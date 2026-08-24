@@ -231,10 +231,10 @@ pub(crate) unsafe fn ins_compl_equal(match_0: *mut compl_T, str: *mut c_char, le
 /// put that prefix in the buffer.
 pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
     unsafe {
-        if compl_leader.get().data().is_null() {
-            compl_leader.set(copy_string((*match_0).cp_str, ptr::null_mut::<Arena>()));
+        if compl_leader().is_unset() {
+            compl_leader().set(copy_string((*match_0).cp_str, ptr::null_mut::<Arena>()));
             let had_match = (*curwin.get()).w_cursor.col > compl_col.get();
-            ins_compl_longest_insert(compl_leader.get().data());
+            ins_compl_longest_insert(compl_leader().data());
             if !had_match {
                 ins_compl_delete(false);
             }
@@ -242,7 +242,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
             return;
         }
 
-        let mut p = compl_leader.get().data();
+        let mut p = compl_leader().data();
         let mut s = (*match_0).cp_str.data();
         while *p as c_int != NUL {
             let c1 = utf_ptr2char(p);
@@ -261,13 +261,13 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
 
         if *p as c_int != NUL {
             *p = NUL as c_char;
-            let leader = compl_leader.get();
-            compl_leader.set(String_0::from_raw_parts(
+            let leader = compl_leader().value();
+            compl_leader().set(String_0::from_raw_parts(
                 leader.data(),
                 p.offset_from(leader.data()) as size_t,
             ));
             let had_match = (*curwin.get()).w_cursor.col > compl_col.get();
-            ins_compl_longest_insert(compl_leader.get().data());
+            ins_compl_longest_insert(compl_leader().data());
             if !had_match {
                 ins_compl_delete(false);
             }
@@ -413,15 +413,15 @@ pub(crate) unsafe fn set_fuzzy_score() {
         }
 
         // Determine the pattern to match against.
-        let leader = compl_leader.get();
+        let leader = compl_leader().value();
         let use_leader = !leader.data().is_null() && !leader.is_empty();
         let mut pattern: *mut c_char = ptr::null_mut();
         if use_leader {
             // Clear the leader cache once before the loop; the pattern is
             // then computed per match, since each may have its own startcol.
-            get_leader_for_startcol(ptr::null_mut(), true);
+            clear_adjusted_leader();
         } else {
-            let orig = compl_orig_text.get();
+            let orig = compl_orig_text().value();
             if orig.data().is_null() || orig.is_empty() {
                 return;
             }
@@ -431,7 +431,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
         let mut comp = first;
         loop {
             if use_leader {
-                pattern = (*get_leader_for_startcol(comp, true)).data();
+                pattern = get_leader_for_startcol(comp, true).data();
             }
             (*comp).cp_score = fuzzy_match_str((*comp).cp_str.data(), pattern);
             comp = (*comp).cp_next;
@@ -504,8 +504,8 @@ pub(crate) unsafe fn ins_compl_item_free(match_0: *mut compl_T) {
 /// Free the whole match list and the pattern and leader that built it.
 pub(crate) unsafe fn ins_compl_free() {
     unsafe {
-        clear_string(&compl_pattern);
-        clear_string(&compl_leader);
+        compl_pattern().clear();
+        compl_leader().clear();
 
         if compl_first_match.get().is_null() {
             return;
@@ -541,12 +541,12 @@ pub unsafe fn ins_compl_clear() {
         compl_ins_end_col.set(0);
         compl_curr_win.set(ptr::null_mut());
         compl_curr_buf.set(ptr::null_mut());
-        clear_string(&compl_pattern);
-        clear_string(&compl_leader);
+        compl_pattern().clear();
+        compl_leader().clear();
         edit_submode_extra.set(ptr::null_mut());
         xfree(compl_orig_extmarks.get().items.cast::<c_void>());
         compl_orig_extmarks.set(EXTMARK_UNDO_VEC_INIT);
-        clear_string(&compl_orig_text);
+        compl_orig_text().clear();
         compl_enter_selects.set(false);
         cpt_sources_clear();
         compl_autocomplete.set(false);

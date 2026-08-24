@@ -582,7 +582,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
             ins_compl_insert_bytes(ins_compl_leader(), -1);
         }
 
-        expand_by_function(0, (*cpt_compl_pattern.ptr()).data(), cb);
+        expand_by_function(0, cpt_compl_pattern().data(), cb);
 
         if !(*cpt_src).cs_refresh_always {
             ins_compl_delete(false);

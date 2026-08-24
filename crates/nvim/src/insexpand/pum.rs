@@ -129,31 +129,34 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
 
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
-pub(crate) unsafe fn prepend_startcol_text(
-    dest: *mut String_0,
-    src: *mut String_0,
-    startcol: c_int,
-) {
+pub(crate) unsafe fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
     unsafe {
         let prepend_len = compl_col.get() - startcol;
-        let new_length = prepend_len + (*src).len() as c_int;
+        let new_length = prepend_len + src.len() as c_int;
 
-        (*dest).set_len(new_length as size_t);
-        (*dest).set_data(xmalloc(new_length as size_t + 1) as *mut c_char); // +1 for NUL
+        dest.set_len(new_length as size_t);
+        dest.set_data(xmalloc(new_length as size_t + 1) as *mut c_char); // +1 for NUL
 
         let line = ml_get((*curwin.get()).w_cursor.lnum);
         memmove(
-            (*dest).data().cast::<c_void>(),
+            dest.data().cast::<c_void>(),
             line.offset(startcol as isize).cast::<c_void>(),
             prepend_len as size_t,
         );
         memmove(
-            (*dest).data().offset(prepend_len as isize).cast::<c_void>(),
-            (*src).data().cast::<c_void>(),
-            (*src).len(),
+            dest.data().offset(prepend_len as isize).cast::<c_void>(),
+            src.data().cast::<c_void>(),
+            src.len(),
         );
-        *(*dest).data().offset(new_length as isize) = NUL as c_char;
+        *dest.data().offset(new_length as isize) = NUL as c_char;
     }
+}
+
+/// Drop the cached [`adjusted_leader`] — upstream's
+/// `get_leader_for_startcol(NULL, …)`, which is a different job from the one
+/// the rest of that function does and now says so.
+pub(crate) fn clear_adjusted_leader() {
+    adjusted_leader().clear();
 }
 
 /// The leader `match_0` should be filtered against, adjusted for the startcol
@@ -161,16 +164,10 @@ pub(crate) unsafe fn prepend_startcol_text(
 ///
 /// A source whose startcol is *before* `compl_col` matches text the leader
 /// does not contain, so the leader has that text prepended; the result is
-/// cached in `adjusted_leader`, which `match_0 == NULL` clears.
-pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool) -> *mut String_0 {
+/// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
+pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool) -> ComplStr {
     unsafe {
-        static adjusted_leader: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-
-        if match_0.is_null() {
-            xfree(adjusted_leader.get().data().cast::<c_void>());
-            adjusted_leader.set(String_0::NULL);
-            return ptr::null_mut();
-        }
+        debug_assert!(!match_0.is_null());
 
         'theend: {
             if cpt_sources_array.get().is_null() {
@@ -182,7 +179,7 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
             }
             let startcol = (*cpt_sources_array.get().offset(cpt_idx as isize)).cs_startcol;
 
-            if compl_leader.get().data().is_null() {
+            if compl_leader().is_unset() {
                 // The leader is not set yet (`'autocomplete'` fires before
                 // `compl_leader` is initialised). Matches starting at or after
                 // `compl_col` fall back to the original text; matches starting
@@ -190,9 +187,9 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
                 // compared with the original text, so the empty
                 // `compl_leader` is returned to mean "no prefix filter".
                 if startcol < 0 || startcol >= compl_col.get() {
-                    return compl_orig_text.ptr();
+                    return compl_orig_text();
                 }
-                return compl_leader.ptr();
+                return compl_leader();
             }
 
             if compl_col.get() <= 0 {
@@ -200,20 +197,19 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
             }
             if startcol >= 0 && startcol < compl_col.get() {
                 let prepend_len = compl_col.get() - startcol;
-                let new_length = prepend_len + compl_leader.get().len() as c_int;
+                let new_length = prepend_len + compl_leader().len() as c_int;
                 if cached
-                    && new_length as size_t == adjusted_leader.get().len()
-                    && !adjusted_leader.get().data().is_null()
+                    && new_length as size_t == adjusted_leader().len()
+                    && !adjusted_leader().is_unset()
                 {
-                    return adjusted_leader.ptr();
+                    return adjusted_leader();
                 }
-                xfree(adjusted_leader.get().data().cast::<c_void>());
-                adjusted_leader.set(String_0::NULL);
-                prepend_startcol_text(adjusted_leader.ptr(), compl_leader.ptr(), startcol);
-                return adjusted_leader.ptr();
+                adjusted_leader().clear();
+                prepend_startcol_text(adjusted_leader(), compl_leader(), startcol);
+                return adjusted_leader();
             }
         }
-        compl_leader.ptr()
+        compl_leader()
     }
 }
 
@@ -231,9 +227,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         // `.data` — which frees and NULLs the first member and leaves `.size`
         // stale. Reproduced deliberately; every reader guards on `.data`.
         if ins_compl_need_restart() {
-            let leader = compl_leader.get();
-            xfree(leader.data().cast::<c_void>());
-            compl_leader.set(String_0::from_raw_parts(ptr::null_mut(), leader.len()));
+            compl_leader().free_bytes_keep_len();
         }
 
         let compl_no_select = get_cot_flags() & kOptCotFlagNoselect != 0
@@ -248,7 +242,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         // match after it and don't highlight anything.
         let mut shown_match_ok = match_at_original_text(compl_shown_match.get());
 
-        if strequal(compl_leader.get().data(), compl_orig_text.get().data()) && !shown_match_ok {
+        if strequal(compl_leader().data(), compl_orig_text().data()) && !shown_match_ok {
             compl_shown_match.set(if compl_no_select {
                 compl_first_match.get()
             } else {
@@ -267,7 +261,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             ptr::null_mut()
         };
 
-        get_leader_for_startcol(ptr::null_mut(), true); // clear the cache
+        clear_adjusted_leader();
 
         let mut comp = compl_first_match.get();
         loop {
@@ -278,16 +272,16 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             // Apply 'smartcase' behaviour during normal mode.
             if ctrl_x_mode_normal()
                 && p_inf.get() == 0
-                && !(*leader).data().is_null()
-                && ignorecase((*leader).data()) == 0
+                && !leader.data().is_null()
+                && ignorecase(leader.data()) == 0
                 && !cot_fuzzy()
             {
                 (*comp).cp_flags &= !CP_ICASE;
             }
 
             if !match_at_original_text(comp)
-                && ((*leader).data().is_null()
-                    || ins_compl_equal(comp, (*leader).data(), (*leader).len())
+                && (leader.data().is_null()
+                    || ins_compl_equal(comp, leader.data(), leader.len())
                     || (cot_fuzzy() && (*comp).cp_score != FUZZY_SCORE_NONE))
             {
                 // Limit the number of items from each source where

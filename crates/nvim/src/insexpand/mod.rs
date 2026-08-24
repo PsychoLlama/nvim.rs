@@ -369,11 +369,130 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
     }
 }
 
-/// C's `XFREE_CLEAR(s->data); s->size = 0;` over one of the module's
-/// `String_0` statics.
-pub(crate) unsafe fn clear_string(cell: &GlobalCell<String_0>) {
-    unsafe { xfree(cell.get().data().cast::<c_void>()) };
-    cell.set(String_0::NULL);
+/// One of the completion's owned strings.
+///
+/// `compl_pattern`, `compl_leader`, `compl_orig_text`, `cpt_compl_pattern`
+/// and `adjusted_leader` are five `String`s upstream keeps at file scope, a
+/// `char *` and a length each, whose bytes belong to the running completion.
+/// Upstream frees them by hand: `XFREE_CLEAR` is spelled out at a dozen
+/// sites, and which of them owns the buffer it is about to overwrite is
+/// carried in the reader's head.
+///
+/// `ComplStr` is the one owner of each. It names the cell rather than
+/// pointing into it, so every read copies the two words out and no reference
+/// into the global is ever formed — which matters because completion runs
+/// user callbacks, and a callback can reach the same string. The *bytes* are
+/// still handed out raw, because every consumer of them is C-shaped; they
+/// stay valid until the next [`set`](ComplStr::set) or
+/// [`replace`](ComplStr::replace), exactly as upstream's did.
+#[derive(Clone, Copy)]
+pub(crate) struct ComplStr(&'static GlobalCell<String_0>);
+
+impl ComplStr {
+    /// The two words by value.
+    pub(crate) fn value(self) -> String_0 {
+        self.0.get()
+    }
+
+    /// The bytes, or null while the string is unset.
+    pub(crate) fn data(self) -> *mut c_char {
+        self.value().data()
+    }
+
+    /// The byte count.
+    pub(crate) fn len(self) -> size_t {
+        self.value().len()
+    }
+
+    /// Whether the string has no buffer at all — upstream's
+    /// `if (compl_leader.data == NULL)`, which asks something different from
+    /// [`is_empty`](Self::is_empty).
+    pub(crate) fn is_unset(self) -> bool {
+        self.value().is_null()
+    }
+
+    /// Whether the string has no bytes.
+    pub(crate) fn is_empty(self) -> bool {
+        self.value().is_empty()
+    }
+
+    /// Point at `s`. What was there is *not* freed: this is the fresh-start
+    /// shape, where the string was cleared before the new value was built.
+    pub(crate) fn set(self, s: String_0) {
+        self.0.set(s);
+    }
+
+    /// C's `XFREE_CLEAR(x.data); x = s`: free this string's bytes, then take
+    /// `s`.
+    pub(crate) fn replace(self, s: String_0) {
+        self.free_bytes();
+        self.0.set(s);
+    }
+
+    /// C's `XFREE_CLEAR(s->data); s->size = 0`.
+    pub(crate) fn clear(self) {
+        self.replace(String_0::NULL);
+    }
+
+    /// C's `XFREE_CLEAR(compl_leader)` written on the *struct* rather than on
+    /// its `.data`: the bytes go and the pointer nulls, but the length is
+    /// left stale. Reproduced deliberately for `ins_compl_build_pum`; every
+    /// reader guards on the pointer.
+    pub(crate) fn free_bytes_keep_len(self) {
+        let stale = self.len();
+        self.free_bytes();
+        self.0.set(String_0::from_raw_parts(ptr::null_mut(), stale));
+    }
+
+    /// Point at `data`, keeping the length — the two-step build in
+    /// `get_normal_compl_info`, which sizes the pattern before it fills it.
+    pub(crate) fn set_data(self, data: *mut c_char) {
+        let mut s = self.value();
+        s.set_data(data);
+        self.0.set(s);
+    }
+
+    /// Set the length, keeping the pointer.
+    pub(crate) fn set_len(self, len: size_t) {
+        let mut s = self.value();
+        s.set_len(len);
+        self.0.set(s);
+    }
+
+    /// Free the bytes, leaving the two words alone.
+    fn free_bytes(self) {
+        // SAFETY: the bytes are this string's own, and `xfree` takes null.
+        unsafe { xfree(self.data().cast::<c_void>()) };
+    }
+}
+
+/// What the current completion searches for.
+pub(crate) fn compl_pattern() -> ComplStr {
+    ComplStr(&COMPL_PATTERN)
+}
+
+/// The `'complete'` source's own pattern, when its startcol differs from
+/// `compl_col`.
+pub(crate) fn cpt_compl_pattern() -> ComplStr {
+    ComplStr(&CPT_COMPL_PATTERN)
+}
+
+/// What the user has typed since the completion started, which filters the
+/// matches. Unset until the first `ins_compl_addleader`.
+pub(crate) fn compl_leader() -> ComplStr {
+    ComplStr(&COMPL_LEADER)
+}
+
+/// The text that was under the cursor when the completion started, and which
+/// CTRL-E puts back.
+pub(crate) fn compl_orig_text() -> ComplStr {
+    ComplStr(&COMPL_ORIG_TEXT)
+}
+
+/// [`compl_leader`] with the text a source's earlier startcol covers
+/// prepended; the cache behind [`get_leader_for_startcol`].
+pub(crate) fn adjusted_leader() -> ComplStr {
+    ComplStr(&ADJUSTED_LEADER)
 }
 
 /// C's `e_hitend`.
@@ -392,7 +511,8 @@ static compl_old_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
 static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false);
-static compl_leader: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static COMPL_LEADER: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static ADJUSTED_LEADER: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static compl_get_longest: GlobalCell<bool> = GlobalCell::new(false);
 static compl_used_match: GlobalCell<bool> = GlobalCell::new(false);
 static compl_was_interrupted: GlobalCell<bool> = GlobalCell::new(false);
@@ -401,8 +521,8 @@ static compl_restarting: GlobalCell<bool> = GlobalCell::new(false);
 static compl_started: GlobalCell<bool> = GlobalCell::new(false);
 static ctrl_x_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(CTRL_X_NORMAL);
 static compl_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_pattern: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static cpt_compl_pattern: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static COMPL_PATTERN: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static CPT_COMPL_PATTERN: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static compl_direction: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -411,7 +531,7 @@ static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::cor
 static compl_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static compl_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
 static compl_ins_end_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
-static compl_orig_text: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
+static COMPL_ORIG_TEXT: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static compl_orig_extmarks: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {

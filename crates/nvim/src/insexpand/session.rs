@@ -62,14 +62,14 @@ pub(crate) unsafe fn get_normal_compl_info(
                 compl_length.set(curs_col - startcol);
             }
             if p_ic.get() != 0 {
-                compl_pattern.set(cstr_as_string(str_foldcase(
+                compl_pattern().set(cstr_as_string(str_foldcase(
                     line.offset(compl_col.get() as isize),
                     compl_length.get(),
                     ptr::null_mut(),
                     0,
                 )));
             } else {
-                compl_pattern.set(cbuf_to_string(
+                compl_pattern().set(cbuf_to_string(
                     line.offset(compl_col.get() as isize),
                     compl_length.get() as size_t,
                 ));
@@ -85,15 +85,15 @@ pub(crate) unsafe fn get_normal_compl_info(
                 c"\\<"
             };
             let (data, n) = build_pattern(prefix, compl_length.get());
-            (*compl_pattern.ptr()).set_data(data);
-            (*compl_pattern.ptr()).set_len(n - 1);
+            compl_pattern().set_data(data);
+            compl_pattern().set_len(n - 1);
         } else {
             // Upstream decrements in the `else if` test itself, so only these
             // two branches see the smaller column.
             startcol -= 1;
             if startcol < 0 || !vim_iswordp(mb_prevptr(line, line.offset(startcol as isize + 1))) {
                 // Match any word of at least two chars.
-                compl_pattern.set(cbuf_to_string(c"\\<\\k\\k".as_ptr(), 6));
+                compl_pattern().set(cbuf_to_string(c"\\<\\k\\k".as_ptr(), 6));
                 compl_col.set(compl_col.get() + curs_col);
                 compl_length.set(0);
                 compl_from_nonkeyword.set(true);
@@ -125,12 +125,12 @@ pub(crate) unsafe fn get_normal_compl_info(
                     strcpy(data, c"\\<".as_ptr());
                     quote_meta(data.offset(2), line.offset(compl_col.get() as isize), 1);
                     strcat(data, c"\\k".as_ptr());
-                    (*compl_pattern.ptr()).set_data(data);
-                    (*compl_pattern.ptr()).set_len(strlen(data));
+                    compl_pattern().set_data(data);
+                    compl_pattern().set_len(strlen(data));
                 } else {
                     let (data, n) = build_pattern(c"\\<", compl_length.get());
-                    (*compl_pattern.ptr()).set_data(data);
-                    (*compl_pattern.ptr()).set_len(n - 1);
+                    compl_pattern().set_data(data);
+                    compl_pattern().set_len(n - 1);
                 }
             }
         }
@@ -156,14 +156,14 @@ pub(crate) unsafe fn get_wholeline_compl_info(line: *mut c_char, curs_col: colnr
             compl_length.set(0);
         }
         if p_ic.get() != 0 {
-            compl_pattern.set(cstr_as_string(str_foldcase(
+            compl_pattern().set(cstr_as_string(str_foldcase(
                 line.offset(compl_col.get() as isize),
                 compl_length.get(),
                 ptr::null_mut(),
                 0,
             )));
         } else {
-            compl_pattern.set(cbuf_to_string(
+            compl_pattern().set(cbuf_to_string(
                 line.offset(compl_col.get() as isize),
                 compl_length.get() as size_t,
             ));
@@ -200,7 +200,7 @@ pub(crate) unsafe fn get_filename_compl_info(
 
         compl_col.set(compl_col.get() + startcol);
         compl_length.set(curs_col - startcol);
-        compl_pattern.set(cstr_as_string(addstar(
+        compl_pattern().set(cstr_as_string(addstar(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
             ExpandContext::Files,
@@ -215,11 +215,11 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
         // The expansion context outlives no call here, but `set_cmd_context`
         // and `nlua_expand_pat` both want it by pointer, so it is taken once.
         let xp = compl_xp.ptr();
-        compl_pattern.set(cbuf_to_string(line, curs_col as size_t));
+        compl_pattern().set(cbuf_to_string(line, curs_col as size_t));
         set_cmd_context(
             xp,
-            (*compl_pattern.ptr()).data(),
-            (*compl_pattern.ptr()).len() as c_int,
+            compl_pattern().data(),
+            compl_pattern().len() as c_int,
             curs_col,
             false,
         );
@@ -233,7 +233,7 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
             // "pattern not found" message.
             compl_col.set(curs_col);
         } else {
-            compl_col.set((*xp).xp_pattern.offset_from((*compl_pattern.ptr()).data()) as colnr_T);
+            compl_col.set((*xp).xp_pattern.offset_from(compl_pattern().data()) as colnr_T);
         }
         compl_length.set(curs_col - compl_col.get());
         OK
@@ -244,11 +244,11 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
 pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: colnr_T, is_cpt_compl: bool) {
     unsafe {
         if is_cpt_compl {
-            clear_string(&cpt_compl_pattern);
+            cpt_compl_pattern().clear();
             if startcol < compl_col.get() {
-                prepend_startcol_text(cpt_compl_pattern.ptr(), compl_orig_text.ptr(), startcol);
+                prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol);
             } else {
-                cpt_compl_pattern.set(copy_string(compl_orig_text.get(), ptr::null_mut()));
+                cpt_compl_pattern().set(copy_string(compl_orig_text().value(), ptr::null_mut()));
             }
         } else {
             if startcol < 0 || startcol > curs_col {
@@ -257,7 +257,7 @@ pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: colnr_T, i
             // Re-obtain the line in case it has changed.
             let line = ml_get((*curwin.get()).w_cursor.lnum);
             let len = curs_col - startcol;
-            compl_pattern.set(cbuf_to_string(
+            compl_pattern().set(cbuf_to_string(
                 line.offset(startcol as isize),
                 len as size_t,
             ));
@@ -370,7 +370,7 @@ pub(crate) unsafe fn get_spell_compl_info(startcol: c_int, curs_col: colnr_T) ->
         }
         // Need to obtain "line" again, it may have become invalid.
         let line = ml_get((*curwin.get()).w_cursor.lnum);
-        compl_pattern.set(cbuf_to_string(
+        compl_pattern().set(cbuf_to_string(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
         ));
@@ -577,9 +577,9 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
         ins_compl_fix_redo_buf_for_leader(ptr::null_mut());
 
         // Always add a completion for the original text.
-        clear_string(&compl_orig_text);
+        compl_orig_text().clear();
         destroy_orig_extmarks();
-        compl_orig_text.set(cbuf_to_string(
+        compl_orig_text().set(cbuf_to_string(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
         ));
@@ -589,8 +589,8 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             flags |= CP_ICASE;
         }
         if ins_compl_add(
-            (*compl_orig_text.ptr()).data(),
-            (*compl_orig_text.ptr()).len() as c_int,
+            compl_orig_text().data(),
+            compl_orig_text().len() as c_int,
             ptr::null_mut(),
             ptr::null(),
             false,
@@ -602,8 +602,8 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             FUZZY_SCORE_NONE,
         ) != OK
         {
-            clear_string(&compl_pattern);
-            clear_string(&compl_orig_text);
+            compl_pattern().clear();
+            compl_orig_text().clear();
             destroy_orig_extmarks();
             did_ai.set(save_did_ai);
             return FAIL;

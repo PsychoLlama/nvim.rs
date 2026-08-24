@@ -563,7 +563,7 @@ pub(crate) unsafe fn get_next_default_completion(
                     (*st).ins_buf,
                     (*st).cur_match_pos,
                     compl_direction.get(),
-                    (*compl_pattern.ptr()).data(),
+                    compl_pattern().data(),
                 );
             } else {
                 found_new_match = searchit(
@@ -572,8 +572,8 @@ pub(crate) unsafe fn get_next_default_completion(
                     (*st).cur_match_pos,
                     ptr::null_mut(),
                     compl_direction.get(),
-                    (*compl_pattern.ptr()).data(),
-                    (*compl_pattern.ptr()).len(),
+                    compl_pattern().data(),
+                    compl_pattern().len(),
                     1,
                     SEARCH_KEEP + SEARCH_NFMSG,
                     RE_LAST,
@@ -680,7 +680,7 @@ pub(crate) unsafe fn get_register_completion() {
         // a candidate counts when there is no original text to compare against,
         // or it starts with it.
         let starts_with_orig = |s: *mut c_char| {
-            let orig = *compl_orig_text.ptr();
+            let orig = compl_orig_text().value();
             orig.data().is_null()
                 || if p_ic.get() != 0 {
                     strncasecmp(s, orig.data(), orig.len()) == 0

@@ -32,7 +32,7 @@ unsafe fn ins_compl_infercase_gettext(
 
         // Rule 1: were any chars converted to lower?
         let mut has_lower = false;
-        let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
+        let mut p = compl_orig_text().data() as *const c_char;
         for i in 0..min_len {
             let c = mb_ptr2char_adv(&raw mut p);
             if mb_islower(c) {
@@ -50,7 +50,7 @@ unsafe fn ins_compl_infercase_gettext(
         // Rule 2: no lower case, 2nd consecutive letter converted to upper case.
         if !has_lower {
             let mut was_letter = false;
-            let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
+            let mut p = compl_orig_text().data() as *const c_char;
             for i in 0..min_len {
                 let c = mb_ptr2char_adv(&raw mut p);
                 if was_letter && mb_isupper(c) && mb_islower(wca[i as usize]) {
@@ -65,7 +65,7 @@ unsafe fn ins_compl_infercase_gettext(
         }
 
         // Copy the original case of the part we typed.
-        let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
+        let mut p = compl_orig_text().data() as *const c_char;
         for w in wca.iter_mut().take(min_len as usize) {
             let c = mb_ptr2char_adv(&raw mut p);
             if mb_islower(c) {
@@ -141,7 +141,7 @@ pub unsafe fn ins_compl_add_infercase(
         let mut tofree: *mut c_char = ptr::null_mut();
         if p_ic.get() != 0 && (*curbuf.get()).b_p_inf != 0 && len > 0 {
             let char_len = char_count(str);
-            let compl_char_len = char_count((*compl_orig_text.ptr()).data());
+            let compl_char_len = char_count(compl_orig_text().data());
             // "char_len" may be smaller than "compl_char_len" when using
             // thesaurus, only use the minimum when comparing.
             let min_len = char_len.min(compl_char_len);
@@ -224,7 +224,7 @@ pub(crate) unsafe fn get_next_bufname_token() {
         while !b.is_null() {
             if (*b).b_p_bl != 0 && !(*b).b_sfname.is_null() {
                 let tail = path_tail((*b).b_sfname);
-                let orig = *compl_orig_text.ptr();
+                let orig = compl_orig_text().value();
                 if strncmp(tail, orig.data(), orig.len()) == 0 {
                     ins_compl_add(
                         tail,
@@ -292,7 +292,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
         let byte2len = |b: c_char| utf8len_tab[b as u8 as usize] as c_int;
 
         let mut match_count: Vec<c_int> = vec![0; cpt_sources_count.get() as usize];
-        get_leader_for_startcol(ptr::null_mut(), true); // Clear the cache
+        clear_adjusted_leader();
 
         let mut compl = compl_first_match.get();
         let mut first: *mut c_char = ptr::null_mut();
@@ -303,15 +303,14 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
             // Apply 'smartcase' behavior during normal mode.
             if ctrl_x_mode_normal()
                 && p_inf.get() == 0
-                && !(*leader).data().is_null()
-                && ignorecase((*leader).data()) == 0
+                && !leader.data().is_null()
+                && ignorecase(leader.data()) == 0
             {
                 (*compl).cp_flags &= !CP_ICASE;
             }
 
             if !match_at_original_text(compl)
-                && ((*leader).data().is_null()
-                    || ins_compl_equal(compl, (*leader).data(), (*leader).len()))
+                && (leader.data().is_null() || ins_compl_equal(compl, leader.data(), leader.len()))
             {
                 // Limit the number of items from each source if max_items is set.
                 let mut match_limit_exceeded = false;

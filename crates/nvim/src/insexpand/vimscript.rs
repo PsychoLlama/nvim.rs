@@ -236,7 +236,7 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
         compl_lnum.set((*curwin.get()).w_cursor.lnum);
         compl_length.set((*curwin.get()).w_cursor.col - startcol);
         // compl_pattern doesn't need to be set.
-        compl_orig_text.set(cbuf_to_string(
+        compl_orig_text().set(cbuf_to_string(
             get_cursor_line_ptr().offset(compl_col.get() as isize),
             compl_length.get() as size_t,
         ));
@@ -247,8 +247,8 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
             flags |= CP_ICASE;
         }
         if ins_compl_add(
-            (*compl_orig_text.ptr()).data(),
-            (*compl_orig_text.ptr()).len() as c_int,
+            compl_orig_text().data(),
+            compl_orig_text().len() as c_int,
             ptr::null_mut(),
             ptr::null(),
             false,

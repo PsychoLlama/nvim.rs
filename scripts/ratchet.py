@@ -174,9 +174,10 @@ plus these whole-tree metrics, which are not per-file:
                     `garray_T`, a `buffheader_T`. `get` copies the struct out
                     of the cell, so the copy and the global now hold the same
                     pointer: whoever frees or reallocates through one leaves
-                    the other dangling (`insexpand/getexp.rs` frees
-                    `compl_pattern.get().data()` while the global still holds
-                    it). Most sites are borrows *spelled* as copies —
+                    the other dangling (`getchar/redo.rs` writes
+                    `old_redobuff.set(redobuff.get())` and both then own the
+                    same block chain). Most sites are borrows *spelled* as
+                    copies —
                     `script_items.get().ga_len` — and their fix is the owning
                     family's rewrite, not a blanket transformation; a few are
                     genuine moves and want `replace`/`take`.
@@ -356,11 +357,11 @@ CELL_PTR_ALLOW_RE = re.compile(
 # `.get()` hands out a second owner of the same allocation. Hand-maintained:
 # see the doc block. Grouped by the family whose slice retires them.
 CELL_COPY_OWNER = (
-    # insexpand — String_0 (a pointer + a length) and an Array of extmarks
-    "compl_pattern",
-    "compl_leader",
-    "compl_orig_text",
-    "adjusted_leader",
+    # insexpand — the Array of extmarks saved over the original text. Its
+    # four `String_0` siblings retired in phase 22's S5: `compl_pattern`,
+    # `compl_leader`, `compl_orig_text` and `adjusted_leader` are reached
+    # through `ComplStr`, which is the single owner of each buffer, so no
+    # site copies the two words out of the cell any more.
     "compl_orig_extmarks",
     # runtime — garray_T and the search-path buffers
     "script_items",
@@ -1130,11 +1131,11 @@ SELF_TEST_CELL_PTR_ALLOW = [
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
-    ("fn f() {\n    compl_leader.get();\n}\n", 1),
+    ("fn f() {\n    redobuff.get();\n}\n", 1),
     ("fn f() {\n    let n = script_items.get().ga_len;\n}\n", 1),
     # Only `get`: the other accessors do not hand out a second owner.
-    ("fn f() {\n    compl_leader.set(x);\n}\n", 0),
-    ("fn f() {\n    compl_leader.with(|s| s);\n}\n", 0),
+    ("fn f() {\n    redobuff.set(x);\n}\n", 0),
+    ("fn f() {\n    redobuff.with(|s| s);\n}\n", 0),
     # rustfmt wraps a long chain, and the copy still happens.
     ("fn f() {\n    *script_items\n        .get()\n}\n", 1),
     # A global that is not on the list.

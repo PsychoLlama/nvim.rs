@@ -56,8 +56,8 @@ pub unsafe fn ins_compl_bs() -> c_int {
         // completion logic
         line = get_cursor_line_ptr();
 
-        clear_string(&compl_leader);
-        compl_leader.set(cbuf_to_string(
+        compl_leader().clear();
+        compl_leader().set(cbuf_to_string(
             line.offset(compl_col.get() as isize),
             (p_off - compl_col.get() as ptrdiff_t) as size_t,
         ));
@@ -86,12 +86,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
     unsafe {
         ins_compl_del_pum();
         ins_compl_delete(true);
-        ins_compl_insert_bytes(
-            (*compl_leader.ptr())
-                .data()
-                .offset(get_compl_len() as isize),
-            -1,
-        );
+        ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1);
         compl_used_match.set(false);
 
         if p_acl.get() > 0 {
@@ -102,7 +97,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         }
 
         if compl_started.get() {
-            ins_compl_set_original_text((*compl_leader.ptr()).data(), (*compl_leader.ptr()).len());
+            ins_compl_set_original_text(compl_leader().data(), compl_leader().len());
             if is_cpt_func_refresh_always() {
                 cpt_compl_refresh();
             }
@@ -133,11 +128,11 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         // Don't let Enter select the original text when there is no popup menu.
         if (*compl_match_array.ptr()).is_null() {
             compl_enter_selects.set(false);
-        } else if ins_compl_has_preinsert() && !(*compl_leader.ptr()).is_empty() {
+        } else if ins_compl_has_preinsert() && !compl_leader().is_empty() {
             ins_compl_insert(true, false);
         } else if compl_started.get()
             && ins_compl_preinsert_longest()
-            && !(*compl_leader.ptr()).is_empty()
+            && !compl_leader().is_empty()
             && !ins_compl_preinsert_effect()
         {
             ins_compl_insert(true, true);
@@ -174,8 +169,8 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
             ins_compl_restart();
         }
 
-        clear_string(&compl_leader);
-        compl_leader.set(cbuf_to_string(
+        compl_leader().clear();
+        compl_leader().set(cbuf_to_string(
             get_cursor_line_ptr().offset(compl_col.get() as isize),
             ((*curwin.get()).w_cursor.col - compl_col.get()) as size_t,
         ));
@@ -238,7 +233,7 @@ pub unsafe fn ins_compl_addfrommatch() {
             let mut plen: size_t = 0;
             let mut cp = (*shown).cp_next;
             while !cp.is_null() && !is_first_match(cp) {
-                let leader = *compl_leader.ptr();
+                let leader = compl_leader().value();
                 if leader.data().is_null() || ins_compl_equal(cp, leader.data(), leader.len()) {
                     p = (*cp).cp_str.data();
                     plen = (*cp).cp_str.len();
@@ -265,10 +260,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         // Get here when we have finished typing a sequence of ^N and ^P or
         // other completion characters in CTRL-X mode.  Free up memory that was
         // used, and make sure we can redo the insert.
-        if !compl_curr_match.get().is_null()
-            || !(*compl_leader.ptr()).data().is_null()
-            || c == Ctrl_E
-        {
+        if !compl_curr_match.get().is_null() || !compl_leader().is_unset() || c == Ctrl_E {
             // If any of the original typed text has been changed, e.g. when
             // 'ignorecase' is set, we must add back-spaces to the redo buffer.
             // We add as few as necessary to delete just the part of the
@@ -342,10 +334,10 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         // only if the popup is still visible.
         if c == Ctrl_E {
             ins_compl_delete(false);
-            let text = if !(*compl_leader.ptr()).data().is_null() {
-                *compl_leader.ptr()
+            let text = if !compl_leader().is_unset() {
+                compl_leader().value()
             } else if !compl_first_match.get().is_null() {
-                *compl_orig_text.ptr()
+                compl_orig_text().value()
             } else {
                 String_0::NULL
             };
@@ -529,13 +521,13 @@ pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
         let mut len = 0;
         let mut ptr = ptr_arg;
         if ptr.is_null() {
-            if (*compl_leader.ptr()).data().is_null() {
+            if compl_leader().is_unset() {
                 return; // nothing to do
             }
-            ptr = (*compl_leader.ptr()).data();
+            ptr = compl_leader().data();
         }
-        if !(*compl_orig_text.ptr()).data().is_null() {
-            let mut p = (*compl_orig_text.ptr()).data();
+        if !compl_orig_text().is_unset() {
+            let mut p = compl_orig_text().data();
             // Length of the common prefix between the original text and the
             // new completion.
             while *p.offset(len as isize) as c_int != NUL

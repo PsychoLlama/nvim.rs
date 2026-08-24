@@ -103,12 +103,12 @@ pub(crate) unsafe fn fuzzy_longest_match() {
 /// have hidden the one it points at.
 pub(crate) unsafe fn ins_compl_update_shown_match() {
     unsafe {
-        get_leader_for_startcol(ptr::null_mut(), true); // Clear the cache
+        clear_adjusted_leader();
         let mut leader = get_leader_for_startcol(compl_shown_match.get(), true);
 
         // True while the leader hides the shown match and `step` can move on.
-        let hidden = |leader: *mut String_0, step: *mut compl_T| {
-            !ins_compl_equal(compl_shown_match.get(), (*leader).data(), (*leader).len())
+        let hidden = |leader: ComplStr, step: *mut compl_T| {
+            !ins_compl_equal(compl_shown_match.get(), leader.data(), leader.len())
                 && !step.is_null()
                 && !is_first_match(step)
         };
@@ -121,7 +121,7 @@ pub(crate) unsafe fn ins_compl_update_shown_match() {
         // If we didn't find it searching forward, and compl_shows_dir is
         // backward, find the last match.
         if compl_shows_dir_backward()
-            && !ins_compl_equal(compl_shown_match.get(), (*leader).data(), (*leader).len())
+            && !ins_compl_equal(compl_shown_match.get(), leader.data(), leader.len())
             && ((*compl_shown_match.get()).cp_next.is_null()
                 || is_first_match((*compl_shown_match.get()).cp_next))
         {
@@ -141,13 +141,13 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         // appropriately.
         let mut orig_col = 0;
         if new_leader {
-            let mut orig = (*compl_orig_text.ptr()).data();
+            let mut orig = compl_orig_text().data();
             let mut leader = ins_compl_leader();
             while *orig as c_int != NUL && utf_ptr2char(orig) == utf_ptr2char(leader) {
                 leader = leader.offset(utf_ptr2len(leader) as isize);
                 orig = orig.offset(utf_ptr2len(orig) as isize);
             }
-            orig_col = orig.offset_from((*compl_orig_text.ptr()).data()) as c_int;
+            orig_col = orig.offset_from(compl_orig_text().data()) as c_int;
         }
 
         // In insert mode: delete the typed part.
@@ -395,8 +395,8 @@ pub(crate) unsafe fn find_next_completion_match(
             let shown = compl_shown_match.get();
             let leader = get_leader_for_startcol(shown, false);
             if !match_at_original_text(shown)
-                && !(*leader).data().is_null()
-                && !ins_compl_equal(shown, (*leader).data(), (*leader).len())
+                && !leader.data().is_null()
+                && !ins_compl_equal(shown, leader.data(), leader.len())
                 && !(cot_fuzzy() && (*shown).cp_score != FUZZY_SCORE_NONE)
             {
                 todo += 1;
@@ -448,7 +448,7 @@ pub(crate) unsafe fn ins_compl_next(
             return -1;
         }
 
-        if !(*compl_leader.ptr()).data().is_null()
+        if !compl_leader().is_unset()
             && !match_at_original_text(compl_shown_match.get())
             && !cot_fuzzy()
         {
@@ -495,9 +495,7 @@ pub(crate) unsafe fn ins_compl_next(
             }
         } else if compl_no_insert && !started && !compl_preinsert {
             ins_compl_insert_bytes(
-                (*compl_orig_text.ptr())
-                    .data()
-                    .offset(get_compl_len() as isize),
+                compl_orig_text().data().offset(get_compl_len() as isize),
                 -1,
             );
             compl_used_match.set(false);
@@ -509,17 +507,12 @@ pub(crate) unsafe fn ins_compl_next(
                     && match_at_original_text(compl_shown_match.get());
                 ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest);
             } else {
-                debug_assert!(!(*compl_leader.ptr()).data().is_null());
-                ins_compl_insert_bytes(
-                    (*compl_leader.ptr())
-                        .data()
-                        .offset(get_compl_len() as isize),
-                    -1,
-                );
+                debug_assert!(!compl_leader().is_unset());
+                ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1);
             }
             if strequal(
                 (*compl_shown_match.get()).cp_str.data(),
-                (*compl_orig_text.ptr()).data(),
+                compl_orig_text().data(),
             ) {
                 restore_orig_extmarks();
             }
