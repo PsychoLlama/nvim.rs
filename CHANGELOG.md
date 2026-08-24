@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the library crate from `c2rust_neovim` to `neovim` and retired the
+  transpiler's generated names throughout — the anonymous `C2Rust_Unnamed_*`
+  types, the `c2rust_padding` filler fields and the leftover scaffolding it
+  emitted. The editor behaves exactly as before; only names moved.
+
 ## [2026.08.23-529b135d5d]
 
 ### Changed
