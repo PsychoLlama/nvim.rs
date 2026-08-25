@@ -479,6 +479,16 @@ CELL_COPY_OWNER = (
     "provider_caller_scope",
     "saved_last_search_spat",
     "counted",
+    # The `Object` cells, from phase 22's F-P22-53 audit at the close: every
+    # `GlobalCell<String_0>` and `GlobalCell<Object>` in the tree, listed
+    # whether or not the value it happens to hold owns anything today, so the
+    # register can be re-derived by grepping for those two types. `names`
+    # carries no site now -- `nth_lua_string` reads it through `with` and
+    # `cache_lua_answer` frees the old answer with `replace` -- and is listed
+    # so a `get` on it would be counted rather than discovered later.
+    "METADATA",  # the API description; its arena is leaked, the tree shared
+    "msg_ext_id",  # an Object that is always an Integer; both writers agree
+    "names",  # the two cached Lua completion answers in cmdexpand/generate
 )
 # Whitespace *is* tolerated here, unlike CELL_PTR_ALLOW_RE: this count is
 # not a subtraction from a substring total, and rustfmt wraps a long chain

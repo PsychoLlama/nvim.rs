@@ -157,7 +157,7 @@ pub unsafe fn msg_ext_ui_flush() {
         msg_ext_append.set(false);
         msg_ext_kind.set(ptr::null());
         // Only claim the next id if nothing else took it in the meantime.
-        if msg_ext_id.get().data.integer == msg_id_next.get() {
+        if msg_ext_id.with(|id| id.data.integer) == msg_id_next.get() {
             msg_id_next.set(msg_id_next.get() + 1);
         }
         msg_ext_id.set(Object::integer(msg_id_next.get()));

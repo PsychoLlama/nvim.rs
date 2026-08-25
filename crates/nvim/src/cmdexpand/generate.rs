@@ -187,8 +187,7 @@ pub(crate) fn get_mapclear_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// Both Lua-backed generators cache one [`Object`] across the whole
 /// completion and index into it per call; this is the indexing half.
 unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
-    unsafe {
-        let names = names.get();
+    names.with(|names| unsafe {
         if names.type_0 != kObjectTypeArray || idx < 0 || idx >= names.data.array.size as c_int {
             return ptr::null_mut();
         }
@@ -197,7 +196,7 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
             return ptr::null_mut();
         }
         item.data.string.data()
-    }
+    })
 }
 
 /// Replace the cached answer with a fresh one, dropping the old.
@@ -216,8 +215,9 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
             &raw mut err,
         );
         api_clear_error(&raw mut err);
-        api_free_object(names.get());
-        names.set(res);
+        // `replace` rather than a `get`/`set` pair: the old answer must not
+        // be reachable through the cell while it is being freed.
+        api_free_object(names.replace(res));
     }
 }
 
