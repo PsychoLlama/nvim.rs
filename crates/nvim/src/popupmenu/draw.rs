@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::linebuf;
 use crate::types::{kErrorTypeNone, kFloatRelativeEditor};
 
 /// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
@@ -657,9 +658,10 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         // Blank the rest of the row, then overwrite its far cell with the
         // truncation marker if anything was cut. The marker is written
         // straight into the line buffer because it replaces a cell
-        // `grid_line_fill` has already put there.
-        let chars = linebuf_char.get();
-        let attrs = linebuf_attr.get();
+        // `grid_line_fill` has already put there -- so the handle is taken
+        // here but each slice of it is borrowed for one write only, with the
+        // `grid_line_fill` calls between them.
+        let mut line = linebuf();
         if pum_rl.get() {
             let lcol = style.col_off - pum_width.get() + 1;
             grid_line_fill(
@@ -669,31 +671,31 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
                 row.orig_attr,
             );
             if row.need_trunc {
-                *chars.offset(lcol as isize) = if style.fcs_trunc != 0 {
+                line.chars_mut()[lcol as usize] = if style.fcs_trunc != 0 {
                     style.fcs_trunc
                 } else {
                     schar_from_ascii(b'<')
                 };
-                *attrs.offset(lcol as isize) = trunc_attr as sattr_T;
+                line.attrs_mut()[lcol as usize] = trunc_attr as sattr_T;
                 // The marker may have replaced the left half of a wide
                 // character; give the orphaned right half a space.
-                if pum_width.get() > 1 && *chars.offset((lcol + 1) as isize) == 0 {
-                    *chars.offset((lcol + 1) as isize) = schar_from_ascii(b' ');
+                if pum_width.get() > 1 && line.chars()[lcol as usize + 1] == 0 {
+                    line.chars_mut()[lcol as usize + 1] = schar_from_ascii(b' ');
                 }
             }
         } else {
             let rcol = style.col_off + pum_width.get();
             grid_line_fill(row.grid_col, rcol, schar_from_ascii(b' '), row.orig_attr);
             if row.need_trunc {
-                if pum_width.get() > 1 && *chars.offset((rcol - 1) as isize) == 0 {
-                    *chars.offset((rcol - 2) as isize) = schar_from_ascii(b' ');
+                if pum_width.get() > 1 && line.chars()[(rcol - 1) as usize] == 0 {
+                    line.chars_mut()[(rcol - 2) as usize] = schar_from_ascii(b' ');
                 }
-                *chars.offset((rcol - 1) as isize) = if style.fcs_trunc != 0 {
+                line.chars_mut()[(rcol - 1) as usize] = if style.fcs_trunc != 0 {
                     style.fcs_trunc
                 } else {
                     schar_from_ascii(b'>')
                 };
-                *attrs.offset((rcol - 1) as isize) = trunc_attr as sattr_T;
+                line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as sattr_T;
             }
         }
 

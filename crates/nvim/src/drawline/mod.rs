@@ -21,9 +21,9 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::fold::{FOLD_TEXT_LEN, VIRTTEXT_EMPTY, get_foldtext};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
-    schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
-    schar_len,
+    LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf, linebuf_mirror,
+    schar_cells, schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii,
+    schar_get_first_codepoint, schar_len,
 };
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
@@ -37,9 +37,8 @@ use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
     State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol, dy_flags,
-    highlight_attr, highlight_match, hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol,
-    normal_bg, p_sel, screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum,
-    win_extmark_arr,
+    highlight_attr, highlight_match, hl_attr_active, normal_bg, p_sel, screen_search_hl,
+    search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -264,6 +263,7 @@ unsafe fn wlv_put_linebuf(
     bg_attr: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
 ) {
+    let mut line = linebuf();
     // SAFETY: the caller's window and line buffers.
     unsafe {
         let grid: GridView = (*wp).w_grid;
@@ -297,26 +297,26 @@ unsafe fn wlv_put_linebuf(
                 // Do not overwrite the line number either: "123 text" becomes
                 // "123<<<xt".
                 while off < (*wp).w_view_width
-                    && ascii_isdigit(schar_get_ascii(*linebuf_char.get().add(off as usize))
-                        as ::core::ffi::c_int)
+                    && ascii_isdigit(
+                        schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int
+                    )
                 {
                     off += 1;
                 }
             }
+            let at_attr = *hl_attr_active.get().add(HLF_AT as usize) as sattr_T;
             for _ in 0..3 {
                 if off >= (*wp).w_view_width {
                     break;
                 }
-                if off + 1 < (*wp).w_view_width
-                    && *linebuf_char.get().add(off as usize + 1) == NUL as schar_T
+                if off + 1 < (*wp).w_view_width && line.chars()[off as usize + 1] == NUL as schar_T
                 {
                     // The first half of a double-width character is being
                     // overwritten; blank its second half.
-                    *linebuf_char.get().add(off as usize + 1) = schar_from_ascii(b' ');
+                    line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
                 }
-                *linebuf_char.get().add(off as usize) = schar_from_ascii(b'<');
-                *linebuf_attr.get().add(off as usize) =
-                    *hl_attr_active.get().add(HLF_AT as usize) as sattr_T;
+                line.chars_mut()[off as usize] = schar_from_ascii(b'<');
+                line.attrs_mut()[off as usize] = at_attr;
                 off += 1;
             }
         }

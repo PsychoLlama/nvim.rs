@@ -2,8 +2,8 @@
 
 //! Building one screen line and pushing it to the grid.
 //!
-//! Drawing a line is a batch: `grid_line_start` claims the shared scratch
-//! buffers (`linebuf_char`/`_attr`/`_vcol`), any number of
+//! Drawing a line is a batch: `grid_line_start` claims the shared line
+//! buffer ([`LineBuf`], reached through [`linebuf`]), any number of
 //! `grid_line_puts`/`_fill`/`_put_schar` calls fill columns in, and
 //! `grid_line_flush` hands the result to [`grid_put_linebuf`], which
 //! compares it against what is already on the grid and sends the UI only the
@@ -15,7 +15,43 @@
 use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg_c;
-use crate::types::NUL;
+use crate::types::{LineBuf, NUL};
+
+/// The one line under construction. See [`LineBuf`].
+static LINEBUF: GlobalCell<LineBuf> = GlobalCell::new(LineBuf::empty());
+
+/// The line buffers, as a handle.
+///
+/// One acquisition per function, never one per cell: `grid_put_linebuf` and
+/// the `drawline` writers run per cell of every redraw. A `&mut LineBuf` will
+/// not thread down that path for the same reason a `&mut ScreenGrid` will
+/// not -- drawing a line calls out to the decoration providers and to the UI
+/// -- so this is [`GridRef`]'s shape again, and every borrow of the columns
+/// lasts one accessor call.
+#[derive(Clone, Copy)]
+pub(crate) struct LineBufRef(*mut LineBuf);
+
+impl ::core::ops::Deref for LineBufRef {
+    type Target = LineBuf;
+
+    fn deref(&self) -> &LineBuf {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { &*self.0 }
+    }
+}
+
+impl ::core::ops::DerefMut for LineBufRef {
+    fn deref_mut(&mut self) -> &mut LineBuf {
+        // SAFETY: the only constructor names a `static`. The borrow lasts one
+        // call: see the type's own docs for why it may not last longer.
+        unsafe { &mut *self.0 }
+    }
+}
+
+/// The shared scratch line buffers.
+pub(crate) fn linebuf() -> LineBufRef {
+    LineBufRef(LINEBUF.ptr())
+}
 
 /// The line batch in progress. Only one exists at a time; `grid` being null
 /// means there is none.
@@ -55,6 +91,44 @@ impl LineBatch {
 }
 
 static BATCH: GlobalCell<LineBatch> = GlobalCell::new(LineBatch::new());
+
+/// The batch in progress, as a handle.
+///
+/// One acquisition per entry point, for the same reason [`LineBufRef`] is
+/// one: `grid_line_flush` hands the batch to `grid_put_linebuf`, which draws
+/// -- and drawing re-enters this module through the compositor. Every borrow
+/// of a field lasts one access.
+#[derive(Clone, Copy)]
+struct BatchRef(*mut LineBatch);
+
+impl ::core::ops::Deref for BatchRef {
+    type Target = LineBatch;
+
+    fn deref(&self) -> &LineBatch {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { &*self.0 }
+    }
+}
+
+impl ::core::ops::DerefMut for BatchRef {
+    fn deref_mut(&mut self) -> &mut LineBatch {
+        // SAFETY: the only constructor names a `static`. The borrow lasts one
+        // access: see the type's own docs for why it may not last longer.
+        unsafe { &mut *self.0 }
+    }
+}
+
+/// The one line batch.
+fn batch() -> BatchRef {
+    BatchRef(BATCH.ptr())
+}
+
+/// A column as an index. Every column reaching this module is non-negative.
+#[inline(always)]
+fn at(col: c_int) -> size_t {
+    debug_assert!(col >= 0, "col >= 0");
+    col as size_t
+}
 
 /// Which columns of a line the UI has to be told about.
 ///
@@ -107,42 +181,31 @@ pub unsafe fn grid_line_start(view: GridView, mut row: c_int) {
 /// # Safety
 /// No other batch may be in progress.
 pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
-    unsafe {
-        let b = BATCH.ptr();
-        debug_assert!((*b).grid.is_none(), "grid_line_grid == NULL");
-        *b = LineBatch {
-            grid,
-            row,
-            coloff: col,
-            maxcol: grid.cols.min(grid.cols - col),
-            first: LINEBUF_SIZE.get() as c_int,
-            last: 0,
-            clear_to: 0,
-            bg_attr: 0,
-            clear_attr: 0,
-            flags: 0,
-        };
-        debug_assert!(
-            (*b).maxcol as size_t <= LINEBUF_SIZE.get(),
-            "(size_t)grid_line_maxcol <= linebuf_size"
-        );
+    let mut buf = linebuf();
+    let mut b = batch();
+    debug_assert!(b.grid.is_none(), "grid_line_grid == NULL");
+    *b = LineBatch {
+        grid,
+        row,
+        coloff: col,
+        maxcol: grid.cols.min(grid.cols - col),
+        first: buf.width() as c_int,
+        last: 0,
+        clear_to: 0,
+        bg_attr: 0,
+        clear_attr: 0,
+        flags: 0,
+    };
+    debug_assert!(
+        b.maxcol as size_t <= buf.width(),
+        "(size_t)grid_line_maxcol <= linebuf_size"
+    );
 
-        if full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0 {
-            debug_assert!(!linebuf_char.get().is_null(), "linebuf_char");
-            // This batch must not depend on the previous contents of
-            // linebuf_char. Poison it so that any such dependency trips an
-            // assertion further down.
-            memset(
-                linebuf_char.get().cast::<c_void>(),
-                0xff,
-                size_of::<schar_T>() * LINEBUF_SIZE.get(),
-            );
-            memset(
-                linebuf_attr.get().cast::<c_void>(),
-                0xff,
-                size_of::<sattr_T>() * LINEBUF_SIZE.get(),
-            );
-        }
+    if full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0 {
+        // This batch must not depend on the previous line's contents. Poison
+        // the buffers so that any such dependency trips an assertion further
+        // down.
+        buf.poison();
     }
 }
 
@@ -153,7 +216,7 @@ pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
 /// A batch must be in progress.
 pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
     unsafe {
-        let b = *BATCH.ptr();
+        let b = *batch();
         if col >= b.maxcol {
             // NUL is a very special value (right half of a double-width
             // cell); a space is True Neutral.
@@ -168,26 +231,19 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
     }
 }
 
-/// Put one glyph at `col`.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
-    unsafe {
-        let b = BATCH.ptr();
-        debug_assert!(!(*b).grid.is_none(), "grid_line_grid");
-        if col >= (*b).maxcol {
-            return;
-        }
-
-        *linebuf_char.get().offset(col as isize) = schar;
-        *linebuf_attr.get().offset(col as isize) = attr;
-        *linebuf_vcol.get().offset(col as isize) = -1;
-
-        (*b).first = (*b).first.min(col);
-        // TODO(bfredl): Y U NO DOUBLEWIDTH?
-        (*b).last = (*b).last.max(col + 1);
+/// Put one glyph at `col`. A no-op when no batch is open.
+pub fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
+    let mut b = batch();
+    debug_assert!(!b.grid.is_none(), "grid_line_grid");
+    if col >= b.maxcol {
+        return;
     }
+
+    linebuf().put(col as size_t, schar, attr, -1);
+
+    b.first = b.first.min(col);
+    // TODO(bfredl): Y U NO DOUBLEWIDTH?
+    b.last = b.last.max(col + 1);
 }
 
 /// Put `text` at `col`, answering the number of cells used. Only ever writes
@@ -204,15 +260,14 @@ pub unsafe fn grid_line_puts(
     textlen: c_int,
     attr: c_int,
 ) -> c_int {
+    let mut buf = linebuf();
+    let (chars, attrs, vcols) = buf.parts_mut();
+    let mut b = batch();
+    // SAFETY: the caller's promise, for the batch and for `text`.
     unsafe {
-        let b = BATCH.ptr();
-        debug_assert!(!(*b).grid.is_none(), "grid_line_grid");
+        debug_assert!(!b.grid.is_none(), "grid_line_grid");
 
-        let chars = linebuf_char.get();
-        let attrs = linebuf_attr.get();
-        let vcols = linebuf_vcol.get();
-
-        let max_col = (*b).maxcol;
+        let max_col = b.maxcol;
         let start_col = col;
         let mut col = col;
         let mut ptr = text;
@@ -247,21 +302,17 @@ pub unsafe fn grid_line_puts(
 
             // At the start of the text, overwriting the right half of a
             // two-cell character already in this batch truncates it to '>'.
-            if ptr == text
-                && col > (*b).first
-                && col < (*b).last
-                && *chars.offset(col as isize) == 0
-            {
-                *chars.offset((col - 1) as isize) = schar_from_ascii(b'>');
+            if ptr == text && col > b.first && col < b.last && chars[col as size_t] == 0 {
+                chars[(col - 1) as size_t] = schar_from_ascii(b'>');
             }
 
-            *chars.offset(col as isize) = schar;
-            *attrs.offset(col as isize) = attr;
-            *vcols.offset(col as isize) = -1;
+            chars[col as size_t] = schar;
+            attrs[col as size_t] = attr;
+            vcols[col as size_t] = -1;
             if mbyte_cells == 2 {
-                *chars.offset((col + 1) as isize) = 0;
-                *attrs.offset((col + 1) as isize) = attr;
-                *vcols.offset((col + 1) as isize) = -1;
+                chars[(col + 1) as size_t] = 0;
+                attrs[(col + 1) as size_t] = attr;
+                vcols[(col + 1) as size_t] = -1;
             }
 
             col += mbyte_cells;
@@ -269,8 +320,8 @@ pub unsafe fn grid_line_puts(
         }
 
         if col > start_col {
-            (*b).first = (*b).first.min(start_col);
-            (*b).last = (*b).last.max(col);
+            b.first = b.first.min(start_col);
+            b.last = b.last.max(col);
         }
 
         col - start_col
@@ -281,59 +332,38 @@ pub unsafe fn grid_line_puts(
 ///
 /// # Safety
 /// A batch must be in progress.
-pub unsafe fn grid_line_fill(
-    start_col: c_int,
-    mut end_col: c_int,
-    sc: schar_T,
-    attr: c_int,
-) -> c_int {
-    unsafe {
-        let b = BATCH.ptr();
-        end_col = end_col.min((*b).maxcol);
-        if start_col >= end_col {
-            return end_col;
-        }
-
-        let chars = linebuf_char.get();
-        let attrs = linebuf_attr.get();
-        let vcols = linebuf_vcol.get();
-        let mut col = start_col;
-        while col < end_col {
-            *chars.offset(col as isize) = sc;
-            *attrs.offset(col as isize) = attr;
-            *vcols.offset(col as isize) = -1;
-            col += 1;
-        }
-
-        (*b).first = (*b).first.min(start_col);
-        (*b).last = (*b).last.max(end_col);
-        end_col
+pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: schar_T, attr: c_int) -> c_int {
+    let mut b = batch();
+    end_col = end_col.min(b.maxcol);
+    if start_col >= end_col {
+        return end_col;
     }
+
+    let mut buf = linebuf();
+    let (chars, attrs, vcols) = buf.parts_mut();
+    let span = at(start_col)..at(end_col);
+    chars[span.clone()].fill(sc);
+    attrs[span.clone()].fill(attr);
+    vcols[span].fill(-1);
+
+    b.first = b.first.min(start_col);
+    b.last = b.last.max(end_col);
+    end_col
 }
 
 /// Declare that the batch clears `start_col..end_col` on flush.
 ///
 /// `bg_attr` applies to both the buffered line and the cleared columns;
 /// `clear_attr` only to the cleared columns.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_clear_end(
-    start_col: c_int,
-    end_col: c_int,
-    bg_attr: c_int,
-    clear_attr: c_int,
-) {
-    unsafe {
-        let b = BATCH.ptr();
-        if (*b).first > start_col {
-            (*b).first = start_col;
-            (*b).last = start_col;
-        }
-        (*b).clear_to = end_col;
-        (*b).bg_attr = bg_attr;
-        (*b).clear_attr = clear_attr;
+pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, clear_attr: c_int) {
+    let mut b = batch();
+    if b.first > start_col {
+        b.first = start_col;
+        b.last = start_col;
     }
+    b.clear_to = end_col;
+    b.bg_attr = bg_attr;
+    b.clear_attr = clear_attr;
 }
 
 /// Move the cursor to a column of the line being rendered.
@@ -341,100 +371,34 @@ pub unsafe fn grid_line_clear_end(
 /// # Safety
 /// A batch must be in progress.
 pub unsafe fn grid_line_cursor_goto(col: c_int) {
-    unsafe {
-        let b = *BATCH.ptr();
-        ui_grid_cursor_goto(b.grid.handle, b.row, col);
-    }
+    let b = *batch();
+    ui_grid_cursor_goto(b.grid.handle, b.row, col);
 }
 
 /// Reverse the batch for a 'rightleft' window.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_mirror(width: c_int) {
-    unsafe {
-        let b = BATCH.ptr();
-        (*b).clear_to = (*b).last.max((*b).clear_to);
-        if (*b).first >= (*b).clear_to {
-            return;
-        }
-        let (mut first, mut last, mut clear_to) = ((*b).first, (*b).last, (*b).clear_to);
-        linebuf_mirror(&mut first, &mut last, &mut clear_to, width);
-        (*b).first = first;
-        (*b).last = last;
-        (*b).clear_to = clear_to;
-        (*b).flags |= SLF_RIGHTLEFT;
+pub fn grid_line_mirror(width: c_int) {
+    let mut b = batch();
+    b.clear_to = b.last.max(b.clear_to);
+    if b.first >= b.clear_to {
+        return;
     }
+    let (mut first, mut last, mut clear_to) = (b.first, b.last, b.clear_to);
+    linebuf_mirror(&mut first, &mut last, &mut clear_to, width);
+    b.first = first;
+    b.last = last;
+    b.clear_to = clear_to;
+    b.flags |= SLF_RIGHTLEFT;
 }
 
-/// Reverse `*firstp..*lastp` of the scratch buffers about a line of `width`
+/// Reverse `*firstp..*lastp` of the line buffer about a line of `width`
 /// columns, and rewrite the three bounds to describe the mirrored line.
-///
-/// # Safety
-/// The scratch buffers must be allocated and at least `width` wide.
-pub unsafe fn linebuf_mirror(
-    firstp: &mut c_int,
-    lastp: &mut c_int,
-    clearp: &mut c_int,
-    width: c_int,
-) {
-    unsafe {
-        let first = *firstp;
-        let last = *lastp;
-        let n = (last - first) as size_t;
-        let mirror = width - 1; // Mirrors are more fun than television.
+pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int, width: c_int) {
+    let (first, last) = (*firstp, *lastp);
+    linebuf().mirror(first, last, width);
 
-        let chars = linebuf_char.get();
-        let scratch_char = linebuf_scratch.get().cast::<schar_T>();
-        memcpy(
-            scratch_char.offset(first as isize).cast::<c_void>(),
-            chars.offset(first as isize).cast::<c_void>(),
-            n * size_of::<schar_T>(),
-        );
-        let mut col = first;
-        while col < last {
-            let rev = mirror - col;
-            if col + 1 < last && *scratch_char.offset((col + 1) as isize) == 0 {
-                *chars.offset((rev - 1) as isize) = *scratch_char.offset(col as isize);
-                *chars.offset(rev as isize) = 0;
-                col += 1;
-            } else {
-                *chars.offset(rev as isize) = *scratch_char.offset(col as isize);
-            }
-            col += 1;
-        }
-
-        // For attrs and vcols: assumes double-width chars are self-consistent.
-        let attrs = linebuf_attr.get();
-        let scratch_attr = linebuf_scratch.get().cast::<sattr_T>();
-        memcpy(
-            scratch_attr.offset(first as isize).cast::<c_void>(),
-            attrs.offset(first as isize).cast::<c_void>(),
-            n * size_of::<sattr_T>(),
-        );
-        let mut col = first;
-        while col < last {
-            *attrs.offset((mirror - col) as isize) = *scratch_attr.offset(col as isize);
-            col += 1;
-        }
-
-        let vcols = linebuf_vcol.get();
-        let scratch_vcol = linebuf_scratch.get().cast::<colnr_T>();
-        memcpy(
-            scratch_vcol.offset(first as isize).cast::<c_void>(),
-            vcols.offset(first as isize).cast::<c_void>(),
-            n * size_of::<colnr_T>(),
-        );
-        let mut col = first;
-        while col < last {
-            *vcols.offset((mirror - col) as isize) = *scratch_vcol.offset(col as isize);
-            col += 1;
-        }
-
-        *firstp = width - *clearp;
-        *clearp = width - first;
-        *lastp = width - last;
-    }
+    *firstp = width - *clearp;
+    *clearp = width - first;
+    *lastp = width - last;
 }
 
 /// End the batch and send the line to the UI.
@@ -443,33 +407,33 @@ pub unsafe fn linebuf_mirror(
 /// A batch must be in progress.
 pub unsafe fn grid_line_flush() {
     unsafe {
-        let b = BATCH.ptr();
-        let grid = (*b).grid;
-        (*b).grid = GridRef::NONE;
-        (*b).clear_to = (*b).last.max((*b).clear_to);
+        let mut b = batch();
+        let grid = b.grid;
+        b.grid = GridRef::NONE;
+        b.clear_to = b.last.max(b.clear_to);
         debug_assert!(
-            (*b).clear_to <= (*b).maxcol,
+            b.clear_to <= b.maxcol,
             "grid_line_clear_to <= grid_line_maxcol"
         );
-        if (*b).first >= (*b).clear_to {
+        if b.first >= b.clear_to {
             return;
         }
 
         grid_put_linebuf(
             grid,
-            (*b).row,
-            (*b).coloff,
+            b.row,
+            b.coloff,
             LineSpan {
-                col: (*b).first,
-                endcol: (*b).last,
-                clear_width: (*b).clear_to,
+                col: b.first,
+                endcol: b.last,
+                clear_width: b.clear_to,
             },
             LineAttrs {
-                bg: (*b).bg_attr,
-                clear: (*b).clear_attr,
+                bg: b.bg_attr,
+                clear: b.clear_attr,
             },
             -1,
-            (*b).flags,
+            b.flags,
         );
     }
 }
@@ -482,12 +446,12 @@ pub unsafe fn grid_line_flush() {
 /// A batch must be in progress.
 pub unsafe fn grid_line_flush_if_valid_row() {
     unsafe {
-        let b = BATCH.ptr();
-        if (*b).row < 0 || (*b).row >= { (*b).grid }.rows {
+        let mut b = batch();
+        if b.row < 0 || b.row >= { b.grid }.rows {
             if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
                 abort();
             }
-            (*b).grid = GridRef::NONE;
+            b.grid = GridRef::NONE;
             return;
         }
         grid_line_flush();
@@ -510,11 +474,11 @@ pub unsafe fn grid_clear(
         let mut row = start_row;
         while row < end_row {
             grid_line_start(view, row);
-            let b = BATCH.ptr();
-            end_col = end_col.min((*b).maxcol);
-            if (*b).row >= { (*b).grid }.rows || start_col >= end_col {
+            let mut b = batch();
+            end_col = end_col.min(b.maxcol);
+            if b.row >= { b.grid }.rows || start_col >= end_col {
                 // TODO(bfredl): make callers behave instead.
-                (*b).grid = GridRef::NONE;
+                b.grid = GridRef::NONE;
                 return;
             }
             grid_line_clear_end(start_col, end_col, attr, 0);
@@ -531,21 +495,21 @@ pub unsafe fn grid_clear(
 /// - different attributes, or
 /// - a double-width character whose second cell differs.
 ///
-/// # Safety
-/// `col` must be within the scratch buffers.
 #[inline]
-unsafe fn grid_char_needs_redraw(on_grid: &GridCells<'_>, col: c_int, cols: c_int) -> bool {
-    unsafe {
-        let at = col as size_t;
-        cols > 0
-            && ((*linebuf_char.get().offset(col as isize) != on_grid.chars[at]
-                || *linebuf_attr.get().offset(col as isize) != on_grid.attrs[at]
-                || (cols > 1
-                    && *linebuf_char.get().offset((col + 1) as isize) == 0
-                    && *linebuf_char.get().offset((col + 1) as isize) != on_grid.chars[at + 1]))
-                || exmode_active.get() // TODO(bfredl): what in the actual fuck
-                || rdb_flags.get() & kOptRdbFlagNodelta != 0)
-    }
+fn grid_char_needs_redraw(
+    line: &LineBuf,
+    on_grid: &GridCells<'_>,
+    col: c_int,
+    cols: c_int,
+) -> bool {
+    let at = col as size_t;
+    let (chars, attrs) = (line.chars(), line.attrs());
+    cols > 0
+        && ((chars[at] != on_grid.chars[at]
+            || attrs[at] != on_grid.attrs[at]
+            || (cols > 1 && chars[at + 1] == 0 && chars[at + 1] != on_grid.chars[at + 1]))
+            || exmode_active.get() // TODO(bfredl): what in the actual fuck
+            || rdb_flags.get() & kOptRdbFlagNodelta != 0)
 }
 
 /// What [`copy_changed_cells`] wrote.
@@ -568,73 +532,72 @@ struct Copied {
 /// `on_grid` is the row from the batch's first column on; every column here
 /// indexes into it.
 ///
-/// # Safety
-/// `col..endcol` must be within the scratch buffers.
-unsafe fn copy_changed_cells(on_grid: &mut GridCells<'_>, mut col: c_int, endcol: c_int) -> Copied {
-    unsafe {
-        let chars = linebuf_char.get();
-        let attrs = linebuf_attr.get();
-        let vcols = linebuf_vcol.get();
+fn copy_changed_cells(
+    line: &LineBuf,
+    on_grid: &mut GridCells<'_>,
+    mut col: c_int,
+    endcol: c_int,
+) -> Copied {
+    let (chars, attrs, vcols) = (line.chars(), line.attrs(), line.vcols());
 
-        let mut redraw_next = grid_char_needs_redraw(on_grid, col, endcol - col);
-        let mut start_dirty = -1;
-        let mut end_dirty = 0;
-        let mut clear_next = false;
+    let mut redraw_next = grid_char_needs_redraw(line, on_grid, col, endcol - col);
+    let mut start_dirty = -1;
+    let mut end_dirty = 0;
+    let mut clear_next = false;
 
-        while col < endcol {
-            // 1 for a normal char, 2 when it occupies two display cells.
-            let char_cells = if col + 1 < endcol && *chars.offset((col + 1) as isize) == 0 {
-                2
-            } else {
-                1
-            };
-            let redraw_this = redraw_next;
-            let off = col as size_t;
-            redraw_next =
-                grid_char_needs_redraw(on_grid, col + char_cells, endcol - col - char_cells);
+    while col < endcol {
+        // 1 for a normal char, 2 when it occupies two display cells.
+        let char_cells = if col + 1 < endcol && chars[(col + 1) as size_t] == 0 {
+            2
+        } else {
+            1
+        };
+        let redraw_this = redraw_next;
+        let off = col as size_t;
+        redraw_next =
+            grid_char_needs_redraw(line, on_grid, col + char_cells, endcol - col - char_cells);
 
-            if redraw_this {
-                if start_dirty == -1 {
-                    start_dirty = col;
-                }
-                end_dirty = col + char_cells;
-                // Writing a single-width char over a double-width one at the
-                // end of the redrawn text leaves the old right half behind.
-                // Same when writing the right half of a double-width char
-                // over the left half of an existing one.
-                if col + char_cells == endcol
-                    && off + (char_cells as size_t) < on_grid.chars.len()
-                    && on_grid.chars[off + char_cells as size_t] == 0
-                {
-                    clear_next = true;
-                }
-
-                on_grid.chars[off] = *chars.offset(col as isize);
-                on_grid.attrs[off] = *attrs.offset(col as isize);
-                if char_cells == 2 {
-                    on_grid.chars[off + 1] = *chars.offset((col + 1) as isize);
-                    // For simplicity the second half of a double-width
-                    // character gets the first half's attributes.
-                    on_grid.attrs[off + 1] = *attrs.offset(col as isize);
-                }
+        if redraw_this {
+            if start_dirty == -1 {
+                start_dirty = col;
+            }
+            end_dirty = col + char_cells;
+            // Writing a single-width char over a double-width one at the
+            // end of the redrawn text leaves the old right half behind.
+            // Same when writing the right half of a double-width char
+            // over the left half of an existing one.
+            if col + char_cells == endcol
+                && off + (char_cells as size_t) < on_grid.chars.len()
+                && on_grid.chars[off + char_cells as size_t] == 0
+            {
+                clear_next = true;
             }
 
-            on_grid.vcols[off] = *vcols.offset(col as isize);
+            on_grid.chars[off] = chars[off];
+            on_grid.attrs[off] = attrs[off];
             if char_cells == 2 {
-                on_grid.vcols[off + 1] = *vcols.offset((col + 1) as isize);
+                on_grid.chars[off + 1] = chars[off + 1];
+                // For simplicity the second half of a double-width
+                // character gets the first half's attributes.
+                on_grid.attrs[off + 1] = attrs[off];
             }
-
-            col += char_cells;
         }
 
-        Copied {
-            dirty: Dirty {
-                start: start_dirty,
-                end: end_dirty,
-            },
-            clear_next,
-            col,
+        on_grid.vcols[off] = vcols[off];
+        if char_cells == 2 {
+            on_grid.vcols[off + 1] = vcols[off + 1];
         }
+
+        col += char_cells;
+    }
+
+    Copied {
+        dirty: Dirty {
+            start: start_dirty,
+            end: end_dirty,
+        },
+        clear_next,
+        col,
     }
 }
 
@@ -722,6 +685,8 @@ pub unsafe fn grid_put_linebuf(
     last_vcol: colnr_T,
     flags: c_int,
 ) {
+    let mut line = linebuf();
+    // SAFETY: the caller's promise about `row` and the buffers.
     unsafe {
         let LineSpan {
             mut col,
@@ -753,9 +718,9 @@ pub unsafe fn grid_put_linebuf(
         // At the start of the text, overwriting the right half of a two-cell
         // character already on the grid truncates it into a '>'.
         if col > 0 && grid.char_at(off_to + col as size_t) == 0 {
-            *linebuf_char.get().offset((col - 1) as isize) = schar_from_ascii(b'>');
-            *linebuf_attr.get().offset((col - 1) as isize) =
-                grid.attr_at(off_to + col as size_t - 1);
+            let at = (col - 1) as size_t;
+            line.chars_mut()[at] = schar_from_ascii(b'>');
+            line.attrs_mut()[at] = grid.attr_at(off_to + col as size_t - 1);
             col -= 1;
         }
 
@@ -768,21 +733,18 @@ pub unsafe fn grid_put_linebuf(
         }
 
         if p_arshape.get() != 0 && p_tbidi.get() == 0 && endcol > col {
-            line_do_arabic_shape(linebuf_char.get().offset(col as isize), endcol - col);
+            line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]);
         }
 
         if attrs.bg != 0 {
-            let buf = linebuf_attr.get();
-            let mut c = col;
-            while c < endcol {
-                *buf.offset(c as isize) = hl_combine_attr(attrs.bg, *buf.offset(c as isize));
-                c += 1;
+            for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
+                *cell = hl_combine_attr(attrs.bg, *cell);
             }
         }
 
         let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
         let mut on_grid = grid.cells_mut(off_to, span_width);
-        let copied = copy_changed_cells(&mut on_grid, col, endcol);
+        let copied = copy_changed_cells(&line, &mut on_grid, col, endcol);
         let mut start_dirty = copied.dirty.start;
         let mut end_dirty = copied.dirty.end;
         col = copied.col;
@@ -852,7 +814,7 @@ pub unsafe fn grid_put_linebuf(
                 );
             } else if grid.tracks_dirty_cols() {
                 // TODO(bfredl): really get rid of the extra pseudo terminal
-                // in message.c by using a linebuf_char copy for the
+                // in message.c by using a line-buffer copy for the
                 // "throttled message line".
                 grid.raise_dirty_col(row, clear_end);
             }

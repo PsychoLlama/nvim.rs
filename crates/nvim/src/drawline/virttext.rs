@@ -20,6 +20,7 @@ use crate::decoration::{
     kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
     kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
 };
+use crate::grid::linebuf;
 use crate::types::NUL;
 
 /// Put one character of `*pp` into `dest`, and advance `*pp` past it.
@@ -36,22 +37,22 @@ use crate::types::NUL;
 pub(crate) unsafe fn line_putchar(
     buf: *mut buf_T,
     pp: &mut *const ::core::ffi::c_char,
-    dest: *mut schar_T,
+    dest: &mut [schar_T],
     maxcells: ::core::ffi::c_int,
     vcol: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    // SAFETY: the caller's string and destination cells.
-    unsafe {
-        // The caller handles overwriting the right half of a double-width
-        // character; a zero here means it did not.
-        debug_assert!(*dest != 0);
-        debug_assert!(maxcells > 0);
+    // The caller handles overwriting the right half of a double-width
+    // character; a zero here means it did not.
+    debug_assert!(dest[0] != 0);
+    debug_assert!(maxcells > 0);
 
+    // SAFETY: the caller's string and buffer.
+    unsafe {
         let p = *pp;
         let mut cells = utf_ptr2cells(p);
         let c_len = utfc_ptr2len(p);
         if cells > maxcells {
-            *dest = schar_from_ascii(b' ');
+            dest[0] = schar_from_ascii(b' ');
             return 1;
         }
 
@@ -61,19 +62,17 @@ pub(crate) unsafe fn line_putchar(
         }
         // Overwriting the left half of a double-width character: clear its
         // orphaned right half.
-        if cells < maxcells && *dest.add(cells as usize) == 0 {
-            *dest.add(cells as usize) = schar_from_ascii(b' ');
+        if cells < maxcells && dest[cells as usize] == 0 {
+            dest[cells as usize] = schar_from_ascii(b' ');
         }
         if is_tab {
-            for c in 0..cells {
-                *dest.add(c as usize) = schar_from_ascii(b' ');
-            }
+            dest[..cells as usize].fill(schar_from_ascii(b' '));
         } else {
             let mut u8c: ::core::ffi::c_int = 0;
-            *dest = utfc_ptr2schar(p, &raw mut u8c);
+            dest[0] = utfc_ptr2schar(p, &raw mut u8c);
             if cells > 1 {
                 // The right half of a double-width glyph is a zero cell.
-                *dest.add(1) = 0;
+                dest[1] = 0;
             }
         }
 
@@ -253,6 +252,7 @@ pub(crate) unsafe fn draw_virt_text_item(
     mut vcol: ::core::ffi::c_int,
     mut skip_cells: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
+    let mut line = linebuf();
     // SAFETY: the caller's buffer, chunks and line-buffer width.
     unsafe {
         let mut virt_str = c"".as_ptr();
@@ -296,17 +296,14 @@ pub(crate) unsafe fn draw_virt_text_item(
             debug_assert!(skip_cells <= 0);
 
             let mut through = false;
+            let under = line.attrs_mut()[col as usize];
             let attr = match hl_mode {
-                kHlModeCombine => hl_combine_attr(*linebuf_attr.get().add(col as usize), virt_attr),
+                kHlModeCombine => hl_combine_attr(under, virt_attr),
                 kHlModeBlend => {
                     // A space blends the cell underneath through, rather than
                     // painting over it.
                     through = *draw_str as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
-                    hl_blend_attrs(
-                        *linebuf_attr.get().add(col as usize),
-                        virt_attr,
-                        &mut through,
-                    )
+                    hl_blend_attrs(under, virt_attr, &mut through)
                 }
                 _ => virt_attr,
             };
@@ -314,21 +311,22 @@ pub(crate) unsafe fn draw_virt_text_item(
             // Landing on the right half of a double-width character: clear
             // its left half too, and the right half itself so `line_putchar`
             // has a non-zero cell to start from.
-            if !through && *linebuf_char.get().add(col as usize) == 0 {
+            if !through && line.chars()[col as usize] == 0 {
                 debug_assert!(col > 0);
-                *linebuf_char.get().add(col as usize - 1) = schar_from_ascii(b' ');
-                *linebuf_char.get().add(col as usize) = schar_from_ascii(b' ');
+                line.chars_mut()[col as usize - 1] = schar_from_ascii(b' ');
+                line.chars_mut()[col as usize] = schar_from_ascii(b' ');
             }
 
             let mut dummy: [schar_T; 2] = [schar_from_ascii(b' '); 2];
-            let dest = if through {
-                dummy.as_mut_ptr()
+            let dest: &mut [schar_T] = if through {
+                &mut dummy
             } else {
-                linebuf_char.get().add(col as usize)
+                &mut line.chars_mut()[col as usize..]
             };
             let cells = line_putchar(buf, &mut draw_str, dest, max_col - col, vcol);
+            let attrs = line.attrs_mut();
             for _ in 0..cells {
-                *linebuf_attr.get().add(col as usize) = attr as sattr_T;
+                attrs[col as usize] = attr as sattr_T;
                 col += 1;
             }
 

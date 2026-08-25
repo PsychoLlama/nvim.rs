@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
+use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
@@ -64,6 +65,7 @@ impl WinLineVars {
     ) {
         // SAFETY: the caller's buffer, and `off` is kept under the view width
         // by the loop condition.
+        let mut line = linebuf();
         unsafe {
             let end = text.add(len);
             let mut ptr = text;
@@ -71,7 +73,7 @@ impl WinLineVars {
                 let cells = line_putchar(
                     (*wp).w_buffer,
                     &mut ptr,
-                    linebuf_char.get().add(self.off as usize),
+                    &mut line.chars_mut()[self.off as usize..],
                     (*wp).w_view_width - self.off,
                     self.off,
                 );
@@ -92,8 +94,8 @@ impl WinLineVars {
                     } else {
                         -1
                     };
-                    *linebuf_attr.get().add(self.off as usize) = myattr as sattr_T;
-                    *linebuf_vcol.get().add(self.off as usize) = vcol;
+                    line.attrs_mut()[self.off as usize] = myattr as sattr_T;
+                    line.vcols_mut()[self.off as usize] = vcol;
                     self.off += 1;
                 }
             }
@@ -115,13 +117,12 @@ impl WinLineVars {
         width: ::core::ffi::c_int,
         attr: ::core::ffi::c_int,
     ) {
-        // SAFETY: the caller's bound.
-        unsafe {
-            for _ in 0..width {
-                *linebuf_char.get().add(self.off as usize) = fillchar;
-                *linebuf_attr.get().add(self.off as usize) = attr as sattr_T;
-                self.off += 1;
-            }
+        let mut line = linebuf();
+        for _ in 0..width {
+            let at = self.off as usize;
+            line.chars_mut()[at] = fillchar;
+            line.attrs_mut()[at] = attr as sattr_T;
+            self.off += 1;
         }
     }
 }
@@ -366,8 +367,10 @@ impl WinLineVars {
             let sign_pos =
                 self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
             debug_assert!(sign_pos >= 0);
-            *linebuf_char.get().add(sign_pos as usize) = sattr.text[0];
-            *linebuf_char.get().add(sign_pos as usize + 1) = sattr.text[1];
+            let mut line = linebuf();
+            let chars = &mut line.chars_mut()[sign_pos as usize..];
+            chars[0] = sattr.text[0];
+            chars[1] = sattr.text[1];
         }
     }
 }

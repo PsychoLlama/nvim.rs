@@ -302,3 +302,149 @@ impl ScreenGrid {
         }
     }
 }
+
+/// The shared scratch line buffers: the one screen line under construction.
+///
+/// Three parallel arrays indexed by screen column -- the glyph, its highlight
+/// attribute, and the buffer virtual column the cell came from (`-1` for a
+/// cell that is not buffer text). `drawline` fills them, `grid_put_linebuf`
+/// diffs them onto a [`ScreenGrid`], and there is exactly one of them for the
+/// whole process: only one line is ever under construction at a time.
+///
+/// The three `mirror_*` arrays are the scratch a `'rightleft'` line is
+/// reversed through. C kept one untyped buffer and reinterpreted it three
+/// times; three typed ones cost twelve bytes a column and no `unsafe`.
+///
+/// All six stay as wide as the widest grid: see `grid_alloc`.
+pub(crate) struct LineBuf {
+    chars: Vec<schar_T>,
+    attrs: Vec<sattr_T>,
+    vcols: Vec<colnr_T>,
+    mirror_chars: Vec<schar_T>,
+    mirror_attrs: Vec<sattr_T>,
+    mirror_vcols: Vec<colnr_T>,
+}
+
+impl LineBuf {
+    /// No buffers at all, which is what the cell holds before the first
+    /// `grid_alloc`.
+    pub(crate) const fn empty() -> LineBuf {
+        LineBuf {
+            chars: Vec::new(),
+            attrs: Vec::new(),
+            vcols: Vec::new(),
+            mirror_chars: Vec::new(),
+            mirror_attrs: Vec::new(),
+            mirror_vcols: Vec::new(),
+        }
+    }
+
+    /// How many columns the buffers hold.
+    pub(crate) fn width(&self) -> size_t {
+        self.chars.len()
+    }
+
+    /// Widen the buffers to `width` columns, if they are narrower.
+    ///
+    /// The contents are not preserved: every caller is about to start a line
+    /// from scratch.
+    pub(crate) fn widen(&mut self, width: size_t) {
+        if self.width() >= width {
+            return;
+        }
+        self.chars.resize(width, 0);
+        self.attrs.resize(width, 0);
+        self.vcols.resize(width, 0);
+        self.mirror_chars.resize(width, 0);
+        self.mirror_attrs.resize(width, 0);
+        self.mirror_vcols.resize(width, 0);
+    }
+
+    /// The glyphs, for the readers that only look.
+    pub(crate) fn chars(&self) -> &[schar_T] {
+        &self.chars
+    }
+
+    /// The glyphs, writable.
+    pub(crate) fn chars_mut(&mut self) -> &mut [schar_T] {
+        &mut self.chars
+    }
+
+    /// The attributes, for the readers that only look.
+    pub(crate) fn attrs(&self) -> &[sattr_T] {
+        &self.attrs
+    }
+
+    /// The virtual columns, for the readers that only look.
+    pub(crate) fn vcols(&self) -> &[colnr_T] {
+        &self.vcols
+    }
+
+    /// The attributes, writable.
+    pub(crate) fn attrs_mut(&mut self) -> &mut [sattr_T] {
+        &mut self.attrs
+    }
+
+    /// The virtual columns, writable.
+    pub(crate) fn vcols_mut(&mut self) -> &mut [colnr_T] {
+        &mut self.vcols
+    }
+
+    /// All three at once, which is what a loop over columns wants: one
+    /// bounds-checked slicing, then plain indexing inside the loop.
+    pub(crate) fn parts_mut(&mut self) -> (&mut [schar_T], &mut [sattr_T], &mut [colnr_T]) {
+        (&mut self.chars, &mut self.attrs, &mut self.vcols)
+    }
+
+    /// Write one whole cell.
+    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T, vcol: colnr_T) {
+        self.chars[col] = ch;
+        self.attrs[col] = attr;
+        self.vcols[col] = vcol;
+    }
+
+    /// Fill the glyphs and attributes with a value no line can produce, so
+    /// that a batch depending on the previous line's contents trips an
+    /// assertion rather than drawing something plausible. `'redrawdebug'`
+    /// asks for this.
+    pub(crate) fn poison(&mut self) {
+        self.chars.fill(schar_T::MAX);
+        self.attrs.fill(-1);
+    }
+
+    /// Reverse `first..last` about a line of `width` columns, in place.
+    ///
+    /// Double-width characters keep their halves in order: the left half
+    /// lands one column before the right, not after it.
+    pub(crate) fn mirror(
+        &mut self,
+        first: ::core::ffi::c_int,
+        last: ::core::ffi::c_int,
+        width: ::core::ffi::c_int,
+    ) {
+        let (first, last) = (at(first), at(last));
+        let mirror = at(width - 1);
+
+        self.mirror_chars[first..last].copy_from_slice(&self.chars[first..last]);
+        let mut col = first;
+        while col < last {
+            let rev = mirror - col;
+            if col + 1 < last && self.mirror_chars[col + 1] == 0 {
+                self.chars[rev - 1] = self.mirror_chars[col];
+                self.chars[rev] = 0;
+                col += 1;
+            } else {
+                self.chars[rev] = self.mirror_chars[col];
+            }
+            col += 1;
+        }
+
+        // For attrs and vcols: assumes double-width chars are self-consistent.
+        self.mirror_attrs[first..last].copy_from_slice(&self.attrs[first..last]);
+        self.mirror_vcols[first..last].copy_from_slice(&self.vcols[first..last]);
+        for col in first..last {
+            self.attrs[mirror - col] = self.mirror_attrs[col];
+            self.vcols[mirror - col] = self.mirror_vcols[col];
+        }
+    }
+}

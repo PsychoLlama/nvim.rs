@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::MAXCOL;
 use crate::types::NUL;
@@ -213,7 +214,7 @@ impl Cells {
                 wlv.col -= 1;
             } else {
                 // Add a blank character to highlight.
-                *linebuf_char.get().add(wlv.off as usize) = schar_from_ascii(b' ');
+                linebuf().chars_mut()[wlv.off as usize] = schar_from_ascii(b' ');
             }
             if self.area_attr == 0 && !self.has_fold {
                 // Use the attributes of the highest-priority match.
@@ -229,8 +230,8 @@ impl Cells {
             } else {
                 wlv.char_attr
             };
-            *linebuf_attr.get().add(wlv.off as usize) = eol_attr as sattr_T;
-            *linebuf_vcol.get().add(wlv.off as usize) = wlv.vcol;
+            linebuf().attrs_mut()[wlv.off as usize] = eol_attr as sattr_T;
+            linebuf().vcols_mut()[wlv.off as usize] = wlv.vcol;
             wlv.col += 1;
             wlv.off += 1;
             wlv.vcol += 1;

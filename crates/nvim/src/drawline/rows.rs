@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
-use crate::grid::{SLF_INC_VCOL, SLF_WRAP};
+use crate::grid::{SLF_INC_VCOL, SLF_WRAP, linebuf};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
@@ -209,6 +209,7 @@ impl Cells {
         f: &LineFrame,
         grid: GridView,
     ) -> Step {
+        let mut line = linebuf();
         // SAFETY: the caller's window, buffer, frame and grid.
         unsafe {
             let grid_width = (*(*wp).w_grid.target).cols;
@@ -220,18 +221,18 @@ impl Cells {
                 && (*wp).w_onebuf_opt.wo_rl == 0; // not right-to-left
 
             let mut draw_col = wlv.col - wlv.boguscols;
-            for i in draw_col..self.view_width {
-                *linebuf_vcol.get().add((wlv.off + (i - draw_col)) as usize) = wlv.vcol - 1;
-            }
+            let span = wlv.off as usize..(wlv.off + self.view_width - draw_col) as usize;
+            line.vcols_mut()[span].fill(wlv.vcol - 1);
 
             // Fill the columns concealment pretended to use, so that
             // 'cursorline' still covers the whole row.
             if wlv.boguscols != 0 && (wlv.line_attr_lowprio != 0 || wlv.line_attr != 0) {
                 let attr = hl_combine_attr(wlv.line_attr_lowprio, wlv.line_attr);
                 while draw_col < self.view_width {
-                    *linebuf_char.get().add(wlv.off as usize) = schar_from_ascii(b' ');
-                    *linebuf_attr.get().add(wlv.off as usize) = attr as sattr_T;
-                    // `linebuf_vcol` was filled by the loop above.
+                    let at = wlv.off as usize;
+                    line.chars_mut()[at] = schar_from_ascii(b' ');
+                    line.attrs_mut()[at] = attr as sattr_T;
+                    // The vcols were filled by the loop above.
                     wlv.off += 1;
                     draw_col += 1;
                 }
@@ -346,6 +347,7 @@ impl Cells {
         buf: *mut buf_T,
         f: &LineFrame,
     ) {
+        let mut line = linebuf();
         // SAFETY: the caller's window, buffer and frame.
         unsafe {
             // The line may end left of the left margin.
@@ -366,8 +368,7 @@ impl Cells {
             // Increasing virtual columns past the end of the line, so a click
             // out there lands somewhere sensible.
             for i in wlv.col..self.view_width {
-                *linebuf_vcol.get().add((wlv.off + (i - wlv.col)) as usize) =
-                    wlv.vcol + (i - wlv.col);
+                line.vcols_mut()[(wlv.off + (i - wlv.col)) as usize] = wlv.vcol + (i - wlv.col);
             }
 
             if ((*wp).w_onebuf_opt.wo_cuc != 0
@@ -431,6 +432,7 @@ impl Cells {
         wp: *mut win_T,
         f: &LineFrame,
     ) {
+        let mut line = linebuf();
         // SAFETY: the caller's window and frame.
         unsafe {
             let mut rightmost_vcol = get_rightmost_vcol(wp, wlv.color_cols);
@@ -454,7 +456,7 @@ impl Cells {
             }
 
             while wlv.col < self.view_width {
-                *linebuf_char.get().add(wlv.off as usize) = schar_from_ascii(b' ');
+                line.chars_mut()[wlv.off as usize] = schar_from_ascii(b' ');
                 wlv.advance_color_col(wlv.hl_vcol());
 
                 let mut col_attr = base_attr;
@@ -473,8 +475,8 @@ impl Cells {
                 }
                 col_attr = hl_combine_attr(col_attr, wlv.line_attr);
 
-                *linebuf_attr.get().add(wlv.off as usize) = col_attr as sattr_T;
-                // `linebuf_vcol` was filled by the loop in the caller.
+                line.attrs_mut()[wlv.off as usize] = col_attr as sattr_T;
+                // The vcols were filled by the loop in the caller.
                 wlv.off += 1;
                 wlv.col += 1;
                 wlv.vcol += 1;

@@ -537,8 +537,7 @@ pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
 
 /// Put one glyph in the open batch.
 pub(crate) fn paint_schar(col: c_int, sc: schar_T, attr: c_int) {
-    // SAFETY: the batch is open for as long as a line is being painted.
-    unsafe { grid_line_put_schar(col, sc, attr) };
+    grid_line_put_schar(col, sc, attr);
 }
 
 /// Put `text` in the open batch, answering how many cells it took.
@@ -559,8 +558,7 @@ pub(crate) fn paint_cstr(col: c_int, text: &CStr, attr: c_int) -> c_int {
 
 /// Fill `col..end_col` with one glyph, answering where it stopped.
 pub(crate) fn paint_fill(col: c_int, end_col: c_int, sc: schar_T, attr: c_int) -> c_int {
-    // SAFETY: as [`paint_schar`].
-    unsafe { grid_line_fill(col, end_col, sc, attr) }
+    grid_line_fill(col, end_col, sc, attr)
 }
 
 /// Close the batch, sending the line to the UI.

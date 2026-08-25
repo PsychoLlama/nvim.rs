@@ -998,14 +998,6 @@ pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
-pub static linebuf_char: GlobalCell<*mut schar_T> =
-    GlobalCell::new(::core::ptr::null_mut::<schar_T>());
-pub static linebuf_attr: GlobalCell<*mut sattr_T> =
-    GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
-pub static linebuf_vcol: GlobalCell<*mut colnr_T> =
-    GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
-pub static linebuf_scratch: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_ambw: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_acd: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ai: GlobalCell<c_int> = GlobalCell::new(0);

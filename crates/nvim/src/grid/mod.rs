@@ -40,8 +40,8 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::main::{
-    default_grid, exmode_active, firstwin, full_screen, hl_attr_active, linebuf_attr, linebuf_char,
-    linebuf_scratch, linebuf_vcol, p_arshape, p_tbidi, rdb_flags, resizing_screen,
+    default_grid, exmode_active, firstwin, full_screen, hl_attr_active, p_arshape, p_tbidi,
+    rdb_flags, resizing_screen,
 };
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
@@ -49,20 +49,20 @@ use crate::mbyte::{
     mb_string2cells, utf_char2bytes, utf_char2len, utf_cp_bounds, utf_ptr2cells, utf_ptr2cells_len,
     utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len, utfc_ptrlen2schar,
 };
-use crate::memory::{xcalloc, xfree, xmalloc};
+use crate::memory::{xcalloc, xfree};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BorderTextType, GridCells, GridView, Integer, MHPutStatus, MapHash, ScreenGrid,
-    Set_glyph, String_0, VirtText, WinConfig, colnr_T, handle_T, sattr_T, schar_T, size_t,
-    uint32_t, win_T, wline_T,
+    Set_glyph, String_0, VirtText, WinConfig, colnr_T, handle_T, schar_T, size_t, uint32_t, win_T,
+    wline_T,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
 };
-use ::libc::{abort, memcpy, memset, strlen, strnlen};
+use ::libc::{abort, memcpy, strlen, strnlen};
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -73,6 +73,7 @@ pub mod line;
 pub mod schar;
 
 pub use border::grid_draw_border;
+pub(crate) use line::linebuf;
 pub use line::{
     LineAttrs, LineSpan, grid_clear, grid_line_clear_end, grid_line_cursor_goto, grid_line_fill,
     grid_line_flush, grid_line_flush_if_valid_row, grid_line_getchar, grid_line_mirror,
@@ -99,15 +100,6 @@ pub const SLF_WRAP: c_int = 2;
 pub const SLF_INC_VCOL: c_int = 4;
 /// Handle of `default_grid`; window grids are numbered above it.
 const DEFAULT_GRID_HANDLE: c_int = 1;
-
-/// The element type of `linebuf_scratch`, which is reinterpreted as
-/// `schar_T`, `sattr_T` or `colnr_T` in turn by [`linebuf_mirror`]. All three
-/// are four bytes wide.
-type sscratch_T = c_int;
-
-/// Width of the shared scratch line buffers, which are kept as wide as the
-/// widest grid.
-static LINEBUF_SIZE: GlobalCell<size_t> = GlobalCell::new(0);
 
 /// A live grid, named by address rather than borrowed. See the module docs
 /// for why nothing in the draw path may hold a `&mut ScreenGrid`.
@@ -237,24 +229,9 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
     debug_assert!(rows >= 0 && columns >= 0, "rows >= 0 && columns >= 0");
     grid.alloc(rows, columns, copy, valid);
 
-    // One scratch buffer is shared by every grid, so keep it as wide as the
+    // One line buffer is shared by every grid, so keep it as wide as the
     // widest of them.
-    if LINEBUF_SIZE.get() < columns as size_t {
-        let n = columns as size_t;
-        // SAFETY: the four buffers are this module's own, always either null
-        // or a `xmalloc` of `LINEBUF_SIZE` elements.
-        unsafe {
-            xfree(linebuf_char.get().cast::<c_void>());
-            xfree(linebuf_attr.get().cast::<c_void>());
-            xfree(linebuf_vcol.get().cast::<c_void>());
-            xfree(linebuf_scratch.get().cast::<c_void>());
-            linebuf_char.set(xmalloc(n * size_of::<schar_T>()).cast::<schar_T>());
-            linebuf_attr.set(xmalloc(n * size_of::<sattr_T>()).cast::<sattr_T>());
-            linebuf_vcol.set(xmalloc(n * size_of::<colnr_T>()).cast::<colnr_T>());
-            linebuf_scratch.set(xmalloc(n * size_of::<sscratch_T>()).cast::<c_char>());
-        }
-        LINEBUF_SIZE.set(n);
-    }
+    linebuf().widen(columns as size_t);
 }
 
 /// (Re)allocate a window's own grid if its size changed while in

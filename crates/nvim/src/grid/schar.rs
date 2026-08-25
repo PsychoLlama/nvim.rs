@@ -266,45 +266,33 @@ fn is_arabic_char(c: c_int) -> bool {
 /// depends on the characters either side of it.
 ///
 /// # Safety
-/// `buf` must point to `cols` glyphs this process produced.
-pub unsafe fn line_do_arabic_shape(buf: *mut schar_T, cols: c_int) {
+/// Every glyph in `buf` must be one this process produced.
+pub unsafe fn line_do_arabic_shape(buf: &mut [schar_T]) {
+    // SAFETY: the caller's promise, for every call below.
     unsafe {
         // Quickly skip over non-Arabic text.
-        let mut i = 0;
-        while i < cols {
-            if schar_in_arabic_block(*buf.offset(i as isize)) {
-                break;
-            }
-            i += 1;
-        }
-        if i == cols {
+        let Some(start) = buf.iter().position(|&c| schar_in_arabic_block(c)) else {
             return;
-        }
+        };
 
         let mut c0prev = 0;
-        let (mut c0, mut c1) = schar_get_first_two_codepoints(*buf.offset(i as isize));
+        let (mut c0, mut c1) = schar_get_first_two_codepoints(buf[start]);
 
-        while i < cols {
-            let next = if i + 1 < cols {
-                *buf.offset((i + 1) as isize)
-            } else {
-                0
-            };
+        for i in start..buf.len() {
+            let next = if i + 1 < buf.len() { buf[i + 1] } else { 0 };
             let (c0next, c1next) = schar_get_first_two_codepoints(next);
 
             if is_arabic_char(c0) {
                 let mut c1new = c1;
                 let c0new = arabic_shape(c0, &mut c1new, c0next, c1next, c0prev);
                 if c0new != c0 || c1new != c1 {
-                    *buf.offset(i as isize) =
-                        reshape(*buf.offset(i as isize), c0, c1, c0new, c1new);
+                    buf[i] = reshape(buf[i], c0, c1, c0new, c1new);
                 }
             }
 
             c0prev = c0;
             c0 = c0next;
             c1 = c1next;
-            i += 1;
         }
     }
 }

@@ -14,7 +14,7 @@
 //! ## The line buffer
 //!
 //! Drawing does not write to the grid. It fills three parallel arrays indexed
-//! by screen column — `linebuf_char`, `linebuf_attr` and `linebuf_vcol` — and
+//! by screen column — the glyph, its attribute and its vcol — and
 //! `grid_put_linebuf` diffs the result against what the grid already holds.
 //! [`WinLineVars::off`] is the write cursor into them; [`put_cell`] is the one
 //! place all three are written together.
@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::linebuf;
 use crate::types::NUL;
 
 /// The variables `win_line` passes to the functions that draw parts of a line.
@@ -313,23 +314,17 @@ pub(crate) struct LineSetup {
 /// that is not buffer text. Everything left of the text writes `-1` (or the
 /// fold column's own `-2`/`-3` markers, which `'mouse'` handling reads back).
 ///
-/// # Safety
-/// `off` must be under `w_view_width` of the window being drawn, and the line
-/// buffers must be sized for it — `grid_alloc` keeps them at least that wide.
+/// `off` must be under `w_view_width` of the window being drawn; the buffers
+/// are at least that wide, so a caller that gets it wrong panics rather than
+/// writing past the line.
 #[inline(always)]
-pub(crate) unsafe fn put_cell(
+pub(crate) fn put_cell(
     off: ::core::ffi::c_int,
     ch: schar_T,
     attr: ::core::ffi::c_int,
     vcol: colnr_T,
 ) {
-    // SAFETY: the caller's bound.
-    unsafe {
-        let at = off as usize;
-        *linebuf_char.get().add(at) = ch;
-        *linebuf_attr.get().add(at) = attr as sattr_T;
-        *linebuf_vcol.get().add(at) = vcol;
-    }
+    linebuf().put(off as usize, ch, attr as sattr_T, vcol);
 }
 
 // ---------------------------------------------------------------------------
