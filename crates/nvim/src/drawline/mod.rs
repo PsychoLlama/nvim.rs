@@ -16,6 +16,7 @@ use crate::decoration::{
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_change_parse, diff_check_with_linestatus, diff_find_change};
+use crate::drawscreen::SearchHl;
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
 use crate::eval::vars::set_vim_var_nr;
 use crate::fold::{FOLD_TEXT_LEN, VIRTTEXT_EMPTY, get_foldtext};
@@ -25,6 +26,7 @@ use crate::grid::{
     schar_cells, schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii,
     schar_get_first_codepoint, schar_len,
 };
+use crate::highlight::default_hl_attr;
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
 };
@@ -37,8 +39,8 @@ use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
     State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol, dy_flags,
-    highlight_attr, highlight_match, hl_attr_active, normal_bg, p_sel, screen_search_hl,
-    search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
+    highlight_match, hl_attr_active, normal_bg, p_sel, search_match_endcol, search_match_lines,
+    spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,

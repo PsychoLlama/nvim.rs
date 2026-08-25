@@ -154,6 +154,22 @@ static ATTRS: GlobalCell<AttrTable> = GlobalCell::new(AttrTable::new());
 /// Results of [`hl_combine_attr`], by the pair that produced them.
 static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
 
+/// The combine cache, by address: it is read and written once per cell on
+/// the draw path, so the lookup goes straight at it rather than through a
+/// borrow.
+fn combine_cache() -> *mut AttrCache {
+    COMBINE.ptr()
+}
+
+/// The attribute the built-in highlight group `hlf` resolves to.
+///
+/// One `c_int` out of the table rather than a copy of all 76 of them: this
+/// is asked per spell run and per UI group.
+pub(crate) fn default_hl_attr(hlf: usize) -> c_int {
+    // SAFETY: reads one element of a `static`'s array.
+    unsafe { (*highlight_attr.ptr())[hlf] }
+}
+
 /// The URLs entries refer to by index (OSC 8 hyperlinks).
 static URLS: GlobalCell<UrlTable> = GlobalCell::new(UrlTable::new());
 
@@ -362,7 +378,7 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
         }
         for hlf in 0..HLF_COUNT as usize {
             let name = cstr_as_string(hlf_names[hlf]);
-            let attr = Integer::from((*highlight_attr.ptr())[hlf]);
+            let attr = Integer::from(default_hl_attr(hlf));
             remote_ui_hl_group_set(ui, name, attr);
         }
     }
@@ -501,10 +517,10 @@ pub unsafe fn clear_hl_tables(reinit: bool) {
         return;
     }
     highlight_init();
+    // No group's attribute matches its remembered one any more.
+    highlight_attr_last.set([-1; HLF_COUNT as usize]);
     // SAFETY: the editor's own tables.
     unsafe {
-        // No group's attribute matches its remembered one any more.
-        (*highlight_attr_last.ptr()).fill(-1);
         highlight_attr_set_all();
         highlight_changed();
         screen_invalidate_highlights();
@@ -542,7 +558,7 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
 
     // SAFETY: the caller's ids and the editor's own tables.
     unsafe {
-        let cached = (*COMBINE.ptr()).get(char_attr, prim_attr);
+        let cached = (*combine_cache()).get(char_attr, prim_attr);
         if cached > 0 {
             return cached;
         }
@@ -605,7 +621,7 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
             id2: prim_attr,
         });
         if id > 0 {
-            (*COMBINE.ptr()).insert(char_attr, prim_attr, id);
+            (*combine_cache()).insert(char_attr, prim_attr, id);
         }
         id
     }

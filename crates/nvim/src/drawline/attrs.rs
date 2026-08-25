@@ -202,7 +202,7 @@ impl Cells {
                 wlv.lnum,
                 at,
                 &raw mut self.line,
-                screen_search_hl.ptr(),
+                SearchHl::current().raw(),
                 &raw mut self.has_match_conc,
                 &raw mut self.match_conc,
                 self.lcs_eol_todo,

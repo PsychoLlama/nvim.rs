@@ -143,7 +143,7 @@ pub(crate) unsafe fn prepare_line(
                 lnum,
                 at,
                 &raw mut s.line,
-                screen_search_hl.ptr(),
+                SearchHl::current().raw(),
                 &raw mut s.search_attr,
                 &raw mut s.search_attr_from_match,
             );
@@ -856,7 +856,7 @@ impl LineSetup {
                 debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);
                 self.word_end = (*wp).w_cursor.col + len as ::core::ffi::c_int + 1;
                 if spell_hlf != HLF_COUNT {
-                    self.spell_attr = (*highlight_attr.ptr())[spell_hlf as usize];
+                    self.spell_attr = default_hl_attr(spell_hlf as usize);
                 }
             }
             (*wp).w_cursor = saved_cursor;

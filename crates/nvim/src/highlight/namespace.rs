@@ -21,6 +21,7 @@
 //! a namespace forced by a fast callback wins, then the current window's,
 //! then the global one.
 
+use super::default_hl_attr;
 use super::{
     HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
     hl_get_syn_attr, kHlUI, syn_attr2entry,
@@ -51,6 +52,13 @@ use core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
+
+/// The built-in highlight table, by address: `hl_attr_active` and a window's
+/// `w_ns_hl_attr` both *hold* it, switching between this table and a
+/// namespace's own.
+fn default_hl_attr_table() -> *mut c_int {
+    highlight_attr.ptr().cast::<c_int>()
+}
 
 /// The two maps here are keyed by small integers and never iterated, so a
 /// fixed-seed hasher is both enough and constructible in a `static`.
@@ -327,7 +335,7 @@ pub unsafe fn hl_check_ns() -> bool {
     }
 
     ns_hl_active.set(ns);
-    hl_attr_active.set(highlight_attr.ptr().cast::<c_int>());
+    hl_attr_active.set(default_hl_attr_table());
     if ns > 0 {
         // SAFETY: the editor's own tables.
         unsafe { update_ns_hl(ns) };
@@ -441,7 +449,7 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             (*wp).w_ns_hl_active = ns_id;
             let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
             // No namespace table: read the global one.
-            (*wp).w_ns_hl_attr = table.unwrap_or_else(|| highlight_attr.ptr().cast::<c_int>());
+            (*wp).w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table);
         }
         let hl_def = (*wp).w_ns_hl_attr;
 
@@ -463,7 +471,7 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             if active > 0 {
                 active
             } else {
-                (*highlight_attr.ptr())[HLF_NFLOAT as usize]
+                default_hl_attr(HLF_NFLOAT as usize)
             }
         } else {
             0

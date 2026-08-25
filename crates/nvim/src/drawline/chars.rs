@@ -472,7 +472,7 @@ impl Cells {
             }
 
             if spell_hlf != HLF_COUNT {
-                self.spell_attr = (*highlight_attr.ptr())[spell_hlf as usize];
+                self.spell_attr = default_hl_attr(spell_hlf as usize);
             }
 
             if (*f.spv).spv_cap_col > 0 {

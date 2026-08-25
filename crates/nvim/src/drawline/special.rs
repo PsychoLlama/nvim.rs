@@ -196,7 +196,7 @@ impl Cells {
             }
             // Does the previous column start a search match?
             let prevcol_hl_flag =
-                get_prevcol_hl_flag(wp, screen_search_hl.ptr(), self.byte_col() - 1);
+                get_prevcol_hl_flag(wp, SearchHl::current().raw(), self.byte_col() - 1);
             let want = self.lcs_eol_todo
                 && ((self.area_attr != 0
                     && wlv.vcol == wlv.fromcol
@@ -220,7 +220,7 @@ impl Cells {
                 // Use the attributes of the highest-priority match.
                 get_search_match_hl(
                     wp,
-                    screen_search_hl.ptr(),
+                    SearchHl::current().raw(),
                     self.byte_col(),
                     &raw mut wlv.char_attr,
                 );

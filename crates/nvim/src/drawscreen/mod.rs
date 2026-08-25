@@ -92,7 +92,8 @@ use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     DecorPriority, DecorVirtText, DecorVirtText_data, FAIL, Integer, OK, OptInt, VirtText,
     VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T,
-    pos_T, schar_T, size_t, spellvars_T, uint16_t, varnumber_T, win_T,
+    match_T, pos_T, proftime_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
+    varnumber_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -486,7 +487,7 @@ pub unsafe fn update_screen() -> c_int {
 
         // Top to bottom through the windows, redrawing the ones that need it.
         let mut did_one = false;
-        (*screen_search_hl.ptr()).rm.regprog = ::core::ptr::null_mut();
+        SearchHl::current().set_regprog(::core::ptr::null_mut());
 
         for wp in windows_in_curtab() {
             if (*wp).w_redr_type == UPD_CLEAR
@@ -578,30 +579,74 @@ pub unsafe fn update_screen() -> c_int {
     }
 }
 
-/// Compile the `'hlsearch'` pattern for the redraw that is starting.
-pub unsafe fn start_search_hl() {
-    // SAFETY: the screen's search-highlight state, on the main thread.
-    unsafe {
-        if p_hls.get() == 0 || no_hlsearch.get() {
-            return;
-        }
-        end_search_hl(); // just in case it was not called before
-        last_pat_prog(&raw mut (*screen_search_hl.ptr()).rm);
-        // Bound the search by 'redrawtime'.
-        (*screen_search_hl.ptr()).tm = profile_setlimit(p_rdt.get() as int64_t);
+/// The search-highlight matcher the whole redraw shares.
+///
+/// A `Copy` handle that *names* the cell rather than borrowing it: it is
+/// handed to `drawline/`, which runs decoration providers that re-enter the
+/// draw pass, so no borrow could span the walk.
+#[derive(Clone, Copy)]
+pub(crate) struct SearchHl(*mut match_T);
+
+impl SearchHl {
+    /// The one place the redraw matcher's address is taken.
+    pub(crate) fn current() -> Self {
+        SearchHl(screen_search_hl.ptr())
+    }
+
+    /// The address, for the `*_search_hl` helpers that take one.
+    pub(crate) fn raw(self) -> *mut match_T {
+        self.0
+    }
+
+    /// The multi-line regmatch, for `last_pat_prog` to compile into.
+    pub(crate) fn regmatch(self) -> *mut regmmatch_T {
+        // SAFETY: the only constructor names a `static`; no dereference here.
+        unsafe { &raw mut (*self.0).rm }
+    }
+
+    /// The compiled `'hlsearch'` pattern, NULL when there is none.
+    pub(crate) fn regprog(self) -> *mut regprog_T {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { (*self.0).rm.regprog }
+    }
+
+    /// Install (or, with NULL, forget) the compiled pattern.
+    pub(crate) fn set_regprog(self, prog: *mut regprog_T) {
+        // SAFETY: as `regprog`.
+        unsafe { (*self.0).rm.regprog = prog };
+    }
+
+    /// Bound the matching by `'redrawtime'`.
+    fn set_time_limit(self, tm: proftime_T) {
+        // SAFETY: as `regprog`.
+        unsafe { (*self.0).tm = tm };
     }
 }
 
-/// Free the compiled `'hlsearch'` pattern.
-pub unsafe fn end_search_hl() {
-    // SAFETY: the screen's search-highlight state, on the main thread.
-    unsafe {
-        if (*screen_search_hl.ptr()).rm.regprog.is_null() {
-            return;
-        }
-        vim_regfree((*screen_search_hl.ptr()).rm.regprog);
-        (*screen_search_hl.ptr()).rm.regprog = ::core::ptr::null_mut();
+/// Compile the `'hlsearch'` pattern for the redraw that is starting.
+pub unsafe fn start_search_hl() {
+    if p_hls.get() == 0 || no_hlsearch.get() {
+        return;
     }
+    end_search_hl(); // just in case it was not called before
+    let hl = SearchHl::current();
+    // SAFETY: the search history's own last pattern, compiled into the
+    // redraw's matcher.
+    unsafe { last_pat_prog(hl.regmatch()) };
+    // Bound the search by 'redrawtime'.
+    hl.set_time_limit(profile_setlimit(p_rdt.get() as int64_t));
+}
+
+/// Free the compiled `'hlsearch'` pattern.
+pub fn end_search_hl() {
+    let hl = SearchHl::current();
+    let prog = hl.regprog();
+    if prog.is_null() {
+        return;
+    }
+    // SAFETY: the pattern `start_search_hl` compiled, freed once.
+    unsafe { vim_regfree(prog) };
+    hl.set_regprog(::core::ptr::null_mut());
 }
 
 /// Put the terminal cursor where the cursor is in the current window.

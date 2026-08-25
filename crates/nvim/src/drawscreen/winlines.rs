@@ -310,7 +310,7 @@ unsafe fn draw_one_line(
             // below take the rest.
             w.row = (*wp).w_view_height + 1;
         } else {
-            prepare_search_hl(wp, screen_search_hl.ptr(), w.lnum);
+            prepare_search_hl(wp, SearchHl::current().raw(), w.lnum);
             // Let the syntax machinery know lines were skipped.
             if w.syntax_last_parsed != 0 && w.syntax_last_parsed + 1 < w.lnum && syntax_present(wp)
             {

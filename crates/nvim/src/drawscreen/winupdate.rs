@@ -167,7 +167,7 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
         validate_virtcol(wp);
         rg.redr_type = (*wp).w_redr_type;
 
-        init_search_hl(wp, screen_search_hl.ptr());
+        init_search_hl(wp, SearchHl::current().raw());
 
         clamp_skipcol(wp);
 
@@ -371,8 +371,9 @@ unsafe fn find_changed_lines(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) 
             // With a multi-line 'hlsearch' or :match pattern, a change in one
             // line can invalidate the highlighting of an earlier one. Simple
             // solution: redraw every visible line above the change.
-            rg.top_to_mod = if !(*screen_search_hl.ptr()).rm.regprog.is_null() {
-                re_multiline((*screen_search_hl.ptr()).rm.regprog) != 0
+            let regprog = SearchHl::current().regprog();
+            rg.top_to_mod = if !regprog.is_null() {
+                re_multiline(regprog) != 0
             } else {
                 false
             };
@@ -609,11 +610,11 @@ unsafe fn scroll_down(wp: *mut win_T, rg: &mut Regions) {
 /// # Safety
 /// `wp` must be a live window.
 unsafe fn scroll_up(wp: *mut win_T, rg: &mut Regions) {
+    // Find `w_topline` in `w_lines[]`, counting the rows above it.
+    let mut at = -1;
+    let mut rows = 0;
     // SAFETY: the caller's window and its `w_lines` array.
     unsafe {
-        // Find `w_topline` in `w_lines[]`, counting the rows above it.
-        let mut at = -1;
-        let mut rows = 0;
         for i in 0..(*wp).w_lines_valid {
             let wl = (*wp).w_lines.add(i as usize);
             if (*wl).wl_valid && (*wl).wl_lnum == (*wp).w_topline {
