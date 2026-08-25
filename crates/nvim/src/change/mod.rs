@@ -45,7 +45,7 @@ use crate::indent::{
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
 use crate::main::{
-    Insstart, Rows, State, ai_col, autocmd_busy, can_si, can_si_back, cmdmod, curbuf,
+    Insstart, Rows, State, ai_col, autocmd_busy, can_si, can_si_back, curbuf,
     curbuf_splice_pending, curtab, curwin, did_ai, did_si, emsg_silent, end_comment_pending,
     first_tabpage, firstwin, highlight_match, in_assert_fails, inhibit_delete_count,
     last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll, msg_silent,

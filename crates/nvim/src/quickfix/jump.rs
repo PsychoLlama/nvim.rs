@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::edit::BeginlineOpts;
+use crate::ex_docmd::cmdmod_tab;
 use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
 use crate::types::{FAIL, IOSIZE, OK, ShmFlag};
@@ -333,7 +334,7 @@ unsafe fn qf_jump_open_window(
 
         // A `:helpgrep` entry wants a help window.
         if (*qf_ptr).qf_type == 1
-            && (!bt_help((*curwin.get()).w_buffer) || (*cmdmod.ptr()).cmod_tab != 0)
+            && (!bt_help((*curwin.get()).w_buffer) || cmdmod_tab() != 0)
             && jump_to_help_window(qi, newwin, opened_window) == FAIL
         {
             return Jumped::Restore;

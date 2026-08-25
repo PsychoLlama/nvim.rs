@@ -76,10 +76,11 @@ pub unsafe fn ex_source(eap: *mut exarg_T) {
 pub unsafe fn ex_options(_eap: *mut exarg_T) {
     let mut buf = [0 as c_char; 500];
     let mut multi_mods = false;
-    // SAFETY: `buf` is the scratch the modifiers are rendered into, and
-    // `SYS_OPTWIN_FILE` is a NUL-terminated constant.
+    // SAFETY: `buf` is the scratch the modifiers are rendered into.
+    cmdmod
+        .with(|cmod| unsafe { add_win_cmd_modifiers(buf.as_mut_ptr(), cmod, &raw mut multi_mods) });
+    // SAFETY: `buf` is NUL-terminated and `SYS_OPTWIN_FILE` is a constant.
     unsafe {
-        add_win_cmd_modifiers(buf.as_mut_ptr(), cmdmod.ptr(), &raw mut multi_mods);
         os_setenv(c"OPTWIN_CMD".as_ptr(), buf.as_ptr(), 1);
         cmd_source(SYS_OPTWIN_FILE.as_ptr().cast_mut(), ptr::null_mut());
     }

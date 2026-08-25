@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::optionstr::empty_option;
 use crate::types::{FAIL, OK};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
@@ -82,7 +83,7 @@ pub(crate) unsafe fn jump_to_help_window(
 ) -> c_int {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let wp = if (*cmdmod.ptr()).cmod_tab != 0 || newwin {
+        let wp = if cmdmod_tab() != 0 || newwin {
             ptr::null_mut()
         } else {
             qf_find_help_win()
@@ -96,7 +97,7 @@ pub(crate) unsafe fn jump_to_help_window(
         // Put the split at the very top when no position was asked for and
         // the current window is one of a narrow vertical split.
         let mut flags = WSP_HELP as c_int;
-        if (*cmdmod.ptr()).cmod_split == 0
+        if cmdmod_split() == 0
             && (*curwin.get()).w_width != Columns.get()
             && (*curwin.get()).w_width < 80
         {

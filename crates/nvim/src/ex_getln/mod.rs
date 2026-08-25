@@ -142,8 +142,8 @@ use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr,
-    CmdModFlags, CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineColors,
-    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
+    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineColors, CmdlineInfo,
+    ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
     OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
@@ -152,8 +152,8 @@ use crate::types::{
     disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T,
     garray_T, handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T,
     magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
-    regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
-    typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -615,30 +615,6 @@ pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
     }
 }
 
-/// An all-zero [`cmdmod_T`], which is what the C leaves a `cmdmod_T` local as
-/// before `parse_cmd_address` or `cmdpreview_prepare` fills it.
-pub(crate) const CMDMOD_T_INIT: cmdmod_T = cmdmod_T {
-    cmod_flags: CmdModFlags::NONE,
-    cmod_split: 0,
-    cmod_tab: 0,
-    cmod_filter_pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmod_filter_regmatch: regmatch_T {
-        regprog: ::core::ptr::null_mut::<regprog_T>(),
-        startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-        endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    },
-    cmod_filter_force: false,
-    cmod_verbose: 0,
-    cmod_save_ei: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmod_did_sandbox: 0,
-    cmod_verbose_save: 0,
-    cmod_save_msg_silent: 0,
-    cmod_save_msg_scroll: 0,
-    cmod_did_esilent: 0,
-};
-
 /// An all-zero [`exarg_T`]; `parse_cmdline` fills it.
 pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
     arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -679,7 +655,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
 
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
 pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
-    cmdmod: CMDMOD_T_INIT,
+    cmdmod: cmdmod_T::NONE,
     magic: CmdParseInfo_magic {
         file: false,
         bar: false,
@@ -737,7 +713,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
         items: ::core::ptr::null_mut::<CpBufInfo>(),
     },
     save_hls: false,
-    save_cmdmod: CMDMOD_T_INIT,
+    save_cmdmod: cmdmod_T::NONE,
     save_view: garray_T {
         ga_len: 0,
         ga_maxlen: 0,

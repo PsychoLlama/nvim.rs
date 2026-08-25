@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 use core::ffi::{c_char, c_int};
@@ -131,7 +132,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                     );
                     strcat(newname, c".new".as_ptr());
                 }
-                (*cmdmod.ptr()).cmod_tab = 0;
+                cmdmod_set_tab(0);
                 if win_split(
                     0,
                     if diff_flags.get() & DIFF_VERTICAL != 0 {
@@ -182,7 +183,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
         set_bufref(&raw mut old_curbuf, curbuf.get());
         validate_cursor(curwin.get());
         set_fraction(curwin.get());
-        (*cmdmod.ptr()).cmod_tab = 0;
+        cmdmod_set_tab(0);
         if win_split(
             0,
             if diff_flags.get() & DIFF_VERTICAL != 0 {

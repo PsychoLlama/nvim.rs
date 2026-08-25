@@ -29,7 +29,7 @@ use crate::ex_docmd::argopt::{getargcmd, getargopt};
 use crate::ex_docmd::edit::ex_print;
 use crate::ex_docmd::filename::replace_makeprg;
 use crate::ex_docmd::lookup::{find_ex_command, is_user_cmd};
-use crate::ex_docmd::modifier::{apply_cmdmod, parse_command_modifiers, undo_cmdmod};
+use crate::ex_docmd::modifier::CmdModScope;
 use crate::ex_docmd::scan::{
     check_nextcmd, get_flags, parse_bang, parse_count, parse_register, separate_nextcmd,
     skip_colon_white,
@@ -46,10 +46,10 @@ use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locke
 use crate::fold::has_folding;
 use crate::input::ask_yesno;
 use crate::main::{
-    IObuff, check_cstack, cmdmod, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax,
-    did_throw, do_profiling, e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang,
-    e_norange, e_sandbox, e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy,
-    got_int, msg_silent, need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
+    IObuff, check_cstack, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax, did_throw,
+    do_profiling, e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange,
+    e_sandbox, e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy, got_int,
+    msg_silent, need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
 };
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrlcat, xstrlcpy};
@@ -71,7 +71,7 @@ use crate::types::{
     CMD_snomagic, CMD_substitute, CMD_syntax, CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde,
     CMD_topleft, CMD_try, CMD_unlet, CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical,
     CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL,
-    cmdidx_T, cmdmod_T, cstack_T, exarg_T, size_t, uint8_t,
+    cmdidx_T, cstack_T, exarg_T, size_t, uint8_t,
 };
 use ::libc::{strcpy, strlen};
 
@@ -201,10 +201,10 @@ pub(crate) unsafe fn do_one_cmd(
             *quitmore.ptr() -= 1;
         }
 
-        // Modifiers are restored on the way out, for recursive calls.
-        // A shallow copy, as it always was: the saved block owns the
-        // `:filter` pattern and program until it is put back below.
-        let save_cmdmod: cmdmod_T = cmdmod.with(Clone::clone);
+        // Modifiers are restored on the way out, for recursive calls. The
+        // guard owns the `:filter` pattern and program of the set it took
+        // out until it puts them back.
+        let mods = CmdModScope::cleared();
         let mut after_modifier: *mut c_char = ptr::null_mut();
 
         'doend: {
@@ -222,11 +222,10 @@ pub(crate) unsafe fn do_one_cmd(
             ea.cookie = cookie;
             ea.cstack = cstack;
 
-            if parse_command_modifiers(&raw mut ea, &raw mut errormsg, cmdmod.ptr(), false) == FAIL
-            {
+            if mods.parse(&raw mut ea, &raw mut errormsg) == FAIL {
                 break 'doend;
             }
-            apply_cmdmod(cmdmod.ptr());
+            mods.apply();
             after_modifier = ea.cmd;
 
             ea.skip = (did_emsg.get() != 0
@@ -593,8 +592,7 @@ pub(crate) unsafe fn do_one_cmd(
             },
         );
 
-        undo_cmdmod(cmdmod.ptr());
-        cmdmod.set(save_cmdmod);
+        drop(mods);
         reg_executing.set(save_reg_executing);
         pending_end_reg_executing.set(save_pending_end_reg_executing);
 

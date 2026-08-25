@@ -14,6 +14,7 @@ use super::{
     active_lstate, get_global_lstate, lua_Debug, lua_getinfo, lua_getstack, nlua_error, nlua_pcall,
     nlua_pushref,
 };
+use crate::ex_docmd::cmdmod_report;
 use crate::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
 use crate::lua::ffi::{
     lua_isnumber, lua_newtable, lua_pop, lua_pushboolean, lua_pushinteger, lua_pushlstring,
@@ -195,19 +196,18 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         set(c"nargs");
 
         let mut buf = [0 as c_char; MODS_BUFSIZE];
-        uc_mods(buf.as_mut_ptr(), cmdmod.ptr(), false);
+        cmdmod.with(|cmod| uc_mods(buf.as_mut_ptr(), cmod, false));
         lua_pushstring(lstate, buf.as_ptr());
         set(c"mods");
 
         // `smods`: the same modifiers, parsed.
         lua_newtable(lstate);
-        let cmod = cmdmod.ptr();
-        lua_pushinteger(lstate, ((*cmod).cmod_tab - 1) as lua_Integer);
+        let (tab, verbose, split, flags) = cmdmod_report();
+        lua_pushinteger(lstate, (tab - 1) as lua_Integer);
         set(c"tab");
-        lua_pushinteger(lstate, ((*cmod).cmod_verbose - 1) as lua_Integer);
+        lua_pushinteger(lstate, (verbose - 1) as lua_Integer);
         set(c"verbose");
 
-        let split = (*cmod).cmod_split;
         let split_name = if split & WSP_ABOVE as c_int != 0 {
             c"aboveleft"
         } else if split & WSP_BELOW as c_int != 0 {
@@ -227,7 +227,6 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         lua_pushboolean(lstate, split & WSP_HOR as c_int);
         set(c"horizontal");
 
-        let flags = (*cmod).cmod_flags;
         lua_pushboolean(lstate, flags.has(CmdModFlags::SILENT) as c_int);
         set(c"silent");
         lua_pushboolean(lstate, flags.has(CmdModFlags::ERRSILENT) as c_int);

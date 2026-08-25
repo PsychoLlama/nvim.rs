@@ -6,7 +6,7 @@ use core::ptr;
 
 use crate::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
-use crate::ex_docmd::kRetNilBool;
+use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_shellempty, p_sh};
@@ -35,13 +35,11 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
 
         // With a window modifier, the modifier plus `new` makes the window;
         // without one, `enew` reuses the current window.
-        if (*cmdmod.ptr()).cmod_tab > 0 || (*cmdmod.ptr()).cmod_split != 0 {
+        if cmdmod_tab() > 0 || cmdmod_split() != 0 {
             let mut multi_mods = false;
-            len = add_win_cmd_modifiers(
-                &raw mut ex_cmd as *mut c_char,
-                cmdmod.ptr(),
-                &raw mut multi_mods,
-            );
+            len = cmdmod.with(|cmod| {
+                add_win_cmd_modifiers(&raw mut ex_cmd as *mut c_char, cmod, &raw mut multi_mods)
+            });
             debug_assert!(len < CMD_LEN);
             let written = snprintf(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),

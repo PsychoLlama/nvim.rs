@@ -312,14 +312,14 @@ unsafe fn add_cmd_modifier(
 /// them. Answers how many bytes were added.
 ///
 /// # Safety
-/// As [`add_cmd_modifier`]; `cmod` and `multi_mods` must be live.
+/// As [`add_cmd_modifier`]; `multi_mods` must be live.
 pub(crate) unsafe fn add_win_cmd_modifiers(
     buf: *mut c_char,
-    cmod: *const cmdmod_T,
+    cmod: &cmdmod_T,
     multi_mods: *mut bool,
 ) -> size_t {
     // SAFETY: caller contract.
-    let (cmod, multi_mods) = unsafe { (&*cmod, &mut *multi_mods) };
+    let multi_mods = unsafe { &mut *multi_mods };
     let mut result = 0;
     let mut add = |name: *const c_char, present: bool| {
         if present {
@@ -370,8 +370,8 @@ pub(crate) unsafe fn add_win_cmd_modifiers(
 /// A null `buf` only measures; `quote` wraps the result in `"`.
 ///
 /// # Safety
-/// As [`add_cmd_modifier`]; `cmod` must be live.
-pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> size_t {
+/// As [`add_cmd_modifier`].
+pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: &cmdmod_T, quote: bool) -> size_t {
     /// The modifiers that are nothing but a flag.
     static MOD_ENTRIES: [(CmdModFlags, &CStr); 12] = [
         (CmdModFlags::BROWSE, c"browse"),
@@ -387,10 +387,7 @@ pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: boo
         (CmdModFlags::NOAUTOCMD, c"noautocmd"),
         (CmdModFlags::SANDBOX, c"sandbox"),
     ];
-    // SAFETY: caller contract.
-    let flags = unsafe { (*cmod).cmod_flags };
-    // SAFETY: caller contract.
-    let verbose = unsafe { (*cmod).cmod_verbose };
+    let (flags, verbose) = (cmod.cmod_flags, cmod.cmod_verbose);
     let mut multi_mods = false;
     let mut result: size_t = if quote { 2 } else { 0 };
 
@@ -599,7 +596,7 @@ unsafe fn uc_check_code(
             out.len
         }
         // SAFETY: caller contract.
-        Code::Mods => unsafe { uc_mods(buf, cmdmod.ptr(), quote != Quote::None) },
+        Code::Mods => cmdmod.with(|cmod| unsafe { uc_mods(buf, cmod, quote != Quote::None) }),
         Code::Register => {
             let register = [eap.regname as u8];
             let body: &[u8] = if eap.regname != 0 { &register } else { b"" };

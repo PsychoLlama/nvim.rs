@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
 use crate::types::{CmdModFlags, FAIL, NUL, OK, OptionSetFlags};
@@ -141,8 +142,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         pum_undisplay(true);
 
         // Don't use a new tab page.
-        (*cmdmod.ptr()).cmod_tab = 0;
-        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::NOSWAPFILE;
+        cmdmod_set_tab(0);
+        cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
         // Create a window for the command-line buffer.
         if win_split(

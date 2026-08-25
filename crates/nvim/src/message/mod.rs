@@ -46,7 +46,7 @@ use crate::keycodes::{
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
     Columns, IObuff, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
-    cmdline_row, cmdline_was_last_drawn, cmdmod, cmdmsg_rl, curbuf, curwin, default_grid, did_emsg,
+    cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, curbuf, curwin, default_grid, did_emsg,
     did_wait_return, do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode,
     emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
     emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting,
@@ -82,7 +82,6 @@ use crate::os::env::home_replace_save;
 use crate::os::fs::os_fopen;
 use crate::os::input::{input_available, os_breakcheck};
 use crate::os::time::os_delay;
-use crate::regexp::vim_regexec;
 use crate::register::write_reg_contents;
 use crate::runtime::estack_sfile;
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};

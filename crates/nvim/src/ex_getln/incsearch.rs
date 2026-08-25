@@ -118,8 +118,8 @@ pub unsafe fn parse_pattern_and_range(
         };
 
         // Uninitialised in the C; `parse_command_modifiers` only writes it.
-        let mut dummy_cmdmod: cmdmod_T = CMDMOD_T_INIT;
-        parse_command_modifiers(&raw mut ea, &raw mut dummy, &raw mut dummy_cmdmod, true);
+        let mut dummy_cmdmod = cmdmod_T::default();
+        parse_command_modifiers(&raw mut ea, &raw mut dummy, &mut dummy_cmdmod, true);
 
         // Skip over the range to find the command.
         let cmd = skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>());

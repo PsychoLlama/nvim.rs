@@ -15,10 +15,11 @@ use crate::ex_docmd::scan::{check_nextcmd, ends_excmd};
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DT_FIRST, DT_JUMP, DT_LAST, DT_LTAG,
-    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, cmdnames, kDirectionNotSet,
+    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, cmdmod_split, cmdmod_tab,
+    cmdnames, kDirectionNotSet,
 };
 use crate::main::{
-    cmdmod, e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
+    e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
     postponed_split_tab,
 };
 use crate::option::magic_isset;
@@ -113,8 +114,8 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
     unsafe {
         // `-1` means "split, and let the tag code choose the size".
         postponed_split.set(-1);
-        postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
-        postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
+        postponed_split_flags.set(cmdmod_split());
+        postponed_split_tab.set(cmdmod_tab());
         ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name.add(1));
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);

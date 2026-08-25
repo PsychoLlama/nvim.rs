@@ -341,6 +341,6 @@ pub unsafe fn nvim_parse_cmd(
 
     // The `:filter` pattern `parse_mods` copied out is freed here, not before.
     // SAFETY: paired with the `parse_cmdline` above.
-    unsafe { undo_cmdmod(&raw mut cmdinfo.cmdmod) };
+    unsafe { undo_cmdmod(&mut cmdinfo.cmdmod) };
     result.reported(error)
 }

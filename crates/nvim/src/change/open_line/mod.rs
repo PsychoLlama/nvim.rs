@@ -34,6 +34,7 @@ use core::ffi::{c_char, c_int, c_void};
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
+use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::types::{FAIL, FoFlag, NUL};
 
 mod comment;
@@ -76,7 +77,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
             prompt_line.add(prompt_len) as *const c_void,
             strlen(prompt_line.add(prompt_len)).wrapping_add(1),
         );
-        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::LOCKMARKS;
+        cmdmod_add_flags(CmdModFlags::LOCKMARKS);
         ml_replace((*curwin.get()).w_cursor.lnum, prompt_line, true);
         concat_str(prompt, p_extra)
     }
@@ -536,7 +537,7 @@ pub unsafe fn open_line(
 
         *curbuf_splice_pending.ptr() += 1;
         let old_cursor = (*curwin.get()).w_cursor;
-        let old_cmod_flags = (*cmdmod.ptr()).cmod_flags;
+        let old_cmod_flags = cmdmod_flags();
         let mut prompt_moved: *mut c_char = ::core::ptr::null_mut();
         if dir == BACKWARD {
             prompt_moved = move_prompt_down(p_extra);
@@ -639,7 +640,7 @@ pub unsafe fn open_line(
         xfree(next_line as *mut c_void);
         xfree(allocated as *mut c_void);
         xfree(prompt_moved as *mut c_void);
-        (*cmdmod.ptr()).cmod_flags = old_cmod_flags;
+        cmdmod_set_flags(old_cmod_flags);
         retval
     }
 }

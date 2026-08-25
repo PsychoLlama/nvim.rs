@@ -37,7 +37,7 @@ use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::pos::MAXLNUM;
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdAddr, CmdModFlags,
@@ -45,7 +45,7 @@ use crate::types::{
     exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
-use ::libc::{atoi, memset, strlen};
+use ::libc::{atoi, strlen};
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.
@@ -106,20 +106,19 @@ pub fn cmd_has_expr_args(cmdidx: cmdidx_T) -> bool {
 ///
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
 /// and evaluate nothing.
-pub unsafe fn parse_command_modifiers(
+pub(crate) unsafe fn parse_command_modifiers(
     eap: *mut exarg_T,
     errormsg: *mut *const c_char,
-    cmod: *mut cmdmod_T,
+    cm: &mut cmdmod_T,
     skip_only: bool,
 ) -> c_int {
     unsafe {
         let ea = &mut *eap;
-        let cm = &mut *cmod;
         let orig_cmd = ea.cmd;
         let mut cmd_start: *mut c_char = ptr::null_mut();
         let mut use_plus_cmd = false;
         let mut has_visual_range = false;
-        memset(cmod as *mut c_void, 0, size_of::<cmdmod_T>());
+        *cm = cmdmod_T::default();
 
         // A `'<,'>` typed by the user (which is what a Visual-mode `:` puts
         // there) is stepped over so a modifier after it is still seen, and
@@ -424,53 +423,149 @@ unsafe fn restore_visual_range(
 
 /// Whether the running command carries any of `flags` as a `:` modifier.
 ///
-/// The question every caller asked through the raw cell -- `unsafe {
-/// (*cmdmod.ptr()).cmod_flags } & CMOD_LOCKMARKS as c_int != 0` -- for a read
-/// that needs no pointer at all.
-pub fn cmdmod_has(flags: CmdModFlags) -> bool {
-    cmdmod.with(|mods| mods.cmod_flags).has(flags)
+/// The question every caller used to ask by dereferencing the cell and
+/// masking `cmod_flags` by hand, for a read that needs no pointer at all.
+pub(crate) fn cmdmod_has(flags: CmdModFlags) -> bool {
+    cmdmod_flags().has(flags)
 }
 
-/// Put the parsed modifiers in force. Every field this writes is saved
-/// *plus one*, so that zero can mean "not saved" — `undo_cmdmod` relies on
-/// it, and so does the fact that `apply_cmdmod` may run twice.
-pub unsafe fn apply_cmdmod(cmod: *mut cmdmod_T) {
-    unsafe {
-        let cm = &mut *cmod;
-        let mods = cm.cmod_flags;
-        if mods.has(CmdModFlags::SANDBOX) && cm.cmod_did_sandbox == 0 {
-            *sandbox.ptr() += 1;
-            cm.cmod_did_sandbox = 1;
+/// The whole flag set the running command carries.
+pub(crate) fn cmdmod_flags() -> CmdModFlags {
+    cmdmod.with(|mods| mods.cmod_flags)
+}
+
+/// Replace the flag set — for the two scopes that save it, force a flag on
+/// for a stretch of their own, and put the old set back by hand.
+pub(crate) fn cmdmod_set_flags(flags: CmdModFlags) {
+    cmdmod.with_mut(|mods| mods.cmod_flags = flags);
+}
+
+/// Force `flags` on for the rest of the command, as `:lockmarks` in front
+/// of it would have.
+pub(crate) fn cmdmod_add_flags(flags: CmdModFlags) {
+    cmdmod.with_mut(|mods| mods.cmod_flags |= flags);
+}
+
+/// `:tab`'s argument: the 1-based tab page a new window goes to, or 0 for
+/// "no `:tab` was used".
+pub(crate) fn cmdmod_tab() -> c_int {
+    cmdmod.with(|mods| mods.cmod_tab)
+}
+
+/// See [`cmdmod_tab`].
+pub(crate) fn cmdmod_set_tab(tab: c_int) {
+    cmdmod.with_mut(|mods| mods.cmod_tab = tab);
+}
+
+/// The `WSP_*` bits `:aboveleft`, `:vertical` and friends asked for.
+pub(crate) fn cmdmod_split() -> c_int {
+    cmdmod.with(|mods| mods.cmod_split)
+}
+
+/// Force `bits` on in the split direction, as a `:vertical` in front of the
+/// command would have.
+pub(crate) fn cmdmod_add_split(bits: c_int) {
+    cmdmod.with_mut(|mods| mods.cmod_split |= bits);
+}
+
+/// See [`cmdmod_split`].
+pub(crate) fn cmdmod_set_split(split: c_int) {
+    cmdmod.with_mut(|mods| mods.cmod_split = split);
+}
+
+/// Everything `<mods>` and `smods` report, read out in one go: the four
+/// scalars a caller rendering the modifier set needs.
+pub(crate) fn cmdmod_report() -> (c_int, c_int, c_int, CmdModFlags) {
+    cmdmod.with(|mods| {
+        (
+            mods.cmod_tab,
+            mods.cmod_verbose,
+            mods.cmod_split,
+            mods.cmod_flags,
+        )
+    })
+}
+
+/// Whether `:filter pattern` is in force and `msg` does not match it.
+///
+/// The program is taken out of the cell and put back rather than matched in
+/// place: the engines may *replace* it (the NFA one falls back to the
+/// backtracking one and frees what it had), and a `\=` inside the pattern
+/// re-enters the editor, so no borrow may be held across the match.
+///
+/// # Safety
+/// `msg` is NUL-terminated, and this is a main-thread editor call.
+pub(crate) unsafe fn cmdmod_filters_out(msg: *const c_char) -> bool {
+    let mut regmatch = cmdmod.with(|mods| mods.cmod_filter_regmatch.clone());
+    if regmatch.regprog.is_null() {
+        return false;
+    }
+    // SAFETY: the caller's contract; `regmatch` holds this command's
+    // `:filter` program.
+    let matched = unsafe { vim_regexec(&raw mut regmatch, msg, 0) };
+    cmdmod.with_mut(|mods| mods.cmod_filter_regmatch = regmatch);
+    if cmdmod.with(|mods| mods.cmod_filter_force) {
+        matched
+    } else {
+        !matched
+    }
+}
+
+/// Put the modifiers now in the cell in force. Every field this writes is
+/// saved *plus one*, so that zero can mean "not saved" — `undo_cmdmod`
+/// relies on it, and so does the fact that this may run twice.
+///
+/// The writes go back into the cell one at a time rather than through a
+/// borrow held across the body: the two calls out (`xstrdup` and
+/// `set_option_direct`) re-enter the editor, and `set_option_direct` runs
+/// with the new modifiers already in force, exactly as the C leaves them.
+///
+/// # Safety
+/// Main-thread editor call. `set_option_direct` runs `'eventignore'`'s
+/// side effects.
+unsafe fn apply_cmdmod() {
+    let mods = cmdmod.with(|cm| cm.cmod_flags);
+    if mods.has(CmdModFlags::SANDBOX) && cmdmod.with(|cm| cm.cmod_did_sandbox) == 0 {
+        sandbox.set(sandbox.get() + 1);
+        cmdmod.with_mut(|cm| cm.cmod_did_sandbox = 1);
+    }
+    let verbose = cmdmod.with(|cm| cm.cmod_verbose);
+    if verbose > 0 {
+        if cmdmod.with(|cm| cm.cmod_verbose_save) == 0 {
+            let save = p_verbose.get() + 1;
+            cmdmod.with_mut(|cm| cm.cmod_verbose_save = save);
         }
-        if cm.cmod_verbose > 0 {
-            if cm.cmod_verbose_save == 0 {
-                cm.cmod_verbose_save = p_verbose.get() + 1;
-            }
-            p_verbose.set((cm.cmod_verbose - 1) as OptInt);
-        }
-        if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT) && cm.cmod_save_msg_silent == 0 {
-            cm.cmod_save_msg_silent = msg_silent.get() + 1;
-            cm.cmod_save_msg_scroll = msg_scroll.get();
-        }
-        if mods.has(CmdModFlags::SILENT) {
-            *msg_silent.ptr() += 1;
-        }
-        if mods.has(CmdModFlags::UNSILENT) {
-            msg_silent.set(0);
-        }
-        if mods.has(CmdModFlags::ERRSILENT) {
-            *emsg_silent.ptr() += 1;
-            cm.cmod_did_esilent += 1;
-        }
-        if mods.has(CmdModFlags::NOAUTOCMD) && cm.cmod_save_ei.is_null() {
-            cm.cmod_save_ei = xstrdup(p_ei.get());
-            set_option_direct(
-                kOptEventignore,
-                eventignore_all(),
-                OptionSetFlags::NONE,
-                SID_NONE,
-            );
-        }
+        p_verbose.set((verbose - 1) as OptInt);
+    }
+    if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT)
+        && cmdmod.with(|cm| cm.cmod_save_msg_silent) == 0
+    {
+        let (silent, scroll) = (msg_silent.get() + 1, msg_scroll.get());
+        cmdmod.with_mut(|cm| {
+            cm.cmod_save_msg_silent = silent;
+            cm.cmod_save_msg_scroll = scroll;
+        });
+    }
+    if mods.has(CmdModFlags::SILENT) {
+        msg_silent.set(msg_silent.get() + 1);
+    }
+    if mods.has(CmdModFlags::UNSILENT) {
+        msg_silent.set(0);
+    }
+    if mods.has(CmdModFlags::ERRSILENT) {
+        emsg_silent.set(emsg_silent.get() + 1);
+        cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
+    }
+    if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
+        // SAFETY: `p_ei` is the live `'eventignore'` string.
+        let save_ei = unsafe { xstrdup(p_ei.get()) };
+        cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
+        set_option_direct(
+            kOptEventignore,
+            eventignore_all(),
+            OptionSetFlags::NONE,
+            SID_NONE,
+        );
     }
 }
 
@@ -485,15 +580,14 @@ fn eventignore_all() -> OptVal {
 }
 
 /// Take the modifiers back out of force.
-pub unsafe fn undo_cmdmod(cmod: *mut cmdmod_T) {
+pub(crate) unsafe fn undo_cmdmod(cm: &mut cmdmod_T) {
     unsafe {
-        let cm = &mut *cmod;
         if cm.cmod_verbose_save > 0 {
             p_verbose.set(cm.cmod_verbose_save - 1);
             cm.cmod_verbose_save = 0;
         }
         if cm.cmod_did_sandbox != 0 {
-            *sandbox.ptr() -= 1;
+            sandbox.set(sandbox.get() - 1);
             cm.cmod_did_sandbox = 0;
         }
         if !cm.cmod_save_ei.is_null() {
@@ -519,8 +613,7 @@ pub unsafe fn undo_cmdmod(cmod: *mut cmdmod_T) {
             if did_emsg.get() == 0 || msg_silent.get() > cm.cmod_save_msg_silent - 1 {
                 msg_silent.set(cm.cmod_save_msg_silent - 1);
             }
-            *emsg_silent.ptr() -= cm.cmod_did_esilent;
-            emsg_silent.set(emsg_silent.get().max(0));
+            emsg_silent.set((emsg_silent.get() - cm.cmod_did_esilent).max(0));
             msg_scroll.set(cm.cmod_save_msg_scroll);
             if redirecting() {
                 msg_col.set(0);
@@ -528,6 +621,95 @@ pub unsafe fn undo_cmdmod(cmod: *mut cmdmod_T) {
             cm.cmod_save_msg_silent = 0;
             cm.cmod_did_esilent = 0;
         }
+    }
+}
+
+/// The modifiers in force for a scope, taken back out when it ends.
+///
+/// The hand-rolled shape this replaces is four statements far apart — copy
+/// the cell, overwrite it, `apply_cmdmod`, and much later `undo_cmdmod`
+/// plus copy the old set back — and `do_one_cmd` alone has a dozen ways out
+/// between the halves. Here the second half is `Drop`'s, so an early return
+/// or a panic can no longer leave a `:silent` or a `:noautocmd` switched on
+/// for the rest of the session.
+///
+/// The restore is ordered: `undo_cmdmod` runs against the modifiers *still
+/// in the cell* — a command may have changed them, `:tag` and `:help` both
+/// do — and only then does the previous set go back.
+#[must_use = "the modifiers are taken back out as soon as the guard is dropped"]
+pub(crate) struct CmdModScope {
+    saved: cmdmod_T,
+}
+
+impl CmdModScope {
+    /// Save the modifiers in force and clear the cell, for the caller that
+    /// parses the new set straight into it. This is what the C's copy plus
+    /// `parse_command_modifiers`'s opening `CLEAR_FIELD` amount to.
+    ///
+    /// Clearing *here* rather than inside the parse is the one place this
+    /// diverges from upstream, and it is a crash fix: `do_one_cmd` bails to
+    /// its exit path on a `#!` shebang line before it ever parses, so
+    /// upstream's `undo_cmdmod` there runs against the *enclosing* command's
+    /// modifiers -- ending its `:silent` early, and freeing the `:filter`
+    /// pattern and program that the enclosing frame goes on to free again.
+    /// `:filter /x/ source file-starting-with-#!` is a double free upstream.
+    /// See `1786212071-upstream-neovim-bugs`.
+    pub(crate) fn cleared() -> Self {
+        CmdModScope {
+            saved: cmdmod.take(),
+        }
+    }
+
+    /// Save the modifiers in force and put `mods` in force instead.
+    ///
+    /// # Safety
+    /// Main-thread editor call: `apply_cmdmod` sets `'eventignore'`.
+    pub(crate) unsafe fn enter(mods: cmdmod_T) -> Self {
+        let scope = CmdModScope {
+            saved: cmdmod.take(),
+        };
+        cmdmod.set(mods);
+        // SAFETY: the caller's contract.
+        unsafe { apply_cmdmod() };
+        scope
+    }
+
+    /// Read the run of modifiers at the head of `eap`'s command line into
+    /// the cell, which stays *cleared* for the whole parse — an error
+    /// raised while the modifiers are still being read is no longer inside
+    /// the enclosing `:silent` or `:filter`, which is what the C's opening
+    /// `CLEAR_FIELD(cmdmod)` amounts to.
+    ///
+    /// # Safety
+    /// As [`parse_command_modifiers`].
+    pub(crate) unsafe fn parse(&self, eap: *mut exarg_T, errormsg: *mut *const c_char) -> c_int {
+        let mut parsed = cmdmod_T::default();
+        // SAFETY: the caller's contract.
+        let read = unsafe { parse_command_modifiers(eap, errormsg, &mut parsed, false) };
+        cmdmod.set(parsed);
+        read
+    }
+
+    /// Put the parsed modifiers in force, once [`CmdModScope::parse`] has
+    /// stored them.
+    ///
+    /// # Safety
+    /// As [`CmdModScope::enter`].
+    pub(crate) unsafe fn apply(&self) {
+        // SAFETY: the caller's contract.
+        unsafe { apply_cmdmod() };
+    }
+}
+
+impl Drop for CmdModScope {
+    fn drop(&mut self) {
+        // The clone shares the `:filter` pattern and program with the cell,
+        // which is what lets `undo_cmdmod` free them while the cell still
+        // answers `message_filtered` for anything it says on the way out.
+        let mut live = cmdmod.with(Clone::clone);
+        // SAFETY: `live` names the modifiers this guard put in force.
+        unsafe { undo_cmdmod(&mut live) };
+        cmdmod.set(core::mem::take(&mut self.saved));
     }
 }
 

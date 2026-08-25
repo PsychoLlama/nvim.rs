@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags, kErrorTypeNone};
 
@@ -264,9 +265,9 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
         // No search highlighting during a live substitution.
         p_hls.set(0);
         // Disable the :leftabove/:botright, :tab and swap-file modifiers.
-        (*cmdmod.ptr()).cmod_split = 0;
-        (*cmdmod.ptr()).cmod_tab = 0;
-        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::NOSWAPFILE;
+        cmdmod_set_split(0);
+        cmdmod_set_tab(0);
+        cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
         u_sync(true);
     }
@@ -386,7 +387,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
             // Is the command previewable? If not, don't attempt a preview.
             if !ea.argt.has(ExArgt::PREVIEW) {
-                undo_cmdmod(&raw mut cmdinfo.cmdmod);
+                undo_cmdmod(&mut cmdinfo.cmdmod);
                 break 'end;
             }
 

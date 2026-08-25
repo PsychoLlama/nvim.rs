@@ -12,7 +12,8 @@ use crate::buffer::do_modelines;
 use crate::charset::skipwhite;
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
-    filetype_detect, filetype_indent, filetype_plugin, kOptValTypeString, kRetNilBool,
+    cmdmod_split, cmdmod_tab, filetype_detect, filetype_indent, filetype_plugin, kOptValTypeString,
+    kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
@@ -235,13 +236,11 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         // rest itself.
         let mut mods: [c_char; 1024] = [0; 1024];
         let mut mods_len: size_t = 0;
-        if (*cmdmod.ptr()).cmod_tab > 0 || (*cmdmod.ptr()).cmod_split != 0 {
+        if cmdmod_tab() > 0 || cmdmod_split() != 0 {
             let mut multi_mods = false;
-            mods_len = add_win_cmd_modifiers(
-                &raw mut mods as *mut c_char,
-                cmdmod.ptr(),
-                &raw mut multi_mods,
-            );
+            mods_len = cmdmod.with(|cmod| {
+                add_win_cmd_modifiers(&raw mut mods as *mut c_char, cmod, &raw mut multi_mods)
+            });
             debug_assert!(mods_len < size_of::<[c_char; 1024]>());
         }
 

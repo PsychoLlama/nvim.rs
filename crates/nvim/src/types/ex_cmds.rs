@@ -178,6 +178,12 @@ crate::flag_set! {
     /// `:noswapfile` -- a buffer the command opens gets no swap file.
     const NOSWAPFILE = 8192;
 }
+/// The `:silent`/`:noautocmd`/`:tab`/… run in front of one Ex command.
+///
+/// Not `Copy`: `cmod_filter_pat` and `cmod_filter_regmatch.regprog` are
+/// allocations the modifier set owns, and the trailing `cmod_*_save`
+/// fields are what `apply_cmdmod` put aside so `undo_cmdmod` can put it
+/// back — a duplicate of those would undo the same suppression twice.
 #[derive(Clone)]
 pub struct cmdmod_T {
     pub cmod_flags: CmdModFlags,
@@ -193,6 +199,39 @@ pub struct cmdmod_T {
     pub cmod_save_msg_silent: ::core::ffi::c_int,
     pub cmod_save_msg_scroll: ::core::ffi::c_int,
     pub cmod_did_esilent: ::core::ffi::c_int,
+}
+
+impl cmdmod_T {
+    /// No modifiers at all: the all-zero set a command starts from, and
+    /// what the C reaches with `CLEAR_FIELD(cmdmod)`. A `const` because
+    /// two other all-zero initialisers embed it.
+    pub const NONE: cmdmod_T = cmdmod_T {
+        cmod_flags: CmdModFlags::NONE,
+        cmod_split: 0,
+        cmod_tab: 0,
+        cmod_filter_pat: ::core::ptr::null_mut(),
+        cmod_filter_regmatch: regmatch_T {
+            regprog: ::core::ptr::null_mut(),
+            startp: [::core::ptr::null_mut(); 10],
+            endp: [::core::ptr::null_mut(); 10],
+            rm_matchcol: 0,
+            rm_ic: false,
+        },
+        cmod_filter_force: false,
+        cmod_verbose: 0,
+        cmod_save_ei: ::core::ptr::null_mut(),
+        cmod_did_sandbox: 0,
+        cmod_verbose_save: 0,
+        cmod_save_msg_silent: 0,
+        cmod_save_msg_scroll: 0,
+        cmod_did_esilent: 0,
+    };
+}
+
+impl Default for cmdmod_T {
+    fn default() -> Self {
+        Self::NONE
+    }
 }
 /// One parsed Ex command line.
 ///

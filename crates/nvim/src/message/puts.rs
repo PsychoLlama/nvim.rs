@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::cmdmod_filters_out;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
@@ -388,18 +389,12 @@ pub(crate) unsafe fn msg_puts_display(
 }
 
 /// Whether `:filter pattern` was used and `msg` does not match it.
-pub unsafe fn message_filtered(msg: *const c_char) -> bool {
-    unsafe {
-        if (*cmdmod.ptr()).cmod_filter_regmatch.regprog.is_null() {
-            return false;
-        }
-        let matched = vim_regexec(&raw mut (*cmdmod.ptr()).cmod_filter_regmatch, msg, 0);
-        if (*cmdmod.ptr()).cmod_filter_force {
-            matched
-        } else {
-            !matched
-        }
-    }
+///
+/// # Safety
+/// `msg` is NUL-terminated; main-thread editor call.
+pub(crate) unsafe fn message_filtered(msg: *const c_char) -> bool {
+    // SAFETY: the caller's contract.
+    unsafe { cmdmod_filters_out(msg) }
 }
 
 /// Whether messages should be printed to stdout/stderr rather than drawn:

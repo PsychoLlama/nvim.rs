@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
@@ -531,17 +532,17 @@ impl Jump {
                     self.reused_window = true;
                 }
             }
-            if self.reused_window || (postponed_split.get() == 0 && (*cmdmod.ptr()).cmod_tab == 0) {
+            if self.reused_window || (postponed_split.get() == 0 && cmdmod_tab() == 0) {
                 return true;
             }
 
             // 'switchbuf' may ask for the new window to be a vertical
             // split, or for a whole new tab page.
             if switchbuf & kOptSwbFlagVsplit as c_uint != 0 {
-                (*cmdmod.ptr()).cmod_split |= WSP_VERT as c_int;
+                cmdmod_add_split(WSP_VERT as c_int);
             }
-            if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && (*cmdmod.ptr()).cmod_tab == 0 {
-                (*cmdmod.ptr()).cmod_tab = tabpage_index(curtab.get()) + 1;
+            if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
+                cmdmod_set_tab(tabpage_index(curtab.get()) + 1);
             }
             if win_split(postponed_split.get().max(0), postponed_split_flags.get()) == FAIL {
                 return false;

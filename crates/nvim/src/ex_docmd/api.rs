@@ -23,7 +23,7 @@ use crate::ex_docmd::address::{
 use crate::ex_docmd::filename::expand_filename;
 use crate::ex_docmd::lookup::is_user_cmd;
 use crate::ex_docmd::modifier::{
-    apply_cmdmod, cmd_has_expr_args, parse_command_modifiers, undo_cmdmod,
+    CmdModScope, cmd_has_expr_args, parse_command_modifiers, undo_cmdmod,
 };
 use crate::ex_docmd::onecmd::{
     append_command, ex_range_without_command, fresh_exarg, shift_cmd_args,
@@ -51,7 +51,7 @@ use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
     CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, IOSIZE, NUL, OK,
-    cmdmod_T, cstack_T, exarg_T, linenr_T, pos_T, size_t,
+    cstack_T, exarg_T, linenr_T, pos_T, size_t,
 };
 use crate::usercmd::do_ucmd;
 use ::libc::{memset, strlen};
@@ -89,7 +89,7 @@ pub unsafe fn parse_cmdline(
             // A modifier that failed to parse is still a modifier: keep
             // going, so that the error is reported against the command
             // rather than against the line.
-            let result = parse_command_modifiers(eap, errormsg, &raw mut (*cmdinfo).cmdmod, false);
+            let result = parse_command_modifiers(eap, errormsg, &mut (*cmdinfo).cmdmod, false);
             let after_modifier = ea.cmd;
             if result == FAIL && after_modifier == orig_cmd {
                 break 'end;
@@ -223,7 +223,7 @@ pub unsafe fn parse_cmdline(
         }
 
         if !retval {
-            undo_cmdmod(&raw mut (*cmdinfo).cmdmod);
+            undo_cmdmod(&mut (*cmdinfo).cmdmod);
         }
         ex_pressedreturn.set(save_ex_pressedreturn);
         (*curwin.get()).w_cursor = save_cursor;
@@ -296,10 +296,10 @@ pub(crate) unsafe fn execute_cmd0(
 
         // `:try` saves 'emsg_silent' itself, so `:silent! try` must not
         // still be silencing by the time the body runs.
-        if ea.cmdidx as c_int == CMD_try as c_int && (*cmdmod.ptr()).cmod_did_esilent > 0 {
-            *emsg_silent.ptr() -= (*cmdmod.ptr()).cmod_did_esilent;
-            emsg_silent.set(emsg_silent.get().max(0));
-            (*cmdmod.ptr()).cmod_did_esilent = 0;
+        let did_esilent = cmdmod.with(|mods| mods.cmod_did_esilent);
+        if ea.cmdidx as c_int == CMD_try as c_int && did_esilent > 0 {
+            emsg_silent.set((emsg_silent.get() - did_esilent).max(0));
+            cmdmod.with_mut(|mods| mods.cmod_did_esilent = 0);
         }
 
         if is_user_cmd(ea.cmdidx) {
@@ -345,11 +345,10 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
         }
 
         let mut errormsg: *const c_char = ptr::null();
-        // Shallow both ways: the saved block owns what it points at
-        // until it goes back, and the caller keeps owning `cmdinfo`.
-        let save_cmdmod: cmdmod_T = cmdmod.with(Clone::clone);
-        cmdmod.set((*cmdinfo).cmdmod.clone());
-        apply_cmdmod(cmdmod.ptr());
+        // Shallow both ways: the guard owns what the set it took out
+        // points at until it goes back, and the caller keeps owning
+        // `cmdinfo`.
+        let mods = CmdModScope::enter((*cmdinfo).cmdmod.clone());
 
         'end: {
             // `:put` is allowed in a terminal buffer, which is not
@@ -418,8 +417,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
         if !errormsg.is_null() && *errormsg as c_int != NUL {
             emsg(errormsg);
         }
-        undo_cmdmod(cmdmod.ptr());
-        cmdmod.set(save_cmdmod);
+        drop(mods);
         do_cmdline_end();
         retv
     }
