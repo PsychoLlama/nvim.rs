@@ -58,7 +58,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
             trigger_insert_enter((*s).cmdchar);
         }
 
-        if (*where_paste_started.ptr()).lnum != 0 {
+        if where_paste_started.get().lnum != 0 {
             Insstart.set(where_paste_started.get());
         } else {
             Insstart.set((*curwin.get()).w_cursor);
@@ -115,7 +115,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
                 .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
         }
         if (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt {
-            (*State.ptr()) |= MODE_LANGMAP;
+            State.set(State.get() | MODE_LANGMAP);
         }
 
         setmouse();
@@ -131,7 +131,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
         // Handle restarting Insert mode: put the cursor back where CTRL-O
         // took it from.
         if restart_edit.get() != 0 && stuff_empty() {
-            arrow_used.set((*where_paste_started.ptr()).lnum == 0);
+            arrow_used.set(where_paste_started.get().lnum == 0);
             restart_edit.set(0);
             validate_virtcol(curwin.get());
             update_curswant();
@@ -143,7 +143,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
 
         need_start_insertmode.set(false);
         ins_need_undo.set(true);
-        (*where_paste_started.ptr()).lnum = 0;
+        where_paste_started.set(where_paste_started.get().with_lnum(0));
         can_cindent.set(true);
         if did_restart_edit.get() == 0 {
             // Open a fold at the cursor line, unless it was already open when
@@ -649,11 +649,11 @@ pub(crate) unsafe fn insert_do_complete(s: *mut InsertState) {
     unsafe {
         compl_busy.set(true);
         // Folds must not be updated while the popup menu is being built.
-        (*disable_fold_update.ptr()) += 1;
+        disable_fold_update.set(disable_fold_update.get() + 1);
         if ins_complete((*s).c, true) == FAIL {
             compl_status_clear();
         }
-        (*disable_fold_update.ptr()) -= 1;
+        disable_fold_update.set(disable_fold_update.get() - 1);
         compl_busy.set(false);
         can_si.set(may_do_si());
     }

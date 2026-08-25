@@ -196,7 +196,7 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
     // to be written back.
     let mut modifiers = mod_mask.get();
     // SAFETY: `modifiers` is a live local the callee reads and writes.
-    let key = unsafe { merge_modifiers(key, &raw mut modifiers) };
+    let key = merge_modifiers(key, &mut modifiers);
     mod_mask.set(modifiers);
     key
 }

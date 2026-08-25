@@ -673,8 +673,8 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
             }) && (*s).c != Ctrl_RSB)
         {
             insert_special((*s).c, 0, 0);
-            (*revins_legal.ptr()) += 1;
-            (*revins_chars.ptr()) += 1;
+            revins_legal.set(revins_legal.get() + 1);
+            revins_chars.set(revins_chars.get() + 1);
         }
 
         auto_format(false, true);

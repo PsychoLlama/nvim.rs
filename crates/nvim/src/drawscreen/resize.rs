@@ -111,7 +111,7 @@ pub unsafe fn screenclear() {
         msg_didany.set(false);
         msg_didout.set(false);
 
-        if *(*hl_attr_active.ptr()).add(HLF_MSG as usize) > 0
+        if *hl_attr_active.get().add(HLF_MSG as usize) > 0
             && msg_use_grid()
             && msg_grid_ref().is_allocated()
         {

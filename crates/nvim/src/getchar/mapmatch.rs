@@ -141,7 +141,7 @@ pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
             // ASCII key. Shift would already have been applied.
             let mut modifier = c_int::from(*tp.add(2));
             let c = c_int::from(*tp.add(3));
-            let new_c = merge_modifiers(c, &raw mut modifier);
+            let new_c = merge_modifiers(c, &mut modifier);
             if new_c == c {
                 continue;
             }
@@ -267,7 +267,7 @@ unsafe fn search_maphash(
                     } else {
                         if c2 == K_SPECIAL {
                             nomap = 2;
-                        } else if merge_modifiers(c2, &raw mut modifiers) == c2 {
+                        } else if merge_modifiers(c2, &mut modifiers) == c2 {
                             // Only apply 'langmap' when merging the modifiers
                             // into the key would not produce another
                             // character, so that 'langmap' behaves the same

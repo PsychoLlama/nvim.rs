@@ -513,8 +513,8 @@ unsafe fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
                     inc_cursor();
                 }
                 if revins_chars.get() != 0 {
-                    (*revins_chars.ptr()) -= 1;
-                    (*revins_legal.ptr()) += 1;
+                    revins_chars.set(revins_chars.get() - 1);
+                    revins_legal.set(revins_legal.get() + 1);
                 }
                 if revins_on.get() && gchar_cursor() == NUL {
                     break;

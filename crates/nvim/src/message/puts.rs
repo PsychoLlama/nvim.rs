@@ -239,7 +239,7 @@ pub(crate) unsafe fn msg_puts_display(
             return;
         }
 
-        let print_attr = hl_combine_attr(*(*hl_attr_active.ptr()).offset(HLF_MSG as isize), attr);
+        let print_attr = hl_combine_attr(*hl_attr_active.get().offset(HLF_MSG as isize), attr);
         msg_grid_validate();
         cmdline_was_last_drawn.set(redrawing_cmdline.get());
 
@@ -337,7 +337,7 @@ pub(crate) unsafe fn msg_puts_display(
                         msg_col.get(),
                         c">".as_ptr(),
                         1,
-                        *(*hl_attr_active.ptr()).offset(HLF_AT as isize),
+                        *hl_attr_active.get().offset(HLF_AT as isize),
                     );
                     cw = 1;
                 } else {

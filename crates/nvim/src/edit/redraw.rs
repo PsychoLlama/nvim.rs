@@ -22,6 +22,7 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::grid::default_grid_ref;
 use crate::option::cpo_has;
+use crate::statusline::hl_attr;
 use crate::types::{CpoFlag, MB_MAXCHAR, NUL};
 
 /// Redraw for Insert mode.
@@ -166,11 +167,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 
         update_topline(win); // just in case w_topline isn't valid
         validate_cursor(win);
-        let attr = if highlight {
-            *(*hl_attr_active.ptr()).offset(HLF_8 as isize)
-        } else {
-            0
-        };
+        let attr = if highlight { hl_attr(HLF_8) } else { 0 };
 
         pc_row.set((*win).w_wrow);
         pc_status.set(PutChar::Unset);
@@ -192,7 +189,9 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 
         // Save the character, so it can be put back.
         if pc_status.get() == PutChar::Unset {
-            pc_schar.set(grid_line_getchar(pc_col.get(), pc_attr.ptr()));
+            let mut attr = pc_attr.get();
+            pc_schar.set(grid_line_getchar(pc_col.get(), &raw mut attr));
+            pc_attr.set(attr);
             pc_status.set(PutChar::Set);
         }
 

@@ -452,7 +452,7 @@ fn draw_on_last_line(clear: bool) {
         msg_grid_validate();
         let showcmd_row = Rows.get() - 1;
         grid_line_start(msg_grid_view(), showcmd_row);
-        let attr = *(*hl_attr_active.ptr()).offset(HLF_MSG as isize);
+        let attr = *hl_attr_active.get().offset(HLF_MSG as isize);
         let mut len = 0;
         if !clear {
             len = grid_line_puts(sc_col.get(), showcmd_buf.ptr().cast::<c_char>(), -1, attr);

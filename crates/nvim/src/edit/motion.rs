@@ -107,9 +107,9 @@ pub(crate) unsafe fn ins_left() {
             // Only the characters 'revins' itself put there are legal to go
             // back over.
             if revins_scol.get() != -1 && (*curwin.get()).w_cursor.col >= revins_scol.get() {
-                (*revins_legal.ptr()) += 1;
+                revins_legal.set(revins_legal.get() + 1);
             }
-            (*revins_chars.ptr()) += 1;
+            revins_chars.set(revins_chars.get() + 1);
         } else if !vim_strchr(p_ww.get(), '[' as c_int).is_null()
             && (*curwin.get()).w_cursor.lnum > 1
         {
@@ -210,9 +210,9 @@ pub(crate) unsafe fn ins_right() {
                 (*curwin.get()).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
             }
 
-            (*revins_legal.ptr()) += 1;
+            revins_legal.set(revins_legal.get() + 1);
             if revins_chars.get() != 0 {
-                (*revins_chars.ptr()) -= 1;
+                revins_chars.set(revins_chars.get() - 1);
             }
         } else if !vim_strchr(p_ww.get(), ']' as c_int).is_null()
             && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count

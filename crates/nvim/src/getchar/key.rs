@@ -18,28 +18,32 @@ use core::ptr;
 ///
 /// Only Ctrl has such codes: `CTRL-A` is 0x01 rather than `<C-> A`. The
 /// modifier is cleared out of `*modifiers` when it was folded in.
-///
-/// # Safety
-/// `modifiers` must point at a writable `c_int`.
-pub unsafe fn merge_modifiers(c_arg: c_int, modifiers: *mut c_int) -> c_int {
-    unsafe {
-        let mut c = c_arg;
-        if *modifiers & MOD_MASK_CTRL != 0 {
-            if c >= '@' as c_int && c <= 0x7f {
-                c &= 0x1f;
-                if c == NUL {
-                    c = K_ZERO;
-                }
-            } else if c == '6' as c_int {
-                // CTRL-6 is equivalent to CTRL-^.
-                c = 0x1e;
+pub fn merge_modifiers(c_arg: c_int, modifiers: &mut c_int) -> c_int {
+    let mut c = c_arg;
+    if *modifiers & MOD_MASK_CTRL != 0 {
+        if c >= '@' as c_int && c <= 0x7f {
+            c &= 0x1f;
+            if c == NUL {
+                c = K_ZERO;
             }
-            if c != c_arg {
-                *modifiers &= !MOD_MASK_CTRL;
-            }
+        } else if c == '6' as c_int {
+            // CTRL-6 is equivalent to CTRL-^.
+            c = 0x1e;
         }
-        c
+        if c != c_arg {
+            *modifiers &= !MOD_MASK_CTRL;
+        }
     }
+    c
+}
+
+/// [`merge_modifiers`] applied to the global `mod_mask`, which is where the
+/// editor's own key handling keeps the pending modifiers.
+pub(crate) fn merge_mod_mask(c: c_int) -> c_int {
+    let mut modifiers = mod_mask.get();
+    let merged = merge_modifiers(c, &mut modifiers);
+    mod_mask.set(modifiers);
+    merged
 }
 
 /// The next input character, which may be a special key or a multibyte one.

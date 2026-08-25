@@ -51,8 +51,8 @@ pub(crate) unsafe fn ins_ctrl_v() {
         }
         clear_showcmd();
         insert_special(c, 1, 1);
-        (*revins_chars.ptr()) += 1;
-        (*revins_legal.ptr()) += 1;
+        revins_chars.set(revins_chars.get() + 1);
+        revins_legal.set(revins_legal.get() + 1);
     }
 }
 
@@ -89,7 +89,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
         loop {
             nc = plain_vgetc();
             if !no_simplify {
-                nc = merge_modifiers(nc, mod_mask.ptr());
+                nc = merge_mod_mask(nc);
             }
             if mod_mask.get() & !MOD_MASK_SHIFT != 0 {
                 // A character with a non-Shift modifier cannot be part of
@@ -389,8 +389,8 @@ pub(crate) unsafe fn ins_ctrl_ey(tc: c_int) -> c_int {
         (*curbuf.get()).b_p_tw = -1;
         insert_special(c, 1, 0);
         (*curbuf.get()).b_p_tw = tw_save;
-        (*revins_chars.ptr()) += 1;
-        (*revins_legal.ptr()) += 1;
+        revins_chars.set(revins_chars.get() + 1);
+        revins_legal.set(revins_legal.get() + 1);
         auto_format(false, true);
         Ctrl_V
     }

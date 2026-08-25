@@ -589,8 +589,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();
-    // SAFETY: an out-parameter of this frame's own.
-    let mod_key = unsafe { merge_modifiers(key, &raw mut mods) };
+    let mod_key = merge_modifiers(key, &mut mods);
 
     // Keys the editor handles itself. Everything but CTRL-N/CTRL-O is dealt
     // with here and done; those two continue below because they are what a

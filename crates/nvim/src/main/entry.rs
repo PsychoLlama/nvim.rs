@@ -312,7 +312,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             params.window_count = 0;
         }
 
-        (*RedrawingDisabled.ptr()) += 1;
+        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
         setbuf(stdout, ptr::null_mut());
         full_screen.set(!silent_mode.get());
 

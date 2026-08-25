@@ -77,27 +77,30 @@ const fn is_ascii_alpha(key: c_int) -> bool {
 /// Fold `modifiers` into `key` where the terminal has a code for the
 /// combination: `<S-Up>` is a key of its own, not `Up` plus a shift bit.
 /// `modifiers` is left holding whatever could not be folded in.
-///
-/// # Safety
-/// `modifiers` must point at a writable `c_int`.
-pub unsafe fn simplify_key(key: c_int, modifiers: *mut c_int) -> c_int {
-    unsafe {
-        if *modifiers & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0 {
-            return key;
-        }
-        // TAB is the one key with a shifted code but no unshifted termcap row.
-        if key == TAB && *modifiers & MOD_MASK_SHIFT != 0 {
-            *modifiers &= !MOD_MASK_SHIFT;
-            return K_S_TAB;
-        }
-        match simplify(key, *modifiers) {
-            Some((simplified, left)) => {
-                *modifiers = left;
-                simplified
-            }
-            None => key,
-        }
+pub fn simplify_key(key: c_int, modifiers: &mut c_int) -> c_int {
+    if *modifiers & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0 {
+        return key;
     }
+    // TAB is the one key with a shifted code but no unshifted termcap row.
+    if key == TAB && *modifiers & MOD_MASK_SHIFT != 0 {
+        *modifiers &= !MOD_MASK_SHIFT;
+        return K_S_TAB;
+    }
+    match simplify(key, *modifiers) {
+        Some((simplified, left)) => {
+            *modifiers = left;
+            simplified
+        }
+        None => key,
+    }
+}
+
+/// [`simplify_key`] applied to the global `mod_mask`.
+pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
+    let mut modifiers = crate::main::mod_mask.get();
+    let simplified = simplify_key(key, &mut modifiers);
+    crate::main::mod_mask.set(modifiers);
+    simplified
 }
 
 /// `<xKey>` to `<Key>`: the DEC and vt100 spellings of keys that also have an
@@ -439,7 +442,7 @@ pub unsafe fn find_special_key(
             return 0;
         }
         // Only keep a modifier that no key code already includes.
-        key = simplify_key(key, &raw mut modifiers);
+        key = simplify_key(key, &mut modifiers);
         if flags & FSK_KEYCODE == 0 {
             // No key code wanted: answer with the single-byte code.
             if key == K_BS {

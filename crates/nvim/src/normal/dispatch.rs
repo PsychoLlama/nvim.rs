@@ -28,7 +28,7 @@ use crate::guard::{Allow, Keys};
 use crate::keycodes::{
     Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT,
     K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT,
-    KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_key,
+    KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_mod_mask,
 };
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curbuf, curwin, did_cursorhold,
@@ -306,9 +306,9 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
         (*s).ca.nchar_composing[(*s).ca.nchar_len as usize] = NUL as c_char;
         drop(mapped);
         // The keys are recorded for a redo, not fed through undo syncing.
-        (*no_u_sync.ptr()) += 1;
+        no_u_sync.set(no_u_sync.get() + 1);
         gotchars_ignore();
-        (*no_u_sync.ptr()) -= 1;
+        no_u_sync.set(no_u_sync.get() - 1);
     }
 }
 
@@ -444,10 +444,10 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
             let raw_key = (*s).ctrl_w.then(Keys::unmapped_with_codes);
             // A '0' here is a count digit, not the "go to column 0" command,
             // so it must not be mapped.
-            (*no_zero_mapping.ptr()) += 1;
+            no_zero_mapping.set(no_zero_mapping.get() + 1);
             (*s).c = plain_vgetc();
             langmap_adjust(&mut (*s).c, true);
-            (*no_zero_mapping.ptr()) -= 1;
+            no_zero_mapping.set(no_zero_mapping.get() - 1);
             drop(raw_key);
             (*s).need_flushbuf |= add_to_showcmd((*s).c);
         }
@@ -701,7 +701,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                         debug_assert!((*s).idx >= 0);
                     } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
                         start_selection();
-                        (*mod_mask.ptr()) &= !MOD_MASK_SHIFT;
+                        mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
                     }
                 }
 
@@ -880,7 +880,7 @@ pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
             K_S_END => K_END,
             other => other,
         };
-        (*cap).cmdchar = simplify_key((*cap).cmdchar, mod_mask.ptr());
+        (*cap).cmdchar = simplify_mod_mask((*cap).cmdchar);
     }
 }
 

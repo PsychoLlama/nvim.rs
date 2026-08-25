@@ -217,7 +217,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
                     return true;
                 }
             } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
-                (*mod_mask.ptr()) &= !MOD_MASK_SHIFT;
+                mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
             }
         }
         false

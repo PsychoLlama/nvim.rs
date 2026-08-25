@@ -98,7 +98,7 @@ pub(crate) unsafe fn ins_reg() {
 
         // Don't `u_sync()` while typing the expression, or while giving an
         // error message for it; only explicitly.
-        (*no_u_sync.ptr()) += 1;
+        no_u_sync.set(no_u_sync.get() + 1);
         if regname == '=' as c_int {
             let curpos = (*curwin.get()).w_cursor;
             // Sync undo if the expression calls setline() or append(), so
@@ -154,7 +154,7 @@ pub(crate) unsafe fn ins_reg() {
             }
         }
 
-        (*no_u_sync.ptr()) -= 1;
+        no_u_sync.set(no_u_sync.get() - 1);
         if u_sync_once.get() == 1 {
             ins_need_undo.set(true);
         }
@@ -225,10 +225,10 @@ pub(crate) unsafe fn ins_ctrl_hat() {
             // `:lmap` mappings exist, so the key toggles their use.
             if State.get() & MODE_LANGMAP != 0 {
                 (*curbuf.get()).b_p_iminsert = B_IMODE_NONE as OptInt;
-                (*State.ptr()) &= !MODE_LANGMAP;
+                State.set(State.get() & !MODE_LANGMAP);
             } else {
                 (*curbuf.get()).b_p_iminsert = B_IMODE_LMAP as OptInt;
-                (*State.ptr()) |= MODE_LANGMAP;
+                State.set(State.get() | MODE_LANGMAP);
             }
         }
         set_iminsert_global(curbuf.get());
@@ -257,7 +257,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
 
         let temp = (*curwin.get()).w_cursor.col;
         if disabled_redraw.get() {
-            (*RedrawingDisabled.ptr()) -= 1;
+            RedrawingDisabled.set(RedrawingDisabled.get() - 1);
             disabled_redraw.set(false);
         }
 
@@ -282,13 +282,13 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
                 // Repeat what was typed.  Vi repeats the insert without
                 // replacing characters.
                 if cpo_has(CpoFlag::REPLCNT) {
-                    (*State.ptr()) &= !REPLACE_FLAG;
+                    State.set(State.get() & !REPLACE_FLAG);
                 }
                 start_redo_ins();
                 if single_char_insert {
                     stuff_redo_readbuf(ESC_STR.as_ptr()); // no ESC in the redo buffer
                 }
-                (*RedrawingDisabled.ptr()) += 1;
+                RedrawingDisabled.set(RedrawingDisabled.get() + 1);
                 disabled_redraw.set(true);
                 return false;
             }
@@ -394,7 +394,7 @@ pub(crate) unsafe fn ins_ctrl_() {
         revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
         if revins_on.get() {
             revins_scol.set((*curwin.get()).w_cursor.col);
-            (*revins_legal.ptr()) += 1;
+            revins_legal.set(revins_legal.get() + 1);
             revins_chars.set(0);
             undisplay_dollar();
         } else {

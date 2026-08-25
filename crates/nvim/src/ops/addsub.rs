@@ -99,16 +99,16 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     unsafe {
         // 'foldexpr' may be re-evaluated part way through, and it must not see
         // the buffer mid-operation.
-        *disable_fold_update.ptr() += 1;
+        disable_fold_update.set(disable_fold_update.get() + 1);
 
         if !visual_active() {
             let mut pos = (*curwin.get()).w_cursor;
             if u_save_cursor() == FAIL {
-                *disable_fold_update.ptr() -= 1;
+                disable_fold_update.set(disable_fold_update.get() - 1);
                 return;
             }
             let changed = do_addsub((*oap).op_type, &raw mut pos, 0, prenum1);
-            *disable_fold_update.ptr() -= 1;
+            disable_fold_update.set(disable_fold_update.get() - 1);
             if changed {
                 changed_lines(curbuf.get(), pos.lnum, 0, pos.lnum + 1, 0, true);
             }
@@ -116,7 +116,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         }
 
         if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
-            *disable_fold_update.ptr() -= 1;
+            disable_fold_update.set(disable_fold_update.get() - 1);
             return;
         }
 
@@ -145,7 +145,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
             pos.lnum += 1;
         }
 
-        *disable_fold_update.ptr() -= 1;
+        disable_fold_update.set(disable_fold_update.get() - 1);
         if change_cnt != 0 {
             changed_lines(
                 curbuf.get(),

@@ -391,7 +391,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                     selstart_col,
                     selstart,
                     -1,
-                    *(*hl_attr_active.ptr()).offset(HLF_WM as isize),
+                    *hl_attr_active.get().offset(HLF_WM as isize),
                 );
             }
 

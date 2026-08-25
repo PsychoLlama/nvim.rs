@@ -199,7 +199,7 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
                 // Fold the modifiers into the key where that has a spelling,
                 // which reads better: CTRL-A rather than <C-> then A.
                 let mut left = modifiers;
-                let merged = merge_modifiers(c, &raw mut left);
+                let merged = merge_modifiers(c, &mut left);
                 if left == 0 {
                     modifiers = 0;
                     c = merged;
