@@ -19,7 +19,7 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::main::{IObuff, curbuf, curwin, e_argreq, got_int};
+use crate::main::{curbuf, curwin, e_argreq, got_int};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::emsg;
@@ -100,6 +100,9 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
 /// # Safety
 /// `eap` must be a live command argument block.
 pub unsafe fn ex_luado(eap: *mut exarg_T) {
+    // Where the wrapped chunk is assembled when it fits; upstream shares
+    // `IObuff` for it, which the loop body may overwrite.
+    let mut chunk = [0 as c_char; IOSIZE as usize];
     unsafe {
         if u_save((*eap).line1 - 1, (*eap).line2 + 1) == FAIL {
             emsg(gettext(c"cannot save undo information".as_ptr()));
@@ -115,7 +118,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
         // Not `chunk_buffer`'s rule: this one allocates one byte more, which
         // is upstream's own asymmetry.
         let lcmd = if lcmd_len < IOSIZE as size_t {
-            IObuff.ptr().cast::<c_char>()
+            chunk.as_mut_ptr()
         } else {
             xmalloc(lcmd_len + 1).cast::<c_char>()
         };
@@ -196,6 +199,7 @@ pub unsafe fn ex_luafile(eap: *mut exarg_T) {
 /// # Safety
 /// Stdin must be openable; the answer is the caller's to free.
 unsafe fn read_stdin() -> Option<*mut c_char> {
+    let mut chunk = [0 as c_char; STDIN_CHUNK];
     unsafe {
         let mut stdin_dup = FILE_DESCRIPTOR_INIT;
         if file_open_stdin(&raw mut stdin_dup) != 0 {
@@ -208,14 +212,14 @@ unsafe fn read_stdin() -> Option<*mut c_char> {
                 sb.free();
                 return None;
             }
-            let read_size = file_read(&raw mut stdin_dup, IObuff.ptr().cast(), STDIN_CHUNK);
+            let read_size = file_read(&raw mut stdin_dup, chunk.as_mut_ptr(), STDIN_CHUNK);
             if read_size < 0 {
                 file_close(&raw mut stdin_dup, false);
                 sb.free();
                 return None;
             }
             if read_size > 0 {
-                sb.extend(IObuff.ptr().cast::<c_char>(), read_size as size_t);
+                sb.extend(chunk.as_ptr(), read_size as size_t);
             }
             if (read_size as size_t) < STDIN_CHUNK {
                 break;

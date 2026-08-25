@@ -214,6 +214,7 @@ pub(crate) unsafe fn ins_compl_files(
     buf: *mut c_char,
     dir: *mut Direction,
 ) {
+    let mut progress = [0 as c_char; IOSIZE as usize];
     unsafe {
         let leader = if cot_fuzzy() {
             ins_compl_leader()
@@ -233,13 +234,13 @@ pub(crate) unsafe fn ins_compl_files(
             let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
             if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
                 vim_snprintf(
-                    IObuff.ptr().cast::<c_char>(),
+                    progress.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"Scanning dictionary: %s".as_ptr()),
                     file,
                 );
                 msg_progress(
-                    IObuff.ptr().cast::<c_char>(),
+                    progress.as_mut_ptr(),
                     c"completion".as_ptr().cast_mut(),
                     c"running".as_ptr().cast_mut(),
                     HLF_R,
@@ -409,13 +410,14 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     cur_match_pos: *mut pos_T,
     match_len: *mut c_int,
     cont_s_ipos: *mut bool,
+    out: &mut [c_char; IOSIZE as usize],
 ) -> *mut c_char {
     unsafe {
         *match_len = 0;
         let mut ptr =
             ml_get_buf(ins_buf, (*cur_match_pos).lnum).offset((*cur_match_pos).col as isize);
         let mut len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum) - (*cur_match_pos).col;
-        let iobuff = IObuff.ptr().cast::<c_char>();
+        let iobuff = out.as_mut_ptr();
 
         if ctrl_x_mode_line_or_eval() {
             if compl_status_adding() {
@@ -506,9 +508,12 @@ pub(crate) unsafe fn get_next_default_completion(
     st: *mut ins_compl_next_state_T,
     start_pos: *mut pos_T,
 ) -> c_int {
+    // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares
+    // `IObuff` for it, which the message machinery also writes.
+    let mut word = [0 as c_char; IOSIZE as usize];
+    let mut ptr: *mut c_char = ptr::null_mut();
+    let mut len = 0;
     unsafe {
-        let mut ptr: *mut c_char = ptr::null_mut();
-        let mut len = 0;
         let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
         let leader = ins_compl_leader();
         let mut score = FUZZY_SCORE_NONE;
@@ -633,6 +638,7 @@ pub(crate) unsafe fn get_next_default_completion(
                     (*st).cur_match_pos,
                     &raw mut len,
                     &raw mut cont_s_ipos,
+                    &mut word,
                 );
             }
             if ptr.is_null() || (ins_compl_has_preinsert() && strcmp(ptr, ins_compl_leader()) == 0)

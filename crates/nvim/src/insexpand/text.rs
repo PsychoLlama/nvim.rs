@@ -12,13 +12,14 @@ use crate::types::{IOSIZE, NUL};
 
 /// The completed text with the case of the originally typed text inferred.
 ///
-/// The answer is `IObuff` unless it did not fit, in which case `tofree` is set
+/// The answer is `out` unless it did not fit, in which case `tofree` is set
 /// to the allocation the answer lives in.
 unsafe fn ins_compl_infercase_gettext(
     str: *const c_char,
     char_len: c_int,
     compl_char_len: c_int,
     min_len: c_int,
+    out: &mut [c_char; IOSIZE as usize],
     tofree: *mut *mut c_char,
 ) -> *mut c_char {
     unsafe {
@@ -75,11 +76,11 @@ unsafe fn ins_compl_infercase_gettext(
             }
         }
 
-        // Encode the wide characters back. `IObuff` is used until a character
+        // Encode the wide characters back. `out` is used until a character
         // would come within six bytes of its end (five for the widest
         // sequence, one for the NUL), at which point everything written so far
         // moves into a growarray and the rest is appended there.
-        let iobuff = IObuff.ptr().cast::<c_char>();
+        let iobuff = out.as_mut_ptr();
         let mut gap = GARRAY_T_INIT;
         let mut out = iobuff;
         let mut i = 0;
@@ -126,6 +127,10 @@ pub unsafe fn ins_compl_add_infercase(
     cont_s_ipos: bool,
     score: c_int,
 ) -> c_int {
+    // Where `'infercase'` re-cases the match; upstream shares `IObuff`.
+    let mut recased = [0 as c_char; IOSIZE as usize];
+    let mut str = str_arg;
+    let mut tofree: *mut c_char = ptr::null_mut();
     unsafe {
         // C's MB_PTR_ADV: step one (possibly composed) character.
         let char_count = |mut p: *const c_char| {
@@ -137,8 +142,6 @@ pub unsafe fn ins_compl_add_infercase(
             n
         };
 
-        let mut str = str_arg;
-        let mut tofree: *mut c_char = ptr::null_mut();
         if p_ic.get() != 0 && (*curbuf.get()).b_p_inf != 0 && len > 0 {
             let char_len = char_count(str);
             let compl_char_len = char_count(compl_orig_text().data());
@@ -150,6 +153,7 @@ pub unsafe fn ins_compl_add_infercase(
                 char_len,
                 compl_char_len,
                 min_len,
+                &mut recased,
                 &raw mut tofree,
             );
         }

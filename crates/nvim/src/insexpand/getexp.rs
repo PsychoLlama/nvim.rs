@@ -54,6 +54,9 @@ pub(crate) unsafe fn process_next_cpt_value(
     fuzzy_collect: bool,
     advance_cpt_idx: *mut bool,
 ) -> c_int {
+    // The progress message, and the throwaway `copy_option_part` writes
+    // into to step over the entry. Upstream shares `IObuff` for both.
+    let mut scratch = [0 as c_char; IOSIZE as usize];
     unsafe {
         let mut compl_type = -1;
         let mut status = INS_COMPL_CPT_OK;
@@ -118,7 +121,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                     let buf = (*st).ins_buf;
                     vim_snprintf(
-                        IObuff.ptr() as *mut c_char,
+                        scratch.as_mut_ptr(),
                         IOSIZE as size_t,
                         gettext(c"Scanning: %s".as_ptr()),
                         if (*buf).b_fname.is_null() {
@@ -130,7 +133,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                         },
                     );
                     msg_progress(
-                        IObuff.ptr() as *mut c_char,
+                        scratch.as_mut_ptr(),
                         c"completion".as_ptr().cast_mut(),
                         c"running".as_ptr().cast_mut(),
                         HLF_R,
@@ -175,13 +178,13 @@ pub(crate) unsafe fn process_next_cpt_value(
                         compl_type = CTRL_X_TAGS;
                         if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                             vim_snprintf(
-                                IObuff.ptr() as *mut c_char,
+                                scratch.as_mut_ptr(),
                                 IOSIZE as size_t,
                                 c"%s".as_ptr(),
                                 gettext(c"Scanning tags.".as_ptr()),
                             );
                             msg_progress(
-                                IObuff.ptr() as *mut c_char,
+                                scratch.as_mut_ptr(),
                                 c"completion".as_ptr().cast_mut(),
                                 c"running".as_ptr().cast_mut(),
                                 HLF_R,
@@ -195,7 +198,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 // In any case `e_cpt` advances to the next entry.
                 copy_option_part(
                     &raw mut (*st).e_cpt,
-                    IObuff.ptr() as *mut c_char,
+                    scratch.as_mut_ptr(),
                     IOSIZE as size_t,
                     c",".as_ptr().cast_mut(),
                 );

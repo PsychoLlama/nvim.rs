@@ -73,14 +73,17 @@ pub(crate) unsafe fn push_cstr(out: &mut Vec<u8>, text: *const c_char) {
 ///
 /// `qfp` must be a live entry.
 unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
+    // The heading. Upstream assembles it in `IObuff` and then calls
+    // `message_filtered` and `msg_outtrans`, both of which re-enter the
+    // message machinery.
+    let mut heading = [0 as c_char; IOSIZE as usize];
+    let mut fname = ptr::null_mut::<c_char>();
     // SAFETY: forwarded from the caller.
     unsafe {
-        // The heading: the entry number and where it points.
-        let mut fname = ptr::null_mut::<c_char>();
         let module = (*qfp).qf_module;
         if !module.is_null() && *module != 0 {
             vim_snprintf(
-                IObuff.ptr().cast(),
+                heading.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"%2d %s".as_ptr(),
                 qf_idx,
@@ -105,14 +108,14 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
             }
             if fname.is_null() {
                 snprintf(
-                    IObuff.ptr().cast(),
+                    heading.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"%2d".as_ptr(),
                     qf_idx,
                 );
             } else {
                 vim_snprintf(
-                    IObuff.ptr().cast(),
+                    heading.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"%2d %s".as_ptr(),
                     qf_idx,
@@ -145,7 +148,7 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
             msg_putchar('\n' as c_int);
         }
         msg_outtrans(
-            IObuff.ptr().cast(),
+            heading.as_mut_ptr(),
             if cursel { HLF_QFL } else { qfFile_hl_id.get() },
             false,
         );
@@ -302,10 +305,11 @@ pub(crate) unsafe fn qf_fmt_text(out: &mut Vec<u8>, text: *const c_char) {
 ///
 /// `qfp` must be a live entry.
 pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const qfline_T) {
+    let mut range = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller. Each `vim_snprintf_safelen`
     // answers what it wrote, so the next one appends where it stopped.
     unsafe {
-        let buf = IObuff.ptr().cast::<c_char>();
+        let buf = range.as_mut_ptr();
         let mut len = vim_snprintf_safelen(buf, IOSIZE as size_t, c"%d".as_ptr(), (*qfp).qf_lnum);
         if (*qfp).qf_end_lnum > 0 && (*qfp).qf_lnum != (*qfp).qf_end_lnum {
             len += vim_snprintf_safelen(

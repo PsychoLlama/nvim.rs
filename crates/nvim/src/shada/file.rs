@@ -85,6 +85,7 @@ unsafe fn shada_get_default_file() -> *const c_char {
 /// environment-variable expansion — anything the shell handed over has been
 /// expanded already.
 unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
+    let mut expansion = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if !file.is_null() && *file != NUL as c_char {
             return Some(CStr::from_ptr(file).to_owned());
@@ -100,8 +101,8 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
         if named.is_null() || *named == NUL as c_char {
             named = shada_get_default_file().cast_mut();
         }
-        let len = expand_env(named, NameBuff.ptr().cast::<c_char>(), MAXPATHL);
-        let expanded = core::slice::from_raw_parts(NameBuff.ptr().cast::<u8>(), len);
+        let len = expand_env(named, expansion.as_mut_ptr(), MAXPATHL);
+        let expanded = core::slice::from_raw_parts(expansion.as_ptr().cast::<u8>(), len);
         Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
     }
 }
@@ -498,6 +499,7 @@ fn writable_by_us(info: &FileInfo) -> bool {
 /// Whether a file is on removable media, per `'shada'`'s `r` entries — its
 /// marks are then not remembered at all.
 pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
+    let mut folded = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let mut part = [0 as c_char; MAXPATHL as usize + 1];
         let new_name = home_replace_save(core::ptr::null_mut(), name);
@@ -516,12 +518,12 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
             home_replace(
                 core::ptr::null(),
                 part.as_ptr().add(1),
-                NameBuff.ptr().cast::<c_char>(),
+                folded.as_mut_ptr(),
                 MAXPATHL as size_t,
                 true,
             );
-            let n = strlen(NameBuff.ptr().cast::<c_char>());
-            if mb_strnicmp(NameBuff.ptr().cast::<c_char>(), new_name, n) == 0 {
+            let n = strlen(folded.as_ptr());
+            if mb_strnicmp(folded.as_ptr(), new_name, n) == 0 {
                 retval = true;
                 break;
             }

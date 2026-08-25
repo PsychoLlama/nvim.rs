@@ -196,6 +196,7 @@ unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<*mut buf_T> {
 ///
 /// `eap` must be a live command.
 pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
+    let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
     unsafe {
         let au_name = cbuffer_get_auname((*eap).cmdidx);
@@ -218,17 +219,18 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
             return;
         };
 
-        // The title names the buffer as well as the command.
+        // The title names the buffer as well as the command. `qf_init_ext`
+        // copies it, so this frame can own it.
         let mut qf_title = qf_cmdtitle(*(*eap).cmdlinep);
         if !(*buf).b_sfname.is_null() {
             vim_snprintf(
-                IObuff.ptr().cast(),
+                title.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"%s (%s)".as_ptr(),
                 qf_title,
                 (*buf).b_sfname,
             );
-            qf_title = IObuff.ptr().cast();
+            qf_title = title.as_mut_ptr();
         }
 
         incr_quickfix_busy();

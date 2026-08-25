@@ -7,7 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
@@ -25,8 +25,7 @@ use crate::lua::ffi::{
     luaL_error,
 };
 use crate::main::{
-    IObuff, current_sctx, curwin, did_emsg, did_throw, e_fast_api_disabled, force_abort,
-    suppress_errthrow,
+    current_sctx, curwin, did_emsg, did_throw, e_fast_api_disabled, force_abort, suppress_errthrow,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
@@ -41,7 +40,7 @@ use ::libc::strlen;
 /// message quotes.
 const NAME_LIMIT: size_t = 100;
 /// `Vimscript function "%s"` less the `%s`, plus its terminator.
-const QUOTED_FMT_LEN: size_t = size_of::<[core::ffi::c_char; 22]>();
+const QUOTED_FMT_LEN: size_t = size_of::<[c_char; 22]>();
 
 /// `vim.call(name, ...)`: call a Vimscript function.
 ///
@@ -52,6 +51,7 @@ const QUOTED_FMT_LEN: size_t = size_of::<[core::ffi::c_char; 22]>();
 /// # Safety
 /// `lstate` must be a live Lua state holding this function's arguments.
 pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
+    let mut refused = [0 as c_char; NAME_LIMIT + QUOTED_FMT_LEN + 1];
     unsafe {
         let mut err = ERROR_INIT;
         let mut name_len: size_t = 0;
@@ -60,16 +60,13 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
         if !nlua_is_deferred_safe() && !viml_func_is_fast(name) {
             let length = strlen(name).min(NAME_LIMIT) + QUOTED_FMT_LEN;
             vim_snprintf(
-                IObuff.ptr().cast(),
+                refused.as_mut_ptr(),
                 length,
                 c"Vimscript function \"%s\"".as_ptr(),
                 name,
             );
-            return luaL_error(
-                lstate,
-                &raw const e_fast_api_disabled as *const _,
-                IObuff.ptr(),
-            );
+            let fmt = &raw const e_fast_api_disabled as *const _;
+            return luaL_error(lstate, fmt, refused.as_ptr());
         }
 
         let nargs = lua_gettop(lstate) - 1;

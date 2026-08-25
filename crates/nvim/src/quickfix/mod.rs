@@ -62,13 +62,13 @@ use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
-    Columns, IObuff, KeyTyped, NameBuff, cmdline_row, cmdmod, curbuf, curtab, curwin,
-    e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invarg2, e_invrange,
-    e_listreq, e_loclist, e_no_errors, e_nomatch, e_nomatch2, e_noprevre, e_notmp, e_openerrf,
-    e_readerrf, e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer, fdo_flags,
-    first_tabpage, firstwin, got_int, lastwin, msg_col, msg_didout, msg_nowait, msg_scroll,
-    msg_scrolled, must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic,
-    p_mef, p_menc, p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin, restart_edit, swb_flags,
+    Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, e_au_recursive,
+    e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invarg2, e_invrange, e_listreq,
+    e_loclist, e_no_errors, e_nomatch, e_nomatch2, e_noprevre, e_notmp, e_openerrf, e_readerrf,
+    e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer, fdo_flags, first_tabpage,
+    firstwin, got_int, lastwin, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled,
+    must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc,
+    p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin, restart_edit, swb_flags,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};

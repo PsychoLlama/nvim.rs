@@ -607,6 +607,7 @@ pub unsafe fn compl_match_curr_select(selected: c_int) -> bool {
 /// Report which file the shown match came from, truncating the name on the
 /// left to whatever room the status line leaves.
 pub(crate) unsafe fn ins_compl_show_filename() {
+    let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         let lead = gettext(c"match in file".as_ptr());
         let mut space = sc_col.get() - vim_strsize(lead) - 2;
@@ -632,7 +633,7 @@ pub(crate) unsafe fn ins_compl_show_filename() {
         }
         msg_hist_off.set(true);
         vim_snprintf(
-            IObuff.ptr() as *mut c_char,
+            line.as_mut_ptr(),
             IOSIZE as size_t,
             c"%s %s%s".as_ptr(),
             lead,
@@ -643,7 +644,7 @@ pub(crate) unsafe fn ins_compl_show_filename() {
             },
             s,
         );
-        msg(IObuff.ptr() as *mut c_char, 0);
+        msg(line.as_mut_ptr(), 0);
         msg_hist_off.set(false);
         redraw_cmdline.set(false);
     }

@@ -677,6 +677,8 @@ pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) ->
 /// Call the functions named in `'complete'` with `findstart=1` and record the
 /// start column each answers.
 pub(crate) unsafe fn prepare_cpt_compl_funcs() {
+    // The throwaway `copy_option_part` steps the entry into.
+    let mut skipped = [0 as c_char; IOSIZE as usize];
     unsafe {
         // Make a copy of 'cpt' in case the buffer gets wiped out.
         let cpt = xstrdup((*curbuf.get()).b_p_cpt);
@@ -712,7 +714,7 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
             // Advance p.
             copy_option_part(
                 &raw mut p,
-                IObuff.ptr().cast::<c_char>(),
+                skipped.as_mut_ptr(),
                 IOSIZE as size_t,
                 c",".as_ptr().cast_mut(),
             );
@@ -820,6 +822,8 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
 /// Re-collect matches from the `'complete'` functions that set
 /// `refresh:always`.
 pub(crate) unsafe fn cpt_compl_refresh() {
+    // The throwaway `copy_option_part` steps the entry into.
+    let mut skipped = [0 as c_char; IOSIZE as usize];
     unsafe {
         // Make the completion list linear (non-cyclic).
         ins_compl_make_linear();
@@ -866,7 +870,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
             // Advance p.
             copy_option_part(
                 &raw mut p,
-                IObuff.ptr().cast::<c_char>(),
+                skipped.as_mut_ptr(),
                 IOSIZE as size_t,
                 c",".as_ptr().cast_mut(),
             );

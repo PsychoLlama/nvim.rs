@@ -57,6 +57,9 @@ unsafe fn hgr_get_ll(new_ll: &mut bool) -> *mut qf_info_T {
 /// `qfl` must be a live list, `fname` NUL-terminated and `p_regmatch` a
 /// compiled pattern.
 unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *mut regmatch_T) {
+    // Where each line is read. Upstream shares `IObuff`, which the entry
+    // it builds and the messages it may raise both write.
+    let mut read = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
     unsafe {
         let fd = os_fopen(fname, c"r".as_ptr());
@@ -64,7 +67,7 @@ unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *
             return;
         }
 
-        let line: *mut c_char = IObuff.ptr().cast();
+        let line = read.as_mut_ptr();
         let mut lnum: linenr_T = 1;
         while !vim_fgets(line, IOSIZE, fd) && !got_int.get() {
             if vim_regexec(p_regmatch, line, 0) {
@@ -177,17 +180,18 @@ unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
 ///
 /// `qfl` must be a live list and `p_regmatch` a compiled pattern.
 unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, lang: *const c_char) {
-    // SAFETY: forwarded from the caller; `NameBuff` holds MAXPATHL bytes.
+    let mut dir = [0 as c_char; MAXPATHL as usize];
+    // SAFETY: forwarded from the caller; `dir` holds MAXPATHL bytes.
     unsafe {
         let mut p = p_rtp.get();
         while *p as c_int != NUL && !got_int.get() {
             let len = copy_option_part(
                 &raw mut p,
-                NameBuff.ptr().cast(),
+                dir.as_mut_ptr(),
                 MAXPATHL as size_t,
                 c",".as_ptr().cast_mut(),
             );
-            let entry = core::slice::from_raw_parts(NameBuff.ptr().cast::<u8>(), len);
+            let entry = core::slice::from_raw_parts(dir.as_ptr().cast::<u8>(), len);
             hgr_search_files_in_dir(qfl, entry, p_regmatch, lang);
         }
     }

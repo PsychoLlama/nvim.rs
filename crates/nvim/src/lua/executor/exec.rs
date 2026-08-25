@@ -26,7 +26,6 @@ use crate::lua::ffi::{
     LUA_MULTRET, LUA_TNIL, lua_gettop, lua_pop, lua_pushinteger, lua_pushnil, lua_pushstring,
     lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::main::IObuff;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::types::{
@@ -44,29 +43,29 @@ const EVALHEADER: &CStr = c"local _A=select(1,...) return (";
 const CALLHEADER: &CStr = c"return ";
 const CALLSUFFIX: &CStr = c"(...)";
 
-/// Where the assembled chunk goes: the shared `IObuff` when it fits, a fresh
-/// allocation otherwise.
+/// Where the assembled chunk goes: `scratch`, the caller's own `IOSIZE`
+/// buffer, when it fits; a fresh allocation otherwise. Upstream shares
+/// `IObuff` for it, which anything the chunk runs may overwrite.
 ///
 /// # Safety
-/// `len` must be the length the caller is about to write.
-unsafe fn chunk_buffer(len: size_t) -> *mut c_char {
+/// `scratch` must be `IOSIZE` writable bytes and `len` the length the
+/// caller is about to write.
+unsafe fn chunk_buffer(scratch: *mut c_char, len: size_t) -> *mut c_char {
     if len < IOSIZE as size_t {
-        IObuff.ptr().cast::<c_char>()
-    } else {
-        // SAFETY: a plain allocation.
-        unsafe { xmalloc(len).cast::<c_char>() }
+        return scratch;
     }
+    // SAFETY: a plain allocation.
+    unsafe { xmalloc(len).cast::<c_char>() }
 }
 
-/// Free [`chunk_buffer`]'s answer, unless it was `IObuff`.
+/// Free [`chunk_buffer`]'s answer, unless it was the caller's `scratch`.
 ///
 /// # Safety
-/// `buf` must be [`chunk_buffer`]'s answer.
-unsafe fn free_chunk_buffer(buf: *mut c_char) {
-    unsafe {
-        if buf != IObuff.ptr().cast::<c_char>() {
-            xfree(buf.cast::<c_void>());
-        }
+/// `buf` must be [`chunk_buffer`]'s answer for `scratch`.
+unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
+    if !ptr::eq(buf.cast_const(), scratch) {
+        // SAFETY: the caller's contract.
+        unsafe { xfree(buf.cast::<c_void>()) };
     }
 }
 
@@ -75,10 +74,12 @@ unsafe fn free_chunk_buffer(buf: *mut c_char) {
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
 pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut typval_T) {
+    let mut chunk = [0 as c_char; IOSIZE as usize];
+    let scratch = chunk.as_mut_ptr();
     unsafe {
         let head = EVALHEADER.count_bytes();
         let lcmd_len = head + str.len() + 1;
-        let lcmd = chunk_buffer(lcmd_len);
+        let lcmd = chunk_buffer(scratch, lcmd_len);
         memcpy(lcmd.cast::<c_void>(), EVALHEADER.as_ptr().cast(), head);
         memcpy(
             lcmd.add(head).cast::<c_void>(),
@@ -87,7 +88,7 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut t
         );
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
         nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, 1, true, ret_tv);
-        free_chunk_buffer(lcmd);
+        free_chunk_buffer(scratch, lcmd);
     }
 }
 
@@ -102,11 +103,13 @@ pub unsafe fn nlua_typval_call(
     argcount: c_int,
     ret_tv: *mut typval_T,
 ) {
+    let mut chunk = [0 as c_char; IOSIZE as usize];
+    let scratch = chunk.as_mut_ptr();
     unsafe {
         let head = CALLHEADER.count_bytes();
         let tail = CALLSUFFIX.count_bytes();
         let lcmd_len = head + len + tail;
-        let lcmd = chunk_buffer(lcmd_len);
+        let lcmd = chunk_buffer(scratch, lcmd_len);
         memcpy(lcmd.cast::<c_void>(), CALLHEADER.as_ptr().cast(), head);
         memcpy(lcmd.add(head).cast::<c_void>(), str.cast(), len);
         memcpy(
@@ -123,7 +126,7 @@ pub unsafe fn nlua_typval_call(
             false,
             ret_tv,
         );
-        free_chunk_buffer(lcmd);
+        free_chunk_buffer(scratch, lcmd);
     }
 }
 
