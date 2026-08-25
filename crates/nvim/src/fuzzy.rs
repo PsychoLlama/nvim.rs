@@ -34,10 +34,9 @@ use crate::ascii::ascii_iswhite;
 use crate::charset::{vim_iswordc, vim_iswordp};
 use crate::eval::callback_call;
 use crate::eval::typval::{
-    callback_free, kCallbackNone, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
-    tv_dict_get_callback, tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk,
-    tv_get_string, tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
-    tv_list_append_tv, tv_list_find,
+    NumBuf, callback_free, kCallbackNone, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
+    tv_dict_get_callback, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_list, tv_list_append_number, tv_list_append_tv, tv_list_find,
 };
 use crate::garray::{ga_grow, ga_init};
 use crate::insexpand::{ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start};
@@ -715,6 +714,7 @@ unsafe fn item_string(
     request: &Request,
     tv: *const typval_T,
     rettv: *mut typval_T,
+    numbuf: &mut NumBuf,
 ) -> *const c_char {
     unsafe {
         if (*tv).v_type == VAR_STRING {
@@ -725,7 +725,7 @@ unsafe fn item_string(
         }
         match request.source {
             Source::Item => core::ptr::null(),
-            Source::Key(key) => tv_dict_get_string((*tv).vval.v_dict, key, false),
+            Source::Key(key) => numbuf.dict_string((*tv).vval.v_dict, key),
             Source::Callback(cb) => {
                 // The callback is handed the dict, which it must not be able
                 // to free out from under this loop.
@@ -769,6 +769,7 @@ unsafe fn nested_list(list: *mut list_T, idx: c_int) -> *mut list_T {
 /// holds three lists — the matched strings, the matching positions of each,
 /// and the scores — which are filled in turn.
 unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: *mut list_T) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let pattern = CStr::from_ptr(request.pattern);
         let mut found: Vec<FuzzyItem> = Vec::new();
@@ -779,7 +780,7 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
                 break;
             }
             let mut rettv = TV_UNKNOWN;
-            let itemstr = item_string(request, &raw const (*li).li_tv, &raw mut rettv);
+            let itemstr = item_string(request, &raw const (*li).li_tv, &raw mut rettv, &mut numbuf);
             if !itemstr.is_null() {
                 let itemstr = CStr::from_ptr(itemstr);
                 let (score, filled) =
@@ -863,6 +864,10 @@ fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
 unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatchpos: bool) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
     unsafe {
         let list = &*argvars;
         if list.v_type != VAR_LIST || list.vval.v_list.is_null() {
@@ -878,7 +883,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
         }
         let pat = &*argvars.add(1);
         if pat.v_type != VAR_STRING || pat.vval.v_string.is_null() {
-            semsg_c!(message(&e_invarg2), tv_get_string(pat));
+            semsg_c!(message(&e_invarg2), numbuf.string(pat));
             return;
         }
 
@@ -907,11 +912,11 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                     semsg_c!(
                         message(&e_invargNval),
                         c"key".as_ptr(),
-                        tv_get_string(&raw const (*di).di_tv),
+                        numbuf2.string(&raw const (*di).di_tv),
                     );
                     return;
                 }
-                key = tv_get_string(&raw const (*di).di_tv);
+                key = numbuf3.string(&raw const (*di).di_tv);
             } else if !tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) {
                 semsg_c!(message(&e_invargval), c"text_cb".as_ptr());
                 return;
@@ -941,7 +946,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
             }
         }
         let request = Request {
-            pattern: tv_get_string(pat),
+            pattern: numbuf4.string(pat),
             source: if !key.is_null() {
                 Source::Key(key)
             } else if cb.type_0 != kCallbackNone {

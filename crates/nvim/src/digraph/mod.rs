@@ -15,8 +15,8 @@ use crate::charset::char2cells;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
 use crate::eval::typval::{
-    tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_get_string_chk,
-    tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_string,
+    NumBuf, tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_list, tv_list_append_string,
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
@@ -541,11 +541,12 @@ unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
 ///
 /// Standard eval-function contract: `argvars` and `rettv` are valid.
 pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = core::ptr::null_mut();
-        tv_get_string_chk(argvars)
+        numbuf.string_chk(argvars)
     };
     if digraphs.is_null() {
         return;

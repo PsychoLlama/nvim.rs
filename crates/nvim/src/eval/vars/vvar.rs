@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::types::{NUL, OK};
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
@@ -120,12 +121,27 @@ pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut dict_T {
     unsafe { (*get_vim_var_tv(idx)).vval.v_dict }
 }
 
-/// `v:` variable `idx` as a string, converting whatever it holds.
+/// `v:` variable `idx` as a string — the variable's own, with an unset one
+/// reading as empty.
+///
+/// Every variable asked for here is declared `VAR_STRING` and `E963` refuses
+/// an assignment of another type, so there is nothing to convert and nothing
+/// to convert it into: the answer lives as long as the variable does, which
+/// is what the callers holding it across a call need.
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
 pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
-    unsafe { tv_get_string(get_vim_var_tv(idx)) as *mut c_char }
+    // SAFETY: the caller's obligation, and the table slot is initialised.
+    let tv = unsafe { &*get_vim_var_tv(idx) };
+    debug_assert_eq!(tv.v_type, VAR_STRING, "v: variable {idx:?} is not a String");
+    // SAFETY: the type tag says the union holds the string arm.
+    let s = unsafe { tv.vval.v_string };
+    if s.is_null() {
+        c"".as_ptr().cast_mut()
+    } else {
+        s
+    }
 }
 
 /// `v:` variable `idx` as a Partial.
@@ -189,8 +205,8 @@ pub unsafe fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
 /// Nothing; `utf_char2bytes` writes at most six bytes, so the NUL lands
 /// inside `buf`.
 pub unsafe fn set_vim_var_char(c: c_int) {
+    let mut buf = [0 as c_char; 7];
     unsafe {
-        let mut buf = [0 as c_char; 7];
         let buflen = utf_char2bytes(c, buf.as_mut_ptr());
         buf[buflen as usize] = NUL as c_char;
         set_vim_var_string(Vv::Char, buf.as_ptr(), buflen as ptrdiff_t);
@@ -466,6 +482,7 @@ pub unsafe fn before_set_vvar(
     watched: bool,
     type_error: *mut bool,
 ) -> bool {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if (*di).di_tv.v_type == VAR_STRING {
             let mut oldtv = TV_INITIAL_VALUE;
@@ -476,7 +493,7 @@ pub unsafe fn before_set_vvar(
             (*di).di_tv.vval.v_string = ptr::null_mut();
 
             if copy || (*tv).v_type != VAR_STRING {
-                let val = tv_get_string(tv);
+                let val = numbuf.string(tv);
                 // Careful: assigning to v:errmsg, `tv_get_string()` may
                 // itself raise an error, which sets the variable -- so only
                 // store when it is still empty.

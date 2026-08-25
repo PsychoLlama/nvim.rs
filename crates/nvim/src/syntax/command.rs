@@ -13,6 +13,7 @@ use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::types::NUL;
 
 /// Is the word between `arg` and `next` exactly `name`, ignoring case?
@@ -343,6 +344,7 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
 ///
 /// Upstream marks this `@deprecated`.
 pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if (*curwin.get()).w_s == &raw mut (*(*curwin.get()).w_buffer).b_s {
             (*curwin.get()).w_s =
@@ -360,7 +362,7 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
         }
 
         // Save the value of b:current_syntax.
-        let mut old_value = get_var_value(c"b:current_syntax".as_ptr());
+        let mut old_value = get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf);
         if !old_value.is_null() {
             old_value = xstrdup(old_value);
         }
@@ -375,7 +377,7 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
         );
 
         // Move the value of b:current_syntax to w:current_syntax.
-        let new_value = get_var_value(c"b:current_syntax".as_ptr());
+        let new_value = get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf);
         if !new_value.is_null() {
             set_internal_string_var(c"w:current_syntax".as_ptr(), new_value);
         }

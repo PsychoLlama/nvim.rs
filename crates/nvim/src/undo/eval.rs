@@ -11,6 +11,7 @@ use std::ffi::CString;
 use super::file::u_get_undo_file_name;
 use super::store::Marks;
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_T;
 use crate::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use crate::winlayer::Buf;
@@ -132,10 +133,11 @@ fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
 ///
 /// The eval-function contract: one argument and a return value to fill in.
 pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        let fname: *const c_char = tv_get_string(argvars);
+        let fname: *const c_char = numbuf.string(argvars);
         if *fname == NUL as c_char {
             (*rettv).vval.v_string = ptr::null_mut();
             return;

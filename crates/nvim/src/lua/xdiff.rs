@@ -11,8 +11,7 @@
 //!
 //! The three shapes the binding can answer in are [`Mode`]: a unified-diff
 //! *string* (the default, assembled in a `luaL_Buffer`), *nothing* with an
-//! `on_hunk` callback run per hunk, or a *list* of `{start_a, count_a,
-//! start_b, count_b}` tuples (`result_type = 'indices'`).
+//! `on_hunk` callback run per hunk, or a *list* of `{start_a, count_a, //! start_b, count_b}` tuples (`result_type = 'indices'`).
 
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};

@@ -13,6 +13,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
 use crate::types::{NUL, OK, OptionSetFlags};
 use crate::winlayer::{TabPage, Win};
@@ -120,6 +121,7 @@ unsafe fn get_var_from(
 /// # Safety
 /// `argvars` holds at least `off + 3` values; `rettv` is writable.
 unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let tp = if off == 1 {
             find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int)
@@ -128,7 +130,7 @@ unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
         };
         let win = find_win_by_nr(argvars.offset(off as isize), TabPage::from_raw(tp))
             .map_or(ptr::null_mut(), Win::raw);
-        let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
+        let varname = numbuf.string_chk(argvars.offset((off + 1) as isize));
         get_var_from(
             varname,
             rettv,
@@ -313,6 +315,7 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
 /// # Safety
 /// `argvars` holds at least `off + 3` values.
 unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if check_secure() {
             return;
@@ -324,7 +327,7 @@ unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
         };
         let win = find_win_by_nr(argvars.offset(off as isize), TabPage::from_raw(tp))
             .map_or(ptr::null_mut(), Win::raw);
-        let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
+        let varname = numbuf.string_chk(argvars.offset((off + 1) as isize));
         let varp = argvars.offset((off + 2) as isize);
         if win.is_null() || varname.is_null() {
             return;
@@ -369,8 +372,9 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut typval
 /// # Safety
 /// As a `VimLFunc`.
 pub unsafe fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        let varname = tv_get_string_chk(argvars.add(1));
+        let varname = numbuf.string_chk(argvars.add(1));
         let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
         // Any window of that tab page will do: only its `t:` scope is read.
         let win = if tp.is_null() {
@@ -413,8 +417,9 @@ pub unsafe fn f_getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// # Safety
 /// As a `VimLFunc`.
 pub unsafe fn f_getbufvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        let varname = tv_get_string_chk(argvars.add(1));
+        let varname = numbuf.string_chk(argvars.add(1));
         let buf = tv_get_buf_from_arg(argvars);
         get_var_from(
             varname,
@@ -433,12 +438,13 @@ pub unsafe fn f_getbufvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// # Safety
 /// As a `VimLFunc`.
 pub unsafe fn f_settabvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if check_secure() {
             return;
         }
         let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
-        let varname = tv_get_string_chk(argvars.add(1));
+        let varname = numbuf.string_chk(argvars.add(1));
         let varp = argvars.add(2);
         if varname.is_null() || tp.is_null() {
             return;
@@ -481,11 +487,12 @@ pub unsafe fn f_setwinvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// As a `VimLFunc`.
 pub unsafe fn f_setbufvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if check_secure() || !tv_check_str_or_nr(argvars) {
             return;
         }
-        let varname = tv_get_string_chk(argvars.add(1));
+        let varname = numbuf.string_chk(argvars.add(1));
         let buf = tv_get_buf(argvars, 0);
         let varp = argvars.add(2);
         if buf.is_null() || varname.is_null() {

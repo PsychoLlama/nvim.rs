@@ -15,8 +15,8 @@ use crate::channel::{
 };
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
-    kCallbackNone, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
-    tv_get_string, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
+    NumBuf, kCallbackNone, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::event::libuv::uv_strerror;
@@ -107,6 +107,7 @@ unsafe fn trailing_args(
 
 /// `chanclose({id} [, {stream}])`
 pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -122,7 +123,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
         let mut part = kChannelPartAll;
         if args.ty(1) == VAR_STRING {
-            let stream = tv_get_string(args.ptr(1));
+            let stream = numbuf.string(args.ptr(1));
             let found = CHANNEL_PARTS
                 .iter()
                 .find(|(name, _)| strcmp(stream, name.as_ptr()) == 0);
@@ -197,6 +198,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
 pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -228,7 +230,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let event_args = trailing_args(args, 2, &mut items, &raw mut arena);
         let ok = rpc_send_event(
             args.get(0).vval.v_number as uint64_t,
-            tv_get_string(args.ptr(1)),
+            numbuf.string(args.ptr(1)),
             event_args,
         );
         arena_mem_free(arena_finish(&raw mut arena));
@@ -313,6 +315,7 @@ impl ProviderScope {
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
 pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -352,7 +355,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             msg: ptr::null_mut(),
         };
         let chan_id = args.get(0).vval.v_number as uint64_t;
-        let method = tv_get_string(args.ptr(1));
+        let method = numbuf.string(args.ptr(1));
         let mut res_mem: ArenaMem = ptr::null_mut();
         let result = rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &raw mut err);
         arena_mem_free(arena_finish(&raw mut arena));
@@ -476,6 +479,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `serverstart([{address}])`
 pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -491,7 +495,7 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             emsg(gettext(e_invarg.as_ptr()));
             return;
         } else {
-            xstrdup(tv_get_string(args.ptr(0)))
+            xstrdup(numbuf.string(args.ptr(0)))
         };
 
         let result = server_start(address);
@@ -546,6 +550,8 @@ pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `sockconnect({mode}, {address} [, {opts}])`
 pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
@@ -559,8 +565,8 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             return;
         }
 
-        let mode = tv_get_string(args.ptr(0));
-        let address = tv_get_string(args.ptr(1));
+        let mode = numbuf.string(args.ptr(0));
+        let address = numbuf2.string(args.ptr(1));
         let tcp = if strcmp(mode, c"tcp".as_ptr()) == 0 {
             true
         } else if strcmp(mode, c"pipe".as_ptr()) == 0 {

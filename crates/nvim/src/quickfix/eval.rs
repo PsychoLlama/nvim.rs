@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{
     NUL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
@@ -199,6 +200,8 @@ pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// `wp` must be null or a live window, and `args` hold three values.
 unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval_T) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
     /// call `setqflist()` again and the list would be pulled out from under
     /// the outer call.
@@ -230,7 +233,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
             }
             // Never null: the value is a string, which is what
             // `tv_get_string_chk` fails on anything else for.
-            let act = tv_get_string_chk(action_arg);
+            let act = numbuf.string_chk(action_arg);
             let known = matches!(*act as u8, b'a' | b'r' | b'u' | b' ' | b'f');
             if !known || *act.add(1) as c_int != NUL {
                 semsg_c!(gettext(c"E927: Invalid action: '%s'".as_ptr()), act);
@@ -240,7 +243,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
 
             let what_arg = args.add(2);
             if (*what_arg).v_type == VAR_STRING {
-                title = tv_get_string_chk(what_arg);
+                title = numbuf2.string_chk(what_arg);
                 if title.is_null() {
                     return;
                 }

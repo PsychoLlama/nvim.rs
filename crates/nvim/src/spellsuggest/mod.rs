@@ -79,6 +79,7 @@ use ::libc::{atoi, fclose, strcasecmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
+use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_COUNT;
 /// The longest word the spell code handles, and so the size of every word
 /// buffer in this module tree.
@@ -614,6 +615,7 @@ unsafe fn spell_find_suggest(
 ///
 /// `su` must be valid and `expr` NUL-terminated.
 unsafe fn spell_suggest_expr(su: *mut suginfo_T, expr: *mut c_char) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller guarantees the pointers; the list the expression
     // returns is owned here until it is unreferenced.
     unsafe {
@@ -626,7 +628,7 @@ unsafe fn spell_suggest_expr(su: *mut suginfo_T, expr: *mut c_char) {
                 if (*li).li_tv.v_type == VAR_LIST {
                     // Each item is a [word, score] pair.
                     let mut word: *const c_char = ptr::null();
-                    let score = get_spellword((*li).li_tv.vval.v_list, &raw mut word);
+                    let score = get_spellword((*li).li_tv.vval.v_list, &raw mut word, &mut numbuf);
                     if score >= 0 && score <= (*su).su_maxscore {
                         add_suggestion(
                             su,

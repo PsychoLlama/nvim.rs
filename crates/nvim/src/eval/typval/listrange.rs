@@ -393,6 +393,7 @@ pub unsafe fn tv_list_join(
 
 /// `join()` the builtin.
 pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if (*argvars).v_type != VAR_LIST {
             emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
@@ -401,7 +402,7 @@ pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         let sep = if (*argvars.add(1)).v_type == VAR_UNKNOWN {
             c" ".as_ptr()
         } else {
-            tv_get_string_chk(argvars.add(1))
+            numbuf.string_chk(argvars.add(1))
         };
 
         (*rettv).v_type = VAR_STRING;

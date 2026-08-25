@@ -17,8 +17,8 @@ use core::ptr::{null, null_mut};
 use crate::buffer::buflist_findnr;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_first, tv_list_len, tv_list_ref,
+    NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_len,
+    tv_list_ref,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::eval::{NL, PROF_YES};
@@ -42,15 +42,20 @@ use ::libc::strlen;
 /// executable; `executable` is cleared when the first item is not one.
 ///
 /// # Safety
-/// `cmd_tv` must be valid; `cmd` and `executable` null or valid.
+/// `cmd_tv` must be valid; `cmd` and `executable` null or valid. `numbuf` is
+/// the scratch a Number command is spelled into and must outlive `*cmd`,
+/// which may point into it.
 pub unsafe fn tv_to_argv(
     cmd_tv: *mut typval_T,
     cmd: *mut *const c_char,
     executable: *mut bool,
+    numbuf: &mut NumBuf,
 ) -> *mut *mut c_char {
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
     unsafe {
         if (*cmd_tv).v_type == VAR_STRING {
-            let cmd_str = tv_get_string(cmd_tv);
+            let cmd_str = numbuf.string(cmd_tv);
             if !cmd.is_null() {
                 *cmd = cmd_str;
             }
@@ -73,7 +78,7 @@ pub unsafe fn tv_to_argv(
 
         // The first item has to resolve to something runnable, and the
         // resolved path is what actually goes in slot 0.
-        let arg0 = tv_get_string_chk(&raw mut (*tv_list_first(argl)).li_tv);
+        let arg0 = numbuf2.string_chk(&raw mut (*tv_list_first(argl)).li_tv);
         let mut exe_resolved: *mut c_char = null_mut();
         if arg0.is_null() || !os_can_exe(arg0, &raw mut exe_resolved, true) {
             if !arg0.is_null() && !executable.is_null() {
@@ -102,7 +107,7 @@ pub unsafe fn tv_to_argv(
         if !argl.is_null() {
             let mut arg: *const listitem_T = (*argl).lv_first;
             while !arg.is_null() {
-                let a = tv_get_string_chk(&raw const (*arg).li_tv);
+                let a = numbuf3.string_chk(&raw const (*arg).li_tv);
                 if a.is_null() {
                     shell_free_argv(argv);
                     xfree(exe_resolved as *mut c_void);
@@ -151,6 +156,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     rettv: *mut typval_T,
     retlist: bool,
 ) {
+    let mut cmdbuf = NumBuf::new();
     unsafe {
         let profiling = do_profiling.get() == PROF_YES;
         (*rettv).v_type = VAR_STRING;
@@ -167,7 +173,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         }
 
         let mut executable = true;
-        let argv = tv_to_argv(argvars, null_mut(), &raw mut executable);
+        let argv = tv_to_argv(argvars, null_mut(), &raw mut executable, &mut cmdbuf);
         if argv.is_null() {
             // A command that does not exist reports -1 rather than a shell
             // exit status.
@@ -265,13 +271,14 @@ pub unsafe fn save_tv_as_string(
     endnl: bool,
     crlf: bool,
 ) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         *len = 0;
         if (*tv).v_type == VAR_UNKNOWN {
             return null_mut();
         }
         if (*tv).v_type != VAR_LIST && (*tv).v_type != VAR_NUMBER {
-            let ret = tv_get_string_chk(tv);
+            let ret = numbuf.string_chk(tv);
             if ret.is_null() {
                 *len = -1;
                 return null_mut();
@@ -341,6 +348,8 @@ unsafe fn list_as_string(
     endnl: bool,
     crlf: bool,
 ) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let sep = if crlf { 2 } else { 1 };
 
@@ -348,7 +357,7 @@ unsafe fn list_as_string(
         if !list.is_null() {
             let mut li: *const listitem_T = (*list).lv_first;
             while !li.is_null() {
-                *len += strlen(tv_get_string(&raw const (*li).li_tv)) as ptrdiff_t + sep;
+                *len += strlen(numbuf.string(&raw const (*li).li_tv)) as ptrdiff_t + sep;
                 li = (*li).li_next;
             }
         }
@@ -363,7 +372,7 @@ unsafe fn list_as_string(
         if !list.is_null() {
             let mut li: *const listitem_T = (*list).lv_first;
             while !li.is_null() {
-                let mut s = tv_get_string(&raw const (*li).li_tv);
+                let mut s = numbuf2.string(&raw const (*li).li_tv);
                 while *s as c_int != NUL {
                     *end = if *s == b'\n' as c_char {
                         NUL as c_char

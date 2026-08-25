@@ -24,6 +24,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{Owned, at, err, frame, from, is_sep, ret_string, str_arg, str_arg_chk};
+use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::memory::{xrealloc, xstrlcat};
@@ -165,8 +166,9 @@ fn simplify(s: *mut c_char) {
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
 pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let pat = str_arg_chk(args, 0);
+    let pat = str_arg_chk(args, 0, &mut numbuf);
     ret_string(
         rettv,
         pat.map_or(ptr::null_mut(), |pat| {
@@ -184,8 +186,9 @@ pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 /// As [`f_glob2regpat`].
 pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = is_absolute(str_arg(args, 0)) as varnumber_T;
+    rettv.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as varnumber_T;
 }
 
 /// `pathshorten({path} [, {len}])`: every component but the last one cut
@@ -197,6 +200,7 @@ pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// # Safety
 /// As [`f_glob2regpat`], arity 1..2.
 pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let trim_len = if args.has(1) {
         // SAFETY: a live typval; `tv_get_number` reports its own error and
@@ -206,7 +210,7 @@ pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         1
     };
     rettv.v_type = VAR_STRING;
-    let Some(p) = str_arg_chk(args, 0) else {
+    let Some(p) = str_arg_chk(args, 0, &mut numbuf) else {
         rettv.vval.v_string = ptr::null_mut();
         return;
     };
@@ -223,8 +227,9 @@ pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 /// As [`f_glob2regpat`].
 pub unsafe fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let simplified = Owned::dup(str_arg(args, 0)).into_raw();
+    let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
     simplify(simplified);
     ret_string(rettv, simplified);
 }
@@ -234,9 +239,10 @@ pub unsafe fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// As [`f_glob2regpat`].
 pub unsafe fn f_resolve(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
-    if let Some(resolved) = resolve(str_arg(args, 0)) {
+    if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         let raw = resolved.into_raw();
         simplify(raw);
         rettv.vval.v_string = raw;

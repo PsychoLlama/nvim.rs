@@ -10,8 +10,8 @@ use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::eval::typval::{
     callback_copy, callback_free, kCallbackNone, tv_clear, tv_dict_add_list, tv_dict_add_nr,
     tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock, tv_dict_find, tv_dict_get_number,
-    tv_dict_get_string, tv_get_number, tv_list_alloc, tv_list_append_dict, tv_list_append_number,
-    tv_list_first, tv_list_free,
+    tv_dict_get_string_alloc, tv_get_number, tv_list_alloc, tv_list_append_dict,
+    tv_list_append_number, tv_list_first, tv_list_free,
 };
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{callback_call, list2fpos, set_ref_in_callback};

@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
@@ -64,6 +65,7 @@ unsafe fn qf_add_entry_from_dict(
     first_entry: bool,
     valid_entry: &mut bool,
 ) {
+    let mut numbuf = NumBuf::new();
     static DID_BUFNR_EMSG: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: forwarded from the caller.
@@ -72,8 +74,8 @@ unsafe fn qf_add_entry_from_dict(
             DID_BUFNR_EMSG.set(false);
         }
 
-        let filename = tv_dict_get_string(d, c"filename".as_ptr(), true);
-        let module = tv_dict_get_string(d, c"module".as_ptr(), true);
+        let filename = tv_dict_get_string_alloc(d, c"filename".as_ptr());
+        let module = tv_dict_get_string_alloc(d, c"module".as_ptr());
         let mut bufnum = tv_dict_get_number(d, c"bufnr".as_ptr()) as c_int;
         let lnum = tv_dict_get_number(d, c"lnum".as_ptr()) as linenr_T;
         let end_lnum = tv_dict_get_number(d, c"end_lnum".as_ptr()) as linenr_T;
@@ -83,9 +85,9 @@ unsafe fn qf_add_entry_from_dict(
         // `getqflist()` reports it back.
         let vcol = tv_dict_get_number(d, c"vcol".as_ptr()) as c_char;
         let nr = tv_dict_get_number(d, c"nr".as_ptr()) as c_int;
-        let kind = tv_dict_get_string(d, c"type".as_ptr(), false);
-        let pattern = tv_dict_get_string(d, c"pattern".as_ptr(), true);
-        let mut text = tv_dict_get_string(d, c"text".as_ptr(), true);
+        let kind = numbuf.dict_string(d, c"type".as_ptr());
+        let pattern = tv_dict_get_string_alloc(d, c"pattern".as_ptr());
+        let mut text = tv_dict_get_string_alloc(d, c"text".as_ptr());
         if text.is_null() {
             text = xcalloc(1, 1).cast();
         }
@@ -402,7 +404,7 @@ unsafe fn qf_setprop_title(
         }
         let qfl = qf_get_list(qi, qf_idx);
         xfree((*qfl).qf_title.cast());
-        (*qfl).qf_title = tv_dict_get_string(what, c"title".as_ptr(), true);
+        (*qfl).qf_title = tv_dict_get_string_alloc(what, c"title".as_ptr());
         if qf_idx == (*qi).qf_curlist {
             qf_update_win_titlevar(qi);
         }

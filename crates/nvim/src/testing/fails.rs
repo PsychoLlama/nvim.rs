@@ -13,9 +13,9 @@ use core::ptr;
 
 use crate::eval::pattern_match;
 use crate::eval::typval::{
-    tv_check_for_opt_number_arg, tv_check_for_opt_string_arg, tv_check_for_opt_string_or_list_arg,
-    tv_check_for_string_or_number_arg, tv_get_string_buf_chk, tv_get_string_chk, tv_list_first,
-    tv_list_last, tv_list_len,
+    NumBuf, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
+    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg, tv_get_string_buf_chk,
+    tv_list_first, tv_list_last, tv_list_len,
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
@@ -293,6 +293,7 @@ pub(crate) unsafe fn f_assert_fails(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is
     // restored by `finish_assert_fails`.
@@ -315,7 +316,7 @@ pub(crate) unsafe fn f_assert_fails(
         // hit-enter prompt.
         let no_prompt = Suppress::wait_return();
 
-        let cmd = tv_get_string_chk(arg(argvars, 0));
+        let cmd = numbuf.string_chk(arg(argvars, 0));
         do_cmdline_cmd(cmd);
 
         // Reset here for any errors reported below.

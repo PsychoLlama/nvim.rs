@@ -12,8 +12,7 @@ use crate::buffer::bt_prompt;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
 use crate::eval::typval::{
-    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
-    tv_get_string_chk, tv_list_len,
+    NumBuf, tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_list_len,
 };
 use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
@@ -55,6 +54,7 @@ const DIALOG_TYPES: [(u8, c_int); 5] = [
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
 pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut buttons_buf = [0 as c_char; NUMBUFLEN];
     let mut type_buf = [0 as c_char; NUMBUFLEN];
@@ -67,7 +67,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // strings `tv_get_string_buf_chk` may park in them and the dialog runs
     // before they go out of scope.
     unsafe {
-        let message = tv_get_string_chk(args.ptr(0));
+        let message = numbuf.string_chk(args.ptr(0));
         if message.is_null() {
             error = true;
         }
@@ -126,6 +126,7 @@ pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `feedkeys({string} [, {mode}])`
 pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, rettv);
     let mut mode_buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the frame is live and both strings outlive the call.
@@ -133,7 +134,7 @@ pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         if check_secure() {
             return;
         }
-        let keys = tv_get_string(args.ptr(0));
+        let keys = numbuf.string(args.ptr(0));
         // A missing {mode} is spelled as a null string, not as "".
         let mode = if args.has(1) {
             tv_get_string_buf(args.ptr(1), mode_buf.as_mut_ptr())
@@ -176,6 +177,7 @@ pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: 
 
 /// `inputlist({textlist})` — print the list and read a number.
 pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and the List is held by an argument for the
     // whole call.
@@ -196,7 +198,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         if !list.is_null() {
             let mut li: *const listitem_T = (*list).lv_first;
             while !li.is_null() {
-                msg_puts(tv_get_string(&raw const (*li).li_tv));
+                msg_puts(numbuf.string(&raw const (*li).li_tv));
                 // A UI that owns the message area keeps the items in one
                 // message, bar the last separator.
                 if !ui_has(kUIMessages) || !(*li).li_next.is_null() {

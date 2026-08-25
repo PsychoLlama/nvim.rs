@@ -8,8 +8,7 @@ use super::wrappers::tv_get_float_chk;
 use crate::charset::skipwhite;
 use crate::eval::string2float;
 use crate::eval::typval::{
-    tv_get_number_chk, tv_get_string, tv_list_alloc_ret, tv_list_append_number, tv_list_find,
-    tv_list_len,
+    NumBuf, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number, tv_list_find, tv_list_len,
 };
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
@@ -278,6 +277,7 @@ fn xoshiro128starstar(s: &mut [u32; 4]) -> u32 {
 /// `rand([{expr}])` — the next value of the process-wide generator, or of
 /// the four-Number list handed in, which is advanced in place.
 pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     /// The process-wide generator, seeded from the OS on first use.
     static STATE: GlobalCell<Option<[u32; 4]>> = GlobalCell::new(None);
 
@@ -302,7 +302,7 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // format string can only carry UTF-8.
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(0)),) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), numbuf.string(args.ptr(0)),) };
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;
@@ -445,12 +445,13 @@ pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// `str2float({string})` — the leading sign and any whitespace around it are
 /// consumed here; `string2float` parses what is left.
 pub unsafe fn f_str2float(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `args.ptr(0)` is a live typval; `tv_get_string` hands back a
     // NUL-terminated buffer that outlives this call, and `skipwhite` only
     // walks forward over it.
     unsafe {
-        let mut p = skipwhite(tv_get_string(args.ptr(0)));
+        let mut p = skipwhite(numbuf.string(args.ptr(0)));
         // Only one sign is consumed, and the whitespace skip after it is
         // what makes `"- 1"` parse as -1.
         let negate = *p == b'-' as c_char;

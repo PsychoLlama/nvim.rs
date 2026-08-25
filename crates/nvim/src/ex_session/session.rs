@@ -31,7 +31,7 @@ use super::{
     ses_put_fname,
 };
 use crate::buffer::{bt_help, bt_nofilename, bt_terminal};
-use crate::eval::typval::tv_get_string;
+use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::hashtab::hash_removed;
@@ -655,9 +655,10 @@ unsafe fn put_session_global(
     kind: VarType,
     tv: *mut typval_T,
 ) -> bool {
+    let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; `escaped` is owned and freed here.
     unsafe {
-        let escaped = vim_strsave_escaped(tv_get_string(tv), c"\\\"\n\r".as_ptr());
+        let escaped = vim_strsave_escaped(numbuf.string(tv), c"\\\"\n\r".as_ptr());
         let mut t = escaped;
         while *t != NUL as c_char {
             if *t == b'\n' as c_char {

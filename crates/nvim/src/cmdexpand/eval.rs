@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{ExpandContext, FAIL, OK, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
@@ -28,6 +29,8 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
 pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let mut xpc: expand_T = core::mem::zeroed();
         let mut filtered = false;
@@ -36,7 +39,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         if tv_check_for_string_arg(argvars, 1) == FAIL {
             return;
         }
-        let type_0 = tv_get_string(argvars.add(1));
+        let type_0 = numbuf.string(argvars.add(1));
 
         if (*argvars.add(2)).v_type != VAR_UNKNOWN {
             filtered = tv_get_number_chk(argvars.add(2), ptr::null_mut()) != 0;
@@ -55,7 +58,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             emsg(gettext(&raw const e_invarg as *const c_char));
             return;
         }
-        let pattern = tv_get_string(argvars);
+        let pattern = numbuf2.string(argvars);
         let mut pattern_start = pattern;
 
         // C's `goto theend`: the "cmdline" type takes the whole classifier and
@@ -160,6 +163,7 @@ pub unsafe fn f_getcompletiontype(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = ptr::null_mut();
@@ -168,7 +172,7 @@ pub unsafe fn f_getcompletiontype(
             return;
         }
 
-        let pat = tv_get_string(argvars);
+        let pat = numbuf.string(argvars);
         let mut xpc: expand_T = core::mem::zeroed();
         expand_init(&raw mut xpc);
 

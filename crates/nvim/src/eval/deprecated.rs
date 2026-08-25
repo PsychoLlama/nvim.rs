@@ -25,7 +25,7 @@ use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
-    kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string, tv_list_len,
+    NumBuf, kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
 };
 use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
@@ -118,6 +118,7 @@ unsafe fn err(msg: &[c_char]) {
 /// # Safety
 /// As the module doc; arity 1..2.
 pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise about `rettv`.
     let rettv = unsafe { &mut *rettv };
     rettv.v_type = VAR_NUMBER;
@@ -184,7 +185,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: the list is unchanged since it was counted, so it still has
     // `argsl` items and they all fit.
     for arg in unsafe { items(args_list) } {
-        child_argv[i] = unsafe { xstrdup(tv_get_string(&raw const (*arg).li_tv)) };
+        child_argv[i] = unsafe { xstrdup(numbuf.string(&raw const (*arg).li_tv)) };
         i += 1;
     }
     child_argv[i] = core::ptr::null_mut();

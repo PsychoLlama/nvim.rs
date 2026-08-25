@@ -18,6 +18,7 @@
 use super::*;
 
 use crate::cstr;
+use crate::eval::typval::NumBuf;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, IOSIZE, MAXPATHL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -346,6 +347,7 @@ unsafe fn script_query(
     pat: *mut *mut c_char,
     regmatch: &mut regmatch_T,
 ) -> ScriptQuery {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's argument vector; argument 0 always exists.
     let arg = unsafe { &*argvars };
     if arg.v_type != VAR_DICT {
@@ -369,7 +371,7 @@ unsafe fn script_query(
                 semsg_c!(
                     gettext(&raw const e_invargNval as *const c_char),
                     c"sid".as_ptr(),
-                    tv_get_string(&raw mut (*sid_di).di_tv),
+                    numbuf.string(&raw mut (*sid_di).di_tv),
                 );
             }
             return ScriptQuery::Rejected;
@@ -379,7 +381,7 @@ unsafe fn script_query(
 
     // SAFETY: the string is allocated for us and handed straight to the caller.
     unsafe {
-        *pat = tv_dict_get_string(dict, c"name".as_ptr(), true);
+        *pat = tv_dict_get_string_alloc(dict, c"name".as_ptr());
         if !(*pat).is_null() {
             regmatch.regprog = vim_regcomp(*pat, RE_MAGIC + RE_STRING);
         }

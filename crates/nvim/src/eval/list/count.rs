@@ -17,6 +17,7 @@ use super::{
     Container, Dict, List, char_len, check_lock, copy_tv, cstr_of_chk, err, err_not_countable,
     err_nr, frame, number_of, starts_with_ic, string_bytes,
 };
+use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
 use crate::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumber_T};
 
@@ -145,7 +146,8 @@ pub unsafe fn f_count(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         match Container::of(args.get_mut(0)) {
             Container::Str(_) => {
                 let hay = string_bytes(args.get_mut(0));
-                if let Some(needle) = cstr_of_chk(args.get_mut(1)) {
+                let mut numbuf = NumBuf::new();
+                if let Some(needle) = cstr_of_chk(args.get_mut(1), &mut numbuf) {
                     n = count_string(hay, needle.to_bytes(), ic);
                 }
             }

@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{
@@ -405,6 +406,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     old_last: *mut qfline_T,
     qf_winid: c_int,
 ) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: forwarded from the caller.
     unsafe {
         let old_key_typed = KeyTyped.get();
@@ -442,7 +444,7 @@ pub(crate) unsafe fn qf_fill_buffer(
                 // its answer is ignored too.
                 let mut qftf_str = ptr::null::<c_char>();
                 if !qftf_li.is_null() && !invalid_val {
-                    qftf_str = tv_get_string_chk(&raw mut (*qftf_li).li_tv);
+                    qftf_str = numbuf.string_chk(&raw mut (*qftf_li).li_tv);
                     if qftf_str.is_null() {
                         invalid_val = true;
                     }

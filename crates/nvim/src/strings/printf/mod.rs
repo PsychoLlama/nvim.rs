@@ -19,7 +19,7 @@ use core::ptr;
 
 use super::given;
 use crate::eval::encode::encode_tv2echo;
-use crate::eval::typval::{tv_get_number_chk, tv_get_string_chk};
+use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
 use crate::memory::{arena_alloc, arena_alloc_block, xrealloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
@@ -71,12 +71,17 @@ pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> varnumber_T 
 
 /// The next argument as a string.
 ///
-/// A String or Number is read in place; anything else is rendered as
-/// `:echo` would render it, and `*tofree` then owns that rendering.
+/// A String is read in place and a Number is rendered into `numbuf`, which
+/// the caller lends and which must outlive the answer; anything else is
+/// rendered as `:echo` would render it, and `*tofree` then owns that.
+///
+/// # Safety
+/// `numbuf` must be writable for `NUMBUFLEN` bytes.
 pub(crate) unsafe fn tv_str(
     tvs: *mut typval_T,
     idxp: &mut c_int,
     tofree: &mut *mut c_char,
+    numbuf: *mut c_char,
 ) -> *const c_char {
     unsafe {
         let Some(tv) = next_arg(tvs, idxp) else {
@@ -84,7 +89,7 @@ pub(crate) unsafe fn tv_str(
         };
         if matches!((*tv).v_type, VAR_STRING | VAR_NUMBER) {
             *tofree = ptr::null_mut();
-            tv_get_string_chk(tv)
+            tv_get_string_buf_chk(tv, numbuf)
         } else {
             *tofree = encode_tv2echo(tv, ptr::null_mut());
             *tofree

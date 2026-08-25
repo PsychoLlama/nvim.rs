@@ -5,11 +5,11 @@
 use super::TV_TRANSLATE;
 use super::args::{Args, frame};
 use crate::eval::typval::{
-    tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
+    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
     tv_dict_add_bool, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number_def,
-    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_get_number_chk, tv_get_string,
-    tv_is_func, tv_list_alloc_ret, tv_list_append_tv, tv_list_copy, tv_list_find, tv_list_first,
+    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_get_number_chk, tv_is_func,
+    tv_list_alloc_ret, tv_list_append_tv, tv_list_copy, tv_list_find, tv_list_first,
     tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx, value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
@@ -252,13 +252,14 @@ unsafe fn get_from_list(args: Args<'_>) -> *mut typval_T {
 /// # Safety
 /// Argument 0 is a live Dict typval.
 unsafe fn get_from_dict(args: Args<'_>) -> *mut typval_T {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation.
     unsafe {
         let d = args.get(0).vval.v_dict;
         if d.is_null() {
             return ptr::null_mut();
         }
-        let di = tv_dict_find(d, tv_get_string(args.ptr(1)), -1);
+        let di = tv_dict_find(d, numbuf.string(args.ptr(1)), -1);
         if di.is_null() {
             return ptr::null_mut();
         }
@@ -273,6 +274,7 @@ unsafe fn get_from_dict(args: Args<'_>) -> *mut typval_T {
 /// # Safety
 /// Argument 0 is a live Funcref or Partial typval.
 unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. A plain Funcref is answered through
     // a stack Partial holding just its name, which lives as long as this
     // call and is never stored.
@@ -293,7 +295,7 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
             fref.pt_name = args.get(0).vval.v_string;
             &raw mut fref
         };
-        let what = tv_get_string(args.ptr(1));
+        let what = numbuf.string(args.ptr(1));
         match CStr::from_ptr(what).to_bytes() {
             b"func" | b"name" => {
                 let mut name: *const c_char = partial_name(pt);
@@ -612,13 +614,14 @@ unsafe fn indexof_list(l: *mut list_T, startidx: varnumber_T, expr: *mut typval_
 
 /// `len({expr})` — bytes for a String or Number, items otherwise.
 pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let tv = args.get(0);
     // SAFETY: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
     unsafe {
         rettv.vval.v_number = match tv.v_type {
-            VAR_STRING | VAR_NUMBER => strlen(tv_get_string(args.ptr(0))) as varnumber_T,
+            VAR_STRING | VAR_NUMBER => strlen(numbuf.string(args.ptr(0))) as varnumber_T,
             VAR_BLOB => tv_blob_len(tv.vval.v_blob) as varnumber_T,
             VAR_LIST => tv_list_len(tv.vval.v_list) as varnumber_T,
             VAR_DICT => tv_dict_len(tv.vval.v_dict) as varnumber_T,

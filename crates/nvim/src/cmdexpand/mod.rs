@@ -14,8 +14,8 @@ use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_statu
 use crate::eval::funcs::{get_expr_name, get_function_name};
 use crate::eval::typval::{
     tv_check_for_string_arg, tv_clear, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc_ret, tv_get_number_chk, tv_get_string, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_string, tv_list_unref,
+    tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_string,
+    tv_list_unref,
 };
 use crate::eval::userfunc::get_user_func_name;
 use crate::eval::vars::get_user_var_name;

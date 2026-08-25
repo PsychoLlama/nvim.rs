@@ -14,6 +14,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval};
 use crate::types::{FAIL, NUL, OK, OptionSetFlags};
 
@@ -332,6 +333,7 @@ unsafe fn ex_let_env(
     endchars: *const c_char,
     op: *const c_char,
 ) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if is_const {
             emsg(gettext(
@@ -361,7 +363,7 @@ unsafe fn ex_let_env(
             let c1 = *name.offset(len as isize);
             *name.offset(len as isize) = NUL as c_char;
 
-            let mut p = tv_get_string_chk(tv);
+            let mut p = numbuf.string_chk(tv);
             if !p.is_null() && !op.is_null() && *op == b'.' as c_char {
                 let s = vim_getenv(name);
                 if !s.is_null() {
@@ -540,6 +542,7 @@ unsafe fn ex_let_register(
     endchars: *const c_char,
     op: *const c_char,
 ) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if is_const {
             emsg(gettext(c"E996: Cannot lock a register".as_ptr()));
@@ -566,7 +569,7 @@ unsafe fn ex_let_register(
             *arg as c_int
         };
         let mut ptofree: *mut c_char = ptr::null_mut();
-        let mut p = tv_get_string_chk(tv);
+        let mut p = numbuf.string_chk(tv);
         if !p.is_null() && !op.is_null() && *op == b'.' as c_char {
             let s = get_reg_contents(regname, kGRegExprSrc as c_int) as *mut c_char;
             if !s.is_null() {

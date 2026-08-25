@@ -14,8 +14,8 @@ use crate::channel::{
     channel_proc, channel_pty, channel_terminal_alloc, find_channel,
 };
 use crate::eval::typval::{
-    kCallbackNone, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
-    tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove,
+    NumBuf, kCallbackNone, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc,
+    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove,
     tv_list_alloc, tv_list_append_number, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
@@ -404,6 +404,10 @@ unsafe fn create_environment(
 
 /// `jobstart({cmd} [, {opts}])`
 pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut cmdbuf = NumBuf::new();
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -416,7 +420,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
         let mut cmd = ptr::null::<c_char>();
         let mut executable = true;
-        let argv = tv_to_argv(args.ptr(0), &raw mut cmd, &raw mut executable);
+        let argv = tv_to_argv(args.ptr(0), &raw mut cmd, &raw mut executable, &mut cmdbuf);
         if argv.is_null() {
             // A malformed command answers 0; a command that is simply not
             // executable answers -1.
@@ -447,7 +451,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         let mut on_stdout = NO_READER;
         let mut on_stderr = NO_READER;
         let mut on_exit = NO_CALLBACK;
-        let mut cwd = ptr::null_mut::<c_char>();
+        let mut cwd = ptr::null::<c_char>();
         let mut job_env = ptr::null_mut::<dictitem_T>();
 
         if args.ty(1) == VAR_DICT {
@@ -460,7 +464,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             overlapped = tv_dict_get_number(job_opts, c"overlapped".as_ptr()) != 0;
 
             // An unrecognised `stdin` is a warning, not a failure.
-            let s = tv_dict_get_string(job_opts, c"stdin".as_ptr(), false);
+            let s = numbuf.dict_string(job_opts, c"stdin".as_ptr());
             if !s.is_null() {
                 if strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) == 0 {
                     stdin_mode = kChannelStdinNull;
@@ -487,7 +491,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
                 bail!();
             }
 
-            let new_cwd = tv_dict_get_string(job_opts, c"cwd".as_ptr(), false);
+            let new_cwd = numbuf2.dict_string(job_opts, c"cwd".as_ptr());
             if !new_cwd.is_null() && *new_cwd as c_int != NUL {
                 cwd = new_cwd;
                 if !os_isdir(cwd) {
@@ -519,7 +523,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         // whether or not there were options at all.
         let mut width = tv_dict_get_number(job_opts, c"width".as_ptr()) as uint16_t;
         let mut height = tv_dict_get_number(job_opts, c"height".as_ptr()) as uint16_t;
-        let mut term_name = ptr::null_mut::<c_char>();
+        let mut term_name = ptr::null::<c_char>();
 
         if term {
             if text_locked() {
@@ -545,9 +549,9 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             // `pty && rpc` was refused above and `term` implies `pty`.
             debug_assert!(!rpc);
 
-            term_name = c"xterm-256color".as_ptr() as *mut c_char;
+            term_name = c"xterm-256color".as_ptr();
             if cwd.is_null() {
-                cwd = c".".as_ptr() as *mut c_char;
+                cwd = c".".as_ptr();
             }
             overlapped = false;
             detach = false;
@@ -561,9 +565,9 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             }
         }
         if pty && term_name.is_null() {
-            term_name = tv_dict_get_string(job_opts, c"TERM".as_ptr(), false);
+            term_name = numbuf3.dict_string(job_opts, c"TERM".as_ptr());
             if term_name.is_null() {
-                term_name = c"ansi".as_ptr() as *mut c_char;
+                term_name = c"ansi".as_ptr();
             }
         }
 

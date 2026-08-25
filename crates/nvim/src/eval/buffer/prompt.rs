@@ -12,7 +12,7 @@
 
 use super::lines::set_buffer_lines;
 use super::*;
-use crate::eval::typval::kCallbackNone;
+use crate::eval::typval::{NumBuf, kCallbackNone};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
 
@@ -58,6 +58,10 @@ pub unsafe fn f_prompt_appendbuf(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 1;
@@ -87,14 +91,14 @@ pub unsafe fn f_prompt_appendbuf(
                 let l = (*lines).vval.v_list;
                 if !l.is_null() && (*l).lv_len > 0 {
                     let li = (*l).lv_first;
-                    let joined = concat_str(text, tv_get_string(&raw mut (*li).li_tv));
+                    let joined = concat_str(text, numbuf.string(&raw mut (*li).li_tv));
                     tv_clear(&raw mut (*li).li_tv);
                     (*li).li_tv.v_type = VAR_STRING;
                     (*li).li_tv.vval.v_string = joined;
                     did_concat = true;
                 }
             } else if (*lines).v_type == VAR_STRING {
-                let joined = concat_str(text, tv_get_string(lines));
+                let joined = concat_str(text, numbuf2.string(lines));
                 tv_clear(lines);
                 (*lines).v_type = VAR_STRING;
                 (*lines).vval.v_string = joined;
@@ -119,9 +123,9 @@ pub unsafe fn f_prompt_appendbuf(
             let mut buf = buf;
             buf.b_prompt_append_new_line = if (*lines).v_type == VAR_LIST {
                 let last = list_last(lines);
-                !last.is_null() && ends_in_newline(tv_get_string(&raw mut (*last).li_tv))
+                !last.is_null() && ends_in_newline(numbuf3.string(&raw mut (*last).li_tv))
             } else {
-                (*lines).v_type == VAR_STRING && ends_in_newline(tv_get_string(lines))
+                (*lines).v_type == VAR_STRING && ends_in_newline(numbuf4.string(lines))
             };
         }
     }
@@ -193,6 +197,7 @@ pub unsafe fn f_prompt_setprompt(
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     let (args, _) = frame!(argvars, _rettv);
     // SAFETY: the arguments are live typvals; every line index below is
     // clamped into the buffer first, and `concat_str` hands back an owned
@@ -204,7 +209,7 @@ pub unsafe fn f_prompt_setprompt(
         let Some(mut buf) = Buf::from_raw(tv_get_buf(args.ptr(0), 0)) else {
             return;
         };
-        let new_prompt = tv_get_string(args.ptr(1));
+        let new_prompt = numbuf.string(args.ptr(1));
         let new_prompt_len = len_as_int(strlen(new_prompt));
         if bt_prompt(buf.raw()) && !buf.b_ml.ml_mfp.is_null() {
             rewrite_prompt_line(buf, new_prompt, new_prompt_len);

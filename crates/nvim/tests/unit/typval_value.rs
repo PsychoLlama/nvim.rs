@@ -11,9 +11,8 @@ use std::ptr;
 
 use neovim::eval::typval::{
     tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
-    tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
-    tv_get_string_buf_chk, tv_get_string_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
-    value_check_lock,
+    tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf,
+    tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
 use neovim::main::{curwin, kTVCstring};
 use neovim::memory::{xfree, xmalloc};
@@ -1057,12 +1056,18 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
             ),
         ];
 
-        // `tv_get_string` and `tv_get_string_chk` each have a static buffer,
-        // and they are not the same one.
+        // Every answer comes from the buffer its caller lends, so two
+        // coerced values can be held at once: the second no longer overwrites
+        // the first the way one process-wide buffer made it.
         let one = Tv::Int(1).build();
-        let shared = tv_get_string(&raw const one);
-        let shared_chk = tv_get_string_chk(&raw const one);
-        assert_ne!(shared, shared_chk);
+        let two = Tv::Int(2).build();
+        let mut first = [0 as c_char; NUMBUFLEN as usize];
+        let mut second = [0 as c_char; NUMBUFLEN as usize];
+        let a = tv_get_string_buf(&raw const one, first.as_mut_ptr());
+        let b = tv_get_string_buf(&raw const two, second.as_mut_ptr());
+        assert_ne!(a, b);
+        assert_eq!(CStr::from_ptr(a).to_bytes(), b"1");
+        assert_eq!(CStr::from_ptr(b).to_bytes(), b"2");
 
         // The caller's buffer is this frame's, so allocating it does not
         // land in the log the rows below assert over.
@@ -1070,8 +1075,6 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
         let scratch: *mut c_char = buffer.as_mut_ptr();
 
         for (name, checked, in_buffer) in [
-            ("string", false, shared),
-            ("string_chk", true, shared_chk),
             ("string_buf", false, scratch.cast_const()),
             ("string_buf_chk", true, scratch.cast_const()),
         ] {
@@ -1081,8 +1084,6 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string" => tv_get_string(&raw const tv),
-                        "string_chk" => tv_get_string_chk(&raw const tv),
                         "string_buf" => tv_get_string_buf(&raw const tv, scratch),
                         _ => tv_get_string_buf_chk(&raw const tv, scratch),
                     },

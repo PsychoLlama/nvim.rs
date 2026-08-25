@@ -8,7 +8,7 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::buflist_findnr;
 use crate::eval::kMarkAll;
-use crate::eval::typval::{tv_get_string_chk, tv_list_find, tv_list_find_nr, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_find, tv_list_find_nr, tv_list_len};
 use crate::main::{curbuf, curwin};
 use crate::mark::mark_get;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
@@ -95,6 +95,7 @@ pub unsafe fn var2fpos(
     charcol: bool,
     wp: *mut win_T,
 ) -> Option<pos_T> {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut pos = pos_T::default();
         let bp: *mut buf_T = (*wp).w_buffer;
@@ -141,7 +142,7 @@ pub unsafe fn var2fpos(
             return Some(pos);
         }
 
-        let name = tv_get_string_chk(tv);
+        let name = numbuf.string_chk(tv);
         if name.is_null() {
             return None;
         }

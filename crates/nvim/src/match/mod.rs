@@ -21,8 +21,7 @@ use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_rang
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_number, tv_dict_get_string, tv_dict_get_string_buf, tv_get_number,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_dict_get_number, tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
     tv_list_first, tv_list_idx_of_item, tv_list_len, tv_list_ref, tv_list_unref,
 };
@@ -57,10 +56,6 @@ mod vimscript;
 pub(crate) use self::vimscript::*;
 
 use crate::regexp::re_multiline;
-
-/// The scratch buffer `tv_get_string_buf_chk` needs to render a non-string
-/// argument into.
-pub(crate) const NUMBUFLEN: usize = 65;
 
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;

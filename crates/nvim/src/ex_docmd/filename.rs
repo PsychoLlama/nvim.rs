@@ -18,6 +18,7 @@ use crate::charset::{backslash_halve, getdigits_int, skipwhite};
 use crate::cmdexpand::{expand_init, expand_one};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
+use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_list_find_str;
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
@@ -403,6 +404,7 @@ pub unsafe fn eval_vars(
     let mut tilde_file = false;
     let mut skip_mod = false;
     let mut strbuf: [c_char; 30] = [0; 30];
+    let mut numbuf = NumBuf::new();
     unsafe {
         *errormsg = ptr::null();
         if !escaped.is_null() {
@@ -479,8 +481,8 @@ pub unsafe fn eval_vars(
                                 *usedlen = 1;
                                 return ptr::null_mut();
                             }
-                            result = tv_list_find_str(get_vim_var_list(Vv::Oldfiles), i - 1)
-                                as *mut c_char;
+                            let oldfiles = get_vim_var_list(Vv::Oldfiles);
+                            result = tv_list_find_str(oldfiles, i - 1, &mut numbuf).cast_mut();
                             if result.is_null() {
                                 *errormsg = c"".as_ptr();
                                 return ptr::null_mut();

@@ -216,6 +216,7 @@ pub unsafe fn tv_dict_get_bool(
 /// which has a string form. The array and every string in it are the
 /// caller's to free.
 pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let env_size = tv_dict_len(denv) as size_t;
 
@@ -226,7 +227,7 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
         for (i, hi) in tv_dict_iter(&*denv).enumerate() {
             let var = tv_dict_hi2di(hi);
             let key = tv_dict_item_key(var);
-            let str = tv_get_string(&raw mut (*var).di_tv);
+            let str = numbuf.string(&raw mut (*var).di_tv);
             debug_assert!(!str.is_null());
             let len = strlen(key) + strlen(str) + c"=".count_bytes() + 1;
             *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
@@ -239,32 +240,27 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
     }
 }
 
-/// `d[key]` as a string, using a shared scratch buffer for a number.
+/// `d[key]` as a fresh allocation the caller owns, NULL for a missing key.
 ///
-/// With `save`, the answer is a fresh allocation the caller owns; without it,
-/// the answer may point into that shared buffer and only lasts until the next
-/// call.
+/// The `save` half of the C's `tv_dict_get_string`; the borrowing half is
+/// [`tv_dict_get_string_buf`], which renders into the caller's own
+/// [`NumBuf`] rather than a process-wide one.
 ///
 /// # Safety
 /// `d` is null or points at a live dictionary, and `key` must be a
 /// NUL-terminated string.
-///
-/// Without `save` the answer may point into a process-wide scratch buffer
-/// that the next call overwrites, so two live answers cannot be held at
-/// once; with `save` it is a fresh allocation the caller owns.
-pub unsafe fn tv_dict_get_string(
+pub unsafe fn tv_dict_get_string_alloc(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
-    save: bool,
 ) -> *mut ::core::ffi::c_char {
-    unsafe {
-        static numbuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
-        let s = tv_dict_get_string_buf(d, key, numbuf.ptr() as *mut ::core::ffi::c_char);
-        if save && !s.is_null() {
-            return xstrdup(s);
-        }
-        s.cast_mut()
+    let mut numbuf = NumBuf::new();
+    // SAFETY: the caller's dictionary and key; the scratch is this frame's.
+    let s = unsafe { numbuf.dict_string(d, key) };
+    if s.is_null() {
+        return ::core::ptr::null_mut();
     }
+    // SAFETY: a non-null answer is a NUL-terminated string.
+    unsafe { xstrdup(s) }
 }
 
 /// `d[key]` as a string, formatting a number into `numbuf`.
@@ -479,6 +475,7 @@ pub unsafe fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
 /// yet.
 pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if tv_check_for_dict_arg(argvars, 0) == FAIL {
             return;
@@ -488,6 +485,24 @@ pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             return;
         }
         (*rettv).vval.v_number =
-            varnumber_T::from(!tv_dict_find(d, tv_get_string(argvars.add(1)), -1).is_null());
+            varnumber_T::from(!tv_dict_find(d, numbuf.string(argvars.add(1)), -1).is_null());
+    }
+}
+
+impl NumBuf {
+    /// `d[key]` as a string, NULL for a missing key. The borrowing half of
+    /// the C's `tv_dict_get_string`; [`tv_dict_get_string_alloc`] is the
+    /// other one.
+    ///
+    /// # Safety
+    /// `d` is null or points at a live dictionary, and `key` must be a
+    /// NUL-terminated string.
+    pub unsafe fn dict_string(
+        &mut self,
+        d: *const dict_T,
+        key: *const ::core::ffi::c_char,
+    ) -> *const ::core::ffi::c_char {
+        // SAFETY: the caller's dictionary and key.
+        unsafe { tv_dict_get_string_buf(d, key, self.as_mut_ptr()) }
     }
 }

@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::types::{VAR_NUMBER, VAR_STRING};
 
@@ -48,11 +49,12 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
 
 /// `bufadd({name})` — the number of the buffer, creating it if need be.
 pub unsafe fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals and `tv_get_string` hands back a
     // NUL-terminated string.
     unsafe {
-        let name = tv_get_string(args.ptr(0)) as *mut c_char;
+        let name = numbuf.string(args.ptr(0)) as *mut c_char;
         // An empty name asks for an unnamed buffer.
         let name = if *name == 0 { ptr::null_mut() } else { name };
         rettv.vval.v_number = varnumber_T::from(buflist_add(name, 0));
@@ -129,6 +131,7 @@ pub unsafe fn f_bufname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// `bufnr([{buf} [, {create}]])` — -1 when there is no such buffer and it was
 /// not asked to be created.
 pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals and `curbuf` is set.
@@ -150,7 +153,7 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             && tv_get_number_chk(args.ptr(1), &raw mut error) != 0
             && !error
         {
-            let name = tv_get_string_chk(args.ptr(0));
+            let name = numbuf.string_chk(args.ptr(0));
             if !name.is_null() {
                 buf = buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0);
             }

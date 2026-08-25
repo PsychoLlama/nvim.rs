@@ -11,7 +11,7 @@ use crate::api::ui::{remote_ui_connect, remote_ui_disconnect};
 use crate::api::vim::nvim__chan_set_detach;
 use crate::api::vimscript::nvim_command;
 use crate::channel::{channel_close, channel_job_start, channel_proc, find_channel};
-use crate::eval::typval::{kCallbackNone, tv_get_string, tv_list_len};
+use crate::eval::typval::{NumBuf, kCallbackNone, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::event::proc::{proc_stop, proc_wait};
 use crate::ex_docmd::{GA_EMPTY_INIT_VALUE, cmdmod_has, kChannelPartAll};
@@ -88,6 +88,8 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
 pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let mut err = Error {
             type_0: kErrorTypeNone,
@@ -106,7 +108,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
         let mut li: *const listitem_T = (*argv_list).lv_first;
         while !li.is_null() {
-            let arg = tv_get_string(&raw const (*li).li_tv);
+            let arg = numbuf.string(&raw const (*li).li_tv);
             // `-- [files…]` is dropped: it is almost never wanted, and
             // `:mksession` is the way to carry a session over.
             if i > 0 && strequal(arg, c"--".as_ptr()) {
@@ -126,7 +128,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
             if i > 0 && strequal(arg, c"--listen".as_ptr()) {
                 let next_li = (*li).li_next;
                 if !next_li.is_null() {
-                    let addr = tv_get_string(&raw const (*next_li).li_tv);
+                    let addr = numbuf2.string(&raw const (*next_li).li_tv);
                     if !strstr(addr, c":".as_ptr()).is_null()
                         || !strstr(addr, c"/".as_ptr()).is_null()
                         || !strstr(addr, c"\\".as_ptr()).is_null()

@@ -9,8 +9,7 @@ use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
 use crate::eval::garbage_collect;
 use crate::eval::typval::{
-    tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string, tv_dict_has_key,
-    tv_get_number_chk,
+    tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_has_key, tv_get_number_chk,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::event::libuv::uv_strerror;

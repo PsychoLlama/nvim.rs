@@ -17,7 +17,7 @@ use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
 use neovim::eval::typval::{
-    tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
+    NumBuf, tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
     tv_list_append_list, tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string,
     tv_list_append_tv, tv_list_concat, tv_list_copy, tv_list_drop_items, tv_list_equal,
     tv_list_extend, tv_list_find, tv_list_find_nr, tv_list_find_str, tv_list_free,
@@ -1671,7 +1671,8 @@ fn finding_a_string_by_index_renders_scalars() {
     // SAFETY: every list is this case's own; the answer is borrowed.
     unsafe {
         let find_str = |l: *mut list_T, n: c_int, msg: Option<&str>| -> Option<String> {
-            let ret = check_emsg(log.editor(), || tv_list_find_str(l, n), msg);
+            let mut numbuf = NumBuf::new();
+            let ret = check_emsg(log.editor(), || tv_list_find_str(l, n, &mut numbuf), msg);
             (!ret.is_null()).then(|| CStr::from_ptr(ret).to_string_lossy().into_owned())
         };
 

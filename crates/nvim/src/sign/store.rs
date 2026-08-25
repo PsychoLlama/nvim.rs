@@ -164,7 +164,7 @@ unsafe fn namespace_id(group: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `group` must be NUL-terminated.
-pub(super) unsafe fn namespace_of(group: *mut c_char) -> Integer {
+pub(super) unsafe fn namespace_of(group: *const c_char) -> Integer {
     // SAFETY: the caller's group name.
     let known = unsafe { namespace_id(group) } != 0;
     // SAFETY: as above.

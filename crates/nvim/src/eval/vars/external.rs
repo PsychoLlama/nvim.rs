@@ -17,6 +17,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
@@ -157,7 +158,11 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
 /// # Safety
 /// `list` is one entry of the suggestion list; `ret_word` is writable, and
 /// is left alone when the answer is -1.
-pub unsafe fn get_spellword(list: *mut list_T, ret_word: *mut *const c_char) -> c_int {
+pub unsafe fn get_spellword(
+    list: *mut list_T,
+    ret_word: *mut *const c_char,
+    numbuf: &mut NumBuf,
+) -> c_int {
     unsafe {
         if tv_list_len(list) != 2 {
             emsg(gettext(
@@ -166,7 +171,7 @@ pub unsafe fn get_spellword(list: *mut list_T, ret_word: *mut *const c_char) -> 
             ));
             return -1;
         }
-        *ret_word = tv_list_find_str(list, 0);
+        *ret_word = tv_list_find_str(list, 0, numbuf);
         if (*ret_word).is_null() {
             return -1;
         }

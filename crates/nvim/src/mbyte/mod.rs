@@ -36,7 +36,7 @@ use crate::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
 use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::{
-    tv_check_for_string_arg, tv_get_string, tv_get_string_buf, tv_list_alloc, tv_list_alloc_ret,
+    tv_check_for_string_arg, tv_get_string_buf, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_list, tv_list_append_number, tv_list_first, tv_list_len,
 };
 use crate::getchar::beep_flush;

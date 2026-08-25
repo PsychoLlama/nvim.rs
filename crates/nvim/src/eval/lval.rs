@@ -32,10 +32,10 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len, tv_blob_set_append,
-    tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc,
-    tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_watcher_notify,
-    tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk, tv_get_string, tv_is_func,
+    NumBuf, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
+    tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
+    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk, tv_is_func,
     tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
     tv_list_check_range_index_two, value_check_lock,
 };
@@ -125,12 +125,13 @@ pub(crate) unsafe fn get_lval_dict_item(
     unlet: bool,
     rettv: *mut typval_T,
 ) -> glv_status_T {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let quiet = flags & GLV_QUIET as c_int != 0;
         let p = *key_end;
         // "[key]": the key is `var1`'s string, which is a Number or String.
         let key = if len == -1 {
-            tv_get_string(var1) as *mut c_char
+            numbuf.string(var1) as *mut c_char
         } else {
             key
         };

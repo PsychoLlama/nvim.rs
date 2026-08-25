@@ -8,12 +8,12 @@ use super::{
 };
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{
-    tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
+    NumBuf, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_copy, tv_dict_add_list, tv_dict_add_nr,
     tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_get_bool, tv_get_lnum_buf,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_number, tv_list_append_string,
-    tv_list_find, tv_list_first, tv_list_item_remove, tv_list_uidx,
+    tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_find, tv_list_first,
+    tv_list_item_remove, tv_list_uidx,
 };
 use crate::main::{
     did_emsg, e_buffer_is_not_loaded, e_invalid_buffer_name_str, e_invargval, p_cpo, p_ic,
@@ -107,6 +107,7 @@ impl Drop for Echoed {
 /// # Safety
 /// `args` is the call frame and `rettv` its cleared return value.
 unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchType) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. Every pointer below either points
     // into an argument (which outlives the call), into `patbuf`, or into
     // the string `tofree` owns.
@@ -157,7 +158,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                 }
                 li = tv_list_first(l);
             } else {
-                str = tv_get_string(args.ptr(0)) as *mut c_char;
+                str = numbuf.string(args.ptr(0)) as *mut c_char;
                 expr = str;
                 len = strlen(str) as i64;
             }
@@ -398,6 +399,7 @@ unsafe fn get_matches_in_str(
 
 /// `matchbufline({buf}, {pat}, {lnum}, {end} [, {dict}])`.
 pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
@@ -420,7 +422,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
             if did_emsg.get() == prev_did_emsg {
                 semsg_c!(
                     gettext(e_invalid_buffer_name_str.as_ptr()),
-                    tv_get_string(args.ptr(0)),
+                    numbuf.string(args.ptr(0)),
                 );
             }
             return;

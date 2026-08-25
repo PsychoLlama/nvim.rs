@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
@@ -23,8 +24,9 @@ const NUMBUFLEN: usize = 65;
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        let name = tv_get_string(argvars);
+        let name = numbuf.string(argvars);
         let mut buf = [0 as c_char; NUMBUFLEN];
         let mut abbr = false;
         let mode = if (*argvars.add(1)).v_type == VAR_UNKNOWN as _ {
@@ -190,12 +192,13 @@ pub(crate) unsafe fn mapblock_fill_dict(
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
 unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         // Return an empty string on failure.
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = ptr::null_mut();
 
-        let keys = tv_get_string(argvars).cast_mut();
+        let keys = numbuf.string(argvars).cast_mut();
         if c_int::from(*keys) == NUL {
             return;
         }

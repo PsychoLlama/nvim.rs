@@ -20,6 +20,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{OK, RgbValue};
 
 use super::do_highlight;
+use crate::eval::typval::NumBuf;
 
 /// The groups whose definition does not depend on `'background'`.
 static HIGHLIGHT_INIT_BOTH: [&CStr; 174] = [
@@ -512,6 +513,7 @@ pub(crate) unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
 /// # Safety
 /// Sources a colour scheme and runs `:highlight`; main thread only.
 pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
+    let mut numbuf = NumBuf::new();
     /// Whether the `both == true` call from `main()` has happened. Before it
     /// has, nothing else is set up and its own run would overrule this one
     /// anyway, so a `both == false` call is dropped.
@@ -519,7 +521,7 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
 
     // SAFETY: the editor's own state; every callee is a main-thread call.
     unsafe {
-        let name = get_var_value(c"g:colors_name".as_ptr());
+        let name = get_var_value(c"g:colors_name".as_ptr(), &mut numbuf);
         if !name.is_null() {
             // `load_colors` can free the variable, and with it `name`.
             let copy = xstrdup(name);

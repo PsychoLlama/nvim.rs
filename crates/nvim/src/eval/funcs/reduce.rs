@@ -6,8 +6,8 @@ use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
 use crate::eval::typval::{
-    tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
-    tv_dict_len, tv_get_number_chk, tv_get_string, tv_list_first, tv_list_len, tv_list_locked,
+    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear,
+    tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first, tv_list_len, tv_list_locked,
     tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
@@ -259,10 +259,11 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 /// # Safety
 /// `args` is the call frame and `rettv` its cleared return value.
 unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
     unsafe {
-        let mut p = tv_get_string(args.ptr(0));
+        let mut p = numbuf.string(args.ptr(0));
         let called_emsg_start = called_emsg.get();
         if !args.has(2) {
             if *p as c_int == NUL {
@@ -340,6 +341,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 
 /// `reduce({object}, {func} [, {initial}])`.
 pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: everything read below is the frame's.
     unsafe {
@@ -354,7 +356,7 @@ pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         let func_name = match args.ty(1) {
             VAR_FUNC => args.get(1).vval.v_string,
             VAR_PARTIAL => partial_name(args.get(1).vval.v_partial),
-            _ => tv_get_string(args.ptr(1)),
+            _ => numbuf.string(args.ptr(1)),
         };
         if func_name.is_null() || *func_name as c_int == NUL {
             emsg(gettext(e_missing_function_argument.as_ptr()));

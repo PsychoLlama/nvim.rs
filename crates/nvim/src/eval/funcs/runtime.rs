@@ -11,8 +11,8 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::eval::typval::{
-    tv_dict_alloc_ret, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string,
-    tv_list_alloc_ret, tv_list_append_number,
+    NumBuf, tv_dict_alloc_ret, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
+    tv_list_append_number,
 };
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
@@ -275,10 +275,11 @@ fn has_wsl() -> bool {
 
 /// `has({feature})`
 pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `name` is the string an argument owns.
     unsafe {
-        let name = tv_get_string(args.ptr(0));
+        let name = numbuf.string(args.ptr(0));
         let known = special_feature(name)
             .or_else(|| FEATURES.iter().any(|f| same_name(name, f)).then_some(true));
 
@@ -355,6 +356,8 @@ pub unsafe fn f_hostname(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `menu_get({path} [, {modes}])`
 pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `rettv` is the cleared return value.
     unsafe {
@@ -363,7 +366,7 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         // mode set at "all".
         let modes = if args.ty(1) == VAR_STRING {
             get_menu_cmd_modes(
-                tv_get_string(args.ptr(1)),
+                numbuf.string(args.ptr(1)),
                 false,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -371,7 +374,7 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         } else {
             MENU_ALL_MODES as c_int
         };
-        menu_get(tv_get_string(args.ptr(0)) as *mut c_char, modes, list);
+        menu_get(numbuf2.string(args.ptr(0)) as *mut c_char, modes, list);
     }
 }
 
@@ -394,6 +397,7 @@ pub unsafe fn f_mode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// `state([{what}])` — the letters for whatever is currently in the way of
 /// a `:sleep`, filtered by `{what}` if it was given.
 pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut ga = garray_T {
         ga_len: 0,
@@ -408,7 +412,7 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     unsafe {
         ga_init(&raw mut ga, 1, 20);
         let include = if args.has(0) {
-            tv_get_string(args.ptr(0))
+            numbuf.string(args.ptr(0))
         } else {
             ptr::null()
         };

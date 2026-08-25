@@ -9,9 +9,8 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_number, tv_get_string,
-    tv_get_string_buf_chk, tv_get_string_chk, tv_list_first, tv_list_len, tv_list_ref,
-    tv_list_unref,
+    NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_number,
+    tv_get_string_buf_chk, tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -68,6 +67,7 @@ impl Drop for Owned {
 
 /// `call({func}, {arglist} [, {dict}])`
 pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
@@ -93,7 +93,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
                 owned = true;
                 nlua_register_table_as_callable(args.ptr(0))
             }
-            _ => tv_get_string(args.ptr(0)) as *mut c_char,
+            _ => numbuf.string(args.ptr(0)) as *mut c_char,
         };
         if func.is_null() || *func as c_int == NUL {
             // Upstream returns here without releasing an owned name.
@@ -139,10 +139,11 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 
 /// `eval({string})`
 pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `s` walks a string an argument owns.
     unsafe {
-        let mut s = tv_get_string_chk(args.ptr(0));
+        let mut s = numbuf.string_chk(args.ptr(0));
         if !s.is_null() {
             s = skipwhite(s);
         }
@@ -212,6 +213,7 @@ unsafe fn get_list_line(
 /// # Safety
 /// `argvars` is a dispatcher argument array and `rettv` its return value.
 pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_off: c_int) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation, which is `Args::new`'s.
     let args = unsafe { Args::new(argvars) };
     let cmd_idx = arg_off as usize;
@@ -270,7 +272,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
         }
 
         if args.ty(cmd_idx) != VAR_LIST {
-            do_cmdline_cmd(tv_get_string(args.ptr(cmd_idx)));
+            do_cmdline_cmd(numbuf.string(args.ptr(cmd_idx)));
         } else if !args.get(cmd_idx).vval.v_list.is_null() {
             let list = args.get(cmd_idx).vval.v_list;
             // The List is held across the run: a command may drop the
@@ -313,10 +315,11 @@ pub unsafe fn f_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
 pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `p` walks a string an argument owns.
     unsafe {
-        let mut p = tv_get_string(args.ptr(0));
+        let mut p = numbuf.string(args.ptr(0));
         // Not a bool: the `:` arm answers 2 for an exact command name, and
         // that grading is part of `exists()`'s contract.
         let found: c_int = match *p as u8 {
@@ -361,6 +364,8 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// # Safety
 /// `args` is a live call frame.
 unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     // SAFETY: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
     unsafe {
@@ -377,7 +382,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             // function('MyFunc', [arg], dict)
             _ => {
                 use_string = true;
-                tv_get_string(args.ptr(0)) as *mut c_char
+                numbuf.string(args.ptr(0)) as *mut c_char
             }
         };
 
@@ -409,7 +414,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             semsg_c!(
                 gettext(e_invarg2.as_ptr()),
                 if use_string {
-                    tv_get_string(args.ptr(0))
+                    numbuf2.string(args.ptr(0))
                 } else {
                     s as *const c_char
                 },
@@ -650,10 +655,11 @@ pub unsafe fn f_libcallnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `luaeval({expr} [, {expr}])`
 pub unsafe fn f_luaeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and the chunk outlives the call.
     unsafe {
-        let chunk = tv_get_string_chk(args.ptr(0));
+        let chunk = numbuf.string_chk(args.ptr(0));
         if chunk.is_null() {
             return;
         }

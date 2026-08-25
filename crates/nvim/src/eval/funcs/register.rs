@@ -9,9 +9,9 @@ use super::{
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::eval::typval::{
-    tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find,
-    tv_dict_get_number, tv_dict_get_string, tv_dict_len, tv_get_number_chk, tv_get_string_buf_chk,
-    tv_get_string_chk, tv_list_alloc, tv_list_len, tv_list_ref,
+    NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find,
+    tv_dict_get_number, tv_dict_len, tv_get_number_chk, tv_get_string_buf_chk, tv_list_alloc,
+    tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::keycodes::Ctrl_V;
@@ -43,10 +43,11 @@ type TypeBuf = [c_char; 67];
 /// # Safety
 /// `args.ptr(0)` is a live typval.
 unsafe fn regname(args: Args<'_>) -> Option<c_int> {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation; both sources are NUL-terminated.
     unsafe {
         let name = if args.has(0) {
-            let name = tv_get_string_chk(args.ptr(0));
+            let name = numbuf.string_chk(args.ptr(0));
             if name.is_null() {
                 return None;
             }
@@ -243,6 +244,11 @@ unsafe fn get_yank_type(
 
 /// `setreg({regname}, {value} [, {options}])`.
 pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
+    let mut numbuf5 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; every string
     // read below is NUL-terminated and outlives its use.
@@ -250,7 +256,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         // Non-zero means "did not set anything", which is what every early
         // return leaves behind.
         rettv.vval.v_number = 1;
-        let strregname = tv_get_string_chk(args.ptr(0));
+        let strregname = numbuf.string_chk(args.ptr(0));
         if strregname.is_null() {
             return;
         }
@@ -276,7 +282,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             if !di.is_null() {
                 regcontents = &raw mut (*di).di_tv;
             }
-            let stropt = tv_dict_get_string(d, c"regtype".as_ptr(), false);
+            let stropt = numbuf2.dict_string(d, c"regtype".as_ptr());
             if !stropt.is_null() {
                 let mut p: *const c_char = stropt;
                 // The type must be exactly one letter (plus a width), so
@@ -290,7 +296,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 }
             }
             if regname == b'"' as c_char {
-                let stropt = tv_dict_get_string(d, c"points_to".as_ptr(), false);
+                let stropt = numbuf3.dict_string(d, c"points_to".as_ptr());
                 if !stropt.is_null() {
                     pointreg = *stropt;
                     regname = pointreg;
@@ -311,7 +317,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 semsg_c!(gettext(e_toomanyarg.as_ptr()), c"setreg".as_ptr(),);
                 return;
             }
-            let opts = tv_get_string_chk(args.ptr(2));
+            let opts = numbuf4.string_chk(args.ptr(2));
             if opts.is_null() {
                 return;
             }
@@ -339,7 +345,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 block_len,
             );
         } else if !regcontents.is_null() {
-            let strval = tv_get_string_chk(regcontents);
+            let strval = numbuf5.string_chk(regcontents);
             if strval.is_null() {
                 return;
             }

@@ -15,7 +15,7 @@ use neovim::eval::typval::{
     callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str, tv_dict_add_dict,
     tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find, tv_dict_free,
-    tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string, tv_dict_get_string_buf,
+    tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc, tv_dict_get_string_buf,
     tv_dict_get_string_buf_chk, tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref,
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_unref,
 };
@@ -331,28 +331,36 @@ fn getting_a_number_reads_through_strings_and_reports_otherwise() {
 
 /// `describe('get_string()') itp('works')`, spec line 1829.
 ///
-/// Without `save` the answer for a scalar is the module's own number
-/// buffer, so two scalar lookups hand back the *same* pointer and the
-/// second overwrites the first.
+/// The answer for a scalar is rendered into the buffer the caller lends, so
+/// two scalar lookups given two buffers stay independent -- the C's one
+/// process-wide buffer let the second overwrite the first.
 #[test]
-fn getting_a_string_borrows_a_shared_buffer_for_scalars() {
+fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
     let log = AllocLog::start();
-    // SAFETY: every dict is this case's own; the answers are borrowed.
+    // SAFETY: every dict is this case's own; the answers are borrowed and
+    // every buffer lent outlives the answer taken from it.
     unsafe {
-        let get = |d: *const dict_T, key: &str, msg: Option<&str>| {
+        let get = |d: *const dict_T, key: &str, msg: Option<&str>, buf: &mut [c_char; 65]| {
             check_emsg(
                 log.editor(),
-                || tv_dict_get_string(d, cstr(key).as_ptr(), false),
+                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf.as_mut_ptr()),
                 msg,
             )
         };
+        let mut buf1 = [0 as c_char; 65];
+        let mut buf2 = [0 as c_char; 65];
         let text = |p: *const c_char| CStr::from_ptr(p).to_string_lossy().into_owned();
 
-        assert!(get(ptr::null(), "test", None).is_null());
+        assert!(get(ptr::null(), "test", None, &mut buf1).is_null());
 
         let d = tv::new_dict(&[("test", Tv::Dict(vec![]))]);
         assert_eq!(
-            text(get(d, "test", Some("E731: Using a Dictionary as a String"))),
+            text(get(
+                d,
+                "test",
+                Some("E731: Using a Dictionary as a String"),
+                &mut buf1
+            )),
             ""
         );
         tv_dict_free(d);
@@ -366,16 +374,19 @@ fn getting_a_string_borrows_a_shared_buffer_for_scalars() {
         ]);
         log.clear();
 
-        assert!(get(d, "test", None).is_null(), "a missing key is NULL");
-        let s42 = get(d, "tes", None);
+        assert!(
+            get(d, "test", None, &mut buf1).is_null(),
+            "a missing key is NULL"
+        );
+        let s42 = get(d, "tes", None, &mut buf1);
         assert_eq!(text(s42), "42");
-        let s45 = get(d, "xx", None);
-        assert_eq!(s45, s42, "the same shared buffer");
+        let s45 = get(d, "xx", None, &mut buf2);
+        assert_ne!(s45, s42, "a buffer each");
         assert_eq!(text(s45), "45");
-        assert_eq!(text(s42), "45", "and the first answer moved with it");
+        assert_eq!(text(s42), "42", "and the first answer is still there");
 
         // A string item is answered in place, not through the buffer.
-        let s43 = get(d, "te", None);
+        let s43 = get(d, "te", None, &mut buf1);
         assert_eq!(text(s43), "43");
         assert_ne!(s43, s42);
         assert_eq!(s43, (*tv::di_of(d, "te")).di_tv.vval.v_string);
@@ -383,7 +394,7 @@ fn getting_a_string_borrows_a_shared_buffer_for_scalars() {
 
         // Rendering a float goes through `vim_snprintf`, which costs two
         // `free(NULL)`s and nothing else.
-        assert_eq!(text(get(d, "t", None)), "44.0");
+        assert_eq!(text(get(d, "t", None, &mut buf1)), "44.0");
         log.check(&[
             alloc::freed(ptr::null::<u8>()),
             alloc::freed(ptr::null::<u8>()),
@@ -404,7 +415,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || tv_dict_get_string(d, cstr(key).as_ptr(), true),
+                || tv_dict_get_string_alloc(d, cstr(key).as_ptr()),
                 msg,
             );
             let answer =

@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{FAIL, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::{c_char, c_int};
@@ -23,6 +24,11 @@ const NUMBUFLEN: usize = 65;
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
+    let mut numbuf5 = NumBuf::new();
     unsafe {
         if check_secure() {
             return;
@@ -36,7 +42,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         // If the first argument is a dict, then that is the only one allowed.
         if (*argvars).v_type == VAR_DICT as _ {
             d = (*argvars).vval.v_dict;
-            which = tv_dict_get_string(d, c"mode".as_ptr(), false);
+            which = numbuf.dict_string(d, c"mode".as_ptr());
             let abbr = tv_dict_get_bool(d, c"abbr".as_ptr(), -1);
             if which.is_null() || abbr < 0 {
                 emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr()));
@@ -62,10 +68,10 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         }
 
         // Get the values in the same order as get_maparg() writes them.
-        let lhs = tv_dict_get_string(d, c"lhs".as_ptr(), false);
-        let lhsraw = tv_dict_get_string(d, c"lhsraw".as_ptr(), false);
-        let lhsrawalt = tv_dict_get_string(d, c"lhsrawalt".as_ptr(), false);
-        let mut orig_rhs = tv_dict_get_string(d, c"rhs".as_ptr(), false);
+        let lhs = numbuf2.dict_string(d, c"lhs".as_ptr());
+        let lhsraw = numbuf3.dict_string(d, c"lhsraw".as_ptr());
+        let lhsrawalt = numbuf4.dict_string(d, c"lhsrawalt".as_ptr());
+        let mut orig_rhs = numbuf5.dict_string(d, c"rhs".as_ptr());
         let mut rhs_lua = LUA_NOREF;
         let callback_di = tv_dict_find(d, c"callback".as_ptr(), c"callback".count_bytes() as _);
         if !callback_di.is_null() && (*callback_di).di_tv.v_type == VAR_FUNC as _ {
@@ -98,7 +104,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         args.silent = tv_dict_get_number(d, c"silent".as_ptr()) != 0;
         args.nowait = tv_dict_get_number(d, c"nowait".as_ptr()) != 0;
         args.replace_keycodes = tv_dict_get_number(d, c"replace_keycodes".as_ptr()) != 0;
-        args.desc = tv_dict_get_string(d, c"desc".as_ptr(), true);
+        args.desc = tv_dict_get_string_alloc(d, c"desc".as_ptr());
 
         let sid = tv_dict_get_number(d, c"sid".as_ptr()) as scid_T;
         let lnum = tv_dict_get_number(d, c"lnum".as_ptr()) as linenr_T;

@@ -20,10 +20,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    Args, NUMBUFLEN, e_error_while_writing_str, frame, from, kFileAppend, kFileCreate, kFileMkDir,
-    kFileTruncate, numbuf, str_arg_buf, str_arg_chk,
+    Args, e_error_while_writing_str, frame, from, kFileAppend, kFileCreate, kFileMkDir,
+    kFileTruncate, str_arg_chk,
 };
-use crate::eval::typval::{tv_blob_len, tv_check_str_or_nr, tv_get_string_chk};
+use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -125,11 +125,12 @@ impl Item {
 
     /// The item's value as a string, or None -- having reported -- for a
     /// type that has no string form.
-    fn string<'a>(self) -> Option<&'a CStr> {
-        // SAFETY: a live item; `tv_get_string_chk` answers a NUL-terminated
-        // string, or NULL.
+    /// The caller lends `buf` for a Number item to be spelled into.
+    fn string(self, buf: &mut NumBuf) -> Option<&CStr> {
+        // SAFETY: a live item and a scratch of the promised length; the
+        // answer is NUL-terminated, or NULL.
         unsafe {
-            tv_get_string_chk(&raw const (*self.0).li_tv)
+            tv_get_string_buf_chk(&raw const (*self.0).li_tv, buf.as_mut_ptr())
                 .as_ref()
                 .map(|p| CStr::from_ptr(p))
         }
@@ -208,7 +209,10 @@ fn write_list(out: &mut Out, list: *const list_T, binary: bool) -> bool {
     let mut error;
     'failed: {
         for li in items(list) {
-            let Some(s) = li.string() else { return false };
+            let mut numbuf = NumBuf::new();
+            let Some(s) = li.string(&mut numbuf) else {
+                return false;
+            };
             let bytes = s.to_bytes();
             let mut hunk_start = 0;
             let mut p = 0;
@@ -366,6 +370,7 @@ struct Flags {
 
 impl Flags {
     fn read(args: Args<'_>) -> Option<Self> {
+        let mut numbuf = NumBuf::new();
         let mut f = Self {
             binary: false,
             append: false,
@@ -376,7 +381,7 @@ impl Flags {
         if !args.has(2) {
             return Some(f);
         }
-        let flags = str_arg_chk(args, 2)?;
+        let flags = str_arg_chk(args, 2, &mut numbuf)?;
         for (i, &c) in flags.to_bytes().iter().enumerate() {
             match c {
                 b'b' => f.binary = true,
@@ -413,8 +418,8 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         return;
     };
 
-    let mut buf: [c_char; NUMBUFLEN] = numbuf();
-    let Some(fname) = str_arg_buf(args, 1, &mut buf) else {
+    let mut buf = NumBuf::new();
+    let Some(fname) = str_arg_chk(args, 1, &mut buf) else {
         return;
     };
     if flags.defer && !can_defer() {

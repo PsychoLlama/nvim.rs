@@ -16,6 +16,7 @@ use core::ffi::{CStr, c_int};
 use super::{
     Args, Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, frame, number_of,
 };
+use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{
     EvalFuncData, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNLOCKED, int64_t, typval_T,
@@ -54,9 +55,10 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
     }
 
     // Check the third argument.
+    let mut numbuf = NumBuf::new();
     let mut action = c"force";
     if args.has(2) {
-        let Some(name) = cstr_of_chk(args.get_mut(2)) else {
+        let Some(name) = cstr_of_chk(args.get_mut(2), &mut numbuf) else {
             // Type error; error message already given.
             if is_new {
                 d1.unref();
@@ -205,7 +207,8 @@ pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                     return;
                 }
                 if before < 0 || before > len {
-                    err_str(&e_invarg2, cstr_of(args.get_mut(2)));
+                    let mut numbuf = NumBuf::new();
+                    err_str(&e_invarg2, cstr_of(args.get_mut(2), &mut numbuf));
                     return;
                 }
             }
@@ -214,7 +217,8 @@ pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 return;
             }
             if !(0..=255).contains(&val) {
-                err_str(&e_invarg2, cstr_of(args.get_mut(1)));
+                let mut numbuf = NumBuf::new();
+                err_str(&e_invarg2, cstr_of(args.get_mut(1), &mut numbuf));
                 return;
             }
             b.insert_byte(before, val as uint8_t);

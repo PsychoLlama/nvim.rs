@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::eval::funcs::args::{Args, frame};
+use crate::eval::typval::NumBuf;
 use crate::narrow::number_as_int;
 use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, kListLenMayKnow};
 
@@ -92,9 +93,9 @@ unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut dict_T {
 ///
 /// # Safety
 /// `tv` must be a live typval.
-unsafe fn group_arg(tv: *mut typval_T) -> Option<*mut c_char> {
+unsafe fn group_arg(tv: *mut typval_T, numbuf: &mut NumBuf) -> Option<*mut c_char> {
     // SAFETY: the caller's typval.
-    let group = unsafe { tv_get_string_chk(tv) }.cast_mut();
+    let group = unsafe { numbuf.string_chk(tv) }.cast_mut();
     if group.is_null() {
         return None;
     }
@@ -350,11 +351,18 @@ unsafe fn sign_define_from_dict(
     name: *mut ::core::ffi::c_char,
     dict: *mut dict_T,
 ) -> ::core::ffi::c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
+    let mut numbuf5 = NumBuf::new();
+    let mut numbuf6 = NumBuf::new();
+    let mut numbuf7 = NumBuf::new();
     // SAFETY: the caller's name and dictionary.
     unsafe {
         let mut name = name;
         if name.is_null() {
-            name = tv_dict_get_string(dict, c"name".as_ptr(), false);
+            name = numbuf.dict_string(dict, c"name".as_ptr()).cast_mut();
             if name.is_null() || *name == 0 {
                 return -1;
             }
@@ -367,12 +375,12 @@ unsafe fn sign_define_from_dict(
             // `tv_dict_get_string(.., false)` hands back the dictionary's own
             // buffer, which `init_sign_text` then unescapes IN PLACE — see
             // the note on `sign_define_by_name`.
-            icon = tv_dict_get_string(dict, c"icon".as_ptr(), false);
-            linehl = tv_dict_get_string(dict, c"linehl".as_ptr(), false);
-            text = tv_dict_get_string(dict, c"text".as_ptr(), false);
-            texthl = tv_dict_get_string(dict, c"texthl".as_ptr(), false);
-            culhl = tv_dict_get_string(dict, c"culhl".as_ptr(), false);
-            numhl = tv_dict_get_string(dict, c"numhl".as_ptr(), false);
+            icon = numbuf2.dict_string(dict, c"icon".as_ptr()).cast_mut();
+            linehl = numbuf3.dict_string(dict, c"linehl".as_ptr()).cast_mut();
+            text = numbuf4.dict_string(dict, c"text".as_ptr()).cast_mut();
+            texthl = numbuf5.dict_string(dict, c"texthl".as_ptr()).cast_mut();
+            culhl = numbuf6.dict_string(dict, c"culhl".as_ptr()).cast_mut();
+            numhl = numbuf7.dict_string(dict, c"numhl".as_ptr()).cast_mut();
             prio = number_as_int(tv_dict_get_number_def(dict, c"priority".as_ptr(), -1));
         }
         sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1
@@ -388,6 +396,7 @@ pub(crate) unsafe fn f_sign_define(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_LIST && !args.has(1) {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
@@ -402,7 +411,7 @@ pub(crate) unsafe fn f_sign_define(
 
     rettv.vval.v_number = -1;
     // SAFETY: the argument slots the frame named.
-    let name = unsafe { tv_get_string_chk(args.ptr(0)) }.cast_mut();
+    let name = unsafe { numbuf.string_chk(args.ptr(0)) }.cast_mut();
     // SAFETY: as above.
     if name.is_null() || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) } == FAIL {
         return;
@@ -422,12 +431,13 @@ pub(crate) unsafe fn f_sign_getdefined(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's return slot and argument.
     unsafe {
         let l = tv_list_alloc_ret(rettv, 0);
         let defs = if args.has(0) {
-            sign_find(tv_get_string(args.ptr(0))).into_iter().collect()
+            sign_find(numbuf.string(args.ptr(0))).into_iter().collect()
         } else {
             sign_defs()
         };
@@ -446,6 +456,7 @@ pub(crate) unsafe fn f_sign_getplaced(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's return slot and argument slots.
     unsafe {
@@ -481,7 +492,7 @@ pub(crate) unsafe fn f_sign_getplaced(
                     }
                 }
                 if let Some(tv) = key(dict, "group") {
-                    group = tv_get_string_chk(tv);
+                    group = numbuf.string_chk(tv);
                     if group.is_null() {
                         return;
                     }
@@ -506,6 +517,7 @@ pub(crate) unsafe fn f_sign_jump(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
 
@@ -522,7 +534,7 @@ pub(crate) unsafe fn f_sign_jump(
     }
 
     // SAFETY: the frame's argument slots.
-    let Some(group) = (unsafe { group_arg(args.ptr(1)) }) else {
+    let Some(group) = (unsafe { group_arg(args.ptr(1), &mut numbuf) }) else {
         return;
     };
     // SAFETY: as above.
@@ -561,6 +573,7 @@ unsafe fn sign_place_from_dict(
     buf_tv: *mut typval_T,
     dict: *mut dict_T,
 ) -> ::core::ffi::c_int {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's typvals and dictionary.
     unsafe {
         let mut notanum = false;
@@ -579,7 +592,7 @@ unsafe fn sign_place_from_dict(
 
         let mut group: *mut c_char = null();
         if let Some(tv) = slot(group_tv, dict, "group") {
-            match group_arg(tv) {
+            match group_arg(tv, &mut numbuf) {
                 Some(named) => group = named,
                 None => return -1,
             }
@@ -588,7 +601,7 @@ unsafe fn sign_place_from_dict(
         let Some(name_tv) = slot(name_tv, dict, "name") else {
             return -1;
         };
-        let name = tv_get_string_chk(name_tv).cast_mut();
+        let name = numbuf.string_chk(name_tv).cast_mut();
         if name.is_null() {
             return -1;
         }
@@ -681,13 +694,15 @@ pub(crate) unsafe fn f_sign_undefine(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_LIST && !args.has(1) {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
             for tv in list_items(args.get(0).vval.v_list) {
-                let name = tv_get_string_chk(tv);
+                let name = numbuf.string_chk(tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name) == OK;
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
             }
@@ -702,7 +717,7 @@ pub(crate) unsafe fn f_sign_undefine(
         return;
     }
     // SAFETY: the frame's argument slot.
-    let name = unsafe { tv_get_string_chk(args.ptr(0)) };
+    let name = unsafe { numbuf2.string_chk(args.ptr(0)) };
     // SAFETY: a name the argument owns, NUL-terminated.
     if !name.is_null() && unsafe { sign_undefine_by_name(name) } == OK {
         rettv.vval.v_number = 0;
@@ -717,17 +732,19 @@ pub(crate) unsafe fn f_sign_undefine(
 /// # Safety
 /// The typval and `dict` must be null or live.
 unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> ::core::ffi::c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's typval and dictionary.
     unsafe {
         let mut id = 0;
         let mut buf = ::core::ptr::null_mut();
         let mut group = if !group_tv.is_null() {
-            tv_get_string(group_tv) as *mut ::core::ffi::c_char
+            numbuf.string(group_tv)
         } else {
-            tv_dict_get_string(dict, c"group".as_ptr(), false)
+            numbuf2.dict_string(dict, c"group".as_ptr())
         };
         if !group.is_null() && *group == 0 {
-            group = ::core::ptr::null_mut();
+            group = ::core::ptr::null();
         }
 
         if !dict.is_null() {

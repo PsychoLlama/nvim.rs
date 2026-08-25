@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{__S_IFMT, Args, SEEK_END, SEEK_SET, frame, no_fileinfo, str_arg};
+use crate::eval::typval::NumBuf;
 use crate::eval::typval::{
     tv_blob_alloc_ret, tv_blob_free, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv,
     tv_list_first, tv_list_item_remove, tv_list_len,
@@ -471,6 +472,9 @@ fn nr(args: Args<'_>, i: usize) -> int64_t {
 
 /// The body both builtins share.
 fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
     let mut binary = false;
     let mut blob = always_blob;
     let mut maxline = MAXLNUM as c_int as int64_t;
@@ -486,9 +490,9 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
         } else {
             // The flag is coerced once per comparison, as upstream does, so
             // a type with no string form reports its error twice.
-            if str_arg(args, 1).to_bytes() == b"b" {
+            if str_arg(args, 1, &mut numbuf).to_bytes() == b"b" {
                 binary = true;
-            } else if str_arg(args, 1).to_bytes() == b"B" {
+            } else if str_arg(args, 1, &mut numbuf2).to_bytes() == b"B" {
                 blob = true;
             }
             if args.has(2) {
@@ -503,7 +507,7 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
         Err(Lines::alloc(rettv))
     };
 
-    let fname = str_arg(args, 0);
+    let fname = str_arg(args, 0, &mut numbuf3);
     // SAFETY: `fname` is NUL-terminated.
     if unsafe { os_isdir(fname.as_ptr()) } {
         err_path(&e_isadir2, fname.as_ptr());

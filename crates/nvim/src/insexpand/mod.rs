@@ -32,9 +32,8 @@ use crate::eval::typval::{
     callback_copy, callback_free, kCallbackNone, tv_clear, tv_dict_add_bool, tv_dict_add_dict,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_add_tv,
     tv_dict_alloc, tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number,
-    tv_dict_get_string, tv_dict_get_tv, tv_dict_set_keys_readonly, tv_dict_unref,
-    tv_get_number_chk, tv_get_string, tv_get_string_chk, tv_list_alloc, tv_list_append_dict,
-    tv_list_first, tv_list_unref,
+    tv_dict_get_tv, tv_dict_set_keys_readonly, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
+    tv_list_append_dict, tv_list_first, tv_list_unref,
 };
 use crate::eval::userfunc::callback_call_retnr;
 use crate::eval::vars::set_vim_var_dict;

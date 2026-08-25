@@ -12,8 +12,7 @@ use super::args::{Args, frame};
 use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
-    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
-    tv_list_append_number,
+    NumBuf, tv_get_number_chk, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::main::{curbuf, curwin, e_invarg2, p_cpo, p_ws};
@@ -146,6 +145,8 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
 /// # Safety
 /// `args` is a live call frame.
 unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_int) -> c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
     let mut lnum_stop: linenr_T = 0;
     let mut time_limit: int64_t = 0;
@@ -156,7 +157,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
     // pointer and outlive it.
     unsafe {
-        let pat = tv_get_string(args.ptr(0));
+        let pat = numbuf.string(args.ptr(0));
         // May set 'wrapscan'.
         let dir = search_direction(args.ptr(1), flagsp);
         if dir == 0 {
@@ -196,7 +197,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         if flags & (SP_REPEAT | SP_RETCOUNT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(1)),);
+            semsg_c!(gettext(e_invarg2.as_ptr()), numbuf2.string(args.ptr(1)),);
             return 0;
         }
 
@@ -325,6 +326,7 @@ pub unsafe fn f_searchpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
 pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut locally = true;
     let mut thisblock = false;
@@ -335,7 +337,7 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // SAFETY: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
     unsafe {
-        let name = tv_get_string_chk(args.ptr(0));
+        let name = numbuf.string_chk(args.ptr(0));
         if args.has(1) {
             locally = tv_get_number_chk(args.ptr(1), &raw mut error) == 0;
             if !error && args.has(2) {
@@ -361,6 +363,10 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// `args` is a live call frame.
 unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
+    let mut numbuf4 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
     let mut flags = 0;
     let mut lnum_stop: linenr_T = 0;
@@ -372,7 +378,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     unsafe {
         let mut nbuf1 = [0 as c_char; NUMBUFLEN];
         let mut nbuf2 = [0 as c_char; NUMBUFLEN];
-        let spat = tv_get_string_chk(args.ptr(0));
+        let spat = numbuf.string_chk(args.ptr(0));
         let mpat = tv_get_string_buf_chk(args.ptr(1), nbuf1.as_mut_ptr());
         let epat = tv_get_string_buf_chk(args.ptr(2), nbuf2.as_mut_ptr());
         if spat.is_null() || mpat.is_null() || epat.is_null() {
@@ -390,7 +396,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
         if flags & (SP_END | SP_SUBPAT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(3)),);
+            semsg_c!(gettext(e_invarg2.as_ptr()), numbuf2.string(args.ptr(3)),);
             return 0;
         }
 
@@ -408,13 +414,13 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
             if args.has(5) {
                 lnum_stop = tv_get_number_chk(args.ptr(5), ptr::null_mut()) as linenr_T;
                 if lnum_stop < 0 {
-                    semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(5)),);
+                    semsg_c!(gettext(e_invarg2.as_ptr()), numbuf3.string(args.ptr(5)),);
                     return 0;
                 }
                 if args.has(6) {
                     time_limit = tv_get_number_chk(args.ptr(6), ptr::null_mut()) as int64_t;
                     if time_limit < 0 {
-                        semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(6)),);
+                        semsg_c!(gettext(e_invarg2.as_ptr()), numbuf4.string(args.ptr(6)),);
                         return 0;
                     }
                 }

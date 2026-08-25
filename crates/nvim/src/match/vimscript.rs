@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{FAIL, MB_MAXCHAR, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
@@ -61,6 +62,7 @@ unsafe fn matchadd_dict_arg(
     tv: *mut typval_T,
     conceal_char: *mut *const c_char,
     win: *mut *mut win_T,
+    numbuf: &mut NumBuf,
 ) -> c_int {
     // SAFETY: the caller's typval and out-parameters.
     unsafe {
@@ -72,7 +74,7 @@ unsafe fn matchadd_dict_arg(
 
         let di = find(dict, "conceal");
         if !di.is_null() {
-            *conceal_char = tv_get_string(&raw mut (*di).di_tv);
+            *conceal_char = numbuf.string(&raw mut (*di).di_tv);
         }
 
         let di = find(dict, "window");
@@ -177,6 +179,9 @@ pub(crate) unsafe fn f_setmatches(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut group_buf = NumBuf::new();
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     // SAFETY: the evaluator's slots.
     unsafe {
         let win = get_optional_window(argvars, 1);
@@ -250,22 +255,20 @@ pub(crate) unsafe fn f_setmatches(
                 }
             }
 
-            // Three number buffers are in play here — this one,
-            // `tv_dict_get_string`'s and `tv_get_string`'s — and none may be
-            // reused before its value is.
-            let mut group_buf = [0 as c_char; NUMBUFLEN];
-            let group = tv_dict_get_string_buf(d, c"group".as_ptr(), group_buf.as_mut_ptr());
+            // Three scratches are in play here — this one and the two the
+            // frame lends below — and none may be reused before its value is.
+            let group = group_buf.dict_string(d, c"group".as_ptr());
             let priority = tv_dict_get_number(d, c"priority".as_ptr()) as c_int;
             let id = tv_dict_get_number(d, c"id".as_ptr()) as c_int;
             let conceal_di = find(d, "conceal");
             let conceal = if conceal_di.is_null() {
                 ::core::ptr::null()
             } else {
-                tv_get_string(&raw mut (*conceal_di).di_tv)
+                numbuf.string(&raw mut (*conceal_di).di_tv)
             };
 
             let added = if positions.is_null() {
-                let pattern = tv_dict_get_string(d, c"pattern".as_ptr(), false);
+                let pattern = numbuf2.dict_string(d, c"pattern".as_ptr());
                 match_add(
                     win,
                     group,
@@ -309,6 +312,7 @@ pub(crate) unsafe fn f_setmatches(
 /// The evaluator's argument slots.
 unsafe fn optional_args(
     argvars: *mut typval_T,
+    numbuf: &mut NumBuf,
 ) -> Option<(c_int, c_int, *const c_char, *mut win_T)> {
     // SAFETY: the evaluator's slots.
     unsafe {
@@ -325,8 +329,12 @@ unsafe fn optional_args(
             if (*argvars.offset(3)).v_type != VAR_UNKNOWN {
                 id = tv_get_number_chk(argvars.offset(3), &raw mut error) as c_int;
                 if (*argvars.offset(4)).v_type != VAR_UNKNOWN
-                    && matchadd_dict_arg(argvars.offset(4), &raw mut conceal_char, &raw mut win)
-                        == FAIL
+                    && matchadd_dict_arg(
+                        argvars.offset(4),
+                        &raw mut conceal_char,
+                        &raw mut win,
+                        numbuf,
+                    ) == FAIL
                 {
                     return None;
                 }
@@ -345,18 +353,21 @@ unsafe fn optional_args(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // The group, the pattern and the `conceal` option are all held at once,
+    // so each is given a scratch of its own.
+    let mut grpbuf = NumBuf::new();
+    let mut patbuf = NumBuf::new();
+    let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
     unsafe {
-        let mut grpbuf = [0 as c_char; NUMBUFLEN];
-        let mut patbuf = [0 as c_char; NUMBUFLEN];
-        let grp = tv_get_string_buf_chk(argvars, grpbuf.as_mut_ptr());
-        let pat = tv_get_string_buf_chk(argvars.offset(1), patbuf.as_mut_ptr());
+        let grp = grpbuf.string_chk(argvars);
+        let pat = patbuf.string_chk(argvars.offset(1));
 
         (*rettv).vval.v_number = -1;
         if grp.is_null() || pat.is_null() {
             return;
         }
-        let Some((prio, id, conceal_char, win)) = optional_args(argvars) else {
+        let Some((prio, id, conceal_char, win)) = optional_args(argvars, &mut concealbuf) else {
             return;
         };
         if (1..=3).contains(&id) {
@@ -388,12 +399,13 @@ pub(crate) unsafe fn f_matchaddpos(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut buf = NumBuf::new();
+    let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
     unsafe {
         (*rettv).vval.v_number = -1;
 
-        let mut buf = [0 as c_char; NUMBUFLEN];
-        let group = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
+        let group = buf.string_chk(argvars);
         if group.is_null() {
             return;
         }
@@ -409,7 +421,7 @@ pub(crate) unsafe fn f_matchaddpos(
             return;
         }
 
-        let Some((prio, id, conceal_char, win)) = optional_args(argvars) else {
+        let Some((prio, id, conceal_char, win)) = optional_args(argvars, &mut concealbuf) else {
             return;
         };
         // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.

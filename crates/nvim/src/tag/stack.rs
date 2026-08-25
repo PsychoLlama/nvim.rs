@@ -180,7 +180,7 @@ impl TagStack {
                 {
                     continue;
                 }
-                let tagname = tv_dict_get_string(item, c"tagname".as_ptr(), true);
+                let tagname = tv_dict_get_string_alloc(item, c"tagname".as_ptr());
                 if tagname.is_null() {
                     continue;
                 }
@@ -194,7 +194,7 @@ impl TagStack {
                     cur_match: number(item, c"matchnr") - 1,
                     mark,
                     fnum,
-                    user_data: tv_dict_get_string(item, c"user_data".as_ptr(), true),
+                    user_data: tv_dict_get_string_alloc(item, c"user_data".as_ptr()),
                 });
             }
         }

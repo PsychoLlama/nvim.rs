@@ -28,10 +28,11 @@
 
 use super::{
     Args, FAIL, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet,
-    nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
+    nr_arg, ret_string, str_arg, str_arg_chk,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
+use crate::eval::typval::NumBuf;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
@@ -222,17 +223,18 @@ fn set_val(name: *const c_char) {
 /// matches of a name, answering the last one -- or, for a negative count,
 /// all of them as a List.
 fn findfilendir(args: Args<'_>, rettv: &mut typval_T, find_what: c_int) {
+    let mut numbuf = NumBuf::new();
     let mut fresult: *mut c_char = ptr::null_mut();
     let mut path = search_path();
     let mut count = 1;
     let mut error = false;
 
     ret_string(rettv, ptr::null_mut());
-    let fname = str_arg(args, 0);
+    let fname = str_arg(args, 0, &mut numbuf);
 
-    let mut pathbuf = numbuf();
+    let mut pathbuf = NumBuf::new();
     if args.has(1) {
-        match str_arg_buf(args, 1, &mut pathbuf) {
+        match str_arg_chk(args, 1, &mut pathbuf) {
             None => error = true,
             Some(p) => {
                 if !p.to_bytes().is_empty() {
@@ -330,6 +332,7 @@ pub unsafe fn f_findfile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `argvars` is the evaluator's own argument vector, arity 1..4, and `rettv`
 /// a cleared result.
 pub unsafe fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
@@ -357,7 +360,7 @@ pub unsafe fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     if p_wic.get() != 0 {
         options |= WildOpts::ICASE;
     }
-    let pat = str_arg(args, 0);
+    let pat = str_arg(args, 0, &mut numbuf);
     if rettv.v_type == VAR_STRING {
         rettv.vval.v_string = xpc.one(pat, options, WildMode::All);
         return;
@@ -377,6 +380,7 @@ pub unsafe fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// `argvars` is the evaluator's own argument vector, arity 2..5, and `rettv`
 /// a cleared result.
 pub unsafe fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
@@ -396,15 +400,15 @@ pub unsafe fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         }
     }
 
-    let mut buf1 = numbuf();
-    let file = str_arg_buf(args, 1, &mut buf1);
+    let mut buf1 = NumBuf::new();
+    let file = str_arg_chk(args, 1, &mut buf1);
     let (Some(file), false) = (file, error) else {
         rettv.vval.v_string = ptr::null_mut();
         return;
     };
 
     let mut found = StrArray::new();
-    let path = str_arg(args, 0).as_ptr().cast_mut();
+    let path = str_arg(args, 0, &mut numbuf).as_ptr().cast_mut();
     // SAFETY: two NUL-terminated strings, which `globpath` only reads, and an
     // initialised array for it to append the matches to.
     unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
@@ -475,9 +479,10 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnum
 /// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
 /// a cleared result.
 pub unsafe fn f_readdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (mut args, rettv) = frame!(argvars, rettv);
     let list = RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
-    let path = str_arg(args, 0).as_ptr();
+    let path = str_arg(args, 0, &mut numbuf).as_ptr();
     let expr: *mut typval_T = args.get_mut(1);
 
     let mut found = StrArray::new();

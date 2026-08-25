@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
 use crate::types::{ExpandContext, FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
 
@@ -239,6 +240,7 @@ pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 
 /// `setcmdline()` function.
 pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if tv_check_for_string_arg(argvars, 0) == FAIL
             || tv_check_for_opt_number_arg(argvars, 1) == FAIL
@@ -261,7 +263,7 @@ pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
         // tv_get_string() so that a NULL string reads as an empty one.
         (*rettv).vval.v_number =
-            set_cmdline_str(tv_get_string(argvars.offset(0)), pos) as varnumber_T;
+            set_cmdline_str(numbuf.string(argvars.offset(0)), pos) as varnumber_T;
     }
 }
 

@@ -4,8 +4,7 @@
 use super::args::frame;
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::eval::typval::{
-    callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string,
-    tv_get_string_chk, tv_islocked,
+    NumBuf, callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_islocked,
 };
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
@@ -33,6 +32,7 @@ const NO_CALLBACK: Callback = Callback {
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
 pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: every callee below is a C entry point taking live typvals from
     // the frame; the callback is handed to the watcher, which takes it over.
@@ -54,7 +54,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
             semsg!("E475: Invalid argument: key");
             return;
         }
-        let key_pattern = tv_get_string_chk(args.ptr(1));
+        let key_pattern = numbuf.string_chk(args.ptr(1));
         if key_pattern.is_null() {
             return;
         }
@@ -75,6 +75,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
 pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: as `f_dictwatcheradd`; the callback built here is only used to
     // identify a watcher and is freed before returning.
@@ -90,7 +91,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
             semsg!("E475: Invalid argument: funcref");
             return;
         }
-        let key_pattern = tv_get_string_chk(args.ptr(1));
+        let key_pattern = numbuf.string_chk(args.ptr(1));
         if key_pattern.is_null() {
             return;
         }
@@ -113,6 +114,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,
 /// 0 when it is not, -1 when there is no such variable.
 pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
@@ -120,7 +122,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     unsafe {
         let mut lv = core::mem::zeroed();
         let end = get_lval(
-            tv_get_string(args.ptr(0)) as *mut c_char,
+            numbuf.string(args.ptr(0)) as *mut c_char,
             ptr::null_mut(),
             &raw mut lv,
             false,

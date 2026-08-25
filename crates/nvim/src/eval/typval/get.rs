@@ -195,22 +195,53 @@ pub unsafe fn tv_get_string_buf_chk(
     }
 }
 
-/// [`tv_get_string_buf_chk`] using a shared scratch buffer.
+/// The scratch a caller lends for the string form of a Number.
 ///
-/// The answer may point into that buffer and only lasts until the next call.
-pub unsafe fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char {
-    unsafe {
-        static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
-        tv_get_string_buf_chk(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
+/// It replaces the process-wide buffer the C's `tv_get_string`,
+/// `tv_get_string_chk` and `tv_dict_get_string` answer from: a caller owns
+/// its own, so two answers held at once no longer collide — with one shared
+/// buffer the second silently overwrote the first.
+///
+/// The answer borrows either the value's own string or this buffer, so it
+/// lives no longer than the shorter of the two: a caller whose answer
+/// outlives the frame must be lent a buffer that does too.
+pub struct NumBuf([::core::ffi::c_char; NUMBUFLEN as usize]);
+
+impl Default for NumBuf {
+    fn default() -> Self {
+        NumBuf::new()
     }
 }
 
-/// [`tv_get_string_buf`] using a shared scratch buffer of its own — a
-/// different one from [`tv_get_string_chk`]'s.
-pub unsafe fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char {
-    unsafe {
-        static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
-        tv_get_string_buf(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
+impl NumBuf {
+    /// A fresh, zeroed scratch.
+    pub const fn new() -> Self {
+        NumBuf([0; NUMBUFLEN as usize])
+    }
+
+    /// `tv` as a string — the empty string, with the error reported, for a
+    /// value that has none. The C's `tv_get_string`.
+    ///
+    /// # Safety
+    /// `tv` points at a live, initialised value.
+    pub unsafe fn string(&mut self, tv: *const typval_T) -> *const ::core::ffi::c_char {
+        // SAFETY: the caller's value; the scratch is `NUMBUFLEN` bytes.
+        unsafe { tv_get_string_buf(tv, self.as_mut_ptr()) }
+    }
+
+    /// As [`string`](Self::string), but NULL rather than the empty string for
+    /// a value that has none. The C's `tv_get_string_chk`.
+    ///
+    /// # Safety
+    /// `tv` points at a live, initialised value.
+    pub unsafe fn string_chk(&mut self, tv: *const typval_T) -> *const ::core::ffi::c_char {
+        // SAFETY: as `string`.
+        unsafe { tv_get_string_buf_chk(tv, self.as_mut_ptr()) }
+    }
+
+    /// The raw buffer, for the `*_buf` entry points that take one.
+    pub fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
+        self.0.as_mut_ptr()
     }
 }
 

@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::types::{
     ExArgt, ExpandContext, FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
 };
@@ -29,6 +30,7 @@ const NUMBUFLEN: usize = 65;
 /// Answers an allocated string, or NULL when skipping and on error; it shows
 /// no messages of its own.
 pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut cmd = (*eap).arg;
         if *cmd.offset(0) as ::core::ffi::c_int != '<' as ::core::ffi::c_int
@@ -66,7 +68,7 @@ pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::f
         let mut li: *const listitem_T = (*l).lv_first;
         while !li.is_null() {
             if (*eap).skip == 0 {
-                ga_concat(&raw mut ga, tv_get_string(&raw const (*li).li_tv));
+                ga_concat(&raw mut ga, numbuf.string(&raw const (*li).li_tv));
                 ga_append(&raw mut ga, b'\n');
             }
             li = (*li).li_next;

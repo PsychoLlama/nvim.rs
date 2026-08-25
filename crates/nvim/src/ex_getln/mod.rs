@@ -40,8 +40,8 @@ use crate::eval::typval::{
     callback_free, kCallbackNone, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear,
     tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_first,
-    tv_list_free, tv_list_last, tv_list_len,
+    tv_get_number_chk, tv_get_string_buf_chk, tv_list_first, tv_list_free, tv_list_last,
+    tv_list_len,
 };
 use crate::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg_c;
@@ -362,6 +363,7 @@ unsafe fn list_number(list: *mut list_T, index: c_int, current: c_int) -> Option
 /// The Vimscript function ABI: `argvars` is the argument array and
 /// `rettv` the return value.
 pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut pos = (*curwin.get()).w_cursor;
         let mut pattern = ptr::null_mut::<c_char>();
@@ -393,7 +395,7 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
             let di = tv_dict_find(dict, c"pattern".as_ptr(), -1 as ptrdiff_t);
             if !di.is_null() {
-                pattern = tv_get_string_chk(&raw mut (*di).di_tv) as *mut c_char;
+                pattern = numbuf.string_chk(&raw mut (*di).di_tv) as *mut c_char;
                 if pattern.is_null() {
                     return;
                 }

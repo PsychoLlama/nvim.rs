@@ -22,7 +22,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
-    tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_get_string, tv_get_string_buf_chk,
+    NumBuf, tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_get_string_buf_chk,
     tv_list_alloc, tv_list_append_string, tv_list_join, tv_list_last, tv_list_len,
     tv_list_set_lock,
 };
@@ -359,6 +359,7 @@ pub unsafe fn eval_expr_to_bool(expr: *const typval_T, error: *mut bool) -> bool
 /// # Safety
 /// As `eval_to_bool`.
 pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: bool) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut tv = UNSET_TV;
         let mut evalarg = UNSET_EVALARG;
@@ -367,7 +368,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
         let retval = if eval0(arg, &raw mut tv, eap, &raw mut evalarg) == FAIL || skip {
             null_mut()
         } else {
-            let s = xstrdup(tv_get_string(&raw mut tv));
+            let s = xstrdup(numbuf.string(&raw mut tv));
             tv_clear(&raw mut tv);
             s
         };
@@ -412,6 +413,7 @@ pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut evalarg_T) -> c_int 
 /// # Safety
 /// `tv` must be valid.
 pub(crate) unsafe fn typval2string(tv: *mut typval_T, join_list: bool) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if join_list && (*tv).v_type == VAR_LIST {
             let mut ga = UNSET_GA;
@@ -428,7 +430,7 @@ pub(crate) unsafe fn typval2string(tv: *mut typval_T, join_list: bool) -> *mut c
         if (*tv).v_type == VAR_LIST || (*tv).v_type == VAR_DICT {
             return encode_tv2string(tv, null_mut());
         }
-        xstrdup(tv_get_string(tv))
+        xstrdup(numbuf.string(tv))
     }
 }
 
@@ -619,12 +621,13 @@ pub unsafe fn call_func_retstr(
     argc: c_int,
     argv: *mut typval_T,
 ) -> *mut c_void {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut rettv = UNSET_TV;
         if call_vim_function(func, argc, argv, &raw mut rettv) == FAIL {
             return null_mut();
         }
-        let retval = xstrdup(tv_get_string(&raw mut rettv));
+        let retval = xstrdup(numbuf.string(&raw mut rettv));
         tv_clear(&raw mut rettv);
         retval as *mut c_void
     }
@@ -705,6 +708,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
 /// # Safety
 /// `wp` must be valid.
 pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
+    let mut numbuf = NumBuf::new();
     unsafe {
         /// The empty String an error answers with.
         fn empty_string() -> Object {
@@ -737,7 +741,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
                     Object {
                         type_0: kObjectTypeString,
                         data: object_data {
-                            string: cstr_to_string(tv_get_string(&raw mut tv)),
+                            string: cstr_to_string(numbuf.string(&raw mut tv)),
                         },
                     }
                 };

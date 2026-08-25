@@ -3,7 +3,7 @@
 //! Highlight attributes as API values.
 //!
 //! Two conversions, roughly inverse. [`hlattrs2dict`] writes an [`HlAttrs`]
-//! out as the `{ bold = true, fg = 0xff0000, … }` shape `nvim_get_hl` and the
+//! out as the `{bold = true, fg = 0xff0000, …}` shape `nvim_get_hl` and the
 //! `hl_attr_define` UI event carry; [`dict2hlattrs`] reads that shape back
 //! from a parsed `Dict(highlight)` keyset.
 //!

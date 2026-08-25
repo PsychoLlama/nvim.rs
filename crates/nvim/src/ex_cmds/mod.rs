@@ -29,7 +29,7 @@
 
 use crate::autocmd::apply_autocmds;
 use crate::charset::{skiptowhite, vim_is_ident_char};
-use crate::eval::typval::{tv_get_string, tv_list_find_str, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
@@ -313,6 +313,8 @@ pub unsafe fn skip_vimgrep_pat(
     }
 }
 pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let mut l: *mut list_T = get_vim_var_list(Vv::Oldfiles);
         let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -330,12 +332,12 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
                     break;
                 }
                 nr += 1;
-                let mut fname: *const ::core::ffi::c_char = tv_get_string(&raw mut (*li).li_tv);
+                let mut fname: *const ::core::ffi::c_char = numbuf.string(&raw mut (*li).li_tv);
                 if !message_filtered(fname) {
                     msg_outnum(nr);
                     msg_puts(c": ".as_ptr());
                     msg_outtrans(
-                        tv_get_string(&raw mut (*li).li_tv),
+                        numbuf2.string(&raw mut (*li).li_tv),
                         0 as ::core::ffi::c_int,
                         false,
                     );
@@ -358,7 +360,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
             msg_starthere();
             if nr > 0 as ::core::ffi::c_int && nr <= tv_list_len(l) {
                 let p: *const ::core::ffi::c_char =
-                    tv_list_find_str(l, nr - 1 as ::core::ffi::c_int);
+                    tv_list_find_str(l, nr - 1 as ::core::ffi::c_int, &mut numbuf2);
                 if p.is_null() {
                     return;
                 }

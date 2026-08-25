@@ -772,6 +772,7 @@ pub unsafe fn tv_dict_remove(
     rettv: *mut typval_T,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         if (*argvars.add(2)).v_type != VAR_UNKNOWN {
             semsg_c!(
@@ -785,7 +786,7 @@ pub unsafe fn tv_dict_remove(
         if d.is_null() || value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) {
             return;
         }
-        let key = tv_get_string_chk(argvars.add(1));
+        let key = numbuf.string_chk(argvars.add(1));
         if key.is_null() {
             return;
         }

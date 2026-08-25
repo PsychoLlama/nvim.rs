@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
 
@@ -123,6 +124,7 @@ fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
 /// # Safety
 /// `argvar` must point at a live typval.
 unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
+    let mut numbuf = NumBuf::new();
     let mut twin = tp.curwin();
     if unsafe { (*argvar).v_type } == VAR_UNKNOWN {
         // Without an argument the answer is the current window's number,
@@ -134,7 +136,7 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
         // SAFETY: the caller's obligation; `endp` is a live local and
         // `tv_get_string_chk` hands back a NUL-terminated string or NULL.
         let resolved = unsafe {
-            let arg = tv_get_string_chk(argvar);
+            let arg = numbuf.string_chk(argvar);
             if arg.is_null() {
                 None
             } else {
@@ -344,13 +346,14 @@ pub unsafe fn f_winnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 
 /// `tabpagenr([{arg}])` — a tab page number.
 pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals; the tab page globals are set.
     let nr = unsafe {
         if !args.has(0) {
             tabpage_index(curtab.get())
         } else {
-            let arg = tv_get_string_chk(args.ptr(0));
+            let arg = numbuf.string_chk(args.ptr(0));
             if arg.is_null() {
                 0
             } else if strcmp(arg, c"$".as_ptr()) == 0 {

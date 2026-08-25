@@ -4,10 +4,9 @@
 use super::args::frame;
 use super::tv_get_buf;
 use crate::eval::typval::{
-    tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
-    tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
-    tv_list_append_string,
+    NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str,
+    tv_dict_alloc, tv_dict_alloc_ret, tv_get_number, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_dict, tv_list_append_list, tv_list_append_number, tv_list_append_string,
 };
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
@@ -163,6 +162,7 @@ pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
 pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; after the check argument 1's
@@ -183,7 +183,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             if tv_check_for_string_arg(args.ptr(0), 2) == FAIL {
                 return;
             }
-            let actstr = tv_get_string_chk(args.ptr(2));
+            let actstr = numbuf.string_chk(args.ptr(2));
             if actstr.is_null() {
                 return;
             }
@@ -216,18 +216,20 @@ pub unsafe fn f_tagfiles(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `taglist({expr} [, {filename}])`.
 pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; both strings are
     // NUL-terminated and outlive the search.
     unsafe {
-        let pattern = tv_get_string(args.ptr(0));
+        let pattern = numbuf.string(args.ptr(0));
         // An empty pattern answers 0 — a Number, not an empty List.
         rettv.vval.v_number = 0;
         if *pattern == NUL as c_char {
             return;
         }
         let fname = if args.has(1) {
-            tv_get_string(args.ptr(1))
+            numbuf2.string(args.ptr(1))
         } else {
             ptr::null()
         };

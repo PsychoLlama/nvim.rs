@@ -21,7 +21,7 @@ use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
 
 use crate::charset::vim_strsize;
-use crate::eval::typval::{tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_chk};
+use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk, tv_get_string_buf};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
@@ -311,10 +311,11 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
 ///
 /// `arg` must be a valid typval.
 unsafe fn arg_histtype(arg: *const typval_T) -> HistoryType {
+    let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; a non-null result is a NUL-terminated string
     // owned by the typval, which outlives the lookup.
     unsafe {
-        let name = tv_get_string_chk(arg);
+        let name = numbuf.string_chk(arg);
         if name.is_null() {
             HIST_INVALID
         } else {
@@ -355,10 +356,11 @@ pub unsafe fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
 /// "histdel()" function
 pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
     let n = unsafe {
-        let name = tv_get_string_chk(argvars);
+        let name = numbuf.string_chk(argvars);
         if name.is_null() {
             0
         } else {
@@ -383,8 +385,9 @@ pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
 /// "histget()" function
 pub unsafe fn f_histget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
-    let name = unsafe { tv_get_string_chk(argvars) };
+    let name = unsafe { numbuf.string_chk(argvars) };
     let text = if name.is_null() {
         core::ptr::null_mut()
     } else {

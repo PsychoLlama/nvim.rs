@@ -13,6 +13,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::types::{FAIL, NUL, OK};
 
 /// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
@@ -383,16 +384,19 @@ pub unsafe fn find_var_ht(
 
 /// The string value of the variable `name`, or NULL when it does not exist.
 ///
+/// A variable holding a Number has no string of its own, so the caller lends
+/// `numbuf` for it to be rendered into; the answer borrows either that or the
+/// variable, and lives no longer than the shorter of the two.
+///
 /// # Safety
-/// `name` is a NUL-terminated string.  The answer is only valid for as long
-/// as `tv_get_string` promises.
-pub unsafe fn get_var_value(name: *const c_char) -> *mut c_char {
+/// `name` is a NUL-terminated string.
+pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_char {
     unsafe {
         let v = find_var(name, strlen(name), ptr::null_mut(), false);
         if v.is_null() {
             return ptr::null_mut();
         }
-        tv_get_string(&raw mut (*v).di_tv) as *mut c_char
+        numbuf.string(&raw mut (*v).di_tv) as *mut c_char
     }
 }
 

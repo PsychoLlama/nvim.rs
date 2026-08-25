@@ -40,12 +40,13 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    tv_blob_copy, tv_blob_remove, tv_blob_set_ret, tv_check_for_string_or_list_or_blob_arg,
+    NumBuf, tv_blob_copy, tv_blob_remove, tv_blob_set_ret, tv_check_for_string_or_list_or_blob_arg,
     tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret, tv_dict_copy, tv_dict_extend,
-    tv_dict_item_remove, tv_dict_remove, tv_dict_unref, tv_equal, tv_get_number_chk, tv_get_string,
-    tv_get_string_chk, tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy,
-    tv_list_extend, tv_list_find, tv_list_insert_tv, tv_list_item_remove, tv_list_remove,
-    tv_list_reverse, tv_list_set_ret, tv_list_unref, value_check_lock,
+    tv_dict_item_remove, tv_dict_remove, tv_dict_unref, tv_equal, tv_get_number_chk,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_owned_tv,
+    tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_find, tv_list_insert_tv,
+    tv_list_item_remove, tv_list_remove, tv_list_reverse, tv_list_set_ret, tv_list_unref,
+    value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -700,18 +701,24 @@ pub(crate) fn string_bytes<'a>(tv: &typval_T) -> &'a [u8] {
 }
 
 /// `tv` as a NUL-terminated string, coercing what can be coerced.
+///
+/// A Number has no string of its own, so the caller lends `buf` for it to be
+/// spelled into; the answer borrows `buf` or the value, whichever it came
+/// from, and lives no longer than either.
 #[inline(always)]
-pub(crate) fn cstr_of<'a>(tv: &mut typval_T) -> &'a CStr {
-    // SAFETY: `tv_get_string` answers a NUL-terminated string, never NULL.
-    unsafe { CStr::from_ptr(tv_get_string(tv)) }
+pub(crate) fn cstr_of<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> &'a CStr {
+    // SAFETY: the scratch is the promised length and the answer is
+    // NUL-terminated, never NULL.
+    unsafe { CStr::from_ptr(tv_get_string_buf(tv, buf.as_mut_ptr())) }
 }
 
 /// `tv` as a NUL-terminated string, or None -- having reported the error --
-/// for a type that has no string form.
+/// for a type that has no string form. As [`cstr_of`], the caller lends the
+/// scratch a Number is spelled into.
 #[inline(always)]
-pub(crate) fn cstr_of_chk<'a>(tv: &mut typval_T) -> Option<&'a CStr> {
-    // SAFETY: `tv_get_string_chk` answers a NUL-terminated string, or NULL.
-    unsafe { cstr::at_opt(tv_get_string_chk(tv)) }
+pub(crate) fn cstr_of_chk<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> Option<&'a CStr> {
+    // SAFETY: as `cstr_of`; the answer may also be NULL.
+    unsafe { cstr::at_opt(tv_get_string_buf_chk(tv, buf.as_mut_ptr())) }
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.

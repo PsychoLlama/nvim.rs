@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
@@ -73,6 +74,8 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut dict_T 
 /// NOTDONE if the string is already in the list, OK if it was added, FAIL on
 /// error.
 pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: bool) -> c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let word: *const c_char;
         let mut dup = false;
@@ -84,19 +87,21 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: b
 
         if (*tv).v_type == VAR_DICT && !(*tv).vval.v_dict.is_null() {
             let d = (*tv).vval.v_dict;
-            // `save` copies the answer; the four cptext strings are owned by
-            // the match from here on, the two highlight names are not.
-            let get_str = |key: &CStr, save: bool| tv_dict_get_string(d, key.as_ptr(), save);
+            // The four cptext strings are copied and owned by the match from
+            // here on; the two highlight names and `word` are borrowed, so
+            // each borrowing answer renders into a scratch of its own —
+            // `word` outlives all of them.
+            let borrowed = |key: &CStr, b: &mut NumBuf| b.dict_string(d, key.as_ptr());
             let get_nr = |key: &CStr| tv_dict_get_number(d, key.as_ptr());
 
-            word = get_str(c"word", false);
-            cptext[CPT_ABBR as usize] = get_str(c"abbr", true);
-            cptext[CPT_MENU as usize] = get_str(c"menu", true);
-            cptext[CPT_KIND as usize] = get_str(c"kind", true);
-            cptext[CPT_INFO as usize] = get_str(c"info", true);
+            word = borrowed(c"word", &mut numbuf);
+            cptext[CPT_ABBR as usize] = tv_dict_get_string_alloc(d, c"abbr".as_ptr());
+            cptext[CPT_MENU as usize] = tv_dict_get_string_alloc(d, c"menu".as_ptr());
+            cptext[CPT_KIND as usize] = tv_dict_get_string_alloc(d, c"kind".as_ptr());
+            cptext[CPT_INFO as usize] = tv_dict_get_string_alloc(d, c"info".as_ptr());
 
-            user_hl[0] = get_user_highlight_attr(get_str(c"abbr_hlgroup", false));
-            user_hl[1] = get_user_highlight_attr(get_str(c"kind_hlgroup", false));
+            user_hl[0] = get_user_highlight_attr(borrowed(c"abbr_hlgroup", &mut numbuf2));
+            user_hl[1] = get_user_highlight_attr(borrowed(c"kind_hlgroup", &mut numbuf2));
 
             tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data);
 
@@ -105,11 +110,11 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: b
             }
             dup = get_nr(c"dup") != 0;
             empty = get_nr(c"empty") != 0;
-            if !get_str(c"equal", false).is_null() && get_nr(c"equal") != 0 {
+            if !borrowed(c"equal", &mut numbuf2).is_null() && get_nr(c"equal") != 0 {
                 flags |= CP_EQUAL;
             }
         } else {
-            word = tv_get_string_chk(tv);
+            word = numbuf.string_chk(tv);
         }
 
         if word.is_null() || (!empty && *word as c_int == NUL) {
@@ -422,6 +427,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
 
 /// Fill `retdict` with whatever of `complete_info()` `what_list` asked for.
 pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dict_T) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let add_nr = |key: &str, val: varnumber_T| {
             tv_dict_add_nr(retdict, key.as_ptr().cast(), key.len(), val)
@@ -436,7 +442,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
             while !item.is_null() {
                 // `tv_get_string` answers "" rather than NULL for anything it
                 // cannot render, so this is never a null pointer.
-                let what = CStr::from_ptr(tv_get_string(&raw mut (*item).li_tv));
+                let what = CStr::from_ptr(numbuf.string(&raw mut (*item).li_tv));
                 what_flag |= match what.to_bytes() {
                     b"mode" => CI_WHAT_MODE,
                     b"pum_visible" => CI_WHAT_PUM_VISIBLE,

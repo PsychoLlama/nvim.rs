@@ -51,9 +51,8 @@ use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_number, tv_dict_get_number_def, tv_dict_get_string, tv_get_lnum, tv_get_number_chk,
-    tv_get_string, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
-    tv_list_append_number, tv_list_first,
+    tv_dict_get_number, tv_dict_get_number_def, tv_get_lnum, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_number, tv_list_first,
 };
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::extmark::{extmark_del, extmark_del_id, extmark_set};

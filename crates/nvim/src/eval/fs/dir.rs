@@ -23,10 +23,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    __S_IFMT, Args, FAIL, NUMBUFLEN, Owned, frame, no_fileinfo, numbuf, ret_string, str_arg,
-    str_arg_buf,
-};
+use super::{__S_IFMT, Args, FAIL, Owned, frame, no_fileinfo, ret_string, str_arg, str_arg_chk};
+use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk, tv_get_string_buf};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::eval::window::find_win_by_nr;
@@ -79,15 +77,15 @@ fn is_string_arg(args: Args<'_>, i: usize) -> bool {
 ///
 /// Upstream's `tv_get_string_buf`, which is the *unchecked* form: the three
 /// builtins below carry on with the empty string rather than returning.
-fn path_arg<'a>(args: Args<'_>, i: usize, buf: &'a mut [c_char; NUMBUFLEN]) -> &'a CStr {
-    str_arg_buf(args, i, buf).unwrap_or(c"")
+fn path_arg<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> &'a CStr {
+    str_arg_chk(args, i, buf).unwrap_or(c"")
 }
 
 /// As [`path_arg`], but kept raw, because `mkdir()` writes the trailing
 /// separators off the path *in place* -- in whatever storage the argument
 /// gave it, which is upstream's own doing and not something a `&CStr` may
 /// share provenance with.
-fn path_arg_raw(args: Args<'_>, i: usize, buf: &mut [c_char; NUMBUFLEN]) -> *mut c_char {
+fn path_arg_raw(args: Args<'_>, i: usize, buf: &mut NumBuf) -> *mut c_char {
     // SAFETY: a live typval and a scratch of the length the callee is
     // promised; the answer is NUL-terminated and never NULL.
     unsafe { tv_get_string_buf(args.ptr(i), buf.as_mut_ptr()).cast_mut() }
@@ -277,6 +275,7 @@ fn number_of(tv: &typval_T) -> varnumber_T {
 /// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
 /// a cleared result.
 pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
     if args.ty(0) != VAR_STRING {
@@ -296,7 +295,7 @@ pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 
     let mut scope = kCdScopeGlobal;
     if args.has(1) {
-        let s = str_arg(args, 1);
+        let s = str_arg(args, 1, &mut numbuf);
         scope = match s.to_bytes() {
             b"global" => kCdScopeGlobal,
             b"tabpage" => kCdScopeTabpage,
@@ -326,18 +325,19 @@ pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// # Safety
 /// As [`f_chdir`].
 pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1 as varnumber_T;
     if secure() {
         return;
     }
-    let name = str_arg(args, 0);
+    let name = str_arg(args, 0, &mut numbuf);
     if name.to_bytes().is_empty() {
         err0(e_invarg.as_ptr());
         return;
     }
 
-    let mut nbuf = numbuf();
+    let mut nbuf = NumBuf::new();
     let flags = if args.has(1) {
         path_arg(args, 1, &mut nbuf)
     } else {
@@ -363,6 +363,9 @@ pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// # Safety
 /// As [`f_chdir`], arity 2.
 pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
+    let mut numbuf3 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     if secure() || !is_string_arg(args, 0) || !is_string_arg(args, 1) {
@@ -370,7 +373,7 @@ pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     let mut info = no_fileinfo();
-    let from = str_arg(args, 0);
+    let from = str_arg(args, 0, &mut numbuf);
     // SAFETY: `from` is NUL-terminated, and `info` is this frame's own.
     let known = unsafe { os_fileinfo_link(from.as_ptr(), &raw mut info) };
     // `S_ISREG` and `S_ISLNK`: only a plain file or a symlink is copied.
@@ -378,7 +381,10 @@ pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     const S_IFLNK: uint64_t = 0o120000;
     let kind = info.stat.st_mode & __S_IFMT as uint64_t;
     if known && (kind == S_IFREG || kind == S_IFLNK) {
-        let (from, to) = (str_arg(args, 0).as_ptr(), str_arg(args, 1).as_ptr());
+        let (from, to) = (
+            str_arg(args, 0, &mut numbuf2).as_ptr(),
+            str_arg(args, 1, &mut numbuf3).as_ptr(),
+        );
         // SAFETY: both are NUL-terminated.
         rettv.vval.v_number = (unsafe { vim_copyfile(from, to) } == OK) as varnumber_T;
     }
@@ -463,6 +469,7 @@ pub unsafe fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 /// As [`f_chdir`], arity 1..3.
 pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // Upstream's default, which is *not* the 0777 the shell's `mkdir` uses.
     let mut prot: c_int = 0o755;
@@ -474,7 +481,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         return;
     }
 
-    let mut buf = numbuf();
+    let mut buf = NumBuf::new();
     let dir = path_arg_raw(args, 0, &mut buf);
     // SAFETY: `dir` is NUL-terminated.
     if unsafe { *dir } == 0 {
@@ -496,7 +503,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             }
         }
         // The flags are ASCII, so a plain byte search is `vim_strchr`.
-        let arg2 = str_arg(args, 1).to_bytes();
+        let arg2 = str_arg(args, 1, &mut numbuf).to_bytes();
         defer = arg2.contains(&b'D');
         defer_recurse = arg2.contains(&b'R');
         if (defer || defer_recurse) && !can_defer() {
@@ -571,14 +578,15 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
 /// # Safety
 /// As [`f_chdir`], arity 2.
 pub unsafe fn f_rename(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if secure() {
         rettv.vval.v_number = -1 as varnumber_T;
         return;
     }
-    let mut buf = numbuf();
+    let mut buf = NumBuf::new();
     let (from, to) = (
-        str_arg(args, 0).as_ptr(),
+        str_arg(args, 0, &mut numbuf).as_ptr(),
         path_arg(args, 1, &mut buf).as_ptr(),
     );
     // SAFETY: both are NUL-terminated.

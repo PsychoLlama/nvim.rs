@@ -12,7 +12,7 @@ use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
-use crate::eval::typval::tv_get_string;
+use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count};
@@ -265,8 +265,9 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// pointer, and apigen's line-based scan needs the declaration spelled out
 /// literally.
 pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        let mut name = tv_get_string(argvars) as *mut c_char;
+        let mut name = numbuf.string(argvars) as *mut c_char;
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = ptr::null_mut();
         while *name as c_int == ':' as c_int {

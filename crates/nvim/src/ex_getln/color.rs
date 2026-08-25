@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::smsg_c;
 use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
@@ -156,6 +157,7 @@ enum Label {
 /// Answers true if [`super::draw::draw_cmdline`] may proceed, false if there
 /// is nothing for it to do.
 pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut printed_errmsg = false;
 
@@ -387,7 +389,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                 }
 
                 prev_end = end;
-                let group = tv_get_string_chk(&raw mut (*tv_list_last(l)).li_tv);
+                let group = numbuf.string_chk(&raw mut (*tv_list_last(l)).li_tv);
                 if group.is_null() {
                     break 'body Label::Error;
                 }

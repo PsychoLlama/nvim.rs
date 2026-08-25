@@ -568,6 +568,7 @@ pub unsafe fn tv_list_find_nr(
 pub unsafe fn tv_list_find_str(
     l: *mut list_T,
     n: ::core::ffi::c_int,
+    numbuf: &mut NumBuf,
 ) -> *const ::core::ffi::c_char {
     unsafe {
         let li = tv_list_find(l, n);
@@ -578,7 +579,7 @@ pub unsafe fn tv_list_find_str(
             );
             return ::core::ptr::null();
         }
-        tv_get_string(&raw const (*li).li_tv)
+        numbuf.string(&raw const (*li).li_tv)
     }
 }
 

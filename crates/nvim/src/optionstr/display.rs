@@ -50,6 +50,7 @@ use super::{
     terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
+use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
@@ -87,6 +88,7 @@ pub unsafe fn did_set_emoji(_args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
+    let mut numbuf = NumBuf::new();
     let errmsg = unsafe { did_set_str_generic(args) };
     if !errmsg.is_null() {
         return errmsg;
@@ -105,7 +107,7 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
     // and the editor's own variable dictionary.
     if unsafe {
         dark != (*p_bg.get() == b'd' as c_char)
-            && !get_var_value(c"g:colors_name".as_ptr()).is_null()
+            && !get_var_value(c"g:colors_name".as_ptr(), &mut numbuf).is_null()
     } {
         let name = c"g:colors_name";
         // SAFETY: the name is a C string of the length given, and `p_bg` is

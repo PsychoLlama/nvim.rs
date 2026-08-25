@@ -16,7 +16,7 @@ use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, api_free_object};
 use crate::buffer::{buflist_findnr, buflist_findpat};
 use crate::eval::buffer::find_buffer;
-use crate::eval::typval::{tv_check_str_or_nr, tv_get_string};
+use crate::eval::typval::{NumBuf, tv_check_str_or_nr};
 use crate::eval::userfunc::get_user_func_name;
 use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
 use crate::eval::window::find_win_by_nr_or_id;
@@ -452,6 +452,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
 /// # Safety
 /// `arg` is a live typval.
 pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
     unsafe {
@@ -461,7 +462,7 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
         if buf.is_null() {
             semsg_c!(
                 gettext(c"E158: Invalid buffer name: %s".as_ptr()),
-                tv_get_string(arg),
+                numbuf.string(arg),
             );
         }
         buf

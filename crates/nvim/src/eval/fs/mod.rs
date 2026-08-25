@@ -36,8 +36,8 @@
 // so the six children reach it as `super::{Args, frame}`.
 pub(crate) use crate::eval::funcs::args::{Args, frame};
 use crate::eval::typval::{
-    tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk, tv_get_string,
-    tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret, tv_list_append_string,
+    NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_string,
 };
 use crate::main::c_bytes;
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
@@ -97,42 +97,20 @@ static e_error_while_writing_str: [::core::ffi::c_char; 29] =
 // The safe layer
 // ---------------------------------------------------------------------
 
-/// `NUMBUFLEN`: the scratch a Number argument's decimal form is spelled
-/// into, so that two coerced arguments can be held at once.
-pub(crate) const NUMBUFLEN: usize = 65;
-
-/// A fresh [`NUMBUFLEN`] scratch.
-pub(crate) fn numbuf() -> [c_char; NUMBUFLEN] {
-    [0; NUMBUFLEN]
-}
-
 /// Argument `i` as a NUL-terminated path, coercing what can be coerced.
-pub(crate) fn str_arg<'a>(args: Args<'_>, i: usize) -> &'a CStr {
-    // SAFETY: a live typval, and `tv_get_string` answers a NUL-terminated
-    // string, never NULL.
-    unsafe { CStr::from_ptr(tv_get_string(args.ptr(i))) }
+///
+/// A Number argument has no string of its own, so the caller lends `buf` for
+/// it to be spelled into and the answer borrows one or the other.
+pub(crate) fn str_arg<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> &'a CStr {
+    // SAFETY: a live typval and a scratch of the promised length; the answer
+    // is NUL-terminated and never NULL.
+    unsafe { CStr::from_ptr(tv_get_string_buf(args.ptr(i), buf.as_mut_ptr())) }
 }
 
 /// Argument `i` as a NUL-terminated path, or None -- having reported the
-/// error -- for a type that has no string form.
-pub(crate) fn str_arg_chk<'a>(args: Args<'_>, i: usize) -> Option<&'a CStr> {
-    // SAFETY: a live typval, and `tv_get_string_chk` answers a
-    // NUL-terminated string, or NULL.
-    unsafe {
-        tv_get_string_chk(args.ptr(i))
-            .as_ref()
-            .map(|p| CStr::from_ptr(p))
-    }
-}
-
-/// As [`str_arg_chk`], but a Number argument is spelled into `buf` rather
-/// than into the shared static one -- what a builtin needs when it holds two
-/// coerced arguments at once.
-pub(crate) fn str_arg_buf<'a>(
-    args: Args<'_>,
-    i: usize,
-    buf: &'a mut [c_char; NUMBUFLEN],
-) -> Option<&'a CStr> {
+/// error -- for a type that has no string form. As [`str_arg`], the caller
+/// lends the scratch a Number is spelled into.
+pub(crate) fn str_arg_chk<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> Option<&'a CStr> {
     // SAFETY: a live typval and a scratch of the length the callee is
     // promised; the answer is NUL-terminated, or NULL.
     unsafe {
@@ -410,11 +388,12 @@ fn size(info: &FileInfo) -> uint64_t {
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
 pub unsafe fn f_executable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if !is_string_arg(args, 0) {
         return;
     }
-    rettv.vval.v_number = can_exe(str_arg(args, 0)) as varnumber_T;
+    rettv.vval.v_number = can_exe(str_arg(args, 0, &mut numbuf)) as varnumber_T;
 }
 
 /// `exepath({expr})`: the full path of the executable, or the empty string.
@@ -422,11 +401,12 @@ pub unsafe fn f_executable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_exepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if !is_nonempty_string_arg(args, 0) {
         return;
     }
-    ret_string(rettv, exe_path(str_arg(args, 0)));
+    ret_string(rettv, exe_path(str_arg(args, 0, &mut numbuf)));
 }
 
 /// `filereadable({file})`: whether the file exists and can be read.
@@ -434,8 +414,9 @@ pub unsafe fn f_exepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let p = str_arg(args, 0);
+    let p = str_arg(args, 0, &mut numbuf);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
     rettv.vval.v_number = readable as varnumber_T;
 }
@@ -446,8 +427,9 @@ pub unsafe fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_filewritable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = writability(str_arg(args, 0)) as varnumber_T;
+    rettv.vval.v_number = writability(str_arg(args, 0, &mut numbuf)) as varnumber_T;
 }
 
 /// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string
@@ -456,8 +438,9 @@ pub unsafe fn f_filewritable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_getfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let file_perm = getperm(str_arg(args, 0));
+    let file_perm = getperm(str_arg(args, 0, &mut numbuf));
     let mut perm = ptr::null_mut();
     if file_perm >= 0 {
         let spelled = Owned::dup(c"---------");
@@ -477,8 +460,9 @@ pub unsafe fn f_getfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_getfsize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let fname = str_arg(args, 0);
+    let fname = str_arg(args, 0, &mut numbuf);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = match stat(fname) {
         None => -1 as varnumber_T,
@@ -502,8 +486,9 @@ pub unsafe fn f_getfsize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_getftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mtime = stat(str_arg(args, 0)).map(|info| info.stat.st_mtim.tv_sec);
+    let mtime = stat(str_arg(args, 0, &mut numbuf)).map(|info| info.stat.st_mtim.tv_sec);
     rettv.vval.v_number = mtime.map_or(-1 as varnumber_T, |t| t as varnumber_T);
 }
 
@@ -513,9 +498,10 @@ pub unsafe fn f_getftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_getftype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
-    let named = lstat(str_arg(args, 0)).map(|info| {
+    let named = lstat(str_arg(args, 0, &mut numbuf)).map(|info| {
         // The `S_IS*` family, spelled out.
         match info.stat.st_mode & __S_IFMT as uint64_t {
             0o100000 => c"file",
@@ -537,8 +523,9 @@ pub unsafe fn f_getftype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// As [`f_executable`].
 pub unsafe fn f_isdirectory(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = is_dir(str_arg(args, 0)) as varnumber_T;
+    rettv.vval.v_number = is_dir(str_arg(args, 0, &mut numbuf)) as varnumber_T;
 }
 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no

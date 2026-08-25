@@ -19,9 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::{
-    tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
-};
+use crate::eval::typval::{NumBuf, tv_clear, tv_get_number, tv_list_extend};
 use crate::eval::{grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::os::cshim::memmove;
@@ -32,9 +30,6 @@ use crate::types::{
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int};
-
-/// The size of the buffer `tv_get_string_buf` formats a number into.
-const NUMBUFLEN: usize = 65;
 
 /// Is `op` one of the arithmetic operators, i.e. everything but concatenation?
 ///
@@ -157,20 +152,24 @@ unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_in
 
 /// `str1 .= str2`.
 unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
+    // The two operands need a scratch each: `s2` is still live when `tv1`'s
+    // own string form is rendered.
+    let mut numbuf1 = NumBuf::new();
     // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias. `numbuf` is a live local that outlives the string formatted into
-    // it, and `concat_str` has copied both operands before `tv_clear` runs.
+    // alias. Both scratches are live locals that outlive the strings
+    // formatted into them, and `concat_str` has copied both operands before
+    // `tv_clear` runs.
     unsafe {
         if (*tv2).v_type == VAR_FLOAT {
             return FAIL;
         }
-        let mut numbuf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-        let s2 = tv_get_string_buf(tv2, numbuf.as_mut_ptr());
+        let mut numbuf = NumBuf::new();
+        let s2 = numbuf.string(tv2);
         // An owned string with room to spare is extended in place.
         if grow_string_tv(tv1, s2) {
             return OK;
         }
-        let s = concat_str(tv_get_string(tv1), s2);
+        let s = concat_str(numbuf1.string(tv1), s2);
         tv_clear(tv1);
         (*tv1).v_type = VAR_STRING;
         (*tv1).vval.v_string = s;

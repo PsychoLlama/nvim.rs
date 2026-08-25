@@ -5,10 +5,9 @@
 use super::args::{Args, frame};
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
-    tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_string,
-    tv_get_bool, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_chk,
-    tv_list_alloc_ret, tv_list_append_number,
+    NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_get_bool, tv_get_lnum,
+    tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
@@ -426,6 +425,7 @@ pub unsafe fn f_setcursorcharpos(
 /// # Safety
 /// The arguments and `rettv` are live typvals.
 unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation; `pos` and `curswant` are live
     // locals the List parser fills.
     unsafe {
@@ -458,7 +458,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
                 // Kept on the variadic message call: the argument is
                 // arbitrary user bytes. Note that this reports and then
                 // carries on to the range check below.
-                semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(0)),);
+                semsg_c!(gettext(e_invarg2.as_ptr()), numbuf.string(args.ptr(0)),);
             } else if lnum == 0 {
                 lnum = (*curwin.get()).w_cursor.lnum;
             }
@@ -514,11 +514,12 @@ pub unsafe fn f_setcharpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// The arguments and `rettv` are live typvals.
 unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation; `pos`, `fnum` and `curswant` are
     // live locals the List parser fills, and `name` is NUL-terminated.
     unsafe {
         rettv.vval.v_number = -1;
-        let name = tv_get_string_chk(args.ptr(0));
+        let name = numbuf.string_chk(args.ptr(0));
         if name.is_null() {
             return;
         }
@@ -588,6 +589,7 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
 /// that part of the state alone.
 pub unsafe fn f_setcharsearch(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: `args.ptr(0)` is a live typval; after the check the union
     // holds a Dict pointer, which may still be null.
@@ -599,7 +601,7 @@ pub unsafe fn f_setcharsearch(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
         if d.is_null() {
             return;
         }
-        let csearch = tv_dict_get_string(d, c"char".as_ptr(), false);
+        let csearch = numbuf.dict_string(d, c"char".as_ptr());
         if !csearch.is_null() {
             set_last_csearch(utf_ptr2char(csearch), csearch, utfc_ptr2len(csearch));
         }

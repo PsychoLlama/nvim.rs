@@ -20,8 +20,8 @@ use crate::charset::{
 };
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
-    tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk, tv_get_string,
-    tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret, tv_list_append_number,
+    NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
+    tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::main::{e_invarg, e_invarg2};
@@ -44,9 +44,10 @@ const NUMBUFLEN: usize = 65;
 
 /// "str2list()" function: the string as a list of code points.
 pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t);
-        let mut p = tv_get_string(argvars);
+        let mut p = numbuf.string(argvars);
         while *p != 0 {
             tv_list_append_number((*rettv).vval.v_list, utf_ptr2char(p) as varnumber_T);
             p = p.offset(utf_ptr2len(p) as isize);
@@ -60,6 +61,7 @@ pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// prefix may follow it and so that whitespace between the two is allowed.
 /// Text after the number is silently ignored.
 pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut base = 10;
         let mut what = 0;
@@ -74,7 +76,7 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             }
         }
 
-        let mut p = skipwhite(tv_get_string(argvars));
+        let mut p = skipwhite(numbuf.string(argvars));
         let isneg = *p == b'-' as c_char;
         if *p == b'+' as c_char || *p == b'-' as c_char {
             p = skipwhite(p.add(1));
@@ -106,11 +108,12 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// "stridx()" function: the byte index of the first occurrence.
 pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).vval.v_number = -1;
 
         let mut buf = [0 as c_char; NUMBUFLEN];
-        let needle = tv_get_string_chk(argvars.add(1));
+        let needle = numbuf.string_chk(argvars.add(1));
         let haystack_start = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
         let mut haystack = haystack_start;
         if needle.is_null() || haystack.is_null() {
@@ -140,11 +143,12 @@ pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// "strridx()" function: the byte index of the last occurrence at or
 /// before `end_idx`.
 pub unsafe fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).vval.v_number = -1;
 
         let mut buf = [0 as c_char; NUMBUFLEN];
-        let needle = tv_get_string_chk(argvars.add(1));
+        let needle = numbuf.string_chk(argvars.add(1));
         let haystack = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
         if needle.is_null() || haystack.is_null() {
             return;
@@ -194,8 +198,9 @@ pub unsafe fn f_string(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// "strlen()" function: the length in bytes.
 pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        (*rettv).vval.v_number = strlen(tv_get_string(argvars)) as varnumber_T;
+        (*rettv).vval.v_number = strlen(numbuf.string(argvars)) as varnumber_T;
     }
 }
 
@@ -204,13 +209,14 @@ pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// `skipcc` folds a composing character into the base character it
 /// follows; without it each one counts on its own.
 unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: bool) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
             mb_ptr2char_adv
         } else {
             mb_cptr2char_adv
         };
-        let mut s = tv_get_string(argvars);
+        let mut s = numbuf.string(argvars);
         let mut len: varnumber_T = 0;
         while *s != 0 {
             next_char(&raw mut s);
@@ -244,8 +250,9 @@ pub unsafe fn f_strchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// "strdisplaywidth()" function: screen cells, tabs expanded against the
 /// optional starting column.
 pub unsafe fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        let s = tv_get_string(argvars);
+        let s = numbuf.string(argvars);
         let col = if given(&*argvars.add(1)) {
             tv_get_number(argvars.add(1)) as c_int
         } else {
@@ -257,32 +264,36 @@ pub unsafe fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, _f
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
 pub unsafe fn f_strwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
-        (*rettv).vval.v_number = mb_string2cells(tv_get_string(argvars)) as varnumber_T;
+        (*rettv).vval.v_number = mb_string2cells(numbuf.string(argvars)) as varnumber_T;
     }
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
 pub unsafe fn f_strtrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = transstr(tv_get_string(argvars), true);
+        (*rettv).vval.v_string = transstr(numbuf.string(argvars), true);
     }
 }
 
 /// "tolower()" function.
 pub unsafe fn f_tolower(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = strcase_save(tv_get_string(argvars), false);
+        (*rettv).vval.v_string = strcase_save(numbuf.string(argvars), false);
     }
 }
 
 /// "toupper()" function.
 pub unsafe fn f_toupper(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = strcase_save(tv_get_string(argvars), true);
+        (*rettv).vval.v_string = strcase_save(numbuf.string(argvars), true);
     }
 }
 
@@ -294,10 +305,11 @@ pub unsafe fn f_toupper(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// in `fromstr` and the counts can be compared directly. So
 /// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
 pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut buf = [0 as c_char; NUMBUFLEN];
         let mut buf2 = [0 as c_char; NUMBUFLEN];
-        let mut in_str = tv_get_string(argvars);
+        let mut in_str = numbuf.string(argvars);
         let fromstr = tv_get_string_buf_chk(argvars.add(1), buf.as_mut_ptr());
         let tostr = tv_get_string_buf_chk(argvars.add(2), buf2.as_mut_ptr());
 
@@ -400,6 +412,7 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
 /// exactly the mask's characters, and an empty mask reverts to the
 /// default.
 pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut buf1 = [0 as c_char; NUMBUFLEN];
         let mut buf2 = [0 as c_char; NUMBUFLEN];
@@ -425,7 +438,7 @@ pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
                     return;
                 }
                 if !(0..=2).contains(&dir) {
-                    semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(argvars.add(2)),);
+                    semsg_c!(gettext(e_invarg2.as_ptr()), numbuf.string(argvars.add(2)),);
                     return;
                 }
             }

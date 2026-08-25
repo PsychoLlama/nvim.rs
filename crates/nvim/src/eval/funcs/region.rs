@@ -9,9 +9,8 @@ use crate::buffer::buflist_findnr;
 use crate::charset::getdigits_int;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
-    tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string,
-    tv_list_alloc, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list,
-    tv_list_append_number,
+    NumBuf, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
 use crate::main::{
@@ -136,6 +135,7 @@ impl Drop for BufferSwap {
 /// # Safety
 /// The arguments and `rettv` are live typvals.
 unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
@@ -175,9 +175,9 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
         let (is_select_exclusive, spec) = match opts {
             Some(d) => (
                 tv_dict_get_bool(d, c"exclusive".as_ptr(), exclusive_by_default as c_int) != 0,
-                tv_dict_get_string(d, c"type".as_ptr(), false),
+                numbuf.dict_string(d, c"type".as_ptr()),
             ),
-            None => (exclusive_by_default, ptr::null_mut()),
+            None => (exclusive_by_default, ptr::null()),
         };
         let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
         let (region_type, block_width) = parse_type(spec)?;

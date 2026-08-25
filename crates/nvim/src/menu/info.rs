@@ -18,7 +18,7 @@ use std::ffi::CString;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::eval::typval::{tv_dict_alloc_ret, tv_get_string_chk};
+use crate::eval::typval::{NumBuf, tv_dict_alloc_ret};
 use crate::eval::vars::del_menutrans_vars;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
@@ -235,10 +235,12 @@ pub(crate) unsafe fn f_menu_info(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(rettv);
-        ((*rettv).vval.v_dict, tv_get_string_chk(argvars))
+        ((*rettv).vval.v_dict, numbuf.string_chk(argvars))
     };
     if menu_name.is_null() {
         // Before the second argument is looked at: `tv_get_string_chk`
@@ -250,7 +252,7 @@ pub(crate) unsafe fn f_menu_info(
     let which = unsafe {
         let second = argvars.add(1);
         if (*second).v_type != VAR_UNKNOWN {
-            tv_get_string_chk(second)
+            numbuf2.string_chk(second)
         } else {
             // The default is the modes of plain ":menu".
             c"".as_ptr()

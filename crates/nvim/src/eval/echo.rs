@@ -10,7 +10,7 @@ use core::ptr::null_mut;
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::skipwhite;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::eval::typval::{tv_clear, tv_get_string};
+use crate::eval::typval::{NumBuf, tv_clear};
 use crate::eval::userfunc::{restore_funccal, save_funccal};
 use crate::eval::vars::set_var;
 use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
@@ -172,6 +172,7 @@ pub fn get_echo_hl_id() -> c_int {
 /// # Safety
 /// `eap` must be valid.
 pub unsafe fn ex_execute(eap: *mut exarg_T) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut arg: *mut c_char = (*eap).arg;
         let mut rettv = UNSET_TV;
@@ -190,7 +191,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
                 // so own what they produce.
                 let owned = (*eap).cmdidx != CMD_execute;
                 let argstr: *const c_char = if !owned {
-                    tv_get_string(&raw mut rettv)
+                    numbuf.string(&raw mut rettv)
                 } else if rettv.v_type == VAR_STRING {
                     encode_tv2echo(&raw mut rettv, null_mut::<size_t>())
                 } else {

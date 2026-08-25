@@ -153,10 +153,16 @@ impl<'f> Args<'f> {
         }
     }
 
-    unsafe fn next_string(&mut self, tofree: &mut *mut c_char) -> *const c_char {
+    /// `numbuf` is scratch a Number argument is rendered into; it must
+    /// outlive the answer.
+    unsafe fn next_string(
+        &mut self,
+        tofree: &mut *mut c_char,
+        numbuf: *mut c_char,
+    ) -> *const c_char {
         unsafe {
             if self.reads_typvals() {
-                tv_str(self.tvs, &mut self.arg_idx, tofree)
+                tv_str(self.tvs, &mut self.arg_idx, tofree, numbuf)
             } else {
                 self.position();
                 self.ap.next_arg::<*const c_char>()
@@ -432,7 +438,9 @@ unsafe fn render_string(
             }
             // b's' | b'S'
             _ => {
-                let str_arg = args.next_string(tofree);
+                // `tmp` is untouched on this branch and outlives the
+                // answer, so it doubles as the Number scratch.
+                let str_arg = args.next_string(tofree, tmp.as_mut_ptr());
                 if str_arg.is_null() {
                     return Body::At(c"[NULL]".as_ptr(), 6);
                 }

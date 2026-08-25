@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::types::{FAIL, OK};
 use ::libc::{EILSEQ, EINVAL};
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -195,11 +196,12 @@ unsafe fn iconv_string(
 
 /// `iconv({string}, {from}, {to})`.
 pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     unsafe {
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = core::ptr::null_mut();
 
-        let str = tv_get_string(argvars);
+        let str = numbuf.string(argvars);
         let mut buf1 = [0 as c_char; NUMBUFLEN];
         let from = enc_canonize(enc_skip(
             tv_get_string_buf(argvars.add(1), buf1.as_mut_ptr()).cast_mut(),

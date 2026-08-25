@@ -24,6 +24,7 @@ use core::{ptr, slice};
 
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{transchar, vim_isprintc, vim_str2nr};
+use crate::eval::typval::NumBuf;
 use crate::eval::vars::get_var_value;
 use crate::main::{current_sctx, e_invarg, e_usingsid};
 use crate::mbyte::{
@@ -588,6 +589,7 @@ pub unsafe fn replace_termcodes(
     did_simplify: *mut bool,
     cpo_val: *const c_char,
 ) -> *mut c_char {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let end = from.add(from_len).sub(1);
         // A backslash is a special character unless 'cpoptions' contains B.
@@ -664,11 +666,11 @@ pub unsafe fn replace_termcodes(
                 let (len, value) = if end.offset_from(src) >= 7
                     && strncasecmp(src, c"<Leader>".as_ptr(), 8) == 0
                 {
-                    (8, get_var_value(c"g:mapleader".as_ptr()))
+                    (8, get_var_value(c"g:mapleader".as_ptr(), &mut numbuf))
                 } else if end.offset_from(src) >= 12
                     && strncasecmp(src, c"<LocalLeader>".as_ptr(), 13) == 0
                 {
-                    (13, get_var_value(c"g:maplocalleader".as_ptr()))
+                    (13, get_var_value(c"g:maplocalleader".as_ptr(), &mut numbuf))
                 } else {
                     (0, ptr::null_mut())
                 };

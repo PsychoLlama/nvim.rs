@@ -21,8 +21,8 @@ use core::ptr;
 
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{
-    tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk,
+    NumBuf, tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
+    tv_get_number_chk, tv_get_string_buf_chk,
 };
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, get_vim_var_tv};
 use crate::eval::{garbage_collect, pattern_match};
@@ -228,10 +228,11 @@ unsafe fn assert_append_cmd_or_arg(gap: *mut garray_T, argvars: *mut typval_T, c
 /// # Safety
 /// `argvars` has one slot.
 unsafe fn assert_beeps(argvars: *mut typval_T, no_beep: bool) -> c_int {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's arguments; `do_cmdline_cmd` runs user code, which
     // is the whole point, and the flags around it are restored below.
     unsafe {
-        let cmd = tv_get_string_chk(arg(argvars, 0));
+        let cmd = numbuf.string_chk(arg(argvars, 0));
         called_vim_beep.set(false);
         suppress_errthrow.set(true);
         emsg_silent.set(0);
@@ -538,9 +539,10 @@ pub(crate) unsafe fn f_assert_exception(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        let error = tv_get_string_chk(arg(argvars, 0));
+        let error = numbuf.string_chk(arg(argvars, 0));
         if *get_vim_var_str(Vv::Exception) == 0 {
             let mut ga = prepare_assert_error();
             ga_concat_lit(&raw mut ga, c"v:exception is not set");
@@ -631,10 +633,11 @@ pub(crate) unsafe fn f_assert_report(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         let mut ga = prepare_assert_error();
-        ga_concat(&raw mut ga, tv_get_string(arg(argvars, 0)));
+        ga_concat(&raw mut ga, numbuf.string(arg(argvars, 0)));
         report_assert_error(&raw mut ga);
         (*rettv).vval.v_number = 1;
     }
@@ -672,6 +675,7 @@ pub(crate) unsafe fn f_test_write_list_log(
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector.
-    unsafe { tv_get_string_chk(arg(argvars, 0)) };
+    unsafe { numbuf.string_chk(arg(argvars, 0)) };
 }

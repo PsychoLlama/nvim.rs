@@ -8,11 +8,10 @@ use super::{GA_EMPTY_INIT_VALUE, NSUBEXP, VSE_NONE};
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
-    tv_blob_alloc_ret, tv_blob_get, tv_blob_set_range, tv_check_for_nonempty_string_arg,
+    NumBuf, tv_blob_alloc_ret, tv_blob_get, tv_blob_set_range, tv_check_for_nonempty_string_arg,
     tv_check_for_string_arg, tv_check_num, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
-    tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_is_func,
-    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string, tv_list_extend,
-    tv_list_len,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_is_func, tv_list_alloc_ret,
+    tv_list_append_allocated_string, tv_list_append_string, tv_list_extend, tv_list_len,
 };
 use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::{ga_clear, ga_grow};
@@ -59,11 +58,6 @@ unsafe fn dummy_ap() -> VaList<'static> {
     unsafe { core::mem::transmute::<[u8; 24], VaList<'static>>([0u8; 24]) }
 }
 
-/// The scratch buffer `tv_get_string_buf` fills for a value that is not
-/// already a String. `NUMBUFLEN` in the C.
-type NumBuf = [c_char; 65];
-const NUM_BUF: NumBuf = [0; 65];
-
 /// A conversion descriptor that has not been set up yet.
 const CONV_NONE_INIT: vimconv_T = vimconv_T {
     vc_type: CONV_NONE,
@@ -75,25 +69,27 @@ const CONV_NONE_INIT: vimconv_T = vimconv_T {
 /// `char2nr({string} [, {utf8}])` — the first character's code point. The
 /// second argument only has to type-check; nvim is always UTF-8.
 pub unsafe fn f_char2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     unsafe {
         if args.has(1) && !tv_check_num(args.ptr(1)) {
             return;
         }
-        rettv.vval.v_number = utf_ptr2char(tv_get_string(args.ptr(0))) as varnumber_T;
+        rettv.vval.v_number = utf_ptr2char(numbuf.string(args.ptr(0))) as varnumber_T;
     }
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
 pub unsafe fn f_escape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut buf: NumBuf = NUM_BUF;
+    let mut buf = NumBuf::new();
     // SAFETY: the arguments are live typvals and `buf` outlives the call
     // `tv_get_string_buf` may fill it for.
     rettv.vval.v_string = unsafe {
         vim_strsave_escaped(
-            tv_get_string(args.ptr(0)),
+            numbuf.string(args.ptr(0)),
             tv_get_string_buf(args.ptr(1), buf.as_mut_ptr()),
         )
     };
@@ -102,10 +98,11 @@ pub unsafe fn f_escape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// `fnameescape({string})`.
 pub unsafe fn f_fnameescape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `args.ptr(0)` is a live typval.
     rettv.vval.v_string =
-        unsafe { vim_strsave_fnameescape(tv_get_string(args.ptr(0)), VSE_NONE as c_int) };
+        unsafe { vim_strsave_fnameescape(numbuf.string(args.ptr(0)), VSE_NONE as c_int) };
     rettv.v_type = VAR_STRING;
 }
 
@@ -192,7 +189,7 @@ pub unsafe fn f_printf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
-    let mut buf: NumBuf = NUM_BUF;
+    let mut buf = NumBuf::new();
     // SAFETY: `buf` outlives both passes, and `args.ptr(1)` is the start of
     // the remaining arguments — `vim_vsnprintf_typval` stops at the
     // `VAR_UNKNOWN` terminator. The `dummy_ap` va_list is never read
@@ -278,6 +275,7 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
 /// # Safety
 /// Argument 0 is a live typval and `rettv` is the cleared return value.
 unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
+    let mut numbuf = NumBuf::new();
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
     if n <= 0 {
@@ -286,7 +284,7 @@ unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     // SAFETY: the caller's obligation; `p` is NUL-terminated and outlives
     // the copies made from it.
     unsafe {
-        let p = tv_get_string(args.ptr(0));
+        let p = numbuf.string(args.ptr(0));
         let slen = strlen(p);
         if slen == 0 {
             return;
@@ -310,6 +308,7 @@ unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they
 /// are rather than up to the first NUL.
 pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: `args.ptr(0)` is a live typval. For the Blob branch the tag
@@ -328,7 +327,7 @@ pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             };
             hex_digest(bytes)
         } else {
-            let p = tv_get_string(args.ptr(0));
+            let p = numbuf.string(args.ptr(0));
             hex_digest(core::slice::from_raw_parts(p.cast::<u8>(), strlen(p)))
         }
     };
@@ -339,22 +338,24 @@ pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// `shellescape({string} [, {special}])`.
 pub unsafe fn f_shellescape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     unsafe {
         let do_special = non_zero_arg(args.ptr(1));
         rettv.vval.v_string =
-            vim_strsave_shellescape(tv_get_string(args.ptr(0)), do_special, do_special);
+            vim_strsave_shellescape(numbuf.string(args.ptr(0)), do_special, do_special);
     }
     rettv.v_type = VAR_STRING;
 }
 
 /// `soundfold({word})`.
 pub unsafe fn f_soundfold(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: `args.ptr(0)` is a live typval.
-    rettv.vval.v_string = unsafe { eval_soundfold(tv_get_string(args.ptr(0))) };
+    rettv.vval.v_string = unsafe { eval_soundfold(numbuf.string(args.ptr(0))) };
 }
 
 /// Turn 'spell' on for the duration of `body`, loading the spell languages
@@ -385,6 +386,7 @@ unsafe fn with_spell(body: impl FnOnce()) {
 
 /// `spellbadword([{sentence}])` — the first misspelling and why it is one.
 pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut word: *const c_char = c"".as_ptr();
     let mut attr: hlf_T = HLF_COUNT;
@@ -403,7 +405,7 @@ pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
                     (*curwin.get()).w_set_curswant = true;
                 }
             } else if *(*curbuf.get()).b_s.b_p_spl != NUL as c_char {
-                let mut str = tv_get_string_chk(args.ptr(0));
+                let mut str = numbuf.string_chk(args.ptr(0));
                 let mut capcol: c_int = -1;
                 if !str.is_null() {
                     while *str != NUL as c_char {
@@ -447,6 +449,7 @@ pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 
 /// `spellsuggest({word} [, {max} [, {capital}]])`.
 pub unsafe fn f_spellsuggest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut ga: garray_T = GA_EMPTY_INIT_VALUE;
     let mut reported = false;
@@ -455,7 +458,7 @@ pub unsafe fn f_spellsuggest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     unsafe {
         with_spell(|| {
             reported = true;
-            let str = tv_get_string(args.ptr(0));
+            let str = numbuf.string(args.ptr(0));
             let mut typeerr = false;
             let (maxcount, need_capital) = if !args.has(1) {
                 (25, false)
@@ -497,8 +500,9 @@ pub unsafe fn f_spellsuggest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 
 /// `split({string} [, {pattern} [, {keepempty}]])`.
 pub unsafe fn f_split(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut patbuf: NumBuf = NUM_BUF;
+    let mut patbuf = NumBuf::new();
     // 'cpoptions' is cleared around the split so that its flags cannot
     // change what the pattern means.
     let save_cpo = p_cpo.get();
@@ -506,7 +510,7 @@ pub unsafe fn f_split(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     // SAFETY: the arguments are live typvals, `patbuf` outlives the calls
     // that may fill it, and the compiled program is freed before returning.
     unsafe {
-        let str = tv_get_string(args.ptr(0));
+        let str = numbuf.string(args.ptr(0));
         let mut typeerr = false;
         let mut keepempty = false;
         let mut pat: *const c_char = ptr::null();
@@ -598,13 +602,14 @@ unsafe fn split_into(
 
 /// `strftime({format} [, {time}])`.
 pub unsafe fn f_strftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: the arguments are live typvals; the two conversion
     // descriptors are opened and closed here, and `enc` is freed on every
     // path out.
     unsafe {
-        let mut p = tv_get_string(args.ptr(0)) as *mut c_char;
+        let mut p = numbuf.string(args.ptr(0)) as *mut c_char;
         let seconds: time_t = if args.has(1) {
             tv_get_number(args.ptr(1)) as time_t
         } else {
@@ -644,8 +649,8 @@ pub unsafe fn f_strftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `strptime({format}, {timestring})`.
 pub unsafe fn f_strptime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut fmt_buf: NumBuf = NUM_BUF;
-    let mut str_buf: NumBuf = NUM_BUF;
+    let mut fmt_buf = NumBuf::new();
+    let mut str_buf = NumBuf::new();
     // strptime() is asked to determine DST itself.
     let mut tmval: tm = tm {
         tm_isdst: -1,
@@ -721,16 +726,17 @@ pub unsafe fn f_submatch(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `substitute({string}, {pat}, {sub}, {flags})` — `{sub}` may be a Funcref,
 /// in which case it is handed on rather than read as a String.
 pub unsafe fn f_substitute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut patbuf: NumBuf = NUM_BUF;
-    let mut subbuf: NumBuf = NUM_BUF;
-    let mut flagsbuf: NumBuf = NUM_BUF;
+    let mut patbuf = NumBuf::new();
+    let mut subbuf = NumBuf::new();
+    let mut flagsbuf = NumBuf::new();
     rettv.v_type = VAR_STRING;
     // SAFETY: the arguments are live typvals and the three scratch buffers
     // outlive the calls that fill them and the `do_string_sub` that reads
     // what they hold.
     unsafe {
-        let str = tv_get_string_chk(args.ptr(0));
+        let str = numbuf.string_chk(args.ptr(0));
         let pat = tv_get_string_buf_chk(args.ptr(1), patbuf.as_mut_ptr());
         let flg = tv_get_string_buf_chk(args.ptr(3), flagsbuf.as_mut_ptr());
         let mut sub: *const c_char = ptr::null();

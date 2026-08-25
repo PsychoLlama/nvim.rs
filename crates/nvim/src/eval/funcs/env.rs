@@ -9,10 +9,9 @@ use super::{
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
 use crate::eval::typval::{
-    tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
-    tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string, tv_list_ref,
-    tv_list_set_ret,
+    NumBuf, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_allocated_string, tv_list_append_string, tv_list_ref, tv_list_set_ret,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
@@ -81,9 +80,10 @@ pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
 pub unsafe fn f_getenv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `vim_getenv` returns an owned string or null.
-    let p = unsafe { vim_getenv(tv_get_string(args.ptr(0))) };
+    let p = unsafe { vim_getenv(numbuf.string(args.ptr(0))) };
     if p.is_null() {
         rettv.v_type = VAR_SPECIAL;
         rettv.vval.v_special = kSpecialVarNull;
@@ -95,6 +95,7 @@ pub unsafe fn f_getenv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// `expand({string} [, {nosuf} [, {list}]])`.
 pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
@@ -111,7 +112,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         {
             tv_list_set_ret(rettv, ptr::null_mut::<list_T>());
         }
-        let s = tv_get_string(args.ptr(0));
+        let s = numbuf.string(args.ptr(0));
         if matches!(*s as u8, b'%' | b'#' | b'<') {
             // A `%`/`#`/`<` item is resolved by the Ex-command machinery,
             // whose own errors are suppressed unless 'verbose' is set.
@@ -184,6 +185,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// `expandcmd({string} [, {options}])` — expand the `%`, `#` and wildcard
 /// items in a command line.
 pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: `cmdstr` is owned here and handed to the return value;
@@ -197,7 +199,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
                 c"errmsg".as_ptr(),
                 kBoolVarFalse as c_int,
             ) != 0);
-        let mut cmdstr = xstrdup(tv_get_string(args.ptr(0)));
+        let mut cmdstr = xstrdup(numbuf.string(args.ptr(0)));
         let mut eap: exarg_T = core::mem::zeroed();
         eap.arg = cmdstr;
         eap.cmd = cmdstr;
@@ -241,12 +243,13 @@ pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
 /// `setfperm({fname}, {mode})` — `{mode}` is nine "rwxrwxrwx" characters,
 /// any of which is "off" only when it is a `-`.
 pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     // SAFETY: both strings are coerced from the frame and NUL-terminated;
     // the nine bytes read below are covered by the length check.
     unsafe {
-        let fname = tv_get_string_chk(args.ptr(0));
+        let fname = numbuf.string_chk(args.ptr(0));
         if fname.is_null() {
             return;
         }
@@ -313,13 +316,14 @@ unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
 
 /// `stdpath({what})`.
 pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: `p` is coerced from the frame and NUL-terminated once the
     // null check has passed.
     unsafe {
-        let p = tv_get_string_chk(args.ptr(0));
+        let p = numbuf.string_chk(args.ptr(0));
         if p.is_null() {
             return;
         }
@@ -361,12 +365,13 @@ pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
 pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
     unsafe {
         tv_dict_alloc_ret(rettv);
-        swapfile_dict(tv_get_string(args.ptr(0)), rettv.vval.v_dict);
+        swapfile_dict(numbuf.string(args.ptr(0)), rettv.vval.v_dict);
     }
 }
 

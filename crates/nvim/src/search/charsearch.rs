@@ -46,7 +46,7 @@ pub fn last_csearch_until() -> c_int {
 ///
 /// # Safety
 /// `s` must point at `len` readable bytes.
-pub unsafe fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) {
+pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
     lastc.set(c as u8);
     lastc_bytelen.set(len);
     // Upstream writes over the front of the old value rather than replacing

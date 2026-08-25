@@ -24,7 +24,7 @@ use crate::drawscreen::{
 };
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find,
-    tv_get_number_chk, tv_get_string_chk, tv_list_find, tv_list_len,
+    tv_get_number_chk, tv_list_find, tv_list_len,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{getfile, prepare_tagpreview};

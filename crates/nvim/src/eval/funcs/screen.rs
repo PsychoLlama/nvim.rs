@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 
 use crate::eval::typval::{
-    tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
-    tv_list_alloc_ret, tv_list_append_number, tv_list_append_string, tv_list_set_ret,
+    NumBuf, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_list_alloc_ret,
+    tv_list_append_number, tv_list_append_string, tv_list_set_ret,
 };
 use crate::grid::{
     GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
@@ -187,16 +187,18 @@ pub unsafe fn f_screenstring(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 
 /// `hlID({name})` — the highlight group's id, or 0.
 pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { syn_name2id(tv_get_string(args.ptr(0))) } as varnumber_T;
+    rettv.vval.v_number = unsafe { syn_name2id(numbuf.string(args.ptr(0))) } as varnumber_T;
 }
 
 /// `hlexists({name})` — whether the group is defined.
 pub unsafe fn f_hlexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { highlight_exists(tv_get_string(args.ptr(0))) } as varnumber_T;
+    rettv.vval.v_number = unsafe { highlight_exists(numbuf.string(args.ptr(0))) } as varnumber_T;
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -258,6 +260,7 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 
 /// `synIDattr({id}, {what} [, {mode}])`
 pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut color: HlColorText = [0; 20];
     // SAFETY: the frame is live; `what` is the string an argument owns and
@@ -265,7 +268,7 @@ pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // `tv_get_string_buf` may park in it.
     unsafe {
         let id = tv_get_number(args.ptr(0)) as c_int;
-        let what = tv_get_string(args.ptr(1));
+        let what = numbuf.string(args.ptr(1));
 
         // "cterm" or "gui"; anything else, including an absent argument,
         // means whatever the attached UI is.

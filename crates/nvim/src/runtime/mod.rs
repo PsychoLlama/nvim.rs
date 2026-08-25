@@ -38,7 +38,7 @@ use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_func,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock,
-    tv_dict_copy, tv_dict_find, tv_dict_get_string, tv_get_number_chk, tv_get_string, tv_ht_iter,
+    tv_dict_copy, tv_dict_find, tv_dict_get_string_alloc, tv_get_number_chk, tv_ht_iter,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_string,
     tv_list_append_tv, tv_list_set_ret,
 };

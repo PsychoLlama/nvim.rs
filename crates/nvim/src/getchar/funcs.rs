@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::eval::typval::NumBuf;
 use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::semsg_c;
@@ -45,6 +46,7 @@ struct GetcharOpts {
 /// # Safety
 /// `argvars` must be a valid argument vector.
 unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<GetcharOpts> {
+    let mut numbuf = NumBuf::new();
     unsafe {
         let mut opts = GetcharOpts {
             allow_number,
@@ -71,7 +73,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
 
             opts.simplify = tv_dict_get_bool(d, c"simplify".as_ptr(), 1) != 0;
 
-            let cursor = tv_dict_get_string(d, c"cursor".as_ptr(), false);
+            let cursor = numbuf.dict_string(d, c"cursor".as_ptr());
             if !cursor.is_null() {
                 opts.cursor = if strcmp(cursor, c"hide".as_ptr()) == 0 {
                     CursorFlag::Hide

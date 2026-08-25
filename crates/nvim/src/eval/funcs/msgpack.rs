@@ -12,8 +12,8 @@ use crate::eval::encode::{
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
 use crate::eval::typval::{
-    tv_blob_alloc_ret, tv_blob_len, tv_get_string, tv_get_string_buf_chk, tv_list_alloc_ret,
-    tv_list_append_owned_tv, tv_list_first, tv_list_len,
+    NumBuf, tv_blob_alloc_ret, tv_blob_len, tv_list_alloc_ret, tv_list_append_owned_tv,
+    tv_list_first, tv_list_len,
 };
 use crate::main::{e_listarg, e_listblobarg};
 use crate::memory::{alloc_block, free_block, strequal, xfree};
@@ -45,7 +45,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // released on every path; `s` points into it or into `numbuf`, both of
     // which outlive the parse.
     unsafe {
-        let mut numbuf: [c_char; 65] = [0; 65];
+        let mut numbuf = NumBuf::new();
         let mut tofree: *mut c_char = ptr::null_mut();
         let mut len: usize = 0;
         let s: *const c_char = if args.ty(0) == VAR_LIST {
@@ -60,7 +60,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
                 tofree
             }
         } else {
-            let s = tv_get_string_buf_chk(args.ptr(0), numbuf.as_mut_ptr());
+            let s = numbuf.string_chk(args.ptr(0));
             if s.is_null() {
                 return;
             }
@@ -95,6 +95,7 @@ pub unsafe fn f_json_encode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List
 /// of NL-joined lines, or as a Blob when `{type}` is "B".
 pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the packer owns its buffer until `packer_take_string` hands
     // it over, and the string is then owned by the Blob or written into the
@@ -125,7 +126,7 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             li = (*li).li_next;
         }
         let data = packer_take_string(&packer);
-        if args.has(1) && strequal(tv_get_string(args.ptr(1)), c"B".as_ptr()) {
+        if args.has(1) && strequal(numbuf.string(args.ptr(1)), c"B".as_ptr()) {
             // The Blob adopts the packer's allocation as-is, capacity and
             // all; nothing copies.
             let b: *mut blob_T = tv_blob_alloc_ret(rettv);

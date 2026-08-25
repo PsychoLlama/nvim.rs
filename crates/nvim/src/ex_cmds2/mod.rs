@@ -87,6 +87,7 @@ use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
+use crate::eval::typval::NumBuf;
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
     DOBUF_UNLOAD, VIM_QUESTION,
@@ -711,6 +712,7 @@ pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
+    let mut numbuf = NumBuf::new();
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
@@ -732,7 +734,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
             // ":compiler! {name}" sets global options.
             do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr());
         } else {
-            old_cur_comp = get_var_value(CURRENT_COMPILER.as_ptr());
+            old_cur_comp = get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf);
             if !old_cur_comp.is_null() {
                 old_cur_comp = xstrdup(old_cur_comp);
             }
@@ -758,7 +760,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
         do_cmdline_cmd(c":delcommand CompilerSet".as_ptr());
 
         // Set "b:current_compiler" from "current_compiler".
-        let p = get_var_value(CURRENT_COMPILER.as_ptr());
+        let p = get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf);
         if !p.is_null() {
             set_internal_string_var(B_CURRENT_COMPILER.as_ptr(), p);
         }

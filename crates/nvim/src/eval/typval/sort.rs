@@ -340,9 +340,14 @@ pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
 
 /// Read `sort()`/`uniq()`'s optional `{how}` and `{dict}` arguments into
 /// `info`.
+///
+/// A `{how}` given as a Number has no string of its own, so the caller lends
+/// `how` for it: `info.item_compare_func` may borrow it, and the sort
+/// reads that field long after this returns.
 pub(crate) unsafe fn parse_sort_uniq_args(
     argvars: *mut typval_T,
     info: *mut sortinfo_T,
+    how: &mut NumBuf,
 ) -> ::core::ffi::c_int {
     unsafe {
         (*info).item_compare_ic = 0;
@@ -372,7 +377,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
             if nr == 1 {
                 (*info).item_compare_ic = 1;
             } else if (*argvars.add(1)).v_type != VAR_NUMBER {
-                (*info).item_compare_func = tv_get_string(argvars.add(1));
+                (*info).item_compare_func = how.string(argvars.add(1));
             } else if nr != 0 {
                 emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
                 return FAIL;
@@ -420,6 +425,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
 pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, sort: bool) {
+    let mut how = NumBuf::new();
     unsafe {
         if (*argvars).v_type != VAR_LIST {
             semsg_c!(
@@ -445,7 +451,7 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
         let l = (*argvars).vval.v_list;
         if !value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) {
             tv_list_set_ret(rettv, l);
-            if tv_list_len(l) > 1 && parse_sort_uniq_args(argvars, &raw mut info) != FAIL {
+            if tv_list_len(l) > 1 && parse_sort_uniq_args(argvars, &raw mut info, &mut how) == OK {
                 if sort {
                     do_sort(l, &raw mut info);
                 } else {

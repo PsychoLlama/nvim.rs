@@ -15,8 +15,8 @@ use core::ptr::{null, null_mut};
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    tv_blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
-    tv_get_number, tv_get_string, tv_get_string_chk, tv_is_func, tv_list_slice_or_index,
+    NumBuf, tv_blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
+    tv_get_number, tv_is_func, tv_list_slice_or_index,
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
@@ -234,6 +234,8 @@ pub(crate) unsafe fn eval_index_inner(
     keylen: ptrdiff_t,
     verbose: bool,
 ) -> c_int {
+    let mut numbuf = NumBuf::new();
+    let mut numbuf2 = NumBuf::new();
     unsafe {
         let mut n1: varnumber_T = 0;
         let mut n2: varnumber_T = 0;
@@ -256,7 +258,7 @@ pub(crate) unsafe fn eval_index_inner(
 
         match (*rettv).v_type {
             VAR_NUMBER | VAR_STRING => {
-                let s = tv_get_string(rettv);
+                let s = numbuf.string(rettv);
                 let len = strlen(s) as c_int as varnumber_T;
                 let v = if exclusive {
                     // slice(): character indexes, second one excluded.
@@ -317,7 +319,7 @@ pub(crate) unsafe fn eval_index_inner(
             VAR_DICT => {
                 let mut key = key;
                 if key.is_null() {
-                    key = tv_get_string_chk(var1);
+                    key = numbuf2.string_chk(var1);
                     if key.is_null() {
                         return FAIL;
                     }
