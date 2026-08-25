@@ -465,7 +465,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
                                 *iobuff.offset(len as isize) = ' ' as c_char;
                                 len += 1;
                             }
-                            // IObuff =~ "\k.* ", thus len >= 2.
+                            // The joined line =~ "\k.* ", thus len >= 2.
                             if p_js.get() != 0
                                 && matches!(
                                     *iobuff.offset((len - 2) as isize) as u8,

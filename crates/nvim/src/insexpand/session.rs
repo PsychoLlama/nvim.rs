@@ -459,8 +459,8 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
                 compl_col.set(compl_startpos.get().col);
             }
             compl_length.set((*curwin.get()).w_cursor.col - compl_col.get());
-            // IObuff is used to add a "word from the next line"; would we have
-            // enough space?  Just being paranoid.
+            // An `IOSIZE` buffer is used to add a "word from the next
+            // line"; would we have enough space?  Just being paranoid.
             if compl_length.get() > IOSIZE - MIN_SPACE {
                 compl_cont_status.set(compl_cont_status.get() & !CONT_SOL);
                 compl_length.set(IOSIZE - MIN_SPACE);
