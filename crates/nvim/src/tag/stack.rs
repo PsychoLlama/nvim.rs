@@ -221,6 +221,7 @@ pub unsafe fn tagstack_clear_entry(item: &mut taggy_T) {
 /// # Safety
 /// Must be called with a live `curwin`.
 pub unsafe fn do_tags(_eap: *mut exarg_T) {
+    let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin` is live, and `fm_getname` answers an allocation we
     // free again below.
     unsafe {
@@ -241,10 +242,10 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
                 continue;
             }
             msg_putchar('\n' as c_int);
-            // Kept in `IObuff` rather than built here: a tag name longer
-            // than the buffer is truncated, as upstream truncates it.
+            // Formatted rather than built up: a tag name longer than the
+            // buffer is truncated, as upstream truncates it.
             vim_snprintf(
-                IObuff.ptr().cast(),
+                row.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"%c%2d %2d %-15s %5d  ".as_ptr(),
                 if i as c_int == curidx { '>' } else { ' ' } as c_int,
@@ -253,7 +254,7 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
                 item.tagname,
                 item.fmark.mark.lnum,
             );
-            msg_outtrans(IObuff.ptr().cast(), 0, false);
+            msg_outtrans(row.as_ptr(), 0, false);
             let hl = if item.fmark.fnum == (*curbuf.get()).handle {
                 HLF_D
             } else {

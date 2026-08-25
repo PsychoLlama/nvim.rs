@@ -107,6 +107,10 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
 
     // SAFETY: `msg_ext_set_kind` copies the literal.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    // The listing pauses for the user, which can run anything; both buffers
+    // are this frame's rather than the shared scratch upstream reuses.
+    let mut shortname = [0 as c_char; MAXPATHL as usize];
+    let mut row = [0 as c_char; IOSIZE as usize];
     let mut sid: scid_T = 1;
     while sid <= script_count() && !got_int.get() {
         // SAFETY: `sid` is in range, and the registry is re-read every round
@@ -117,12 +121,12 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
         if name.is_null() {
             continue;
         }
-        // SAFETY: `NameBuff` and `IObuff` are the shared scratch buffers, both
-        // sized as the calls below are told.
+        // SAFETY: both buffers are sized as the calls below are told, and
+        // outlive every one of them.
         unsafe {
-            let namebuff = NameBuff.ptr().cast::<c_char>();
+            let namebuff = shortname.as_mut_ptr();
             home_replace(ptr::null(), name, namebuff, MAXPATHL as size_t, true);
-            let iobuff = IObuff.ptr().cast::<c_char>();
+            let iobuff = row.as_mut_ptr();
             vim_snprintf(
                 iobuff,
                 IOSIZE as size_t,
@@ -147,6 +151,7 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
 ///
 /// `eap` must be the live `:script` command block.
 unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
+    let mut path = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if by_number {
             if !script_id_valid((*eap).line2 as c_int) {
@@ -155,7 +160,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
             }
             (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name;
         } else {
-            let namebuff = NameBuff.ptr().cast::<c_char>();
+            let namebuff = path.as_mut_ptr();
             expand_env((*eap).arg, namebuff, MAXPATHL);
             (*eap).arg = namebuff;
         }

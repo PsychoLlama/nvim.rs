@@ -13,10 +13,9 @@
 //! (`help-tags\t<tagfile>\t1\n`), which is built in final form and written
 //! verbatim.
 //!
-//! Like the rest of the module this works in `NameBuff` -- the glob goes in,
-//! `gen_expand_wildcards` reads it back out, then the same buffer becomes
-//! the output path -- and reads each help line into `IObuff`. Nothing
-//! reached from here wants either buffer meanwhile.
+//! Each step owns the buffer it works in: the glob goes into a local,
+//! `gen_expand_wildcards` reads it back out, and the same buffer becomes the
+//! output path. Upstream uses the shared `NameBuff`/`IObuff` for all of it.
 //!
 //! Original: `src/nvim/help.c`, Vim/Neovim, Vim license.
 
@@ -26,7 +25,7 @@ use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
 use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::fileio::vim_fgets;
-use crate::main::{IObuff, NameBuff, e_fnametoolong, got_int, p_rtp};
+use crate::main::{e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
@@ -131,9 +130,9 @@ unsafe fn helptags_cb(
 /// # Safety
 /// `dirname` is NUL-terminated. Main thread.
 unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr: bool) {
-    let namebuff = NameBuff.ptr().cast::<c_char>();
-    // SAFETY: `NameBuff` is the shared path scratch buffer; nothing between
-    // here and `gen_expand_wildcards` reading it wants it too.
+    let mut glob = [0 as c_char; MAXPATHL as usize];
+    let namebuff = glob.as_mut_ptr();
+    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below.
     let files = unsafe {
         xstrlcpy(namebuff, dirname, MAXPATHL as usize);
         if !add_pathsep(namebuff)
@@ -288,10 +287,10 @@ unsafe fn helptags_one(
     add_help_tags: bool,
     ignore_writeerr: bool,
 ) {
-    let namebuff = NameBuff.ptr().cast::<c_char>();
+    let mut glob = [0 as c_char; MAXPATHL as usize];
+    let namebuff = glob.as_mut_ptr();
     // Find all the help files: "<dir>/**/*<ext>".
-    // SAFETY: `NameBuff` is the shared path scratch buffer, and this owns it
-    // until `gen_expand_wildcards` has read the glob back out.
+    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below.
     let (dirlen, files) = unsafe {
         let dirlen = xstrlcpy(namebuff, dir, MAXPATHL as usize);
         if dirlen >= MAXPATHL as usize
@@ -398,9 +397,10 @@ unsafe fn helptags_one(
 /// # Safety
 /// `fd` is open for reading and `fname` NUL-terminated. Uses `IObuff`.
 unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mut c_char>) {
-    let iobuff = IObuff.ptr().cast::<c_char>();
+    let mut line = [0 as c_char; IOSIZE as usize];
+    let iobuff = line.as_mut_ptr();
     let mut in_example = false;
-    // SAFETY: `vim_fgets` NUL-terminates `IObuff` within `IOSIZE` bytes, and
+    // SAFETY: `vim_fgets` NUL-terminates `line` within `IOSIZE` bytes, and
     // every pointer below stays between its start and that NUL.
     unsafe {
         while !vim_fgets(iobuff, IOSIZE, fd) && !got_int.get() {
@@ -484,7 +484,8 @@ fn is_lower(c: c_char) -> bool {
 /// Every entry is a NUL-terminated `"<tag>\t<file>"` line; `dir` is
 /// NUL-terminated.
 unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
-    let namebuff = NameBuff.ptr().cast::<c_char>();
+    let mut path = [0 as c_char; MAXPATHL as usize];
+    let namebuff = path.as_mut_ptr();
     // SAFETY: caller contract. The tab is restored before returning, so the
     // entry is still a whole line for the writer below.
     unsafe {

@@ -777,6 +777,9 @@ impl DoTag {
     /// # Safety
     /// `name` must be NUL-terminated and the globals live.
     unsafe fn jump(&mut self, name: *mut c_char) -> bool {
+        // `v:swapcommand` is read by a SwapExists autocommand, which can
+        // format anything it likes; the text is this frame's.
+        let mut swapcmd = [0 as c_char; IOSIZE as usize];
         // SAFETY: the caller's promise.
         unsafe {
             // Only when about to try the next match: otherwise E429 below
@@ -795,16 +798,12 @@ impl DoTag {
 
             // Let the SwapExists event know what tag is being jumped to.
             let len = vim_snprintf_safelen(
-                IObuff.ptr().cast::<c_char>(),
+                swapcmd.as_mut_ptr(),
                 IOSIZE as size_t,
                 c":ta %s\r".as_ptr(),
                 name,
             );
-            set_vim_var_string(
-                Vv::Swapcommand,
-                IObuff.ptr().cast::<c_char>(),
-                len as ptrdiff_t,
-            );
+            set_vim_var_string(Vv::Swapcommand, swapcmd.as_ptr(), len as ptrdiff_t);
             let result = jumpto_tag(entry, self.forceit, true);
             set_vim_var_string(Vv::Swapcommand, ptr::null(), -1);
 
@@ -849,6 +848,7 @@ impl DoTag {
     /// # Safety
     /// The globals must be live.
     unsafe fn report_count(&self, ignored_case: bool) {
+        let mut report = [0 as c_char; IOSIZE as usize];
         let found = num_matches.get();
         if self.selecting()
             || self.kind == DT_TAG as c_int
@@ -857,10 +857,10 @@ impl DoTag {
         {
             return;
         }
-        // SAFETY: the caller's promise; `IObuff` is `IOSIZE` bytes and
+        // SAFETY: the caller's promise; `report` is `IOSIZE` bytes and
         // both writes are bounded by it.
         unsafe {
-            let buf = IObuff.ptr().cast::<c_char>();
+            let buf = report.as_mut_ptr();
             snprintf(
                 buf,
                 IOSIZE as size_t,

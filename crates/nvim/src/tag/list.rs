@@ -153,10 +153,11 @@ unsafe fn print_entry_head(
     current: bool,
     taglen: c_int,
 ) {
+    let mut head = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller's promise. The number and priority are formatted
-    // into `IObuff`, which truncates them where upstream truncates them.
+    // into `head`, which truncates them where upstream truncates them.
     unsafe {
-        let buf = IObuff.ptr().cast::<c_char>();
+        let buf = head.as_mut_ptr();
         *buf = if current { b'>' } else { b' ' } as c_char;
         vim_snprintf(
             buf.add(1),
@@ -355,6 +356,8 @@ pub(crate) unsafe fn add_llist_tags(
     num_matches: c_int,
     matches: *mut *mut c_char,
 ) -> c_int {
+    // The list's title outlives `set_errorlist`, so it is this frame's.
+    let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller's promise; each match outlives the `TagParts`
     // taken from it, and the list is handed to `set_errorlist` before it
     // is freed.
@@ -406,7 +409,7 @@ pub(crate) unsafe fn add_llist_tags(
         }
 
         vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
+            title.as_mut_ptr(),
             IOSIZE as size_t,
             c"ltag %s".as_ptr(),
             tag,
@@ -416,7 +419,7 @@ pub(crate) unsafe fn add_llist_tags(
             curwin.get(),
             list,
             ' ' as c_int,
-            IObuff.ptr().cast::<c_char>(),
+            title.as_mut_ptr(),
             ptr::null_mut(),
         );
         tv_list_free(list);
