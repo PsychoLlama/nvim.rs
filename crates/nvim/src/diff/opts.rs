@@ -118,7 +118,7 @@ pub(crate) unsafe fn parse_diffanchors(
             }
             curbuf.set(buf);
             curwin.set(bufwin);
-            let mut errormsg = ::core::ptr::null::<c_char>();
+            let mut errormsg = None;
             let lnum = get_address(
                 ::core::ptr::null_mut(),
                 &raw mut dia,
@@ -127,12 +127,12 @@ pub(crate) unsafe fn parse_diffanchors(
                 true,
                 0,
                 1,
-                &raw mut errormsg,
+                &mut errormsg,
             );
             curbuf.set(orig_curbuf);
             curwin.set(orig_curwin);
-            if !errormsg.is_null() {
-                emsg(errormsg);
+            if let Some(msg) = &errormsg {
+                emsg(msg.as_ptr());
             }
             if dia.is_null() {
                 return FAIL;

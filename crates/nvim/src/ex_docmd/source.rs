@@ -7,29 +7,30 @@ use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::smsg_c;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::buffer::buf_get_changedtick;
 use crate::clipboard::{end_batch_changes, start_batch_changes};
+use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
-    ex_pressedreturn, loop_cookie, wcmd_T,
+    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_pressedreturn,
+    loop_cookie, wcmd_T,
 };
 use crate::ex_eval::discard_current_exception;
 use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
-    IObuff, KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf,
-    current_exception, curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint,
-    ex_normal_busy, exiting, exmode_active, force_abort, global_busy, got_int, lines_left, msg_col,
-    msg_row, msg_scroll, msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow,
-    trylevel,
+    KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf, current_exception,
+    curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint, ex_normal_busy,
+    exiting, exmode_active, force_abort, global_busy, got_int, lines_left, msg_col, msg_row,
+    msg_scroll, msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
@@ -232,13 +233,14 @@ pub unsafe fn handle_did_throw() {
         match exception.type_0 as c_uint {
             0 => {
                 // ET_USER
+                let mut buf = [0 as c_char; IOSIZE as usize];
                 vim_snprintf(
-                    IObuff.ptr() as *mut c_char,
+                    buf.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"E605: Exception not caught: %s".as_ptr()),
                     exception.value,
                 );
-                reported = xstrdup(IObuff.ptr() as *mut c_char);
+                reported = xstrdup(buf.as_ptr());
             }
             1 => {
                 // ET_ERROR: take the messages, so that discarding the
@@ -254,8 +256,6 @@ pub unsafe fn handle_did_throw() {
         // caught.
         estack_push(ETYPE_EXCEPT, exception.throw_name, exception.throw_lnum);
         exception.throw_name = ptr::null_mut();
-        // Uses IObuff when 'verbose' is set, so it must come after the
-        // E605 text has been copied out of it.
         discard_current_exception();
 
         // `:silent!` makes even an uncaught exception non-fatal.
@@ -381,18 +381,35 @@ unsafe fn unwrap_loop_getter(
     }
 }
 
-/// Format an error message with its argument, into a buffer only the last
-/// error occupies.
-pub unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> *mut c_char {
-    unsafe {
-        vim_snprintf(
-            ex_error_buf.ptr() as *mut c_char,
-            MSG_BUF_LEN as size_t,
-            gettext(msg_0),
-            arg,
-        );
-        ex_error_buf.ptr() as *mut c_char
-    }
+/// A translated message, copied into an owned Ex-command error message.
+///
+/// Every producer of an `exarg_T::errmsg` — and of the `errormsg`
+/// out-parameter the parser threads — answers a buffer of its own, so that
+/// raising a second error before the first is reported cannot overwrite it.
+/// Upstream shared two static buffers here (`IObuff` and `ex_error_buf`)
+/// and `emsg` runs autocommands, so the overwrite was reachable.
+///
+/// # Safety
+///
+/// `msg` must be NUL-terminated.
+pub(crate) unsafe fn ex_msg(msg: *const c_char) -> CString {
+    // SAFETY: the caller's NUL-terminated message; `gettext` answers it or
+    // a translation of it, equally NUL-terminated.
+    unsafe { CStr::from_ptr(gettext(msg)) }.to_owned()
+}
+
+/// [`ex_msg`] for a message with one `%s` in it.
+///
+/// # Safety
+///
+/// `msg_0` must be a NUL-terminated format taking one `%s`, and `arg` a
+/// NUL-terminated string.
+pub(crate) unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CString {
+    let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
+    let size = MSG_BUF_LEN as size_t;
+    // SAFETY: the caller's format and argument, and the whole of `buf`.
+    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg_0), arg) };
+    cstr::in_chars(&buf).to_owned()
 }
 
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.

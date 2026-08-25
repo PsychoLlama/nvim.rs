@@ -12,8 +12,8 @@ use crate::buffer::do_modelines;
 use crate::charset::skipwhite;
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
-    cmdmod_split, cmdmod_tab, filetype_detect, filetype_indent, filetype_plugin, kOptValTypeString,
-    kRetNilBool,
+    cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent, filetype_plugin,
+    kOptValTypeString, kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
@@ -39,7 +39,7 @@ pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
         if secure.get() != 0 {
             // 2 means "an error was already reported for this".
             secure.set(2);
-            (*eap).errmsg = gettext(&raw const e_curdir as *const c_char);
+            (*eap).errmsg = Some(ex_msg(e_curdir.as_ptr()));
         } else if (*eap).cmdidx as c_int == CMD_autocmd as c_int {
             do_autocmd(eap, (*eap).arg, (*eap).forceit);
         } else {

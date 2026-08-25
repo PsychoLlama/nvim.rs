@@ -15,6 +15,7 @@
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{bt_quickfix, get_highest_fnum};
@@ -25,7 +26,7 @@ use crate::ex_docmd::scan::skip_colon_white;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors,
-    e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
+    e_norange, ex_msg, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
 use crate::fold::has_folding;
 use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
@@ -282,7 +283,7 @@ pub(crate) unsafe fn find_excmd_after_range(eap: *mut exarg_T) -> *mut c_char {
 /// from here" however the first address was spelled.
 pub unsafe fn parse_cmd_address(
     eap: *mut exarg_T,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
     silent: bool,
 ) -> c_int {
     unsafe {
@@ -324,7 +325,7 @@ pub unsafe fn parse_cmd_address(
                     ea.addr_count += 1;
                 } else if *ea.cmd as c_int == '*' as c_int {
                     if ea.addr_type != CmdAddr::Lines {
-                        *errormsg = gettext(&raw const e_invrange as *const c_char);
+                        *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                         break 'theend;
                     }
                     ea.cmd = ea.cmd.add(1);
@@ -383,7 +384,7 @@ pub unsafe fn parse_cmd_address(
 
 /// Fill in the range `%` means for this address kind. Answers false when
 /// the kind has no "all", having reported why.
-unsafe fn whole_range(eap: *mut exarg_T, errormsg: *mut *const c_char) -> bool {
+unsafe fn whole_range(eap: *mut exarg_T, errormsg: &mut Option<CString>) -> bool {
     let ea = unsafe { &mut *eap };
     unsafe {
         match ea.addr_type {
@@ -404,7 +405,7 @@ unsafe fn whole_range(eap: *mut exarg_T, errormsg: *mut *const c_char) -> bool {
                 // Only a *user* command may say `%` over windows or tab
                 // pages; a builtin one would not know what to do with it.
                 if (ea.cmdidx as c_int) >= 0 {
-                    *errormsg = gettext(&raw const e_invrange as *const c_char);
+                    *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     return false;
                 }
                 ea.line1 = 1;
@@ -415,7 +416,7 @@ unsafe fn whole_range(eap: *mut exarg_T, errormsg: *mut *const c_char) -> bool {
                 };
             }
             CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-                *errormsg = gettext(&raw const e_invrange as *const c_char);
+                *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 return false;
             }
             CmdAddr::Arguments => {
@@ -491,12 +492,12 @@ pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_
 }
 
 /// E493 or E481, depending on whether the command takes a range at all.
-pub(crate) unsafe fn addr_error(addr_type: CmdAddr) -> *const c_char {
+pub(crate) unsafe fn addr_error(addr_type: CmdAddr) -> CString {
     unsafe {
         if addr_type == CmdAddr::NoRange {
-            gettext(&raw const e_norange as *const c_char)
+            ex_msg(e_norange.as_ptr())
         } else {
-            gettext(&raw const e_invrange as *const c_char)
+            ex_msg(e_invrange.as_ptr())
         }
     }
 }
@@ -515,7 +516,7 @@ pub unsafe fn get_address(
     silent: bool,
     to_other_file: c_int,
     address_count: c_int,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
 ) -> linenr_T {
     unsafe {
         let mut cmd: *mut c_char = skipwhite(*ptr);
@@ -539,7 +540,7 @@ pub unsafe fn get_address(
                         Addr::At(n) => lnum = n,
                         Addr::Unchanged => {}
                         Addr::Refused => {
-                            *errormsg = addr_error(addr_type);
+                            *errormsg = Some(addr_error(addr_type));
                             cmd = ptr::null_mut();
                             break;
                         }
@@ -552,7 +553,7 @@ pub unsafe fn get_address(
                         break;
                     }
                     if addr_type != CmdAddr::Lines {
-                        *errormsg = addr_error(addr_type);
+                        *errormsg = Some(addr_error(addr_type));
                         cmd = ptr::null_mut();
                         break;
                     }
@@ -591,7 +592,7 @@ pub unsafe fn get_address(
                     cmd = cmd.add(1);
                     let c = c as c_int;
                     if addr_type != CmdAddr::Lines {
-                        *errormsg = addr_error(addr_type);
+                        *errormsg = Some(addr_error(addr_type));
                         cmd = ptr::null_mut();
                         break;
                     }
@@ -645,7 +646,7 @@ pub unsafe fn get_address(
                     // the last substitute pattern.
                     cmd = cmd.add(1);
                     if addr_type != CmdAddr::Lines {
-                        *errormsg = addr_error(addr_type);
+                        *errormsg = Some(addr_error(addr_type));
                         cmd = ptr::null_mut();
                         break;
                     }
@@ -654,7 +655,7 @@ pub unsafe fn get_address(
                     } else if *cmd as c_int == '?' as c_int || *cmd as c_int == '/' as c_int {
                         RE_SEARCH as c_int
                     } else {
-                        *errormsg = gettext(&raw const e_backslash as *const c_char);
+                        *errormsg = Some(ex_msg(e_backslash.as_ptr()));
                         cmd = ptr::null_mut();
                         break;
                     };
@@ -730,14 +731,14 @@ pub unsafe fn get_address(
                 } else {
                     let n = getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) as linenr_T;
                     if n == MAXLNUM as linenr_T {
-                        *errormsg = gettext(&raw const e_line_number_out_of_range as *const c_char);
+                        *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                         cmd = ptr::null_mut();
                         break 'error;
                     }
                     n
                 };
                 if addr_type == CmdAddr::TabsRelative {
-                    *errormsg = gettext(&raw const e_invrange as *const c_char);
+                    *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;
                 } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
@@ -756,7 +757,7 @@ pub unsafe fn get_address(
                     if i == '-' as c_int {
                         lnum -= n;
                     } else if lnum >= 0 && n >= INT32_MAX as linenr_T - lnum {
-                        *errormsg = gettext(&raw const e_line_number_out_of_range as *const c_char);
+                        *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                         cmd = ptr::null_mut();
                         break 'error;
                     } else {
@@ -848,15 +849,15 @@ unsafe fn offset_base(eap: *mut exarg_T, addr_type: CmdAddr) -> Addr {
 
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
-pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
+pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
     unsafe {
         let ea = &mut *eap;
-        let invrange = || gettext(&raw const e_invrange as *const c_char);
+        let invrange = || Some(ex_msg(e_invrange.as_ptr()));
         if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
             return invrange();
         }
         if !ea.argt.has(ExArgt::RANGE) {
-            return ptr::null_mut();
+            return None;
         }
         match ea.addr_type {
             CmdAddr::Lines => {
@@ -920,7 +921,7 @@ pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
                     // "no errors" reads better than "invalid range" when
                     // the user did not ask for a particular entry.
                     if ea.addr_count == 0 {
-                        return gettext(&raw const e_no_errors as *const c_char);
+                        return Some(ex_msg(e_no_errors.as_ptr()));
                     }
                     return invrange();
                 }
@@ -933,7 +934,7 @@ pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
             }
             _ => {}
         }
-        ptr::null_mut()
+        None
     }
 }
 

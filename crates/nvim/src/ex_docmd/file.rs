@@ -100,7 +100,7 @@ pub(crate) unsafe fn do_exbuffer(eap: *mut exarg_T) {
         // The buffer was already resolved from the argument by
         // `execute_cmd0`'s `ExArgt::BUFNAME` handling, so anything left is junk.
         if *(*eap).arg != 0 {
-            (*eap).errmsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, (*eap).arg);
+            (*eap).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), (*eap).arg));
             return;
         }
         if (*eap).addr_count == 0 {

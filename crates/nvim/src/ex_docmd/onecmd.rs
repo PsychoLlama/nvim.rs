@@ -12,11 +12,13 @@
 //! and unwinds the command modifiers. That is what the `'doend` block is.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
@@ -38,18 +40,18 @@ use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
     CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES, cmdnames,
-    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
-    quitmore,
+    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, ex_msg,
+    exmode_plus, quitmore,
 };
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
 use crate::fold::has_folding;
 use crate::input::ask_yesno;
 use crate::main::{
-    IObuff, check_cstack, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax, did_throw,
-    do_profiling, e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange,
-    e_sandbox, e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy, got_int,
-    msg_silent, need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
+    check_cstack, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax, did_throw, do_profiling,
+    e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
+    e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy, got_int, msg_silent,
+    need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
 };
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrlcat, xstrlcpy};
@@ -187,7 +189,7 @@ pub(crate) unsafe fn do_one_cmd(
     cookie: *mut c_void,
 ) -> *mut c_char {
     unsafe {
-        let mut errormsg: *const c_char = ptr::null();
+        let mut errormsg: Option<CString> = None;
         let save_reg_executing = reg_executing.get();
         let save_pending_end_reg_executing = pending_end_reg_executing.get();
         let mut ea = fresh_exarg();
@@ -222,7 +224,7 @@ pub(crate) unsafe fn do_one_cmd(
             ea.cookie = cookie;
             ea.cstack = cstack;
 
-            if mods.parse(&raw mut ea, &raw mut errormsg) == FAIL {
+            if mods.parse(&raw mut ea, &mut errormsg) == FAIL {
                 break 'doend;
             }
             mods.apply();
@@ -253,7 +255,7 @@ pub(crate) unsafe fn do_one_cmd(
             }
 
             set_cmd_addr_type(&raw mut ea, p);
-            if parse_cmd_address(&raw mut ea, &raw mut errormsg, false) == FAIL {
+            if parse_cmd_address(&raw mut ea, &mut errormsg, false) == FAIL {
                 break 'doend;
             }
 
@@ -267,7 +269,7 @@ pub(crate) unsafe fn do_one_cmd(
                 !ea.nextcmd.is_null()
             } {
                 if ea.skip == 0 {
-                    debug_assert!(errormsg.is_null());
+                    debug_assert!(errormsg.is_none());
                     errormsg = ex_range_without_command(&raw mut ea);
                 }
                 break 'doend;
@@ -301,18 +303,13 @@ pub(crate) unsafe fn do_one_cmd(
 
             if p.is_null() {
                 if ea.skip == 0 {
-                    errormsg = gettext(e_ambiguous_use_of_user_defined_command.as_ptr());
+                    errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
                 }
                 break 'doend;
             }
 
             if ea.cmdidx as c_int == CMD_SIZE as c_int {
                 if ea.skip == 0 {
-                    xstrlcpy(
-                        IObuff.ptr() as *mut c_char,
-                        gettext(e_not_an_editor_command.as_ptr()),
-                        IOSIZE as size_t,
-                    );
                     // The modifiers parsed, so the error is in what follows
                     // them.
                     let cmdname = if after_modifier.is_null() {
@@ -320,10 +317,13 @@ pub(crate) unsafe fn do_one_cmd(
                     } else {
                         after_modifier
                     };
-                    if !flags.has(DoCmdOpts::VERBOSE) {
-                        append_command(cmdname);
-                    }
-                    errormsg = IObuff.ptr() as *mut c_char;
+                    let msg = ex_msg(e_not_an_editor_command.as_ptr());
+                    errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
+                        // The whole line is appended below instead.
+                        msg
+                    } else {
+                        append_command(&msg, cmdname)
+                    });
                     did_emsg_syntax.set(true);
                     verify_command(cmdname);
                 }
@@ -342,7 +342,7 @@ pub(crate) unsafe fn do_one_cmd(
 
             if ea.skip == 0 {
                 if let Some(msg) = refuses_here(&ea) {
-                    errormsg = msg;
+                    errormsg = Some(msg);
                     break 'doend;
                 }
                 // `curbuf->b_ro_locked` forbids editing another buffer.
@@ -358,13 +358,13 @@ pub(crate) unsafe fn do_one_cmd(
                     break 'doend;
                 }
                 if !ni && !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-                    errormsg = gettext(&raw const e_norange as *const c_char);
+                    errormsg = Some(ex_msg(e_norange.as_ptr()));
                     break 'doend;
                 }
             }
 
             if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
-                errormsg = gettext(&raw const e_nobang as *const c_char);
+                errormsg = Some(ex_msg(e_nobang.as_ptr()));
                 break 'doend;
             }
 
@@ -377,7 +377,7 @@ pub(crate) unsafe fn do_one_cmd(
                 if global_busy.get() == 0 && ea.line1 > ea.line2 {
                     if msg_silent.get() == 0 {
                         if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
-                            errormsg = gettext(c"E493: Backwards range given".as_ptr());
+                            errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
                             break 'doend;
                         }
                         if ask_yesno(gettext(c"Backwards range given, OK to swap".as_ptr()))
@@ -389,7 +389,7 @@ pub(crate) unsafe fn do_one_cmd(
                     core::mem::swap(&mut ea.line1, &mut ea.line2);
                 }
                 errormsg = invalid_range(&raw mut ea);
-                if !errormsg.is_null() {
+                if errormsg.is_some() {
                     break 'doend;
                 }
             }
@@ -436,7 +436,7 @@ pub(crate) unsafe fn do_one_cmd(
                     && *ea.arg.add(1) as c_int == '+' as c_int
                 {
                     if getargopt(&raw mut ea) == FAIL && !ni {
-                        errormsg = gettext(&raw const e_invarg as *const c_char);
+                        errormsg = Some(ex_msg(e_invarg.as_ptr()));
                         break 'doend;
                     }
                 }
@@ -447,7 +447,7 @@ pub(crate) unsafe fn do_one_cmd(
                 if *ea.arg as c_int == '>' as c_int {
                     ea.arg = ea.arg.add(1);
                     if *ea.arg as c_int != '>' as c_int {
-                        errormsg = gettext(c"E494: Use w or w>>".as_ptr());
+                        errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
                         break 'doend;
                     }
                     ea.arg = skipwhite(ea.arg.add(1));
@@ -519,7 +519,7 @@ pub(crate) unsafe fn do_one_cmd(
             }
 
             parse_register(&raw mut ea);
-            if parse_count(&raw mut ea, &raw mut errormsg, true) == FAIL {
+            if parse_count(&raw mut ea, &mut errormsg, true) == FAIL {
                 break 'doend;
             }
 
@@ -532,11 +532,11 @@ pub(crate) unsafe fn do_one_cmd(
                 && *ea.arg as c_int != '"' as c_int
                 && (*ea.arg as c_int != '|' as c_int || !ea.argt.has(ExArgt::TRLBAR))
             {
-                errormsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, ea.arg);
+                errormsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), ea.arg));
                 break 'doend;
             }
             if !ni && ea.argt.has(ExArgt::NEEDARG) && *ea.arg as c_int == NUL {
-                errormsg = gettext(&raw const e_argreq as *const c_char);
+                errormsg = Some(ex_msg(e_argreq.as_ptr()));
                 break 'doend;
             }
 
@@ -545,7 +545,7 @@ pub(crate) unsafe fn do_one_cmd(
             }
 
             let mut retv: c_int = 0;
-            if execute_cmd0(&raw mut retv, &raw mut ea, &raw mut errormsg, false) == FAIL {
+            if execute_cmd0(&raw mut retv, &raw mut ea, &mut errormsg, false) == FAIL {
                 break 'doend;
             }
 
@@ -573,15 +573,16 @@ pub(crate) unsafe fn do_one_cmd(
             (*curwin.get()).w_cursor.col = 0;
         }
 
-        if !errormsg.is_null() && *errormsg as c_int != NUL && did_emsg.get() == 0 {
-            if flags.has(DoCmdOpts::VERBOSE) {
-                if errormsg != IObuff.ptr() as *const c_char {
-                    xstrlcpy(IObuff.ptr() as *mut c_char, errormsg, IOSIZE as size_t);
-                    errormsg = IObuff.ptr() as *mut c_char;
-                }
-                append_command(*ea.cmdlinep);
-            }
-            emsg(errormsg);
+        if let Some(msg) = errormsg
+            && !msg.is_empty()
+            && did_emsg.get() == 0
+        {
+            let msg = if flags.has(DoCmdOpts::VERBOSE) {
+                append_command(&msg, *ea.cmdlinep)
+            } else {
+                msg
+            };
+            emsg(msg.as_ptr());
         }
         do_errthrow(
             cstack,
@@ -681,10 +682,10 @@ pub(crate) unsafe fn profile_cmd(
 /// The three "this command is not allowed here" checks that share an exit.
 ///
 /// Answers the message to report, or `None` when the command may run.
-unsafe fn refuses_here(ea: &exarg_T) -> Option<*const c_char> {
+unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
     unsafe {
         if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
-            return Some(gettext(&raw const e_sandbox as *const c_char));
+            return Some(ex_msg(e_sandbox.as_ptr()));
         }
         // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
         if (*curbuf.get()).b_p_ma == 0
@@ -693,14 +694,14 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<*const c_char> {
                 && (ea.cmdidx as c_int == CMD_put as c_int
                     || ea.cmdidx as c_int == CMD_iput as c_int))
         {
-            return Some(gettext(&raw const e_modifiable as *const c_char));
+            return Some(ex_msg(e_modifiable.as_ptr()));
         }
         if !is_user_cmd(ea.cmdidx) {
             if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
-                return Some(gettext(&raw const e_cmdwin as *const c_char));
+                return Some(ex_msg(e_cmdwin.as_ptr()));
             }
             if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
-                return Some(gettext(get_text_locked_msg()));
+                return Some(ex_msg(get_text_locked_msg()));
             }
         }
         None
@@ -714,24 +715,24 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<*const c_char> {
 /// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
 /// mode substitutes for a bare `+`; it is recognised by *address*, not by
 /// content.
-pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> *mut c_char {
+pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> Option<CString> {
     unsafe {
         let ea = &mut *eap;
-        let mut errormsg: *mut c_char = ptr::null_mut();
+        let mut errormsg: Option<CString> = None;
         if *ea.cmd as c_int == '|' as c_int
             || (exmode_active.get() && !ptr::eq(ea.cmd, exmode_plus.as_ptr().add(1)))
         {
             ea.cmdidx = CMD_print;
             ea.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
             errormsg = invalid_range(eap);
-            if errormsg.is_null() {
+            if errormsg.is_none() {
                 correct_range(eap);
                 ex_print(eap);
             }
         } else if ea.addr_count != 0 {
             ea.line2 = ea.line2.min((*curbuf.get()).b_ml.ml_line_count);
             if ea.line2 < 0 {
-                errormsg = gettext(&raw const e_invrange as *const c_char);
+                errormsg = Some(ex_msg(e_invrange.as_ptr()));
             } else {
                 // Line 0 is not a position; the cursor goes to line 1.
                 (*curwin.get()).w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
@@ -742,14 +743,20 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> *mut c_char 
     }
 }
 
-/// Append `cmd` to the error message already in `IObuff`.
+/// `msg`, with `cmd` appended after a colon: the "…: :bogus" form a
+/// command-line error takes.
+///
+/// The result is capped at `IOSIZE` bytes, with the message elided to `...`
+/// where it alone fills the buffer.
 ///
 /// Truncates to fit, and spells U+00A0 as `<a0>` — it is white space that
 /// would otherwise be invisible in the report, and it is a common paste
 /// accident.
-pub(crate) unsafe fn append_command(cmd: *const c_char) {
+pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
+    let mut buf = [0 as c_char; IOSIZE as usize];
     unsafe {
-        let iobuff = IObuff.ptr() as *mut c_char;
+        let iobuff = buf.as_mut_ptr();
+        xstrlcpy(iobuff, msg.as_ptr(), IOSIZE as size_t);
         let len = strlen(iobuff);
         if len > (IOSIZE - 100) as size_t {
             let mut d = iobuff.add(IOSIZE as usize - 100);
@@ -774,7 +781,11 @@ pub(crate) unsafe fn append_command(cmd: *const c_char) {
         }
         *d = NUL as c_char;
     }
+    cstr::in_chars(&buf).to_owned()
 }
+
+/// What [`ex_ni`] and [`ex_script_ni`] report.
+const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this version";
 
 /// The handler every command this build does not implement runs.
 ///
@@ -783,7 +794,7 @@ pub(crate) unsafe fn append_command(cmd: *const c_char) {
 pub unsafe fn ex_ni(eap: *mut exarg_T) {
     unsafe {
         if (*eap).skip == 0 {
-            (*eap).errmsg = gettext(c"E319: The command is not available in this version".as_ptr());
+            (*eap).errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
         }
     }
 }

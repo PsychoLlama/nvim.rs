@@ -99,7 +99,7 @@ pub unsafe fn parse_pattern_and_range(
 ) -> bool {
     unsafe {
         let mut delim_optional = false;
-        let mut dummy: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+        let mut dummy = None;
         let mut magic: magic_T = 0;
 
         *skiplen = 0;
@@ -119,7 +119,7 @@ pub unsafe fn parse_pattern_and_range(
 
         // Uninitialised in the C; `parse_command_modifiers` only writes it.
         let mut dummy_cmdmod = cmdmod_T::default();
-        parse_command_modifiers(&raw mut ea, &raw mut dummy, &mut dummy_cmdmod, true);
+        parse_command_modifiers(&raw mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
         // Skip over the range to find the command.
         let cmd = skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>());
@@ -239,7 +239,7 @@ pub unsafe fn parse_pattern_and_range(
         let save_cursor = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor = incsearch_start;
 
-        parse_cmd_address(&raw mut ea, &raw mut dummy, true);
+        parse_cmd_address(&raw mut ea, &mut dummy, true);
 
         if ea.addr_count > 0 {
             // Allow for a reverse match.

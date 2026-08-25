@@ -269,7 +269,13 @@ pub struct exarg {
     pub force_enc: ::core::ffi::c_int,
     pub bad_char: ::core::ffi::c_int,
     pub useridx: ::core::ffi::c_int,
-    pub errmsg: *mut ::core::ffi::c_char,
+    /// Why the command failed, owned by whoever raised it.
+    ///
+    /// Upstream threads a `char *` here that may point at a static string
+    /// or at one of two shared static buffers, so a second error assembled
+    /// before the first was reported overwrote it. Owning the text removes
+    /// the sharing.
+    pub errmsg: Option<::std::ffi::CString>,
     pub ea_getline: LineGetter,
     pub cookie: *mut ::core::ffi::c_void,
     pub cstack: *mut cstack_T,
@@ -310,7 +316,7 @@ impl Default for exarg {
             force_enc: 0,
             bad_char: 0,
             useridx: 0,
-            errmsg: ::core::ptr::null_mut(),
+            errmsg: None,
             ea_getline: None,
             cookie: ::core::ptr::null_mut(),
             cstack: ::core::ptr::null_mut(),

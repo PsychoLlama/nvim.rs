@@ -11,6 +11,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::ascii_iswhite;
 use crate::buffer::buflist_findpat;
@@ -20,6 +21,7 @@ use crate::ex_docmd::address::{
     correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
     set_cmd_dflall_range,
 };
+use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::filename::expand_filename;
 use crate::ex_docmd::lookup::is_user_cmd;
 use crate::ex_docmd::modifier::{
@@ -41,17 +43,16 @@ use crate::ex_getln::{
 use crate::fold::has_folding;
 use crate::guard::Suppress;
 use crate::main::{
-    IObuff, cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable,
-    e_nobang, e_norange, emsg_silent, global_busy,
+    cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang,
+    e_norange, emsg_silent, global_busy,
 };
-use crate::memory::xstrlcpy;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
-    CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, IOSIZE, NUL, OK,
-    cstack_T, exarg_T, linenr_T, pos_T, size_t,
+    CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, NUL, OK, cstack_T,
+    exarg_T, linenr_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
 use ::libc::{memset, strlen};
@@ -70,7 +71,7 @@ pub unsafe fn parse_cmdline(
     cmdline: *mut *mut c_char,
     eap: *mut exarg_T,
     cmdinfo: *mut CmdParseInfo,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
 ) -> bool {
     unsafe {
         let save_ex_pressedreturn = ex_pressedreturn.get();
@@ -98,7 +99,7 @@ pub unsafe fn parse_cmdline(
             // The command name says what kind of address the range counts in.
             let mut p = find_excmd_after_range(eap);
             if p.is_null() {
-                *errormsg = gettext(e_ambiguous_use_of_user_defined_command.as_ptr());
+                *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
                 break 'end;
             }
 
@@ -131,19 +132,14 @@ pub unsafe fn parse_cmdline(
             }
 
             if ea.cmdidx as c_int == CMD_SIZE as c_int {
-                xstrlcpy(
-                    IObuff.ptr() as *mut c_char,
-                    gettext(e_not_an_editor_command.as_ptr()),
-                    IOSIZE as size_t,
-                );
                 // The modifiers parsed, so the error is in what follows them.
                 let cmdname = if after_modifier.is_null() {
                     *cmdline
                 } else {
                     after_modifier
                 };
-                append_command(cmdname);
-                *errormsg = IObuff.ptr() as *mut c_char;
+                let msg = ex_msg(e_not_an_editor_command.as_ptr());
+                *errormsg = Some(append_command(&msg, cmdname));
                 break 'end;
             }
 
@@ -191,11 +187,11 @@ pub unsafe fn parse_cmdline(
             }
 
             if !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
-                *errormsg = gettext(&raw const e_nobang as *const c_char);
+                *errormsg = Some(ex_msg(e_nobang.as_ptr()));
                 break 'end;
             }
             if !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-                *errormsg = gettext(&raw const e_norange as *const c_char);
+                *errormsg = Some(ex_msg(e_norange.as_ptr()));
                 break 'end;
             }
             if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
@@ -239,7 +235,7 @@ pub unsafe fn parse_cmdline(
 pub(crate) unsafe fn execute_cmd0(
     retv: *mut c_int,
     eap: *mut exarg_T,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
     preview: bool,
 ) -> c_int {
     unsafe {
@@ -305,7 +301,7 @@ pub(crate) unsafe fn execute_cmd0(
         if is_user_cmd(ea.cmdidx) {
             *retv = do_ucmd(eap, preview);
         } else {
-            ea.errmsg = ptr::null_mut();
+            ea.errmsg = None;
             if preview {
                 *retv = cmdnames[ea.cmdidx as usize]
                     .cmd_preview_func
@@ -319,8 +315,8 @@ pub(crate) unsafe fn execute_cmd0(
                     .cmd_func
                     .expect("every command in the table has a handler")(eap);
             }
-            if !ea.errmsg.is_null() {
-                *errormsg = ea.errmsg;
+            if ea.errmsg.is_some() {
+                *errormsg = ea.errmsg.take();
             }
         }
 
@@ -344,7 +340,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             return retv;
         }
 
-        let mut errormsg: *const c_char = ptr::null();
+        let mut errormsg: Option<CString> = None;
         // Shallow both ways: the guard owns what the set it took out
         // points at until it goes back, and the caller keeps owning
         // `cmdinfo`.
@@ -359,16 +355,16 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                     && (ea.cmdidx as c_int == CMD_put as c_int
                         || ea.cmdidx as c_int == CMD_iput as c_int))
             {
-                errormsg = gettext(&raw const e_modifiable as *const c_char);
+                errormsg = Some(ex_msg(e_modifiable.as_ptr()));
                 break 'end;
             }
             if !is_user_cmd(ea.cmdidx) {
                 if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
-                    errormsg = gettext(&raw const e_cmdwin as *const c_char);
+                    errormsg = Some(ex_msg(e_cmdwin.as_ptr()));
                     break 'end;
                 }
                 if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
-                    errormsg = gettext(get_text_locked_msg());
+                    errormsg = Some(ex_msg(get_text_locked_msg()));
                     break 'end;
                 }
             }
@@ -401,7 +397,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 has_folding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
             }
 
-            if parse_count(eap, &raw mut errormsg, true) == FAIL {
+            if parse_count(eap, &mut errormsg, true) == FAIL {
                 break 'end;
             }
 
@@ -411,11 +407,13 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             cstack.cs_idx = -1;
             ea.cstack = &raw mut cstack;
 
-            execute_cmd0(&raw mut retv, eap, &raw mut errormsg, preview);
+            execute_cmd0(&raw mut retv, eap, &mut errormsg, preview);
         }
 
-        if !errormsg.is_null() && *errormsg as c_int != NUL {
-            emsg(errormsg);
+        if let Some(msg) = &errormsg
+            && !msg.is_empty()
+        {
+            emsg(msg.as_ptr());
         }
         drop(mods);
         do_cmdline_end();

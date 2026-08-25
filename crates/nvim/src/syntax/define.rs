@@ -79,10 +79,10 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
             || *(*eap).arg as c_int == '$' as c_int
             || path_is_absolute((*eap).arg);
         if source {
-            let mut errormsg = ::core::ptr::null::<c_char>();
-            if expand_filename(eap, syn_cmdlinep.get(), &raw mut errormsg) == FAIL {
-                if !errormsg.is_null() {
-                    emsg(errormsg);
+            let mut errormsg = None;
+            if expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) == FAIL {
+                if let Some(msg) = &errormsg {
+                    emsg(msg.as_ptr());
                 }
                 return;
             }

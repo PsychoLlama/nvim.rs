@@ -365,13 +365,12 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     /// afterwards.
     static IN_FLIGHT: GlobalCell<fmark_T> = GlobalCell::new(UNSET_FMARK);
 
-    let mut errormsg: *const c_char = ptr::null();
-    // SAFETY: the caller promised a live record or null, and the message is
-    // an out-parameter on this stack.
-    if !unsafe { mark_check(fm, &raw mut errormsg) } {
-        if !errormsg.is_null() {
-            // SAFETY: `mark_check` wrote a `'static` message.
-            unsafe { emsg(errormsg) };
+    let mut errormsg = None;
+    // SAFETY: the caller promised a live record or null.
+    if !unsafe { mark_check(fm, &mut errormsg) } {
+        if let Some(msg) = &errormsg {
+            // SAFETY: `mark_check`'s message, owned by this frame.
+            unsafe { emsg(msg.as_ptr()) };
         }
         return kMarkMoveFailed;
     }
@@ -391,10 +390,10 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
         // The mark's line was checked against the OLD buffer above; now that
         // the file is loaded, ask again against the real one.
         // SAFETY: `curbuf` is live and the record is the static.
-        if !unsafe { mark_check_line_bounds(Buf::current().raw(), fm, &raw mut errormsg) } {
-            if !errormsg.is_null() {
+        if !unsafe { mark_check_line_bounds(Buf::current().raw(), fm, &mut errormsg) } {
+            if let Some(msg) = &errormsg {
                 // SAFETY: as above.
-                unsafe { emsg(errormsg) };
+                unsafe { emsg(msg.as_ptr()) };
             }
             return res | kMarkMoveFailed;
         }

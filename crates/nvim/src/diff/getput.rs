@@ -54,7 +54,7 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
             force_enc: 0,
             bad_char: 0,
             useridx: 0,
-            errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            errmsg: None,
             ea_getline: None,
             cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
             cstack: ::core::ptr::null_mut(),

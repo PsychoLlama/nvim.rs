@@ -10,6 +10,7 @@ use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::{getdigits, skipwhite};
 use crate::cmdexpand::expand_generic;
 use crate::event::libuv::uv_strerror;
+use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::lookup::checkforcmd;
 use crate::ex_docmd::scan::skip_cmd_arg;
 use crate::ex_docmd::source::ex_errmsg;
@@ -275,7 +276,7 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
         };
         let last_tab = || current_tab_nr(ptr::null_mut());
         let invarg2 = |ea: &mut exarg_T| {
-            ea.errmsg = ex_errmsg(&raw const e_invarg2 as *const c_char, ea.arg);
+            ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
         };
 
         'theend: {
@@ -302,7 +303,7 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
                         tab_number = last_tab();
                     } else if strcmp(p, c"#".as_ptr()) == 0 {
                         if !valid_tabpage(lastused_tabpage.get()) {
-                            ea.errmsg = ex_errmsg(&raw const e_invargval as *const c_char, ea.arg);
+                            ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
                             tab_number = 0;
                             break 'theend;
                         }
@@ -346,7 +347,7 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
                 }
             } else if ea.addr_count > 0 {
                 if unaccept_arg0 != 0 && ea.line2 == 0 {
-                    ea.errmsg = gettext(&raw const e_invrange as *const c_char);
+                    ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                     tab_number = 0;
                 } else {
                     tab_number = ea.line2 as c_int;
@@ -366,7 +367,7 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
                         if *cmdp as c_int == '-' as c_int {
                             tab_number = tab_number.wrapping_sub(1);
                             if tab_number < unaccept_arg0 {
-                                ea.errmsg = gettext(&raw const e_invrange as *const c_char);
+                                ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                             }
                         }
                     }

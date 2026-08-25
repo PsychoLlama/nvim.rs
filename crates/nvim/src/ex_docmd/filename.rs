@@ -10,6 +10,7 @@
 use crate::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::arglist::arg_all;
 use crate::buffer::buflist_findnr;
@@ -106,11 +107,14 @@ pub unsafe fn replace_makeprg(
 
 /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
 /// argument, then expand wildcards if the command takes exactly one name.
-pub unsafe fn expand_filename(
+pub(crate) unsafe fn expand_filename(
     eap: *mut exarg_T,
     cmdlinep: *mut *mut c_char,
-    errormsgp: *mut *const c_char,
+    errormsgp: &mut Option<CString>,
 ) -> c_int {
+    // `eval_vars` answers a static message or the empty marker, never a
+    // shared buffer, so the copy below is the whole of what owning it costs.
+    let mut msg: *const c_char = ptr::null();
     unsafe {
         let ea = &mut *eap;
         // A `:vimgrep` pattern is not a file name, so the scan starts after
@@ -141,11 +145,12 @@ pub unsafe fn expand_filename(
                 ea.arg,
                 &raw mut srclen,
                 &raw mut ea.do_ecmd_lnum,
-                errormsgp,
+                &raw mut msg,
                 &raw mut escaped,
                 true,
             );
-            if !(*errormsgp).is_null() {
+            if !msg.is_null() {
+                *errormsgp = Some(CStr::from_ptr(msg).to_owned());
                 return FAIL;
             }
             if repl.is_null() {
@@ -400,15 +405,14 @@ pub unsafe fn eval_vars(
     escaped: *mut c_int,
     empty_is_error: bool,
 ) -> *mut c_char {
+    let mut result: *mut c_char = c"".as_ptr() as *mut c_char;
+    let mut resultbuf: *mut c_char = ptr::null_mut();
+    let mut resultlen: size_t;
+    let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
+    let mut tilde_file = false;
+    let mut skip_mod = false;
+    let mut strbuf: [c_char; 30] = [0; 30];
     unsafe {
-        let mut result: *mut c_char = c"".as_ptr() as *mut c_char;
-        let mut resultbuf: *mut c_char = ptr::null_mut();
-        let mut resultlen: size_t;
-        let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
-        let mut tilde_file = false;
-        let mut skip_mod = false;
-        let mut strbuf: [c_char; 30] = [0; 30];
-
         *errormsg = ptr::null();
         if !escaped.is_null() {
             *escaped = 0;

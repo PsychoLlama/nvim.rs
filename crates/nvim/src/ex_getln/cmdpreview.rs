@@ -366,7 +366,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // A copy of the command line, so `parse_cmdline` can modify it --
         // it advances this pointer, so it has to be the local itself.
         let mut cmdline = xstrdup(Cc::current().text());
-        let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+        let mut errormsg = None;
 
         // C's `goto end`: everything below happens only when the command line
         // parses *and* the command supports a preview.
@@ -378,7 +378,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
                 &raw mut cmdline,
                 &raw mut ea,
                 &raw mut cmdinfo,
-                &raw mut errormsg,
+                &mut errormsg,
             );
             drop(no_emsg);
             if !parsed {

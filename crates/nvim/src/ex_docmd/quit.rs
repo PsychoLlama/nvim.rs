@@ -389,7 +389,7 @@ pub(crate) unsafe fn ex_tabclose(eap: *mut exarg_T) {
             return;
         }
         let tab_number = get_tabpage_arg(eap);
-        if !(*eap).errmsg.is_null() {
+        if (*eap).errmsg.is_some() {
             return;
         }
         let tp = find_tabpage(tab_number);
@@ -420,7 +420,7 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
             return;
         }
         let tab_number = get_tabpage_arg(eap);
-        if !(*eap).errmsg.is_null() {
+        if (*eap).errmsg.is_some() {
             return;
         }
         goto_tabpage(tab_number);

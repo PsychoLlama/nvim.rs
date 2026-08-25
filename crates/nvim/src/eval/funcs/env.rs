@@ -204,14 +204,14 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         eap.cmdidx = CMD_USER;
         eap.addr_type = CmdAddr::Lines;
         eap.argt = ExArgt::NOSPC;
-        let mut errormsg: *const c_char = ptr::null();
+        let mut errormsg = None;
         let _no_emsg = quiet.then(Suppress::emsg);
-        if expand_filename(&raw mut eap, &raw mut cmdstr, &raw mut errormsg) == FAIL
+        if expand_filename(&raw mut eap, &raw mut cmdstr, &mut errormsg) == FAIL
             && !quiet
-            && !errormsg.is_null()
-            && *errormsg as c_int != NUL
+            && let Some(msg) = &errormsg
+            && !msg.is_empty()
         {
-            emsg(errormsg);
+            emsg(msg.as_ptr());
         }
         rettv.vval.v_string = cmdstr;
     }

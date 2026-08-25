@@ -639,7 +639,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
     force_enc: 0,
     bad_char: 0,
     useridx: 0,
-    errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    errmsg: None,
     ea_getline: None,
     cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     cstack: ::core::ptr::null_mut::<cstack_T>(),

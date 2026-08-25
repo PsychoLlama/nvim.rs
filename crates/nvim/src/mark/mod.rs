@@ -27,6 +27,7 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
 use crate::buffer::{bt_prompt, buflist_findnr, buflist_new};
 use crate::charset::{ptr2cells, vim_isprintc};
+use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
 use crate::main::{IObuff, NameBuff, e_markinval, e_marknotset, e_umark};
@@ -35,7 +36,7 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xstrlcpy};
 use crate::r#move::set_topline;
 use crate::options::kOptJopFlagStack;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::memmove;
 use crate::os::env::expand_env;
 use crate::os::fs::os_dirname;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
@@ -45,6 +46,7 @@ use crate::types::*;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 mod adjust;
 mod builtins;
@@ -532,12 +534,11 @@ unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buf: Buf) {
 /// Returns true if the mark passes all the above checks, else false.
 ///
 /// # Safety
-/// `fm` must be null or point at a live `fmark_T`, and `errormsg` at a live,
-/// writable pointer.
-pub unsafe fn mark_check(fm: *mut fmark_T, errormsg: *mut *const c_char) -> bool {
+/// `fm` must be null or point at a live `fmark_T`.
+pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>) -> bool {
     if fm.is_null() {
-        // SAFETY: the caller promised a writable out-parameter.
-        unsafe { *errormsg = gettext((&raw const e_umark).cast::<c_char>()) };
+        // SAFETY: a NUL-terminated message static.
+        *errormsg = Some(unsafe { ex_msg((&raw const e_umark).cast::<c_char>()) });
         return false;
     }
     // SAFETY: the caller promised a live record.
@@ -547,7 +548,7 @@ pub unsafe fn mark_check(fm: *mut fmark_T, errormsg: *mut *const c_char) -> bool
         // "not set", so it gets no message at all.
         if fm.lnum() == 0 {
             // SAFETY: as above.
-            unsafe { *errormsg = gettext((&raw const e_marknotset).cast::<c_char>()) };
+            *errormsg = Some(unsafe { ex_msg((&raw const e_marknotset).cast::<c_char>()) });
         }
         return false;
     }
@@ -566,12 +567,12 @@ pub unsafe fn mark_check(fm: *mut fmark_T, errormsg: *mut *const c_char) -> bool
 /// Returns true if below line count else false.
 ///
 /// # Safety
-/// `buf` must be null or a live buffer; `fm` must point at a live `fmark_T`
-/// and `errormsg` at a live, writable pointer.
-pub unsafe fn mark_check_line_bounds(
+/// `buf` must be null or a live buffer, and `fm` must point at a live
+/// `fmark_T`.
+pub(crate) unsafe fn mark_check_line_bounds(
     buf: *mut buf_T,
     fm: *mut fmark_T,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
 ) -> bool {
     // SAFETY: the caller promised a live buffer or null.
     let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
@@ -581,8 +582,8 @@ pub unsafe fn mark_check_line_bounds(
     if unsafe { Fmark::new(fm) }.lnum() <= buf.b_ml.ml_line_count {
         return true;
     }
-    // SAFETY: the caller promised a writable out-parameter.
-    unsafe { *errormsg = gettext((&raw const e_markinval).cast::<c_char>()) };
+    // SAFETY: a NUL-terminated message static.
+    *errormsg = Some(unsafe { ex_msg((&raw const e_markinval).cast::<c_char>()) });
     false
 }
 

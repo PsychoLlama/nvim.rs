@@ -49,6 +49,7 @@
 mod exception;
 mod trycmd;
 
+use crate::cstr;
 use crate::debugger::dbg_check_skipped;
 use crate::eval::typval::{tv_clear, tv_free};
 use crate::eval::{
@@ -69,6 +70,7 @@ use crate::types::{
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use flag::{
     CSF_ACTIVE, CSF_CAUGHT, CSF_ELSE, CSF_FINALLY, CSF_FINISHED, CSF_FOR, CSF_SILENT, CSF_TRUE,
@@ -155,11 +157,15 @@ const E_MULTIPLE_FINALLY: &CStr = c"E607: Multiple :finally";
 /// what keeps [`aborting`] answering the same thing throughout.
 static cause_abort: GlobalCell<bool> = GlobalCell::new(false);
 
-/// The address of a message constant, for `eap->errmsg` (which stores the
-/// pointer) and for the identity test in
+/// The address of a message constant, for the identity test in
 /// [`cause_errthrow`](exception::cause_errthrow).
 fn message<const N: usize>(msg: &'static [c_char; N]) -> *mut c_char {
     msg.as_ptr().cast_mut()
+}
+
+/// A message constant as an owned `eap->errmsg`.
+fn err_msg<const N: usize>(msg: &'static [c_char; N]) -> Option<CString> {
+    Some(cstr::in_chars(msg).to_owned())
 }
 
 /// The shared scratch buffer the exception reports format through.
@@ -265,7 +271,7 @@ pub(crate) unsafe fn ex_if(eap: *mut exarg_T) {
     unsafe {
         let cstack = (*eap).cstack;
         if (*cstack).cs_idx == CSTACK_LEN - 1 {
-            (*eap).errmsg = c"E579: :if nesting too deep".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E579: :if nesting too deep".to_owned());
             return;
         }
         (*cstack).cs_idx += 1;
@@ -299,7 +305,7 @@ pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
         if (*cstack).cs_idx < 0
             || (*cstack).cs_flags[(*cstack).cs_idx as usize] & (CSF_WHILE | CSF_FOR | CSF_TRY) != 0
         {
-            (*eap).errmsg = c"E580: :endif without :if".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E580: :endif without :if".to_owned());
             return;
         }
         // When debugging or at a breakpoint, show the prompt if it has not
@@ -329,24 +335,24 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
             || (*cstack).cs_flags[(*cstack).cs_idx as usize] & (CSF_WHILE | CSF_FOR | CSF_TRY) != 0
         {
             if (*eap).cmdidx == CMD_else {
-                (*eap).errmsg = c"E581: :else without :if".as_ptr().cast_mut();
+                (*eap).errmsg = Some(c"E581: :else without :if".to_owned());
                 return;
             }
-            (*eap).errmsg = c"E582: :elseif without :if".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E582: :elseif without :if".to_owned());
             skip = true;
         } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ELSE != 0 {
             if (*eap).cmdidx == CMD_else {
-                (*eap).errmsg = E_MULTIPLE_ELSE.as_ptr().cast_mut();
+                (*eap).errmsg = Some(E_MULTIPLE_ELSE.to_owned());
                 return;
             }
-            (*eap).errmsg = c"E584: :elseif after :else".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E584: :elseif after :else".to_owned());
             skip = true;
         }
 
         let idx = (*cstack).cs_idx as usize;
         // Skipping, or the ":if" was TRUE: reset ACTIVE. Otherwise set it.
         if skip || (*cstack).cs_flags[idx] & CSF_TRUE != 0 {
-            if (*eap).errmsg.is_null() {
+            if (*eap).errmsg.is_none() {
                 (*cstack).cs_flags[idx] = CSF_TRUE;
             }
             // Don't evaluate an ":elseif".
@@ -388,7 +394,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
         // `emsg` ignores the parsing error.
         if !skip && !error {
             (*cstack).cs_flags[idx] = if result { CSF_ACTIVE | CSF_TRUE } else { 0 };
-        } else if (*eap).errmsg.is_null() {
+        } else if (*eap).errmsg.is_none() {
             // Set TRUE, so this conditional never becomes active.
             (*cstack).cs_flags[idx] = CSF_TRUE;
         }
@@ -404,7 +410,7 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
     unsafe {
         let cstack = (*eap).cstack;
         if (*cstack).cs_idx == CSTACK_LEN - 1 {
-            (*eap).errmsg = c"E585: :while/:for nesting too deep".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E585: :while/:for nesting too deep".to_owned());
             return;
         }
 
@@ -497,9 +503,7 @@ pub(crate) unsafe fn ex_continue(eap: *mut exarg_T) {
     unsafe {
         let cstack = (*eap).cstack;
         if (*cstack).cs_looplevel <= 0 || (*cstack).cs_idx < 0 {
-            (*eap).errmsg = c"E586: :continue without :while or :for"
-                .as_ptr()
-                .cast_mut();
+            (*eap).errmsg = Some(c"E586: :continue without :while or :for".to_owned());
             return;
         }
         // Find the matching ":while". This may stop at a try conditional not
@@ -529,7 +533,7 @@ pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
     unsafe {
         let cstack = (*eap).cstack;
         if (*cstack).cs_looplevel <= 0 || (*cstack).cs_idx < 0 {
-            (*eap).errmsg = c"E587: :break without :while or :for".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E587: :break without :while or :for".to_owned());
             return;
         }
         // Deactivate conditionals until the matching ":while" or a try
@@ -553,9 +557,9 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
         let cstack = (*eap).cstack;
         let ending_while = (*eap).cmdidx == CMD_endwhile;
         let err = if ending_while {
-            message(&e_while)
+            err_msg(&e_while)
         } else {
-            message(&e_for)
+            err_msg(&e_for)
         };
         let csf = if ending_while { CSF_WHILE } else { CSF_FOR };
 
@@ -569,16 +573,16 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
             // In a ":while"/":for" but with the wrong endloop command: do
             // not rewind to the next enclosing one.
             if fl & CSF_WHILE != 0 {
-                (*eap).errmsg = c"E732: Using :endfor with :while".as_ptr().cast_mut();
+                (*eap).errmsg = Some(c"E732: Using :endfor with :while".to_owned());
             } else if fl & CSF_FOR != 0 {
-                (*eap).errmsg = c"E733: Using :endwhile with :for".as_ptr().cast_mut();
+                (*eap).errmsg = Some(c"E733: Using :endwhile with :for".to_owned());
             }
         }
         if fl & (CSF_WHILE | CSF_FOR) == 0 {
             if fl & CSF_TRY == 0 {
-                (*eap).errmsg = message(&e_endif);
+                (*eap).errmsg = err_msg(&e_endif);
             } else if fl & CSF_FINALLY != 0 {
-                (*eap).errmsg = message(&e_endtry);
+                (*eap).errmsg = err_msg(&e_endtry);
             }
             // Find the matching ":while" and report what is missing.
             let mut idx = (*cstack).cs_idx;
@@ -758,16 +762,16 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn get_end_emsg(cstack: *mut cstack_T) -> *mut c_char {
+unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
     // SAFETY: module contract.
     unsafe {
         let flags = (*cstack).cs_flags[(*cstack).cs_idx as usize];
         if flags & CSF_WHILE != 0 {
-            message(&e_endwhile)
+            err_msg(&e_endwhile)
         } else if flags & CSF_FOR != 0 {
-            message(&e_endfor)
+            err_msg(&e_endfor)
         } else {
-            message(&e_endif)
+            err_msg(&e_endif)
         }
     }
 }

@@ -316,7 +316,7 @@ unsafe fn put_lines(eap: *mut exarg_T, flags: c_int) {
 /// command, which is why they parse one more address here.
 pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     unsafe {
-        let mut errormsg: *const c_char = ptr::null();
+        let mut errormsg = None;
         let n = get_address(
             eap,
             &raw mut (*eap).arg,
@@ -325,11 +325,11 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
             false,
             0,
             1,
-            &raw mut errormsg,
+            &mut errormsg,
         );
         if (*eap).arg.is_null() {
-            if !errormsg.is_null() {
-                emsg(errormsg);
+            if let Some(msg) = &errormsg {
+                emsg(msg.as_ptr());
             }
             (*eap).nextcmd = ptr::null_mut();
             return;

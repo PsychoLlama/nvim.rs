@@ -282,7 +282,6 @@ static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
 /// static rather than a literal at each of its two uses.
 static dollar_command: [c_char; 2] = c_bytes(b"$\0");
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static ex_error_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
 /// The command Ex mode substitutes for a bare newline. Never written, and
 /// recognised by address in `ex_range_without_command`.
 static exmode_plus: [c_char; 2] = c_bytes(b"+\0");

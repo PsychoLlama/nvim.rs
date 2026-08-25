@@ -20,23 +20,23 @@
 
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
+use std::ffi::CString;
 
 use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::charset::{getdigits_int, skiptowhite_esc, skipwhite};
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
-use crate::ex_docmd::{cmdmod_has, ex_errmsg};
+use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
-    IObuff, au_new_curbuf, cmdline_row, curbuf, curwin, e_cannot_switch_to_a_closing_buffer,
+    au_new_curbuf, cmdline_row, curbuf, curwin, e_cannot_switch_to_a_closing_buffer,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, e_nobufnr, e_trailing_arg,
     got_int, jop_flags, lastwin, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
     swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
-use crate::memory::xstrlcpy;
 use crate::message::msg_puts;
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
@@ -45,8 +45,7 @@ use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
     CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CmdModFlags, FAIL,
-    IOSIZE, NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T,
-    size_t, win_T,
+    NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -165,13 +164,10 @@ fn report_count(one: &CStr, many: &CStr, n: c_int) {
     let _: c_int = unsafe { smsg_c!(0 as c_int, fmt, n) };
 }
 
-/// Copy `msg` into `IObuff` and answer it: how this family returns an error
-/// message it had to build. The hand-off is why the pointer escapes the cell.
-fn into_iobuff(msg: &CStr) -> *mut c_char {
-    let msg = tr(msg);
-    // SAFETY: a translated message, and the whole of `IObuff` to copy into.
-    IObuff.with_mut(|b| unsafe { xstrlcpy(b.as_mut_ptr(), msg, IOSIZE as size_t) });
-    IObuff.ptr().cast::<c_char>()
+/// A translated message, as the owned error this family answers with.
+fn owned_err(msg: &CStr) -> Option<CString> {
+    // SAFETY: a NUL-terminated message.
+    Some(unsafe { ex_msg(msg.as_ptr()) })
 }
 fn skip_white(arg: *mut c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated argument.
@@ -193,9 +189,9 @@ fn find_by_pattern(pattern: *mut c_char, end: *mut c_char, unlisted: bool) -> c_
     // SAFETY: a NUL-terminated pattern and a pointer into it.
     unsafe { buflist_findpat(pattern, end, unlisted, false, false) }
 }
-fn trailing_arg_error(arg: *mut c_char) -> *mut c_char {
+fn trailing_arg_error(arg: *mut c_char) -> Option<CString> {
     // SAFETY: the message static and the caller's NUL-terminated argument.
-    unsafe { ex_errmsg((&raw const e_trailing_arg).cast::<c_char>(), arg) }
+    Some(unsafe { ex_errmsg((&raw const e_trailing_arg).cast::<c_char>(), arg) })
 }
 fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0
@@ -342,7 +338,7 @@ pub unsafe fn do_bufdel(
     start_bnr: c_int,
     end_bnr: c_int,
     forceit: c_int,
-) -> *mut c_char {
+) -> Option<CString> {
     let mut arg = arg;
     let mut do_current = 0; // delete current buffer?
     let mut deleted = 0; // number of buffers deleted
@@ -355,7 +351,7 @@ pub unsafe fn do_bufdel(
             0,
             forceit_flag(forceit),
         );
-        return ptr::null_mut();
+        return None;
     }
 
     let mut bnr = if addr_count == 2 {
@@ -408,7 +404,7 @@ pub unsafe fn do_bufdel(
     }
 
     if deleted == 0 {
-        return into_iobuff(match command {
+        return owned_err(match command {
             c if c == DOBUF_UNLOAD as c_int => c"E515: No buffers were unloaded",
             c if c == DOBUF_DEL as c_int => c"E516: No buffers were deleted",
             _ => c"E517: No buffers were wiped out",
@@ -425,7 +421,7 @@ pub unsafe fn do_bufdel(
             _ => report_count(c"%d buffer wiped out", c"%d buffers wiped out", deleted),
         }
     }
-    ptr::null_mut()
+    None
 }
 
 fn forceit_flag(forceit: c_int) -> c_int {

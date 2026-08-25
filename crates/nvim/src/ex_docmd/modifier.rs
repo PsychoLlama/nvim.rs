@@ -10,6 +10,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -23,7 +24,7 @@ use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn, exmode_plus, getexline,
+    SID_NONE, cmdnames, e_invrange, ex_func_T, ex_msg, ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
     cmdmod, curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
@@ -35,7 +36,7 @@ use crate::message::redirecting;
 use crate::option::{kOptValTypeString, set_option_direct};
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
-use crate::os::cshim::{gettext, memmove, strncmp};
+use crate::os::cshim::{memmove, strncmp};
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
@@ -108,7 +109,7 @@ pub fn cmd_has_expr_args(cmdidx: cmdidx_T) -> bool {
 /// and evaluate nothing.
 pub(crate) unsafe fn parse_command_modifiers(
     eap: *mut exarg_T,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
     cm: &mut cmdmod_T,
     skip_only: bool,
 ) -> c_int {
@@ -327,7 +328,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                                 cm.cmod_tab = tabpage_index(curtab.get()) + 1;
                             } else {
                                 if tabnr < 0 || tabnr > current_tab_nr(ptr::null_mut()) {
-                                    *errormsg = gettext(&raw const e_invrange as *const c_char);
+                                    *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                                     return FAIL;
                                 }
                                 cm.cmod_tab = tabnr + 1;
@@ -682,7 +683,7 @@ impl CmdModScope {
     ///
     /// # Safety
     /// As [`parse_command_modifiers`].
-    pub(crate) unsafe fn parse(&self, eap: *mut exarg_T, errormsg: *mut *const c_char) -> c_int {
+    pub(crate) unsafe fn parse(&self, eap: *mut exarg_T, errormsg: &mut Option<CString>) -> c_int {
         let mut parsed = cmdmod_T::default();
         // SAFETY: the caller's contract.
         let read = unsafe { parse_command_modifiers(eap, errormsg, &mut parsed, false) };

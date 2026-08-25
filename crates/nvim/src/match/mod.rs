@@ -445,7 +445,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
             if !skip {
                 if *end != 0 && ends_excmd(*skipwhite(end.offset(1)) as c_int) == 0 {
                     xfree(g.cast());
-                    (*eap).errmsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, end);
+                    (*eap).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end));
                     return;
                 }
                 if *end != *p {

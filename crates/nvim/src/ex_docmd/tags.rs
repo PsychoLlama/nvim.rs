@@ -71,7 +71,7 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
                 *p = NUL as c_char;
                 p = skipwhite(p.add(1));
                 if ends_excmd(*p as c_int) == 0 {
-                    ea.errmsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, p);
+                    ea.errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), p));
                 } else {
                     ea.nextcmd = check_nextcmd(p);
                 }

@@ -143,7 +143,7 @@ pub(crate) unsafe fn ex_try(eap: *mut exarg_T) {
     unsafe {
         let cstack = (*eap).cstack;
         if (*cstack).cs_idx == CSTACK_LEN - 1 {
-            (*eap).errmsg = c"E601: :try nesting too deep".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E601: :try nesting too deep".to_owned());
             return;
         }
         (*cstack).cs_idx += 1;
@@ -191,7 +191,7 @@ pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
         let mut skip = false;
 
         if (*cstack).cs_trylevel <= 0 || (*cstack).cs_idx < 0 {
-            (*eap).errmsg = c"E603: :catch without :try".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E603: :catch without :try".to_owned());
             give_up = true;
         } else {
             if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY == 0 {
@@ -206,7 +206,7 @@ pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
             }
             if (*cstack).cs_flags[idx as usize] & CSF_FINALLY != 0 {
                 // Give up on a ":catch" after ":finally" and just parse it.
-                (*eap).errmsg = c"E604: :catch after :finally".as_ptr().cast_mut();
+                (*eap).errmsg = Some(c"E604: :catch after :finally".to_owned());
                 give_up = true;
             } else {
                 rewind_conditionals(
@@ -363,7 +363,7 @@ pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
             idx -= 1;
         }
         if (*cstack).cs_trylevel <= 0 || idx < 0 {
-            (*eap).errmsg = c"E606: :finally without :try".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E606: :finally without :try".to_owned());
             return;
         }
 
@@ -377,7 +377,7 @@ pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
 
         if (*cstack).cs_flags[idx as usize] & CSF_FINALLY != 0 {
             // Give up on a second ":finally" and ignore it.
-            (*eap).errmsg = super::E_MULTIPLE_FINALLY.as_ptr().cast_mut();
+            (*eap).errmsg = Some(super::E_MULTIPLE_FINALLY.to_owned());
             return;
         }
         rewind_conditionals(
@@ -473,7 +473,7 @@ pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
             idx -= 1;
         }
         if (*cstack).cs_trylevel <= 0 || idx < 0 {
-            (*eap).errmsg = c"E602: :endtry without :try".as_ptr().cast_mut();
+            (*eap).errmsg = Some(c"E602: :endtry without :try".to_owned());
             return;
         }
 

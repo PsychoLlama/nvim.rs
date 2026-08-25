@@ -459,7 +459,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
             ea.line2 = last as linenr_T;
         }
         // SAFETY: `ea` is resolved.
-        if !unsafe { invalid_range(ea) }.is_null() {
+        if unsafe { invalid_range(ea) }.is_some() {
             err_invalid(err, c"range", c"");
             return false;
         }

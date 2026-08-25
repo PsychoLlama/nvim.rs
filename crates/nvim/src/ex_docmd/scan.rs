@@ -10,19 +10,20 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::{getdigits_int32, skipdigits, skipwhite};
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
-use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount};
+use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
 use crate::main::curbuf;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::option::cpo_has;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::memmove;
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::del_trailing_spaces;
@@ -124,7 +125,7 @@ pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool) 
 /// the range.
 pub(crate) unsafe fn parse_count(
     eap: *mut exarg_T,
-    errormsg: *mut *const c_char,
+    errormsg: &mut Option<CString>,
     validate: bool,
 ) -> c_int {
     unsafe {
@@ -157,9 +158,7 @@ pub(crate) unsafe fn parse_count(
             }
         }
         if n <= 0 && !ea.argt.has(ExArgt::ZEROR) {
-            if !errormsg.is_null() {
-                *errormsg = gettext(&raw const e_zerocount as *const c_char);
-            }
+            *errormsg = Some(ex_msg(e_zerocount.as_ptr()));
             return FAIL;
         }
         set_cmd_count(eap, n, validate);

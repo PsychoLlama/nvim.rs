@@ -212,7 +212,7 @@ pub unsafe fn nvim_parse_cmd(
         )
     };
 
-    let mut errormsg: *const c_char = ptr::null();
+    let mut errormsg = None;
     // SAFETY: `arena` is the dispatcher's and `str` is `size` readable bytes;
     // the arena copy outlives everything `parse_cmdline` leaves pointing into
     // it, including `ea.arg` and `ea.nextcmd`.
@@ -222,22 +222,20 @@ pub unsafe fn nvim_parse_cmd(
             &raw mut cmdline,
             &raw mut ea,
             &raw mut cmdinfo,
-            &raw mut errormsg,
+            &mut errormsg,
         )
     };
     if !parsed {
-        // SAFETY: `err` is live; `errormsg`, when set, is the parser's own
-        // NUL-terminated literal.
+        // SAFETY: `err` is live, and `errormsg` is the parser's own message.
         unsafe {
-            if errormsg.is_null() {
-                api_set_error(err, kErrorTypeException, c"Parsing command-line".as_ptr());
-            } else {
-                api_set_error(
+            match &errormsg {
+                None => api_set_error(err, kErrorTypeException, c"Parsing command-line".as_ptr()),
+                Some(msg) => api_set_error(
                     err,
                     kErrorTypeException,
                     c"Parsing command-line: %s".as_ptr(),
-                    errormsg,
-                );
+                    msg.as_ptr(),
+                ),
             }
         }
         return Err(error);

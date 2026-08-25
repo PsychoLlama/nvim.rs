@@ -9,9 +9,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_TABNEWENTERED, apply_autocmds};
@@ -32,9 +33,9 @@ use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::main::{
-    Columns, IObuff, Rows, cmdmod, curbuf, curwin, e_invarg, e_invarg2, e_invcmd, e_invrange,
-    e_screenmode, g_do_tagpreview, got_int, lastused_tabpage, msg_col, msg_scroll, must_redraw,
-    p_pvh, postponed_split_flags, postponed_split_tab,
+    Columns, Rows, cmdmod, curbuf, curwin, e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode,
+    g_do_tagpreview, got_int, lastused_tabpage, msg_col, msg_scroll, must_redraw, p_pvh,
+    postponed_split_flags, postponed_split_tab,
 };
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
@@ -113,9 +114,14 @@ impl Ex {
 // The neighbours that are still transpiled, one wrapper each.
 
 /// `_()`: the translated message.
-fn tr(msg: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated message.
-    unsafe { gettext(msg) }
+fn tr(msg: *const c_char) -> &'static CStr {
+    // SAFETY: a NUL-terminated message, and `gettext` answers one too.
+    unsafe { CStr::from_ptr(gettext(msg)) }
+}
+
+/// `_(msg)` as an owned Ex-command error message.
+fn err_msg(msg: *const c_char) -> Option<CString> {
+    Some(tr(msg).to_owned())
 }
 
 /// `emsg(_(msg))`.
@@ -211,7 +217,7 @@ pub(crate) fn current_tab_nr(tab: *mut tabpage_T) -> c_int {
 pub(crate) unsafe fn ex_wrongmodifier(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(eap);
-    ea.errmsg = tr(&raw const e_invcmd as *const c_char);
+    ea.errmsg = err_msg(&raw const e_invcmd as *const c_char);
 }
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
@@ -367,7 +373,7 @@ fn tabnext(mut ea: Ex) {
     }
     if !ea.is(CMD_tabprevious) && !ea.is(CMD_tabNext) {
         let tab_number = tabpage_arg(ea);
-        if ea.errmsg.is_null() {
+        if ea.errmsg.is_none() {
             goto_tab_number(tab_number);
         }
         return;
@@ -391,7 +397,7 @@ fn tabnext(mut ea: Ex) {
         {
             let (msg, arg) = (&raw const e_invarg2 as *const c_char, ea.arg);
             // SAFETY: a message with one `%s`, and the argument for it.
-            ea.errmsg = unsafe { ex_errmsg(msg, arg) };
+            ea.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
             return;
         }
     } else if ea.addr_count == 0 {
@@ -399,7 +405,7 @@ fn tabnext(mut ea: Ex) {
     } else {
         tab_number = ea.line2 as c_int;
         if tab_number < 1 {
-            ea.errmsg = tr(&raw const e_invrange as *const c_char);
+            ea.errmsg = err_msg(&raw const e_invrange as *const c_char);
             return;
         }
     }
@@ -414,7 +420,7 @@ pub(crate) unsafe fn ex_tabmove(eap: *mut exarg_T) {
 
 fn tabmove(ea: Ex) {
     let tab_number = tabpage_arg(ea);
-    if ea.errmsg.is_null() {
+    if ea.errmsg.is_none() {
         tabpage_move(tab_number);
     }
 }
@@ -428,6 +434,9 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
     msg_scroll.set(1);
 
     let lastused_win = valid_tab(lastused_tabpage.get()).map_or(ptr::null_mut(), |tp| tp.tp_curwin);
+    // The listing's scratch line. Upstream assembles it in `IObuff`, which
+    // `msg_outtrans` reads again as it re-enters the message machinery.
+    let mut line = [0 as c_char; IOSIZE as usize];
 
     for (tabcount, tp) in tabs().enumerate() {
         if got_int.get() {
@@ -436,20 +445,17 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
         if msg_col.get() > 0 {
             msg_char('\n' as c_int);
         }
-        let (fmt, nr) = (tr(c"Tab page %d".as_ptr()), tabcount as c_int + 1);
-        IObuff.with_mut(|b| {
-            let (out, size) = (b.as_mut_ptr(), IOSIZE as size_t);
-            // SAFETY: a message with one `%d`, into the shared buffer.
-            unsafe { vim_snprintf(out, size, fmt, nr) };
-        });
-        msg_iobuff(HLF_T);
+        let (fmt, nr) = (tr(c"Tab page %d".as_ptr()).as_ptr(), tabcount as c_int + 1);
+        // SAFETY: a message with one `%d`, into this frame's own buffer.
+        unsafe { vim_snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
+        msg_line(&line, HLF_T);
         os_breakcheck();
-        list_tab_windows(tp, lastused_win);
+        list_tab_windows(tp, lastused_win, &mut line);
     }
 }
 
 /// The `:tabs` entry for each window of `tp`.
-fn list_tab_windows(tp: TabPage, lastused_win: *mut win_T) {
+fn list_tab_windows(tp: TabPage, lastused_win: *mut win_T, line: &mut [c_char; IOSIZE as usize]) {
     for wp in windows_in_tab(tp) {
         if got_int.get() {
             break;
@@ -473,28 +479,26 @@ fn list_tab_windows(tp: TabPage, lastused_win: *mut win_T) {
             ' ' as c_int
         });
         msg_char(' ' as c_int);
-        fill_iobuff_with_name(wp.buffer());
-        msg_iobuff(0);
+        fill_name(wp.buffer(), line);
+        msg_line(line, 0);
         os_breakcheck();
     }
 }
 
-/// `buf`'s display name in `IObuff`: the special name a scratch buffer has,
-/// or its file name with the home directory folded back to `~`.
-fn fill_iobuff_with_name(buf: Buf) {
+/// `buf`'s display name in `out`: the special name a scratch buffer has, or
+/// its file name with the home directory folded back to `~`.
+fn fill_name(buf: Buf, out: &mut [c_char; IOSIZE as usize]) {
     // SAFETY: a live buffer; the answer is a static name or null.
     let special = unsafe { buf_spname(buf.raw()) };
     let (raw, fname) = (buf.raw(), buf.b_fname);
-    IObuff.with_mut(|b| {
-        let (out, size) = (b.as_mut_ptr(), IOSIZE as size_t);
-        if special.is_null() {
-            // SAFETY: a live buffer and its own file name, into the buffer.
-            unsafe { home_replace(raw, fname, out, size, true) };
-        } else {
-            // SAFETY: a NUL-terminated name, into the buffer.
-            unsafe { xstrlcpy(out, special, size) };
-        }
-    });
+    let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
+    if special.is_null() {
+        // SAFETY: a live buffer and its own file name, into the buffer.
+        unsafe { home_replace(raw, fname, out, size, true) };
+    } else {
+        // SAFETY: a NUL-terminated name, into the buffer.
+        unsafe { xstrlcpy(out, special, size) };
+    }
 }
 
 fn msg_char(c: c_int) {
@@ -502,13 +506,12 @@ fn msg_char(c: c_int) {
     unsafe { msg_putchar(c) };
 }
 
-/// Print what [`fill_iobuff_with_name`] and friends left in `IObuff`.
-///
-/// The buffer is handed on as a pointer rather than as a borrow: `msg_outtrans`
-/// re-enters the message machinery, which reads `IObuff` again.
-fn msg_iobuff(hl_id: c_int) {
-    // SAFETY: `IObuff` is NUL-terminated by whatever filled it.
-    unsafe { msg_outtrans(IObuff.ptr() as *mut c_char, hl_id, false) };
+/// Print what [`fill_name`] and friends left in `line`.
+fn msg_line(line: &[c_char; IOSIZE as usize], hl_id: c_int) {
+    // SAFETY: NUL-terminated by whatever filled it, and `msg_outtrans` only
+    // reads it — the re-entry into the message machinery no longer reaches
+    // the same buffer, because this one belongs to `ex_tabs`.
+    unsafe { msg_outtrans(line.as_ptr().cast_mut(), hl_id, false) };
 }
 
 fn is_changed(buf: Buf) -> bool {
@@ -660,7 +663,7 @@ fn wincmd(mut ea: Ex) {
 pub(crate) unsafe fn ex_nogui(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(eap);
-    ea.errmsg = tr(c"E25: Nvim does not have a built-in GUI".as_ptr());
+    ea.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
 }
 
 /// `:popup`.
