@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_free_array, copy_string, cstr_as_string, cstr_to_string, ga_take_string,
+    api_free_array, cbuf_to_string, copy_string, cstr_as_string, cstr_to_string,
 };
 use crate::api::vim::nvim_echo;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -191,13 +191,9 @@ static msg_ext_id: GlobalCell<Object> = GlobalCell::new(object {
     },
 });
 static msg_ext_chunks: GlobalCell<*mut Array> = GlobalCell::new(::core::ptr::null_mut::<Array>());
-static msg_ext_last_chunk: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-    ga_growsize: 40 as ::core::ffi::c_int,
-    ga_data: ::core::ptr::null_mut(),
-});
+/// The text written under the current highlight, waiting to be closed off
+/// into a `msg_show` chunk by [`ext::msg_ext_emit_chunk`].
+static msg_ext_last_chunk: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 static msg_ext_last_attr: GlobalCell<sattr_T> = GlobalCell::new(-1 as sattr_T);
 static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false);

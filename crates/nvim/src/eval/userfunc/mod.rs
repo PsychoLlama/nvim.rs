@@ -178,7 +178,13 @@ static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
         hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     }; 16],
 });
-static funcargs: GlobalCell<garray_T> = GlobalCell::new(GARRAY_EMPTY);
+/// The arguments of the calls currently in progress, innermost last.
+///
+/// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks
+/// through it so that a value living only in a caller's argument array is not
+/// collected. The entries are borrowed -- each points into a caller's own
+/// `argvars` -- which is why this is a `Vec` of pointers and not of values.
+static funcargs: GlobalCell<Vec<*mut typval_T>> = GlobalCell::new(Vec::new());
 static current_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 static previous_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 

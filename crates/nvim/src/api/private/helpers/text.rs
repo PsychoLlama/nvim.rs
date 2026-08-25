@@ -14,12 +14,12 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, NUL, String_0, buf_T, garray_T, int64_t,
-    kErrorTypeValidation, kObjectTypeString, linenr_T, object, object_data, size_t,
+    Arena, Array, ArrayBuilder, Error, NUL, String_0, buf_T, int64_t, kErrorTypeValidation,
+    kObjectTypeString, linenr_T, object, object_data, size_t,
 };
 use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
-use core::{mem, ptr, slice};
+use core::{mem, slice};
 
 // -- Strings ---------------------------------------------------------------
 
@@ -84,18 +84,6 @@ pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
 pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> String_0 {
     // SAFETY: `str` has `maxsize` readable bytes.
     unsafe { String_0::from_raw_parts(str, strnlen(str, maxsize)) }
-}
-
-/// Take `ga`'s buffer as an API string, leaving the growarray empty.
-pub(crate) unsafe fn ga_take_string(ga: *mut garray_T) -> String_0 {
-    // SAFETY: `ga` is the caller's growarray of bytes.
-    unsafe {
-        let str = String_0::from_raw_parts((*ga).ga_data.cast(), (*ga).ga_len as size_t);
-        (*ga).ga_data = ptr::null_mut();
-        (*ga).ga_len = 0;
-        (*ga).ga_maxlen = 0;
-        str
-    }
 }
 
 /// Split `input` into one array item per line, arena-allocating the lines.

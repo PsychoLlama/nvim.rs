@@ -14,7 +14,7 @@ use crate::grid::default_grid_ref;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
+use core::{ptr, slice};
 
 /// C's `ARRAY_DICT_INIT`: empty, and owning nothing.
 const EMPTY_ARRAY: Array = Array {
@@ -199,8 +199,8 @@ pub(crate) unsafe fn msg_puts_display(
     hl_id: c_int,
     recurse: bool,
 ) {
+    let mut s = str;
     unsafe {
-        let mut s = str;
         let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
         did_wait_return.set(false);
 
@@ -216,7 +216,8 @@ pub(crate) unsafe fn msg_puts_display(
             } else {
                 strnlen(str, maxlen as size_t)
             };
-            ga_concat_len(msg_ext_last_chunk.ptr(), str, len);
+            let bytes = slice::from_raw_parts(str.cast::<u8>(), len);
+            msg_ext_last_chunk.with_mut(|chunk| chunk.extend_from_slice(bytes));
 
             // The message column is whatever follows the last newline.
             let lastline: *const c_char = xmemrchr(str.cast(), b'\n', len).cast();

@@ -54,24 +54,19 @@ pub unsafe fn get_func_tv(
         debug_assert!(ret == OK || ret == FAIL);
 
         if ret == OK {
-            let mut i = 0;
-            if get_vim_var_nr(Vv::Testing) != 0 {
-                // Prepare for calling `test_garbagecollect_now()`, which
-                // needs to know which variables are used on the call stack.
-                if (*funcargs.ptr()).ga_itemsize == 0 {
-                    ga_init(funcargs.ptr(), size_of::<*mut typval_T>() as c_int, 50);
-                }
-                while i < argcount {
-                    ga_grow(funcargs.ptr(), 1);
-                    let ga = funcargs.ptr();
-                    *((*ga).ga_data as *mut *mut typval_T).offset((*ga).ga_len as isize) =
-                        argvars.as_mut_ptr().offset(i as isize);
-                    (*ga).ga_len += 1;
-                    i += 1;
-                }
-            }
+            // Prepare for calling `test_garbagecollect_now()`, which needs to
+            // know which variables are used on the call stack.
+            let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
+                funcargs.with_mut(|args| {
+                    args.extend((0..argcount).map(|i| argvars.as_mut_ptr().offset(i as isize)));
+                });
+                argcount as usize
+            } else {
+                0
+            };
             ret = call_func(name, len, rettv, argcount, argvars.as_mut_ptr(), funcexe);
-            (*funcargs.ptr()).ga_len -= i;
+            // The nested calls pushed and popped their own; ours are the last.
+            funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
         } else if !aborting() && evaluate {
             if argcount == MAX_FUNC_ARGS {
                 emsg_funcname(c"E740: Too many arguments for function %s".as_ptr(), name);

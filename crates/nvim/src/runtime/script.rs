@@ -913,22 +913,19 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
     // SAFETY: `name` is as the caller described it.
     let scriptname = unsafe { autoload_name(name, name_len) };
     // SAFETY: `scriptname` is the freshly built path.
-    let known = unsafe { loaded_index(scriptname) };
-    let loaded_len = ga_loaded.get().ga_len;
+    let path = unsafe { CStr::from_ptr(scriptname) }.to_bytes();
+    let known = ga_loaded.with(|loaded| loaded.iter().any(|entry| same_autoload(entry, path)));
 
     // Was it loaded already?
-    if !reload && known < loaded_len {
+    if !reload && known {
         // SAFETY: ours, and nothing took ownership of it.
         unsafe { xfree(scriptname.cast::<c_void>()) };
         return false;
     }
 
-    // Remember the name if it wasn't loaded already; `ga_loaded` takes it over.
-    let mut tofree = scriptname;
-    if known == loaded_len {
-        // SAFETY: `ga_loaded` is a garray of owned `char *`.
-        unsafe { ga_append_ptr(ga_loaded.ptr(), scriptname) };
-        tofree = ptr::null_mut();
+    // Remember the name if it wasn't loaded already.
+    if !known {
+        ga_loaded.with_mut(|loaded| loaded.push(path.to_vec()));
     }
 
     // Try loading the package from `$VIMRUNTIME/autoload/<name>.vim`.  The
@@ -946,46 +943,14 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
         ) == OK
     };
 
-    // SAFETY: null unless `ga_loaded` declined it, in which case it is ours.
-    unsafe { xfree(tofree.cast::<c_void>()) };
+    // SAFETY: still ours -- `ga_loaded` keeps its own copy of the path.
+    unsafe { xfree(scriptname.cast::<c_void>()) };
     ret
 }
 
-/// Where `scriptname` sits in `ga_loaded`, or its length when it is not there.
-///
-/// The shared `autoload/` prefix is skipped -- it is the same on every entry.
-///
-/// # Safety
-///
-/// `scriptname` must be an autoload path, so at least as long as the prefix.
-unsafe fn loaded_index(scriptname: *const c_char) -> c_int {
-    let ga = ga_loaded.get();
+/// Are these the same autoload path? The shared `autoload/` prefix is skipped
+/// -- every entry carries it, so comparing it again buys nothing.
+fn same_autoload(entry: &[u8], path: &[u8]) -> bool {
     let skip = AUTOLOAD_PREFIX.len();
-    for i in 0..ga.ga_len {
-        // SAFETY: `ga_loaded` holds `ga_len` NUL-terminated paths, each with
-        // the same prefix as `scriptname`.
-        if unsafe {
-            let entry = *ga.ga_data.cast::<*mut c_char>().add(i as usize);
-            strcmp(entry.add(skip), scriptname.add(skip)) == 0
-        } {
-            return i;
-        }
-    }
-    ga.ga_len
-}
-
-/// `GA_APPEND` for a garray of owned `char *`.
-///
-/// # Safety
-///
-/// `ga` must be a garray whose item type is `*mut c_char`.
-unsafe fn ga_append_ptr(ga: *mut garray_T, value: *mut c_char) {
-    unsafe {
-        ga_grow(ga, 1);
-        *(*ga)
-            .ga_data
-            .cast::<*mut c_char>()
-            .add((*ga).ga_len as usize) = value;
-        (*ga).ga_len += 1;
-    }
+    entry.get(skip..) == path.get(skip..)
 }

@@ -59,22 +59,25 @@ pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
 /// # Safety
 /// Only that the emitter statics are in a consistent state.
 pub(crate) unsafe fn msg_ext_emit_chunk() {
-    unsafe {
-        if msg_ext_chunks.get().is_null() {
-            msg_ext_init_chunks();
-        }
-        if msg_ext_last_attr.get() == -1 {
-            return;
-        }
+    if msg_ext_chunks.get().is_null() {
+        // SAFETY: the caller's obligation, as documented above.
+        unsafe { msg_ext_init_chunks() };
+    }
+    if msg_ext_last_attr.get() == -1 {
+        return;
+    }
+    // The accumulated text moves out, leaving the buffer empty.
+    let accumulated = msg_ext_last_chunk.take();
+    let mut chunk = EMPTY_ARRAY;
 
-        let mut chunk = EMPTY_ARRAY;
+    // SAFETY: `accumulated` is the chunk's own bytes, and `msg_ext_chunks` is
+    // non-null by the test above.
+    unsafe {
         array_push(&mut chunk, Object::integer(msg_ext_last_attr.get().into()));
         msg_ext_last_attr.set(-1);
-        // Takes ownership of the accumulated text, leaving the garray empty.
-        let text = ga_take_string(msg_ext_last_chunk.ptr());
+        let text = cbuf_to_string(accumulated.as_ptr().cast::<c_char>(), accumulated.len());
         array_push(&mut chunk, Object::string(text));
         array_push(&mut chunk, Object::integer(msg_ext_last_hl_id.get().into()));
-
         array_push(&mut *msg_ext_chunks.get(), Object::array(chunk));
     }
 }

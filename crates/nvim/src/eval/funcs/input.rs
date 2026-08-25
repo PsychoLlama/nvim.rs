@@ -18,7 +18,6 @@ use crate::eval::typval::{
 use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
-use crate::garray::ga_append_via_ptr;
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::input::prompt_for_input;
@@ -34,7 +33,7 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, buf_T, garray_T, listitem_T, tasave_T, typval_T,
+    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, buf_T, listitem_T, tasave_T, typval_T,
     varnumber_T,
 };
 use crate::ui::ui_has;
@@ -219,35 +218,32 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// The typeahead states `inputsave()` has stacked up.
-static SAVED_TYPEAHEAD: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: size_of::<tasave_T>() as c_int,
-    ga_growsize: 4,
-    ga_data: ptr::null_mut(),
-});
+///
+/// A `Vec`, not a `garray_T`: [`tasave_T`] owns its buffers now, so the stack
+/// has to move whole values rather than blit bytes into a grown tail.
+static SAVED_TYPEAHEAD: GlobalCell<Vec<tasave_T>> = GlobalCell::new(Vec::new());
 
 /// `inputsave()` — push the typeahead aside so that a prompt reads real
 /// keys.
 pub unsafe fn f_inputsave(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the garray's item size is `tasave_T`, which is what
-    // `ga_append_via_ptr` is told and what `save_typeahead` writes.
-    unsafe {
-        let slot = ga_append_via_ptr(SAVED_TYPEAHEAD.ptr(), size_of::<tasave_T>()) as *mut tasave_T;
-        save_typeahead(slot);
-    }
+    let mut saved = tasave_T::default();
+    // SAFETY: `saved` is a fresh state of the right type, and the stack owns
+    // it from here on.
+    unsafe { save_typeahead(&raw mut saved) };
+    SAVED_TYPEAHEAD.with_mut(|stack| stack.push(saved));
 }
 
 /// `inputrestore()` — pop it back. Answers 1 only for an underflow, and
 /// only when 'verbose' is high enough to have said something.
 pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the index is inside the garray by the length test.
-    unsafe {
-        let stack = SAVED_TYPEAHEAD.ptr();
-        if (*stack).ga_len > 0 {
-            (*stack).ga_len -= 1;
-            restore_typeahead(((*stack).ga_data as *mut tasave_T).add((*stack).ga_len as usize));
-        } else if p_verbose.get() > 1 {
+    // The pop happens outside the restore: `restore_typeahead` reaches the
+    // typeahead cells, not this one, but keeping the borrow a leaf is the rule.
+    if let Some(mut saved) = SAVED_TYPEAHEAD.with_mut(Vec::pop) {
+        // SAFETY: filled by the `f_inputsave` that pushed it.
+        unsafe { restore_typeahead(&raw mut saved) };
+    } else if p_verbose.get() > 1 {
+        // SAFETY: a static message, and the caller's return value.
+        unsafe {
             verb_msg(gettext(
                 c"called inputrestore() more often than inputsave()".as_ptr(),
             ));

@@ -9,7 +9,7 @@
 
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::{ptr, slice};
 
 use super::*;
 use crate::types::{FAIL, NUL, OK};
@@ -41,13 +41,9 @@ pub unsafe fn assert_error(gap: *mut garray_T) {
 /// A NULL `redir_lval` means no redirection is running; a NULL `redir_endp`
 /// means one is, but failed, so the teardown should only free.
 static redir_lval: GlobalCell<*mut lval_T> = GlobalCell::new(ptr::null_mut());
-static redir_ga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ptr::null_mut(),
-});
+/// The text collected so far, without a terminator: the NUL goes on once, in
+/// [`var_redir_stop`], when the buffer has stopped growing.
+static redir_ga: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 static redir_endp: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static redir_varname: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
@@ -69,11 +65,10 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         redir_varname.set(xstrdup(name));
         redir_lval.set(xcalloc(1, ::core::mem::size_of::<lval_T>()) as *mut lval_T);
         // The output is collected here until redirection ends.
-        ga_init(
-            redir_ga.ptr(),
-            ::core::mem::size_of::<c_char>() as c_int,
-            500,
-        );
+        redir_ga.with_mut(|text| {
+            text.clear();
+            text.reserve(500);
+        });
 
         // Parse the name, which may be a Dict or List entry.
         redir_endp.set(get_lval(
@@ -145,17 +140,20 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
 /// # Safety
 /// `value` is readable for `value_len` bytes, or NUL-terminated.
 pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
-    unsafe {
-        if redir_lval.get().is_null() {
-            return;
-        }
+    if redir_lval.get().is_null() {
+        return;
+    }
+    // SAFETY: the caller's `value` is readable for `value_len` bytes, or is
+    // NUL-terminated when the length is -1.
+    let bytes = unsafe {
         let len = if value_len == -1 {
             strlen(value)
         } else {
             value_len as size_t
         };
-        ga_concat_len(redir_ga.ptr(), value, len);
-    }
+        slice::from_raw_parts(value.cast::<u8>(), len)
+    };
+    redir_ga.with_mut(|text| text.extend_from_slice(bytes));
 }
 
 /// Stop capturing and store what was collected.
@@ -165,14 +163,18 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
 pub unsafe fn var_redir_stop() {
     unsafe {
         if !redir_lval.get().is_null() {
+            // Collecting is over: take the buffer, so that a message emitted
+            // from inside `set_var_lval` appends to a fresh one instead of
+            // reallocating under the `typval` that borrows this one.
+            let mut text = redir_ga.take();
             // Store the text, unless the start failed.
             if !redir_endp.get().is_null() {
-                ga_append(redir_ga.ptr(), NUL as uint8_t);
+                text.push(NUL as u8);
                 let mut tv = typval_T {
                     v_type: VAR_STRING,
                     v_lock: VAR_UNLOCKED,
                     vval: typval_vval_union {
-                        v_string: (*redir_ga.ptr()).ga_data as *mut c_char,
+                        v_string: text.as_mut_ptr().cast::<c_char>(),
                     },
                 };
                 // Resolve the name again: inside a Dict or List it may have
@@ -199,8 +201,6 @@ pub unsafe fn var_redir_stop() {
                 clear_lval(redir_lval.get());
             }
 
-            xfree((*redir_ga.ptr()).ga_data);
-            (*redir_ga.ptr()).ga_data = ptr::null_mut();
             xfree(redir_lval.get().cast());
             redir_lval.set(ptr::null_mut());
         }

@@ -329,13 +329,11 @@ pub static script_items: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_growsize: 20 as ::core::ffi::c_int,
     ga_data: NULL_0,
 });
-static ga_loaded: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-    ga_growsize: 4 as ::core::ffi::c_int,
-    ga_data: NULL_0,
-});
+/// Every autoload script `script_autoload` has already run, by path.
+///
+/// A `Vec`, not a `garray_T` of owned `char *`: the list is private to
+/// [`script`], is only ever appended to and scanned, and never freed.
+static ga_loaded: GlobalCell<Vec<Vec<u8>>> = GlobalCell::new(Vec::new());
 static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static runtime_search_path_valid: GlobalCell<bool> = GlobalCell::new(false);

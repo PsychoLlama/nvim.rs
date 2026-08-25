@@ -780,16 +780,14 @@ pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
 
 /// Mark everything reachable from an argument of a call in progress.
 pub unsafe fn set_ref_in_func_args(copyID: c_int) -> bool {
-    unsafe {
-        let args = &*funcargs.ptr();
-        for i in 0..args.ga_len as usize {
-            let tv = *(args.ga_data as *mut *mut typval_T).add(i);
-            if set_ref_in_item(tv, copyID, ptr::null_mut(), ptr::null_mut()) {
-                return true;
-            }
-        }
-        false
-    }
+    // Marking only reads; nothing it reaches calls a function, so holding the
+    // borrow across the walk is sound.
+    funcargs.with(|args| {
+        args.iter().any(|&tv| {
+            // SAFETY: each entry points at a live caller's argument.
+            unsafe { set_ref_in_item(tv, copyID, ptr::null_mut(), ptr::null_mut()) }
+        })
+    })
 }
 
 /// Mark every list and dictionary reachable through the function `name`, or
