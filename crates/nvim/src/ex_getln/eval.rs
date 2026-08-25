@@ -22,48 +22,48 @@ pub fn get_cmdline_info() -> *mut CmdlineInfo {
     Cc::current().raw()
 }
 
+/// Whether a command line is being edited at all: C's
+/// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`
+/// can ask now that the buffer is owned.
+pub(crate) fn cmdline_in_use() -> bool {
+    Cc::current().in_use()
+}
+
 /// The id of the most recently *started* command line, which
 /// [`super::color::color_cmdline`] compares against a cached colouring.
 pub fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
     last_prompt_id.get()
 }
 
-/// The command line info the Vimscript functions should answer about, or NULL
-/// when there is none.
+/// The command line the Vimscript functions should answer about, if any.
 ///
 /// `save_cmdline()` suspends `ccline` onto the saved stack, so inside a
 /// `<C-r>=` expression the *enclosing* command line -- one level out -- is
 /// the one with the text.
-pub(crate) fn get_ccline_ptr() -> *mut CmdlineInfo {
+pub(crate) fn get_ccline_ptr() -> Option<Cc> {
     if State.get() & MODE_CMDLINE == 0 {
-        return ::core::ptr::null_mut::<CmdlineInfo>();
+        return None;
     }
-    let depth = usize::from(Cc::current().cmdbuff.is_null());
-    match cmdline_at(depth) {
-        Some(cc) if !cc.cmdbuff.is_null() => cc.raw(),
-        _ => ::core::ptr::null_mut::<CmdlineInfo>(),
-    }
+    let depth = usize::from(!Cc::current().in_use());
+    cmdline_at(depth).filter(|cc| cc.in_use())
 }
 
 /// The current command-line type: `:`, `/`, `?`, `@`, `>` or `-`, and `NUL`
 /// when no command line is being edited.
-pub(crate) unsafe fn get_cmdline_type() -> ::core::ffi::c_int {
-    unsafe {
-        let p = get_ccline_ptr();
-        if p.is_null() {
-            return NUL;
-        }
-        if (*p).cmdfirstc == NUL {
-            // No first character: `input()` reports '@', a `:insert` style
-            // line-getter '-'.
-            return if (*p).input_fn != 0 {
-                '@' as ::core::ffi::c_int
-            } else {
-                '-' as ::core::ffi::c_int
-            };
-        }
-        (*p).cmdfirstc
+pub(crate) fn get_cmdline_type() -> ::core::ffi::c_int {
+    let Some(p) = get_ccline_ptr() else {
+        return NUL;
+    };
+    if p.cmdfirstc == NUL {
+        // No first character: `input()` reports '@', a `:insert` style
+        // line-getter '-'.
+        return if p.input_fn != 0 {
+            '@' as ::core::ffi::c_int
+        } else {
+            '-' as ::core::ffi::c_int
+        };
     }
+    p.cmdfirstc
 }
 
 /// The current command line, allocated; NULL when there is none or the line
@@ -73,11 +73,10 @@ pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
         if cmdline_star.get() > 0 {
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
-        let p = get_ccline_ptr();
-        if p.is_null() {
+        let Some(p) = get_ccline_ptr() else {
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        xstrnsave((*p).cmdbuff, (*p).cmdlen as size_t)
+        };
+        xstrnsave(p.text(), p.len() as size_t)
     }
 }
 
@@ -97,11 +96,10 @@ unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ExpandContext)> {
         if cmdline_star.get() > 0 {
             return None;
         }
-        let p = get_ccline_ptr();
-        if p.is_null() || (*p).xpc.is_null() {
+        let xpc = get_ccline_ptr().map_or(::core::ptr::null_mut(), |p| p.xpc);
+        if xpc.is_null() {
             return None;
         }
-        let xpc = (*p).xpc;
         let mut xp_context = (*xpc).xp_context;
         if xp_context == ExpandContext::Nothing {
             set_expand_context(xpc);
@@ -155,25 +153,17 @@ pub unsafe fn f_getcmdline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `getcmdpos()` function.
 pub unsafe fn f_getcmdpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        let p = get_ccline_ptr();
-        (*rettv).vval.v_number = if !p.is_null() {
-            ((*p).cmdpos + 1) as varnumber_T
-        } else {
-            0
-        };
+        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as varnumber_T);
     }
 }
 
 /// `getcmdprompt()` function.
 pub unsafe fn f_getcmdprompt(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        let p = get_ccline_ptr();
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = if !p.is_null() && !(*p).cmdprompt.is_null() {
-            xstrdup((*p).cmdprompt)
-        } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
-        };
+        (*rettv).vval.v_string = get_ccline_ptr()
+            .filter(|p| !p.cmdprompt.is_null())
+            .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt));
     }
 }
 
@@ -184,12 +174,7 @@ pub unsafe fn f_getcmdscreenpos(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        let p = get_ccline_ptr();
-        (*rettv).vval.v_number = if !p.is_null() {
-            ((*p).cmdspos + 1) as varnumber_T
-        } else {
-            0
-        };
+        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as varnumber_T);
     }
 }
 
@@ -212,23 +197,23 @@ pub(crate) unsafe fn set_cmdline_str(
     pos: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let p = get_ccline_ptr();
-        if p.is_null() {
+        let Some(mut p) = get_ccline_ptr() else {
             return 1;
-        }
+        };
 
-        let len = strlen(str) as ::core::ffi::c_int;
-        realloc_cmdbuff(len + 1);
-        (*p).cmdlen = len;
-        strcpy((*p).cmdbuff, str as *mut ::core::ffi::c_char);
+        // `p` is not always `ccline`: inside `<C-r>=` it is the command line
+        // one level out. C resized `ccline` here whichever line it then wrote
+        // to, and overran the other one -- see the upstream note on
+        // `set_cmdline_str`.
+        p.set_cstr(str);
 
-        (*p).cmdpos = if pos < 0 || pos > (*p).cmdlen {
-            (*p).cmdlen
+        p.cmdpos = if pos < 0 || pos > p.len() {
+            p.len()
         } else {
             pos
         };
-        new_cmdpos.set((*p).cmdpos);
-        (*p).cmdbuff_replaced = true;
+        new_cmdpos.set(p.cmdpos);
+        p.cmdbuff_replaced = true;
 
         redrawcmd();
 
@@ -245,7 +230,7 @@ pub(crate) unsafe fn set_cmdline_str(
 /// changing the command line.  Answers 1 when there is no command line, 0 on
 /// success.
 pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if get_ccline_ptr().is_null() {
+    if get_ccline_ptr().is_none() {
         return 1;
     }
     new_cmdpos.set(pos.max(0));

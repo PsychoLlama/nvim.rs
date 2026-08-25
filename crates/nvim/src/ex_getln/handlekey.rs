@@ -30,49 +30,44 @@ pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> KeyOu
 
         // Deleting the current character is the same as a backspace on the
         // next character, except at the end of the line.
-        if (*s).c == K_DEL && cc.cmdpos != cc.cmdlen {
+        if (*s).c == K_DEL && cc.cmdpos != cc.len() {
             cc.cmdpos += 1;
         }
         if (*s).c == K_DEL {
-            cc.cmdpos += mb_off_next(cc.cmdbuff, cc.cmdbuff.offset(cc.cmdpos as isize));
+            cc.cmdpos += mb_off_next(cc.text(), cc.text().offset(cc.cmdpos as isize));
         }
 
         if cc.cmdpos > 0 {
             let mut j = cc.cmdpos;
-            let mut p = mb_prevptr(cc.cmdbuff, cc.cmdbuff.offset(j as isize));
+            let mut p = mb_prevptr(cc.text(), cc.at(j));
 
             if (*s).c == Ctrl_W {
-                while p > cc.cmdbuff && ascii_isspace(*p as ::core::ffi::c_int) {
-                    p = mb_prevptr(cc.cmdbuff, p);
+                while p > cc.text() && ascii_isspace(*p as ::core::ffi::c_int) {
+                    p = mb_prevptr(cc.text(), p);
                 }
                 let class = mb_get_class(p);
-                while p > cc.cmdbuff && mb_get_class(p) == class {
-                    p = mb_prevptr(cc.cmdbuff, p);
+                while p > cc.text() && mb_get_class(p) == class {
+                    p = mb_prevptr(cc.text(), p);
                 }
                 if mb_get_class(p) != class {
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }
             }
 
-            cc.cmdpos = p.offset_from(cc.cmdbuff) as ::core::ffi::c_int;
-            cc.cmdlen -= j - cc.cmdpos;
-            let mut i = cc.cmdpos;
-            while i < cc.cmdlen {
-                *cc.cmdbuff.offset(i as isize) = *cc.cmdbuff.offset(j as isize);
-                i += 1;
-                j += 1;
-            }
-
-            // Truncate at the end, required for multi-byte characters.
-            *cc.cmdbuff.offset(cc.cmdlen as isize) = NUL as ::core::ffi::c_char;
-            if cc.cmdlen == 0 {
+            cc.cmdpos = p.offset_from(cc.text()) as ::core::ffi::c_int;
+            // Shift the tail down over the deleted bytes; `set_len` writes the
+            // terminator, which is why it comes after the move and not before.
+            let tail = (cc.len() - j).max(0) as usize;
+            ::core::ptr::copy(cc.at(j), cc.at(cc.cmdpos), tail);
+            cc.set_len(cc.len() - (j - cc.cmdpos));
+            if cc.len() == 0 {
                 (*s).is_state.search_start = (*s).is_state.save_cursor;
                 // Save the view settings, so that the screen won't be
                 // restored at the wrong position.
                 (*s).is_state.old_viewstate = (*s).is_state.init_viewstate;
             }
             redrawcmd();
-        } else if cc.cmdlen == 0 && (*s).c != Ctrl_W && cc.cmdprompt.is_null() && (*s).indent == 0 {
+        } else if cc.len() == 0 && (*s).c != Ctrl_W && cc.cmdprompt.is_null() && (*s).indent == 0 {
             // In ex and debug mode it doesn't make sense to return.
             if exmode_active.get() || cc.cmdfirstc == '>' as ::core::ffi::c_int {
                 return KeyOutcome::NotChanged;
@@ -166,14 +161,14 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
 
             // When there was a serious error, abort getting the command line.
             if aborting() {
-                // Will free ccline.cmdbuff after putting it in the history.
+                // Will drop the command line after putting it in the history.
                 (*s).gotesc = true;
                 return KeyOutcome::GotoNormalMode;
             }
             KeyTyped.set(false); // don't do 'wildchar' completion
             if new_cmdpos.get() >= 0 {
                 // set_cmdline_pos() was used.
-                cc.cmdpos = cc.cmdlen.min(new_cmdpos.get());
+                cc.cmdpos = cc.len().min(new_cmdpos.get());
             }
         }
         new_cmdpos.set(save_new_cmdpos);
@@ -199,7 +194,7 @@ pub(crate) unsafe fn command_line_left_right_mouse(s: *mut CommandLineState) {
 
         cc.cmdspos = cmd_startcol();
         cc.cmdpos = 0;
-        while cc.cmdpos < cc.cmdlen {
+        while cc.cmdpos < cc.len() {
             let cells = cmdline_charsize(cc.cmdpos);
             if mouse_row.get() <= cmdline_row.get() + cc.cmdspos / Columns.get()
                 && mouse_col.get() < cc.cmdspos % Columns.get() + cells
@@ -209,7 +204,7 @@ pub(crate) unsafe fn command_line_left_right_mouse(s: *mut CommandLineState) {
 
             // Count ">" for a double-wide character that doesn't fit.
             correct_screencol(cc.cmdpos, cells, &raw mut cc.cmdspos);
-            cc.cmdpos += utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize)) - 1;
+            cc.cmdpos += utfc_ptr2len(cc.text().offset(cc.cmdpos as isize)) - 1;
             cc.cmdspos += cells;
             cc.cmdpos += 1;
         }
@@ -248,19 +243,14 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 
             Ctrl_U => {
                 // Delete all characters left of the cursor.
-                let mut j = cc.cmdpos;
-                cc.cmdlen -= j;
+                // Shift the tail down over everything left of the cursor;
+                // `set_len` writes the terminator, so it comes after the move.
+                let j = cc.cmdpos;
+                let tail = (cc.len() - j).max(0) as usize;
+                ::core::ptr::copy(cc.at(j), cc.at(0), tail);
                 cc.cmdpos = 0;
-                let mut i = 0;
-                while i < cc.cmdlen {
-                    *cc.cmdbuff.offset(i as isize) = *cc.cmdbuff.offset(j as isize);
-                    i += 1;
-                    j += 1;
-                }
-
-                // Truncate at the end, required for multi-byte characters.
-                *cc.cmdbuff.offset(cc.cmdlen as isize) = NUL as ::core::ffi::c_char;
-                if cc.cmdlen == 0 {
+                cc.set_len(cc.len() - j);
+                if cc.len() == 0 {
                     (*s).is_state.search_start = (*s).is_state.save_cursor;
                 }
                 redrawcmd();
@@ -279,7 +269,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                     return Some(command_line_not_changed(s));
                 }
 
-                // Will free ccline.cmdbuff after putting it in the history.
+                // Will drop the command line after putting it in the history.
                 (*s).gotesc = true;
                 Some(0) // back to cmd mode
             }
@@ -305,17 +295,17 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             }
 
             K_RIGHT | K_S_RIGHT | K_C_RIGHT => {
-                while cc.cmdpos < cc.cmdlen {
+                while cc.cmdpos < cc.len() {
                     let cells = cmdline_charsize(cc.cmdpos);
                     if KeyTyped.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
                         break;
                     }
                     cc.cmdspos += cells;
-                    cc.cmdpos += utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize));
+                    cc.cmdpos += utfc_ptr2len(cc.text().offset(cc.cmdpos as isize));
                     if !(((*s).c == K_S_RIGHT
                         || (*s).c == K_C_RIGHT
                         || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
-                        && *cc.cmdbuff.offset(cc.cmdpos as isize) as ::core::ffi::c_int
+                        && *cc.text().offset(cc.cmdpos as isize) as ::core::ffi::c_int
                             != ' ' as ::core::ffi::c_int)
                     {
                         break;
@@ -332,14 +322,13 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 loop {
                     cc.cmdpos -= 1;
                     // Move to the first byte of a possibly multibyte char.
-                    cc.cmdpos -= utf_head_off(cc.cmdbuff, cc.cmdbuff.offset(cc.cmdpos as isize));
+                    cc.cmdpos -= utf_head_off(cc.text(), cc.text().offset(cc.cmdpos as isize));
                     cc.cmdspos -= cmdline_charsize(cc.cmdpos);
                     if !(cc.cmdpos > 0
                         && ((*s).c == K_S_LEFT
                             || (*s).c == K_C_LEFT
                             || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
-                        && *cc.cmdbuff.offset((cc.cmdpos - 1) as isize) as ::core::ffi::c_int
-                            != ' ' as ::core::ffi::c_int)
+                        && *cc.at(cc.cmdpos - 1) as ::core::ffi::c_int != ' ' as ::core::ffi::c_int)
                     {
                         break;
                     }
@@ -410,7 +399,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 
             // End of the command line.
             Ctrl_E | K_END | K_KEND | K_S_END | K_C_END => {
-                cc.cmdpos = cc.cmdlen;
+                cc.cmdpos = cc.len();
                 cc.cmdspos = cmd_screencol(cc.cmdpos);
                 Some(command_line_not_changed(s))
             }
@@ -543,7 +532,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                         // with true?
                         unputcmdline();
                     } else {
-                        draw_cmdline(cc.cmdpos, cc.cmdlen - cc.cmdpos);
+                        draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
                         msg_putchar(' ' as ::core::ffi::c_int);
                         cursorcmd();
                     }
@@ -576,7 +565,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 // Number prompts use the mouse and return on a 'q' press;
                 // otherwise 'q' FALLS THROUGH to the default arm.
                 if c == 'q' as ::core::ffi::c_int && !cc.mouse_used.is_null() {
-                    *cc.cmdbuff = NUL as ::core::ffi::c_char;
+                    *cc.at(0) = NUL as ::core::ffi::c_char;
                     return Some(0);
                 }
                 // A normal character with no special meaning. Just set

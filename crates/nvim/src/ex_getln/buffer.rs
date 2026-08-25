@@ -1,7 +1,7 @@
-//! The `ccline.cmdbuff` allocation, and pasting into it.
+//! The command line's own text buffer, and pasting into it.
 //!
-//! [`realloc_cmdbuff`] is the one every caller has to be careful of: it moves
-//! the buffer, so nothing may hold a pointer into it across a call.
+//! [`realloc_cmdbuff`] is the one every caller has to be careful of: it may
+//! move the buffer, so nothing may hold a pointer into it across a call.
 //! [`cmdline_paste`] and [`ccheck_abbr`] are the two writers that go through
 //! the register and abbreviation machinery, and the `*_fnameescape` helpers
 //! escape a file name on its way in.
@@ -69,22 +69,101 @@ impl Cc {
         self.0
     }
 
-    /// The command line's own bytes: `cmdbuff[..cmdlen]`.
+    /// The command line's own bytes: C's `cmdbuff[..cmdlen]`.
     ///
-    /// `cmdbuff` is NULL between [`dealloc_cmdbuff`] and the next
-    /// [`alloc_cmdbuff`] and `slice::from_raw_parts` may not be handed a null
-    /// pointer even with a length of zero, so the empty line is a separate
-    /// arm. The slice must not outlive the next [`realloc_cmdbuff`] or
-    /// [`put_on_cmdline`] -- both move the allocation -- which is why every
-    /// caller takes it inside the expression that reads it rather than
-    /// binding it across a call.
-    pub(crate) fn bytes<'a>(self) -> &'a [::core::ffi::c_char] {
-        if self.cmdbuff.is_null() {
-            return &[];
+    /// The slice must not outlive the next [`Cc::reserve`] or
+    /// [`put_on_cmdline`] -- both may move the allocation -- which is why
+    /// every caller takes it inside the expression that reads it rather than
+    /// binding it across a call. That is also why the lifetime is free: the
+    /// handle is a pointer, so a borrow it carried would say nothing true.
+    pub(crate) fn bytes<'a>(mut self) -> &'a [::core::ffi::c_char] {
+        let text = self.cmdbuff.bytes();
+        // SAFETY: the borrow is the caller's obligation, stated above.
+        unsafe { ::core::slice::from_raw_parts(text.as_ptr(), text.len()) }
+    }
+
+    /// C's `cmdlen`.
+    pub(crate) fn len(self) -> ::core::ffi::c_int {
+        self.cmdbuff.len()
+    }
+
+    /// Whether a command line is in use: C's `cmdbuff != NULL`.
+    pub(crate) fn in_use(self) -> bool {
+        self.cmdbuff.in_use()
+    }
+
+    /// C's `cmdbuff`: the text and its terminator, NULL when no command line
+    /// is in use.
+    pub(crate) fn text(mut self) -> *mut ::core::ffi::c_char {
+        self.cmdbuff.as_mut_ptr()
+    }
+
+    /// C's `cmdbuff + i`.
+    ///
+    /// `wrapping_offset`, not `offset`: with no command line in use the base
+    /// is NULL, and several callers compute an address they then compare
+    /// rather than read.
+    pub(crate) fn at(mut self, i: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
+        self.cmdbuff.as_mut_ptr().wrapping_offset(i as isize)
+    }
+
+    /// C's `realloc_cmdbuff`: make room for `want` bytes, terminator
+    /// included.
+    pub(crate) fn reserve(mut self, want: ::core::ffi::c_int) {
+        self.cmdbuff.reserve(want);
+    }
+
+    /// C's `cmdlen = n`, with the terminator that goes with it.
+    pub(crate) fn set_len(mut self, n: ::core::ffi::c_int) {
+        self.cmdbuff.set_len(n);
+    }
+
+    /// Replace the text, opening a command line if none was in use.
+    pub(crate) fn set_text(mut self, bytes: &[::core::ffi::c_char]) {
+        self.cmdbuff.set(bytes);
+    }
+
+    /// Replace the text with a NUL-terminated string's bytes.
+    ///
+    /// # Safety
+    ///
+    /// `s` must be a live NUL-terminated string that does not point into this
+    /// command line's own buffer.
+    pub(crate) unsafe fn set_cstr(self, s: *const ::core::ffi::c_char) {
+        // SAFETY: the caller's promise -- a NUL-terminated string.
+        let text = unsafe { ::core::slice::from_raw_parts(s, len(s)) };
+        self.set_text(text);
+    }
+
+    /// C's `alloc_cmdbuff`: an empty command line with room for `want` bytes.
+    pub(crate) fn open(mut self, want: ::core::ffi::c_int) {
+        self.cmdbuff.open(want);
+    }
+
+    /// C's `dealloc_cmdbuff`: no command line in use.
+    pub(crate) fn close(mut self) {
+        self.cmdbuff.close();
+    }
+
+    /// Hand the text to a caller that owns it, closing the command line.
+    ///
+    /// `getcmdline()`'s answer is an `xmalloc`ed C string its caller frees,
+    /// so the bytes are copied out rather than the `Vec` released: an
+    /// allocation the editor made is not one `xfree` may take. Answers NULL
+    /// when no command line was in use, which is what the callers test.
+    pub(crate) fn release(self) -> *mut ::core::ffi::c_char {
+        if !self.in_use() {
+            return ::core::ptr::null_mut();
         }
-        let (from, n) = (self.cmdbuff, self.cmdlen.max(0) as usize);
-        // SAFETY: `cmdlen` bytes of the live `cmdbuff` allocation.
-        unsafe { ::core::slice::from_raw_parts(from, n) }
+        let text = self.bytes();
+        let out = alloc(text.len() as size_t + 1);
+        // SAFETY: `text.len() + 1` bytes were just asked for, and `xmalloc`
+        // aborts rather than answering null.
+        let copy = unsafe { ::core::slice::from_raw_parts_mut(out, text.len() + 1) };
+        copy[..text.len()].copy_from_slice(text);
+        copy[text.len()] = NUL as ::core::ffi::c_char;
+        self.close();
+        out
     }
 
     /// The byte offset the cursor is on.
@@ -175,64 +254,35 @@ pub fn cmdline_overstrike() -> bool {
 /// Whether the cursor is at the end of the command line.
 pub fn cmdline_at_end() -> bool {
     let cc = Cc::current();
-    cc.cmdpos >= cc.cmdlen
+    cc.cmdpos >= cc.len()
 }
 
 // ---------------------------------------------------------------------------
 // The allocation.
 
-/// Deallocate the command-line buffer, updating its size and length.
+/// Close the command line: C's `dealloc_cmdbuff`.
 pub(crate) fn dealloc_cmdbuff() {
-    let mut cc = Cc::current();
-    free(cc.cmdbuff);
-    cc.cmdbuff = ::core::ptr::null_mut();
-    cc.cmdbufflen = 0;
-    cc.cmdlen = 0;
+    Cc::current().close();
 }
 
-/// Allocate a new command-line buffer into `ccline.cmdbuff`/`cmdbufflen`.
-pub(crate) fn alloc_cmdbuff(mut len: ::core::ffi::c_int) {
-    // Give some extra space to avoid having to allocate all the time.
-    if len < 80 {
-        len = 100;
-    } else {
-        len += 20;
-    }
-    let mut cc = Cc::current();
-    cc.cmdbuff = alloc(len as size_t);
-    cc.cmdbufflen = len;
-}
-
-/// Re-allocate the command line to `len` plus something extra.
+/// Make room for `len` bytes of command line, terminator included.
 ///
-/// This *moves* the buffer.  `xp_pattern` is the one pointer into it
-/// upstream knows about and re-derives here; anything else holding a
-/// pointer or an offset into `cmdbuff` across a call is a bug — the
-/// completion code deliberately keeps indices rather than pointers for
-/// that reason.
-pub fn realloc_cmdbuff(len: ::core::ffi::c_int) {
-    if len < Cc::current().cmdbufflen {
-        return; // no need to resize
+/// C's `realloc_cmdbuff`, and it may still *move* the buffer, but only when
+/// the buffer it is asked to grow is the one being written -- `Cc` carries
+/// which. `xp_pattern` is the one pointer into it upstream knows about and
+/// re-derives here; anything else holding a pointer or an offset into the
+/// text across a call is a bug, which is why the completion code keeps
+/// indices.
+pub(crate) fn realloc_cmdbuff(cc: Cc, len: ::core::ffi::c_int) {
+    let old = cc.text();
+    cc.reserve(len);
+    if cc.text() != old {
+        move_xp_pattern(cc, old);
     }
-    let old = Cc::current().cmdbuff;
-    alloc_cmdbuff(len); // will get some more
-
-    // There isn't always a NUL after the command, but it may need to be
-    // there, so copy up to the NUL and add one.
-    let cc = Cc::current();
-    let (to, n) = (cc.cmdbuff, cc.cmdlen as size_t);
-    // SAFETY: `cmdlen` bytes moved from the old allocation into the new one,
-    // which `alloc_cmdbuff` has just made at least that long.
-    unsafe { memmove(to as *mut _, old as *const _, n) };
-    // SAFETY: one past the text, inside the new allocation.
-    unsafe { *cc.cmdbuff.add(cc.cmdlen.max(0) as usize) = NUL as ::core::ffi::c_char };
-
-    move_xp_pattern(cc, old);
-    free(old);
 }
 
-/// If `xp_pattern` pointed inside the old `cmdbuff` it has to be adjusted to
-/// point into the newly allocated memory.
+/// If `xp_pattern` pointed inside the old text it has to be adjusted to point
+/// into the newly allocated memory.
 fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
     if cc.xpc.is_null() {
         return;
@@ -248,8 +298,8 @@ fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
     // SAFETY: as upstream -- `xp_pattern` either points into `old` or into
     // something else entirely, and the difference decides which.
     let i = unsafe { xpc.xp_pattern.offset_from(old) } as ::core::ffi::c_int;
-    if i >= 0 && i <= cc.cmdlen {
-        xpc.xp_pattern = cc.cmdbuff.wrapping_offset(i as isize);
+    if i >= 0 && i <= cc.len() {
+        xpc.xp_pattern = cc.at(i);
     }
 }
 
@@ -362,10 +412,10 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
 fn duplicate_word_len(arg: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let cc = Cc::current();
     // Locate the start of the last word in the cmd buffer.
-    let end = cc.cmdbuff.wrapping_offset(cc.cursor());
+    let end = cc.text().wrapping_offset(cc.cursor());
     let mut w = end;
-    while w > cc.cmdbuff {
-        let len = head_off(cc.cmdbuff, w.wrapping_offset(-1)) + 1;
+    while w > cc.text() {
+        let len = head_off(cc.text(), w.wrapping_offset(-1)) + 1;
         if !is_word_char(char_at(w.wrapping_offset(-(len as isize)))) {
             break;
         }
@@ -465,7 +515,7 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
         spos = 0;
     }
 
-    let (buff, col, mincol) = (cc.cmdbuff, cc.cmdpos, spos as ::core::ffi::c_int);
+    let (buff, col, mincol) = (cc.text(), cc.cmdpos, spos as ::core::ffi::c_int);
     // SAFETY: the live command line, and two offsets inside it.
     unsafe { check_abbr(c, buff, col, mincol) }
 }

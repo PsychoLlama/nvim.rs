@@ -573,7 +573,7 @@ pub unsafe fn set_cmd_context(
             set_context_for_expression(xp, str, CMD_SIZE);
         } else if use_ccline && ccline.input_fn != 0 {
             (*xp).xp_context = ccline.xp_context;
-            (*xp).xp_pattern = ccline.cmdbuff;
+            (*xp).xp_pattern = ccline.text();
             (*xp).xp_arg = ccline.xp_arg;
             if (*xp).xp_context == ExpandContext::ShellCmdLine {
                 let mut context = (*xp).xp_context;

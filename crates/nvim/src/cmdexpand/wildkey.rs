@@ -48,8 +48,8 @@ pub(crate) unsafe fn wildmenu_translate_key(
         // Hitting CR after "emenu Name.": complete the submenu.
         if (*xp).xp_context == ExpandContext::Menunames
             && cclp.cmdpos > 1
-            && *cclp.cmdbuff.offset((cclp.cmdpos - 1) as isize) == b'.' as c_char
-            && *cclp.cmdbuff.offset((cclp.cmdpos - 2) as isize) != b'\\' as c_char
+            && *cclp.at(cclp.cmdpos - 1) == b'.' as c_char
+            && *cclp.at(cclp.cmdpos - 2) != b'\\' as c_char
             && (c == '\n' as c_int || c == '\r' as c_int || c == K_KENTER)
         {
             c = K_DOWN;
@@ -61,14 +61,14 @@ pub(crate) unsafe fn wildmenu_translate_key(
 /// Delete characters on the command line, from `from` to the current position.
 unsafe fn cmdline_del(mut cclp: Cc, from: c_int) {
     unsafe {
-        debug_assert!(cclp.cmdpos <= cclp.cmdlen);
+        debug_assert!(cclp.cmdpos <= cclp.len());
         // +1 for the NUL.
         core::ptr::copy(
-            cclp.cmdbuff.offset(cclp.cmdpos as isize),
-            cclp.cmdbuff.offset(from as isize),
-            (cclp.cmdlen - cclp.cmdpos + 1) as size_t,
+            cclp.text().offset(cclp.cmdpos as isize),
+            cclp.at(from),
+            (cclp.len() - cclp.cmdpos + 1) as size_t,
         );
-        cclp.cmdlen -= cclp.cmdpos - from;
+        cclp.set_len(cclp.len() - (cclp.cmdpos - from));
         cclp.cmdpos = from;
     }
 }
@@ -85,7 +85,7 @@ fn recomplete() -> c_int {
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
 unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     unsafe {
-        let buf = cclp.cmdbuff;
+        let buf = cclp.text();
         if key == K_DOWN
             && cclp.cmdpos > 0
             && *buf.offset((cclp.cmdpos - 1) as isize) == b'.' as c_char
@@ -137,7 +137,7 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T
 /// completion of the result.
 unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     unsafe {
-        let buf = cclp.cmdbuff;
+        let buf = cclp.text();
         let at = |k: c_int| *buf.offset(k as isize);
         // Where the pattern being completed starts.
         let start = (*xp).xp_pattern.offset_from(buf) as c_int;

@@ -65,14 +65,14 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
         }
 
         if (*s).c != 'e' as ::core::ffi::c_int {
-            // Will free ccline.cmdbuff after putting it in the history.
+            // Will drop the command line after putting it in the history.
             (*s).gotesc = true;
             return CtrlBsl::GotoNormalMode;
         }
 
         // Replace the command line with the result of an expression. This
         // calls getcmdline() recursively, from get_expr_register().
-        new_cmdpos.set(if cc.cmdpos == cc.cmdlen {
+        new_cmdpos.set(if cc.cmdpos == cc.len() {
             99999 // keep it at the end
         } else {
             cc.cmdpos
@@ -89,14 +89,14 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
 
             if !p.is_null() {
                 let len = strlen(p) as ::core::ffi::c_int;
-                realloc_cmdbuff(len + 1);
-                cc.cmdlen = len;
-                strcpy(cc.cmdbuff, p);
+                realloc_cmdbuff(cc, len + 1);
+                cc.set_len(len);
+                strcpy(cc.text(), p);
                 xfree(p as *mut ::core::ffi::c_void);
 
                 // Restore the cursor, or use the position set with
                 // set_cmdline_pos().
-                cc.cmdpos = cc.cmdlen.min(new_cmdpos.get());
+                cc.cmdpos = cc.len().min(new_cmdpos.get());
 
                 KeyTyped.set(false); // don't do 'wildchar' completion
                 redrawcmd();
@@ -390,10 +390,9 @@ pub(crate) unsafe fn command_line_execute(
             // In Ex mode a backslash escapes a newline.
             if exmode_active.get()
                 && (*s).c != ESC
-                && cc.cmdpos == cc.cmdlen
+                && cc.cmdpos == cc.len()
                 && cc.cmdpos > 0
-                && *cc.cmdbuff.offset((cc.cmdpos - 1) as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
+                && *cc.at(cc.cmdpos - 1) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
             {
                 if (*s).c == K_KENTER {
                     (*s).c = '\n' as ::core::ffi::c_int;
@@ -589,7 +588,7 @@ pub(crate) unsafe fn command_line_changed(s: *mut CommandLineState) -> ::core::f
 
         if !cc.cmdbuff_replaced
             && (cc.cmdpos != (*s).prev_cmdpos
-                || (!(*s).prev_cmdbuff.is_null() && strcmp((*s).prev_cmdbuff, cc.cmdbuff) != 0))
+                || (!(*s).prev_cmdbuff.is_null() && strcmp((*s).prev_cmdbuff, cc.text()) != 0))
         {
             do_autocmd_cmdlinechanged(if (*s).firstc > 0 {
                 (*s).firstc

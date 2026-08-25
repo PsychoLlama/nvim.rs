@@ -34,14 +34,14 @@ unsafe fn push_chunk(colors: *mut CmdlineColors, chunk: CmdlineColorChunk) {
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
 pub(crate) unsafe fn color_expr_cmdline(
-    colored_ccline: *const CmdlineInfo,
+    colored_ccline: Cc,
     ret_ccline_colors: *mut ColoredCmdline,
 ) {
     unsafe {
         let mut parser_lines: [ParserLine; 2] = [
             ParserLine {
-                data: (*colored_ccline).cmdbuff,
-                size: strlen((*colored_ccline).cmdbuff),
+                data: colored_ccline.text(),
+                size: strlen(colored_ccline.text()),
                 allocated: false,
             },
             ParserLine {
@@ -114,12 +114,12 @@ pub(crate) unsafe fn color_expr_cmdline(
             prev_end = chunk.end_col;
             i += 1;
         }
-        if prev_end < (*colored_ccline).cmdlen as size_t {
+        if prev_end < colored_ccline.len() as size_t {
             push_chunk(
                 out,
                 CmdlineColorChunk {
                     start: prev_end as ::core::ffi::c_int,
-                    end: (*colored_ccline).cmdlen,
+                    end: colored_ccline.len(),
                     hl_id: 0,
                 },
             );
@@ -155,7 +155,7 @@ enum Label {
 ///
 /// Answers true if [`super::draw::draw_cmdline`] may proceed, false if there
 /// is nothing for it to do.
-pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
+pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     unsafe {
         let mut printed_errmsg = false;
 
@@ -171,21 +171,19 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         }
 
         let mut ret = true;
-        let ccline_colors: *mut ColoredCmdline = &raw mut (*colored_ccline).last_colors;
+        let ccline_colors: *mut ColoredCmdline = &raw mut (*colored_ccline.raw()).last_colors;
 
         // Is the result of the previous call still valid?
-        if (*ccline_colors).prompt_id == (*colored_ccline).prompt_id
+        if (*ccline_colors).prompt_id == colored_ccline.prompt_id
             && !(*ccline_colors).cmdbuff.is_null()
-            && strcmp((*ccline_colors).cmdbuff, (*colored_ccline).cmdbuff) == 0
+            && strcmp((*ccline_colors).cmdbuff, colored_ccline.text()) == 0
         {
             return ret;
         }
 
         (*ccline_colors).colors.size = 0;
 
-        if (*colored_ccline).cmdbuff.is_null()
-            || *(*colored_ccline).cmdbuff as ::core::ffi::c_int == NUL
-        {
+        if !colored_ccline.in_use() || *colored_ccline.text() as ::core::ffi::c_int == NUL {
             // Nothing to do.
             xfree((*ccline_colors).cmdbuff as *mut ::core::ffi::c_void);
             (*ccline_colors).cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -197,7 +195,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             v_type: VAR_STRING,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union {
-                v_string: (*colored_ccline).cmdbuff,
+                v_string: colored_ccline.text(),
             },
         };
         let mut tv = typval_T {
@@ -224,19 +222,19 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         let mut dgc_ret = true;
 
         let outcome = 'body: {
-            if (*colored_ccline).prompt_id != prev_prompt_id.get() {
+            if colored_ccline.prompt_id != prev_prompt_id.get() {
                 prev_prompt_errors.set(0);
-                prev_prompt_id.set((*colored_ccline).prompt_id);
+                prev_prompt_id.set(colored_ccline.prompt_id);
             } else if prev_prompt_errors.get() >= MAX_CB_ERRORS {
                 break 'body Label::End;
             }
 
-            if (*colored_ccline).highlight_callback.type_0 != kCallbackNone {
+            if colored_ccline.highlight_callback.type_0 != kCallbackNone {
                 // Currently this should only happen while processing input()
                 // prompts.
-                debug_assert!((*colored_ccline).input_fn != 0);
-                color_cb = (*colored_ccline).highlight_callback.clone();
-            } else if (*colored_ccline).cmdfirstc == ':' as ::core::ffi::c_int {
+                debug_assert!(colored_ccline.input_fn != 0);
+                color_cb = colored_ccline.highlight_callback.clone();
+            } else if colored_ccline.cmdfirstc == ':' as ::core::ffi::c_int {
                 // C's TRY_WRAP.
                 let mut tstate: TryState = TRY_STATE_INIT;
                 try_enter(&raw mut tstate);
@@ -250,7 +248,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 );
                 try_leave(&raw mut tstate, &raw mut err);
                 can_free_cb = true;
-            } else if (*colored_ccline).cmdfirstc == '=' as ::core::ffi::c_int {
+            } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
                 color_expr_cmdline(colored_ccline, ccline_colors);
             }
             if err.type_0 != kErrorTypeNone || !dgc_ret {
@@ -260,15 +258,11 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             if color_cb.type_0 == kCallbackNone {
                 break 'body Label::End;
             }
-            if *(*colored_ccline)
-                .cmdbuff
-                .offset((*colored_ccline).cmdlen as isize) as ::core::ffi::c_int
-                != NUL
-            {
+            if *colored_ccline.at(colored_ccline.len()) as ::core::ffi::c_int != NUL {
                 arg_allocated = true;
                 arg.vval.v_string = xmemdupz(
-                    (*colored_ccline).cmdbuff as *const ::core::ffi::c_void,
-                    (*colored_ccline).cmdlen as size_t,
+                    colored_ccline.text() as *const ::core::ffi::c_void,
+                    colored_ccline.len() as size_t,
                 ) as *mut ::core::ffi::c_char;
             }
             // msg_start(), called by e.g. :echo, may shift the command line to
@@ -332,17 +326,17 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 let start = tv_get_number_chk(&raw mut (*tv_list_first(l)).li_tv, &raw mut error);
                 if error {
                     break 'body Label::Error;
-                } else if !(prev_end <= start && start < (*colored_ccline).cmdlen as varnumber_T) {
+                } else if !(prev_end <= start && start < colored_ccline.len() as varnumber_T) {
                     print_errmsg!(
                         gettext(c"E5403: Chunk %i start %ld not in range [%ld, %i)".as_ptr()),
                         i,
                         start,
                         prev_end,
-                        (*colored_ccline).cmdlen
+                        colored_ccline.len()
                     );
                     break 'body Label::Error;
                 } else if utf8len_tab_zero
-                    [*(*colored_ccline).cmdbuff.offset(start as isize) as uint8_t as usize]
+                    [*colored_ccline.at(start as ::core::ffi::c_int) as uint8_t as usize]
                     == 0
                 {
                     print_errmsg!(
@@ -370,18 +364,18 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 );
                 if error {
                     break 'body Label::Error;
-                } else if !(start < end && end <= (*colored_ccline).cmdlen as varnumber_T) {
+                } else if !(start < end && end <= colored_ccline.len() as varnumber_T) {
                     print_errmsg!(
                         gettext(c"E5404: Chunk %i end %ld not in range (%ld, %i]".as_ptr()),
                         i,
                         end,
                         start,
-                        (*colored_ccline).cmdlen
+                        colored_ccline.len()
                     );
                     break 'body Label::Error;
-                } else if end < (*colored_ccline).cmdlen as varnumber_T
+                } else if end < colored_ccline.len() as varnumber_T
                     && utf8len_tab_zero
-                        [*(*colored_ccline).cmdbuff.offset(end as isize) as uint8_t as usize]
+                        [*colored_ccline.at(end as ::core::ffi::c_int) as uint8_t as usize]
                         == 0
                 {
                     print_errmsg!(
@@ -409,12 +403,12 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 li = (*li).li_next;
             }
 
-            if prev_end < (*colored_ccline).cmdlen as varnumber_T {
+            if prev_end < colored_ccline.len() as varnumber_T {
                 push_chunk(
                     &raw mut (*ccline_colors).colors,
                     CmdlineColorChunk {
                         start: prev_end as ::core::ffi::c_int,
-                        end: (*colored_ccline).cmdlen,
+                        end: colored_ccline.len(),
                         hl_id: 0,
                     },
                 );
@@ -443,13 +437,13 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         }
         xfree((*ccline_colors).cmdbuff as *mut ::core::ffi::c_void);
         // Errors' "output" is cached just as well as regular results.
-        (*ccline_colors).prompt_id = (*colored_ccline).prompt_id;
+        (*ccline_colors).prompt_id = colored_ccline.prompt_id;
         if arg_allocated {
             (*ccline_colors).cmdbuff = arg.vval.v_string;
         } else {
             (*ccline_colors).cmdbuff = xmemdupz(
-                (*colored_ccline).cmdbuff as *const ::core::ffi::c_void,
-                (*colored_ccline).cmdlen as size_t,
+                colored_ccline.text() as *const ::core::ffi::c_void,
+                colored_ccline.len() as size_t,
             ) as *mut ::core::ffi::c_char;
         }
         tv_clear(&raw mut tv);

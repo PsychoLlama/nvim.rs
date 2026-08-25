@@ -298,7 +298,7 @@ fn winfixbuf_allows() -> bool {
 
 pub unsafe fn prevwin_curwin() -> *mut win_T {
     // SAFETY: reads the cmdline-window state, which is always set up.
-    let in_cmdwin = unsafe { is_in_cmdwin() };
+    let in_cmdwin = is_in_cmdwin();
     let prev = prevwin.get();
     if in_cmdwin && !prev.is_null() {
         prev

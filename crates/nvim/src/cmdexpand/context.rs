@@ -46,7 +46,7 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
             } else {
                 BACKWARD
             };
-            (*xp).xp_pattern = ccline.cmdbuff;
+            (*xp).xp_pattern = ccline.text();
             (*xp).xp_pattern_len = ccline.cmdpos as size_t;
             search_first_line.set(0); // Search entire buffer
             return;
@@ -63,7 +63,7 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
         }
 
         // Fallback to command-line expansion.
-        set_cmd_context(xp, ccline.cmdbuff, ccline.cmdlen, ccline.cmdpos, true);
+        set_cmd_context(xp, ccline.text(), ccline.len(), ccline.cmdpos, true);
     }
 }
 
@@ -645,7 +645,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
             return;
         }
 
-        (*xp).xp_pattern = ccline.cmdbuff.offset(skiplen as isize);
+        (*xp).xp_pattern = ccline.at(skiplen);
         (*xp).xp_pattern_len = (ccline.cmdpos - skiplen) as size_t;
         (*xp).xp_context = ExpandContext::PatternInBuf;
         (*xp).xp_search_dir = FORWARD;

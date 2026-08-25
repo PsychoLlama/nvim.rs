@@ -176,10 +176,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
         }
 
         // The same on the command line, where `get_number()` has none.
-        if State.get() & MODE_CMDLINE != 0
-            && !(*get_cmdline_info()).cmdbuff.is_null()
-            && cmdline_star.get() == 0
-        {
+        if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && cmdline_star.get() == 0 {
             let p = tb.at(tb.len() - 1);
             if ptr2cells(p.cast()) == 1 && c_int::from(*p) < 128 {
                 putcmdline(*p as c_char, false);
@@ -203,7 +200,7 @@ unsafe fn unshow_partial_key(partial: &Partial) {
             if State.get() & MODE_INSERT != 0 {
                 edit_unputchar();
             }
-            if State.get() & MODE_CMDLINE != 0 && !(*get_cmdline_info()).cmdbuff.is_null() {
+            if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
                 unputcmdline();
             } else {
                 setcursor(); // put the cursor back where it belongs

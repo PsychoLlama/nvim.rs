@@ -54,7 +54,7 @@ pub(crate) unsafe fn cmdline_pum_create(
         } else {
             (*xp).xp_pattern
         };
-        let col = endpos.offset_from(ccline.cmdbuff) as c_int;
+        let col = endpos.offset_from(ccline.text()) as c_int;
         compl_startcol.set(if ui_has(kUICmdline) && (*cmdline_win.ptr()).is_null() {
             col
         } else {

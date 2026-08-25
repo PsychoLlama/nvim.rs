@@ -103,7 +103,7 @@ pub unsafe fn parse_pattern_and_range(
         let mut magic: magic_T = 0;
 
         *skiplen = 0;
-        *patlen = Cc::current().cmdlen;
+        *patlen = Cc::current().len();
 
         // Default range: all lines.
         search_first_line.set(0);
@@ -112,7 +112,7 @@ pub unsafe fn parse_pattern_and_range(
         let mut ea = exarg_T {
             line1: 1,
             line2: 1,
-            cmd: Cc::current().cmdbuff,
+            cmd: Cc::current().text(),
             addr_type: CmdAddr::Lines,
             ..EXARG_T_INIT
         };
@@ -232,7 +232,7 @@ pub unsafe fn parse_pattern_and_range(
         }
 
         // Found a non-empty pattern, or "//".
-        *skiplen = p.offset_from(Cc::current().cmdbuff) as ::core::ffi::c_int;
+        *skiplen = p.offset_from(Cc::current().text()) as ::core::ffi::c_int;
         *patlen = end.offset_from(p) as ::core::ffi::c_int;
 
         // Parse the address range.
@@ -271,7 +271,7 @@ pub(crate) unsafe fn do_incsearch_highlighting(
 ) -> bool {
     unsafe {
         *skiplen = 0;
-        *patlen = Cc::current().cmdlen;
+        *patlen = Cc::current().len();
 
         if p_is.get() == 0 || cmd_silent.get() {
             return false;
@@ -337,9 +337,8 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         (*s).incsearch_postponed = false;
 
         // Use the previous pattern for ":s//".
-        let mut next_char = *cc.cmdbuff.offset((skiplen + patlen) as isize);
-        let use_last_pat =
-            patlen == 0 && skiplen > 0 && *cc.cmdbuff.offset((skiplen - 1) as isize) == next_char;
+        let mut next_char = *cc.at(skiplen + patlen);
+        let use_last_pat = patlen == 0 && skiplen > 0 && *cc.at(skiplen - 1) == next_char;
 
         if patlen != 0 || use_last_pat {
             ui_busy_start();
@@ -378,7 +377,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
                 sa_timed_out: 0,
                 sa_wrapped: 0,
             };
-            *cc.cmdbuff.offset((skiplen + patlen) as isize) = NUL as ::core::ffi::c_char;
+            *cc.at(skiplen + patlen) = NUL as ::core::ffi::c_char;
             // So it doesn't beep on a bad expression.
             let no_emsg = Suppress::emsg();
             found = do_search(
@@ -389,14 +388,14 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
                     firstc
                 },
                 search_delim,
-                cc.cmdbuff.offset(skiplen as isize),
+                cc.at(skiplen),
                 patlen as size_t,
                 count,
                 search_flags,
                 &raw mut sia,
             );
             drop(no_emsg);
-            *cc.cmdbuff.offset((skiplen + patlen) as isize) = next_char;
+            *cc.at(skiplen + patlen) = next_char;
 
             if (*curwin.get()).w_cursor.lnum < search_first_line.get()
                 || (*curwin.get()).w_cursor.lnum > search_last_line.get()
@@ -446,18 +445,13 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         // Disable 'hlsearch' highlighting if the pattern matches everything.
         // Avoids a flash when typing "foo\|".
         if !use_last_pat {
-            next_char = *cc.cmdbuff.offset((skiplen + patlen) as isize);
-            *cc.cmdbuff.offset((skiplen + patlen) as isize) = NUL as ::core::ffi::c_char;
-            if empty_pattern(
-                cc.cmdbuff.offset(skiplen as isize),
-                patlen as size_t,
-                search_delim,
-            ) && !no_hlsearch.get()
-            {
+            next_char = *cc.at(skiplen + patlen);
+            *cc.at(skiplen + patlen) = NUL as ::core::ffi::c_char;
+            if empty_pattern(cc.at(skiplen), patlen as size_t, search_delim) && !no_hlsearch.get() {
                 redraw_all_later(UPD_SOME_VALID);
                 set_no_hlsearch(true);
             }
-            *cc.cmdbuff.offset((skiplen + patlen) as isize) = next_char;
+            *cc.at(skiplen + patlen) = next_char;
         }
 
         validate_cursor(curwin.get());
@@ -474,7 +468,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 
         // Leave the cursor at the end so CTRL-R CTRL-W works — but not when
         // it is beyond the end of the pattern, as for ":s/pat/".
-        if *cc.cmdbuff.offset((skiplen + patlen) as isize) as ::core::ffi::c_int != NUL {
+        if *cc.at(skiplen + patlen) as ::core::ffi::c_int != NUL {
             (*curwin.get()).w_cursor = (*s).search_start;
         } else if found != 0 {
             (*curwin.get()).w_cursor = end_pos;
@@ -526,7 +520,7 @@ pub(crate) unsafe fn may_add_char_to_search(
                 // the command line, lowercase the character.
                 if p_ic.get() != 0
                     && p_scs.get() != 0
-                    && !pat_has_uppercase(Cc::current().cmdbuff.offset(skiplen as isize))
+                    && !pat_has_uppercase(Cc::current().at(skiplen))
                 {
                     *c = mb_tolower(*c);
                 }
@@ -635,7 +629,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             restore_last_search_pattern();
             return OK;
         }
-        if patlen == 0 && *cc.cmdbuff.offset(skiplen as isize) as ::core::ffi::c_int == NUL {
+        if patlen == 0 && *cc.at(skiplen) as ::core::ffi::c_int == NUL {
             restore_last_search_pattern();
             return FAIL;
         }
@@ -646,7 +640,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         let mut search_flags = SEARCH_NOOF;
 
         let pat: *mut ::core::ffi::c_char;
-        if search_delim == *cc.cmdbuff.offset(skiplen as isize) as ::core::ffi::c_int {
+        if search_delim == *cc.at(skiplen) as ::core::ffi::c_int {
             pat = last_search_pattern();
             if pat.is_null() {
                 restore_last_search_pattern();
@@ -655,7 +649,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             skiplen = 0;
             patlen = last_search_pattern_len() as ::core::ffi::c_int;
         } else {
-            pat = cc.cmdbuff.offset(skiplen as isize);
+            pat = cc.at(skiplen);
         }
 
         // Do not search for the search end delimiter, unless it is part of

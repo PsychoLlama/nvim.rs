@@ -130,7 +130,7 @@ pub unsafe fn showmatches(
             }
             let retval = expand_cmdline(
                 xp,
-                ccline.cmdbuff,
+                ccline.text(),
                 ccline.cmdpos,
                 &raw mut numMatches,
                 &raw mut matches,

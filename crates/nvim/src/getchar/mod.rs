@@ -17,7 +17,7 @@ use crate::event::libuv::uv_strerror;
 use crate::event::multiqueue::multiqueue_empty;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::update_topline_cursor;
-use crate::ex_getln::{get_cmdline_info, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
+use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_grow};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;

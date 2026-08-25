@@ -141,7 +141,7 @@ use crate::state::{
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr,
+    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr, CmdBuff,
     CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineColors, CmdlineInfo,
     ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
@@ -471,9 +471,7 @@ static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::
 /// `kCallbackNone` and a null `funcref` are both zero, so this really is the
 /// zero value and the C's `CLEAR_FIELD` and this constant agree bit for bit.
 pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
-    cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmdbufflen: 0,
-    cmdlen: 0,
+    cmdbuff: CmdBuff::NONE,
     cmdpos: 0,
     cmdspos: 0,
     cmdfirstc: 0,

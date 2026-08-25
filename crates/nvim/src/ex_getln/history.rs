@@ -69,7 +69,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
 
         // Save the current command string, so that it can be restored later.
         if (*s).lookfor.is_null() {
-            (*s).lookfor = xstrnsave(cc.cmdbuff, cc.cmdlen as size_t);
+            (*s).lookfor = xstrnsave(cc.text(), cc.len() as size_t);
             *(*s).lookfor.offset(cc.cmdpos as isize) = NUL as ::core::ffi::c_char;
             (*s).lookforlen = cc.cmdpos;
         }
@@ -125,19 +125,19 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
                         // Replace the old separator with the new one, unless
                         // it is escaped.
                         if pass > 0 {
-                            *cc.cmdbuff.offset(len as isize) = (*s).firstc as ::core::ffi::c_char;
+                            *cc.at(len) = (*s).firstc as ::core::ffi::c_char;
                         }
                     } else {
                         // Escape the new separator, unless it is already
                         // escaped.
                         if *p.offset(j) as ::core::ffi::c_int == (*s).firstc && unescaped(j) {
                             if pass > 0 {
-                                *cc.cmdbuff.offset(len as isize) = '\\' as ::core::ffi::c_char;
+                                *cc.at(len) = '\\' as ::core::ffi::c_char;
                             }
                             len += 1;
                         }
                         if pass > 0 {
-                            *cc.cmdbuff.offset(len as isize) = *p.offset(j);
+                            *cc.at(len) = *p.offset(j);
                         }
                     }
                     len += 1;
@@ -145,16 +145,16 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
                 }
 
                 if pass == 0 {
-                    alloc_cmdbuff(len);
+                    cc.open(len);
                 }
             }
-            *cc.cmdbuff.offset(len as isize) = NUL as ::core::ffi::c_char;
-            cc.cmdlen = len;
+            *cc.at(len) = NUL as ::core::ffi::c_char;
+            cc.set_len(len);
             cc.cmdpos = len;
         } else {
-            alloc_cmdbuff(plen);
-            strcpy(cc.cmdbuff, p);
-            cc.cmdlen = plen;
+            cc.open(plen);
+            strcpy(cc.text(), p);
+            cc.set_len(plen);
             cc.cmdpos = plen;
         }
 

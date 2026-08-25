@@ -70,11 +70,9 @@ pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi
         };
         cc.cmdindent = if firstc > 0 { indent } else { 0 };
 
-        // Allocate the initial ccline.cmdbuff.
-        alloc_cmdbuff(indent + 50);
-        cc.cmdlen = 0;
+        // Allocate the initial command-line buffer.
+        cc.open(indent + 50);
         cc.cmdpos = 0;
-        *cc.cmdbuff = NUL as ::core::ffi::c_char;
 
         cc.last_colors = COLORED_CMDLINE_INIT;
         sb_text_start_cmdline();
@@ -82,14 +80,14 @@ pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi
         // Autoindent for :insert and :append.
         if firstc <= 0 {
             memset(
-                cc.cmdbuff as *mut ::core::ffi::c_void,
+                cc.text() as *mut ::core::ffi::c_void,
                 ' ' as ::core::ffi::c_int,
                 indent as size_t,
             );
-            *cc.cmdbuff.offset(indent as isize) = NUL as ::core::ffi::c_char;
+            *cc.at(indent) = NUL as ::core::ffi::c_char;
             cc.cmdpos = indent;
             cc.cmdspos = indent;
-            cc.cmdlen = indent;
+            cc.set_len(indent);
         }
     }
 }
@@ -158,7 +156,7 @@ pub(crate) unsafe fn command_line_enter(
 
         let mut cc = Cc::current();
         let mut did_save_ccline = false;
-        if !cc.cmdbuff.is_null() {
+        if cc.in_use() {
             // Currently ccline can never be in use if clear_ccline is false;
             // some changes would be needed if that ever stops holding.
             debug_assert!(clear_ccline);
@@ -176,7 +174,7 @@ pub(crate) unsafe fn command_line_enter(
         }
 
         init_ccline((*s).firstc, (*s).indent);
-        debug_assert!(!cc.cmdbuff.is_null());
+        debug_assert!(cc.in_use());
         let prompt_id = last_prompt_id.get();
         last_prompt_id.set(prompt_id.wrapping_add(1));
         cc.prompt_id = prompt_id;
@@ -218,7 +216,7 @@ pub(crate) unsafe fn command_line_enter(
 
             if cc.input_fn != 0 {
                 (*s).xpc.xp_context = cc.xp_context;
-                (*s).xpc.xp_pattern = cc.cmdbuff;
+                (*s).xpc.xp_pattern = cc.text();
                 (*s).xpc.xp_arg = cc.xp_arg;
             }
 
@@ -392,17 +390,17 @@ pub(crate) unsafe fn command_line_enter(
 
             finish_incsearch_highlighting((*s).gotesc, &raw mut (*s).is_state, false);
 
-            if !cc.cmdbuff.is_null() {
+            if cc.in_use() {
                 // Put the line in the history buffer (":" and "=" only when
                 // it was typed).
                 if (*s).histype != HIST_INVALID
-                    && cc.cmdlen != 0
+                    && cc.len() != 0
                     && (*s).firstc != NUL
                     && ((*s).some_key_typed || (*s).histype == HIST_SEARCH)
                 {
                     add_to_history(
                         (*s).histype,
-                        ::core::slice::from_raw_parts(cc.cmdbuff as *const u8, cc.cmdlen as usize),
+                        ::core::slice::from_raw_parts(cc.text() as *const u8, cc.len() as usize),
                         true,
                         if (*s).histype == HIST_SEARCH {
                             (*s).firstc as u8
@@ -412,7 +410,7 @@ pub(crate) unsafe fn command_line_enter(
                     );
                     if (*s).firstc == ':' as ::core::ffi::c_int {
                         xfree(new_last_cmdline.get() as *mut ::core::ffi::c_void);
-                        new_last_cmdline.set(xstrnsave(cc.cmdbuff, cc.cmdlen as size_t));
+                        new_last_cmdline.set(xstrnsave(cc.text(), cc.len() as size_t));
                     }
                 }
 
@@ -475,13 +473,11 @@ pub(crate) unsafe fn command_line_enter(
         cc.last_colors.colors.size = 0;
         cc.last_colors.colors.items = ::core::ptr::null_mut::<CmdlineColorChunk>();
 
-        let p = cc.cmdbuff;
-
         if ui_has(kUICmdline) {
-            // Emit cmdline_block in Ex mode unless cmdbuff is NULL, which
-            // happens with <C-\><C-N> (upstream #39021).
-            if exmode_active.get() && !p.is_null() {
-                ui_ext_cmdline_block_append(0, p);
+            // Emit cmdline_block in Ex mode unless there is no command line,
+            // which happens with <C-\><C-N> (upstream #39021).
+            if exmode_active.get() && cc.in_use() {
+                ui_ext_cmdline_block_append(0, cc.text());
             }
             ui_ext_cmdline_hide((*s).gotesc);
         }
@@ -492,14 +488,17 @@ pub(crate) unsafe fn command_line_enter(
 
         (*cmdline_level.ptr()) -= 1;
 
+        // The text leaves the command line here, which is what C's
+        // `ccline.cmdbuff = NULL` meant. It has to come before the resume:
+        // `restore_cmdline` overwrites `ccline`, and what it overwrites is
+        // freed now that the command line owns its buffer.
+        let answer = cc.release();
         if did_save_ccline {
             restore_cmdline();
-        } else {
-            cc.cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
 
         xfree((*s).prev_cmdbuff as *mut ::core::ffi::c_void);
-        p as *mut uint8_t
+        answer as *mut uint8_t
     }
 }
 
@@ -533,8 +532,8 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
         // Trigger SafeState if nothing is pending.
         may_trigger_safestate((*s).xpc.xp_numfiles <= 0);
 
-        if !cc.cmdbuff.is_null() {
-            (*s).prev_cmdbuff = xstrdup(cc.cmdbuff);
+        if cc.in_use() {
+            (*s).prev_cmdbuff = xstrdup(cc.text());
         }
 
         // Defer the screen update to avoid pum flicker during wildtrigger().
@@ -572,7 +571,7 @@ pub(crate) unsafe fn abandon_cmdline() {
 /// - NUL — text for the `:insert` command
 /// - -1 — like NUL, and break on CTRL-C
 ///
-/// The line is collected in `ccline.cmdbuff`, which is reallocated to fit.
+/// The line is collected in the command line's own buffer, which grows to fit.
 /// `count` is only used for incremental search and `indent` is the indent
 /// for inside conditionals.  Answers an allocated string, or NULL if there
 /// is no command line.
@@ -614,7 +613,7 @@ pub unsafe fn getcmdline_prompt(
         let mut cc = Cc::current();
 
         let mut did_save_ccline = false;
-        if !cc.cmdbuff.is_null() {
+        if cc.in_use() {
             // Suspend the current cmdline and resume it below.
             save_cmdline();
             did_save_ccline = true;
@@ -644,7 +643,7 @@ pub unsafe fn getcmdline_prompt(
         }
         drop(loud);
         cmd_silent.set(cmd_silent_saved);
-        if !cc.cmdbuff.is_null() {
+        if cc.in_use() {
             msg_col.set(msg_col_save);
         }
         ret

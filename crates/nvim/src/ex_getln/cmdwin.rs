@@ -282,7 +282,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         // the cursor there.
         ml_replace(
             (*curbuf.get()).b_ml.ml_line_count,
-            Cc::current().cmdbuff,
+            Cc::current().text(),
             true,
         );
         (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
@@ -350,19 +350,15 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
             if cmdwin_result.get() == K_XF1 || cmdwin_result.get() == K_XF2 {
                 // ":qa[!]" was typed.
-                let (p, plen) = if cmdwin_result.get() == K_XF2 {
-                    (c"qa", 2 as size_t)
+                let p = if cmdwin_result.get() == K_XF2 {
+                    c"qa"
                 } else {
-                    (c"qa!", 3 as size_t)
+                    c"qa!"
                 };
 
                 if histtype == HIST_CMD {
                     // Execute the command directly.
-                    let mut cc = Cc::current();
-                    cc.cmdbuff = xmemdupz(p.as_ptr() as *const ::core::ffi::c_void, plen)
-                        as *mut ::core::ffi::c_char;
-                    cc.cmdlen = plen as ::core::ffi::c_int;
-                    cc.cmdbufflen = plen as ::core::ffi::c_int + 1;
+                    Cc::current().set_cstr(p.as_ptr());
                     cmdwin_result.set(CAR);
                 } else {
                     // First need to cancel what we were doing.
@@ -373,28 +369,26 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             } else if cmdwin_result.get() == Ctrl_C {
                 // ":q" or ":close": don't execute any command and don't
                 // modify the cmdline window.
-                Cc::current().cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                Cc::current().close();
             } else {
-                let mut cc = Cc::current();
-                cc.cmdlen = get_cursor_line_len() as ::core::ffi::c_int;
-                cc.cmdbufflen = cc.cmdlen + 1;
-                cc.cmdbuff = xstrnsave(get_cursor_line_ptr(), cc.cmdlen as size_t);
+                let n = get_cursor_line_len() as ::core::ffi::c_int;
+                Cc::current().set_text(::core::slice::from_raw_parts(
+                    get_cursor_line_ptr(),
+                    n.max(0) as usize,
+                ));
             }
 
             let mut cc = Cc::current();
-            if cc.cmdbuff.is_null() {
-                cc.cmdbuff = xmemdupz(c"".as_ptr() as *const ::core::ffi::c_void, 0)
-                    as *mut ::core::ffi::c_char;
-                cc.cmdlen = 0;
-                cc.cmdbufflen = 1;
+            if !cc.in_use() {
+                cc.set_text(&[]);
                 cc.cmdpos = 0;
                 cmdwin_result.set(Ctrl_C);
             } else {
                 cc.cmdpos = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                 // If the cursor is on the last character, it probably should
                 // be after it.
-                if cc.cmdpos == cc.cmdlen - 1 || cc.cmdpos > cc.cmdlen {
-                    cc.cmdpos = cc.cmdlen;
+                if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
+                    cc.cmdpos = cc.len();
                 }
                 if cmdwin_result.get() == K_IGNORE {
                     cc.cmdspos = cmd_screencol(cc.cmdpos);
@@ -448,6 +442,6 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 }
 
 /// True when in the cmdwin, and not editing the command line.
-pub unsafe fn is_in_cmdwin() -> bool {
-    unsafe { cmdwin_type.get() != 0 && get_cmdline_type() == NUL }
+pub fn is_in_cmdwin() -> bool {
+    cmdwin_type.get() != 0 && get_cmdline_type() == NUL
 }

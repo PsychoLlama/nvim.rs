@@ -254,8 +254,6 @@ pub(crate) unsafe fn call_user_expand_func(
     xp: *mut expand_T,
 ) -> *mut c_void {
     unsafe {
-        let mut ccline = Cc::current();
-        let mut keep = 0 as c_char;
         let mut args = [typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
@@ -267,11 +265,10 @@ pub(crate) unsafe fn call_user_expand_func(
             return ptr::null_mut();
         }
 
-        if !ccline.cmdbuff.is_null() {
-            keep = *ccline.cmdbuff.offset(ccline.cmdlen as isize);
-            *ccline.cmdbuff.offset(ccline.cmdlen as isize) = 0;
-        }
-
+        // Upstream saves `cmdbuff[cmdlen]` here and puts a NUL in its place
+        // for the duration of the callback. The command line's terminator is
+        // `CmdBuff`'s invariant now, so the byte it saved is always the NUL it
+        // wrote, and both halves are gone.
         let pat = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
         args[0].v_type = VAR_STRING;
         args[1].v_type = VAR_STRING;
@@ -286,10 +283,6 @@ pub(crate) unsafe fn call_user_expand_func(
         let ret = user_expand_func((*xp).xp_arg, 3, args.as_mut_ptr());
 
         current_sctx.set(save_current_sctx);
-        if !ccline.cmdbuff.is_null() {
-            *ccline.cmdbuff.offset(ccline.cmdlen as isize) = keep;
-        }
-
         xfree(pat as *mut c_void);
         ret
     }

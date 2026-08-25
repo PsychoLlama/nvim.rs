@@ -11,7 +11,7 @@ use super::*;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
-pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
+pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
     unsafe {
         let mut arena: Arena = ARENA_EMPTY;
 
@@ -27,7 +27,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
             // Obscured (`inputsecret()`): one '*' per *character*.
             content = arena_array(&raw mut arena, 1);
             let mut len: size_t = 0;
-            let mut p = Cc::current().cmdbuff;
+            let mut p = Cc::current().text();
             while *p != 0 {
                 len += 1;
                 p = p.offset(utfc_ptr2len(p) as isize);
@@ -47,11 +47,11 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
             );
             push(&mut item, Object::integer(0));
             push(&mut content, Object::array(item));
-        } else if (*line).last_colors.colors.size != 0 {
-            content = arena_array(&raw mut arena, (*line).last_colors.colors.size);
+        } else if line.last_colors.colors.size != 0 {
+            content = arena_array(&raw mut arena, line.last_colors.colors.size);
             let mut i: size_t = 0;
-            while i < (*line).last_colors.colors.size {
-                let chunk: CmdlineColorChunk = *(*line).last_colors.colors.items.add(i);
+            while i < line.last_colors.colors.size {
+                let chunk: CmdlineColorChunk = *line.last_colors.colors.items.add(i);
                 let mut item = arena_array(&raw mut arena, 3);
                 push(
                     &mut item,
@@ -66,7 +66,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
                 push(
                     &mut item,
                     Object::string(String_0::from_raw_parts(
-                        (*line).cmdbuff.offset(chunk.start as isize),
+                        line.at(chunk.start),
                         (chunk.end - chunk.start) as size_t,
                     )),
                 );
@@ -77,28 +77,28 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
         } else {
             let mut item = arena_array(&raw mut arena, 3);
             push(&mut item, Object::integer(0));
-            push(&mut item, Object::string(cstr_as_string((*line).cmdbuff)));
+            push(&mut item, Object::string(cstr_as_string(line.text())));
             push(&mut item, Object::integer(0));
             content = arena_array(&raw mut arena, 1);
             push(&mut content, Object::array(item));
         }
 
-        let mut charbuf: [::core::ffi::c_char; 2] = [(*line).cmdfirstc as ::core::ffi::c_char, 0];
+        let mut charbuf: [::core::ffi::c_char; 2] = [line.cmdfirstc as ::core::ffi::c_char, 0];
         ui_call_cmdline_show(
             content,
-            (*line).cmdpos as Integer,
+            line.cmdpos as Integer,
             cstr_as_string(charbuf.as_mut_ptr()),
-            cstr_as_string((*line).cmdprompt),
-            (*line).cmdindent as Integer,
-            (*line).level as Integer,
-            (*line).hl_id as Integer,
+            cstr_as_string(line.cmdprompt),
+            line.cmdindent as Integer,
+            line.level as Integer,
+            line.hl_id as Integer,
         );
-        if (*line).special_char != 0 {
-            charbuf[0] = (*line).special_char;
+        if line.special_char != 0 {
+            charbuf[0] = line.special_char;
             ui_call_cmdline_special_char(
                 cstr_as_string(charbuf.as_mut_ptr()),
-                (*line).special_shift as Boolean,
-                (*line).level as Integer,
+                line.special_shift as Boolean,
+                line.level as Integer,
             );
         }
         arena_mem_free(arena_finish(&raw mut arena));
@@ -254,7 +254,7 @@ pub fn cmdline_ui_flush() {
             if redraw_state == kCmdRedrawAll {
                 cmdline_was_last_drawn.set(true);
                 // SAFETY: a live command line, from `cmdline_at`.
-                unsafe { ui_ext_cmdline_show(line.raw()) };
+                unsafe { ui_ext_cmdline_show(line) };
             } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
                 ui_call_cmdline_pos(line.cmdpos as Integer, line.level as Integer);
             }
