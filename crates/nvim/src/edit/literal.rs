@@ -191,8 +191,8 @@ pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut 
             allow_modmask = 1;
         }
         if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
-            let p = get_special_key_name(c, mod_mask.get());
-            let len = strlen(p) as c_int;
+            let mut name = get_special_key_name(c, mod_mask.get());
+            let (p, len) = (name.as_mut_ptr(), strlen(name.as_ptr()) as c_int);
             c = *p.offset((len - 1) as isize) as uint8_t as c_int;
             if len > 2 {
                 if stop_arrow() == FAIL {

@@ -150,7 +150,7 @@ unsafe fn describe_byte(
             line.as_mut_ptr(),
             IOSIZE as usize,
             gettext(fmt.as_ptr()),
-            transchar(c),
+            transchar(c).as_ptr(),
             nonprint.as_ptr(),
             empty.as_ptr(),
             cval,

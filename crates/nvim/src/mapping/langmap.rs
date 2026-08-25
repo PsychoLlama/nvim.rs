@@ -140,7 +140,7 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                         (*args).os_errbuf,
                         (*args).os_errbuflen,
                         gettext(c"E357: 'langmap': Matching character missing for %s".as_ptr()),
-                        transchar(from),
+                        transchar(from).as_ptr(),
                     );
                     return (*args).os_errbuf;
                 }

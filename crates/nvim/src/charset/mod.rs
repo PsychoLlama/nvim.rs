@@ -48,10 +48,13 @@ pub mod transchar;
 
 // The display half was split out for size; its callers are spread over three
 // dozen modules and name it as `charset::*`.
+pub(crate) use display::{
+    CHAR_DISPLAY_LEN, CharDisplay, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
+};
 pub use display::{
-    byte2cells, char2cells, ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transchar,
-    transchar_buf, transchar_byte, transchar_byte_buf, transchar_hex, transchar_nonprint, transstr,
-    transstr_buf, transstr_len, vim_strnsize, vim_strsize,
+    byte2cells, char2cells, ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters,
+    transchar_hex, transchar_nonprint, transstr, transstr_buf, transstr_len, vim_strnsize,
+    vim_strsize,
 };
 
 use crate::keycodes::Ctrl_V;

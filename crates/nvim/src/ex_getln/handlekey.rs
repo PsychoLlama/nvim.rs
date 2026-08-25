@@ -585,9 +585,8 @@ pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core
     // One character, its own buffer: `put_on_cmdline` reaches the message
     // machinery, which writes upstream's shared `IObuff`.
     let mut ch = [0 as ::core::ffi::c_char; MB_MAXCHAR + 1];
+    let mut cc = Cc::current();
     unsafe {
-        let mut cc = Cc::current();
-
         // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
         // For all other keys, just put it onto the cmdline and exit — which is
         // the C's `goto end`.
@@ -613,7 +612,8 @@ pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core
 
         // C's `end:` — put the character in the command line.
         if is_special((*s).c) || mod_mask.get() != 0 {
-            put_on_cmdline(get_special_key_name((*s).c, mod_mask.get()), -1, true);
+            let name = get_special_key_name((*s).c, mod_mask.get());
+            put_on_cmdline(name.as_ptr().cast_mut(), -1, true);
         } else {
             let j = utf_char2bytes((*s).c, ch.as_mut_ptr());
             ch[j as usize] = NUL as ::core::ffi::c_char; // exclude composing chars

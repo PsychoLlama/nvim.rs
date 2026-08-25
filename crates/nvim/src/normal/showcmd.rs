@@ -12,6 +12,7 @@
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
+use crate::charset::CHAR_DISPLAY_LEN;
 use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
@@ -313,18 +314,19 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     }
 
     let mut mbyte_buf: [c_char; 7] = [0; 7];
-    // SAFETY: `transchar` answers a pointer to a static buffer it keeps
-    // NUL-terminated; the multibyte branch writes at most MB_MAXBYTES + 1
-    // into `mbyte_buf`, and the borrow ends with the statement.
+    let mut display = [0 as c_char; CHAR_DISPLAY_LEN];
+    // SAFETY: `transchar` answers a NUL-terminated rendering; the multibyte
+    // branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`, and both
+    // outlive the borrow.
     let extra = unsafe {
         if c <= 0x7f || !vim_isprintc(c) {
-            let p = transchar(c);
+            display = transchar(c);
             // A space is shown as its byte value, so it is not lost in the
             // padding the area is drawn with.
-            if *p as c_int == ' ' as c_int {
-                strcpy(p, c"<20>".as_ptr().cast_mut());
+            if display[0] as c_int == ' ' as c_int {
+                strcpy(display.as_mut_ptr(), c"<20>".as_ptr().cast_mut());
             }
-            CStr::from_ptr(p)
+            CStr::from_ptr(display.as_ptr())
         } else {
             let n = utf_char2bytes(c, mbyte_buf.as_mut_ptr());
             mbyte_buf[n as usize] = NUL as c_char;

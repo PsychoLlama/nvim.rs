@@ -14,7 +14,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use crate::garray::{ga_grow, ga_init};
-use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, dy_flags};
 use crate::mbyte::{
     mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells, utf_ptr2char,
@@ -415,19 +414,24 @@ pub unsafe fn str_foldcase(
     }
 }
 
-/// The shared buffer every `transchar*` answer lives in. Each call
-/// overwrites the previous one's result.
-static transchar_charbuf: GlobalCell<[uint8_t; render::MAX_LEN]> =
-    GlobalCell::new([0; render::MAX_LEN]);
+/// A character's display form, NUL-terminated within its own storage.
+///
+/// Upstream answers a pointer into one shared static buffer, so a second
+/// rendering invalidates the first — which the `msg_outtrans` family walks
+/// straight into, holding one rendering while it asks for the next.
+pub(crate) type CharDisplay = [c_char; CHAR_DISPLAY_LEN];
 
-/// Park a rendering in the shared buffer and answer a pointer to it.
+/// How long a [`CharDisplay`] is.
+pub(crate) const CHAR_DISPLAY_LEN: usize = render::MAX_LEN;
+
+/// A rendering as its own NUL-terminated buffer.
 #[inline(always)]
-fn share(rendered: &render::Rendered) -> *mut c_char {
-    let charbuf = transchar_charbuf.ptr() as *mut c_char;
-    // SAFETY: the cell holds a live `MAX_LEN`-byte array, and a rendering
-    // with its terminator is never longer than that.
-    unsafe { write_rendered(charbuf, rendered) };
-    charbuf
+fn owned(rendered: &render::Rendered) -> CharDisplay {
+    let mut out: CharDisplay = [0; render::MAX_LEN];
+    // SAFETY: `out` is `MAX_LEN` bytes, and a rendering with its terminator
+    // is never longer than that.
+    unsafe { write_rendered(out.as_mut_ptr(), rendered) };
+    out
 }
 
 /// Copy a rendering, and the NUL after it, to `dst`.
@@ -517,23 +521,23 @@ unsafe fn render_byte(buf: *const buf_T, c: c_int) -> render::Rendered {
     unsafe { render_char(buf, c) }
 }
 
-/// The display form of character `c`, in a shared buffer.
+/// The display form of character `c`.
 ///
 /// # Safety
 /// The current buffer must be valid.
-pub unsafe fn transchar(c: c_int) -> *mut c_char {
+pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     unsafe { transchar_buf(curbuf.get(), c) }
 }
 
 /// The display form of `c` as it would appear in `buf` (which decides how a
-/// carriage return renders), in a shared buffer.
+/// carriage return renders).
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
-pub unsafe fn transchar_buf(buf: *const buf_T, c: c_int) -> *mut c_char {
+pub(crate) unsafe fn transchar_buf(buf: *const buf_T, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    share(&unsafe { render_char(buf, c) })
+    owned(&unsafe { render_char(buf, c) })
 }
 
 /// The display form of the single byte `c`. Unlike [`transchar_buf`] this
@@ -541,16 +545,16 @@ pub unsafe fn transchar_buf(buf: *const buf_T, c: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
-pub unsafe fn transchar_byte_buf(buf: *const buf_T, c: c_int) -> *mut c_char {
+pub(crate) unsafe fn transchar_byte_buf(buf: *const buf_T, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    share(&unsafe { render_byte(buf, c) })
+    owned(&unsafe { render_byte(buf, c) })
 }
 
 /// [`transchar_byte_buf`] for the current buffer.
 ///
 /// # Safety
 /// The current buffer must be valid.
-pub unsafe fn transchar_byte(c: c_int) -> *mut c_char {
+pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     unsafe { transchar_byte_buf(curbuf.get(), c) }
 }

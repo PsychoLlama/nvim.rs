@@ -423,7 +423,8 @@ impl Cells {
         // SAFETY: the caller's window; `transchar_buf` answers a static
         // NUL-terminated buffer.
         unsafe {
-            wlv.extra_text = transchar_buf((*wp).w_buffer, self.char_code);
+            wlv.escape_buf = transchar_buf((*wp).w_buffer, self.char_code);
+            wlv.extra_text = wlv.escape_buf.as_mut_ptr();
             if wlv.extra_todo == 0 {
                 wlv.extra_todo = byte2cells(self.char_code) - 1;
             }
@@ -431,8 +432,7 @@ impl Cells {
                 // Reverse "<12>".
                 rl_mirror_ascii(wlv.extra_text, ::core::ptr::null_mut());
             }
-            wlv.extra_fill = NUL as schar_T;
-            wlv.extra_last = NUL as schar_T;
+            (wlv.extra_fill, wlv.extra_last) = (NUL as schar_T, NUL as schar_T);
             if (*wp).w_onebuf_opt.wo_lbr != 0 {
                 // With 'linebreak' the escape has to be padded out to the
                 // width the character would have had.

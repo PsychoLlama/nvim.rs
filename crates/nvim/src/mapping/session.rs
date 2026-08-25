@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
+use crate::types::MB_MAXCHAR;
 use crate::types::{FAIL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -217,6 +218,7 @@ pub enum EscTarget {
 /// # Safety
 /// `fd` must be an open stream and `strstart` live and NUL-terminated.
 pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget) -> c_int {
+    let mut ch = [0 as c_char; MB_MAXCHAR];
     unsafe {
         let mut str = strstart.cast::<u8>().cast_mut();
 
@@ -231,7 +233,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
         while c_int::from(*str) != NUL {
             // Check for a multi-byte character, which may contain escaped
             // K_SPECIAL bytes.
-            let mut p = mb_unescape((&raw mut str).cast());
+            let mut p = mb_unescape((&raw mut str).cast(), &mut ch);
             'next: {
                 if !p.is_null() {
                     while c_int::from(*p) != NUL {
@@ -254,7 +256,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                         str = str.add(3);
 
                         // Modifiers can apply to multi-byte characters too.
-                        p = mb_unescape((&raw mut str).cast());
+                        p = mb_unescape((&raw mut str).cast(), &mut ch);
                         if p.is_null() {
                             c = c_int::from(*str);
                         } else {
@@ -269,7 +271,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                     }
                     if c < 0 || modifiers != 0 {
                         // A special key.
-                        if fputs(get_special_key_name(c, modifiers), fd) < 0 {
+                        if fputs(get_special_key_name(c, modifiers).as_ptr(), fd) < 0 {
                             return FAIL;
                         }
                         break 'next;

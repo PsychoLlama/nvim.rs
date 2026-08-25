@@ -289,16 +289,19 @@ pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
 /// have gone by without a character — four being the longest sequence anyone
 /// types.
 ///
-/// The result points into a shared static buffer and is only valid until the
-/// next call.
+/// The result is written into `into` and answered as a pointer to it, or
+/// null. Upstream answers a shared static buffer, valid only until the next
+/// call.
 ///
 /// # Safety
 ///
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn mb_unescape(pp: *mut *const c_char) -> *const c_char {
+pub(crate) unsafe fn mb_unescape(
+    pp: *mut *const c_char,
+    into: &mut [c_char; MB_MAXCHAR],
+) -> *const c_char {
     unsafe {
-        static buf: GlobalCell<[c_char; MB_MAXCHAR]> = GlobalCell::new([0; MB_MAXCHAR]);
-        let out = buf.ptr() as *mut c_char;
+        let out = into.as_mut_ptr();
         let str = *pp as *const u8;
         let mut buf_idx = 0;
         let mut str_idx = 0;

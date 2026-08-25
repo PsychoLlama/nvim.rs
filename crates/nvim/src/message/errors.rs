@@ -342,11 +342,12 @@ pub unsafe extern "C" fn emsg(s: *const c_char) -> bool {
 /// # Safety
 /// Only that `name` is a character code.
 pub unsafe fn emsg_invreg(name: c_int) {
+    // SAFETY: a character code, rendered into this frame's own buffer, and
+    // a one-string format.
     unsafe {
-        crate::semsg_c!(
-            gettext(c"E354: Invalid register name: '%s'".as_ptr()),
-            transchar_buf(ptr::null(), name),
-        );
+        let display = transchar_buf(ptr::null(), name);
+        let fmt = gettext(c"E354: Invalid register name: '%s'".as_ptr());
+        crate::semsg_c!(fmt, display.as_ptr());
     }
 }
 

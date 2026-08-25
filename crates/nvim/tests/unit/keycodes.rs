@@ -380,11 +380,11 @@ fn key_code(name: &str) -> c_int {
 }
 
 fn key_name(code: c_int, modifiers: c_int) -> String {
-    unsafe {
-        CStr::from_ptr(get_special_key_name(code, modifiers))
-            .to_string_lossy()
-            .into_owned()
-    }
+    let name = get_special_key_name(code, modifiers);
+    // SAFETY: `get_special_key_name` NUL-terminates its answer.
+    unsafe { CStr::from_ptr(name.as_ptr()) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Wrapper over `find_special_key`: returns the key code and the modifier
@@ -470,9 +470,6 @@ fn replace_termcodes_matches_the_sweep_baseline() {
 /// preferred name for that code — followed by the modifier prefixes and the
 /// three fallbacks for a code the table has no name for.
 ///
-/// Every `get_special_key_name` case lives in this one test on purpose: it
-/// answers out of a single shared static buffer, so two tests calling it run
-/// into each other under the harness's default thread-per-test.
 #[test]
 fn key_names_table_round_trips() {
     for &(name, code, printed) in KEY_CODES {

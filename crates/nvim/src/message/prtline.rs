@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::CHAR_DISPLAY_LEN;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -24,8 +25,8 @@ const MAX_SCHAR_SIZE: usize = 32;
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
+    let mut s = s;
     unsafe {
-        let mut s = s;
         // `'list'` on the window forces the listing form whatever the caller
         // asked for.
         let list = list || (*curwin.get()).w_onebuf_opt.wo_list != 0;
@@ -74,6 +75,8 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
         let mut extra_fill: schar_T = 0;
         let mut extra_last: schar_T = 0;
         let mut extra_text: *const c_char = ptr::null();
+        // The `<xx>` rendering `extra_text` points into while it is drawn.
+        let mut escaped = [0 as c_char; CHAR_DISPLAY_LEN];
 
         while !got_int.get() {
             let sc: schar_T;
@@ -170,9 +173,9 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                 } else if c != NUL && byte2cells(c) > 1 {
                     // An unprintable byte, shown as `<xx>`.
                     extra_left = byte2cells(c) - 1;
-                    extra_text = transchar_byte_buf(ptr::null(), c);
-                    sc = *extra_text as schar_T;
-                    extra_text = extra_text.add(1);
+                    escaped = transchar_byte_buf(ptr::null(), c);
+                    sc = escaped[0] as schar_T;
+                    extra_text = escaped.as_ptr().add(1);
                     // Its own highlight, so `<ff>` can be told apart from the
                     // same four characters typed literally.
                     hl_id = HLF_0;

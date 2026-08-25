@@ -193,11 +193,11 @@ pub(crate) unsafe fn redraw_wildmenu(
     match_idx: c_int,
     showtail: bool,
 ) {
-    unsafe {
-        // Where the listing starts, remembered across redraws so that paging
-        // through the matches does not jump.
-        static first_match: GlobalCell<c_int> = GlobalCell::new(0);
+    // Where the listing starts, remembered across redraws so that paging
+    // through the matches does not jump.
+    static first_match: GlobalCell<c_int> = GlobalCell::new(0);
 
+    unsafe {
         if matches.is_null() {
             // Interrupted completion?
             return;
@@ -301,7 +301,7 @@ pub(crate) unsafe fn redraw_wildmenu(
             let ctx = (*xp).xp_context;
             let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
             if emenu && menu_is_separator(s) {
-                strcpy(buf.offset(len as isize), transchar('|' as c_int));
+                strcpy(buf.offset(len as isize), transchar('|' as c_int).as_ptr());
                 l = strlen(buf.offset(len as isize)) as c_int;
                 len += l;
                 clen += l;
@@ -315,7 +315,8 @@ pub(crate) unsafe fn redraw_wildmenu(
                         s = s.add(l as usize - 1);
                         len += l;
                     } else {
-                        strcpy(buf.offset(len as isize), transchar_byte(*s as u8 as c_int));
+                        let out = buf.offset(len as isize);
+                        strcpy(out, transchar_byte(*s as u8 as c_int).as_ptr());
                         len += strlen(buf.offset(len as isize)) as c_int;
                     }
                     s = s.add(1);

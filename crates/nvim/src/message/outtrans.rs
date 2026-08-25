@@ -7,6 +7,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::CharDisplay;
+use crate::keycodes::{MAX_KEY_NAME_LEN, SpecialKeyName};
 use crate::keycodes::{termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
@@ -95,11 +97,8 @@ pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *c
             msg_outtrans_len(p, len, hl_id, hist);
             return p.add(len as usize);
         }
-        msg_puts_hl(
-            transchar_byte_buf(ptr::null(), *p as u8 as c_int),
-            hl_id,
-            hist,
-        );
+        let display = transchar_byte_buf(ptr::null(), *p as u8 as c_int);
+        msg_puts_hl(display.as_ptr(), hl_id, hist);
         p.add(1)
     }
 }
@@ -167,19 +166,20 @@ pub unsafe fn msg_outtrans_len(
                 } else {
                     flush_plain(str, plain_start);
                     plain_start = str.add(mb_len as usize);
-                    msg_puts_hl(transchar_buf(ptr::null(), c), special_hl(hl_id), false);
+                    let display = transchar_buf(ptr::null(), c);
+                    msg_puts_hl(display.as_ptr(), special_hl(hl_id), false);
                     cells += char2cells(c);
                 }
                 left -= mb_len - 1;
                 str = str.add(mb_len as usize);
             } else {
                 let rendered = transchar_byte_buf(ptr::null(), *str as u8 as c_int);
-                if *rendered.add(1) != 0 {
+                if rendered[1] != 0 {
                     // Unprintable: emit the printable run so far, then it.
                     flush_plain(str, plain_start);
                     plain_start = str.add(1);
-                    msg_puts_hl(rendered, special_hl(hl_id), false);
-                    cells += strlen(rendered) as c_int;
+                    msg_puts_hl(rendered.as_ptr(), special_hl(hl_id), false);
+                    cells += strlen(rendered.as_ptr()) as c_int;
                 } else {
                     cells += 1;
                 }
@@ -242,6 +242,8 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
     if strstart.is_null() {
         return 0;
     }
+    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
+    let mut display: CharDisplay;
     unsafe {
         let mut str = strstart;
         let mut cells = 0;
@@ -250,11 +252,12 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
                 str = str.add(1);
                 c"<Space>".as_ptr()
             } else {
-                str2special(&raw mut str, from, false)
+                str2special(&raw mut str, from, false, &mut piece)
             };
             if *text != 0 && *text.add(1) == 0 {
                 // Single-byte character, or an illegal byte.
-                text = transchar_byte_buf(ptr::null(), *text as u8 as c_int);
+                display = transchar_byte_buf(ptr::null(), *text as u8 as c_int);
+                text = display.as_ptr();
             }
             let len = vim_strsize(text);
             if maxlen > 0 && cells + len >= maxlen {
@@ -281,6 +284,7 @@ pub unsafe fn str2special_save(
     replace_spaces: bool,
     replace_lt: bool,
 ) -> *mut c_char {
+    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     unsafe {
         let mut ga = garray_T::default();
         ga_init(&raw mut ga, 1, 40);
@@ -288,7 +292,7 @@ pub unsafe fn str2special_save(
         while *p != 0 {
             ga_concat(
                 &raw mut ga,
-                str2special(&raw mut p, replace_spaces, replace_lt),
+                str2special(&raw mut p, replace_spaces, replace_lt, &mut piece),
             );
         }
         ga_append(&raw mut ga, 0);
@@ -298,28 +302,30 @@ pub unsafe fn str2special_save(
 
 /// [`str2special`] over a whole string, into `arena`.
 ///
-/// Measures first and copies second, because the conversion buffer is one
-/// shared static and cannot hold two answers at once.
+/// Measures first and copies second, so that the arena is asked for the
+/// exact size once.
 pub unsafe fn str2special_arena(
     str: *const c_char,
     replace_spaces: bool,
     replace_lt: bool,
     arena: *mut Arena,
 ) -> *mut c_char {
+    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     unsafe {
         let mut len: size_t = 0;
         let mut p = str;
         while *p != 0 {
-            len += strlen(str2special(&raw mut p, replace_spaces, replace_lt));
+            let text = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
+            len += strlen(text);
         }
 
         let buf: *mut c_char = arena_alloc(arena, len + 1, false).cast();
         let mut at: size_t = 0;
         p = str;
         while *p != 0 {
-            let piece = str2special(&raw mut p, replace_spaces, replace_lt);
-            let piece_len = strlen(piece);
-            ptr::copy_nonoverlapping(piece, buf.add(at), piece_len);
+            let text = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
+            let piece_len = strlen(text);
+            ptr::copy_nonoverlapping(text, buf.add(at), piece_len);
             at += piece_len;
         }
         *buf.add(at) = 0;
@@ -334,23 +340,24 @@ pub unsafe fn str2special_arena(
 /// which is what a mapping's left-hand side and `keytrans()` want and its
 /// right-hand side does not.
 ///
-/// The answer lives in **one shared static buffer**, so it has to be copied
-/// somewhere before the next call. An illegal byte comes back as itself.
+/// The answer is written into `out` and answered as a pointer to it; an
+/// illegal byte comes back as itself. Upstream answers one shared static
+/// buffer, which is why `str2special_arena` cannot hold two answers.
 ///
 /// # Safety
 /// `sp` must point at a readable pointer into a NUL-terminated string.
-pub unsafe fn str2special(
+pub(crate) unsafe fn str2special(
     sp: *mut *const c_char,
     replace_spaces: bool,
     replace_lt: bool,
+    out: &mut SpecialKeyName,
 ) -> *const c_char {
-    static BUF: GlobalCell<[c_char; 7]> = GlobalCell::new([0; 7]);
-
+    let mut ch = [0 as c_char; MB_MAXCHAR];
     unsafe {
         // A multi-byte character escaped into the stream comes back whole.
-        let unescaped = mb_unescape(sp);
-        if !unescaped.is_null() {
-            return unescaped;
+        if !mb_unescape(sp, &mut ch).is_null() {
+            out[..MB_MAXCHAR].copy_from_slice(&ch);
+            return out.as_ptr();
         }
 
         let mut str = *sp;
@@ -375,7 +382,7 @@ pub unsafe fn str2special(
         if c >= 0 && utf8len_tab[c as usize] > 1 {
             *sp = str;
             // Try to un-escape a multi-byte character after the modifiers.
-            let unescaped = mb_unescape(sp);
+            let unescaped = mb_unescape(sp, &mut ch);
             if unescaped.is_null() {
                 // Illegal byte.
                 *sp = str.add(1);
@@ -393,13 +400,12 @@ pub unsafe fn str2special(
             || (replace_spaces && c == b' ' as c_int)
             || (replace_lt && c == b'<' as c_int)
         {
-            return get_special_key_name(c, modifiers);
+            *out = get_special_key_name(c, modifiers);
+            return out.as_ptr();
         }
-        BUF.with_mut(|buf| {
-            buf[0] = c as c_char;
-            buf[1] = 0;
-        });
-        BUF.ptr().cast()
+        out[0] = c as c_char;
+        out[1] = 0;
+        out.as_ptr()
     }
 }
 

@@ -266,9 +266,10 @@ pub unsafe fn did_set_shada(args: *mut optset_T) -> *const c_char {
                 }
                 // SAFETY: the frame's error buffer, with its own length,
                 // and a one-string format.
+                let byte = c_int::from(at(i - 1));
                 unsafe {
                     let fmt = gettext(c"E526: Missing number after <%s>".as_ptr());
-                    vim_snprintf(buf, buflen, fmt, transchar_byte(c_int::from(at(i - 1))));
+                    vim_snprintf(buf, buflen, fmt, transchar_byte(byte).as_ptr());
                 }
                 return buf;
             }

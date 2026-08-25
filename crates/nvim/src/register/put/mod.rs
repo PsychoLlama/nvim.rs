@@ -439,14 +439,12 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             }
 
             if put.y_size == 0 || put.y_array.is_null() {
-                semsg_c!(
-                    gettext(c"E353: Nothing in register %s".as_ptr()),
-                    if regname == 0 {
-                        c"\"".as_ptr()
-                    } else {
-                        transchar(regname) as *const c_char
-                    },
-                );
+                let display = transchar(regname);
+                let mut name = c"\"".as_ptr();
+                if regname != 0 {
+                    name = display.as_ptr();
+                }
+                semsg_c!(gettext(c"E353: Nothing in register %s".as_ptr()), name);
                 break 'end;
             }
 

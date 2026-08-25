@@ -25,7 +25,6 @@ use core::{ptr, slice};
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{transchar, vim_isprintc, vim_str2nr};
 use crate::eval::vars::get_var_value;
-use crate::global_cell::GlobalCell;
 use crate::main::{current_sctx, e_invarg, e_usingsid};
 use crate::mbyte::{
     utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
@@ -125,16 +124,15 @@ fn handle_x_keys(key: c_int) -> c_int {
     }
 }
 
-/// The `<...>` spelling of `key` with `modifiers` held down.
+/// A `<...>` key spelling, NUL-terminated within its own storage.
 ///
-/// The answer lives in one static buffer and is only valid until the next
-/// call — which is also why every caller of this in a test has to be one
-/// test.
-pub fn get_special_key_name(key: c_int, modifiers: c_int) -> *mut c_char {
-    /// Where the answer lives between calls.
-    static NAME: GlobalCell<[c_char; MAX_KEY_NAME_LEN as usize + 1]> =
-        GlobalCell::new([0; MAX_KEY_NAME_LEN as usize + 1]);
+/// Upstream answers a pointer into one static buffer, valid only until the
+/// next call, which is why `str2special_arena` has to measure and copy in
+/// two passes and why two callers in one test tread on each other.
+pub(crate) type SpecialKeyName = [c_char; MAX_KEY_NAME_LEN as usize + 1];
 
+/// The `<...>` spelling of `key` with `modifiers` held down.
+pub fn get_special_key_name(key: c_int, modifiers: c_int) -> SpecialKeyName {
     let mut key = key;
     let mut modifiers = modifiers;
     unsafe {
@@ -194,7 +192,8 @@ pub fn get_special_key_name(key: c_int, modifiers: c_int) -> *mut c_char {
                     out[at..at + len].copy_from_slice(&wide[..len]);
                     at += len;
                 } else {
-                    let shown = CStr::from_ptr(transchar(key)).to_bytes();
+                    let display = transchar(key);
+                    let shown = CStr::from_ptr(display.as_ptr()).to_bytes();
                     out[at..at + shown.len()].copy_from_slice(shown);
                     at += shown.len();
                 }
@@ -209,12 +208,11 @@ pub fn get_special_key_name(key: c_int, modifiers: c_int) -> *mut c_char {
         }
         out[at] = b'>';
 
-        NAME.with_mut(|dst| {
-            for (slot, byte) in dst.iter_mut().zip(out) {
-                *slot = byte as c_char;
-            }
-        });
-        NAME.ptr().cast()
+        let mut name: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
+        for (slot, byte) in name.iter_mut().zip(out) {
+            *slot = byte as c_char;
+        }
+        name
     }
 }
 

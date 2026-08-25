@@ -100,10 +100,12 @@ pub unsafe fn state_enter(s: *mut VimState) {
                     may_sync_undo();
                 }
             }
+            let mut keyname_buf;
             let keyname = if key == K_EVENT {
                 c"K_EVENT".as_ptr()
             } else {
-                get_special_key_name(key, mod_mask.get()).cast_const()
+                keyname_buf = get_special_key_name(key, mod_mask.get());
+                keyname_buf.as_ptr()
             };
             // SAFETY: `keyname` is NUL-terminated and outlives the call.
             unsafe { logmsg!(LOGLVL_DBG, c"state_enter", 97, c"input: %s", keyname) };

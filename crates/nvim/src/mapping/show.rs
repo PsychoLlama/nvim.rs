@@ -132,7 +132,7 @@ pub(crate) unsafe fn translate_mapping(
                     }
                     if c < 0 || modifiers != 0 {
                         // A special key.
-                        ga_concat(&raw mut ga, get_special_key_name(c, modifiers));
+                        ga_concat(&raw mut ga, get_special_key_name(c, modifiers).as_ptr());
                         break 'next;
                     }
                 }

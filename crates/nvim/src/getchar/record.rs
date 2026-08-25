@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
+use crate::types::MB_MAXCHAR;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -156,6 +157,7 @@ pub unsafe fn gotchars_ignore() {
 /// # Safety
 /// Callable at any time.
 pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
+    let mut ch = [0 as c_char; MB_MAXCHAR];
     unsafe {
         /// What `add_byte_to_showcmd` has half a key of, between calls.
         static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
@@ -187,7 +189,7 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
 
         let mut c = NUL;
         if c_int::from(*ptr as u8) != NUL {
-            let mb_ptr = mb_unescape(&raw mut ptr);
+            let mb_ptr = mb_unescape(&raw mut ptr, &mut ch);
             c = if !mb_ptr.is_null() {
                 utf_ptr2char(mb_ptr)
             } else {

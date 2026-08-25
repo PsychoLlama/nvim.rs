@@ -11,6 +11,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
+use crate::types::MB_MAXCHAR;
 use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -209,6 +210,7 @@ unsafe fn search_maphash(
     is_plug_map: bool,
     mut tb_c1: c_int,
 ) -> MapSearch {
+    let mut ch = [0 as c_char; MB_MAXCHAR];
     unsafe {
         let mut found = MapSearch {
             mp: ptr::null_mut(),
@@ -286,7 +288,7 @@ unsafe fn search_maphash(
                 // character, which happens after mapping <M-a> and then
                 // changing 'encoding'. Beware that 0x80 is escaped.
                 let mut p1: *const c_char = (*mp).m_keys;
-                let p2 = mb_unescape(&raw mut p1);
+                let p2 = mb_unescape(&raw mut p1, &mut ch);
                 if !p2.is_null() && c_int::from(utf8len_tab[tb_c1 as usize]) > utfc_ptr2len(p2) {
                     mlen = 0;
                 }

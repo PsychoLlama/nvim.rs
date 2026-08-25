@@ -88,7 +88,7 @@ pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> 
             errbuf,
             errbuflen,
             gettext(c"E539: Illegal character <%s>".as_ptr()),
-            transchar(c),
+            transchar(c).as_ptr(),
         );
     }
     errbuf

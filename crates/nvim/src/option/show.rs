@@ -405,7 +405,7 @@ pub(crate) unsafe fn put_set(
                 // as its name.
                 let mut wc: OptInt = 0;
                 if wc_use_keyname(opt_idx, varp, &mut wc) {
-                    if fputs(get_special_key_name(wc as c_int, 0), fd) < 0 {
+                    if fputs(get_special_key_name(wc as c_int, 0).as_ptr(), fd) < 0 {
                         return FAIL;
                     }
                 } else if fprintf(fd, c"%ld".as_ptr(), value.data.number) < 0 {
@@ -542,11 +542,11 @@ pub(crate) unsafe fn option_value2string(
         if option_has_type(opt_idx, kOptValTypeNumber) {
             let mut wc: OptInt = 0;
             if wc_use_keyname(opt_idx, varp, &mut wc) {
-                xstrlcpy(buf, get_special_key_name(wc as c_int, 0), cap);
+                xstrlcpy(buf, get_special_key_name(wc as c_int, 0).as_ptr(), cap);
             } else if wc != 0 {
                 // A 'wildchar' that is not a named key still shows as the
                 // character rather than as its code.
-                xstrlcpy(buf, transchar(wc as c_int), cap);
+                xstrlcpy(buf, transchar(wc as c_int).as_ptr(), cap);
             } else {
                 snprintf(buf, cap, c"%ld".as_ptr(), *varp.number_var());
             }
