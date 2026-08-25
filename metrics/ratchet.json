@@ -7,7 +7,7 @@
   "files_without_deny_unsafe_op": 0,
   "files_without_deny_casts": 1058,
   "files": {
-    "crates/mainthread/lib.rs": {"pub_items": 2},
+    "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "pub_items": 3, "unsafe_lines": 339},
     "crates/nvim/src/api/autocmd/exec.rs": {"missing_safety_doc": 1, "pub_items": 1, "unsafe_lines": 162},

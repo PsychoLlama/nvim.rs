@@ -289,20 +289,11 @@ fn check_main_thread() {}
 // Borrow tracking. Only `with`/`with_mut` create tracked borrows, so the
 // hot get/set path checks one counter and bails while the table is empty.
 // All state is main-thread-only (guarded by check_main_thread), so plain
-// relaxed atomics act as ordinary variables here; keyed by cell address,
-// positive = shared count, -1 = exclusive.
+// relaxed atomics act as ordinary variables here. The table itself is
+// `nvim_mainthread::BorrowTable`, in the crate that is optimized in every
+// profile: see its module docs for what an unoptimized one cost.
 #[cfg(debug_assertions)]
 static ACTIVE_BORROWS: AtomicUsize = AtomicUsize::new(0);
-
-#[cfg(debug_assertions)]
-mod borrows {
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-
-    thread_local! {
-        pub static TABLE: RefCell<HashMap<usize, isize>> = RefCell::new(HashMap::new());
-    }
-}
 
 #[cfg(debug_assertions)]
 #[inline(always)]
@@ -310,13 +301,9 @@ fn check_no_exclusive_borrow(addr: usize) {
     if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
         return;
     }
-    borrows::TABLE.with(|table| {
-        if let Some(&state) = table.borrow().get(&addr)
-            && state < 0
-        {
-            panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
-        }
-    });
+    if nvim_mainthread::BorrowTable::state(addr) < 0 {
+        panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
+    }
 }
 
 #[cfg(not(debug_assertions))]
@@ -329,11 +316,9 @@ fn check_no_borrow(addr: usize) {
     if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
         return;
     }
-    borrows::TABLE.with(|table| {
-        if table.borrow().get(&addr).is_some() {
-            panic!("GlobalCell::set during an active with/with_mut borrow (cell @ {addr:#x})");
-        }
-    });
+    if nvim_mainthread::BorrowTable::state(addr) != 0 {
+        panic!("GlobalCell::set during an active with/with_mut borrow (cell @ {addr:#x})");
+    }
 }
 
 #[cfg(not(debug_assertions))]
@@ -351,17 +336,12 @@ impl BorrowGuard {
     fn shared(addr: usize) -> Self {
         #[cfg(debug_assertions)]
         {
-            borrows::TABLE.with(|table| {
-                let mut table = table.borrow_mut();
-                let state = table.entry(addr).or_insert(0);
-                if *state < 0 {
-                    panic!(
-                        "GlobalCell::with while exclusively borrowed (cell @ {addr:#x}) — \
-                         reentrant global access"
-                    );
-                }
-                *state += 1;
-            });
+            if nvim_mainthread::BorrowTable::acquire(addr, false) < 0 {
+                panic!(
+                    "GlobalCell::with while exclusively borrowed (cell @ {addr:#x}) — \
+                     reentrant global access"
+                );
+            }
             ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
@@ -378,17 +358,12 @@ impl BorrowGuard {
     fn exclusive(addr: usize) -> Self {
         #[cfg(debug_assertions)]
         {
-            borrows::TABLE.with(|table| {
-                let mut table = table.borrow_mut();
-                let state = table.entry(addr).or_insert(0);
-                if *state != 0 {
-                    panic!(
-                        "GlobalCell::with_mut while already borrowed (cell @ {addr:#x}) — \
-                         reentrant global access"
-                    );
-                }
-                *state = -1;
-            });
+            if nvim_mainthread::BorrowTable::acquire(addr, true) != 0 {
+                panic!(
+                    "GlobalCell::with_mut while already borrowed (cell @ {addr:#x}) — \
+                     reentrant global access"
+                );
+            }
             ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
@@ -406,20 +381,12 @@ impl BorrowGuard {
 #[cfg(debug_assertions)]
 impl Drop for BorrowGuard {
     fn drop(&mut self) {
-        borrows::TABLE.with(|table| {
-            let mut table = table.borrow_mut();
-            let state = table.get_mut(&self.addr).expect("borrow table entry lost");
-            if self.exclusive {
-                debug_assert_eq!(*state, -1);
-                *state = 0;
-            } else {
-                debug_assert!(*state > 0);
-                *state -= 1;
-            }
-            if *state == 0 {
-                table.remove(&self.addr);
-            }
-        });
+        let was = nvim_mainthread::BorrowTable::release(self.addr, self.exclusive);
+        if self.exclusive {
+            debug_assert_eq!(was, -1);
+        } else {
+            debug_assert!(was > 0);
+        }
         ACTIVE_BORROWS.fetch_sub(1, Ordering::Relaxed);
     }
 }
