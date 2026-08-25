@@ -262,14 +262,15 @@ fn bracketed_item(rex: Rex, startc: &mut c_int) {
 /// [`take_char_class`] against the parse cursor.
 fn take_cursor_char_class() -> c_int {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `take_char_class` only ever advances it.
-    unsafe { take_char_class(&mut *regparse.ptr()) }
+    // `take_char_class` only ever advances it -- it walks bytes and calls
+    // nothing, so it cannot re-enter the cell it is handed.
+    regparse.with_mut(|pp| unsafe { take_char_class(pp) })
 }
 
 /// [`take_bracketed`] against the parse cursor.
 fn take_cursor_bracketed(delim: u8) -> c_int {
     // SAFETY: as `take_cursor_char_class`.
-    unsafe { take_bracketed(&mut *regparse.ptr(), delim) }
+    regparse.with_mut(|pp| unsafe { take_bracketed(pp, delim) })
 }
 
 /// Upstream's per-class predicates.

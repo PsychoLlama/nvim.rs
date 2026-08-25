@@ -62,6 +62,21 @@ static NESTING: GlobalCell<c_int> = GlobalCell::new(0);
 static EVAL_RESULT: GlobalCell<[*mut c_char; MAX_REGSUB_NESTING as usize]> =
     GlobalCell::new([core::ptr::null_mut(); MAX_REGSUB_NESTING as usize]);
 
+/// What level `nested` has stashed, without taking it.
+///
+/// The borrow is per slot rather than around the evaluation, and that is the
+/// whole point: what runs between a read and the matching write is arbitrary
+/// Vimscript, which may start a substitution of its own — that is what the
+/// nesting level counts — so nothing may hold this cell across it.
+fn stashed(nested: usize) -> *mut c_char {
+    EVAL_RESULT.with(|slots| slots[nested])
+}
+
+/// Put `text` in level `nested`'s slot. The caller owns whatever was there.
+fn stash(nested: usize, text: *mut c_char) {
+    EVAL_RESULT.with_mut(|slots| slots[nested] = text);
+}
+
 /// The message a pass that would overrun the caller's buffer reports. That
 /// means the two passes disagreed, which is a bug here rather than in the
 /// user's pattern.
@@ -442,7 +457,7 @@ unsafe fn eval_replacement(
         let nested = NESTING.get() as usize;
 
         if out.copy {
-            let text = (*EVAL_RESULT.ptr())[nested];
+            let text = stashed(nested);
             if text.is_null() {
                 return;
             }
@@ -453,13 +468,13 @@ unsafe fn eval_replacement(
                 strcpy(out.dest, text);
                 out.skip(len as isize);
                 xfree(text.cast());
-                (*EVAL_RESULT.ptr())[nested] = core::ptr::null_mut();
+                stash(nested, core::ptr::null_mut());
             }
             return;
         }
 
-        xfree((*EVAL_RESULT.ptr())[nested].cast());
-        (*EVAL_RESULT.ptr())[nested] = core::ptr::null_mut();
+        xfree(stashed(nested).cast());
+        stash(nested, core::ptr::null_mut());
 
         // The expression may itself run a substitution. `submatch()` has to
         // keep answering about the outermost match, so hand it this one and
@@ -495,7 +510,7 @@ unsafe fn eval_replacement(
             }
             out.skip(strlen(text) as isize);
         }
-        (*EVAL_RESULT.ptr())[nested] = text;
+        stash(nested, text);
 
         can_f_submatch.set(outer_can_f_submatch);
         if outer_can_f_submatch {

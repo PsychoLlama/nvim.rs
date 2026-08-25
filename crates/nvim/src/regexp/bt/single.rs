@@ -462,12 +462,13 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
 /// captures match the empty string rather than failing.
 fn external_reference(rex: Rex, no: c_int) -> c_int {
     cleanup_zsubexpr(rex);
+    let captures = re_extmatch_in.get();
+    if captures.is_null() {
+        return RA_CONT;
+    }
     // SAFETY: `re_extmatch_in`'s entries are NUL-terminated copies.
     unsafe {
-        if (*re_extmatch_in.ptr()).is_null() {
-            return RA_CONT;
-        }
-        let text = (*re_extmatch_in.get()).matches[no as usize];
+        let text = (*captures).matches[no as usize];
         if text.is_null() {
             return RA_CONT;
         }

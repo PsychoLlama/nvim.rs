@@ -82,14 +82,15 @@ pub(crate) fn advance_grapheme() {
 /// [`take_char_class`] against the cursor: a `[:alpha:]` at it, consumed.
 pub(crate) fn take_cursor_char_class() -> c_int {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `take_char_class` only ever advances it.
-    unsafe { take_char_class(&mut *regparse.ptr()) }
+    // `take_char_class` only ever advances it -- it walks bytes and calls
+    // nothing, so it cannot re-enter the cell it is handed.
+    regparse.with_mut(|pp| unsafe { take_char_class(pp) })
 }
 
 /// [`take_bracketed`] against the cursor: a `[=a=]` or `[.a.]` at it.
 pub(crate) fn take_cursor_bracketed(delim: u8) -> c_int {
     // SAFETY: as `take_cursor_char_class`.
-    unsafe { take_bracketed(&mut *regparse.ptr(), delim) }
+    regparse.with_mut(|pp| unsafe { take_bracketed(pp, delim) })
 }
 
 /// Is the collection between the cursor and `end` one of the character

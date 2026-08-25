@@ -520,8 +520,9 @@ pub(crate) fn getoctchrs() -> i64 {
 /// Read a number at the cursor, advancing it past the digits.
 fn take_digits(default: c_int) -> c_int {
     // SAFETY: `regparse` points into the NUL-terminated pattern, and
-    // `getdigits_int` advances it no further than the terminator.
-    unsafe { getdigits_int(regparse.ptr(), false, default) }
+    // `getdigits_int` advances it no further than the terminator -- it reads
+    // digits and calls nothing, so it cannot re-enter the cell.
+    regparse.with_mut(|pp| unsafe { getdigits_int(pp, false, default) })
 }
 
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving
