@@ -17,9 +17,9 @@ use core::ffi::c_int;
 use super::*;
 use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
+use crate::grid::default_grid_ref;
 use crate::main::{
-    curtab, default_grid, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, p_so,
-    skip_update_topline,
+    curtab, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, p_so, skip_update_topline,
 };
 use crate::types::{OptInt, int64_t, linenr_T, win_T};
 use crate::winlayer::Win;
@@ -89,7 +89,7 @@ fn update_topline_win(mut win: Win) {
     }
 
     // No screen yet, or a window with no room: just show the cursor line.
-    if default_grid.with(|grid| !grid.is_allocated()) || win.w_view_height == 0 {
+    if !default_grid_ref().is_allocated() || win.w_view_height == 0 {
         win.check_cursor_lnum();
         win.w_topline = win.w_cursor.lnum;
         win.w_botline = win.w_topline;

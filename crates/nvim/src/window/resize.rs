@@ -23,11 +23,10 @@ use crate::buffer::bt_help;
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
-use crate::grid::grid_clear;
+use crate::grid::{default_gridview, grid_clear};
 use crate::main::{
-    Columns, Rows, cmdline_row, curbuf, default_gridview, e_noroom, exiting, full_screen, msg_row,
-    msg_scrolled, p_ch, p_ls, p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline,
-    skip_win_fix_cursor,
+    Columns, Rows, cmdline_row, curbuf, e_noroom, exiting, full_screen, msg_row, msg_scrolled,
+    p_ch, p_ls, p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
 };
 use crate::mark::setmark;
 use crate::message::{msg_grid_validate, msg_grid_view};
@@ -518,7 +517,7 @@ pub unsafe fn command_height() {
     cmdline_row.set(Rows.get() - p_ch.get() as c_int);
     redraw_cmdline.set(true);
     if msg_scrolled.get() == 0 && full_screen.get() {
-        let mut grid = default_gridview.get();
+        let mut grid = default_gridview();
         if !ui_has(kUIMessages) {
             // SAFETY: makes sure the message grid exists before it is cleared.
             unsafe { msg_grid_validate() };

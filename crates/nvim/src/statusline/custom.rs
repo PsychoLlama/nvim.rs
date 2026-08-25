@@ -31,13 +31,12 @@ use crate::buffer::{col_print, get_rel_pos};
 use crate::charset::{transstr_buf, vim_strsize};
 use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::grid::{schar_from_ascii, schar_get};
+use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
 use crate::kvec::Kvec;
 use crate::main::{
-    Columns, Rows, State, default_grid, edit_submode, highlight_stlnc, highlight_user, msg_col,
-    msg_row, p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr, ru_col, tab_page_click_defs,
-    tab_page_click_defs_size,
+    Columns, Rows, State, edit_submode, highlight_stlnc, highlight_user, msg_col, msg_row, p_ch,
+    p_ru, p_ruf, p_stl, p_tal, p_wbr, ru_col, tab_page_click_defs, tab_page_click_defs_size,
 };
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
@@ -61,8 +60,7 @@ static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
 /// The screen grid itself, which is what everything but a floating window's
 /// status line and the ruler-in-the-message-area is drawn on.
 fn screen_canvas() -> GridRef {
-    // SAFETY: `default_grid` is live for the process's lifetime.
-    unsafe { GridRef::new(default_grid.ptr()) }
+    default_grid_ref()
 }
 
 /// Where one of the four formats is drawn, and what it is drawn with.

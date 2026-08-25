@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::ex_docmd::cmdmod_filters_out;
+use crate::grid::default_grid_ref;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
@@ -169,7 +170,7 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
                 msg_col.set(saved_msg_col);
             }
         }
-        if msg_use_printf() == 0 || (headless_mode.get() && (*default_grid.ptr()).is_allocated()) {
+        if msg_use_printf() == 0 || (headless_mode.get() && default_grid_ref().is_allocated()) {
             msg_puts_display(str, len as c_int, hl_id, false);
         }
 

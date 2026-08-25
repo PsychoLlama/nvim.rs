@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot
@@ -35,7 +36,7 @@ pub unsafe fn default_grid_alloc() -> bool {
         }
         RESIZING.set(true);
 
-        let grid = &mut *default_grid.ptr();
+        let mut grid = default_grid_ref();
         let unchanged =
             grid.is_allocated() && Rows.get() == grid.rows && Columns.get() == grid.cols;
         if unchanged || Rows.get() == 0 || Columns.get() == 0 {
@@ -46,7 +47,7 @@ pub unsafe fn default_grid_alloc() -> bool {
         // Allocates new arrays, moves the old lines across, clears the rest and
         // frees the old ones. On failure the arrays are left NULL rather than
         // at the old size, because the wrong size is a crash.
-        grid_alloc(grid, Rows.get(), Columns.get(), true, true);
+        grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
         stl_clear_click_defs(tab_page_click_defs.get(), tab_page_click_defs_size.get());
         tab_page_click_defs.set(stl_alloc_click_defs(
@@ -70,11 +71,11 @@ pub unsafe fn screenclear() {
     unsafe {
         msg_check_for_delay(false);
 
-        if !(*default_grid.ptr()).is_allocated() || starting.get() == NO_SCREEN {
+        if !default_grid_ref().is_allocated() || starting.get() == NO_SCREEN {
             return;
         }
 
-        let grid = &mut *default_grid.ptr();
+        let mut grid = default_grid_ref();
         for row in 0..grid.rows {
             let (off, cols) = (grid.row_start(row), grid.cols);
             grid.clear_line(off, cols, true);

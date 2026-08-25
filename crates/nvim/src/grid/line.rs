@@ -745,7 +745,7 @@ pub unsafe fn grid_put_linebuf(
             return;
         }
 
-        let invalid_row = grid.raw() != default_grid.ptr() && grid.invalid_row(row) && col == 0;
+        let invalid_row = !grid.same(default_grid_ref()) && grid.invalid_row(row) && col == 0;
         // The row from `coloff` on: every column below indexes into it.
         let off_to = grid.cell_offset(row, coloff);
         let span_width = (grid.cols - coloff) as size_t;

@@ -208,6 +208,15 @@ impl ScreenGrid {
         self.attrs.fill(-1);
     }
 
+    /// Put the grid back in use with nothing on it the UI is known to have.
+    ///
+    /// The two writes are one step: a grid marked valid while its cells
+    /// still claim to match the UI would have the next redraw skip them.
+    pub(crate) fn revalidate(&mut self) {
+        self.invalidate();
+        self.valid = true;
+    }
+
     /// Whether `row` was invalidated and never redrawn.
     pub(crate) fn invalid_row(&self, row: ::core::ffi::c_int) -> bool {
         self.attrs[self.row_start(row)] < 0

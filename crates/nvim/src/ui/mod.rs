@@ -47,14 +47,14 @@ use crate::event::libuv::uv_cwd;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::global_cell::GlobalCell;
-use crate::grid::{GridRef, get_win_by_grid_handle};
+use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, default_grid,
-    emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, normal_bg,
-    normal_fg, normal_sp, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags, resize_events,
-    starting, textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
+    State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, emsg_silent,
+    exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, normal_bg, normal_fg,
+    normal_sp, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting,
+    textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
@@ -160,10 +160,9 @@ fn reaches(ui: *mut RemoteUI, reach: Reach) -> bool {
 ///
 /// Call once, before any grid is drawn.
 pub unsafe fn ui_init() {
-    unsafe {
-        (*default_grid.ptr()).handle = DEFAULT_GRID_HANDLE;
-        ui_comp_init();
-    }
+    let mut grid = default_grid_ref();
+    grid.handle = DEFAULT_GRID_HANDLE;
+    ui_comp_init();
 }
 
 /// Whether the editor should resolve highlights to 24-bit colour.
@@ -788,7 +787,7 @@ unsafe fn ui_cursor_is_behind_floatwin() -> bool {
     };
     let ccol = win.w_wincol + win.w_wincol_off + wcol;
     let top_grid = unsafe { ui_comp_get_grid_at_coord(crow, ccol) };
-    top_grid != &raw mut win.w_grid_alloc && top_grid != default_grid.ptr()
+    top_grid != &raw mut win.w_grid_alloc && top_grid != default_grid_ref().raw()
 }
 
 /// Whether `ext` is drawn by the UIs rather than into the grid.

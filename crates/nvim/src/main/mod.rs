@@ -11,8 +11,8 @@ use crate::options::{
 };
 use crate::profile::time_msg;
 use crate::types::{
-    AdditionalData, Array, Callback, Callback_data, CmdModFlags, DecorState, FILE, GridView, Loop,
-    LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
+    AdditionalData, Array, Callback, Callback_data, CmdModFlags, DecorState, FILE, Loop, LuaRef,
+    LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
     UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
@@ -997,11 +997,6 @@ pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
-pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(GridView {
-    target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
-    row_offset: 0,
-    col_offset: 0,
-});
 pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static linebuf_char: GlobalCell<*mut schar_T> =
     GlobalCell::new(::core::ptr::null_mut::<schar_T>());

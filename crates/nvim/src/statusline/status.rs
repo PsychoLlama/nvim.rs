@@ -19,8 +19,9 @@ use super::*;
 use crate::buffer::buf_spname;
 use crate::charset::trans_characters;
 use crate::global_cell::GlobalCell;
+use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
-use crate::main::{default_gridview, redraw_cmdline, wild_menu_showing};
+use crate::main::{redraw_cmdline, wild_menu_showing};
 use crate::memory::xstrlcpy;
 use crate::os::env::home_replace;
 use crate::types::ui::kUIWildmenu;
@@ -76,7 +77,7 @@ pub unsafe fn win_redr_status(wp: *mut win_T) {
         };
         let attr = win_hl(win, group as c_int);
         // SAFETY: `default_gridview` is live, and the batch is flushed below.
-        unsafe { view_line_start(default_gridview.get(), win.w_winrow + win.w_height) };
+        unsafe { view_line_start(default_gridview(), win.w_winrow + win.w_height) };
         paint_schar(win.w_wincol + win.w_width, fillchar, attr);
         paint_flush();
     }

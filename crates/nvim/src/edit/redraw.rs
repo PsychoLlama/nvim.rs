@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::grid::default_grid_ref;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, MB_MAXCHAR, NUL};
 
@@ -159,7 +160,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
 pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
     unsafe {
         let win = curwin.get();
-        if !(*win).w_grid_alloc.is_allocated() && !(*default_grid.ptr()).is_allocated() {
+        if !(*win).w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
             return;
         }
 

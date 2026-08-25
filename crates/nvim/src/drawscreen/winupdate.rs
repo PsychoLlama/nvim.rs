@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::decoration::{DecorStateRef, kVPosWinCol};
+use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::pos::MAXCOL;
@@ -107,7 +108,7 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
     unsafe {
         // Return early when the window would overflow a shrunk terminal, which
         // would draw out of bounds and trip an assertion.
-        if (*wp).w_grid.target == default_grid.ptr() && (*wp).w_wincol >= Columns.get() {
+        if (*wp).w_grid.target == default_grid_ref().raw() && (*wp).w_wincol >= Columns.get() {
             return;
         }
 

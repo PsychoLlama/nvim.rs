@@ -113,9 +113,9 @@ use crate::keycodes::{
 };
 use crate::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, ai_col, arrow_used,
-    can_si, can_si_back, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curwin, default_grid,
-    did_ai, did_check_timestamps, did_cursorhold, did_si, disable_fold_update, dollar_vcol,
-    e_noinstext, e_sandbox, e_textlock, edit_submode_extra, emsg_on_display, end_comment_pending,
+    can_si, can_si_back, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curwin, did_ai,
+    did_check_timestamps, did_cursorhold, did_si, disable_fold_update, dollar_vcol, e_noinstext,
+    e_sandbox, e_textlock, edit_submode_extra, emsg_on_display, end_comment_pending,
     ex_normal_busy, fdo_flags, first_tabpage, force_restart_edit, got_int, hl_attr_active,
     ins_at_eol, km_startsel, langmap_mapchar, last_cursormoved, last_cursormoved_win, mod_mask,
     msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_highlight_changed,

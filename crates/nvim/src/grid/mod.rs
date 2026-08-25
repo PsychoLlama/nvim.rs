@@ -122,10 +122,20 @@ impl GridRef {
 
     /// # Safety
     /// `grid` must name a live `ScreenGrid` that outlives every use of the
-    /// handle -- a global cell, a window's own grid, or a local the caller
-    /// keeps alive.
+    /// handle -- a window's own grid, or a local the caller keeps alive.
+    /// For a grid that lives in a global cell use [`GridRef::of_cell`],
+    /// which discharges this obligation from the cell's own lifetime.
     pub const unsafe fn new(grid: *mut ScreenGrid) -> GridRef {
         GridRef(grid)
+    }
+
+    /// The grid a global cell holds.
+    ///
+    /// Safe, and the only constructor that is: a `&'static GlobalCell` is
+    /// exactly the promise [`GridRef::new`] has to be told, so the three
+    /// screen grids need no `unsafe` at all to be named.
+    pub(crate) fn of_cell(cell: &'static GlobalCell<ScreenGrid>) -> GridRef {
+        GridRef(cell.ptr())
     }
 
     /// The address, for the calls that still spell a raw pointer.
@@ -158,6 +168,33 @@ impl ::core::ops::DerefMut for GridRef {
         // SAFETY: the constructor's promise. The borrow lasts one call: see
         // the type's own docs for why it may not last longer.
         unsafe { &mut *self.0 }
+    }
+}
+
+/// The screen grid, as a handle.
+///
+/// One acquisition per path: the grid is the bottom layer of the
+/// compositor's stack and is reached from there while it is being drawn on,
+/// so it is named rather than borrowed. See the module docs.
+pub(crate) fn default_grid_ref() -> GridRef {
+    GridRef::of_cell(&default_grid)
+}
+
+/// A view of the whole screen: a screen row already is a row of the screen
+/// grid, so both offsets are zero.
+///
+/// Computed, never stored. As a cell (`default_gridview`) this was a second
+/// name for `default_grid`'s address, initialised in a `const` initialiser
+/// through `as_raw` -- the one spelling that skips the main-thread check --
+/// and thereafter trusted to stay in step by hand. See [`msg_grid_view`],
+/// whose stored form was a live bug.
+///
+/// [`msg_grid_view`]: crate::message::msg_grid_view
+pub(crate) fn default_gridview() -> GridView {
+    GridView {
+        target: default_grid_ref().raw(),
+        row_offset: 0,
+        col_offset: 0,
     }
 }
 
@@ -271,8 +308,7 @@ pub unsafe fn win_grid_alloc(wp: *mut win_T) {
             (*grid_allocated).valid = false;
             was_resized = true;
         } else if want_allocation && has_allocation && !(*wp).w_grid_alloc.valid {
-            (*grid_allocated).invalidate();
-            (*grid_allocated).valid = true;
+            (*grid_allocated).revalidate();
         }
 
         if want_allocation {
@@ -280,7 +316,7 @@ pub unsafe fn win_grid_alloc(wp: *mut win_T) {
             (*grid).row_offset = (*wp).w_winrow_off;
             (*grid).col_offset = (*wp).w_wincol_off;
         } else {
-            (*grid).target = default_grid.ptr();
+            (*grid).target = default_grid_ref().raw();
             (*grid).row_offset = (*wp).w_winrow + (*wp).w_winrow_off;
             (*grid).col_offset = (*wp).w_wincol + (*wp).w_wincol_off;
         }

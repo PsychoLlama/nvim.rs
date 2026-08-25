@@ -20,6 +20,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use super::*;
+use crate::grid::default_grid_ref;
 use crate::keycodes::Ctrl_C;
 use crate::menu::{Menu, is_separator};
 use crate::mouse::{MousePos, find_win_outer};
@@ -319,7 +320,7 @@ pub unsafe fn pum_make_popup(path_name: *const c_char, use_mouse_pos: c_int) {
             // why this read stays inside the branch.
             // SAFETY: a live window's own grid.
             mouse_grid.set(unsafe { (*win.w_grid.target).handle } as c_int);
-        } else if !ptr::eq(win.w_grid.target, default_grid.ptr()) {
+        } else if !ptr::eq(win.w_grid.target, default_grid_ref().raw()) {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.
             mouse_grid.set(0);

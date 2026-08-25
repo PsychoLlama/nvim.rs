@@ -31,11 +31,11 @@ use core::{ptr, slice};
 
 use crate::drawscreen::windows_in_curtab;
 use crate::global_cell::GlobalCell;
-use crate::grid::{GridRef, schar_from_ascii, schar_from_buf};
+use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
 use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::log::{LOGLVL_DBG, logmsg_c};
-use crate::main::{Columns, Rows, curwin, default_grid, hl_attr_active, p_wd, rdb_flags};
+use crate::main::{Columns, Rows, curwin, hl_attr_active, p_wd, rdb_flags};
 use crate::message::msg_grid_ref;
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
@@ -52,8 +52,7 @@ use scratch::{Bufs, blend, clear_invalid_attrs};
 
 /// The screen every other layer is composed onto.
 fn default_layer() -> GridRef {
-    // SAFETY: a static, whose arrays exist before anything composes.
-    unsafe { GridRef::new(default_grid.ptr()) }
+    default_grid_ref()
 }
 
 /// The message grid, which the `'msgsep'` row is also attributed to.

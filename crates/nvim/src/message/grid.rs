@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::{default_grid_ref, default_gridview};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -18,9 +19,7 @@ use core::ptr;
 /// compositor and reached from there while it is being drawn on, so it is
 /// named rather than borrowed -- see [`GridRef`] for why that matters.
 pub(crate) fn msg_grid_ref() -> GridRef {
-    // SAFETY: a `static`'s address is always valid, and the handle borrows
-    // nothing.
-    unsafe { GridRef::new(msg_grid.ptr()) }
+    GridRef::of_cell(&msg_grid)
 }
 
 /// Where message output goes, in screen coordinates.
@@ -45,7 +44,7 @@ pub(crate) fn msg_grid_view() -> GridView {
             col_offset: 0,
         }
     } else {
-        default_gridview.get()
+        default_gridview()
     }
 }
 
@@ -101,7 +100,7 @@ pub unsafe fn msg_grid_set_pos(row: c_int, scrolled: bool) {
 /// Only that the default grid is initialised.
 pub unsafe fn msg_use_grid() -> bool {
     // SAFETY: a `static`'s address is always valid.
-    unsafe { (*default_grid.ptr()).is_allocated() && !ui_has(kUIMessages) }
+    default_grid_ref().is_allocated() && !ui_has(kUIMessages)
 }
 
 /// Allocate, resize, reposition or free the message grid to match the screen.

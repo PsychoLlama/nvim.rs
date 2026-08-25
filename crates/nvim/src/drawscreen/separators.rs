@@ -17,6 +17,7 @@
 use super::*;
 use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
+use crate::grid::default_gridview;
 
 /// Which corner of a window a separator connector is being drawn in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -211,7 +212,7 @@ pub(crate) unsafe fn draw_vsep_win(wp: *mut win_T) {
         let attr = win_hl_attr(wp, HLF_C);
         let col = win_endcol(wp);
         for row in (*wp).w_winrow..win_endrow(wp) {
-            grid_line_start(default_gridview.get(), row);
+            grid_line_start(default_gridview(), row);
             grid_line_put_schar(col, (*wp).w_p_fcs_chars.vert, attr);
             grid_line_flush();
         }
@@ -225,7 +226,7 @@ pub(crate) unsafe fn draw_hsep_win(wp: *mut win_T) {
         if (*wp).w_hsep_height == 0 {
             return;
         }
-        grid_line_start(default_gridview.get(), win_endrow(wp));
+        grid_line_start(default_gridview(), win_endrow(wp));
         grid_line_fill(
             (*wp).w_wincol,
             win_endcol(wp),
@@ -309,7 +310,7 @@ pub(crate) unsafe fn draw_sep_connectors_win(wp: *mut win_T) {
             ),
         ] {
             if draw {
-                grid_line_start(default_gridview.get(), row);
+                grid_line_start(default_gridview(), row);
                 grid_line_put_schar(col, get_corner_sep_connector(wp, corner), hl);
                 grid_line_flush();
             }

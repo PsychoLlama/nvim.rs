@@ -23,12 +23,11 @@ use core::iter;
 use super::*;
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
 use crate::charset::{ptr2cells, vim_strsize};
-use crate::grid::schar_from_ascii;
+use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::main::{
-    Columns, curbuf, curtab, curwin, default_grid, default_gridview, first_tabpage, firstbuf,
-    firstwin, p_sc, p_sloc, p_tal, redraw_tabline, showcmd_buf, t_colors, tab_page_click_defs,
-    tab_page_click_defs_size, topframe,
+    Columns, curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, p_sc, p_sloc, p_tal,
+    redraw_tabline, showcmd_buf, t_colors, tab_page_click_defs, tab_page_click_defs_size, topframe,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
@@ -178,7 +177,7 @@ unsafe fn name_buff_in(arena: *mut Arena) -> String_0 {
 pub unsafe fn draw_tabline() {
     // SAFETY: `default_grid` is live for the process's lifetime; before the
     // first resize it has no cells yet.
-    if unsafe { !(*default_grid.ptr()).is_allocated() } {
+    if !default_grid_ref().is_allocated() {
         return;
     }
     redraw_tabline.set(false);
@@ -225,7 +224,7 @@ unsafe fn draw_default_tabline() {
     let use_sep_chars = t_colors.get() < 8;
 
     // SAFETY: `default_gridview` is live; the batch is flushed below.
-    unsafe { view_line_start(default_gridview.get(), 0) };
+    unsafe { view_line_start(default_gridview(), 0) };
     // SAFETY: the caller's promise.
     let count = unsafe { tabpages() }.count() as c_int;
     let tabwidth = if count > 0 {

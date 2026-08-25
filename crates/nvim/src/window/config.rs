@@ -26,9 +26,9 @@ use crate::decoration::clear_virttext;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::deepest_fold_nesting;
-use crate::grid::{grid_adjust, win_grid_alloc};
+use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
-use crate::main::{Columns, Rows, default_grid, float_anchor_str, p_acd, p_ch};
+use crate::main::{Columns, Rows, float_anchor_str, p_acd, p_ch};
 use crate::r#move::textpos2screenpos;
 use crate::os::cshim::strncmp;
 use crate::plines::win_text_height;
@@ -214,7 +214,7 @@ fn ext_win_position(wp: Win, validate: bool) {
         return;
     }
 
-    let mut grid = default_grid.ptr();
+    let mut grid = default_grid_ref().raw();
     let mut row = c.row as Float;
     let mut col = c.col as Float;
     if c.relative as c_uint == kFloatRelativeWindow as c_uint {

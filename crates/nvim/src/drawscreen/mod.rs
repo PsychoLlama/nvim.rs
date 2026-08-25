@@ -23,10 +23,10 @@ use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding}
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    grid_adjust, grid_alloc, grid_clear, grid_del_lines, grid_draw_border, grid_ins_lines,
-    grid_line_clear_end, grid_line_fill, grid_line_flush, grid_line_getchar, grid_line_mirror,
-    grid_line_put_schar, grid_line_start, schar_cache_clear_if_full, schar_from_ascii,
-    win_grid_alloc,
+    default_grid_ref, default_gridview, grid_adjust, grid_alloc, grid_clear, grid_del_lines,
+    grid_draw_border, grid_ins_lines, grid_line_clear_end, grid_line_fill, grid_line_flush,
+    grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
+    schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
@@ -37,18 +37,17 @@ use crate::highlight_group::{
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
     Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, clear_cmdline, cmdline_row,
-    cmdline_was_last_drawn, curbuf, curtab, curwin, default_grid, default_gridview, display_tick,
-    do_redraw, dollar_vcol, dy_flags, edit_submode, edit_submode_extra, edit_submode_highl,
-    edit_submode_pre, exiting, exmode_active, first_tabpage, firstwin, global_busy, got_int,
-    hl_attr_active, lines_left, mode_displayed, msg_col, msg_did_scroll, msg_didany, msg_didout,
-    msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush,
-    msg_silent, must_redraw, must_redraw_pum, need_diff_redraw, need_highlight_changed,
-    need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast, p_ch, p_columns, p_hls, p_icon,
-    p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
-    redraw_cmdline, redraw_mode, redraw_not_allowed, redraw_tabline, reg_recording,
-    resizing_screen, restart_edit, ru_col, ru_wid, sc_col, screen_search_hl,
-    search_hl_has_cursor_lnum, starting, stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
-    updating_screen, win_extmark_arr,
+    cmdline_was_last_drawn, curbuf, curtab, curwin, display_tick, do_redraw, dollar_vcol, dy_flags,
+    edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exiting, exmode_active,
+    first_tabpage, firstwin, global_busy, got_int, hl_attr_active, lines_left, mode_displayed,
+    msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount, msg_no_more,
+    msg_row, msg_scrolled, msg_scrolled_at_flush, msg_silent, must_redraw, must_redraw_pum,
+    need_diff_redraw, need_highlight_changed, need_maketitle, need_wait_return, no_hlsearch,
+    ns_hl_fast, p_ch, p_columns, p_hls, p_icon, p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc,
+    p_sloc, p_smd, p_title, p_wbr, p_wmw, redraw_cmdline, redraw_mode, redraw_not_allowed,
+    redraw_tabline, reg_recording, resizing_screen, restart_edit, ru_col, ru_wid, sc_col,
+    screen_search_hl, search_hl_has_cursor_lnum, starting, stl_syntax, tab_page_click_defs,
+    tab_page_click_defs_size, updating_screen, win_extmark_arr,
 };
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
@@ -258,7 +257,7 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         // UPD_CLEAR is already handled by the caller.
         if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && msg_scrolled.get() != 0 {
             was_invalidated = ui_comp_set_screen_valid(false);
-            let dg = &mut *default_grid.ptr();
+            let mut dg = default_grid_ref();
             let mut row = valid;
             while (row as OptInt) < Rows.get() as OptInt - p_ch.get() {
                 let off = dg.row_start(row);
@@ -349,7 +348,7 @@ pub unsafe fn update_screen() -> c_int {
 
         // A VimResized autocommand can redraw in the middle of a resize, which
         // would bypass the checks in `screen_resize`.
-        if resizing_autocmd.get() || !(*default_grid.ptr()).is_allocated() {
+        if resizing_autocmd.get() || !default_grid_ref().is_allocated() {
             return FAIL;
         }
 
@@ -384,7 +383,7 @@ pub unsafe fn update_screen() -> c_int {
             msg_scrolled_at_flush.set(0);
         }
 
-        if redr_type >= UPD_CLEAR || !(*default_grid.ptr()).valid {
+        if redr_type >= UPD_CLEAR || !default_grid_ref().valid {
             ui_comp_set_screen_valid(false);
         }
 
@@ -413,15 +412,14 @@ pub unsafe fn update_screen() -> c_int {
             redr_type = UPD_NOT_VALID;
             // `must_redraw` may have been set indirectly; avoid another redraw.
             must_redraw.set(0);
-        } else if !(*default_grid.ptr()).valid {
-            (*default_grid.ptr()).invalidate();
-            (*default_grid.ptr()).valid = true;
+        } else if !default_grid_ref().valid {
+            default_grid_ref().revalidate();
         }
 
         // May need to clear space on the default grid for the message area.
         if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
             grid_clear(
-                default_gridview.get(),
+                default_gridview(),
                 Rows.get() - p_ch.get() as c_int,
                 Rows.get(),
                 0,

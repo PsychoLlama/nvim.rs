@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::grid::default_gridview;
 use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
@@ -380,7 +381,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                 if wild_menu_showing.get() == WM_SCROLLED {
                     msg_grid_view()
                 } else {
-                    default_gridview.get()
+                    default_gridview()
                 },
                 row,
             );

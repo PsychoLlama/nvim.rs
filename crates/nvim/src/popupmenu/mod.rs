@@ -21,9 +21,9 @@ use crate::garray::ga_clear;
 use crate::getchar::{vgetc, vungetc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    GridRef, get_win_by_grid_handle, grid_alloc, grid_assign_handle, grid_draw_border,
-    grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts, schar_from_ascii,
-    schar_from_str, screengrid_line_start,
+    GridRef, default_grid_ref, get_win_by_grid_handle, grid_alloc, grid_assign_handle,
+    grid_draw_border, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
+    schar_from_ascii, schar_from_str, screengrid_line_start,
 };
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
@@ -39,10 +39,10 @@ use crate::keycodes::{
 };
 use crate::main::{
     Columns, PumWant, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win,
-    cmdwin_type, curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode,
-    firstwin, g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid,
-    mouse_row, must_redraw_pum, no_u_sync, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw,
-    pum_grid, pum_want,
+    cmdwin_type, curbuf, curtab, curwin, e_menu_only_exists_in_another_mode, firstwin,
+    g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid, mouse_row,
+    must_redraw_pum, no_u_sync, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid,
+    pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
@@ -290,7 +290,7 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
             pum_anchor_grid.set((*(*target_win).w_grid.target).handle as c_int);
             win_row += (*target_win).w_grid.row_offset;
             cursor_col += (*target_win).w_grid.col_offset;
-            if (*target_win).w_grid.target != default_grid.ptr() {
+            if (*target_win).w_grid.target != default_grid_ref().raw() {
                 win_row += (*target_win).w_winrow;
                 cursor_col += (*target_win).w_wincol;
                 if ui_has(kUIMultigrid) {

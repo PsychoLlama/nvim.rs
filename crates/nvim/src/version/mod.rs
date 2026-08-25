@@ -19,12 +19,12 @@ use crate::buffer::buf_is_empty;
 use crate::charset::vim_strsize;
 use crate::drawscreen::screenclear;
 use crate::getchar::plain_vgetc;
-use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
+use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::main::{
-    Columns, Rows, curbuf, curwin, default_gridview, firstwin, got_int, hl_attr_active, msg_col,
-    p_ls, p_shm, p_verbose, starting, topframe,
+    Columns, Rows, curbuf, curwin, firstwin, got_int, hl_attr_active, msg_col, p_ls, p_shm,
+    p_verbose, starting, topframe,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
@@ -525,7 +525,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
             if !colon && ui_has(kUIMultigrid) {
                 (*firstwin.get()).w_grid
             } else {
-                default_gridview.get()
+                default_gridview()
             },
             row,
         );
