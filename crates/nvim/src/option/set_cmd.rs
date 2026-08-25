@@ -31,8 +31,8 @@ use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::keycodes::{K_ZERO, find_special_key};
 use crate::main::{
-    IObuff, curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose,
-    sandbox, silent_mode,
+    curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox,
+    silent_mode,
 };
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
@@ -612,7 +612,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
     let mut did_show = false;
     let mut arg = arg;
 
-    // SAFETY: the caller's string, and `IObuff` is `IOSIZE` writable bytes.
+    // SAFETY: the caller's string.
     unsafe {
         if *arg == NUL as c_char {
             showoptions(false, opt_flags);
@@ -681,17 +681,18 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
 
 /// Report a rejected argument as "message: argument".
 ///
-/// The argument is appended only when both fit in `IObuff`; a message that
-/// long stands on its own.
+/// The argument is appended only when both fit in the report buffer; a
+/// message that long stands on its own.
 ///
 /// # Safety
 ///
 /// `errmsg` must be NUL-terminated and `start..=end` one argument of the
 /// command line.
 unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
-    // SAFETY: the caller's strings, and `IObuff` is `IOSIZE` writable bytes.
+    let mut report = [0 as c_char; IOSIZE as usize];
+    // SAFETY: the caller's strings, and `report` is `IOSIZE` writable bytes.
     unsafe {
-        let buf = IObuff.ptr().cast::<c_char>();
+        let buf = report.as_mut_ptr();
         // Two past the message, leaving room for the ": " written back over
         // its terminator.
         let at = vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext(errmsg)) + 2;

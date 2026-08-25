@@ -21,9 +21,11 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
+use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::indent_c::parse_cino;
 use crate::main::secure;
@@ -359,17 +361,22 @@ fn digit(byte: u8) -> c_int {
 /// the set is kept exactly as upstream spells it.
 const STL_ALL: &CStr = c"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
 
-/// Check a 'statusline'-format value. Returns an untranslated message, or
-/// null when the format is good.
+/// Check a 'statusline'-format value. Answers an untranslated message, or
+/// `None` when the format is good.
+///
+/// Upstream formats the message into a function-local static, because the
+/// answer has to outlive the call and the caller passes no buffer. The
+/// answer is owned instead, so two checks in flight cannot collide.
 ///
 /// # Safety
 /// `s` is a C string.
-pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
-    // The message needs to outlive this call, and the caller passes no
-    // buffer, so upstream formats into a function-local static.
-    static ERRBUF: GlobalCell<[c_char; 80]> = GlobalCell::new([0; 80]);
-    let errbuf = ERRBUF.ptr().cast::<c_char>();
-    let errbuflen = size_of::<[c_char; 80]>();
+pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Option<CString> {
+    let mut errbuf = [0 as c_char; 80];
+    let mut illegal = |c: c_int| {
+        // SAFETY: `errbuf` is 80 writable bytes.
+        unsafe { illegal_char(errbuf.as_mut_ptr(), errbuf.len(), c) };
+        Some(cstr::in_chars(&errbuf).to_owned())
+    };
 
     // SAFETY: the caller's C string.
     let mut rest = unsafe { CStr::from_ptr(s) }.to_bytes();
@@ -413,13 +420,11 @@ pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
             continue;
         }
         let Some(&item) = rest.first() else {
-            // SAFETY: the module's own buffer.
-            return unsafe { illegal_char(errbuf, errbuflen, NUL) };
+            return illegal(NUL);
         };
         // SAFETY: `STL_ALL` is a C string; `vim_strchr` only reads it.
         if unsafe { vim_strchr(STL_ALL.as_ptr(), c_int::from(item)) }.is_null() {
-            // SAFETY: the module's own buffer.
-            return unsafe { illegal_char(errbuf, errbuflen, c_int::from(item)) };
+            return illegal(c_int::from(item));
         }
         if item == b'{' {
             rest = &rest[1..];
@@ -429,8 +434,7 @@ pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
             if reevaluate {
                 rest = &rest[1..];
                 if rest.first() == Some(&b'}') {
-                    // SAFETY: the module's own buffer.
-                    return unsafe { illegal_char(errbuf, errbuflen, c_int::from(b'}')) };
+                    return illegal(c_int::from(b'}'));
                 }
             }
             let close = if reevaluate {
@@ -439,16 +443,16 @@ pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
                 rest.iter().position(|&b| b == b'}')
             };
             let Some(close) = close else {
-                return e_unclosed_expression_sequence.as_ptr();
+                return Some(e_unclosed_expression_sequence.to_owned());
             };
             rest = &rest[close..];
         }
     }
 
     if groupdepth != 0 {
-        return e_unbalanced_groups.as_ptr();
+        return Some(e_unbalanced_groups.to_owned());
     }
-    ptr::null()
+    None
 }
 
 /// Does `val` hold a character an option marked as a file or directory name

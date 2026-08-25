@@ -66,9 +66,9 @@ pub unsafe fn nvim_eval_statusline(
         // SAFETY: `str.data` is NUL-terminated, and the message is the
         // checker's own static text.
         let errmsg = unsafe { check_stl_option(str.data()) };
-        if !errmsg.is_null() {
+        if let Some(errmsg) = errmsg {
             // SAFETY: the caller's error slot.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg) };
+            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg.as_ptr()) };
             return empty.reported(error);
         }
     }

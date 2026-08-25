@@ -15,13 +15,15 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
+use std::ffi::CString;
 
 use crate::cmdexpand::cmdline_fuzzy_complete;
+use crate::cstr;
 use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::get_special_key_code;
-use crate::main::{NameBuff, curbuf, curwin, escape_chars};
+use crate::main::{curbuf, curwin, escape_chars};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
@@ -58,19 +60,23 @@ static FLAGS: GlobalCell<OptionSetFlags> = GlobalCell::new(OptionSetFlags::NONE)
 /// not a candidate to offer back.
 static APPEND: GlobalCell<bool> = GlobalCell::new(false);
 
-/// The option's value with `$VAR` and `~` expanded, in `NameBuff`, or null
-/// when there was nothing to expand.
+/// The option's value with `$VAR` and `~` expanded, or `None` when there
+/// was nothing to expand.
+///
+/// Upstream expands into the shared `NameBuff` and answers its address;
+/// every caller copies the answer out at once, so it is owned here.
 ///
 /// # Safety
 ///
 /// `val`, if not null, must be NUL-terminated.
-pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mut c_char {
+pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Option<CString> {
+    let mut expanded = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the option table is a plain array, `var` is the option's own
     // variable, and the caller's `val` is NUL-terminated.
     unsafe {
         let opt = get_option(opt_idx);
         if opt.flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
-            return ptr::null_mut();
+            return None;
         }
         let val = if val.is_null() {
             *option_var(opt_idx).string_var()
@@ -79,7 +85,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
         };
         // The buffer the expansion lands in is `MAXPATHL` bytes.
         if val.is_null() || strlen(val) > MAXPATHL as size_t {
-            return ptr::null_mut();
+            return None;
         }
         // 'path' and 'tags' hold escaped file names, so their separators
         // must survive the expansion.
@@ -90,19 +96,12 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
             kOptSpellsuggest => c"file:".as_ptr() as *mut c_char,
             _ => ptr::null_mut(),
         };
-        expand_env_esc(
-            val,
-            NameBuff.ptr().cast::<c_char>(),
-            MAXPATHL,
-            esc,
-            false,
-            one_prefix,
-        );
-        if strcmp(NameBuff.ptr().cast::<c_char>(), val) == 0 {
-            return ptr::null_mut();
+        expand_env_esc(val, expanded.as_mut_ptr(), MAXPATHL, esc, false, one_prefix);
+        if strcmp(expanded.as_ptr(), val) == 0 {
+            return None;
         }
-        NameBuff.ptr().cast::<c_char>()
     }
+    Some(cstr::in_chars(&expanded).to_owned())
 }
 
 /// Work out what the cursor is sitting on in a `:set` command line, and
@@ -605,11 +604,12 @@ pub(crate) unsafe fn expand_old_setting(
         if IDX.get() == kOptInvalid {
             IDX.set(find_option(CStr::from_ptr(NAME.ptr().cast::<c_char>())));
         }
+        let mut rendered = [0 as c_char; MAXPATHL as usize];
         let var = if IDX.get() == kOptInvalid {
             c"".as_ptr() as *mut c_char
         } else {
-            option_value2string(IDX.get(), FLAGS.get());
-            NameBuff.ptr().cast::<c_char>()
+            option_value2string(IDX.get(), FLAGS.get(), &mut rendered);
+            rendered.as_mut_ptr()
         };
         *(*matches) = escape_option_str_cmdline(var);
         *numMatches = 1;
@@ -639,8 +639,9 @@ pub(crate) unsafe fn expand_string_setting(
             return FAIL;
         };
 
-        option_value2string(opt_idx, FLAGS.get());
-        let escaped = escape_option_str_cmdline(NameBuff.ptr().cast::<c_char>());
+        let mut rendered = [0 as c_char; MAXPATHL as usize];
+        option_value2string(opt_idx, FLAGS.get(), &mut rendered);
+        let escaped = escape_option_str_cmdline(rendered.as_mut_ptr());
 
         let set_arg = (*xp).xp_line.offset(START_COL.get() as isize);
         let mut args = optexpand_T {

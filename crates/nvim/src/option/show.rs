@@ -5,9 +5,10 @@
 //! it to a session file, and [`ui_refresh_options`] hands the ones a UI
 //! cares about over the RPC channel.
 //!
-//! [`option_value2string`] is the shared bottom of the first two: it leaves
-//! the rendered value in `NameBuff`, which is why nothing here may hold a
-//! previous rendering across a call to it.
+//! [`option_value2string`] is the shared bottom of the first two. Upstream
+//! renders into the shared `NameBuff`, so nothing there could hold a
+//! previous rendering across a call to it; here the caller passes the
+//! buffer it wants filled.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -18,7 +19,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_line};
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::main::{Columns, NameBuff, curbuf, curwin, got_int, info_message, p_mouse, silent_mode};
+use crate::main::{Columns, curbuf, curwin, got_int, info_message, p_mouse, silent_mode};
 use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{
@@ -71,6 +72,7 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 ///
 /// The current window and buffer must be live.
 pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
+    let mut rendered = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the option table, the message area, and the current window
     // and buffer.
     unsafe {
@@ -115,8 +117,8 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                 } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                     1
                 } else {
-                    option_value2string(opt_idx, opt_flags);
-                    strlen(opt.fullname) as c_int + vim_strsize(NameBuff.ptr().cast::<c_char>()) + 1
+                    option_value2string(opt_idx, opt_flags, &mut rendered);
+                    strlen(opt.fullname) as c_int + vim_strsize(rendered.as_mut_ptr()) + 1
                 };
                 let fits = len <= INC - GAP;
                 if fits == (run == 1) {
@@ -187,6 +189,7 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     let save_silent = silent_mode.get();
     silent_mode.set(false);
     info_message.set(true);
+    let mut rendered = [0 as c_char; MAXPATHL as usize];
 
     // SAFETY: the current window and buffer.
     unsafe {
@@ -214,9 +217,9 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
 
         if !boolean {
             msg_putchar('=' as c_int);
-            option_value2string(opt_idx, opt_flags);
-            if *NameBuff.ptr().cast::<c_char>() != NUL as c_char {
-                msg_outtrans(NameBuff.ptr().cast::<c_char>(), 0, false);
+            option_value2string(opt_idx, opt_flags, &mut rendered);
+            if rendered[0] != NUL as c_char {
+                msg_outtrans(rendered.as_mut_ptr(), 0, false);
             }
         }
     }
@@ -519,19 +522,22 @@ unsafe fn put_string_value(
     }
 }
 
-/// Render an option's value into `NameBuff`.
+/// Render an option's value into `out`.
 ///
 /// # Safety
 ///
 /// The current window and buffer must be live.
-pub(crate) unsafe fn option_value2string(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
-    // SAFETY: the current window and buffer, and `NameBuff` is `MAXPATHL`
-    // bytes.
+pub(crate) unsafe fn option_value2string(
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+    out: &mut [c_char; MAXPATHL as usize],
+) {
+    // SAFETY: the current window and buffer, and `out` is `MAXPATHL` bytes.
     unsafe {
         let varp = get_varp_scope(opt_idx, opt_flags);
         debug_assert!(!varp.is_none());
-        let buf = NameBuff.ptr().cast::<c_char>();
-        let cap = size_of::<[c_char; 4096]>();
+        let buf = out.as_mut_ptr();
+        let cap = out.len();
 
         if option_has_type(opt_idx, kOptValTypeNumber) {
             let mut wc: OptInt = 0;

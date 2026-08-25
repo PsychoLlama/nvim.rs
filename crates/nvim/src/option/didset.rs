@@ -67,9 +67,10 @@ use crate::winfloat::win_float_update_statusline;
 use ::libc::strcmp;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
-    did_set_title, kOptValTypeNumber, kOptValTypeString, option_var, option_was_set,
-    optval_boolean, redraw_titles, set_option_value, set_option_varp, set_options_bin,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,
+    check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString, option_var,
+    option_was_set, optval_boolean, redraw_titles, set_option_value, set_option_varp,
+    set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
@@ -138,6 +139,7 @@ impl Frame {
 
 /// 'arabic': a bundle of other settings, plus the Arabic keymap.
 pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
+    let (keymap, local) = (cstr_optval(c"arabic"), OptionSetFlags::LOCAL);
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe {
         let win = Frame::read(args).win;
@@ -170,7 +172,7 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             set_vim_var_string(Vv::Warningmsg, gettext(warning.as_ptr()), -1 as ptrdiff_t);
         }
         p_deco.set(1);
-        set_option_value(kOptKeymap, cstr_optval(c"arabic"), OptionSetFlags::LOCAL)
+        answer_err(args, set_option_value(kOptKeymap, keymap, local))
     }
 }
 

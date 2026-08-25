@@ -243,14 +243,13 @@ fn set_init_expand_env() {
             }
             // A `kOptFlagGettext` default is a translatable message rather
             // than a path; there is nothing in it to expand.
-            let expanded = if opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global() {
-                gettext(*option_var(opt_idx).string_var())
-            } else {
-                option_expand(opt_idx, ptr::null())
+            let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
+            let expansion = (!translated).then(|| option_expand(opt_idx, ptr::null()));
+            let expanded = match &expansion {
+                None => gettext(*option_var(opt_idx).string_var()),
+                Some(Some(expanded)) => expanded.as_ptr(),
+                Some(None) => continue,
             };
-            if expanded.is_null() {
-                continue;
-            }
             let value = OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
@@ -390,11 +389,9 @@ pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -
         {
             return default;
         }
-        let expanded = option_expand(opt_idx, default.data.string.data());
-        if expanded.is_null() {
-            default
-        } else {
-            owned(expanded)
+        match option_expand(opt_idx, default.data.string.data()) {
+            None => default,
+            Some(expanded) => owned(expanded.as_ptr().cast_mut()),
         }
     }
 }

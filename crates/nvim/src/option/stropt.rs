@@ -112,17 +112,16 @@ pub(crate) unsafe fn stropt_expand_envvar(
     newval: *mut c_char,
     op: set_op_T,
 ) -> *mut c_char {
-    // SAFETY: `option_expand` reads the value and answers with a pointer
-    // into its own scratch buffer, or null when nothing expanded.
+    // SAFETY: `option_expand` reads the value and answers an owned copy,
+    // or `None` when nothing expanded.
     unsafe {
-        let expanded = option_expand(opt_idx, newval);
-        if expanded.is_null() {
+        let Some(expanded) = option_expand(opt_idx, newval) else {
             return newval;
-        }
+        };
         xfree(newval.cast::<c_void>());
-        let room = room_for(expanded, origval, op);
+        let room = room_for(expanded.as_ptr(), origval, op);
         let grown = xmalloc(room).cast::<c_char>();
-        strcpy(grown, expanded);
+        strcpy(grown, expanded.as_ptr());
         grown
     }
 }

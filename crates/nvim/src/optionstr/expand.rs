@@ -26,7 +26,6 @@ use crate::autocmd::get_event_name_no_group;
 use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
-use crate::main::IObuff;
 use crate::mbyte::get_encoding_name;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
@@ -34,9 +33,9 @@ use crate::options::{
 };
 use crate::os::cshim::{snprintf, strncmp};
 use crate::strings::vim_strchr;
+use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
-    CompleteListItemGetter, FAIL, IOSIZE, NUL, OK, colnr_T, expand_T, optexpand_T, regmatch_T,
-    size_t,
+    CompleteListItemGetter, FAIL, NUL, OK, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
 };
 use ::libc::strcmp;
 
@@ -459,23 +458,21 @@ pub(crate) unsafe fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut
     if name.is_null() {
         return ptr::null_mut();
     }
-    let buffer = IObuff.ptr().cast::<c_char>();
-    // SAFETY: `IObuff` is the shared `IOSIZE`-byte scratch buffer, and
+    // SAFETY: `xp_buf` is the expansion context's own scratch, which
+    // `expand_generic` reads back before it asks for the next name, and
     // `name` is a C string.
     unsafe {
+        let buffer = (*xp).xp_buf.as_mut_ptr();
+        let dash = if subtract { c"-" } else { c"" };
         snprintf(
             buffer,
-            IOSIZE as size_t,
+            EXPAND_BUF_LEN as size_t,
             c"%s%s".as_ptr(),
-            if subtract {
-                c"-".as_ptr()
-            } else {
-                c"".as_ptr()
-            },
+            dash.as_ptr(),
             name,
         );
+        buffer
     }
-    buffer
 }
 
 /// # Safety

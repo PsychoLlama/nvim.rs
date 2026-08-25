@@ -30,7 +30,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
-use crate::option::{fill_culopt_flags, parse_winhl_opt};
+use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -500,7 +500,7 @@ pub unsafe fn did_set_wildmode(_args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_winbar(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_statustabline_rulerformat(args, false, false) }
+    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
 /// Would `border_opt` be accepted as a floating window's border?

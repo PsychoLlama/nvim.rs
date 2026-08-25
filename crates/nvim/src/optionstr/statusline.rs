@@ -8,6 +8,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, transchar_byte};
@@ -17,7 +18,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{verbose_open, verbose_stop};
-use crate::option::{did_set_title, get_option_default, p_vfile};
+use crate::option::{answer_err, did_set_title, get_option_default, p_vfile};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
@@ -54,7 +55,7 @@ pub(crate) unsafe fn did_set_titleiconstring(args: *mut optset_T, flagval: c_int
     let value = unsafe { *varp(args) };
     // SAFETY: as above; the checker walks it to its terminator.
     let formatted = unsafe {
-        !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_null()
+        !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_none()
     };
     let syntax = stl_syntax.get();
     stl_syntax.set(if formatted {
@@ -76,7 +77,7 @@ fn opt_bytes<'a>(s: *const c_char) -> &'a [u8] {
 }
 
 /// Check `'rulerformat'` as a whole.
-fn check_ruf() -> *const c_char {
+fn check_ruf() -> Option<CString> {
     // SAFETY: the option's own value.
     unsafe { check_stl_option(p_ruf.get()) }
 }
@@ -84,25 +85,25 @@ fn check_ruf() -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_rulerformat(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_statustabline_rulerformat(args, true, false) }
+    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, true, false)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_statuscolumn(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_statustabline_rulerformat(args, false, true) }
+    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, true)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_statusline(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_statustabline_rulerformat(args, false, false) }
+    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_tabline(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_statustabline_rulerformat(args, false, false) }
+    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
 /// The shared check for every option holding a 'statusline' format:
@@ -123,7 +124,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     args: *mut optset_T,
     rulerformat: bool,
     statuscolumn: bool,
-) -> *const c_char {
+) -> Option<CString> {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     if rulerformat {
         ru_wid.set(0);
@@ -152,7 +153,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         unsafe { win_config_float(wp, (*wp).w_config.clone()) };
     }
 
-    let mut errmsg: *const c_char = ptr::null();
+    let mut errmsg = None;
     let text = opt_bytes(s);
     if rulerformat && text.first() == Some(&b'%') {
         // Step past the `%` and an optional `-`; the width itself is read
@@ -165,7 +166,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         let wid = unsafe { getdigits_int(&raw mut p, true, 0) };
         if wid != 0 && opt_bytes(p).first() == Some(&b'(') && {
             errmsg = check_ruf();
-            errmsg.is_null()
+            errmsg.is_none()
         } {
             ru_wid.set(wid);
         } else if text.get(1) != Some(&b'!') {
@@ -177,7 +178,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         // SAFETY: the frame's own C string value.
         errmsg = unsafe { check_stl_option(s) };
     }
-    if rulerformat && errmsg.is_null() {
+    if rulerformat && errmsg.is_none() {
         // The ruler's width decides where the last line's columns start.
         // SAFETY: recomputes a global from the editor's own state.
         unsafe { comp_col() };

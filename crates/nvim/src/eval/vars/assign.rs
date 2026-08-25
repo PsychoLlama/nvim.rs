@@ -505,8 +505,8 @@ unsafe fn ex_let_option(
 
             let err = set_option_value_handle_tty(arg, opt_idx, newval, opt_flags);
             arg_end = p;
-            if !err.is_null() {
-                emsg(gettext(err));
+            if let Some(err) = err {
+                emsg(gettext(err.as_ptr()));
             }
         }
 

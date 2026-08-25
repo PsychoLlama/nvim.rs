@@ -300,8 +300,8 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
         if !error {
             let errmsg =
                 set_option_value_handle_tty(varname, opt_idx, value, OptionSetFlags::LOCAL);
-            if !errmsg.is_null() {
-                emsg(errmsg);
+            if let Some(errmsg) = errmsg {
+                emsg(errmsg.as_ptr());
             }
         }
         optval_free(value);

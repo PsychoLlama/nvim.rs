@@ -205,9 +205,9 @@ pub(crate) unsafe fn set_option_value_for(
     }
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
-    if !errmsg.is_null() {
+    if let Some(errmsg) = errmsg {
         // SAFETY: `err` is valid and `errmsg` NUL-terminated.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), errmsg) };
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), errmsg.as_ptr()) };
     }
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.
