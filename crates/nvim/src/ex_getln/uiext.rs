@@ -105,6 +105,45 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
     }
 }
 
+/// The `ext_cmdline` block: the lines a `:if` or `:function` body
+/// accumulates while it is being typed.
+///
+/// Deliberately not `Copy`: `cmdline_block.get()` handed every caller a
+/// second owner of the same `items` pointer, so the cell and the caller both
+/// believed they had to free it. Owning the array here makes the free this
+/// type's `Drop`, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
+pub(crate) struct CmdlineBlock(Array);
+
+impl CmdlineBlock {
+    pub(crate) const EMPTY: CmdlineBlock = CmdlineBlock(ARRAY_DICT_INIT);
+
+    /// The lines, for the UI call that serialises them.
+    ///
+    /// A shallow copy that the UI call reads and does not free; it must not
+    /// outlive the next append, which is why every caller takes it inside
+    /// the expression that hands it over.
+    fn lines(&self) -> Array {
+        self.0
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.size == 0
+    }
+}
+
+impl Default for CmdlineBlock {
+    fn default() -> Self {
+        CmdlineBlock::EMPTY
+    }
+}
+
+impl Drop for CmdlineBlock {
+    fn drop(&mut self) {
+        // SAFETY: the array and its objects are this value's own.
+        unsafe { api_free_array(self.0) };
+    }
+}
+
 /// Append one line to the `ext_cmdline` block — the body a `:if` or
 /// `:function` accumulates while it is being typed.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
@@ -146,22 +185,25 @@ pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::f
         let mut content: Array = ARRAY_DICT_INIT;
         push(&mut content, Object::array(item));
 
-        push(&mut *cmdline_block.ptr(), Object::array(content));
-        if (*cmdline_block.ptr()).size > 1 {
-            ui_call_cmdline_block_append(content);
+        // A leaf closure over the array itself: nothing it runs can re-enter
+        // the block, so the exclusive borrow cannot overlap another.
+        let first = cmdline_block.with_mut(|block| {
+            push(&mut block.0, Object::array(content));
+            block.0.size == 1
+        });
+        if first {
+            ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
         } else {
-            ui_call_cmdline_block_show(cmdline_block.get());
+            ui_call_cmdline_block_append(content);
         }
     }
 }
 
 /// Drop the `ext_cmdline` block and tell the UI to hide it.
-pub unsafe fn ui_ext_cmdline_block_leave() {
-    unsafe {
-        api_free_array(cmdline_block.get());
-        cmdline_block.set(ARRAY_DICT_INIT);
-        ui_call_cmdline_block_hide();
-    }
+pub fn ui_ext_cmdline_block_leave() {
+    // The block moves out of the cell and is freed by its own `Drop`.
+    drop(cmdline_block.take());
+    ui_call_cmdline_block_hide();
 }
 
 /// Extra redrawing needed for `:redraw!` and on `ui_attach`.
@@ -171,8 +213,8 @@ pub unsafe fn cmdline_screen_cleared() {
             return;
         }
 
-        if (*cmdline_block.ptr()).size != 0 {
-            ui_call_cmdline_block_show(cmdline_block.get());
+        if !cmdline_block.with(CmdlineBlock::is_empty) {
+            ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
         }
 
         let mut prev_level = Cc::current().level - 1;

@@ -736,7 +736,7 @@ pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
 
 static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static cmdline_block: GlobalCell<Array> = GlobalCell::new(ARRAY_DICT_INIT);
+static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);

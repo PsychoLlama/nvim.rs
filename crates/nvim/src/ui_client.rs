@@ -872,13 +872,38 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
     }
 }
 
+/// The copied `restart` event arguments, owned.
+///
+/// Deliberately not `Copy`: `restart_args.get()` handed every caller a
+/// second owner of the same `items` pointer, so the cell and the caller both
+/// believed they had to free it. Owning them here makes the free this type's
+/// `Drop` and the one genuine move `GlobalCell::take`.
+struct RestartArgs(Array);
+
+impl RestartArgs {
+    const EMPTY: RestartArgs = RestartArgs(Array {
+        size: 0,
+        capacity: 0,
+        items: core::ptr::null_mut(),
+    });
+}
+
+impl Default for RestartArgs {
+    fn default() -> Self {
+        RestartArgs::EMPTY
+    }
+}
+
+impl Drop for RestartArgs {
+    fn drop(&mut self) {
+        // SAFETY: the array and its objects are this value's own.
+        unsafe { api_free_array(self.0) };
+    }
+}
+
 /// The address the restarted server will listen on, kept until the old
 /// server's channel has finished closing.
-static restart_args: GlobalCell<Array> = GlobalCell::new(Array {
-    size: 0,
-    capacity: 0,
-    items: core::ptr::null_mut(),
-});
+static restart_args: GlobalCell<RestartArgs> = GlobalCell::new(RestartArgs::EMPTY);
 static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Remembers where to reconnect after `:restart`.
@@ -890,10 +915,10 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_restart(args: Array) {
-    unsafe {
-        api_free_array(restart_args.get());
-        restart_args.set(copy_array(args, core::ptr::null_mut::<Arena>()));
-    }
+    // `set` drops what the cell held, which frees the previous copy.
+    // SAFETY: the caller's promise -- the decoder's array for this event.
+    let copied = unsafe { copy_array(args, core::ptr::null_mut::<Arena>()) };
+    restart_args.set(RestartArgs(copied));
     restart_pending.set(true);
 }
 
@@ -910,9 +935,11 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
         return;
     }
     restart_pending.set(false);
+    // The arguments move out here, so the cell has nothing left to free and
+    // dropping `args` at the end of the scope is the only free.
+    let args = restart_args.take();
     unsafe {
-        let args = restart_args.get();
-        let address = arg(args, 0, Some(kObjectTypeString));
+        let address = arg(args.0, 0, Some(kObjectTypeString));
         match address {
             None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
             Some(address) => {
@@ -958,13 +985,7 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                 }
             }
         }
-        api_free_array(restart_args.get());
     }
-    restart_args.set(Array {
-        size: 0,
-        capacity: 0,
-        items: core::ptr::null_mut(),
-    });
 }
 
 /// The bit `KeyDict_highlight` sets when the dict carried a `url`.

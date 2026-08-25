@@ -381,8 +381,10 @@ CELL_COPY_OWNER = (
     "au_new_curbuf",
     "dont_sync_undo",
     "old_sub",
-    "cmdline_block",
-    "restart_args",
+    # ccline is done: `cmdline_block` and `restart_args` retired in phase 22's
+    # S14 behind `CmdlineBlock`/`RestartArgs`, two owned newtypes over the
+    # `Array` with a `Drop`. Neither is `Copy`, so there is no `get` on either
+    # to count, and the one genuine move at each is `GlobalCell::take`.
     "pending_vimresume",
     "CLIPBOARD",
     "pc_status",
