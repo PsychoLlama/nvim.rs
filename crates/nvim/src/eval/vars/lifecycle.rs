@@ -165,7 +165,7 @@ pub unsafe fn garbage_collect_vimvars(copyID: c_int) -> bool {
 pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
     unsafe {
         let mut abort = false;
-        for i in 1..=(*script_items.ptr()).ga_len {
+        for i in 1..=script_count() {
             abort = abort
                 || set_ref_in_ht(
                     &raw mut (*script_sv(i)).sv_dict.dv_hashtab,
@@ -235,9 +235,7 @@ pub unsafe fn new_script_vars(id: scid_T) {
     unsafe {
         let sv = xcalloc(1, ::core::mem::size_of::<scriptvar_T>()) as *mut scriptvar_T;
         init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE);
-        (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-            .offset((id as c_int - 1) as isize))
-        .sn_vars = sv;
+        (*script_item(id)).sn_vars = sv;
     }
 }
 

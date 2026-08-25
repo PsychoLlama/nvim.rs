@@ -71,7 +71,9 @@ use crate::os::cshim::{__ctype_b_loc, gettext, snprintf, strncmp};
 use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::pos::MAXCOL;
 use crate::register::{get_reg_contents, write_reg_contents};
-use crate::runtime::{new_script_item, script_autoload, script_items};
+use crate::runtime::{
+    new_script_item, script_autoload, script_count, script_id_valid, script_item,
+};
 use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
@@ -83,8 +85,8 @@ use crate::types::{
     VAR_UNKNOWN, VAR_UNLOCKED, VarType, VimVarFlags, Vv, aco_save_T, buf_T, dict_T, dictitem_T,
     evalarg_T, exarg_T, expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse,
     kBoolVarTrue, kListLenUnknown, kSpecialVarNull, list_T, listitem_T, lval_T, partial_T,
-    ptrdiff_t, scid_T, scriptitem_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T,
-    typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    ptrdiff_t, scid_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -224,10 +226,8 @@ pub const e_cannot_use_heredoc_here: &CStr = c"E991: Cannot use =<< here";
 /// # Safety
 /// `sid` is a live script id -- `1 ..= script_items.ga_len`.
 pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
-    unsafe {
-        (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset((sid - 1) as isize))
-            .sn_vars
-    }
+    // SAFETY: the caller's `sid` names a live script item.
+    unsafe { (*script_item(sid)).sn_vars }
 }
 
 /// A `hashtab_T` before `hash_init`: the shape every zeroed table has, and

@@ -41,7 +41,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
-use crate::runtime::script_items;
+use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
     ExpandContext, Vv, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T, scriptitem_T,
     ufunc_T, varnumber_T,
@@ -277,7 +277,7 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
 /// # Safety
 /// Main-thread editor call; the script and function tables are live.
 unsafe fn profile_reset() {
-    for id in 1..=script_items.get().ga_len {
+    for id in 1..=script_count() {
         // SAFETY: `1..=ga_len` are the live script ids.
         let si = unsafe { &mut *script_item(id) };
         if si.sn_prof_on {
@@ -593,8 +593,7 @@ pub unsafe fn profile_init(si: *mut scriptitem_T) {
 /// # Safety
 /// Main-thread editor call; the script table is live.
 pub unsafe fn script_prof_save() -> proftime_T {
-    // SAFETY: `current_script` only answers with a live script item.
-    if let Some(si) = unsafe { current_script() } {
+    if let Some(si) = current_script() {
         let si = unsafe { &mut *si };
         if si.sn_prof_on {
             let nest = si.sn_pr_nest;
@@ -613,8 +612,7 @@ pub unsafe fn script_prof_save() -> proftime_T {
 /// # Safety
 /// Main-thread editor call; the script table is live.
 pub unsafe fn script_prof_restore(wait: proftime_T) {
-    // SAFETY: `current_script` only answers with a live script item.
-    let Some(si) = (unsafe { current_script() }) else {
+    let Some(si) = current_script() else {
         return;
     };
     let si = unsafe { &mut *si };
@@ -675,8 +673,7 @@ pub unsafe fn script_line_start() {
 /// # Safety
 /// Main-thread editor call; the script table is live.
 pub unsafe fn script_line_exec() {
-    // SAFETY: `current_script` only answers with a live script item.
-    let Some(si) = (unsafe { current_script() }) else {
+    let Some(si) = current_script() else {
         return;
     };
     let si = unsafe { &mut *si };
@@ -690,8 +687,7 @@ pub unsafe fn script_line_exec() {
 /// # Safety
 /// Main-thread editor call; the script table is live.
 pub unsafe fn script_line_end() {
-    // SAFETY: `current_script` only answers with a live script item.
-    let Some(si) = (unsafe { current_script() }) else {
+    let Some(si) = current_script() else {
         return;
     };
     let si = unsafe { &mut *si };
@@ -712,26 +708,10 @@ pub unsafe fn script_line_end() {
 // ---------------------------------------------------------------------------
 // Shared accessors for the editor's script/function tables.
 
-/// Script item for 1-based script id `sid` (the transpiled `SCRIPT_ITEM`).
-///
-/// # Safety
-/// `sid` is in `1..=script_items.ga_len`.
-unsafe fn script_item(sid: c_int) -> *mut scriptitem_T {
-    // SAFETY: the caller's bound; the table holds `ga_len` item pointers.
-    unsafe { *(script_items.get().ga_data as *mut *mut scriptitem_T).offset(sid as isize - 1) }
-}
-
 /// The current script's item, if `current_sctx` points at a valid one.
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-unsafe fn current_script() -> Option<*mut scriptitem_T> {
+fn current_script() -> Option<*mut scriptitem_T> {
     let sid = current_sctx.get().sc_sid;
-    if sid <= 0 || sid > script_items.get().ga_len {
-        return None;
-    }
-    // SAFETY: `sid` was just bounded by the table's length.
-    Some(unsafe { script_item(sid) })
+    script_id_valid(sid).then(|| script_item(sid))
 }
 
 /// Line number being sourced/executed: the top of the exestack.

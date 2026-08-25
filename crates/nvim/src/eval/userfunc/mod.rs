@@ -69,7 +69,8 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
 use crate::runtime::{
-    autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload, script_items,
+    autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload,
+    script_id_valid,
 };
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};

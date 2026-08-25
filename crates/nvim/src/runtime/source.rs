@@ -181,26 +181,24 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut s
         // SAFETY: the caller's out-parameter.
         unsafe { *sid_out = sid };
     }
-    let ga = script_items.ptr();
-    // SAFETY: `script_items` is this family's own garray of `scriptitem_T *`;
-    // `ga_grow` makes room for every slot written below, and `xcalloc` zeroes
-    // the item -- which is what upstream's `sn_name = NULL` and
-    // `sn_prof_on = false` amount to.
-    unsafe {
-        ga_grow(ga, sid - (*ga).ga_len);
-        while (*ga).ga_len < sid {
-            let slot = (*ga)
-                .ga_data
-                .cast::<*mut scriptitem_T>()
-                .add((*ga).ga_len as usize);
-            slot.write(xcalloc(1, size_of::<scriptitem_T>()).cast());
-            (*ga).ga_len += 1;
-            new_script_vars((*ga).ga_len as scid_T);
-        }
-        let si = script_item(sid);
-        (*si).sn_name = name;
-        si
+    // The registry is grown one id at a time: `new_script_vars` reaches it,
+    // so the push has to be a leaf borrow that has been let go by then.
+    // `xcalloc` zeroes the item, which is what upstream's `sn_name = NULL`
+    // and `sn_prof_on = false` amount to.
+    while script_count() < sid {
+        // SAFETY: `xcalloc` answers a zeroed `scriptitem_T` or does not return.
+        let item = unsafe { xcalloc(1, size_of::<scriptitem_T>()).cast::<scriptitem_T>() };
+        let added = script_items.with_mut(|items| {
+            items.push(item);
+            items.len() as scid_T
+        });
+        // SAFETY: the slot was pushed just above, so `added` is live.
+        unsafe { new_script_vars(added) };
     }
+    let si = script_item(sid);
+    // SAFETY: `si` is the item just registered, and it takes `name` over.
+    unsafe { (*si).sn_name = name };
+    si
 }
 
 /// Append an owned string to a garray of `char *`.
@@ -538,7 +536,7 @@ unsafe fn register_script(
     if *sid > 0 {
         // Loading the same script again.
         // SAFETY: a positive `sid` names a registered script.
-        return unsafe { script_item(*sid) };
+        return script_item(*sid);
     }
     if req.is(Origin::Str) {
         return ptr::null_mut();

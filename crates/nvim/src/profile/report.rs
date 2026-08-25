@@ -13,13 +13,12 @@
 
 use super::{
     NL, PROFILE_FNAME, func_line, prl_item, profile_cmp, profile_msg_str, profiled_functions,
-    script_item,
 };
 use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::memory::xfree;
 use crate::os::fs::os_fopen;
-use crate::runtime::{get_scriptname, script_items};
+use crate::runtime::{get_scriptname, script_count, script_item};
 use crate::types::{IOSIZE, proftime_T, scriptitem_T, ufunc_T};
 use ::libc::fclose;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -256,7 +255,7 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &scriptitem_T) -> io::Resul
 /// # Safety
 /// Main-thread editor call; the script table is live.
 unsafe fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
-    for id in 1..=script_items.get().ga_len {
+    for id in 1..=script_count() {
         // SAFETY: `1..=ga_len` are the live script ids.
         let si = unsafe { &*script_item(id) };
         if !si.sn_prof_on {

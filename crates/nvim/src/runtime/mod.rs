@@ -322,13 +322,14 @@ pub const SID_STR: ::core::ffi::c_int = -10;
 /// Reach it through [`GlobalCell::with`]/[`GlobalCell::with_mut`], which also
 /// catch a push made while a walk holds a borrow.
 pub static exestack: GlobalCell<Vec<estack_T>> = GlobalCell::new(Vec::new());
-pub static script_items: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: ::core::mem::size_of::<*mut scriptitem_T>() as ::core::ffi::c_int,
-    ga_growsize: 20 as ::core::ffi::c_int,
-    ga_data: NULL_0,
-});
+/// The script registry, script 1 at index 0 -- see [`script`].
+///
+/// A `Vec`, not a `garray_T`: the element type is fixed, ids are never
+/// reused so the vector only ever grows, and [`script::script_item`] can then
+/// be a *safe* bounds-checked lookup instead of an offset off `ga_data`.
+/// Reach it through [`script::script_item`], [`script::script_count`] and
+/// [`script::script_id_valid`], never directly.
+pub static script_items: GlobalCell<Vec<*mut scriptitem_T>> = GlobalCell::new(Vec::new());
 /// Every autoload script `script_autoload` has already run, by path.
 ///
 /// A `Vec`, not a `garray_T` of owned `char *`: the list is private to

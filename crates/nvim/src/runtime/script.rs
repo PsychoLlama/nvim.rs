@@ -35,43 +35,30 @@ const AUTOLOAD_SUFFIX: &[u8] = b".vim\0";
 // ---------------------------------------------------------------------------
 // The registry.
 
-/// Every script the editor has sourced, script 1 first.
-///
-/// # Safety
-///
-/// The slice borrows `script_items`' buffer, which registering a new script
-/// reallocates.  No caller may hold it across a `:source`.
-pub(crate) unsafe fn scripts<'a>() -> &'a [*mut scriptitem_T] {
-    let ga = script_items.get();
-    if ga.ga_data.is_null() {
-        return &[];
-    }
-    // SAFETY: `script_items` is a garray of `scriptitem_T *` whose first
-    // `ga_len` elements are live, and the caller promises not to hold the
-    // borrow across a registration.
-    unsafe { slice::from_raw_parts(ga.ga_data.cast::<*mut scriptitem_T>(), ga.ga_len as usize) }
+/// How many scripts the editor has sourced -- upstream's
+/// `script_items.ga_len`, which is also the highest live script id.
+pub(crate) fn script_count() -> c_int {
+    // The registry only grows, and an editor that has sourced 2^31 scripts
+    // has run out of ids long before it runs out of `c_int`.
+    script_items.with(|items| items.len() as c_int)
 }
 
 /// The registry entry for script `sid` -- upstream's `SCRIPT_ITEM`.
 ///
-/// # Safety
-///
-/// `sid` must satisfy [`script_id_valid`].
-pub(crate) unsafe fn script_item(sid: scid_T) -> *mut scriptitem_T {
+/// Null for an id outside `1..=`[`script_count`], which upstream's macro
+/// would read past the end for; debug builds fail the assertion instead.
+pub(crate) fn script_item(sid: scid_T) -> *mut scriptitem_T {
     debug_assert!(script_id_valid(sid), "script id out of range");
-    // SAFETY: the caller vouched for `sid`, and script IDs are 1-based.
-    unsafe {
-        *script_items
-            .get()
-            .ga_data
-            .cast::<*mut scriptitem_T>()
-            .offset(sid as isize - 1)
-    }
+    let idx = usize::try_from(sid - 1).ok();
+    script_items.with(|items| {
+        idx.and_then(|idx| items.get(idx).copied())
+            .unwrap_or(ptr::null_mut())
+    })
 }
 
 /// Is `sid` a script the editor has sourced -- upstream's `SCRIPT_ID_VALID`?
 pub(crate) fn script_id_valid(sid: c_int) -> bool {
-    sid > 0 && sid <= script_items.get().ga_len
+    sid > 0 && sid <= script_count()
 }
 
 /// Was script `sid` written in Lua?
@@ -93,15 +80,16 @@ pub unsafe fn script_is_lua(sid: scid_T) -> bool {
 /// even though to the user it is the same script, and a deleted script's inode
 /// may be re-used by a differently named one.
 pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
-    // SAFETY: nothing below sources a script, so the borrow stays valid.
-    for (idx, &si) in unsafe { scripts() }.iter().enumerate().rev() {
-        // SAFETY: a registry slot always holds a live `scriptitem_T`, and
-        // `path_fnamecmp` only reads the two NUL-terminated names.
-        if unsafe { !(*si).sn_name.is_null() && path_fnamecmp((*si).sn_name, name) == 0 } {
-            return idx as c_int + 1;
-        }
-    }
-    -1
+    // Nothing in the closure sources a script, so holding the borrow over the
+    // walk is sound.
+    let found = script_items.with(|items| {
+        items.iter().rposition(|&si| {
+            // SAFETY: a registry slot always holds a live `scriptitem_T`, and
+            // `path_fnamecmp` only reads the two NUL-terminated names.
+            unsafe { !(*si).sn_name.is_null() && path_fnamecmp((*si).sn_name, name) == 0 }
+        })
+    });
+    found.map_or(-1, |idx| idx as c_int + 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +108,7 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
     // SAFETY: `msg_ext_set_kind` copies the literal.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     let mut sid: scid_T = 1;
-    while sid <= script_items.get().ga_len && !got_int.get() {
+    while sid <= script_count() && !got_int.get() {
         // SAFETY: `sid` is in range, and the registry is re-read every round
         // because the output below can pause for the user.
         let name = unsafe { (*script_item(sid)).sn_name };
@@ -308,7 +296,7 @@ enum ScriptQuery {
 pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
     unsafe {
-        tv_list_alloc_ret(rettv, script_items.get().ga_len as ptrdiff_t);
+        tv_list_alloc_ret(rettv, script_count() as ptrdiff_t);
         if tv_check_for_opt_dict_arg(argvars, 0) == FAIL {
             return;
         }
@@ -403,7 +391,7 @@ unsafe fn script_query(
 ///
 /// `l` must be a live list, and `query` must still own its compiled pattern.
 unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut regmatch_T) {
-    let total = script_items.get().ga_len as varnumber_T;
+    let total = varnumber_T::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
     let (first, last) = match *query {
@@ -413,7 +401,7 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
 
     for sid in first..=last {
         // SAFETY: `sid` is in range, and nothing in the body sources a script.
-        let si = unsafe { script_item(sid as scid_T) };
+        let si = script_item(sid as scid_T);
         // SAFETY: a registry slot always holds a live `scriptitem_T`.
         let name = unsafe { (*si).sn_name };
         if name.is_null() {

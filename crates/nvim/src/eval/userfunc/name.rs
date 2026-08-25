@@ -586,7 +586,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
             return ptr::null_mut();
         }
         let sid = current_sctx.get().sc_sid;
-        if !(sid > 0 && sid <= (*script_items.ptr()).ga_len) {
+        if !script_id_valid(sid) {
             emsg(gettext(&raw const e_usingsid as *const c_char));
             return ptr::null_mut();
         }

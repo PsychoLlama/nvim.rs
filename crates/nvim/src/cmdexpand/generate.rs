@@ -155,10 +155,10 @@ pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 pub(crate) unsafe fn get_scriptnames_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         let sid = idx + 1;
-        if sid <= 0 || sid > (*script_items.ptr()).ga_len {
+        if !script_id_valid(sid) {
             return ptr::null_mut();
         }
-        let si = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).add((sid - 1) as usize);
+        let si = script_item(sid);
         home_replace(
             ptr::null::<buf_T>(),
             (*si).sn_name,

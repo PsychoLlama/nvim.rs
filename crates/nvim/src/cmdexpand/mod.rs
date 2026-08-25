@@ -86,8 +86,8 @@ use crate::regexp::{
     vim_regfree,
 };
 use crate::runtime::{
-    RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_items,
-    set_context_in_runtime_cmd,
+    RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_id_valid,
+    script_item, set_context_in_runtime_cmd,
 };
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
@@ -106,7 +106,7 @@ use crate::types::{
     Arena, Array, CmdAddr, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData,
     LuaRetMode, Object, OptInt, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
-    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, scriptitem_T, size_t, ssize_t, typval_T,
+    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t, ssize_t, typval_T,
     typval_vval_union, varnumber_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};

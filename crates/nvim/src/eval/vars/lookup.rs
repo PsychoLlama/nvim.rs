@@ -344,7 +344,7 @@ pub(crate) unsafe fn find_var_ht_dict(
                     // write-through-the-pointer amounts to.
                     let mut sctx = current_sctx.get();
                     if (sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
-                        && sctx.sc_sid <= (*script_items.ptr()).ga_len
+                        && sctx.sc_sid <= script_count()
                     {
                         // Resolve the Lua filename and line number, so that
                         // a later "Last set from" can name them.
