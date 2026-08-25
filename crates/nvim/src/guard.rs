@@ -328,8 +328,25 @@ impl Keys {
 mod tests {
     use super::*;
 
+    /// Serialises the tests below.
+    ///
+    /// They assert *absolute* values of process-wide counters, and `cargo
+    /// test` runs a binary's tests in parallel threads, so two of them that
+    /// touch the same cell -- `a_negative_bump_adds_back` and
+    /// `raw_keys_releases_both` both drive `no_mapping` -- interleave and one
+    /// of them sees the other's state.
+    static COUNTERS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// The lock, ignoring a poisoning left by an earlier failure: these tests
+    /// restore what they change, and a second report of the first failure is
+    /// noise.
+    fn counters() -> std::sync::MutexGuard<'static, ()> {
+        COUNTERS.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn bump_nests_and_unwinds() {
+        let _serial = counters();
         assert_eq!(emsg_off.get(), 0);
         {
             let _outer = Suppress::emsg();
@@ -345,6 +362,7 @@ mod tests {
 
     #[test]
     fn saved_restores_what_it_saw() {
+        let _serial = counters();
         msg_silent.set(3);
         {
             let _guard = Allow::messages();
@@ -360,6 +378,7 @@ mod tests {
 
     #[test]
     fn a_panic_releases_the_guard() {
+        let _serial = counters();
         // The whole point: no path out of the scope can leak the counter.
         let caught = std::panic::catch_unwind(|| {
             let _guard = Lock::text();
@@ -372,6 +391,7 @@ mod tests {
 
     #[test]
     fn a_negative_bump_adds_back() {
+        let _serial = counters();
         no_mapping.set(2);
         {
             let _lifted = Allow::mapping();
@@ -383,6 +403,7 @@ mod tests {
 
     #[test]
     fn raw_keys_releases_both() {
+        let _serial = counters();
         {
             let _guard = Keys::unmapped_with_codes();
             assert_eq!((no_mapping.get(), allow_keys.get()), (1, 1));
