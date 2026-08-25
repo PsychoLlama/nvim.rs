@@ -42,18 +42,17 @@ use core::{mem, ptr};
 
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
-use crate::main::{IObuff, curwin, got_int, msg_col, msg_didout, p_verbose};
+use crate::main::{curwin, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
 use crate::message::{msg_clr_eos, msg_puts, msg_start};
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
-use crate::strings::vim_snprintf;
-use crate::types::{IOSIZE, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
+use crate::types::{NUL, hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 use ::libc::strlen;
 
-use super::{FAIL, MAXWLEN, OK, WF_KEEPCAP, spell_message, spellinfo_T};
+use super::{FAIL, MAXWLEN, OK, WF_KEEPCAP, spell_message_fmt, spellinfo_T};
 
 /// Bytes handed out per arena block.
 const SBLOCKSIZE: usize = 16000;
@@ -660,17 +659,11 @@ pub(super) unsafe fn wordtree_compress(
 
         if spin.si_verbose != 0 || p_verbose.get() > 2 {
             let perc = remaining_percentage(n, tot);
-            vim_snprintf(
-                IObuff.ptr().cast::<c_char>(),
-                IOSIZE as usize,
-                gettext(c"Compressed %s: %d of %d nodes; %d (%ld%%) remaining".as_ptr()),
-                name.as_ptr(),
-                n,
-                tot,
-                tot - n,
-                perc,
+            let (name, left) = (name.to_string_lossy(), tot - n);
+            spell_message_fmt(
+                spin,
+                format_args!("Compressed {name}: {n} of {tot} nodes; {left} ({perc}%) remaining"),
             );
-            spell_message(spin, IObuff.ptr().cast::<c_char>());
         }
         hash_clear(&raw mut ht);
     }

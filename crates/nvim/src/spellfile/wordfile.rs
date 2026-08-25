@@ -9,23 +9,23 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::{semsg_c, smsg_c};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::fileio::vim_fgets;
-use crate::main::{IObuff, e_notopen, got_int, p_enc};
+use crate::main::{e_notopen, got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::xfree;
 use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::strings::{has_non_ascii, vim_snprintf, vim_strchr};
-use crate::types::{CONV_NONE, IOSIZE, NUL, linenr_T, size_t, uint8_t};
+use crate::strings::{has_non_ascii, vim_strchr};
+use crate::types::{CONV_NONE, NUL, linenr_T, size_t, uint8_t};
 use ::libc::{fclose, strcpy, strlen};
 
 use super::wordtree::store_word;
 use super::{
     FAIL, MAXLINELEN, MAXREGIONS, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE, WF_REGION,
-    spell_message, spellinfo_T,
+    spell_message_fmt, spellinfo_T,
 };
 
 /// Read a plain word list: one word per line, with optional `/` flags, and
@@ -43,13 +43,8 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
             semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return FAIL;
         }
-        vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
-            IOSIZE as size_t,
-            gettext(c"Reading word file %s...".as_ptr()),
-            fname,
-        );
-        spell_message(&*spin, IObuff.ptr().cast::<c_char>());
+        let name = CStr::from_ptr(fname).to_string_lossy();
+        spell_message_fmt(&*spin, format_args!("Reading word file {name}..."));
 
         let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
         let mut pc: *mut c_char = core::ptr::null_mut();
@@ -170,13 +165,10 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
         xfree(pc.cast());
         fclose(fd);
         if (*spin).si_ascii != 0 && non_ascii > 0 {
-            vim_snprintf(
-                IObuff.ptr().cast::<c_char>(),
-                IOSIZE as size_t,
-                gettext(c"Ignored %d words with non-ASCII characters".as_ptr()),
-                non_ascii,
+            spell_message_fmt(
+                &*spin,
+                format_args!("Ignored {non_ascii} words with non-ASCII characters"),
             );
-            spell_message(&*spin, IObuff.ptr().cast::<c_char>());
         }
         retval
     }

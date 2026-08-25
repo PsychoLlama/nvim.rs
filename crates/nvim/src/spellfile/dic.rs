@@ -33,7 +33,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::{semsg_c, smsg_c};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
@@ -41,7 +41,7 @@ use crate::fileio::vim_fgets;
 use crate::hashtab::{
     hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lookup, hash_removed,
 };
-use crate::main::{IObuff, e_notopen, got_int, msg_col, msg_didout, p_verbose};
+use crate::main::{e_notopen, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
@@ -51,7 +51,7 @@ use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
 use crate::types::{
-    CONV_NONE, IOSIZE, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
+    CONV_NONE, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
 };
 use crate::ui::ui_flush;
 use ::libc::{fclose, strlen};
@@ -62,7 +62,7 @@ use super::{
     AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, FAIL, MAXLINELEN, MAXWLEN, OK,
     WF_BANNED, WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT,
     WF_NOCOMPBEF, WF_NOSUGGEST, WF_RARE, affentry_T, afffile_T, affheader_T, compitem_T,
-    spell_message, spellinfo_T, vim_regexec_prog,
+    spell_message_fmt, spellinfo_T, vim_regexec_prog,
 };
 
 /// Read a `.dic` file: a count line, then one stem per line with the affix
@@ -88,13 +88,8 @@ pub(super) unsafe fn spell_read_dic(
 
         let mut ht: hashtab_T = core::mem::zeroed();
         hash_init(&raw mut ht);
-        vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
-            IOSIZE as size_t,
-            gettext(c"Reading dictionary file %s...".as_ptr()),
-            fname,
-        );
-        spell_message(&*spin, IObuff.ptr().cast::<c_char>());
+        let name = CStr::from_ptr(fname).to_string_lossy();
+        spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
 
         // Force the first progress message.
         (*spin).si_msg_count = 999999;

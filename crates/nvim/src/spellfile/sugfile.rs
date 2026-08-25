@@ -32,11 +32,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::{semsg_c, smsg_c};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::fileio::{put_bytes, put_time};
 use crate::garray::{ga_clear, ga_grow, ga_init};
-use crate::main::{IObuff, e_notopen, e_write, got_int};
+use crate::main::{e_notopen, e_write, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::emsg;
@@ -45,10 +45,9 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
-use crate::strings::vim_snprintf;
 use crate::types::{
-    FILE, IOSIZE, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T,
-    uint8_t, uint16_t, uintmax_t,
+    FILE, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint8_t,
+    uint16_t, uintmax_t,
 };
 use ::libc::{fclose, fwrite, strlen};
 
@@ -56,7 +55,7 @@ use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compre
 use super::write::{clear_node, put_node};
 use super::{
     EOF, FAIL, MAXWLEN, OK, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION, kEqualFiles, spell_load_file,
-    spell_message, spellinfo_T,
+    spell_message, spell_message_fmt, spellinfo_T,
 };
 
 /// Read the just-written `.spl` back and turn it into a `.sug`.
@@ -84,7 +83,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
         }
         let free_slang = slang.is_null();
         if free_slang {
-            spell_message(spin, gettext(c"Reading back spell file...".as_ptr()));
+            spell_message(spin, c"Reading back spell file...");
             slang = spell_load_file(wfname, core::ptr::null_mut(), core::ptr::null_mut(), false);
             if slang.is_null() {
                 return;
@@ -99,7 +98,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
         spin.si_first_free = core::ptr::null_mut();
         spin.si_foldwcount = 0;
 
-        spell_message(spin, gettext(c"Performing soundfolding...".as_ptr()));
+        spell_message(spin, c"Performing soundfolding...");
         let mut fname: *mut c_char = core::ptr::null_mut();
         if sug_filltree(spin, slang) != FAIL && sug_maketable(spin) != FAIL {
             smsg_c!(
@@ -107,7 +106,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
                 gettext(c"Number of words after soundfolding: %ld".as_ptr()),
                 (*spin.si_spellbuf).b_ml.ml_line_count as i64,
             );
-            spell_message(spin, gettext(super::wordtree::MSG_COMPRESSING.as_ptr()));
+            spell_message(spin, super::wordtree::MSG_COMPRESSING);
             let foldroot = spin.si_foldroot;
             wordtree_compress(spin, foldroot, c"case-folded");
 
@@ -384,13 +383,8 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
             semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return;
         }
-        vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
-            IOSIZE as size_t,
-            gettext(c"Writing suggestion file %s...".as_ptr()),
-            fname,
-        );
-        spell_message(spin, IObuff.ptr().cast::<c_char>());
+        let name = CStr::from_ptr(fname).to_string_lossy();
+        spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
         if fwrite(VIMSUGMAGIC.as_ptr().cast(), VIMSUGMAGICL as size_t, 1, fd) != 1 {
             emsg(gettext((&raw const e_write).cast()));
@@ -432,13 +426,11 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
             if putc(0, fd) == EOF {
                 emsg(gettext((&raw const e_write).cast()));
             }
-            vim_snprintf(
-                IObuff.ptr().cast::<c_char>(),
-                IOSIZE as size_t,
-                gettext(c"Estimated runtime memory use: %d bytes".as_ptr()),
-                spin.si_memtot,
+            let used = spin.si_memtot;
+            spell_message_fmt(
+                spin,
+                format_args!("Estimated runtime memory use: {used} bytes"),
             );
-            spell_message(spin, IObuff.ptr().cast::<c_char>());
         }
         fclose(fd);
     }

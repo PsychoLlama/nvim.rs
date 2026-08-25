@@ -3,10 +3,11 @@
 use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, skipwhite};
+use crate::cstr;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::main::{IObuff, c_bytes, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
+use crate::main::{c_bytes, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
@@ -17,13 +18,13 @@ use crate::semsg_c;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, IOSIZE, MAXPATHL, NUL, OK,
-    OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
-    file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
-    time_t, vimconv_T,
+    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, MAXPATHL, NUL, OK, OptInt,
+    OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T, file_comparison,
+    fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{strcmp, strlen};
+use core::ffi::CStr;
 mod add;
 mod aff;
 mod affix;
@@ -569,7 +570,7 @@ unsafe fn mkspell(
                 );
             }
             if !error && !got_int.get() {
-                spell_message(&spin, gettext(MSG_COMPRESSING.as_ptr()));
+                spell_message(&spin, MSG_COMPRESSING);
                 let root = spin.si_foldroot;
                 wordtree_compress(&mut spin, root, c"case-folded");
                 let root = spin.si_keeproot;
@@ -578,22 +579,15 @@ unsafe fn mkspell(
                 wordtree_compress(&mut spin, root, c"prefixes");
             }
             if !error && !got_int.get() {
-                vim_snprintf(
-                    IObuff.ptr().cast::<::core::ffi::c_char>(),
-                    IOSIZE as size_t,
-                    gettext(c"Writing spell file %s...".as_ptr()),
-                    wfname,
-                );
-                spell_message(&spin, IObuff.ptr().cast::<::core::ffi::c_char>());
+                let name = CStr::from_ptr(wfname).to_string_lossy();
+                spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
                 error = write_vim_spell(&mut spin, wfname) == FAIL;
-                spell_message(&spin, gettext(c"Done!".as_ptr()));
-                vim_snprintf(
-                    IObuff.ptr().cast::<::core::ffi::c_char>(),
-                    IOSIZE as size_t,
-                    gettext(c"Estimated runtime memory use: %d bytes".as_ptr()),
-                    spin.si_memtot,
+                spell_message(&spin, c"Done!");
+                let used = spin.si_memtot;
+                spell_message_fmt(
+                    &spin,
+                    format_args!("Estimated runtime memory use: {used} bytes"),
                 );
-                spell_message(&spin, IObuff.ptr().cast::<::core::ffi::c_char>());
                 if !error {
                     spell_reload_one(wfname, added_word);
                 }
@@ -809,26 +803,34 @@ unsafe fn read_inputs(
 
 /// Show `text` while `:mkspell` runs, quietly unless it was asked to be
 /// verbose or `'verbose'` is high enough to want it anyway.
-///
-/// # Safety
-///
-/// `text` must be a NUL-terminated string.
-unsafe fn spell_message(spin: &spellinfo_T, text: *mut ::core::ffi::c_char) {
+fn spell_message(spin: &spellinfo_T, text: &CStr) {
     if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
         return;
     }
     let quiet = spin.si_verbose == 0;
-    // SAFETY: the caller promises the string.
+    // SAFETY: `text` is NUL-terminated and `msg` copies what it keeps.
     unsafe {
         if quiet {
             verbose_enter();
         }
-        msg(text, 0);
+        msg(text.as_ptr(), 0);
         ui_flush();
         if quiet {
             verbose_leave();
         }
     }
+}
+
+/// [`spell_message`] with a compile-checked format string.
+///
+/// Every progress line upstream formats goes through the shared `IObuff`,
+/// which `msg` -- and the autocommands it can run -- may write in the middle
+/// of the report. The message is built here and owned until it is shown.
+pub(super) fn spell_message_fmt(spin: &spellinfo_T, args: core::fmt::Arguments<'_>) {
+    if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
+        return;
+    }
+    spell_message(spin, &cstr::owned(args.to_string().as_bytes()));
 }
 
 /// `:spellgood`, `:spellwrong`, `:spellrare` and their `:spell*undo` forms.

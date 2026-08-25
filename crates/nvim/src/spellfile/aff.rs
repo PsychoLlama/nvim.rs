@@ -36,7 +36,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::charset::skipdigits;
 use crate::fileio::vim_fgets;
 use crate::hashtab::{hash_add, hash_find, hash_init, hash_removed};
-use crate::main::{IObuff, e_notopen, got_int, p_enc};
+use crate::main::{e_notopen, got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
@@ -44,8 +44,7 @@ use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::spell::init_spell_chartab;
-use crate::strings::vim_snprintf;
-use crate::types::{CONV_NONE, IOSIZE, NUL, size_t, uint8_t};
+use crate::types::{CONV_NONE, NUL, uint8_t};
 use ::libc::{atoi, fclose, strcat, strcmp, strcpy, strlen};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
@@ -53,8 +52,8 @@ use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
 use super::{
     _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, COMP_CHECKCASE, COMP_CHECKDUP,
-    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, MAXLINELEN, TAB, afffile_T, affheader_T, spell_message,
-    spellinfo_T,
+    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, MAXLINELEN, TAB, afffile_T, affheader_T,
+    spell_message_fmt, spellinfo_T,
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.
@@ -284,13 +283,8 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
             semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return core::ptr::null_mut();
         }
-        vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
-            IOSIZE as size_t,
-            gettext(c"Reading affix file %s...".as_ptr()),
-            fname,
-        );
-        spell_message(&*spin, IObuff.ptr().cast::<c_char>());
+        let name = CStr::from_ptr(fname).to_string_lossy();
+        spell_message_fmt(&*spin, format_args!("Reading affix file {name}..."));
 
         let mut st = AffState {
             aff_todo: 0,
