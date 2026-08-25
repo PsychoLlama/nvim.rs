@@ -92,17 +92,27 @@ static g_chartab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 /// reference and can alias nothing. That is what lets the rest of the file
 /// treat the table as safe state; these two are the whole unchecked
 /// surface of it.
+/// The character table, by address.
+///
+/// It is asked about once per byte on every draw and edit path, so both
+/// accessors index it directly rather than copying 256 bytes or taking a
+/// tracked borrow. This is the one place its address is taken.
+#[inline(always)]
+fn chartab_table() -> *mut [uint8_t; 256] {
+    g_chartab.ptr()
+}
+
 #[inline(always)]
 fn chartab(c: uint8_t) -> uint8_t {
     // SAFETY: the cell holds a live 256-byte array and `c` indexes it.
-    unsafe { (*g_chartab.ptr())[c as usize] }
+    unsafe { (*chartab_table())[c as usize] }
 }
 
 /// Overwrite the `g_chartab` entry for byte `c`.
 #[inline(always)]
 fn set_chartab(c: uint8_t, value: uint8_t) {
     // SAFETY: as [`chartab`].
-    unsafe { (*g_chartab.ptr())[c as usize] = value }
+    unsafe { (*chartab_table())[c as usize] = value }
 }
 
 /// Add or remove one of the flag bits of `c`'s entry.

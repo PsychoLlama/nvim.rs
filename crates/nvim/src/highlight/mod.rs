@@ -161,13 +161,22 @@ fn combine_cache() -> *mut AttrCache {
     COMBINE.ptr()
 }
 
+/// The built-in highlight table, by address: `hl_attr_active` and a window's
+/// `w_ns_hl_attr` both *hold* it, switching between this table and a
+/// namespace's own, so the address is what the family works from. This is
+/// the one place it is taken.
+pub(crate) fn default_hl_attr_table() -> *mut c_int {
+    highlight_attr.ptr().cast::<c_int>()
+}
+
 /// The attribute the built-in highlight group `hlf` resolves to.
 ///
 /// One `c_int` out of the table rather than a copy of all 76 of them: this
 /// is asked per spell run and per UI group.
 pub(crate) fn default_hl_attr(hlf: usize) -> c_int {
-    // SAFETY: reads one element of a `static`'s array.
-    unsafe { (*highlight_attr.ptr())[hlf] }
+    debug_assert!(hlf < HLF_COUNT as usize);
+    // SAFETY: reads one element of the table, whose length is `HLF_COUNT`.
+    unsafe { *default_hl_attr_table().add(hlf) }
 }
 
 /// The URLs entries refer to by index (OSC 8 hyperlinks).

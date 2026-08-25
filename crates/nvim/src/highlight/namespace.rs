@@ -21,11 +21,11 @@
 //! a namespace forced by a fast callback wins, then the current window's,
 //! then the global one.
 
-use super::default_hl_attr;
 use super::{
     HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
     hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
+use super::{default_hl_attr, default_hl_attr_table};
 use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::decoration_provider::with_decor_provider;
@@ -37,8 +37,8 @@ use crate::highlight_group::{
 };
 use crate::lua::executor::nlua_call_ref;
 use crate::main::{
-    curwin, highlight_attr, hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active,
-    ns_hl_fast, ns_hl_global, ns_hl_win, p_pb,
+    curwin, hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active, ns_hl_fast,
+    ns_hl_global, ns_hl_win, p_pb,
 };
 use crate::option::check_blending;
 use crate::popupmenu::pum_drawn;
@@ -52,13 +52,6 @@ use core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
-
-/// The built-in highlight table, by address: `hl_attr_active` and a window's
-/// `w_ns_hl_attr` both *hold* it, switching between this table and a
-/// namespace's own.
-fn default_hl_attr_table() -> *mut c_int {
-    highlight_attr.ptr().cast::<c_int>()
-}
 
 /// The two maps here are keyed by small integers and never iterated, so a
 /// fixed-seed hasher is both enough and constructible in a `static`.

@@ -10,6 +10,14 @@
 
 use super::*;
 
+/// The loaded parsers, by language name.
+///
+/// The address, because every `map_*`/`set_*` operation the tree has takes
+/// one; it stays a khash (F-P21-9).
+fn lang_map() -> *mut Map_cstr_t_ptr_t {
+    langs.ptr()
+}
+
 pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
     mut L: *mut lua_State,
 ) -> ::core::ffi::c_int {
@@ -21,7 +29,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
         );
         lua_pushboolean(
             L,
-            set_has_cstr_t(&raw mut (*langs.ptr()).set, lang_name as cstr_t) as ::core::ffi::c_int,
+            set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t) as ::core::ffi::c_int,
         );
         1 as ::core::ffi::c_int
     }
@@ -132,7 +140,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
                 ::core::ptr::null_mut::<size_t>(),
             );
         }
-        if set_has_cstr_t(&raw mut (*langs.ptr()).set, lang_name as cstr_t) {
+        if set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t) {
             lua_pushboolean(L, 1);
             return 1 as ::core::ffi::c_int;
         }
@@ -155,7 +163,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
             );
         }
         map_put_cstr_t_ptr_t(
-            langs.ptr(),
+            lang_map(),
             xstrdup(lang_name) as cstr_t,
             lang as *mut TSLanguage as ptr_t,
         );
@@ -173,10 +181,10 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
         );
-        let mut present: bool = set_has_cstr_t(&raw mut (*langs.ptr()).set, lang_name as cstr_t);
+        let mut present: bool = set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t);
         if present {
             let mut key: cstr_t = ::core::ptr::null::<::core::ffi::c_char>();
-            map_del_cstr_t_ptr_t(langs.ptr(), lang_name as cstr_t, &raw mut key);
+            map_del_cstr_t_ptr_t(lang_map(), lang_name as cstr_t, &raw mut key);
             xfree(key as *mut ::core::ffi::c_void);
         }
         lua_pushboolean(L, present as ::core::ffi::c_int);
@@ -192,7 +200,7 @@ pub(crate) unsafe fn lang_check(
         let mut lang_name: *const ::core::ffi::c_char =
             luaL_checklstring(L, index, ::core::ptr::null_mut::<size_t>());
         let mut lang: *mut TSLanguage =
-            map_get_cstr_t_ptr_t(langs.ptr(), lang_name as cstr_t) as *mut TSLanguage;
+            map_get_cstr_t_ptr_t(lang_map(), lang_name as cstr_t) as *mut TSLanguage;
         if lang.is_null() {
             luaL_error(L, c"no such language: %s".as_ptr(), lang_name);
         }

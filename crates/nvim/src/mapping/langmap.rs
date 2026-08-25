@@ -57,11 +57,11 @@ pub(crate) fn langmap_adjust_mb(c: c_int) -> c_int {
 /// here: the free and the re-initialise are the same operation on an owning
 /// container.
 pub(crate) fn langmap_init() {
-    unsafe {
-        for (i, slot) in (*langmap_mapchar.ptr()).iter_mut().enumerate() {
-            *slot = i as u8;
-        }
+    let mut identity = [0u8; 256];
+    for (i, slot) in identity.iter_mut().enumerate() {
+        *slot = i as u8;
     }
+    langmap_mapchar.set(identity);
     LANGMAP_MULTIBYTE.with_mut(Vec::clear);
 }
 
@@ -158,7 +158,8 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                             to_ptr,
                         );
                     }
-                    (*langmap_mapchar.ptr())[(from & 255) as usize] = to as u8;
+                    // The closure is a store; it cannot re-enter the cell.
+                    langmap_mapchar.with_mut(|map| map[(from & 255) as usize] = to as u8);
                 }
 
                 // Advance to the next pair.

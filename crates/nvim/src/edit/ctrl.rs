@@ -75,7 +75,7 @@ pub(crate) unsafe fn ins_reg() {
                 && c >= 0
             {
                 if c < 256 {
-                    (*langmap_mapchar.ptr())[c as usize] as c_int
+                    langmap_mapchar.with(|map| map[c as usize] as c_int)
                 } else {
                     langmap_adjust_mb(c)
                 }

@@ -206,8 +206,8 @@ pub fn get_globvar_dict() -> *mut dict_T {
 
 /// The `g:` scope, as a hashtab.
 pub fn get_globvar_ht() -> *mut hashtab_T {
-    // SAFETY: a field of a `static`, never dereferenced here.
-    unsafe { &raw mut (*globvardict.ptr()).dv_hashtab }
+    // SAFETY: a field of the dictionary above, never dereferenced here.
+    unsafe { &raw mut (*get_globvar_dict()).dv_hashtab }
 }
 
 /// The `v:` scope, as a dictionary.
@@ -217,8 +217,8 @@ pub fn get_vimvar_dict() -> *mut dict_T {
 
 /// The `v:` scope, as a hashtab.
 pub(crate) fn get_vimvar_ht() -> *mut hashtab_T {
-    // SAFETY: a field of a `static`, never dereferenced here.
-    unsafe { &raw mut (*vimvardict.ptr()).dv_hashtab }
+    // SAFETY: a field of the dictionary above, never dereferenced here.
+    unsafe { &raw mut (*get_vimvar_dict()).dv_hashtab }
 }
 
 /// The `v:` variable table, whose rows are the `Vv` discriminants in order.

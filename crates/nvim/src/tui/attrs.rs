@@ -30,6 +30,12 @@ use crate::tui::tui::DEFAULT_ATTRS;
 use crate::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, TUIData, cstr_t, int32_t};
 use core::ffi::{CStr, c_char, c_int};
 
+/// The interned OSC 8 targets, by address: `mh_put_cstr_t` takes one, and the
+/// key it answers is an index into the set's own `keys` array.
+fn url_set() -> *mut Set_cstr_t {
+    URLS.ptr()
+}
+
 /// The underline style parameter each `UNDER*` bit asks the terminal for,
 /// in the order the sequences are emitted.
 const UNDERLINE_STYLES: [(HlAttrFlags, c_int); 4] = [
@@ -66,10 +72,10 @@ pub unsafe fn tui_add_url(_tui: &mut TUIData, url: *const c_char) -> int32_t {
     // the TUI's thread.
     unsafe {
         let mut status: MHPutStatus = KEY_EXISTING;
-        let key = mh_put_cstr_t(URLS.ptr(), url as cstr_t, &raw mut status);
+        let key = mh_put_cstr_t(url_set(), url as cstr_t, &raw mut status);
         // A new key borrows the caller's string; give the set its own copy.
         if status != KEY_EXISTING {
-            *(*URLS.ptr()).keys.add(key as usize) = xstrdup(url) as cstr_t;
+            *(*url_set()).keys.add(key as usize) = xstrdup(url) as cstr_t;
         }
         key as int32_t
     }
@@ -368,7 +374,7 @@ fn set_url(tui: &mut TUIData, url: int32_t) {
         let id = URL_ID_BASE.wrapping_add(url as u32);
         // SAFETY: the interned key is a NUL-terminated copy this module owns
         // and never frees.
-        let target = unsafe { CStr::from_ptr(*(*URLS.ptr()).keys.add(url as usize)) };
+        let target = unsafe { CStr::from_ptr(*(*url_set()).keys.add(url as usize)) };
         let mut seq = format!("\x1b]8;id={id};").into_bytes();
         let target = target.to_bytes();
         seq.reserve(target.len() + OSC8_TERMINATOR.len());

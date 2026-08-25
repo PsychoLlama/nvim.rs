@@ -314,7 +314,7 @@ pub(crate) unsafe fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(NIL);
     // SAFETY: the blob is a compile-time constant and a valid msgpack map.
     unsafe {
-        if (*METADATA.ptr()).type_0 == kObjectTypeNil {
+        if METADATA.get().type_0 == kObjectTypeNil {
             let mut arena = ARENA_EMPTY;
             let mut err = Error {
                 type_0: kErrorTypeNone,
@@ -326,7 +326,7 @@ pub(crate) unsafe fn api_metadata() -> Object {
                 &raw mut arena,
                 &raw mut err,
             ));
-            if err.type_0 != kErrorTypeNone || (*METADATA.ptr()).type_0 != kObjectTypeDict {
+            if err.type_0 != kErrorTypeNone || METADATA.get().type_0 != kObjectTypeDict {
                 abort();
             }
             METADATA_ARENA.set(arena_finish(&raw mut arena));

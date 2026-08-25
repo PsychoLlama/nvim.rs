@@ -195,13 +195,10 @@ fn langmap_wanted(condition: bool) -> bool {
 #[inline(always)]
 pub(crate) fn langmap_adjust(c: &mut c_int, condition: bool) {
     if *c >= 0 && langmap_wanted(condition) {
-        // SAFETY: `langmap_mapchar` is 256 entries and `*c` is below that.
-        *c = unsafe {
-            if *c < 256 {
-                (*langmap_mapchar.ptr())[*c as usize] as c_int
-            } else {
-                langmap_adjust_mb(*c)
-            }
+        *c = if *c < 256 {
+            langmap_mapchar.with(|map| map[*c as usize] as c_int)
+        } else {
+            langmap_adjust_mb(*c)
         };
     }
 }
