@@ -22,8 +22,8 @@ use crate::fileio::{modname, vim_rename};
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::hash_removed;
 use crate::main::{
-    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, namedfm, no_hlsearch, p_enc, p_fs,
-    p_hi, p_shada, p_shadafile, p_verbose,
+    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, no_hlsearch, p_enc, p_fs, p_hi,
+    p_shada, p_shadafile, p_verbose,
 };
 use crate::map::{
     map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, map_ref_cstr_t_ptr_t, mh_get_cstr_t,

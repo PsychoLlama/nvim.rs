@@ -67,6 +67,7 @@ pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
     mark_move_to,
 };
+pub(crate) use shada::global_mark_timestamp;
 pub use shada::{mark_buffer_iter, mark_global_iter, mark_set_global, mark_set_local};
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 

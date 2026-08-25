@@ -22,6 +22,7 @@ use core::cmp::Ordering;
 use core::ffi::{c_int, c_uint, c_void};
 
 use super::*;
+use crate::mark::global_mark_timestamp;
 
 /// Start a ring that holds at most `size` history entries.
 ///
@@ -597,9 +598,7 @@ unsafe fn merge_global_mark(
         };
         // Nothing has claimed the slot yet, so what the file entry has to
         // beat is the mark this Nvim holds.
-        if (*slot).type_0 == kSDItemMissing
-            && (*namedfm.ptr())[idx as usize].fmark.timestamp >= entry.timestamp
-        {
+        if (*slot).type_0 == kSDItemMissing && global_mark_timestamp(idx) >= entry.timestamp {
             shada_free_shada_entry(&raw mut entry);
             return ret;
         }

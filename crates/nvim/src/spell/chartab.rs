@@ -66,6 +66,13 @@ pub fn ascii_spell_chartab() -> spelltab_T {
     sp
 }
 
+/// The table in force, by address: the four questions below read one element
+/// each rather than copying a kilobyte, so this is where its address is
+/// taken.
+fn spell_chartab() -> *mut spelltab_T {
+    spelltab.ptr()
+}
+
 /// The four one-byte questions the spell-check path asks the table in force.
 ///
 /// They read a single element rather than copying the table, which is a
@@ -74,26 +81,26 @@ pub fn ascii_spell_chartab() -> spelltab_T {
 /// `c` must be a byte value; every caller has already ruled out anything
 /// above 255.
 pub(crate) fn spelltab_isw(c: usize) -> bool {
-    // SAFETY: reads one `bool` out of a `static`'s array.
-    unsafe { (*spelltab.ptr()).st_isw[c] }
+    // SAFETY: reads one `bool` out of the table.
+    unsafe { (*spell_chartab()).st_isw[c] }
 }
 
 /// Whether byte `c` is upper case. See [`spelltab_isw`].
 pub(crate) fn spelltab_isu(c: usize) -> bool {
     // SAFETY: as `spelltab_isw`.
-    unsafe { (*spelltab.ptr()).st_isu[c] }
+    unsafe { (*spell_chartab()).st_isu[c] }
 }
 
 /// Byte `c` folded to lower case. See [`spelltab_isw`].
 pub(crate) fn spelltab_fold(c: usize) -> uint8_t {
     // SAFETY: as `spelltab_isw`.
-    unsafe { (*spelltab.ptr()).st_fold[c] }
+    unsafe { (*spell_chartab()).st_fold[c] }
 }
 
 /// Byte `c` raised to upper case. See [`spelltab_isw`].
 pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
     // SAFETY: as `spelltab_isw`.
-    unsafe { (*spelltab.ptr()).st_upper[c] }
+    unsafe { (*spell_chartab()).st_upper[c] }
 }
 
 /// Reset [`spelltab`] to what the current encoding says, discarding

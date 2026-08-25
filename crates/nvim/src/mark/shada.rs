@@ -251,3 +251,12 @@ pub unsafe fn mark_set_local(name: c_char, buf: *mut buf_T, fm: fmark_T, update:
     tgt.write(fm);
     true
 }
+
+/// The timestamp of global mark `idx` — `'A`-`'Z` then `'0`-`'9`.
+///
+/// The ShaDa merge asks for it to decide whether a file entry is newer than
+/// the mark this Nvim already holds; it is the only thing outside `mark/`
+/// that reads the global table directly.
+pub(crate) fn global_mark_timestamp(idx: c_int) -> Timestamp {
+    GlobalMarks::at(idx).read().fmark.timestamp
+}
