@@ -14,6 +14,13 @@ and this project adheres to [CalVer](https://calver.org/).
   types, the `c2rust_padding` filler fields and the leftover scaffolding it
   emitted. The editor behaves exactly as before; only names moved.
 
+### Fixed
+
+- Sourcing a script whose first line is a `#!` shebang no longer cancels the
+  command modifiers of the `:source` that reached it. `:silent source` on
+  such a file used to print everything the script said from the second line
+  on, and `:filter /pat/ source` on one could crash the editor.
+
 ## [2026.08.23-529b135d5d]
 
 ### Changed
