@@ -9,7 +9,7 @@ use crate::eval::typval::{
     tv_list_alloc_ret, tv_list_append_number, tv_list_append_string, tv_list_set_ret,
 };
 use crate::grid::{
-    MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
+    GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{
@@ -23,8 +23,7 @@ use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{
-    EvalFuncData, NUL, ScreenGrid, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T,
-    varnumber_T,
+    EvalFuncData, NUL, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T, varnumber_T,
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
@@ -43,7 +42,7 @@ const NUMBUFLEN: usize = 65;
 /// bounds rather than as an error, which is what these builtins report with
 /// -1 or an empty answer.
 struct Cell {
-    grid: *mut ScreenGrid,
+    grid: GridRef,
     row: c_int,
     col: c_int,
 }
@@ -67,25 +66,16 @@ impl Cell {
             // Legacy tests read printed messages back with screenchar(), so
             // the pending message scroll has to reach the grid first.
             msg_scroll_flush();
-            let grid = ui_comp_get_grid_at_coord(row, col);
-            row -= (*grid).comp_row;
-            col -= (*grid).comp_col;
+            let grid = GridRef::new(ui_comp_get_grid_at_coord(row, col));
+            row -= grid.comp_row;
+            col -= grid.comp_col;
             Cell { grid, row, col }
         }
     }
 
     /// Whether the cell is on the grid it was rebased onto.
-    ///
-    /// # Safety
-    /// `self.grid` is live.
-    unsafe fn on_grid(&self) -> bool {
-        // SAFETY: the constructor's grid is live.
-        unsafe {
-            self.row >= 0
-                && self.row < (*self.grid).rows
-                && self.col >= 0
-                && self.col < (*self.grid).cols
-        }
+    fn on_grid(&self) -> bool {
+        self.row >= 0 && self.row < self.grid.rows && self.col >= 0 && self.col < self.grid.cols
     }
 
     /// The cell's character, as the grid's packed representation.
@@ -94,7 +84,7 @@ impl Cell {
     /// `self` is on the grid.
     unsafe fn schar(&self) -> schar_T {
         // SAFETY: the caller has checked the bounds.
-        unsafe { grid_getchar(self.grid, self.row, self.col, ptr::null_mut()) }
+        grid_getchar(self.grid, self.row, self.col, None)
     }
 
     /// The cell's character, spelled out as UTF-8 and NUL-terminated.
@@ -120,8 +110,8 @@ pub unsafe fn f_screenattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     unsafe {
         let cell = Cell::at(args);
         rettv.vval.v_number = if cell.on_grid() {
-            let offset = *(*cell.grid).line_offset.add(cell.row as usize) + cell.col as usize;
-            *(*cell.grid).attrs.add(offset) as c_int
+            let offset = cell.grid.cell_offset(cell.row, cell.col);
+            cell.grid.attr_at(offset) as c_int
         } else {
             -1
         } as varnumber_T;

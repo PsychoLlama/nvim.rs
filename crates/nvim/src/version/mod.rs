@@ -523,9 +523,9 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         let mut col = ((Columns.get() - vim_strsize(mesg.as_ptr())) / 2).max(0);
         grid_line_start(
             if !colon && ui_has(kUIMultigrid) {
-                &raw mut (*firstwin.get()).w_grid
+                (*firstwin.get()).w_grid
             } else {
-                default_gridview.ptr()
+                default_gridview.get()
             },
             row,
         );

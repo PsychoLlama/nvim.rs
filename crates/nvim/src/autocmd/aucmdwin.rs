@@ -200,10 +200,10 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
                 (*curwin.get()).handle,
                 ::core::ptr::null_mut(),
             );
-            if !(*curwin.get()).w_grid_alloc.chars.is_null() {
+            if (*curwin.get()).w_grid_alloc.is_allocated() {
                 ui_comp_remove_grid(&raw mut (*curwin.get()).w_grid_alloc);
                 ui_call_win_hide((*curwin.get()).w_grid_alloc.handle as Integer);
-                grid_free(&raw mut (*curwin.get()).w_grid_alloc);
+                (*curwin.get()).w_grid_alloc.free();
             }
 
             // The window is given back, not freed: it is used again.

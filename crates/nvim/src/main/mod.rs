@@ -610,28 +610,7 @@ pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
 pub static msg_ext_skip_flush: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_ext_overwrite: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_ext_skip_verbose: GlobalCell<bool> = GlobalCell::new(false);
-pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
-    handle: 0 as handle_T,
-    chars: ::core::ptr::null_mut::<schar_T>(),
-    attrs: ::core::ptr::null_mut::<sattr_T>(),
-    vcols: ::core::ptr::null_mut::<colnr_T>(),
-    line_offset: ::core::ptr::null_mut::<size_t>(),
-    dirty_col: ::core::ptr::null_mut::<c_int>(),
-    rows: 0 as c_int,
-    cols: 0 as c_int,
-    valid: false,
-    throttled: false,
-    blending: false,
-    mouse_enabled: true,
-    zindex: 0 as c_int,
-    comp_row: 0 as c_int,
-    comp_col: 0 as c_int,
-    comp_width: 0 as c_int,
-    comp_height: 0 as c_int,
-    comp_index: 0 as size_t,
-    comp_disabled: false,
-    pending_comp_index_update: true,
-});
+pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static msg_grid_pos: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static msg_grid_adj: GlobalCell<GridView> = GlobalCell::new(GridView {
     target: ::core::ptr::null_mut::<ScreenGrid>(),
@@ -1022,28 +1001,7 @@ pub static magic_overruled: GlobalCell<optmagic_T> = GlobalCell::new(OPTION_MAGI
 pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
-pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
-    handle: 0 as handle_T,
-    chars: ::core::ptr::null_mut::<schar_T>(),
-    attrs: ::core::ptr::null_mut::<sattr_T>(),
-    vcols: ::core::ptr::null_mut::<colnr_T>(),
-    line_offset: ::core::ptr::null_mut::<size_t>(),
-    dirty_col: ::core::ptr::null_mut::<c_int>(),
-    rows: 0 as c_int,
-    cols: 0 as c_int,
-    valid: false,
-    throttled: false,
-    blending: false,
-    mouse_enabled: true,
-    zindex: 0 as c_int,
-    comp_row: 0 as c_int,
-    comp_col: 0 as c_int,
-    comp_width: 0 as c_int,
-    comp_height: 0 as c_int,
-    comp_index: 0 as size_t,
-    comp_disabled: false,
-    pending_comp_index_update: true,
-});
+pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(GridView {
     target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
     row_offset: 0,
@@ -1717,28 +1675,7 @@ pub static showcmd_buf: GlobalCell<[c_char; 41]> = GlobalCell::new([0; 41]);
 pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
-pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
-    handle: 0 as handle_T,
-    chars: ::core::ptr::null_mut::<schar_T>(),
-    attrs: ::core::ptr::null_mut::<sattr_T>(),
-    vcols: ::core::ptr::null_mut::<colnr_T>(),
-    line_offset: ::core::ptr::null_mut::<size_t>(),
-    dirty_col: ::core::ptr::null_mut::<c_int>(),
-    rows: 0 as c_int,
-    cols: 0 as c_int,
-    valid: false,
-    throttled: false,
-    blending: false,
-    mouse_enabled: true,
-    zindex: 0 as c_int,
-    comp_row: 0 as c_int,
-    comp_col: 0 as c_int,
-    comp_width: 0 as c_int,
-    comp_height: 0 as c_int,
-    comp_index: 0 as size_t,
-    comp_disabled: false,
-    pending_comp_index_update: true,
-});
+pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
     active: false,
     item: 0,

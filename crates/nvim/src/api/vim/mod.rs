@@ -38,7 +38,7 @@ use crate::ex_eval::aborting;
 use crate::fold::fold_info;
 use crate::getchar::{ins_typebuf, paste_store};
 use crate::global_cell::GlobalCell;
-use crate::grid::{get_win_by_grid_handle, schar_cache_clear, schar_get, win_grid_alloc};
+use crate::grid::{GridRef, get_win_by_grid_handle, schar_cache_clear, schar_get, win_grid_alloc};
 use crate::highlight::{
     dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
@@ -98,14 +98,14 @@ use crate::types::{
     KeyDict_context, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
-    MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, ScreenGrid,
-    SignTextAttrs, String_0, StringBuilder, Tabpage, TerminalOptions, TryState, Vv, Window,
-    bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values, dobuf_start_values, except_T,
-    foldinfo_T, handle_T, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, linenr_T, mpack_token_type_t, msg_data, msglist_T,
-    object, object_data, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, tabpage_T,
-    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, SignTextAttrs,
+    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, Vv, Window, bln_values, buf_T,
+    bufref_T, dictitem_T, dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T,
+    int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data, pos_T, ptrdiff_t,
+    schar_T, scid_T, sctx_T, size_t, statuscol_T, tabpage_T, uint8_t, uint16_t, uint64_t,
+    varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

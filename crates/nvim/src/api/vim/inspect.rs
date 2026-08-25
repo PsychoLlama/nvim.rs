@@ -219,12 +219,12 @@ pub unsafe fn nvim__inspect_cell(
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut g: *mut ScreenGrid = default_grid.ptr();
+        let mut g: GridRef = GridRef::new(default_grid.ptr());
         if grid == (*pum_grid.ptr()).handle as Integer {
-            g = pum_grid.ptr();
+            g = GridRef::new(pum_grid.ptr());
         } else if grid > 1 as Integer {
             let mut wp: *mut win_T = get_win_by_grid_handle(grid as handle_T);
-            if !(!wp.is_null() && !(*wp).w_grid_alloc.chars.is_null()) {
+            if !(!wp.is_null() && (*wp).w_grid_alloc.is_allocated()) {
                 api_err_invalid(
                     err,
                     c"grid handle".as_ptr(),
@@ -234,22 +234,22 @@ pub unsafe fn nvim__inspect_cell(
                 );
                 return ret.reported(error);
             }
-            g = &raw mut (*wp).w_grid_alloc;
+            g = GridRef::new(&raw mut (*wp).w_grid_alloc);
         }
         if row < 0 as Integer
-            || row >= (*g).rows as Integer
+            || row >= g.rows as Integer
             || col < 0 as Integer
-            || col >= (*g).cols as Integer
+            || col >= g.cols as Integer
         {
             return ret.reported(error);
         }
         ret = arena_array(arena, 3 as size_t);
-        let mut off: size_t = (*(*g).line_offset.add(row as size_t)) + col as size_t;
+        let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
         let mut sc_buf: *mut ::core::ffi::c_char =
             arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false) as *mut ::core::ffi::c_char;
-        schar_get(sc_buf, *(*g).chars.add(off));
+        schar_get(sc_buf, g.char_at(off));
         array_add(&mut ret, Object::string(cstr_as_string(sc_buf)));
-        let mut attr: ::core::ffi::c_int = *(*g).attrs.add(off) as ::core::ffi::c_int;
+        let mut attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
         array_add(
             &mut ret,
             Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, err)),

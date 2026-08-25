@@ -35,9 +35,9 @@ pub unsafe fn default_grid_alloc() -> bool {
         }
         RESIZING.set(true);
 
-        let grid = default_grid.ptr();
+        let grid = &mut *default_grid.ptr();
         let unchanged =
-            !(*grid).chars.is_null() && Rows.get() == (*grid).rows && Columns.get() == (*grid).cols;
+            grid.is_allocated() && Rows.get() == grid.rows && Columns.get() == grid.cols;
         if unchanged || Rows.get() == 0 || Columns.get() == 0 {
             RESIZING.set(false);
             return false;
@@ -55,9 +55,9 @@ pub unsafe fn default_grid_alloc() -> bool {
             tab_page_click_defs_size.ptr(),
         ));
 
-        (*grid).comp_height = Rows.get();
-        (*grid).comp_width = Columns.get();
-        (*grid).handle = DEFAULT_GRID_HANDLE as handle_T;
+        grid.comp_height = Rows.get();
+        grid.comp_width = Columns.get();
+        grid.handle = DEFAULT_GRID_HANDLE as handle_T;
 
         RESIZING.set(false);
         true
@@ -70,18 +70,14 @@ pub unsafe fn screenclear() {
     unsafe {
         msg_check_for_delay(false);
 
-        if starting.get() == NO_SCREEN || (*default_grid.ptr()).chars.is_null() {
+        if !(*default_grid.ptr()).is_allocated() || starting.get() == NO_SCREEN {
             return;
         }
 
-        let grid = default_grid.ptr();
-        for row in 0..(*grid).rows {
-            grid_clear_line(
-                grid,
-                *(*grid).line_offset.add(row as usize),
-                (*grid).cols,
-                true,
-            );
+        let grid = &mut *default_grid.ptr();
+        for row in 0..grid.rows {
+            let (off, cols) = (grid.row_start(row), grid.cols);
+            grid.clear_line(off, cols, true);
         }
         ui_call_grid_clear(1);
         ui_comp_set_screen_valid(true);
@@ -116,9 +112,9 @@ pub unsafe fn screenclear() {
 
         if *(*hl_attr_active.ptr()).add(HLF_MSG as usize) > 0
             && msg_use_grid()
-            && !(*msg_grid.ptr()).chars.is_null()
+            && (*msg_grid.ptr()).is_allocated()
         {
-            grid_invalidate(msg_grid.ptr());
+            (*msg_grid.ptr()).invalidate();
             msg_grid_validate();
             msg_grid_invalid.set(false);
             clear_cmdline.set(true);
@@ -200,7 +196,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             // `win_new_screensize` recomputes float positions; tell the
             // compositor not to draw them yet.
             ui_comp_set_screen_valid(false);
-            if !(*msg_grid.ptr()).chars.is_null() {
+            if (*msg_grid.ptr()).is_allocated() {
                 msg_grid_invalid.set(true);
             }
 
@@ -246,7 +242,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 if State.get() & MODE_CMDLINE != 0 {
                     update_screen();
                 }
-                if !(*msg_grid.ptr()).chars.is_null() {
+                if (*msg_grid.ptr()).is_allocated() {
                     msg_grid_validate();
                 }
                 ui_comp_set_screen_valid(true);

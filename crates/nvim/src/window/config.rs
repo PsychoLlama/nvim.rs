@@ -340,18 +340,18 @@ fn anchor_to_window(
 ) {
     // SAFETY: only compares the pointer against the window list.
     if parent.w_pos_changed
-        && !parent.w_grid_alloc.chars.is_null()
+        && parent.w_grid_alloc.is_allocated()
         && unsafe { win_valid(parent.raw()) }
     {
         ext_win_position(parent, validate);
     }
     let mut parent = parent;
     let (mut row_off, mut col_off) = (0, 0);
-    let (own, r, c1) = (&raw mut parent.w_grid, &raw mut row_off, &raw mut col_off);
     // SAFETY: a live window and its own grid.
     unsafe { win_grid_alloc(parent.raw()) };
-    // SAFETY: as above, plus two out-parameters of ours.
-    *grid = unsafe { grid_adjust(own, r, c1) };
+    let own = parent.w_grid;
+    // SAFETY: as above; `win_grid_alloc` has just run for this view.
+    *grid = unsafe { grid_adjust(own, &mut row_off, &mut col_off) }.raw();
     *row += row_off as Float;
     *col += col_off as Float;
     if c.bufpos.lnum < 0 as linenr_T {

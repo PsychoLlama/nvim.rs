@@ -2654,6 +2654,7 @@ static const int BG_QUERY_DELAY_MS = 100;
 static const int BHPOS = 19;
 static const int BH_DIRTY = 1;
 static const int BH_LOCKED = 2;
+static const int BLANK = 32;
 static const int BLEND_INVISIBLE = 100;
 static const int BLN_CURBUF = 1;
 static const int BLN_DUMMY = 4;

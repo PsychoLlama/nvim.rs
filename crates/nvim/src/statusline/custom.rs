@@ -31,7 +31,7 @@ use crate::buffer::{col_print, get_rel_pos};
 use crate::charset::{transstr_buf, vim_strsize};
 use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::grid::{schar_from_ascii, schar_get};
+use crate::grid::{GridRef, schar_from_ascii, schar_get};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
 use crate::kvec::Kvec;
 use crate::main::{
@@ -62,7 +62,7 @@ static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
 /// status line and the ruler-in-the-message-area is drawn on.
 fn screen_canvas() -> Canvas {
     // SAFETY: `default_grid` is live for the process's lifetime.
-    unsafe { Canvas::new(default_grid.ptr()) }
+    unsafe { Canvas::new(GridRef::new(default_grid.ptr())) }
 }
 
 /// Where one of the four formats is drawn, and what it is drawn with.
@@ -101,7 +101,7 @@ impl Target {
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
         // SAFETY: a floating window owns its grid allocation.
-        let own = || unsafe { Canvas::new(&raw mut (*wp).w_grid_alloc) };
+        let own = || unsafe { Canvas::new(GridRef::new(&raw mut (*wp).w_grid_alloc)) };
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 
@@ -128,7 +128,7 @@ impl Target {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_wbr);
             let mut row = -1; // Row zero is the first row of text.
             // SAFETY: a live window whose grid view is live.
-            canvas = unsafe { Canvas::adjust(&raw mut (*wp).w_grid, &mut row, &mut col) };
+            canvas = unsafe { Canvas::adjust((*wp).w_grid, &mut row, &mut col) };
             if row < 0 {
                 return None;
             }
@@ -195,7 +195,7 @@ impl Target {
             if !in_status_line {
                 row = Rows.get() - 1;
                 // SAFETY: the message grid's view is live.
-                canvas = unsafe { Canvas::adjust(msg_grid_adj.ptr(), &mut row, &mut col) };
+                canvas = unsafe { Canvas::adjust(msg_grid_adj.get(), &mut row, &mut col) };
                 maxwidth -= 1; // Writing in the last column may scroll.
                 fillchar = schar_from_ascii(b' ');
                 group = HLF_MSG;
@@ -702,7 +702,7 @@ pub unsafe fn redraw_ruler() {
     truncate_at_width(&mut buffer, this_ru_col, width);
 
     // SAFETY: the message grid's view is live; the batch is flushed below.
-    unsafe { view_line_start(msg_grid_adj.ptr(), Rows.get() - 1) };
+    unsafe { view_line_start(msg_grid_adj.get(), Rows.get() - 1) };
     DID_RULER_COL.set(off + this_ru_col);
     let w = paint_cstr(DID_RULER_COL.get(), cstr::in_chars(&buffer), attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);

@@ -21,7 +21,7 @@ use crate::types::NUL;
 /// means there is none.
 #[derive(Clone, Copy)]
 struct LineBatch {
-    grid: *mut ScreenGrid,
+    grid: GridRef,
     row: c_int,
     /// Column on the grid that batch column 0 maps to.
     coloff: c_int,
@@ -40,7 +40,7 @@ struct LineBatch {
 impl LineBatch {
     const fn new() -> Self {
         LineBatch {
-            grid: ::core::ptr::null_mut(),
+            grid: GridRef::NONE,
             row: -1,
             coloff: 0,
             maxcol: 0,
@@ -92,10 +92,11 @@ pub struct LineAttrs {
 ///
 /// # Safety
 /// `view` must be live and no other batch may be in progress.
-pub unsafe fn grid_line_start(view: *mut GridView, mut row: c_int) {
+pub unsafe fn grid_line_start(view: GridView, mut row: c_int) {
+    let mut col = 0;
+    // SAFETY: the caller's promise, for both calls.
     unsafe {
-        let mut col = 0;
-        let grid = grid_adjust(view, &raw mut row, &raw mut col);
+        let grid = grid_adjust(view, &mut row, &mut col);
         screengrid_line_start(grid, row, col);
     }
 }
@@ -104,16 +105,16 @@ pub unsafe fn grid_line_start(view: *mut GridView, mut row: c_int) {
 /// have no `GridView` (float borders, the popup menu, the statusline).
 ///
 /// # Safety
-/// `grid` must be live and no other batch may be in progress.
-pub unsafe fn screengrid_line_start(grid: *mut ScreenGrid, row: c_int, col: c_int) {
+/// No other batch may be in progress.
+pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
     unsafe {
         let b = BATCH.ptr();
-        debug_assert!((*b).grid.is_null(), "grid_line_grid == NULL");
+        debug_assert!((*b).grid.is_none(), "grid_line_grid == NULL");
         *b = LineBatch {
             grid,
             row,
             coloff: col,
-            maxcol: (*grid).cols.min((*grid).cols - col),
+            maxcol: grid.cols.min(grid.cols - col),
             first: LINEBUF_SIZE.get() as c_int,
             last: 0,
             clear_to: 0,
@@ -159,11 +160,11 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
             return schar_from_ascii(b' ');
         }
         col += b.coloff;
-        let off = *(*b.grid).line_offset.offset(b.row as isize) + col as size_t;
+        let off = b.grid.cell_offset(b.row, col);
         if !attr.is_null() {
-            *attr = *(*b.grid).attrs.add(off);
+            *attr = b.grid.attr_at(off);
         }
-        *(*b.grid).chars.add(off)
+        b.grid.char_at(off)
     }
 }
 
@@ -174,7 +175,7 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
 pub unsafe fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
     unsafe {
         let b = BATCH.ptr();
-        debug_assert!(!(*b).grid.is_null(), "grid_line_grid");
+        debug_assert!(!(*b).grid.is_none(), "grid_line_grid");
         if col >= (*b).maxcol {
             return;
         }
@@ -205,7 +206,7 @@ pub unsafe fn grid_line_puts(
 ) -> c_int {
     unsafe {
         let b = BATCH.ptr();
-        debug_assert!(!(*b).grid.is_null(), "grid_line_grid");
+        debug_assert!(!(*b).grid.is_none(), "grid_line_grid");
 
         let chars = linebuf_char.get();
         let attrs = linebuf_attr.get();
@@ -342,7 +343,7 @@ pub unsafe fn grid_line_clear_end(
 pub unsafe fn grid_line_cursor_goto(col: c_int) {
     unsafe {
         let b = *BATCH.ptr();
-        ui_grid_cursor_goto((*b.grid).handle, b.row, col);
+        ui_grid_cursor_goto(b.grid.handle, b.row, col);
     }
 }
 
@@ -444,7 +445,7 @@ pub unsafe fn grid_line_flush() {
     unsafe {
         let b = BATCH.ptr();
         let grid = (*b).grid;
-        (*b).grid = ::core::ptr::null_mut();
+        (*b).grid = GridRef::NONE;
         (*b).clear_to = (*b).last.max((*b).clear_to);
         debug_assert!(
             (*b).clear_to <= (*b).maxcol,
@@ -482,11 +483,11 @@ pub unsafe fn grid_line_flush() {
 pub unsafe fn grid_line_flush_if_valid_row() {
     unsafe {
         let b = BATCH.ptr();
-        if (*b).row < 0 || (*b).row >= (*(*b).grid).rows {
+        if (*b).row < 0 || (*b).row >= { (*b).grid }.rows {
             if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
                 abort();
             }
-            (*b).grid = ::core::ptr::null_mut();
+            (*b).grid = GridRef::NONE;
             return;
         }
         grid_line_flush();
@@ -498,7 +499,7 @@ pub unsafe fn grid_line_flush_if_valid_row() {
 /// # Safety
 /// `grid` must be live and no batch may be in progress.
 pub unsafe fn grid_clear(
-    grid: *mut GridView,
+    view: GridView,
     start_row: c_int,
     end_row: c_int,
     start_col: c_int,
@@ -508,12 +509,12 @@ pub unsafe fn grid_clear(
     unsafe {
         let mut row = start_row;
         while row < end_row {
-            grid_line_start(grid, row);
+            grid_line_start(view, row);
             let b = BATCH.ptr();
             end_col = end_col.min((*b).maxcol);
-            if (*b).row >= (*(*b).grid).rows || start_col >= end_col {
+            if (*b).row >= { (*b).grid }.rows || start_col >= end_col {
                 // TODO(bfredl): make callers behave instead.
-                (*b).grid = ::core::ptr::null_mut();
+                (*b).grid = GridRef::NONE;
                 return;
             }
             grid_line_clear_end(start_col, end_col, attr, 0);
@@ -531,22 +532,17 @@ pub unsafe fn grid_clear(
 /// - a double-width character whose second cell differs.
 ///
 /// # Safety
-/// `grid` must be live and `off_to` in range.
+/// `col` must be within the scratch buffers.
 #[inline]
-unsafe fn grid_char_needs_redraw(
-    grid: *mut ScreenGrid,
-    col: c_int,
-    off_to: size_t,
-    cols: c_int,
-) -> bool {
+unsafe fn grid_char_needs_redraw(on_grid: &GridCells<'_>, col: c_int, cols: c_int) -> bool {
     unsafe {
+        let at = col as size_t;
         cols > 0
-            && ((*linebuf_char.get().offset(col as isize) != *(*grid).chars.add(off_to)
-                || *linebuf_attr.get().offset(col as isize) != *(*grid).attrs.add(off_to)
+            && ((*linebuf_char.get().offset(col as isize) != on_grid.chars[at]
+                || *linebuf_attr.get().offset(col as isize) != on_grid.attrs[at]
                 || (cols > 1
                     && *linebuf_char.get().offset((col + 1) as isize) == 0
-                    && *linebuf_char.get().offset((col + 1) as isize)
-                        != *(*grid).chars.add(off_to + 1)))
+                    && *linebuf_char.get().offset((col + 1) as isize) != on_grid.chars[at + 1]))
                 || exmode_active.get() // TODO(bfredl): what in the actual fuck
                 || rdb_flags.get() & kOptRdbFlagNodelta != 0)
     }
@@ -569,23 +565,18 @@ struct Copied {
 /// The vcols are written unconditionally: they are bookkeeping the UI never
 /// sees, so there is nothing to compare against.
 ///
+/// `on_grid` is the row from the batch's first column on; every column here
+/// indexes into it.
+///
 /// # Safety
-/// `grid` must be live, `off_to`/`max_off_to` its offsets for this row, and
-/// `col..endcol` within the scratch buffers.
-unsafe fn copy_changed_cells(
-    grid: *mut ScreenGrid,
-    off_to: size_t,
-    max_off_to: size_t,
-    mut col: c_int,
-    endcol: c_int,
-) -> Copied {
+/// `col..endcol` must be within the scratch buffers.
+unsafe fn copy_changed_cells(on_grid: &mut GridCells<'_>, mut col: c_int, endcol: c_int) -> Copied {
     unsafe {
         let chars = linebuf_char.get();
         let attrs = linebuf_attr.get();
         let vcols = linebuf_vcol.get();
 
-        let mut redraw_next =
-            grid_char_needs_redraw(grid, col, off_to + col as size_t, endcol - col);
+        let mut redraw_next = grid_char_needs_redraw(on_grid, col, endcol - col);
         let mut start_dirty = -1;
         let mut end_dirty = 0;
         let mut clear_next = false;
@@ -598,13 +589,9 @@ unsafe fn copy_changed_cells(
                 1
             };
             let redraw_this = redraw_next;
-            let off = off_to + col as size_t;
-            redraw_next = grid_char_needs_redraw(
-                grid,
-                col + char_cells,
-                off + char_cells as size_t,
-                endcol - col - char_cells,
-            );
+            let off = col as size_t;
+            redraw_next =
+                grid_char_needs_redraw(on_grid, col + char_cells, endcol - col - char_cells);
 
             if redraw_this {
                 if start_dirty == -1 {
@@ -616,25 +603,25 @@ unsafe fn copy_changed_cells(
                 // Same when writing the right half of a double-width char
                 // over the left half of an existing one.
                 if col + char_cells == endcol
-                    && off + (char_cells as size_t) < max_off_to
-                    && *(*grid).chars.add(off + char_cells as size_t) == 0
+                    && off + (char_cells as size_t) < on_grid.chars.len()
+                    && on_grid.chars[off + char_cells as size_t] == 0
                 {
                     clear_next = true;
                 }
 
-                *(*grid).chars.add(off) = *chars.offset(col as isize);
-                *(*grid).attrs.add(off) = *attrs.offset(col as isize);
+                on_grid.chars[off] = *chars.offset(col as isize);
+                on_grid.attrs[off] = *attrs.offset(col as isize);
                 if char_cells == 2 {
-                    *(*grid).chars.add(off + 1) = *chars.offset((col + 1) as isize);
+                    on_grid.chars[off + 1] = *chars.offset((col + 1) as isize);
                     // For simplicity the second half of a double-width
                     // character gets the first half's attributes.
-                    *(*grid).attrs.add(off + 1) = *attrs.offset(col as isize);
+                    on_grid.attrs[off + 1] = *attrs.offset(col as isize);
                 }
             }
 
-            *(*grid).vcols.add(off) = *vcols.offset(col as isize);
+            on_grid.vcols[off] = *vcols.offset(col as isize);
             if char_cells == 2 {
-                *(*grid).vcols.add(off + 1) = *vcols.offset((col + 1) as isize);
+                on_grid.vcols[off + 1] = *vcols.offset((col + 1) as isize);
             }
 
             col += char_cells;
@@ -654,65 +641,62 @@ unsafe fn copy_changed_cells(
 /// Blank `clear_start..clear_width` of the grid row and fill in its vcols,
 /// reporting the range that actually changed.
 ///
-/// # Safety
-/// `grid` must be live and `off_to` its offset for this row.
-unsafe fn clear_rest_of_line(
-    grid: *mut ScreenGrid,
-    off_to: size_t,
+/// `on_grid` is the row from the batch's first column on, as in
+/// [`copy_changed_cells`].
+fn clear_rest_of_line(
+    on_grid: &mut GridCells<'_>,
     clear_start: c_int,
     clear_width: c_int,
     clear_attr: c_int,
     flags: c_int,
     mut last_vcol: colnr_T,
 ) -> Dirty {
-    unsafe {
-        let inc_vcol = flags & SLF_INC_VCOL != 0;
-        let rightleft = flags & SLF_RIGHTLEFT != 0;
+    let inc_vcol = flags & SLF_INC_VCOL != 0;
+    let rightleft = flags & SLF_RIGHTLEFT != 0;
 
-        // Rightleft fills the vcols back to front, before the blanking pass.
-        if rightleft {
-            let mut col = clear_width - 1;
-            while col >= clear_start {
-                *(*grid).vcols.add(off_to + col as size_t) = if inc_vcol {
-                    last_vcol += 1;
-                    last_vcol
-                } else {
-                    last_vcol
-                };
-                col -= 1;
-            }
+    // Rightleft fills the vcols back to front, before the blanking pass.
+    if rightleft {
+        let mut col = clear_width - 1;
+        while col >= clear_start {
+            on_grid.vcols[col as size_t] = if inc_vcol {
+                last_vcol += 1;
+                last_vcol
+            } else {
+                last_vcol
+            };
+            col -= 1;
         }
-
-        let mut start = -1;
-        let mut end = -1;
-        // TODO(bfredl): we could cache winline widths.
-        let mut col = clear_start;
-        while col < clear_width {
-            let off = off_to + col as size_t;
-            if *(*grid).chars.add(off) != schar_from_ascii(b' ')
-                || *(*grid).attrs.add(off) != clear_attr
-                || rdb_flags.get() & kOptRdbFlagNodelta != 0
-            {
-                *(*grid).chars.add(off) = schar_from_ascii(b' ');
-                *(*grid).attrs.add(off) = clear_attr;
-                if start == -1 {
-                    start = col;
-                }
-                end = col + 1;
-            }
-            if !rightleft {
-                *(*grid).vcols.add(off) = if inc_vcol {
-                    last_vcol += 1;
-                    last_vcol
-                } else {
-                    last_vcol
-                };
-            }
-            col += 1;
-        }
-
-        Dirty { start, end }
     }
+
+    let mut start = -1;
+    let mut end = -1;
+    // TODO(bfredl): we could cache winline widths.
+    let mut col = clear_start;
+    while col < clear_width {
+        let off = col as size_t;
+        if on_grid.chars[off] != schar_from_ascii(b' ')
+            || on_grid.attrs[off] != clear_attr
+            || rdb_flags.get() & kOptRdbFlagNodelta != 0
+        {
+            on_grid.chars[off] = schar_from_ascii(b' ');
+            on_grid.attrs[off] = clear_attr;
+            if start == -1 {
+                start = col;
+            }
+            end = col + 1;
+        }
+        if !rightleft {
+            on_grid.vcols[off] = if inc_vcol {
+                last_vcol += 1;
+                last_vcol
+            } else {
+                last_vcol
+            };
+        }
+        col += 1;
+    }
+
+    Dirty { start, end }
 }
 
 /// Move one buffered line to the window grid, writing only the cells that
@@ -728,10 +712,9 @@ unsafe fn clear_rest_of_line(
 ///   `last_vcol + 1` rather than giving them all `last_vcol`.
 ///
 /// # Safety
-/// `grid` must be live, `row` within it, and the scratch buffers must hold
-/// the line.
+/// `row` must be within `grid` and the scratch buffers must hold the line.
 pub unsafe fn grid_put_linebuf(
-    grid: *mut ScreenGrid,
+    mut grid: GridRef,
     row: c_int,
     coloff: c_int,
     span: LineSpan,
@@ -745,15 +728,12 @@ pub unsafe fn grid_put_linebuf(
             mut endcol,
             mut clear_width,
         } = span;
-        debug_assert!(
-            0 <= row && row < (*grid).rows,
-            "0 <= row && row < grid->rows"
-        );
+        debug_assert!(0 <= row && row < grid.rows, "0 <= row && row < grid->rows");
         // TODO(bfredl): check all callsites and eliminate.
-        endcol = endcol.min((*grid).cols);
+        endcol = endcol.min(grid.cols);
 
         // Safety check; avoids clang warnings down the call stack.
-        if (*grid).chars.is_null() || row >= (*grid).rows || coloff >= (*grid).cols {
+        if !grid.is_allocated() || row >= grid.rows || coloff >= grid.cols {
             logmsg_c!(
                 LOGLVL_DBG,
                 ::core::ptr::null(),
@@ -765,16 +745,17 @@ pub unsafe fn grid_put_linebuf(
             return;
         }
 
-        let invalid_row = grid != default_grid.ptr() && grid_invalid_row(grid, row) && col == 0;
-        let off_to = *(*grid).line_offset.offset(row as isize) + coloff as size_t;
-        let max_off_to = *(*grid).line_offset.offset(row as isize) + (*grid).cols as size_t;
+        let invalid_row = grid.raw() != default_grid.ptr() && grid.invalid_row(row) && col == 0;
+        // The row from `coloff` on: every column below indexes into it.
+        let off_to = grid.cell_offset(row, coloff);
+        let span_width = (grid.cols - coloff) as size_t;
 
         // At the start of the text, overwriting the right half of a two-cell
         // character already on the grid truncates it into a '>'.
-        if col > 0 && *(*grid).chars.add(off_to + col as size_t) == 0 {
+        if col > 0 && grid.char_at(off_to + col as size_t) == 0 {
             *linebuf_char.get().offset((col - 1) as isize) = schar_from_ascii(b'>');
             *linebuf_attr.get().offset((col - 1) as isize) =
-                *(*grid).attrs.add(off_to + col as size_t - 1);
+                grid.attr_at(off_to + col as size_t - 1);
             col -= 1;
         }
 
@@ -799,7 +780,9 @@ pub unsafe fn grid_put_linebuf(
             }
         }
 
-        let copied = copy_changed_cells(grid, off_to, max_off_to, col, endcol);
+        let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
+        let mut on_grid = grid.cells_mut(off_to, span_width);
+        let copied = copy_changed_cells(&mut on_grid, col, endcol);
         let mut start_dirty = copied.dirty.start;
         let mut end_dirty = copied.dirty.end;
         col = copied.col;
@@ -807,21 +790,17 @@ pub unsafe fn grid_put_linebuf(
         if copied.clear_next {
             // Clear the second half of a double-width character whose left
             // half was overwritten with a single-width one.
-            *(*grid).chars.add(off_to + col as size_t) = schar_from_ascii(b' ');
+            on_grid.chars[col as size_t] = schar_from_ascii(b' ');
             end_dirty += 1;
         }
 
         // Clearing the left half of a double-width char clears the right too.
-        if off_to + (clear_width as size_t) < max_off_to
-            && *(*grid).chars.add(off_to + clear_width as size_t) == 0
-        {
+        if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
             clear_width += 1;
         }
 
-        let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
         let cleared = clear_rest_of_line(
-            grid,
-            off_to,
+            &mut on_grid,
             clear_start,
             clear_width,
             clear_attr,
@@ -831,7 +810,7 @@ pub unsafe fn grid_put_linebuf(
         let mut clear_end = cleared.end;
 
         if flags & SLF_RIGHTLEFT != 0 && start_dirty != -1 && cleared.start != -1 {
-            if (*grid).throttled || cleared.start >= start_dirty - 5 {
+            if grid.throttled || cleared.start >= start_dirty - 5 {
                 // Cannot draw now, or too small to be worth a separate
                 // "clear" event.
                 start_dirty = cleared.start;
@@ -860,7 +839,7 @@ pub unsafe fn grid_put_linebuf(
         }
 
         if clear_end > start_dirty {
-            if !(*grid).throttled {
+            if !grid.throttled {
                 ui_line(
                     grid,
                     row,
@@ -871,13 +850,11 @@ pub unsafe fn grid_put_linebuf(
                     clear_attr,
                     flags & SLF_WRAP != 0,
                 );
-            } else if !(*grid).dirty_col.is_null() {
+            } else if grid.tracks_dirty_cols() {
                 // TODO(bfredl): really get rid of the extra pseudo terminal
                 // in message.c by using a linebuf_char copy for the
                 // "throttled message line".
-                if clear_end > *(*grid).dirty_col.offset(row as isize) {
-                    *(*grid).dirty_col.offset(row as isize) = clear_end;
-                }
+                grid.raise_dirty_col(row, clear_end);
             }
         }
     }

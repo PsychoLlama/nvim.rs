@@ -105,7 +105,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         }
         // SAFETY: as above.
         let win = unsafe { Win::new(wp) };
-        if !win.w_grid_alloc.chars.is_null() && !(win.w_floating && !win.w_config.mouse) {
+        if win.w_grid_alloc.is_allocated() && !(win.w_floating && !win.w_config.mouse) {
             pos.row = (pos.row - win.w_grid.row_offset).min(win.w_view_height - 1);
             pos.col = (pos.col - win.w_grid.col_offset).min(win.w_view_width - 1);
             return Some(win);

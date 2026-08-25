@@ -85,32 +85,24 @@ impl Layer {
         ptr::eq(self.0, other.0)
     }
 
-    /// Where `row` of this grid starts in its `chars`/`attrs` arrays.
+    /// Where `row` of this grid starts in its cell buffers.
     fn row_offset(self, row: usize) -> usize {
-        // SAFETY: the invariant; callers only ask for rows the grid has.
-        unsafe { *self.line_offset.add(row) }
+        self.row_start(row as c_int)
     }
 
     /// `n` cells of text and attributes from `off`.
     fn cells_at(&self, off: usize, n: usize) -> (&[schar_T], &[sattr_T]) {
-        // SAFETY: the invariant; `off + n` stays inside the row the caller
-        // resolved through [`Layer::row_offset`].
-        unsafe {
-            let chars = slice::from_raw_parts(self.chars.add(off), n);
-            (chars, slice::from_raw_parts(self.attrs.add(off), n))
-        }
+        self.cells(off, n)
     }
 
     /// One cell of text, possibly one past the run being copied.
     fn char_at(self, off: usize) -> schar_T {
-        // SAFETY: as [`Layer::cells_at`], for a single cell.
-        unsafe { *self.chars.add(off) }
+        (*self).char_at(off)
     }
 
     /// One cell's attribute.
     fn attr_at(self, off: usize) -> sattr_T {
-        // SAFETY: as [`Layer::cells_at`], for a single cell.
-        unsafe { *self.attrs.add(off) }
+        (*self).attr_at(off)
     }
 
     /// Whether (`row`, `col`) of the screen falls inside this layer.

@@ -25,7 +25,6 @@ use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
-use crate::grid::grid_free;
 use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;

@@ -99,9 +99,10 @@ pub unsafe fn grid_draw_border(
     winbl: c_int,
     hl_attr: *mut c_int,
 ) {
+    let mut default_adj: [c_int; 4] = [1, 1, 1, 1];
     unsafe {
+        let grid = GridRef::new(grid);
         let attrs = (&raw mut (*config).border_attr).cast::<c_int>();
-        let mut default_adj: [c_int; 4] = [1, 1, 1, 1];
         let adj = if adj.is_null() {
             default_adj.as_mut_ptr()
         } else {
@@ -125,8 +126,8 @@ pub unsafe fn grid_draw_border(
         }
 
         // Interior size, i.e. the window minus whichever sides it has.
-        let irow = (*grid).rows - *adj.offset(0) - *adj.offset(2);
-        let icol = (*grid).cols - *adj.offset(1) - *adj.offset(3);
+        let irow = grid.rows - *adj.offset(0) - *adj.offset(2);
+        let icol = grid.cols - *adj.offset(1) - *adj.offset(3);
 
         if side(0) {
             screengrid_line_start(grid, 0, 0);

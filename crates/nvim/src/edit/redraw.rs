@@ -159,7 +159,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
 pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
     unsafe {
         let win = curwin.get();
-        if (*win).w_grid_alloc.chars.is_null() && (*default_grid.ptr()).chars.is_null() {
+        if !(*win).w_grid_alloc.is_allocated() && !(*default_grid.ptr()).is_allocated() {
             return;
         }
 
@@ -173,7 +173,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 
         pc_row.set((*win).w_wrow);
         pc_status.set(PutChar::Unset);
-        grid_line_start(&raw mut (*win).w_grid, pc_row.get());
+        grid_line_start((*win).w_grid, pc_row.get());
         if (*win).w_onebuf_opt.wo_rl != 0 {
             pc_col.set((*win).w_view_width - 1 - (*win).w_wcol);
             if grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) == NUL as schar_T {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn edit_unputchar() {
             }
             PutChar::Left => redraw_win_line(win, (*win).w_cursor.lnum),
             PutChar::Set => {
-                grid_line_start(&raw mut (*win).w_grid, pc_row.get());
+                grid_line_start((*win).w_grid, pc_row.get());
                 grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
                 grid_line_flush();
             }

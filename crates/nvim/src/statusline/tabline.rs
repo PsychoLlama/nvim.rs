@@ -178,7 +178,7 @@ unsafe fn name_buff_in(arena: *mut Arena) -> String_0 {
 pub unsafe fn draw_tabline() {
     // SAFETY: `default_grid` is live for the process's lifetime; before the
     // first resize it has no cells yet.
-    if unsafe { (*default_grid.ptr()).chars.is_null() } {
+    if unsafe { !(*default_grid.ptr()).is_allocated() } {
         return;
     }
     redraw_tabline.set(false);
@@ -225,7 +225,7 @@ unsafe fn draw_default_tabline() {
     let use_sep_chars = t_colors.get() < 8;
 
     // SAFETY: `default_gridview` is live; the batch is flushed below.
-    unsafe { view_line_start(default_gridview.ptr(), 0) };
+    unsafe { view_line_start(default_gridview.get(), 0) };
     // SAFETY: the caller's promise.
     let count = unsafe { tabpages() }.count() as c_int;
     let tabwidth = if count > 0 {

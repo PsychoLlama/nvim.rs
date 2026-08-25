@@ -207,7 +207,7 @@ impl Cells {
         wp: *mut win_T,
         buf: *mut buf_T,
         f: &LineFrame,
-        grid: *mut GridView,
+        grid: GridView,
     ) -> Step {
         // SAFETY: the caller's window, buffer, frame and grid.
         unsafe {
@@ -274,12 +274,10 @@ impl Cells {
             if wrap {
                 let mut current_row = wlv.row;
                 let mut dummy_col = 0;
-                let current_grid = grid_adjust(grid, &raw mut current_row, &raw mut dummy_col);
+                let mut current_grid = grid_adjust(grid, &mut current_row, &mut dummy_col);
                 // Force a redraw of the first column of the next line.
-                *(*current_grid)
-                    .attrs
-                    .add(*(*current_grid).line_offset.offset(current_row as isize + 1)) =
-                    -1 as sattr_T;
+                let off = current_grid.row_start(current_row + 1);
+                current_grid.set_attr(off, -1 as sattr_T);
             }
 
             wlv.boguscols = 0;

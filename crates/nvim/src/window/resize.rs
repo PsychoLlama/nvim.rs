@@ -518,11 +518,11 @@ pub unsafe fn command_height() {
     cmdline_row.set(Rows.get() - p_ch.get() as c_int);
     redraw_cmdline.set(true);
     if msg_scrolled.get() == 0 && full_screen.get() {
-        let mut grid = default_gridview.ptr();
+        let mut grid = default_gridview.get();
         if !ui_has(kUIMessages) {
             // SAFETY: makes sure the message grid exists before it is cleared.
             unsafe { msg_grid_validate() };
-            grid = msg_grid_adj.ptr();
+            grid = msg_grid_adj.get();
         }
         // SAFETY: a live grid, and a row range inside the screen.
         unsafe { grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0) };

@@ -266,7 +266,7 @@ unsafe fn wlv_put_linebuf(
 ) {
     // SAFETY: the caller's window and line buffers.
     unsafe {
-        let grid: *mut GridView = &raw mut (*wp).w_grid;
+        let grid: GridView = (*wp).w_grid;
         let mut startcol = 0;
         let mut clear_width = if clear_end {
             (*wp).w_view_width
@@ -323,7 +323,7 @@ unsafe fn wlv_put_linebuf(
 
         let mut row = wlv.row;
         let mut coloff = 0;
-        let g = grid_adjust(grid, &raw mut row, &raw mut coloff);
+        let g = grid_adjust(grid, &mut row, &mut coloff);
         grid_put_linebuf(
             g,
             row,

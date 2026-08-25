@@ -419,7 +419,7 @@ pub unsafe fn win_ui_flush(validate: bool) {
     for tp in tabs() {
         for mut wp in windows_in_tab(tp) {
             let moved = wp.w_pos_changed || wp.w_grid_alloc.pending_comp_index_update;
-            if moved && !wp.w_grid_alloc.chars.is_null() {
+            if moved && wp.w_grid_alloc.is_allocated() {
                 if tp.is_current() {
                     // SAFETY: a live window.
                     unsafe { ui_ext_win_position(wp.raw(), validate) };

@@ -357,7 +357,7 @@ fn parse_winhl(win: Win) {
 }
 fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
     // SAFETY: a live window's own grid view, and two locals.
-    unsafe { grid_adjust(&raw mut win.w_grid, row, col) };
+    unsafe { grid_adjust(win.w_grid, row, col) };
 }
 fn screen_pos_of(win: Win, pos: &mut pos_T) -> (c_int, c_int) {
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);

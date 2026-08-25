@@ -683,7 +683,7 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
 
         if dy_flags.get() & kOptDyFlagTruncate != 0 {
             // "@@@" in the last screen line, and nothing else on it.
-            grid_line_start(&raw mut (*wp).w_grid, (*wp).w_view_height - 1);
+            grid_line_start((*wp).w_grid, (*wp).w_view_height - 1);
             grid_line_fill(
                 0,
                 (*wp).w_view_width.min(3),
@@ -695,7 +695,7 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
         } else if dy_flags.get() & kOptDyFlagLastline != 0 {
             // "@@@" at the end of the last screen line, over the text. Four
             // cells when three would split a double-width character in half.
-            grid_line_start(&raw mut (*wp).w_grid, (*wp).w_view_height - 1);
+            grid_line_start((*wp).w_grid, (*wp).w_view_height - 1);
             let width =
                 if grid_line_getchar(((*wp).w_view_width - 3).max(0), ::core::ptr::null_mut()) == 0
                 {
@@ -774,13 +774,13 @@ pub unsafe fn win_scroll_lines(wp: *mut win_T, row: c_int, line_count: c_int) {
 
         let mut col = 0;
         let mut row_off = 0;
-        let grid = grid_adjust(&raw mut (*wp).w_grid, &raw mut row_off, &raw mut col);
+        let grid = grid_adjust((*wp).w_grid, &mut row_off, &mut col);
 
         // The bounds are the grid's rather than the window's because
         // `curs_columns` reaches here from outside `update_screen`, when the
         // two may disagree.
-        let checked_width = ((*grid).cols - col).min((*wp).w_view_width);
-        let checked_height = ((*grid).rows - row_off).min((*wp).w_view_height);
+        let checked_width = (grid.cols - col).min((*wp).w_view_width);
+        let checked_height = (grid.rows - row_off).min((*wp).w_view_height);
 
         // Nothing would be moved; the caller draws over the whole area.
         if row + line_count.abs() >= checked_height {
@@ -832,7 +832,7 @@ pub unsafe fn win_draw_end(
         // upstream's order: it hands out attribute ids in call order, so
         // hoisting `hl` above the three margin groups would renumber them.
         for row in startrow..endrow {
-            grid_line_start(&raw mut (*wp).w_grid, row);
+            grid_line_start((*wp).w_grid, row);
 
             let mut n = 0;
             if draw_margin {

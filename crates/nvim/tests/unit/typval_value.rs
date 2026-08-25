@@ -819,9 +819,13 @@ fn getting_a_line_number_resolves_the_cursor() {
     let log = AllocLog::start();
     // A window is all `var2fpos` needs for `"."`; it never reaches the
     // buffer on that path.
-    let mut win: Box<win_T> = Box::new(unsafe { std::mem::zeroed() });
+    // Zeroed, and left `MaybeUninit`: a `win_T` owns allocations (its grid's
+    // cell buffers among them) that all-zero bytes are not a valid form of,
+    // so no `win_T` value is produced or dropped here.
+    let mut win = Box::new(std::mem::MaybeUninit::<win_T>::zeroed());
+    let wp = win.as_mut_ptr();
     let saved_curwin = curwin.get();
-    curwin.set(&raw mut *win);
+    curwin.set(wp);
 
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
@@ -843,7 +847,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
 
         for (row, want) in rows.into_iter().zip(answers) {
-            win.w_cursor.lnum = 46;
+            (*wp).w_cursor.lnum = 46;
             let tv = raw(row.v_type, row.vval);
             log.check(&[]);
             let got = check_emsg(log.editor(), || tv_get_lnum(&raw const tv), row.emsg);

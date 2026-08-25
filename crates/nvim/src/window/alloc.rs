@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::mem::size_of;
 use core::ptr;
 
@@ -24,7 +24,7 @@ use crate::decoration::clear_virttext;
 use crate::eval::typval::tv_dict_alloc;
 use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
 use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
-use crate::grid::{grid_assign_handle, grid_free};
+use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::main::{
     Columns, Rows, au_pending_free_win, aucmd_win_vec, autocmd_busy, curbuf, curtab, curwin,
@@ -45,7 +45,7 @@ use crate::types::{
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::{Buf, Frame, TabPage, Win, buffers, tabs};
-use ::libc::{abort, memset};
+use ::libc::abort;
 
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
@@ -55,6 +55,19 @@ fn zeroed<T>() -> *mut T {
     // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
     // `win_T`/`frame_T` is what upstream starts one from.
     unsafe { xcalloc(1, size_of::<T>()) }.cast::<T>()
+}
+
+/// A fresh window, zeroed but for its grid.
+///
+/// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
+/// `Vec`s, whose pointers are never null -- so the one field that owns an
+/// allocation is written before anything can read or drop it.
+fn zeroed_window() -> *mut win_T {
+    let wp = zeroed::<win_T>();
+    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid is
+    // overwritten, never read.
+    unsafe { (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty()) };
+    wp
 }
 
 /// Free a window's option block and the folds saved with it.
@@ -190,15 +203,14 @@ pub unsafe fn win_alloc(after: *mut win_T, hidden: bool) -> *mut win_T {
 /// Allocate a window, link it into the list after `after` unless `hidden`, and
 /// give it the defaults a fresh window starts from.
 fn alloc(after: Option<Win>, hidden: bool) -> Win {
-    // SAFETY: a fresh zeroed `win_T`, which is live from here on.
-    let mut new_wp = unsafe { Win::new(zeroed::<win_T>()) };
+    // SAFETY: a fresh window, which is live from here on.
+    let mut new_wp = unsafe { Win::new(zeroed_window()) };
     last_win_id.set(last_win_id.get() + 1);
     new_wp.handle = last_win_id.get() as handle_T;
     let (key, val) = (new_wp.handle as c_int, new_wp.raw());
     window_handles.with_mut(|map| map_put_int_ptr_t(map, key, val as ptr_t));
     new_wp.w_grid_alloc.mouse_enabled = true;
-    // SAFETY: the window's own grid.
-    unsafe { grid_assign_handle(&raw mut new_wp.w_grid_alloc) };
+    grid_assign_handle(&mut new_wp.w_grid_alloc);
     // SAFETY: a fresh dictionary, which becomes the window's own.
     new_wp.w_vars = unsafe { tv_dict_alloc() };
     // SAFETY: the dictionary just allocated, and the window's own scope.
@@ -385,12 +397,9 @@ pub(crate) fn free_grid(wp: Win, reinit: bool) {
     if wp.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
         ui_call_grid_destroy(wp.w_grid_alloc.handle as Integer);
     }
-    // SAFETY: the window's own grid.
-    unsafe { grid_free(&raw mut wp.w_grid_alloc) };
+    wp.w_grid_alloc.free();
     if reinit {
-        let own = (&raw mut wp.w_grid_alloc).cast::<c_void>();
-        // SAFETY: as above; a zeroed `ScreenGrid` is an unallocated one.
-        unsafe { memset(own, 0, size_of::<ScreenGrid>()) };
+        wp.w_grid_alloc = ScreenGrid::empty();
     }
 }
 

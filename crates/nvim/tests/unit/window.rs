@@ -14,6 +14,7 @@
 //! Miri run the lot.
 
 use std::ffi::c_int;
+use std::mem::MaybeUninit;
 use std::ptr;
 
 use neovim::types::{frame_T, win_T};
@@ -52,7 +53,7 @@ struct Chrome {
 /// point here is that the tree points at them.
 struct Tree {
     nodes: Vec<*mut frame_T>,
-    windows: Vec<*mut win_T>,
+    windows: Vec<*mut MaybeUninit<win_T>>,
 }
 
 impl Drop for Tree {
@@ -89,10 +90,14 @@ impl Tree {
     /// A leaf frame holding a window with the given chrome, `height` rows and
     /// `width` columns.
     fn leaf(&mut self, chrome: Chrome, height: c_int, width: c_int) -> *mut frame_T {
-        // SAFETY: as above; `arith` reads only the four chrome fields.
-        let win: Box<win_T> = Box::new(unsafe { std::mem::zeroed() });
-        let wp = Box::into_raw(win);
-        self.windows.push(wp);
+        // Zeroed, and left `MaybeUninit`: a `win_T` owns allocations (its
+        // grid's cell buffers among them) that all-zero bytes are not a
+        // valid form of, so no `win_T` value is ever produced or dropped
+        // here. `arith` reads only the four chrome fields, through the
+        // pointer.
+        let slot = Box::into_raw(Box::new(MaybeUninit::<win_T>::zeroed()));
+        self.windows.push(slot);
+        let wp = slot.cast::<win_T>();
         // SAFETY: the window was just allocated and outlives the tree.
         unsafe {
             (*wp).w_winbar_height = chrome.winbar;

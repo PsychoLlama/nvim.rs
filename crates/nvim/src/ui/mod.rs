@@ -47,7 +47,7 @@ use crate::event::libuv::uv_cwd;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::global_cell::GlobalCell;
-use crate::grid::get_win_by_grid_handle;
+use crate::grid::{GridRef, get_win_by_grid_handle};
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
@@ -72,7 +72,7 @@ use crate::types::ui::{
 };
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Integer, KeyValuePair, LineFlags, Object, OptVal,
-    OptValData, OptionSetFlags, RemoteUI, ScreenGrid, String_0, UIExtension, handle_T,
+    OptValData, OptionSetFlags, RemoteUI, String_0, UIExtension, handle_T,
 };
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
@@ -556,7 +556,7 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
 /// `grid` must be live and `row` within it.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
 pub unsafe fn ui_line(
-    grid: *mut ScreenGrid,
+    grid: GridRef,
     row: c_int,
     invalid_row: bool,
     startcol: c_int,
@@ -565,7 +565,6 @@ pub unsafe fn ui_line(
     clearattr: c_int,
     wrap: bool,
 ) {
-    let grid = unsafe { &mut *grid };
     assert!((0..grid.rows).contains(&row), "row is outside the grid");
 
     let mut flags: LineFlags = if wrap { kLineFlagWrap } else { 0 };
@@ -574,7 +573,8 @@ pub unsafe fn ui_line(
     }
     unsafe { ui_may_set_default_colors() };
 
-    let off = unsafe { *grid.line_offset.add(row as usize) } + startcol as usize;
+    let off = grid.cell_offset(row, startcol);
+    let (chars, attrs) = grid.cells(off, (grid.cols - startcol) as usize);
     unsafe {
         ui_call_raw_line(
             grid.handle as Integer,
@@ -584,8 +584,8 @@ pub unsafe fn ui_line(
             clearcol as Integer,
             clearattr as Integer,
             flags,
-            grid.chars.cast_const().add(off),
-            grid.attrs.cast_const().add(off),
+            chars.as_ptr(),
+            attrs.as_ptr(),
         )
     };
 

@@ -23,10 +23,10 @@ use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding}
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    grid_adjust, grid_alloc, grid_clear, grid_clear_line, grid_del_lines, grid_draw_border,
-    grid_ins_lines, grid_invalidate, grid_line_clear_end, grid_line_fill, grid_line_flush,
-    grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
-    schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
+    grid_adjust, grid_alloc, grid_clear, grid_del_lines, grid_draw_border, grid_ins_lines,
+    grid_line_clear_end, grid_line_fill, grid_line_flush, grid_line_getchar, grid_line_mirror,
+    grid_line_put_schar, grid_line_start, schar_cache_clear_if_full, schar_from_ascii,
+    win_grid_alloc,
 };
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
@@ -245,32 +245,24 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         let valid = (Rows.get() - scrollsize).max(0);
 
         // The part of the message grid that is not displayed is invalid.
-        let mg = msg_grid.ptr();
-        if !(*mg).chars.is_null() {
-            for i in 0..scrollsize.min((*mg).rows) {
-                grid_clear_line(
-                    mg,
-                    *(*mg).line_offset.add(i as usize),
-                    (*mg).cols,
-                    (i as OptInt) < p_ch.get(),
-                );
+        let mg = &mut *msg_grid.ptr();
+        if mg.is_allocated() {
+            for i in 0..scrollsize.min(mg.rows) {
+                let (off, cols) = (mg.row_start(i), mg.cols);
+                mg.clear_line(off, cols, (i as OptInt) < p_ch.get());
             }
         }
-        (*mg).throttled = false;
+        mg.throttled = false;
 
         let mut was_invalidated = false;
         // UPD_CLEAR is already handled by the caller.
         if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && msg_scrolled.get() != 0 {
             was_invalidated = ui_comp_set_screen_valid(false);
-            let dg = default_grid.ptr();
+            let dg = &mut *default_grid.ptr();
             let mut row = valid;
             while (row as OptInt) < Rows.get() as OptInt - p_ch.get() {
-                grid_clear_line(
-                    dg,
-                    *(*dg).line_offset.add(row as usize),
-                    Columns.get(),
-                    false,
-                );
+                let off = dg.row_start(row);
+                dg.clear_line(off, Columns.get(), false);
                 row += 1;
             }
             for wp in windows_in_curtab() {
@@ -357,7 +349,7 @@ pub unsafe fn update_screen() -> c_int {
 
         // A VimResized autocommand can redraw in the middle of a resize, which
         // would bypass the checks in `screen_resize`.
-        if resizing_autocmd.get() || (*default_grid.ptr()).chars.is_null() {
+        if resizing_autocmd.get() || !(*default_grid.ptr()).is_allocated() {
             return FAIL;
         }
 
@@ -422,14 +414,14 @@ pub unsafe fn update_screen() -> c_int {
             // `must_redraw` may have been set indirectly; avoid another redraw.
             must_redraw.set(0);
         } else if !(*default_grid.ptr()).valid {
-            grid_invalidate(default_grid.ptr());
+            (*default_grid.ptr()).invalidate();
             (*default_grid.ptr()).valid = true;
         }
 
         // May need to clear space on the default grid for the message area.
         if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
             grid_clear(
-                default_gridview.ptr(),
+                default_gridview.get(),
                 Rows.get() - p_ch.get() as c_int,
                 Rows.get(),
                 0,
@@ -501,9 +493,9 @@ pub unsafe fn update_screen() -> c_int {
         for wp in windows_in_curtab() {
             if (*wp).w_redr_type == UPD_CLEAR
                 && (*wp).w_floating
-                && !(*wp).w_grid_alloc.chars.is_null()
+                && (*wp).w_grid_alloc.is_allocated()
             {
-                grid_invalidate(&raw mut (*wp).w_grid_alloc);
+                (*wp).w_grid_alloc.invalidate();
                 (*wp).w_redr_type = UPD_NOT_VALID;
             }
 
@@ -647,9 +639,9 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
             col = (*wp).w_view_width - (*wp).w_wcol - cells;
         }
 
-        let grid = grid_adjust(&raw mut (*wp).w_grid, &raw mut row, &raw mut col);
-        if !grid.is_null() {
-            ui_grid_cursor_goto((*grid).handle, row, col);
+        let grid = grid_adjust((*wp).w_grid, &mut row, &mut col);
+        if !grid.is_none() {
+            ui_grid_cursor_goto(grid.handle, row, col);
         }
     }
 }

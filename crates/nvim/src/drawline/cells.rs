@@ -458,7 +458,7 @@ impl Cells {
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
         unsafe {
-            let grid: *mut GridView = &raw mut (*wp).w_grid;
+            let grid: GridView = (*wp).w_grid;
             'row: loop {
                 self.has_match_conc = 0;
                 self.decor_conceal = 0;

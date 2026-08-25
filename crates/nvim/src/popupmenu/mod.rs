@@ -21,9 +21,9 @@ use crate::garray::ga_clear;
 use crate::getchar::{vgetc, vungetc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    get_win_by_grid_handle, grid_alloc, grid_assign_handle, grid_draw_border, grid_free,
-    grid_invalidate, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
-    schar_from_ascii, schar_from_str, screengrid_line_start,
+    GridRef, get_win_by_grid_handle, grid_alloc, grid_assign_handle, grid_draw_border,
+    grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts, schar_from_ascii,
+    schar_from_str, screengrid_line_start,
 };
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
@@ -507,7 +507,7 @@ pub unsafe fn pum_check_clear() {
                 ui_call_grid_destroy((*pum_grid.ptr()).handle as Integer);
             }
             // TODO(bfredl): consider keeping float grids allocated.
-            grid_free(pum_grid.ptr());
+            (*pum_grid.ptr()).free();
         }
         pum_is_drawn.set(false);
         pum_external.set(false);

@@ -587,7 +587,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         };
         let trunc_attr = win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI });
 
-        screengrid_line_start(pum_grid.ptr(), grid_row, 0);
+        screengrid_line_start(GridRef::new(pum_grid.ptr()), grid_row, 0);
 
         if style.extra_space {
             let attr = hl_combine_attr(
@@ -760,7 +760,7 @@ pub unsafe fn pum_redraw() {
         }
 
         (*pum_grid.ptr()).blending = p_pb.get() > 0 || config.shadow;
-        grid_assign_handle(pum_grid.ptr());
+        grid_assign_handle(&mut *pum_grid.ptr());
 
         pum_left_col.set(pum_col.get() - col_off);
         pum_right_col.set(pum_left_col.get() + grid_width);
@@ -778,18 +778,18 @@ pub unsafe fn pum_redraw() {
         must_redraw_pum.set(false);
 
         let (rows, cols) = (pum_height.get() + border.width, grid_width + border.width);
-        if (*pum_grid.ptr()).chars.is_null()
+        if !(*pum_grid.ptr()).is_allocated()
             || (*pum_grid.ptr()).rows != rows
             || (*pum_grid.ptr()).cols != cols
         {
-            grid_alloc(pum_grid.ptr(), rows, cols, !invalid_grid, false);
+            grid_alloc(&mut *pum_grid.ptr(), rows, cols, !invalid_grid, false);
             ui_call_grid_resize(
                 (*pum_grid.ptr()).handle as Integer,
                 (*pum_grid.ptr()).cols as Integer,
                 (*pum_grid.ptr()).rows as Integer,
             );
         } else if invalid_grid {
-            grid_invalidate(pum_grid.ptr());
+            (*pum_grid.ptr()).invalidate();
         }
         if ui_has(kUIMultigrid) {
             pum_send_float_pos();

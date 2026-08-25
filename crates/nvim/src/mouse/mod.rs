@@ -547,21 +547,13 @@ fn mouse_check_grid() -> (Option<colnr_T>, c_int) {
     let (mut start_row, mut start_col) = (0, 0);
     // SAFETY: a live window whose view has been allocated; `grid_adjust`
     // writes the two offsets and answers the grid the view draws on.
-    let gp = unsafe { grid_adjust(&raw mut win.w_grid, &raw mut start_row, &raw mut start_col) };
-    // SAFETY: a live grid.
-    let (handle, drawn, rows, cols) =
-        unsafe { ((*gp).handle, !(*gp).chars.is_null(), (*gp).rows, (*gp).cols) };
+    let gp = unsafe { grid_adjust(win.w_grid, &mut start_row, &mut start_col) };
+    let (handle, drawn, rows, cols) = (gp.handle, gp.is_allocated(), gp.rows, gp.cols);
     let (row, col) = (pos.row + start_row, pos.col + start_col);
     if handle != pos.grid || !drawn || row < 0 || row >= rows || col < 0 || col >= cols {
         return (None, 0);
     }
-    // SAFETY: `line_offset` and `vcols` are allocated for the grid's rows x
-    // cols, and the position is checked just above.
-    let vcol = unsafe {
-        *(*gp)
-            .vcols
-            .add((*(*gp).line_offset.offset(row as isize)).wrapping_add(col as size_t))
-    };
+    let vcol = gp.vcol_at(gp.cell_offset(row, col));
     // Use the virtual column from vcols[], it is accurate also after
     // concealed characters.  -2 and -3 are the fold column's markers.
     let flags = match vcol {

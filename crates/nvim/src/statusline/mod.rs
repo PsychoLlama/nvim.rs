@@ -47,7 +47,7 @@ use crate::drawscreen::redrawing;
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
+    GridRef, grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_line_start, screengrid_line_start,
 };
 use crate::highlight::{hl_combine_attr, win_hl_attr};
@@ -57,9 +57,8 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, OptionSetFlags,
-    ScreenGrid, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, StlFlag, Vv,
-    WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T,
-    win_T,
+    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, StlFlag, Vv, WinSplit, WinStyle,
+    hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -529,12 +528,12 @@ pub unsafe fn stl_alloc_click_defs(
 /// addresses cells of that line by column, which is why the `paint_*` family
 /// is free functions rather than methods.
 #[derive(Clone, Copy)]
-pub(crate) struct Canvas(*mut ScreenGrid);
+pub(crate) struct Canvas(GridRef);
 
 impl Canvas {
-    /// # Safety
-    /// `grid` must stay live until the batch is flushed.
-    pub(crate) const unsafe fn new(grid: *mut ScreenGrid) -> Self {
+    /// The grid must stay live until the batch is flushed, which is what a
+    /// [`GridRef`] already promises.
+    pub(crate) const fn new(grid: GridRef) -> Self {
         Canvas(grid)
     }
 
@@ -543,7 +542,7 @@ impl Canvas {
     ///
     /// # Safety
     /// `win_grid_alloc()` must already have run for this view.
-    pub(crate) unsafe fn adjust(view: *mut GridView, row: &mut c_int, col: &mut c_int) -> Self {
+    pub(crate) unsafe fn adjust(view: GridView, row: &mut c_int, col: &mut c_int) -> Self {
         // SAFETY: the caller's promise; the two are locals of the caller.
         Canvas(unsafe { grid_adjust(view, row, col) })
     }
@@ -562,7 +561,7 @@ impl Canvas {
 ///
 /// # Safety
 /// As [`Canvas::line_start`].
-pub(crate) unsafe fn view_line_start(view: *mut GridView, row: c_int) {
+pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
     // SAFETY: the caller's promise.
     unsafe { grid_line_start(view, row) };
 }

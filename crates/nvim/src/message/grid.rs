@@ -9,8 +9,19 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
+
+/// The message grid, as a handle.
+///
+/// One acquisition per path. The grid's address is registered with the
+/// compositor and reached from there while it is being drawn on, so it is
+/// named rather than borrowed -- see [`GridRef`] for why that matters.
+pub(crate) fn msg_grid_ref() -> GridRef {
+    // SAFETY: a `static`'s address is always valid, and the handle borrows
+    // nothing.
+    unsafe { GridRef::new(msg_grid.ptr()) }
+}
 
 /// Has `id` been handed out as a message id?
 pub fn msg_id_exists(id: int64_t) -> bool {
@@ -48,7 +59,7 @@ pub unsafe fn msg_grid_set_pos(row: c_int, scrolled: bool) {
             msg_grid_pos_at_flush.set(row);
         }
         msg_grid_pos.set(row);
-        if !(*msg_grid.ptr()).chars.is_null() {
+        if (*msg_grid.ptr()).is_allocated() {
             (*msg_grid_adj.ptr()).row_offset = -row;
         }
     }
@@ -61,7 +72,7 @@ pub unsafe fn msg_grid_set_pos(row: c_int, scrolled: bool) {
 /// # Safety
 /// Only that the default grid is initialised.
 pub unsafe fn msg_use_grid() -> bool {
-    unsafe { !(*default_grid.ptr()).chars.is_null() && !ui_has(kUIMessages) }
+    unsafe { (*default_grid.ptr()).is_allocated() && !ui_has(kUIMessages) }
 }
 
 /// Allocate, resize, reposition or free the message grid to match the screen.
@@ -70,21 +81,19 @@ pub unsafe fn msg_use_grid() -> bool {
 /// Only that the grids are initialised.
 pub unsafe fn msg_grid_validate() {
     unsafe {
-        grid_assign_handle(msg_grid.ptr());
+        grid_assign_handle(&mut *msg_grid.ptr());
         let should_alloc = msg_use_grid();
         let max_rows = Rows.get() - p_ch.get() as c_int;
 
         if should_alloc
             && ((*msg_grid.ptr()).rows != Rows.get()
                 || (*msg_grid.ptr()).cols != Columns.get()
-                || (*msg_grid.ptr()).chars.is_null())
+                || !(*msg_grid.ptr()).is_allocated())
         {
             // Force a valid screen size.
-            grid_alloc(msg_grid.ptr(), Rows.get(), Columns.get(), false, true);
+            grid_alloc(&mut *msg_grid.ptr(), Rows.get(), Columns.get(), false, true);
             (*msg_grid.ptr()).zindex = kZIndexMessages as c_int;
-            xfree((*msg_grid.ptr()).dirty_col.cast());
-            (*msg_grid.ptr()).dirty_col =
-                xcalloc(Rows.get() as size_t, ::core::mem::size_of::<c_int>()).cast();
+            (*msg_grid.ptr()).track_dirty_cols(Rows.get());
 
             // Tell the compositor to put the grid at the bottom, or at the top
             // while the pager owns the screen.
@@ -113,19 +122,18 @@ pub unsafe fn msg_grid_validate() {
             msg_scrolled_at_flush.set(msg_scrolled.get());
             (*msg_grid.ptr()).mouse_enabled = false;
             (*msg_grid_adj.ptr()).target = msg_grid.ptr();
-        } else if !should_alloc && !(*msg_grid.ptr()).chars.is_null() {
+        } else if !should_alloc && (*msg_grid.ptr()).is_allocated() {
             // Note: we run this both on moving to ext_messages, and on
             // resizing the screen while ext_messages is active.
             ui_comp_remove_grid(msg_grid.ptr());
-            grid_free(msg_grid.ptr());
-            xfree((*msg_grid.ptr()).dirty_col.cast::<c_void>());
-            (*msg_grid.ptr()).dirty_col = ptr::null_mut();
+            (*msg_grid.ptr()).free();
+            (*msg_grid.ptr()).forget_dirty_cols();
             ui_call_grid_destroy((*msg_grid.ptr()).handle.into());
             (*msg_grid.ptr()).throttled = false;
             (*msg_grid_adj.ptr()).row_offset = 0;
             (*msg_grid_adj.ptr()).target = default_grid.ptr();
             redraw_cmdline.set(true);
-        } else if !(*msg_grid.ptr()).chars.is_null()
+        } else if (*msg_grid.ptr()).is_allocated()
             && msg_scrolled.get() == 0
             && msg_grid_pos.get() != max_rows
         {
@@ -133,7 +141,7 @@ pub unsafe fn msg_grid_validate() {
             msg_grid_set_pos(max_rows, false);
             if diff > 0 {
                 grid_clear(
-                    msg_grid_adj.ptr(),
+                    msg_grid_adj.get(),
                     Rows.get() - diff,
                     Rows.get(),
                     0,
@@ -143,7 +151,7 @@ pub unsafe fn msg_grid_validate() {
             }
         }
 
-        if !(*msg_grid.ptr()).chars.is_null()
+        if (*msg_grid.ptr()).is_allocated()
             && msg_scrolled.get() == 0
             && cmdline_row.get() < msg_grid_pos.get()
         {
@@ -175,8 +183,8 @@ pub unsafe fn msg_cursor_goto(row: c_int, mut col: c_int) {
         if cmdmsg_rl.get() {
             col = Columns.get() - 1 - col;
         }
-        let grid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
-        ui_grid_cursor_goto((*grid).handle, row, col);
+        let grid = grid_adjust(msg_grid_adj.get(), &mut row, &mut col);
+        ui_grid_cursor_goto(grid.handle, row, col);
     }
 }
 
@@ -208,19 +216,16 @@ pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
         msg_did_scroll.set(true);
         if msg_grid_pos.get() > 0 {
             msg_grid_set_pos(msg_grid_pos.get() - 1, !zerocmd);
-            if zerocmd && !(*msg_grid.ptr()).chars.is_null() {
+            if zerocmd && (*msg_grid.ptr()).is_allocated() {
                 // When zerocmd is true, we're scrolling the first line of
                 // msg_grid onto the screen; it must be cleared first.
-                grid_clear_line(
-                    msg_grid.ptr(),
-                    *(*msg_grid.ptr()).line_offset,
-                    (*msg_grid.ptr()).cols,
-                    false,
-                );
+                let grid = &mut *msg_grid.ptr();
+                let (off, cols) = (grid.row_start(0), grid.cols);
+                grid.clear_line(off, cols, false);
             }
         } else {
             grid_del_lines(
-                msg_grid.ptr(),
+                GridRef::new(msg_grid.ptr()),
                 0,
                 1,
                 (*msg_grid.ptr()).rows,
@@ -228,18 +233,11 @@ pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
                 (*msg_grid.ptr()).cols,
             );
             // The dirty columns move up with the lines they describe.
-            ptr::copy(
-                (*msg_grid.ptr()).dirty_col.add(1),
-                (*msg_grid.ptr()).dirty_col,
-                ((*msg_grid.ptr()).rows - 1) as usize,
-            );
-            *(*msg_grid.ptr())
-                .dirty_col
-                .add(((*msg_grid.ptr()).rows - 1) as usize) = 0;
+            (*msg_grid.ptr()).scroll_dirty_cols();
         }
         // Ensure the message area is cleared to the default background.
         grid_clear(
-            msg_grid_adj.ptr(),
+            msg_grid_adj.get(),
             Rows.get() - 1,
             Rows.get(),
             0,
@@ -291,16 +289,15 @@ pub unsafe fn msg_scroll_flush() {
                 let row = i - msg_grid_pos.get();
                 debug_assert!(row >= 0);
                 ui_line(
-                    msg_grid.ptr(),
+                    GridRef::new(msg_grid.ptr()),
                     row,
                     false,
                     0,
-                    *(*msg_grid.ptr()).dirty_col.add(row as usize),
+                    (*msg_grid.ptr()).take_dirty_col(row),
                     (*msg_grid.ptr()).cols,
                     hl_attr(HLF_MSG as c_int),
                     false,
                 );
-                *(*msg_grid.ptr()).dirty_col.add(row as usize) = 0;
                 i += 1;
             }
         }
@@ -326,16 +323,13 @@ pub unsafe fn msg_reset_scroll() {
         // TODO(bfredl): calculate the conflict in the compositor instead.
         msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
         clear_cmdline.set(true);
-        if !(*msg_grid.ptr()).chars.is_null() {
+        if (*msg_grid.ptr()).is_allocated() {
             // The bound is re-evaluated each time round, as upstream does.
             let mut i = 0;
             while i < msg_scrollsize().min((*msg_grid.ptr()).rows) {
-                grid_clear_line(
-                    msg_grid.ptr(),
-                    *(*msg_grid.ptr()).line_offset.add(i as usize),
-                    (*msg_grid.ptr()).cols,
-                    false,
-                );
+                let grid = &mut *msg_grid.ptr();
+                let (off, cols) = (grid.row_start(i), grid.cols);
+                grid.clear_line(off, cols, false);
                 i += 1;
             }
         }
@@ -351,7 +345,7 @@ pub unsafe fn msg_reset_scroll() {
 /// Only that the grids are initialised.
 pub unsafe fn msg_ui_refresh() {
     unsafe {
-        if ui_has(kUIMultigrid) && !(*msg_grid.ptr()).chars.is_null() {
+        if ui_has(kUIMultigrid) && (*msg_grid.ptr()).is_allocated() {
             ui_call_grid_resize(
                 (*msg_grid.ptr()).handle.into(),
                 (*msg_grid.ptr()).cols.into(),
@@ -369,7 +363,7 @@ pub unsafe fn msg_ui_refresh() {
 pub unsafe fn msg_ui_flush() {
     unsafe {
         if ui_has(kUIMultigrid)
-            && !(*msg_grid.ptr()).chars.is_null()
+            && (*msg_grid.ptr()).is_allocated()
             && (*msg_grid.ptr()).pending_comp_index_update
         {
             ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
@@ -438,7 +432,7 @@ pub unsafe fn msg_clr_eos_force() {
         };
 
         // Avoid clearing the line the grid is about to be moved off.
-        if !(*msg_grid.ptr()).chars.is_null() && msg_row.get() < msg_grid_pos.get() {
+        if (*msg_grid.ptr()).is_allocated() && msg_row.get() < msg_grid_pos.get() {
             msg_grid_validate();
             if msg_row.get() < msg_grid_pos.get() {
                 msg_row.set(msg_grid_pos.get());
@@ -446,7 +440,7 @@ pub unsafe fn msg_clr_eos_force() {
         }
 
         grid_clear(
-            msg_grid_adj.ptr(),
+            msg_grid_adj.get(),
             msg_row.get(),
             msg_row.get() + 1,
             msg_startcol,
@@ -454,7 +448,7 @@ pub unsafe fn msg_clr_eos_force() {
             hl_attr(HLF_MSG as c_int),
         );
         grid_clear(
-            msg_grid_adj.ptr(),
+            msg_grid_adj.get(),
             msg_row.get() + 1,
             Rows.get(),
             0,

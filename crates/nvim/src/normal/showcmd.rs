@@ -451,7 +451,7 @@ fn draw_on_last_line(clear: bool) {
     unsafe {
         msg_grid_validate();
         let showcmd_row = Rows.get() - 1;
-        grid_line_start(msg_grid_adj.ptr(), showcmd_row);
+        grid_line_start(msg_grid_adj.get(), showcmd_row);
         let attr = *(*hl_attr_active.ptr()).offset(HLF_MSG as isize);
         let mut len = 0;
         if !clear {

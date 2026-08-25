@@ -89,7 +89,7 @@ fn update_topline_win(mut win: Win) {
     }
 
     // No screen yet, or a window with no room: just show the cursor line.
-    if default_grid.with(|grid| grid.chars.is_null()) || win.w_view_height == 0 {
+    if default_grid.with(|grid| !grid.is_allocated()) || win.w_view_height == 0 {
         win.check_cursor_lnum();
         win.w_topline = win.w_cursor.lnum;
         win.w_botline = win.w_topline;

@@ -28,9 +28,9 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    grid_adjust, grid_alloc, grid_assign_handle, grid_clear, grid_clear_line, grid_del_lines,
-    grid_free, grid_ins_lines, grid_line_cursor_goto, grid_line_flush,
-    grid_line_flush_if_valid_row, grid_line_mirror, grid_line_puts, grid_line_start, schar_get,
+    GridRef, grid_adjust, grid_alloc, grid_assign_handle, grid_clear, grid_del_lines,
+    grid_ins_lines, grid_line_cursor_goto, grid_line_flush, grid_line_flush_if_valid_row,
+    grid_line_mirror, grid_line_puts, grid_line_start, schar_get,
 };
 use crate::guard::Suppress;
 use crate::highlight::hl_combine_attr;

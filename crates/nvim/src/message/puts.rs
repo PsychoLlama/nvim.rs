@@ -169,8 +169,7 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
                 msg_col.set(saved_msg_col);
             }
         }
-        if msg_use_printf() == 0 || (headless_mode.get() && !(*default_grid.ptr()).chars.is_null())
-        {
+        if msg_use_printf() == 0 || (headless_mode.get() && (*default_grid.ptr()).is_allocated()) {
             msg_puts_display(str, len as c_int, hl_id, false);
         }
 
@@ -317,7 +316,7 @@ pub(crate) unsafe fn msg_puts_display(
                 if open_row >= 0 {
                     msg_line_flush();
                 }
-                grid_line_start(msg_grid_adj.ptr(), msg_row.get());
+                grid_line_start(msg_grid_adj.get(), msg_row.get());
                 open_row = msg_row.get();
             }
 
