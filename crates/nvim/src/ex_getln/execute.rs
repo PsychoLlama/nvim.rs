@@ -422,11 +422,11 @@ pub(crate) unsafe fn command_line_execute(
             || (*s).c == Ctrl_Z
         {
             if (*s).c == K_WILD {
-                (*emsg_silent.ptr()) += 1; // silence the bell
+                emsg_silent.set(emsg_silent.get() + 1); // silence the bell
             }
             let res = command_line_wildchar_complete(s);
             if (*s).c == K_WILD {
-                (*emsg_silent.ptr()) -= 1;
+                emsg_silent.set(emsg_silent.get() - 1);
             }
             if res == KeyOutcome::Changed {
                 return command_line_changed(s);

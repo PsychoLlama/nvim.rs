@@ -55,7 +55,7 @@ pub(crate) unsafe fn cmdline_pum_create(
             (*xp).xp_pattern
         };
         let col = endpos.offset_from(ccline.text()) as c_int;
-        compl_startcol.set(if ui_has(kUICmdline) && (*cmdline_win.ptr()).is_null() {
+        compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_null() {
             col
         } else {
             cmd_screencol(col)
@@ -121,14 +121,12 @@ pub unsafe fn cmdline_compl_is_fuzzy() -> bool {
 /// Whether the popup menu should be used for the cmdline completion wildmenu.
 ///
 /// `need_wildmenu` says whether the current `'wildmode'` part wants one.
-pub(crate) unsafe fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
-    unsafe {
-        (need_wildmenu
-            && wop_flags.get() & kOptWopFlagPum as c_uint != 0
-            && !(ui_has(kUICmdline) && (*cmdline_win.ptr()).is_null()))
-            || ui_has(kUIWildmenu)
-            || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
-    }
+pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
+    (need_wildmenu
+        && wop_flags.get() & kOptWopFlagPum as c_uint != 0
+        && !(ui_has(kUICmdline) && cmdline_win.get().is_null()))
+        || ui_has(kUIWildmenu)
+        || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
 }
 
 /// The number of characters that should be skipped in the wildmenu.
@@ -354,9 +352,9 @@ pub(crate) unsafe fn redraw_wildmenu(
                     // is no room, scroll the screen one line up.
                     if cmdline_row.get() == Rows.get() - 1 {
                         msg_scroll_up(false, false);
-                        (*msg_scrolled.ptr()) += 1;
+                        msg_scrolled.set(msg_scrolled.get() + 1);
                     } else {
-                        (*cmdline_row.ptr()) += 1;
+                        cmdline_row.set(cmdline_row.get() + 1);
                         row += 1;
                     }
                     wild_menu_showing.set(WM_SCROLLED);

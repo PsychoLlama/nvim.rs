@@ -98,7 +98,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: *mut CommandLineState) {
         };
         if map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) {
             // ":lmap" mappings exist; toggle the use of mappings.
-            (*State.ptr()) ^= MODE_LANGMAP;
+            State.set(State.get() ^ MODE_LANGMAP);
             if !b_im_ptr.is_null() {
                 *b_im_ptr = if State.get() & MODE_LANGMAP != 0 {
                     B_IMODE_LMAP as OptInt

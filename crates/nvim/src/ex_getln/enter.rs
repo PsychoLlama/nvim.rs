@@ -136,7 +136,7 @@ pub(crate) unsafe fn command_line_enter(
     unsafe {
         // Can be invoked recursively; identify each level.
         static cmdline_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-        (*cmdline_level.ptr()) += 1;
+        cmdline_level.set(cmdline_level.get() + 1);
 
         let save_cmdpreview = cmdpreview.get();
         cmdpreview.set(false);
@@ -238,7 +238,7 @@ pub(crate) unsafe fn command_line_enter(
                 };
                 (*s).b_im_ptr_buf = curbuf.get();
                 if *(*s).b_im_ptr == B_IMODE_LMAP as OptInt {
-                    (*State.ptr()) |= MODE_LANGMAP;
+                    State.set(State.get() | MODE_LANGMAP);
                 }
             }
 
@@ -486,7 +486,7 @@ pub(crate) unsafe fn command_line_enter(
             status_redraw_all(); // redraw to show the mode change
         }
 
-        (*cmdline_level.ptr()) -= 1;
+        cmdline_level.set(cmdline_level.get() - 1);
 
         // The text leaves the command line here, which is what C's
         // `ccline.cmdbuff = NULL` meant. It has to come before the resume:

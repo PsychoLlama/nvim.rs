@@ -261,7 +261,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
 
         if wild_menu_showing.get() == WM_SCROLLED {
             // Entered the command line, move it up.
-            *cmdline_row.ptr() -= 1;
+            cmdline_row.set(cmdline_row.get() - 1);
             redrawcmd();
         } else if save_p_ls.get() != -1 {
             // Restore 'laststatus' and 'winminheight'.

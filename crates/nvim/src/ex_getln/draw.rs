@@ -38,7 +38,7 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
         // The maximum column. A weird 'columns'/'lines' can overflow the
         // product, which reads as negative.
         let m = if KeyTyped.get() {
-            let cells = if !(*cmdline_win.ptr()).is_null() {
+            let cells = if !cmdline_win.get().is_null() {
                 (*cmdline_win.get()).w_view_width * (*cmdline_win.get()).w_view_height
             } else {
                 Columns.get() * Rows.get()
