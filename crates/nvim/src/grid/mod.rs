@@ -17,6 +17,22 @@
 //! * [`schar`] -- the glyph encoding and its intern cache.
 //! * [`line`] -- building one line and diffing it onto the grid.
 //! * [`border`] -- the frame around a floating window.
+//!
+//! # Grids are named, not borrowed
+//!
+//! Every grid on screen is owned by something else -- a window, the message
+//! area, the popup menu, or the `default_grid` static -- and drawing on any
+//! of them emits UI events, which the compositor answers by reading *the
+//! very grid being drawn on* out of its own layer list. A `&mut ScreenGrid`
+//! held across such a call would therefore be aliased, and no `&mut` will
+//! thread down the draw path at all.
+//!
+//! So the whole draw path carries [`GridRef`]: a `Copy` handle that names a
+//! grid by address, checked once at its `unsafe` constructor, after which
+//! every borrow of the cells lasts exactly one accessor call. It is the one
+//! handle -- the compositor's layer, the statusline's canvas and the line
+//! batch's target are all `GridRef`, not wrappers around it. `DecorStateRef`
+//! and `Rex` are the same shape for the same reason.
 
 use crate::arabic::arabic_shape;
 use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
@@ -93,13 +109,8 @@ type sscratch_T = c_int;
 /// widest grid.
 static LINEBUF_SIZE: GlobalCell<size_t> = GlobalCell::new(0);
 
-/// A live grid, named by address rather than borrowed.
-///
-/// Drawing anything emits UI events, and the compositor reaches the very
-/// grid being drawn on through its own layer list; a `&mut ScreenGrid` held
-/// across such a call would be aliased. So the draw path carries the
-/// address, and every borrow of the cells lasts exactly one accessor call.
-/// `DecorStateRef` is the same shape for the same reason.
+/// A live grid, named by address rather than borrowed. See the module docs
+/// for why nothing in the draw path may hold a `&mut ScreenGrid`.
 #[derive(Clone, Copy)]
 pub struct GridRef(*mut ScreenGrid);
 

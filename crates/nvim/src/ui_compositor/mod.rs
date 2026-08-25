@@ -12,7 +12,7 @@
 //!
 //! Every grid in the stack is owned by something else — a window, the
 //! message area, the popup menu, or the `default_grid` static — so a layer
-//! is a bare pointer in C and a [`Layer`] here: one unsafe constructor
+//! is a bare pointer in C and a [`GridRef`] here: one unsafe constructor
 //! carrying the invariant, safe field access afterwards, which is what lets
 //! the composing itself be safe code. The scratch line and the stack are
 //! reached only through momentary [`GlobalCell`] borrows: composing
@@ -27,7 +27,6 @@
 mod scratch;
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
 use crate::drawscreen::windows_in_curtab;
@@ -51,123 +50,37 @@ use crate::ui::{
 };
 use scratch::{Bufs, blend, clear_invalid_attrs};
 
-/// One grid in the layer stack.
-///
-/// # Invariant
-///
-/// A `Layer` other than [`Layer::NONE`] addresses a live [`ScreenGrid`] on
-/// the main thread whose `chars`, `attrs` and `line_offset` arrays are
-/// allocated for its own `rows` × `cols`. The editor owns every one of them
-/// and they outlive any `Layer` made here, which is what makes the accessors
-/// below — and with them the composing — safe.
-#[derive(Copy, Clone)]
-struct Layer(GridRef);
-
-impl Layer {
-    /// No grid: C's `NULL`, which `curgrid` holds until [`ui_comp_init`].
-    const NONE: Layer = Layer(GridRef::NONE);
-
-    /// # Safety
-    /// `grid` must satisfy the invariant above.
-    const unsafe fn new(grid: *mut ScreenGrid) -> Self {
-        // SAFETY: the caller's promise.
-        Layer(unsafe { GridRef::new(grid) })
-    }
-
-    fn raw(self) -> *mut ScreenGrid {
-        self.0.raw()
-    }
-
-    fn is_none(self) -> bool {
-        self.0.is_none()
-    }
-
-    /// Whether both name the same grid.
-    fn same(self, other: Layer) -> bool {
-        self.0.same(other.0)
-    }
-
-    /// Where `row` of this grid starts in its cell buffers.
-    fn row_offset(self, row: usize) -> usize {
-        self.row_start(row as c_int)
-    }
-
-    /// `n` cells of text and attributes from `off`.
-    fn cells_at(&self, off: usize, n: usize) -> (&[schar_T], &[sattr_T]) {
-        self.cells(off, n)
-    }
-
-    /// One cell of text, possibly one past the run being copied.
-    fn char_at(self, off: usize) -> schar_T {
-        (*self).char_at(off)
-    }
-
-    /// One cell's attribute.
-    fn attr_at(self, off: usize) -> sattr_T {
-        (*self).attr_at(off)
-    }
-
-    /// Whether (`row`, `col`) of the screen falls inside this layer.
-    fn covers(self, row: c_int, col: c_int) -> bool {
-        row >= self.comp_row
-            && row < self.comp_row + self.rows
-            && col >= self.comp_col
-            && col < self.comp_col + self.cols
-    }
-
-    /// Records this layer's new position in the stack. The flag is what
-    /// makes the next flush re-announce the grid's index.
-    fn set_comp_index(mut self, index: usize) {
-        self.comp_index = index;
-        self.pending_comp_index_update = true;
-    }
-}
-
-impl Deref for Layer {
-    type Target = ScreenGrid;
-
-    fn deref(&self) -> &ScreenGrid {
-        &self.0
-    }
-}
-
-impl DerefMut for Layer {
-    fn deref_mut(&mut self) -> &mut ScreenGrid {
-        &mut self.0
-    }
-}
-
 /// The screen every other layer is composed onto.
-fn default_layer() -> Layer {
+fn default_layer() -> GridRef {
     // SAFETY: a static, whose arrays exist before anything composes.
-    unsafe { Layer::new(default_grid.ptr()) }
+    unsafe { GridRef::new(default_grid.ptr()) }
 }
 
 /// The message grid, which the `'msgsep'` row is also attributed to.
-fn msg_layer() -> Layer {
-    Layer(msg_grid_ref())
+fn msg_layer() -> GridRef {
+    msg_grid_ref()
 }
 
 /// The window's own grid.
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn win_layer(wp: *mut win_T) -> Layer {
+unsafe fn win_layer(wp: *mut win_T) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
-    unsafe { Layer::new(&raw mut (*wp).w_grid_alloc) }
+    unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) }
 }
 
 /// How many UIs this module draws for. Zero means nothing is composed.
 static composed_uis: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// The layer stack, bottom first.
-static LAYERS: GlobalCell<Vec<Layer>> = GlobalCell::new(Vec::new());
+static LAYERS: GlobalCell<Vec<GridRef>> = GlobalCell::new(Vec::new());
 
 static BUFS: GlobalCell<Bufs> = GlobalCell::new(Bufs::EMPTY);
 
 /// The grid the last [`ui_comp_set_grid`] selected: every coordinate the
 /// entry points take is relative to it.
-static curgrid: GlobalCell<Layer> = GlobalCell::new(Layer::NONE);
+static curgrid: GlobalCell<GridRef> = GlobalCell::new(GridRef::NONE);
 
 /// The size the default grid was last resized to, for the assertions that
 /// composing stays inside the scratch line. C keeps both under `NDEBUG`.
@@ -199,13 +112,13 @@ fn layer_count() -> usize {
     LAYERS.with(Vec::len)
 }
 
-fn layer_at(index: usize) -> Layer {
+fn layer_at(index: usize) -> GridRef {
     LAYERS.with(|stack| stack[index])
 }
 
 /// The topmost layer above the default grid covering (`row`, `col`) that
 /// `accept` takes.
-fn topmost_at(row: c_int, col: c_int, accept: impl Fn(Layer) -> bool) -> Option<Layer> {
+fn topmost_at(row: c_int, col: c_int, accept: impl Fn(GridRef) -> bool) -> Option<GridRef> {
     (1..layer_count())
         .rev()
         .map(layer_at)
@@ -259,17 +172,17 @@ pub fn ui_comp_should_draw() -> bool {
 /// line with `zindex`.
 pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
     let size = layer_count();
-    let layer = layer_at(layer_idx);
+    let mut layer = layer_at(layer_idx);
     if raise {
         while layer_idx < size - 1 && layer.zindex > layer_at(layer_idx + 1).zindex {
-            let above = layer_at(layer_idx + 1);
+            let mut above = layer_at(layer_idx + 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = above);
             above.set_comp_index(layer_idx);
             layer_idx += 1;
         }
     } else {
         while layer_idx > 0 && layer.zindex < layer_at(layer_idx - 1).zindex {
-            let below = layer_at(layer_idx - 1);
+            let mut below = layer_at(layer_idx - 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = below);
             below.set_comp_index(layer_idx);
             layer_idx -= 1;
@@ -283,7 +196,7 @@ pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
 /// as a new layer if it is not one already. Answers whether it moved.
 ///
 /// # Safety
-/// `grid` must satisfy [`Layer`]'s invariant.
+/// `grid` must satisfy [`GridRef`]'s contract.
 pub unsafe fn ui_comp_put_grid(
     grid: *mut ScreenGrid,
     row: c_int,
@@ -294,7 +207,7 @@ pub unsafe fn ui_comp_put_grid(
     on_top: bool,
 ) -> bool {
     // SAFETY: the caller's obligation.
-    let mut grid = unsafe { Layer::new(grid) };
+    let mut grid = unsafe { GridRef::new(grid) };
     let moved;
     grid.pending_comp_index_update = true;
 
@@ -367,10 +280,10 @@ pub unsafe fn ui_comp_put_grid(
 }
 
 /// # Safety
-/// `grid` must satisfy [`Layer`]'s invariant.
+/// `grid` must satisfy [`GridRef`]'s contract.
 pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
     // SAFETY: the caller's obligation.
-    let mut grid = unsafe { Layer::new(grid) };
+    let mut grid = unsafe { GridRef::new(grid) };
     debug_assert!(!grid.same(default_layer()), "grid != &default_grid");
     if grid.comp_index == 0 {
         return; // The grid was not a layer.
@@ -407,10 +320,10 @@ pub fn ui_comp_set_grid(handle: handle_T) -> bool {
 
 /// Moves `grid` up to `new_index`, sliding everything it passes down one,
 /// then recomposes each overlap it uncovered.
-fn raise_grid(grid: Layer, new_index: usize) {
+fn raise_grid(mut grid: GridRef, new_index: usize) {
     let old_index = grid.comp_index;
     for i in old_index..new_index {
-        let above = layer_at(i + 1);
+        let mut above = layer_at(i + 1);
         LAYERS.with_mut(|stack| stack[i] = above);
         above.set_comp_index(i);
     }
@@ -558,16 +471,16 @@ fn compose_into(
     startcol: Integer,
     endcol: Integer,
     skips: (usize, usize),
-) -> (Layer, usize, usize) {
+) -> (GridRef, usize, usize) {
     let default = default_layer();
     let (mut skipstart, mut skipend) = skips;
-    let mut top = Layer::NONE;
+    let mut top = GridRef::NONE;
     let width = (endcol - startcol) as usize;
     let line = &mut bufs.chars[..width];
     let attrbuf = &mut bufs.attrs[..width];
     // The backdrop 'winblend' and 'pumblend' blend against.
-    let bg_off = default.row_offset(row as usize) + startcol as usize;
-    let bg = default.cells_at(bg_off, width);
+    let bg_off = default.row_start(row as c_int) + startcol as usize;
+    let bg = default.cells(bg_off, width);
 
     let mut col = startcol as c_int;
     while Integer::from(col) < endcol {
@@ -613,9 +526,9 @@ fn compose_into(
             line[at..at + n].fill(msg_sep_char.get());
             attrbuf[at..at + n].fill(sep_attr);
         } else {
-            let grid_row = (row - Integer::from(grid.comp_row)) as usize;
-            let off = grid.row_offset(grid_row) + (col - grid.comp_col) as usize;
-            let (chars, attrs) = grid.cells_at(off, n);
+            let grid_row = row - Integer::from(grid.comp_row);
+            let off = grid.row_start(grid_row as c_int) + (col - grid.comp_col) as usize;
+            let (chars, attrs) = grid.cells(off, n);
             line[at..at + n].copy_from_slice(chars);
             attrbuf[at..at + n].copy_from_slice(attrs);
             if grid.comp_col + grid.cols > until && grid.char_at(off + n) == NUL as c_uint {
@@ -719,7 +632,7 @@ fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T
 }
 
 /// Recomposes the area under `grid`.
-fn compose_under(grid: Layer) {
+fn compose_under(grid: GridRef) {
     let bot = grid.comp_row + grid.rows;
     let right = grid.comp_col + grid.cols;
     compose_area(grid.comp_row, bot, grid.comp_col, right);
@@ -729,11 +642,11 @@ fn compose_under(grid: Layer) {
 /// composition — `'pumblend'` for the popup menu, say — needs after a change.
 ///
 /// # Safety
-/// `grid` must satisfy [`Layer`]'s invariant.
+/// `grid` must satisfy [`GridRef`]'s contract.
 pub unsafe fn ui_comp_compose_grid(grid: *mut ScreenGrid) {
     if ui_comp_should_draw() {
         // SAFETY: the caller's obligation.
-        compose_under(unsafe { Layer::new(grid) });
+        compose_under(unsafe { GridRef::new(grid) });
     }
 }
 
@@ -925,7 +838,7 @@ pub fn ui_comp_grid_scroll(
         for r in (top + (-rows).max(0)) as c_int..(bot - rows.max(0)) as c_int {
             // Upstream's TODO: a workaround for `win_update` scrolling twice
             // in a row, the second over space the first invalidated.
-            let row_off = cur.row_offset((r - cur.comp_row) as usize);
+            let row_off = cur.row_start(r - cur.comp_row);
             let off = row_off + left as usize - cur.comp_col as usize;
             if cur.attr_at(off) >= 0 {
                 compose_line(r.into(), left, right, 0);

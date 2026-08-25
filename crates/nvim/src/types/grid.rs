@@ -148,6 +148,23 @@ impl ScreenGrid {
         self.vcols[off]
     }
 
+    /// Whether screen cell (`row`, `col`) falls inside this grid where the
+    /// compositor has placed it.
+    pub(crate) fn covers(&self, row: ::core::ffi::c_int, col: ::core::ffi::c_int) -> bool {
+        row >= self.comp_row
+            && row < self.comp_row + self.rows
+            && col >= self.comp_col
+            && col < self.comp_col + self.cols
+    }
+
+    /// Record the grid's new position in the compositor's layer stack. The
+    /// flag travels with the index: it is what makes the next flush
+    /// re-announce it to the UI, so the two may never be written apart.
+    pub(crate) fn set_comp_index(&mut self, index: size_t) {
+        self.comp_index = index;
+        self.pending_comp_index_update = true;
+    }
+
     /// Overwrite the highlight attribute at `off`.
     pub(crate) fn set_attr(&mut self, off: size_t, attr: sattr_T) {
         self.attrs[off] = attr;

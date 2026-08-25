@@ -27,7 +27,7 @@
 //!   definitions: one entry per screen cell, sized to the line's width.
 //!   Allocating, clearing and filling it are the three C entry points, of
 //!   which the first two are still called from `window.rs` by pointer.
-//! * [`Canvas`] is the screen grid a line is painted on, and the `paint_*`
+//! * [`GridRef`] is the screen grid a line is painted on, and the `paint_*`
 //!   family below is the one-line batch API with its "a batch is in
 //!   progress" obligation discharged once here.
 //! * [`with_name_buff`] hands out the shared `NameBuff` scratch buffer,
@@ -520,47 +520,16 @@ pub unsafe fn stl_alloc_click_defs(
 // Painting
 // ---------------------------------------------------------------------------
 
-/// The screen grid one line of the status line, tab line, winbar or ruler is
-/// painted on.
+/// Begin a batch on `row` of a window-relative view.
 ///
-/// The batch API underneath is a global: [`Canvas::line_start`] opens the one
-/// batch there is and [`paint_flush`] closes it. Everything between the two
-/// addresses cells of that line by column, which is why the `paint_*` family
-/// is free functions rather than methods.
-#[derive(Clone, Copy)]
-pub(crate) struct Canvas(GridRef);
-
-impl Canvas {
-    /// The grid must stay live until the batch is flushed, which is what a
-    /// [`GridRef`] already promises.
-    pub(crate) const fn new(grid: GridRef) -> Self {
-        Canvas(grid)
-    }
-
-    /// Resolve `view` to the grid it really draws on, folding the view's
-    /// offsets into `row`/`col`.
-    ///
-    /// # Safety
-    /// `win_grid_alloc()` must already have run for this view.
-    pub(crate) unsafe fn adjust(view: GridView, row: &mut c_int, col: &mut c_int) -> Self {
-        // SAFETY: the caller's promise; the two are locals of the caller.
-        Canvas(unsafe { grid_adjust(view, row, col) })
-    }
-
-    /// Begin a batch on `row`, whose column zero is `col` of the grid.
-    ///
-    /// # Safety
-    /// No other batch may be in progress; one [`paint_flush`] must follow.
-    pub(crate) unsafe fn line_start(self, row: c_int, col: c_int) {
-        // SAFETY: the caller's promise, and the constructor's.
-        unsafe { screengrid_line_start(self.0, row, col) };
-    }
-}
-
-/// [`Canvas::line_start`] against a window-relative view.
+/// The batch API underneath is a global: this (or [`screengrid_line_start`]
+/// for the callers that already hold the grid) opens the one batch there is
+/// and [`paint_flush`] closes it. Everything between the two addresses cells
+/// of that line by column, which is why the `paint_*` family is free
+/// functions rather than methods on the grid.
 ///
 /// # Safety
-/// As [`Canvas::line_start`].
+/// No other batch may be in progress; one [`paint_flush`] must follow.
 pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
     // SAFETY: the caller's promise.
     unsafe { grid_line_start(view, row) };
@@ -568,7 +537,7 @@ pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
 
 /// Put one glyph in the open batch.
 pub(crate) fn paint_schar(col: c_int, sc: schar_T, attr: c_int) {
-    // SAFETY: the batch is open for as long as a `Canvas` is being painted.
+    // SAFETY: the batch is open for as long as a line is being painted.
     unsafe { grid_line_put_schar(col, sc, attr) };
 }
 
