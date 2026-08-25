@@ -21,6 +21,47 @@ pub const MAX_SCHAR_SIZE: c_int = 32;
 /// 24 bits by [`schar_from_buf`], which is what leaves room for the tag byte.
 static GLYPH_CACHE: GlobalCell<Set_glyph> = GlobalCell::new(SET_INIT);
 
+/// The glyph intern table, as a handle.
+///
+/// `Set_glyph` is the C-shaped hash set `map.rs` operates on by pointer, and
+/// interning a glyph can reallocate the key arena, so the table is named
+/// rather than borrowed: one acquisition per entry point, every borrow one
+/// accessor call. [`GridRef`] is the same shape for the same reason.
+#[derive(Clone, Copy)]
+struct GlyphCache(*mut Set_glyph);
+
+impl GlyphCache {
+    /// The address, for the `mh_*` operations that take the whole set.
+    fn raw(self) -> *mut Set_glyph {
+        self.0
+    }
+
+    /// The hash part, for `mh_clear`.
+    fn hash(self) -> *mut MapHash {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { &raw mut (*self.0).h }
+    }
+
+    /// How many bytes of interned keys there are; every valid index is under
+    /// it. `mh_put_glyph` hands out byte offsets into one arena.
+    fn keys_len(self) -> uint32_t {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { (*self.0).h.n_keys }
+    }
+
+    /// The interned bytes at `idx`, NUL-terminated.
+    fn key(self, idx: uint32_t) -> *mut c_char {
+        // SAFETY: the only constructor names a `static`; `keys` is the arena
+        // `mh_put_glyph` handed `idx` out of.
+        unsafe { (*self.0).keys.add(idx as usize) }
+    }
+}
+
+/// The one glyph intern table.
+fn glyph_cache() -> GlyphCache {
+    GlyphCache(GLYPH_CACHE.ptr())
+}
+
 const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0,
     size: 0,
@@ -82,7 +123,7 @@ pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
 
         let str = String_0::from_raw_parts(buf as *mut c_char, len);
         let mut status: MHPutStatus = kMHExisting;
-        let idx = mh_put_glyph(GLYPH_CACHE.ptr(), str, &raw mut status);
+        let idx = mh_put_glyph(glyph_cache().raw(), str, &raw mut status);
         debug_assert!(idx < 0xffffff, "idx < 0xFFFFFF");
         0xff_u32.wrapping_add(idx << 8)
     }
@@ -99,7 +140,7 @@ pub unsafe fn schar_cache_clear_if_full() -> bool {
     unsafe {
         // The real ceiling is (1<<24)-1; this leaves margin until the next
         // update_screen.
-        if (*GLYPH_CACHE.ptr()).h.n_keys > (1 << 21) {
+        if glyph_cache().keys_len() > (1 << 21) {
             schar_cache_clear();
             return true;
         }
@@ -112,7 +153,7 @@ pub unsafe fn schar_cache_clear_if_full() -> bool {
 pub unsafe fn schar_cache_clear() {
     unsafe {
         decor_check_invalid_glyphs();
-        mh_clear(&raw mut (*GLYPH_CACHE.ptr()).h);
+        mh_clear(glyph_cache().hash());
 
         // The char options kept their original strings, so their parsed
         // schar_T values can be regenerated against the clean cache. Cell
@@ -145,8 +186,8 @@ pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
     unsafe {
         let (src, len) = if schar_high(sc) {
             let idx = schar_idx(sc);
-            debug_assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
-            let key = (*GLYPH_CACHE.ptr()).keys.add(idx as usize);
+            debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
+            let key = glyph_cache().key(idx);
             (key.cast_const(), strlen(key))
         } else {
             let inline = (&raw const sc).cast::<c_char>();
@@ -166,8 +207,8 @@ pub unsafe fn schar_len(sc: schar_T) -> size_t {
     unsafe {
         if schar_high(sc) {
             let idx = schar_idx(sc);
-            debug_assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
-            strlen((*GLYPH_CACHE.ptr()).keys.add(idx as usize))
+            debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
+            strlen(glyph_cache().key(idx))
         } else {
             strnlen((&raw const sc).cast::<c_char>(), 4)
         }
@@ -197,11 +238,11 @@ pub unsafe fn schar_cells(sc: schar_T) -> c_int {
 unsafe fn schar_get_first_byte(sc: schar_T) -> c_char {
     unsafe {
         debug_assert!(
-            !(schar_high(sc) && schar_idx(sc) >= (*GLYPH_CACHE.ptr()).h.n_keys),
+            !(schar_high(sc) && schar_idx(sc) >= glyph_cache().keys_len()),
             "!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys)"
         );
         if schar_high(sc) {
-            *(*GLYPH_CACHE.ptr()).keys.add(schar_idx(sc) as usize)
+            *glyph_cache().key(schar_idx(sc))
         } else {
             *(&raw const sc).cast::<c_char>()
         }
@@ -211,8 +252,9 @@ unsafe fn schar_get_first_byte(sc: schar_T) -> c_char {
 /// # Safety
 /// `sc` must be a glyph this process produced.
 pub unsafe fn schar_get_first_codepoint(sc: schar_T) -> c_int {
+    let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
         schar_get(sc_buf.as_mut_ptr(), sc);
         utf_ptr2char(sc_buf.as_ptr())
     }
@@ -244,8 +286,9 @@ unsafe fn schar_in_arabic_block(sc: schar_T) -> bool {
 /// # Safety
 /// `sc` must be a glyph this process produced.
 unsafe fn schar_get_first_two_codepoints(sc: schar_T) -> (c_int, c_int) {
+    let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
         schar_get(sc_buf.as_mut_ptr(), sc);
 
         let c0 = utf_ptr2char(sc_buf.as_ptr());
@@ -304,11 +347,12 @@ pub unsafe fn line_do_arabic_shape(buf: &mut [schar_T]) {
 /// `sc` must be a glyph this process produced whose first two codepoints are
 /// `c0` and `c1`.
 unsafe fn reshape(sc: schar_T, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> schar_T {
+    let mut old = [0 as c_char; MAX_SCHAR_SIZE as usize];
+    let mut new = [0 as c_char; MAX_SCHAR_SIZE as usize];
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut old = [0 as c_char; MAX_SCHAR_SIZE as usize];
         schar_get(old.as_mut_ptr(), sc);
 
-        let mut new = [0 as c_char; MAX_SCHAR_SIZE as usize];
         let mut len = utf_char2bytes(c0new, new.as_mut_ptr()) as size_t;
         if c1new != 0 {
             len += utf_char2bytes(c1new, new.as_mut_ptr().add(len)) as size_t;
