@@ -28,8 +28,10 @@ static lastc_bytelen: GlobalCell<c_int> = GlobalCell::new(1);
 /// One `schar_T`'s bytes plus its NUL — what `lastc_bytes` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
-pub fn last_csearch() -> *const c_char {
-    lastc_bytes.ptr() as *const c_char
+/// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`
+/// reads them while the very dictionary it is building can run code.
+pub fn last_csearch() -> [c_char; SCHAR_BYTES] {
+    lastc_bytes.get()
 }
 
 pub fn last_csearch_forward() -> c_int {
@@ -45,16 +47,19 @@ pub fn last_csearch_until() -> c_int {
 /// # Safety
 /// `s` must point at `len` readable bytes.
 pub unsafe fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) {
-    unsafe {
-        lastc.set(c as u8);
-        lastc_bytelen.set(len);
-        let bytes = lastc_bytes.ptr();
-        if len != 0 {
-            ptr::copy_nonoverlapping(s, bytes.cast::<c_char>(), len as usize);
-        } else {
-            (*bytes).fill(0);
-        }
-    }
+    lastc.set(c as u8);
+    lastc_bytelen.set(len);
+    // Upstream writes over the front of the old value rather than replacing
+    // it, and `lastc_bytelen` is what says how much of it counts.
+    let mut bytes = if len != 0 {
+        lastc_bytes.get()
+    } else {
+        [0; SCHAR_BYTES]
+    };
+    // SAFETY: the caller's promise of `len` readable bytes, and `len` is a
+    // character's length, which fits.
+    unsafe { ptr::copy_nonoverlapping(s, bytes.as_mut_ptr(), len as usize) };
+    lastc_bytes.set(bytes);
 }
 
 pub fn set_csearch_direction(cdir: Direction) {
@@ -88,16 +93,18 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
                 lastc.set(c as u8);
                 set_csearch_direction(dir as Direction);
                 set_csearch_until(c_int::from(t_cmd));
+                let mut bytes = lastc_bytes.get();
                 if (*cap).nchar_len != 0 {
                     lastc_bytelen.set((*cap).nchar_len);
                     ptr::copy_nonoverlapping(
                         (&raw const (*cap).nchar_composing).cast::<c_char>(),
-                        lastc_bytes.ptr().cast::<c_char>(),
+                        bytes.as_mut_ptr(),
                         (*cap).nchar_len as usize,
                     );
                 } else {
-                    lastc_bytelen.set(utf_char2bytes(c, lastc_bytes.ptr().cast::<c_char>()));
+                    lastc_bytelen.set(utf_char2bytes(c, bytes.as_mut_ptr()));
                 }
+                lastc_bytes.set(bytes);
             }
         } else {
             // Repeat the previous search.
@@ -126,7 +133,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
         let line = get_cursor_line_ptr();
         let len = get_cursor_line_len();
         let bytelen = lastc_bytelen.get();
-        let bytes = lastc_bytes.ptr().cast::<c_char>();
+        let bytes = lastc_bytes.get();
         let mut col = (*curwin.get()).w_cursor.col as c_int;
 
         while count > 0 {
@@ -146,7 +153,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
                 let hit = if bytelen <= 1 {
                     *line.offset(col as isize) as c_int == c
                 } else {
-                    strncmp(line.offset(col as isize), bytes, bytelen as size_t) == 0
+                    strncmp(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t) == 0
                 };
                 if hit && stop {
                     break;

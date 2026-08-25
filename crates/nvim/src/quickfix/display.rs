@@ -16,6 +16,9 @@ use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::semsg_c;
 use crate::types::{CMD_colder, CMD_lolder, IOSIZE};
 use core::ffi::{CStr, c_char, c_int};
+use std::ffi::CString;
+
+use crate::cstr;
 use core::{ptr, slice};
 
 /// The shared line buffer. See [`build_line`].
@@ -155,7 +158,10 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
             if (*qfp).qf_lnum != 0 {
                 qf_range_text(out, qfp);
             }
-            push_cstr(out, qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr));
+            push_cstr(
+                out,
+                qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr).as_ptr(),
+            );
         });
         if position[0] != 0 {
             msg_puts_hl(position.as_ptr().cast(), qfLine_hl_id.get(), false);
@@ -446,43 +452,37 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
 /// The type of an entry as it is printed: `" error"`, `" warning"`, … plus
 /// the error number when there is one.
 ///
-/// The answer points at one of two static buffers, which the next call
-/// overwrites.
-pub(crate) fn qf_types(c: c_int, nr: c_int) -> *const c_char {
-    /// Room for an unrecognized type: a space, the letter and a NUL.
-    static OTHER: GlobalCell<[c_char; 3]> = GlobalCell::new([0; 3]);
-    /// Room for the longest type plus " %3d".
-    static NUMBERED: GlobalCell<[c_char; 20]> = GlobalCell::new([0; 20]);
+/// Upstream answers one of two static buffers the next call overwrites; this
+/// answers a string the caller owns.
+pub(crate) fn qf_types(c: c_int, nr: c_int) -> CString {
+    const W: c_int = b'W' as c_int;
+    const LOWER_W: c_int = b'w' as c_int;
+    const I: c_int = b'I' as c_int;
+    const LOWER_I: c_int = b'i' as c_int;
+    const N: c_int = b'N' as c_int;
+    const LOWER_N: c_int = b'n' as c_int;
+    const E: c_int = b'E' as c_int;
+    const LOWER_E: c_int = b'e' as c_int;
+    let name: &[u8] = match c {
+        W | LOWER_W => b" warning",
+        I | LOWER_I => b" info",
+        N | LOWER_N => b" note",
+        E | LOWER_E => b" error",
+        0 if nr > 0 => b" error",
+        0 | 1 => b"",
+        other => return numbered(&[b' ', other as u8], nr),
+    };
+    numbered(name, nr)
+}
 
-    // SAFETY: both buffers are only ever read back through the answer, and
-    // `snprintf` truncates to the size it is given.
-    unsafe {
-        let name = if c == 'W' as c_int || c == 'w' as c_int {
-            c" warning".as_ptr()
-        } else if c == 'I' as c_int || c == 'i' as c_int {
-            c" info".as_ptr()
-        } else if c == 'N' as c_int || c == 'n' as c_int {
-            c" note".as_ptr()
-        } else if c == 'E' as c_int || c == 'e' as c_int || c == 0 && nr > 0 {
-            c" error".as_ptr()
-        } else if c == 0 || c == 1 {
-            c"".as_ptr()
-        } else {
-            (*OTHER.ptr()) = [' ' as c_char, c as c_char, 0];
-            OTHER.ptr().cast::<c_char>()
-        };
-        if nr <= 0 {
-            return name;
-        }
-        snprintf(
-            NUMBERED.ptr().cast(),
-            size_of::<[c_char; 20]>(),
-            c"%s %3d".as_ptr(),
-            name,
-            nr,
-        );
-        NUMBERED.ptr().cast::<c_char>()
+/// `qf_types`' tail: `name`, with ` %3d` of `nr` after it when there is one.
+fn numbered(name: &[u8], nr: c_int) -> CString {
+    if nr <= 0 {
+        return cstr::owned(name);
     }
+    let mut text = name.to_vec();
+    text.extend_from_slice(format!(" {nr:3}").as_bytes());
+    cstr::owned(&text)
 }
 
 /// Open the entry under the cursor in the quickfix window, in a new window

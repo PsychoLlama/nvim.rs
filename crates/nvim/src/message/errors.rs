@@ -350,14 +350,6 @@ pub unsafe fn emsg_invreg(name: c_int) {
     }
 }
 
-/// The scratch buffer [`semsg_c!`](crate::semsg_c) formats one error into.
-static semsg_buf: GlobalCell<[c_char; SEMSG_ERRBUF_LEN]> = GlobalCell::new([0; SEMSG_ERRBUF_LEN]);
-
-/// The scratch buffer [`semsg_multiline_c!`](crate::semsg_multiline_c) formats
-/// one error into. A multiline error can be much longer than one line's worth.
-static semsg_multiline_buf: GlobalCell<[c_char; SEMSG_MULTILINE_ERRBUF_LEN]> =
-    GlobalCell::new([0; SEMSG_MULTILINE_ERRBUF_LEN]);
-
 /// How much of an error message [`semsg_c!`](crate::semsg_c) keeps.
 pub const SEMSG_ERRBUF_LEN: size_t = 1025;
 
@@ -365,40 +357,46 @@ pub const SEMSG_ERRBUF_LEN: size_t = 1025;
 /// keeps.
 pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
 
-/// Where [`semsg_c!`](crate::semsg_c) formats. The macro's first half; not
-/// meant to be called directly.
+/// Where [`semsg_c!`](crate::semsg_c) formats: a buffer belonging to the
+/// expansion, not the shared one upstream reuses. Formatting an error can
+/// run an autocommand -- `emsg` does -- and that autocommand can raise an
+/// error of its own, which used to overwrite the message being assembled.
+/// The macro's first half; not meant to be called directly.
 #[doc(hidden)]
-pub fn semsg_errbuf() -> *mut c_char {
-    semsg_buf.ptr().cast()
+pub fn semsg_errbuf() -> [c_char; SEMSG_ERRBUF_LEN] {
+    [0; SEMSG_ERRBUF_LEN]
 }
 
-/// Where [`semsg_multiline_c!`](crate::semsg_multiline_c) formats. The macro's
-/// first half; not meant to be called directly.
+/// [`semsg_errbuf`] for [`semsg_multiline_c!`](crate::semsg_multiline_c). A
+/// multiline error can be much longer than one line's worth.
 #[doc(hidden)]
-pub fn semsg_multiline_errbuf() -> *mut c_char {
-    semsg_multiline_buf.ptr().cast()
+pub fn semsg_multiline_errbuf() -> [c_char; SEMSG_MULTILINE_ERRBUF_LEN] {
+    [0; SEMSG_MULTILINE_ERRBUF_LEN]
 }
 
-/// Report whatever was formatted into [`semsg_errbuf`] as an error. The
-/// second half of [`semsg_c!`](crate::semsg_c); not meant to be called
-/// directly. The macro has already established that errors are on.
+/// Report what was formatted into `buf` as an error. The second half of
+/// [`semsg_c!`](crate::semsg_c); not meant to be called directly. The macro
+/// has already established that errors are on.
 ///
 /// # Safety
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
-pub unsafe fn semsg_report() -> bool {
-    unsafe { emsg(semsg_errbuf()) }
+pub unsafe fn semsg_report(buf: &[c_char; SEMSG_ERRBUF_LEN]) -> bool {
+    unsafe { emsg(buf.as_ptr()) }
 }
 
-/// Report whatever was formatted into [`semsg_multiline_errbuf`] as a
-/// multiline error of kind `kind`. The second half of
+/// Report what was formatted into `buf` as a multiline error of kind
+/// `kind`. The second half of
 /// [`semsg_multiline_c!`](crate::semsg_multiline_c).
 ///
 /// # Safety
 /// `kind` must be a valid C string.
 #[doc(hidden)]
-pub unsafe fn semsg_multiline_report(kind: *const c_char) -> bool {
-    unsafe { emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true) }
+pub unsafe fn semsg_multiline_report(
+    buf: &[c_char; SEMSG_MULTILINE_ERRBUF_LEN],
+    kind: *const c_char,
+) -> bool {
+    unsafe { emsg_multiline(buf.as_ptr(), kind, HLF_E, true) }
 }
 
 /// An internal error: same as [`emsg`], but skipped when errors are off.

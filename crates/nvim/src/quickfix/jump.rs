@@ -268,6 +268,7 @@ unsafe fn qf_jump_print_msg(
     old_curbuf: *mut buf_T,
     old_lnum: linenr_T,
 ) {
+    let mut head = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
     unsafe {
         // Update the screen before showing the message, unless messages
@@ -279,7 +280,7 @@ unsafe fn qf_jump_print_msg(
             }
         }
         let len = vim_snprintf_safelen(
-            IObuff.ptr().cast(),
+            head.as_mut_ptr(),
             IOSIZE as size_t,
             gettext(c"(%d of %d)%s%s: ".as_ptr()),
             qf_index,
@@ -289,10 +290,10 @@ unsafe fn qf_jump_print_msg(
             } else {
                 c"".as_ptr()
             },
-            qf_types((*qf_ptr).qf_type as c_int, (*qf_ptr).qf_nr),
+            qf_types((*qf_ptr).qf_type as c_int, (*qf_ptr).qf_nr).as_ptr(),
         );
         let text = build_line(|out| {
-            out.extend_from_slice(slice::from_raw_parts(IObuff.ptr().cast::<u8>(), len));
+            out.extend_from_slice(slice::from_raw_parts(head.as_ptr().cast::<u8>(), len));
             // The message itself, without leading whitespace or newlines.
             qf_fmt_text(out, skipwhite((*qf_ptr).qf_text));
         });

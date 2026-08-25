@@ -217,7 +217,7 @@ unsafe fn qf_buf_add_line(
             out.push(b'|');
             if (*qfp).qf_lnum > 0 {
                 qf_range_text(out, qfp);
-                push_cstr(out, qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr));
+                out.extend(qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr).to_bytes());
             } else if !(*qfp).qf_pattern.is_null() {
                 qf_fmt_text(out, (*qfp).qf_pattern);
             }

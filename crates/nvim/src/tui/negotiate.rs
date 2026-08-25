@@ -222,20 +222,33 @@ pub unsafe fn tui_query_bg_color(tui: *mut TUIData) {
 
 // -------------------------------------------------------------- the backspace
 
-/// The terminal's own erase character, as `stty` reports it.
-static STTY_ERASE: GlobalCell<[c_char; 2]> = GlobalCell::new([0, 0]);
+/// Every one-character C string, indexed by that character.
+///
+/// libtermkey keeps the capability string it is handed, so the erase
+/// character has to be spelled somewhere that outlives the call. Upstream
+/// uses a mutable static it rewrites; a table of all 256 answers is the same
+/// storage, immutable, and index 0 is the empty string the caller tests for.
+static ONE_CHAR_STRINGS: [[c_char; 2]; 256] = {
+    let mut table = [[0 as c_char; 2]; 256];
+    let mut byte = 0usize;
+    while byte < 256 {
+        table[byte][0] = byte as u8 as c_char;
+        byte += 1;
+    }
+    table
+};
 
 /// Read the erase character out of the terminal's line discipline.
 ///
 /// # Safety
 /// `input` must point to a live [`TermInput`].
 unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
+    let mut erase = 0u8;
     // SAFETY: the caller guarantees `input`; `tcgetattr` fills the termios.
     unsafe {
         let mut t: termios = core::mem::zeroed();
         if tcgetattr((*input).in_fd, &raw mut t) != -1 {
-            (*STTY_ERASE.ptr())[0] = t.c_cc[VERASE] as c_char;
-            (*STTY_ERASE.ptr())[1] = 0;
+            erase = t.c_cc[VERASE];
             logmsg_c!(
                 LOGLVL_DBG,
                 core::ptr::null(),
@@ -243,11 +256,11 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
                 0,
                 true,
                 c"stty/termios:erase=%s".as_ptr(),
-                STTY_ERASE.ptr(),
+                ONE_CHAR_STRINGS[usize::from(erase)].as_ptr(),
             );
         }
-        STTY_ERASE.ptr().cast()
     }
+    ONE_CHAR_STRINGS[usize::from(erase)].as_ptr()
 }
 
 /// Correct libtermkey's idea of the backspace and delete keys.

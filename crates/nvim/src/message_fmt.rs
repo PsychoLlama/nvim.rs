@@ -123,13 +123,14 @@ macro_rules! semsg_c {
             $(let _ = $arg;)*
             true
         } else {
+            let mut errbuf = $crate::message::semsg_errbuf();
             $crate::strings::vim_snprintf(
-                $crate::message::semsg_errbuf(),
+                errbuf.as_mut_ptr(),
                 $crate::message::SEMSG_ERRBUF_LEN,
                 fmt,
                 $($arg,)*
             );
-            $crate::message::semsg_report()
+            $crate::message::semsg_report(&errbuf)
         }
     }};
 }
@@ -154,13 +155,14 @@ macro_rules! semsg_multiline_c {
             $(let _ = $arg;)*
             true
         } else {
+            let mut errbuf = $crate::message::semsg_multiline_errbuf();
             $crate::strings::vim_snprintf(
-                $crate::message::semsg_multiline_errbuf(),
+                errbuf.as_mut_ptr(),
                 $crate::message::SEMSG_MULTILINE_ERRBUF_LEN,
                 fmt,
                 $($arg,)*
             );
-            $crate::message::semsg_multiline_report(kind)
+            $crate::message::semsg_multiline_report(&errbuf, kind)
         }
     }};
 }

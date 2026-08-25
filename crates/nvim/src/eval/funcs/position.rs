@@ -565,10 +565,11 @@ unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
 pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the dispatcher's cleared return value; the three
     // readers answer from the process-wide character-search state.
+    let csearch = last_csearch();
     unsafe {
         tv_dict_alloc_ret(rettv);
         let dict = (*rettv).vval.v_dict;
-        tv_dict_add_str(dict, c"char".as_ptr(), 4, last_csearch());
+        tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr());
         tv_dict_add_nr(
             dict,
             c"forward".as_ptr(),
