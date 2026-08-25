@@ -254,7 +254,7 @@ pub(crate) unsafe fn call_user_expand_func(
     xp: *mut expand_T,
 ) -> *mut c_void {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let mut ccline = Cc::current();
         let mut keep = 0 as c_char;
         let mut args = [typval_T {
             v_type: VAR_UNKNOWN,
@@ -267,9 +267,9 @@ pub(crate) unsafe fn call_user_expand_func(
             return ptr::null_mut();
         }
 
-        if !(*ccline).cmdbuff.is_null() {
-            keep = *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize);
-            *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = 0;
+        if !ccline.cmdbuff.is_null() {
+            keep = *ccline.cmdbuff.offset(ccline.cmdlen as isize);
+            *ccline.cmdbuff.offset(ccline.cmdlen as isize) = 0;
         }
 
         let pat = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
@@ -286,8 +286,8 @@ pub(crate) unsafe fn call_user_expand_func(
         let ret = user_expand_func((*xp).xp_arg, 3, args.as_mut_ptr());
 
         current_sctx.set(save_current_sctx);
-        if !(*ccline).cmdbuff.is_null() {
-            *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = keep;
+        if !ccline.cmdbuff.is_null() {
+            *ccline.cmdbuff.offset(ccline.cmdlen as isize) = keep;
         }
 
         xfree(pat as *mut c_void);

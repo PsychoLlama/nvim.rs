@@ -558,7 +558,7 @@ pub unsafe fn set_cmd_context(
     use_ccline: bool,
 ) {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let mut ccline = Cc::current();
         let mut old_char = NUL as c_char;
 
         // Avoid a UMR warning from Purify, only save the character if it has
@@ -568,13 +568,13 @@ pub unsafe fn set_cmd_context(
         }
         *str.offset(col as isize) = NUL as c_char;
 
-        if use_ccline && (*ccline).cmdfirstc == '=' as c_int {
+        if use_ccline && ccline.cmdfirstc == '=' as c_int {
             // Pass CMD_SIZE because there is no real command.
             set_context_for_expression(xp, str, CMD_SIZE);
-        } else if use_ccline && (*ccline).input_fn != 0 {
-            (*xp).xp_context = (*ccline).xp_context;
-            (*xp).xp_pattern = (*ccline).cmdbuff;
-            (*xp).xp_arg = (*ccline).xp_arg;
+        } else if use_ccline && ccline.input_fn != 0 {
+            (*xp).xp_context = ccline.xp_context;
+            (*xp).xp_pattern = ccline.cmdbuff;
+            (*xp).xp_arg = ccline.xp_arg;
             if (*xp).xp_context == ExpandContext::ShellCmdLine {
                 let mut context = (*xp).xp_context;
                 set_context_for_wildcard_arg(

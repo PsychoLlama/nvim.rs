@@ -27,7 +27,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
             // Obscured (`inputsecret()`): one '*' per *character*.
             content = arena_array(&raw mut arena, 1);
             let mut len: size_t = 0;
-            let mut p = (*ccline.ptr()).cmdbuff;
+            let mut p = Cc::current().cmdbuff;
             while *p != 0 {
                 len += 1;
                 p = p.offset(utfc_ptr2len(p) as isize);
@@ -175,8 +175,8 @@ pub unsafe fn cmdline_screen_cleared() {
             ui_call_cmdline_block_show(cmdline_block.get());
         }
 
-        let mut prev_level = (*ccline.ptr()).level - 1;
-        let mut line = (*ccline.ptr()).prev_ccline;
+        let mut prev_level = Cc::current().level - 1;
+        let mut line = Cc::current().prev_ccline;
         while prev_level > 0 && !line.is_null() {
             if (*line).level == prev_level {
                 // Don't redraw a command line already shown in the cmdline
@@ -199,8 +199,8 @@ pub unsafe fn cmdline_ui_flush() {
         if !ui_has(kUICmdline) {
             return;
         }
-        let mut level = (*ccline.ptr()).level;
-        let mut line = ccline.ptr();
+        let mut level = Cc::current().level;
+        let mut line = Cc::current().raw();
         while level > 0 && !line.is_null() {
             if (*line).level == level {
                 let redraw_state = (*line).redraw_state;

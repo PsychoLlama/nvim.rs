@@ -19,7 +19,7 @@ use crate::types::{ExpandContext, FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
 /// redraw and completion code needs, which runs while `cmdbuff` is still
 /// being built.
 pub fn get_cmdline_info() -> *mut CmdlineInfo {
-    ccline.ptr()
+    Cc::current().raw()
 }
 
 /// The id of the most recently *started* command line, which
@@ -38,12 +38,12 @@ pub(crate) unsafe fn get_ccline_ptr() -> *mut CmdlineInfo {
     unsafe {
         if State.get() & MODE_CMDLINE == 0 {
             ::core::ptr::null_mut::<CmdlineInfo>()
-        } else if !(*ccline.ptr()).cmdbuff.is_null() {
-            ccline.ptr()
-        } else if !(*ccline.ptr()).prev_ccline.is_null()
-            && !(*(*ccline.ptr()).prev_ccline).cmdbuff.is_null()
+        } else if !Cc::current().cmdbuff.is_null() {
+            Cc::current().raw()
+        } else if !Cc::current().prev_ccline.is_null()
+            && !(*Cc::current().prev_ccline).cmdbuff.is_null()
         {
-            (*ccline.ptr()).prev_ccline
+            Cc::current().prev_ccline
         } else {
             ::core::ptr::null_mut::<CmdlineInfo>()
         }
@@ -299,8 +299,8 @@ pub unsafe fn f_setcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// The first character of the current command line (`:`, `/`, `?`, …).
-pub unsafe fn get_cmdline_firstc() -> ::core::ffi::c_int {
-    unsafe { (*ccline.ptr()).cmdfirstc }
+pub fn get_cmdline_firstc() -> ::core::ffi::c_int {
+    Cc::current().cmdfirstc
 }
 
 /// `wildtrigger()` function: ask the key loop to complete, as if `'wildchar'`

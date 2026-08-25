@@ -118,7 +118,7 @@ pub unsafe fn showmatches(
     noselect: bool,
 ) -> Expanded {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let mut ccline = Cc::current();
         let mut numMatches = 0;
         let mut matches = ptr::null_mut();
         let showtail;
@@ -130,8 +130,8 @@ pub unsafe fn showmatches(
             }
             let retval = expand_cmdline(
                 xp,
-                (*ccline).cmdbuff,
-                (*ccline).cmdpos,
+                ccline.cmdbuff,
+                ccline.cmdpos,
                 &raw mut numMatches,
                 &raw mut matches,
             );
@@ -146,7 +146,7 @@ pub unsafe fn showmatches(
         }
 
         if cmdline_compl_use_pum(display_wildmenu && !display_list) {
-            cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
+            cmdline_pum_create(Cc::current(), xp, matches, numMatches, showtail, noselect);
             compl_selected.set(if noselect { -1 } else { 0 });
             pum_clear();
             cmdline_pum_display(true);

@@ -60,7 +60,7 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
 pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         if (*s).histype == HIST_INVALID || get_hislen() == 0 || (*s).firstc == NUL {
             return KeyOutcome::NotChanged; // no history
         }
@@ -69,9 +69,9 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
 
         // Save the current command string, so that it can be restored later.
         if (*s).lookfor.is_null() {
-            (*s).lookfor = xstrnsave((*cc).cmdbuff, (*cc).cmdlen as size_t);
-            *(*s).lookfor.offset((*cc).cmdpos as isize) = NUL as ::core::ffi::c_char;
-            (*s).lookforlen = (*cc).cmdpos;
+            (*s).lookfor = xstrnsave(cc.cmdbuff, cc.cmdlen as size_t);
+            *(*s).lookfor.offset(cc.cmdpos as isize) = NUL as ::core::ffi::c_char;
+            (*s).lookforlen = cc.cmdpos;
         }
 
         let next_match = (*s).c == K_DOWN
@@ -125,20 +125,19 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
                         // Replace the old separator with the new one, unless
                         // it is escaped.
                         if pass > 0 {
-                            *(*cc).cmdbuff.offset(len as isize) =
-                                (*s).firstc as ::core::ffi::c_char;
+                            *cc.cmdbuff.offset(len as isize) = (*s).firstc as ::core::ffi::c_char;
                         }
                     } else {
                         // Escape the new separator, unless it is already
                         // escaped.
                         if *p.offset(j) as ::core::ffi::c_int == (*s).firstc && unescaped(j) {
                             if pass > 0 {
-                                *(*cc).cmdbuff.offset(len as isize) = '\\' as ::core::ffi::c_char;
+                                *cc.cmdbuff.offset(len as isize) = '\\' as ::core::ffi::c_char;
                             }
                             len += 1;
                         }
                         if pass > 0 {
-                            *(*cc).cmdbuff.offset(len as isize) = *p.offset(j);
+                            *cc.cmdbuff.offset(len as isize) = *p.offset(j);
                         }
                     }
                     len += 1;
@@ -149,14 +148,14 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
                     alloc_cmdbuff(len);
                 }
             }
-            *(*cc).cmdbuff.offset(len as isize) = NUL as ::core::ffi::c_char;
-            (*cc).cmdlen = len;
-            (*cc).cmdpos = len;
+            *cc.cmdbuff.offset(len as isize) = NUL as ::core::ffi::c_char;
+            cc.cmdlen = len;
+            cc.cmdpos = len;
         } else {
             alloc_cmdbuff(plen);
-            strcpy((*cc).cmdbuff, p);
-            (*cc).cmdlen = plen;
-            (*cc).cmdpos = plen;
+            strcpy(cc.cmdbuff, p);
+            cc.cmdlen = plen;
+            cc.cmdpos = plen;
         }
 
         redrawcmd();

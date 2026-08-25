@@ -30,7 +30,7 @@ const _: () = assert!(
 /// The horizontal arrows step through the matches, and `<CR>` after a menu
 /// name ending in `.` opens the submenu rather than executing.
 pub(crate) unsafe fn wildmenu_translate_key(
-    cclp: *mut CmdlineInfo,
+    cclp: Cc,
     key: c_int,
     xp: *mut expand_T,
     did_wild_list: bool,
@@ -47,9 +47,9 @@ pub(crate) unsafe fn wildmenu_translate_key(
 
         // Hitting CR after "emenu Name.": complete the submenu.
         if (*xp).xp_context == ExpandContext::Menunames
-            && (*cclp).cmdpos > 1
-            && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 1) as isize) == b'.' as c_char
-            && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 2) as isize) != b'\\' as c_char
+            && cclp.cmdpos > 1
+            && *cclp.cmdbuff.offset((cclp.cmdpos - 1) as isize) == b'.' as c_char
+            && *cclp.cmdbuff.offset((cclp.cmdpos - 2) as isize) != b'\\' as c_char
             && (c == '\n' as c_int || c == '\r' as c_int || c == K_KENTER)
         {
             c = K_DOWN;
@@ -59,17 +59,17 @@ pub(crate) unsafe fn wildmenu_translate_key(
 }
 
 /// Delete characters on the command line, from `from` to the current position.
-unsafe fn cmdline_del(cclp: *mut CmdlineInfo, from: c_int) {
+unsafe fn cmdline_del(mut cclp: Cc, from: c_int) {
     unsafe {
-        debug_assert!((*cclp).cmdpos <= (*cclp).cmdlen);
+        debug_assert!(cclp.cmdpos <= cclp.cmdlen);
         // +1 for the NUL.
         core::ptr::copy(
-            (*cclp).cmdbuff.offset((*cclp).cmdpos as isize),
-            (*cclp).cmdbuff.offset(from as isize),
-            ((*cclp).cmdlen - (*cclp).cmdpos + 1) as size_t,
+            cclp.cmdbuff.offset(cclp.cmdpos as isize),
+            cclp.cmdbuff.offset(from as isize),
+            (cclp.cmdlen - cclp.cmdpos + 1) as size_t,
         );
-        (*cclp).cmdlen -= (*cclp).cmdpos - from;
-        (*cclp).cmdpos = from;
+        cclp.cmdlen -= cclp.cmdpos - from;
+        cclp.cmdpos = from;
     }
 }
 
@@ -83,16 +83,12 @@ fn recomplete() -> c_int {
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
-unsafe fn wildmenu_process_key_menunames(
-    cclp: *mut CmdlineInfo,
-    key: c_int,
-    xp: *mut expand_T,
-) -> c_int {
+unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     unsafe {
-        let buf = (*cclp).cmdbuff;
+        let buf = cclp.cmdbuff;
         if key == K_DOWN
-            && (*cclp).cmdpos > 0
-            && *buf.offset(((*cclp).cmdpos - 1) as isize) == b'.' as c_char
+            && cclp.cmdpos > 0
+            && *buf.offset((cclp.cmdpos - 1) as isize) == b'.' as c_char
         {
             // Hitting <Down> after "emenu Name.": complete the submenu.
             return recomplete();
@@ -139,23 +135,19 @@ unsafe fn wildmenu_process_key_menunames(
 /// `<Down>` descends into the directory under the cursor and `<Up>` leaves it,
 /// both by editing the path on the command line and asking for a fresh
 /// completion of the result.
-unsafe fn wildmenu_process_key_filenames(
-    cclp: *mut CmdlineInfo,
-    key: c_int,
-    xp: *mut expand_T,
-) -> c_int {
+unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     unsafe {
-        let buf = (*cclp).cmdbuff;
+        let buf = cclp.cmdbuff;
         let at = |k: c_int| *buf.offset(k as isize);
         // Where the pattern being completed starts.
         let start = (*xp).xp_pattern.offset_from(buf) as c_int;
 
         if key == K_DOWN
-            && (*cclp).cmdpos > 0
-            && at((*cclp).cmdpos - 1) == PATHSEP as c_char
-            && ((*cclp).cmdpos < 3
-                || at((*cclp).cmdpos - 2) != b'.' as c_char
-                || at((*cclp).cmdpos - 3) != b'.' as c_char)
+            && cclp.cmdpos > 0
+            && at(cclp.cmdpos - 1) == PATHSEP as c_char
+            && (cclp.cmdpos < 3
+                || at(cclp.cmdpos - 2) != b'.' as c_char
+                || at(cclp.cmdpos - 3) != b'.' as c_char)
         {
             // Go down a directory.
             return recomplete();
@@ -165,7 +157,7 @@ unsafe fn wildmenu_process_key_filenames(
             // In a direct ancestor: strip off one "../" to go down.  Walk
             // back to the separator that ends the "..".
             let mut found = false;
-            let mut j = (*cclp).cmdpos;
+            let mut j = cclp.cmdpos;
             loop {
                 j -= 1;
                 if j <= start {
@@ -196,7 +188,7 @@ unsafe fn wildmenu_process_key_filenames(
         // what is deleted is the whole trailing path component.
         let mut found = false;
         let mut i = start;
-        let mut j = (*cclp).cmdpos - 1;
+        let mut j = cclp.cmdpos - 1;
         loop {
             j -= 1;
             if j <= i {
@@ -227,7 +219,7 @@ unsafe fn wildmenu_process_key_filenames(
             // in machine-specific stuff here and in UPSEG.
             cmdline_del(cclp, j);
             put_on_cmdline(UPSEG_TAIL.as_ptr().cast_mut(), 3, false);
-        } else if (*cclp).cmdpos > i {
+        } else if cclp.cmdpos > i {
             cmdline_del(cclp, i);
         }
 
@@ -237,11 +229,7 @@ unsafe fn wildmenu_process_key_filenames(
 }
 
 /// Handle a key pressed while the wildmenu is displayed.
-pub(crate) unsafe fn wildmenu_process_key(
-    cclp: *mut CmdlineInfo,
-    key: c_int,
-    xp: *mut expand_T,
-) -> c_int {
+pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     unsafe {
         // Special translations for 'wildmenu'.
         match (*xp).xp_context {
@@ -259,14 +247,14 @@ pub(crate) unsafe fn wildmenu_process_key(
 /// Which of the three ways it went up decides how it comes down: it either
 /// scrolled the command line, borrowed the status line by forcing
 /// `'laststatus'`, or drew over the last window's existing status line.
-pub(crate) unsafe fn wildmenu_cleanup(cclp: *mut CmdlineInfo) {
+pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
     unsafe {
         if p_wmnu.get() == 0 || wild_menu_showing.get() == 0 {
             return;
         }
 
         let skt = KeyTyped.get();
-        let redraw = ((*cclp).input_fn != 0).then(Allow::redraw);
+        let redraw = (cclp.input_fn != 0).then(Allow::redraw);
 
         // Clear highlighting applied during wildmenu activity.
         set_no_hlsearch(true);

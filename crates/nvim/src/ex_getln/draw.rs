@@ -18,27 +18,21 @@ pub(crate) unsafe fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c
             // Showing '*': always one position.
             return 1;
         }
-        ptr2cells((*ccline.ptr()).cmdbuff.offset(idx as isize))
+        ptr2cells(Cc::current().cmdbuff.offset(idx as isize))
     }
 }
 
 /// The screen column the command line's first byte occupies: the indent, plus
 /// one for the `:` / `/` / `?` when there is one.
-pub(crate) unsafe fn cmd_startcol() -> ::core::ffi::c_int {
-    unsafe {
-        (*ccline.ptr()).cmdindent
-            + if (*ccline.ptr()).cmdfirstc != NUL {
-                1
-            } else {
-                0
-            }
-    }
+pub(crate) fn cmd_startcol() -> ::core::ffi::c_int {
+    let cc = Cc::current();
+    cc.cmdindent + i32::from(cc.cmdfirstc != NUL)
 }
 
 /// The screen column for a byte position on the command line.
 pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         let mut col = cmd_startcol();
 
         // The maximum column. A weird 'columns'/'lines' can overflow the
@@ -55,7 +49,7 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
         };
 
         let mut i = 0;
-        while i < (*cc).cmdlen && i < bytepos {
+        while i < cc.cmdlen && i < bytepos {
             let c = cmdline_charsize(i);
             // Count ">" for a double-wide character that doesn't fit.
             correct_screencol(i, c, &raw mut col);
@@ -68,7 +62,7 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
                 col -= c;
                 break;
             }
-            i += utfc_ptr2len((*cc).cmdbuff.offset(i as isize));
+            i += utfc_ptr2len(cc.cmdbuff.offset(i as isize));
         }
         col
     }
@@ -82,7 +76,7 @@ pub(crate) unsafe fn correct_screencol(
     col: *mut ::core::ffi::c_int,
 ) {
     unsafe {
-        let at = (*ccline.ptr()).cmdbuff.offset(idx as isize);
+        let at = Cc::current().cmdbuff.offset(idx as isize);
         if utfc_ptr2len(at) > 1
             && utf_ptr2cells(at) > 1
             && *col % Columns.get() + cells > Columns.get()
@@ -96,14 +90,14 @@ pub(crate) unsafe fn correct_screencol(
 /// — or stars, when `cmdline_star` is set.
 pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
     unsafe {
-        let cc = ccline.ptr();
-        if (*cc).cmdbuff.is_null() || !color_cmdline(cc) {
+        let mut cc = Cc::current();
+        if cc.cmdbuff.is_null() || !color_cmdline(cc.raw()) {
             return;
         }
 
         if ui_has(kUICmdline) {
-            (*cc).special_char = NUL as ::core::ffi::c_char;
-            (*cc).redraw_state = kCmdRedrawAll;
+            cc.special_char = NUL as ::core::ffi::c_char;
+            cc.redraw_state = kCmdRedrawAll;
             return;
         }
 
@@ -112,16 +106,16 @@ pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c
             let mut i = 0;
             while i < len {
                 msg_putchar('*' as ::core::ffi::c_int);
-                i += utfc_ptr2len((*cc).cmdbuff.offset((start + i) as isize));
+                i += utfc_ptr2len(cc.cmdbuff.offset((start + i) as isize));
             }
-        } else if (*cc).last_colors.colors.size != 0 {
+        } else if cc.last_colors.colors.size != 0 {
             let mut i: size_t = 0;
-            while i < (*cc).last_colors.colors.size {
-                let chunk: CmdlineColorChunk = *(*cc).last_colors.colors.items.add(i);
+            while i < cc.last_colors.colors.size {
+                let chunk: CmdlineColorChunk = *cc.last_colors.colors.items.add(i);
                 if chunk.end > start {
                     let chunk_start = chunk.start.max(start);
                     msg_outtrans_len(
-                        (*cc).cmdbuff.offset(chunk_start as isize),
+                        cc.cmdbuff.offset(chunk_start as isize),
                         chunk.end - chunk_start,
                         chunk.hl_id,
                         false,
@@ -130,7 +124,7 @@ pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c
                 i += 1;
             }
         } else {
-            msg_outtrans_len((*cc).cmdbuff.offset(start as isize), len, 0, false);
+            msg_outtrans_len(cc.cmdbuff.offset(start as isize), len, 0, false);
         }
     }
 }
@@ -143,25 +137,25 @@ pub unsafe fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
         if cmd_silent.get() {
             return;
         }
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         if !ui_has(kUICmdline) {
             msg_no_more.set(true);
             msg_putchar(c as ::core::ffi::c_int);
             if shift {
-                draw_cmdline((*cc).cmdpos, (*cc).cmdlen - (*cc).cmdpos);
+                draw_cmdline(cc.cmdpos, cc.cmdlen - cc.cmdpos);
             }
             msg_no_more.set(false);
-        } else if (*cc).redraw_state != kCmdRedrawAll {
+        } else if cc.redraw_state != kCmdRedrawAll {
             let mut charbuf: [::core::ffi::c_char; 2] = [c, 0];
             ui_call_cmdline_special_char(
                 cstr_as_string(charbuf.as_mut_ptr()),
                 shift as Boolean,
-                (*cc).level as Integer,
+                cc.level as Integer,
             );
         }
         cursorcmd();
-        (*cc).special_char = c;
-        (*cc).special_shift = shift;
+        cc.special_char = c;
+        cc.special_shift = shift;
         ui_cursor_shape();
     }
 }
@@ -172,19 +166,19 @@ pub unsafe fn unputcmdline() {
         if cmd_silent.get() {
             return;
         }
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         msg_no_more.set(true);
-        if (*cc).cmdlen == (*cc).cmdpos && !ui_has(kUICmdline) {
+        if cc.cmdlen == cc.cmdpos && !ui_has(kUICmdline) {
             msg_putchar(' ' as ::core::ffi::c_int);
         } else {
             draw_cmdline(
-                (*cc).cmdpos,
-                utfc_ptr2len((*cc).cmdbuff.offset((*cc).cmdpos as isize)),
+                cc.cmdpos,
+                utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize)),
             );
         }
         msg_no_more.set(false);
         cursorcmd();
-        (*cc).special_char = NUL as ::core::ffi::c_char;
+        cc.special_char = NUL as ::core::ffi::c_char;
         ui_cursor_shape();
     }
 }
@@ -205,16 +199,16 @@ pub unsafe fn put_on_cmdline(
             len = strlen(str) as ::core::ffi::c_int;
         }
 
-        let cc = ccline.ptr();
-        realloc_cmdbuff((*cc).cmdlen + len + 1);
+        let mut cc = Cc::current();
+        realloc_cmdbuff(cc.cmdlen + len + 1);
 
-        if (*cc).overstrike == 0 {
+        if cc.overstrike == 0 {
             memmove(
-                (*cc).cmdbuff.offset(((*cc).cmdpos + len) as isize) as *mut ::core::ffi::c_void,
-                (*cc).cmdbuff.offset((*cc).cmdpos as isize) as *const ::core::ffi::c_void,
-                ((*cc).cmdlen - (*cc).cmdpos) as size_t,
+                cc.cmdbuff.offset((cc.cmdpos + len) as isize) as *mut ::core::ffi::c_void,
+                cc.cmdbuff.offset(cc.cmdpos as isize) as *const ::core::ffi::c_void,
+                (cc.cmdlen - cc.cmdpos) as size_t,
             );
-            (*cc).cmdlen += len;
+            cc.cmdlen += len;
         } else {
             // Count the characters in the new string.
             let mut m = 0;
@@ -225,39 +219,39 @@ pub unsafe fn put_on_cmdline(
             }
             // Count the bytes in the command line those characters
             // overwrite.
-            i = (*cc).cmdpos;
-            while i < (*cc).cmdlen && m > 0 {
+            i = cc.cmdpos;
+            while i < cc.cmdlen && m > 0 {
                 m -= 1;
-                i += utfc_ptr2len((*cc).cmdbuff.offset(i as isize));
+                i += utfc_ptr2len(cc.cmdbuff.offset(i as isize));
             }
-            if i < (*cc).cmdlen {
+            if i < cc.cmdlen {
                 memmove(
-                    (*cc).cmdbuff.offset(((*cc).cmdpos + len) as isize) as *mut ::core::ffi::c_void,
-                    (*cc).cmdbuff.offset(i as isize) as *const ::core::ffi::c_void,
-                    ((*cc).cmdlen - i) as size_t,
+                    cc.cmdbuff.offset((cc.cmdpos + len) as isize) as *mut ::core::ffi::c_void,
+                    cc.cmdbuff.offset(i as isize) as *const ::core::ffi::c_void,
+                    (cc.cmdlen - i) as size_t,
                 );
-                (*cc).cmdlen += (*cc).cmdpos + len - i;
+                cc.cmdlen += cc.cmdpos + len - i;
             } else {
-                (*cc).cmdlen = (*cc).cmdpos + len;
+                cc.cmdlen = cc.cmdpos + len;
             }
         }
         memmove(
-            (*cc).cmdbuff.offset((*cc).cmdpos as isize) as *mut ::core::ffi::c_void,
+            cc.cmdbuff.offset(cc.cmdpos as isize) as *mut ::core::ffi::c_void,
             str as *const ::core::ffi::c_void,
             len as size_t,
         );
-        *(*cc).cmdbuff.offset((*cc).cmdlen as isize) = NUL as ::core::ffi::c_char;
+        *cc.cmdbuff.offset(cc.cmdlen as isize) = NUL as ::core::ffi::c_char;
 
         // When the inserted text starts with a composing character, back up
         // to the character before it.
-        if (*cc).cmdpos > 0
-            && *(*cc).cmdbuff.offset((*cc).cmdpos as isize) as uint8_t as ::core::ffi::c_int >= 0x80
+        if cc.cmdpos > 0
+            && *cc.cmdbuff.offset(cc.cmdpos as isize) as uint8_t as ::core::ffi::c_int >= 0x80
         {
-            let head_off = utf_head_off((*cc).cmdbuff, (*cc).cmdbuff.offset((*cc).cmdpos as isize));
+            let head_off = utf_head_off(cc.cmdbuff, cc.cmdbuff.offset(cc.cmdpos as isize));
             if head_off != 0 {
-                (*cc).cmdpos -= head_off;
+                cc.cmdpos -= head_off;
                 len += head_off;
-                (*cc).cmdspos = cmd_screencol((*cc).cmdpos);
+                cc.cmdspos = cmd_screencol(cc.cmdpos);
             }
         }
 
@@ -265,9 +259,9 @@ pub unsafe fn put_on_cmdline(
             msg_no_more.set(true);
             let row_before = cmdline_row.get();
             cursorcmd();
-            draw_cmdline((*cc).cmdpos, (*cc).cmdlen - (*cc).cmdpos);
+            draw_cmdline(cc.cmdpos, cc.cmdlen - cc.cmdpos);
             // Avoid clearing the rest of the line too often.
-            if cmdline_row.get() != row_before || (*cc).overstrike != 0 {
+            if cmdline_row.get() != row_before || cc.overstrike != 0 {
                 msg_clr_eos();
             }
             msg_no_more.set(false);
@@ -283,17 +277,17 @@ pub unsafe fn put_on_cmdline(
 
         let mut i = 0;
         while i < len {
-            let mut c = cmdline_charsize((*cc).cmdpos);
+            let mut c = cmdline_charsize(cc.cmdpos);
             // Count ">" for a double-wide character that doesn't fit.
-            correct_screencol((*cc).cmdpos, c, &raw mut (*cc).cmdspos);
+            correct_screencol(cc.cmdpos, c, &raw mut cc.cmdspos);
             // Stop the cursor at the end of the screen, but do advance the
             // insert position, so that entering a very long command works
             // even though it cannot all be seen.
-            if (*cc).cmdspos + c < m {
-                (*cc).cmdspos += c;
+            if cc.cmdspos + c < m {
+                cc.cmdspos += c;
             }
-            c = (utfc_ptr2len((*cc).cmdbuff.offset((*cc).cmdpos as isize)) - 1).min(len - i - 1);
-            (*cc).cmdpos += c + 1;
+            c = (utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize)) - 1).min(len - i - 1);
+            cc.cmdpos += c + 1;
             i += c + 1;
         }
 
@@ -325,23 +319,23 @@ pub(crate) unsafe fn redrawcmdprompt() {
         if cmd_silent.get() {
             return;
         }
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         if ui_has(kUICmdline) {
-            (*cc).redraw_state = kCmdRedrawAll;
+            cc.redraw_state = kCmdRedrawAll;
             return;
         }
-        if (*cc).cmdfirstc != NUL {
-            msg_putchar((*cc).cmdfirstc);
+        if cc.cmdfirstc != NUL {
+            msg_putchar(cc.cmdfirstc);
         }
-        if !(*cc).cmdprompt.is_null() {
-            msg_puts_hl((*cc).cmdprompt, (*cc).hl_id, false);
-            (*cc).cmdindent = msg_col.get() + (msg_row.get() - cmdline_row.get()) * Columns.get();
+        if !cc.cmdprompt.is_null() {
+            msg_puts_hl(cc.cmdprompt, cc.hl_id, false);
+            cc.cmdindent = msg_col.get() + (msg_row.get() - cmdline_row.get()) * Columns.get();
             // The reverse of cmd_startcol().
-            if (*cc).cmdfirstc != NUL {
-                (*cc).cmdindent -= 1;
+            if cc.cmdfirstc != NUL {
+                cc.cmdindent -= 1;
             }
         } else {
-            let mut i = (*cc).cmdindent;
+            let mut i = cc.cmdindent;
             while i > 0 {
                 msg_putchar(' ' as ::core::ffi::c_int);
                 i -= 1;
@@ -357,14 +351,14 @@ pub unsafe fn redrawcmd() {
             return;
         }
 
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         if ui_has(kUICmdline) {
-            draw_cmdline(0, (*cc).cmdlen);
+            draw_cmdline(0, cc.cmdlen);
             return;
         }
 
         // With 'incsearch' there may be no command line while redrawing.
-        if (*cc).cmdbuff.is_null() {
+        if cc.cmdbuff.is_null() {
             msg_cursor_goto(cmdline_row.get(), 0);
             msg_clr_eos();
             return;
@@ -379,14 +373,14 @@ pub unsafe fn redrawcmd() {
         // Don't use the more prompt; truncate the command line if it doesn't
         // fit.
         msg_no_more.set(true);
-        draw_cmdline(0, (*cc).cmdlen);
+        draw_cmdline(0, cc.cmdlen);
         msg_clr_eos();
         msg_no_more.set(false);
 
-        (*cc).cmdspos = cmd_screencol((*cc).cmdpos);
+        cc.cmdspos = cmd_screencol(cc.cmdpos);
 
-        if (*cc).special_char as ::core::ffi::c_int != NUL {
-            putcmdline((*cc).special_char, (*cc).special_shift);
+        if cc.special_char as ::core::ffi::c_int != NUL {
+            putcmdline(cc.special_char, cc.special_shift);
         }
 
         // An earlier emsg() may have set msg_scroll; in command-line mode it
@@ -430,7 +424,7 @@ pub unsafe fn cursorcmd() {
             return;
         }
 
-        let cmdspos = (*ccline.ptr()).cmdspos;
+        let cmdspos = Cc::current().cmdspos;
         msg_row.set(cmdline_row.get() + cmdspos / Columns.get());
         msg_col.set(cmdspos % Columns.get());
         msg_row.set(msg_row.get().min(Rows.get() - 1));

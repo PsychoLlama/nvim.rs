@@ -23,62 +23,58 @@ use crate::types::{ExpandContext, FAIL, NUL, OK};
 /// line, which leaves the command line altogether.
 pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         if (*s).c == K_KDEL {
             (*s).c = K_DEL;
         }
 
         // Deleting the current character is the same as a backspace on the
         // next character, except at the end of the line.
-        if (*s).c == K_DEL && (*cc).cmdpos != (*cc).cmdlen {
-            (*cc).cmdpos += 1;
+        if (*s).c == K_DEL && cc.cmdpos != cc.cmdlen {
+            cc.cmdpos += 1;
         }
         if (*s).c == K_DEL {
-            (*cc).cmdpos += mb_off_next((*cc).cmdbuff, (*cc).cmdbuff.offset((*cc).cmdpos as isize));
+            cc.cmdpos += mb_off_next(cc.cmdbuff, cc.cmdbuff.offset(cc.cmdpos as isize));
         }
 
-        if (*cc).cmdpos > 0 {
-            let mut j = (*cc).cmdpos;
-            let mut p = mb_prevptr((*cc).cmdbuff, (*cc).cmdbuff.offset(j as isize));
+        if cc.cmdpos > 0 {
+            let mut j = cc.cmdpos;
+            let mut p = mb_prevptr(cc.cmdbuff, cc.cmdbuff.offset(j as isize));
 
             if (*s).c == Ctrl_W {
-                while p > (*cc).cmdbuff && ascii_isspace(*p as ::core::ffi::c_int) {
-                    p = mb_prevptr((*cc).cmdbuff, p);
+                while p > cc.cmdbuff && ascii_isspace(*p as ::core::ffi::c_int) {
+                    p = mb_prevptr(cc.cmdbuff, p);
                 }
                 let class = mb_get_class(p);
-                while p > (*cc).cmdbuff && mb_get_class(p) == class {
-                    p = mb_prevptr((*cc).cmdbuff, p);
+                while p > cc.cmdbuff && mb_get_class(p) == class {
+                    p = mb_prevptr(cc.cmdbuff, p);
                 }
                 if mb_get_class(p) != class {
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }
             }
 
-            (*cc).cmdpos = p.offset_from((*cc).cmdbuff) as ::core::ffi::c_int;
-            (*cc).cmdlen -= j - (*cc).cmdpos;
-            let mut i = (*cc).cmdpos;
-            while i < (*cc).cmdlen {
-                *(*cc).cmdbuff.offset(i as isize) = *(*cc).cmdbuff.offset(j as isize);
+            cc.cmdpos = p.offset_from(cc.cmdbuff) as ::core::ffi::c_int;
+            cc.cmdlen -= j - cc.cmdpos;
+            let mut i = cc.cmdpos;
+            while i < cc.cmdlen {
+                *cc.cmdbuff.offset(i as isize) = *cc.cmdbuff.offset(j as isize);
                 i += 1;
                 j += 1;
             }
 
             // Truncate at the end, required for multi-byte characters.
-            *(*cc).cmdbuff.offset((*cc).cmdlen as isize) = NUL as ::core::ffi::c_char;
-            if (*cc).cmdlen == 0 {
+            *cc.cmdbuff.offset(cc.cmdlen as isize) = NUL as ::core::ffi::c_char;
+            if cc.cmdlen == 0 {
                 (*s).is_state.search_start = (*s).is_state.save_cursor;
                 // Save the view settings, so that the screen won't be
                 // restored at the wrong position.
                 (*s).is_state.old_viewstate = (*s).is_state.init_viewstate;
             }
             redrawcmd();
-        } else if (*cc).cmdlen == 0
-            && (*s).c != Ctrl_W
-            && (*cc).cmdprompt.is_null()
-            && (*s).indent == 0
-        {
+        } else if cc.cmdlen == 0 && (*s).c != Ctrl_W && cc.cmdprompt.is_null() && (*s).indent == 0 {
             // In ex and debug mode it doesn't make sense to return.
-            if exmode_active.get() || (*cc).cmdfirstc == '>' as ::core::ffi::c_int {
+            if exmode_active.get() || cc.cmdfirstc == '>' as ::core::ffi::c_int {
                 return KeyOutcome::NotChanged;
             }
 
@@ -133,7 +129,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: *mut CommandLineState) {
 /// Handle CTRL-R: insert the contents of a numbered or named register.
 pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         let save_new_cmdpos = new_cmdpos.get();
 
         putcmdline('"' as ::core::ffi::c_char, true);
@@ -151,7 +147,7 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
         // Insert the result of an expression.
         new_cmdpos.set(-1);
         if (*s).c == '=' as ::core::ffi::c_int {
-            if (*cc).cmdfirstc == '=' as ::core::ffi::c_int  // can't do this recursively
+            if cc.cmdfirstc == '=' as ::core::ffi::c_int  // can't do this recursively
                 || cmdline_star.get() > 0
             // or when typing a password
             {
@@ -177,12 +173,12 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
             KeyTyped.set(false); // don't do 'wildchar' completion
             if new_cmdpos.get() >= 0 {
                 // set_cmdline_pos() was used.
-                (*cc).cmdpos = (*cc).cmdlen.min(new_cmdpos.get());
+                cc.cmdpos = cc.cmdlen.min(new_cmdpos.get());
             }
         }
         new_cmdpos.set(save_new_cmdpos);
 
-        (*cc).special_char = NUL as ::core::ffi::c_char; // remove the double quote
+        cc.special_char = NUL as ::core::ffi::c_char; // remove the double quote
         redrawcmd();
 
         // With "literally" the command line has already changed; otherwise the
@@ -198,24 +194,24 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
 /// Handle a left or right mouse click: put the cursor where it landed.
 pub(crate) unsafe fn command_line_left_right_mouse(s: *mut CommandLineState) {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         (*s).ignore_drag_release = (*s).c == K_LEFTRELEASE || (*s).c == K_RIGHTRELEASE;
 
-        (*cc).cmdspos = cmd_startcol();
-        (*cc).cmdpos = 0;
-        while (*cc).cmdpos < (*cc).cmdlen {
-            let cells = cmdline_charsize((*cc).cmdpos);
-            if mouse_row.get() <= cmdline_row.get() + (*cc).cmdspos / Columns.get()
-                && mouse_col.get() < (*cc).cmdspos % Columns.get() + cells
+        cc.cmdspos = cmd_startcol();
+        cc.cmdpos = 0;
+        while cc.cmdpos < cc.cmdlen {
+            let cells = cmdline_charsize(cc.cmdpos);
+            if mouse_row.get() <= cmdline_row.get() + cc.cmdspos / Columns.get()
+                && mouse_col.get() < cc.cmdspos % Columns.get() + cells
             {
                 break;
             }
 
             // Count ">" for a double-wide character that doesn't fit.
-            correct_screencol((*cc).cmdpos, cells, &raw mut (*cc).cmdspos);
-            (*cc).cmdpos += utfc_ptr2len((*cc).cmdbuff.offset((*cc).cmdpos as isize)) - 1;
-            (*cc).cmdspos += cells;
-            (*cc).cmdpos += 1;
+            correct_screencol(cc.cmdpos, cells, &raw mut cc.cmdspos);
+            cc.cmdpos += utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize)) - 1;
+            cc.cmdspos += cells;
+            cc.cmdpos += 1;
         }
     }
 }
@@ -228,7 +224,7 @@ pub(crate) unsafe fn command_line_left_right_mouse(s: *mut CommandLineState) {
 /// the abbreviation check and then to inserting it into the line.
 unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::ffi::c_int> {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         match (*s).c {
             K_BS | Ctrl_H | K_DEL | K_KDEL | Ctrl_W => Some(match command_line_erase_chars(s) {
                 KeyOutcome::NotChanged => command_line_not_changed(s),
@@ -237,7 +233,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             }),
 
             K_INS | K_KINS => {
-                (*cc).overstrike = ((*cc).overstrike == 0) as ::core::ffi::c_int;
+                cc.overstrike = (cc.overstrike == 0) as ::core::ffi::c_int;
                 ui_cursor_shape(); // may show a different cursor shape
                 may_trigger_modechanged();
                 status_redraw_curbuf();
@@ -252,19 +248,19 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 
             Ctrl_U => {
                 // Delete all characters left of the cursor.
-                let mut j = (*cc).cmdpos;
-                (*cc).cmdlen -= j;
-                (*cc).cmdpos = 0;
+                let mut j = cc.cmdpos;
+                cc.cmdlen -= j;
+                cc.cmdpos = 0;
                 let mut i = 0;
-                while i < (*cc).cmdlen {
-                    *(*cc).cmdbuff.offset(i as isize) = *(*cc).cmdbuff.offset(j as isize);
+                while i < cc.cmdlen {
+                    *cc.cmdbuff.offset(i as isize) = *cc.cmdbuff.offset(j as isize);
                     i += 1;
                     j += 1;
                 }
 
                 // Truncate at the end, required for multi-byte characters.
-                *(*cc).cmdbuff.offset((*cc).cmdlen as isize) = NUL as ::core::ffi::c_char;
-                if (*cc).cmdlen == 0 {
+                *cc.cmdbuff.offset(cc.cmdlen as isize) = NUL as ::core::ffi::c_char;
+                if cc.cmdlen == 0 {
                     (*s).is_state.search_start = (*s).is_state.save_cursor;
                 }
                 redrawcmd();
@@ -309,50 +305,49 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             }
 
             K_RIGHT | K_S_RIGHT | K_C_RIGHT => {
-                while (*cc).cmdpos < (*cc).cmdlen {
-                    let cells = cmdline_charsize((*cc).cmdpos);
-                    if KeyTyped.get() && (*cc).cmdspos + cells >= Columns.get() * Rows.get() {
+                while cc.cmdpos < cc.cmdlen {
+                    let cells = cmdline_charsize(cc.cmdpos);
+                    if KeyTyped.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
                         break;
                     }
-                    (*cc).cmdspos += cells;
-                    (*cc).cmdpos += utfc_ptr2len((*cc).cmdbuff.offset((*cc).cmdpos as isize));
+                    cc.cmdspos += cells;
+                    cc.cmdpos += utfc_ptr2len(cc.cmdbuff.offset(cc.cmdpos as isize));
                     if !(((*s).c == K_S_RIGHT
                         || (*s).c == K_C_RIGHT
                         || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
-                        && *(*cc).cmdbuff.offset((*cc).cmdpos as isize) as ::core::ffi::c_int
+                        && *cc.cmdbuff.offset(cc.cmdpos as isize) as ::core::ffi::c_int
                             != ' ' as ::core::ffi::c_int)
                     {
                         break;
                     }
                 }
-                (*cc).cmdspos = cmd_screencol((*cc).cmdpos);
+                cc.cmdspos = cmd_screencol(cc.cmdpos);
                 Some(command_line_not_changed(s))
             }
 
             K_LEFT | K_S_LEFT | K_C_LEFT => {
-                if (*cc).cmdpos == 0 {
+                if cc.cmdpos == 0 {
                     return Some(command_line_not_changed(s));
                 }
                 loop {
-                    (*cc).cmdpos -= 1;
+                    cc.cmdpos -= 1;
                     // Move to the first byte of a possibly multibyte char.
-                    (*cc).cmdpos -=
-                        utf_head_off((*cc).cmdbuff, (*cc).cmdbuff.offset((*cc).cmdpos as isize));
-                    (*cc).cmdspos -= cmdline_charsize((*cc).cmdpos);
-                    if !((*cc).cmdpos > 0
+                    cc.cmdpos -= utf_head_off(cc.cmdbuff, cc.cmdbuff.offset(cc.cmdpos as isize));
+                    cc.cmdspos -= cmdline_charsize(cc.cmdpos);
+                    if !(cc.cmdpos > 0
                         && ((*s).c == K_S_LEFT
                             || (*s).c == K_C_LEFT
                             || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
-                        && *(*cc).cmdbuff.offset(((*cc).cmdpos - 1) as isize) as ::core::ffi::c_int
+                        && *cc.cmdbuff.offset((cc.cmdpos - 1) as isize) as ::core::ffi::c_int
                             != ' ' as ::core::ffi::c_int)
                     {
                         break;
                     }
                 }
 
-                (*cc).cmdspos = cmd_screencol((*cc).cmdpos);
-                if (*cc).special_char as ::core::ffi::c_int != NUL {
-                    putcmdline((*cc).special_char, (*cc).special_shift);
+                cc.cmdspos = cmd_screencol(cc.cmdpos);
+                if cc.special_char as ::core::ffi::c_int != NUL {
+                    putcmdline(cc.special_char, cc.special_shift);
                 }
                 Some(command_line_not_changed(s))
             }
@@ -389,10 +384,10 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 }
                 // Return on a left click above a number prompt.
                 if (*s).c != K_RIGHTMOUSE
-                    && !(*cc).mouse_used.is_null()
+                    && !cc.mouse_used.is_null()
                     && mouse_row.get() < cmdline_row.get()
                 {
-                    *(*cc).mouse_used = true;
+                    *cc.mouse_used = true;
                     return Some(0);
                 }
                 command_line_left_right_mouse(s);
@@ -408,15 +403,15 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 
             // Beginning of the command line.
             Ctrl_B | K_HOME | K_KHOME | K_S_HOME | K_C_HOME => {
-                (*cc).cmdpos = 0;
-                (*cc).cmdspos = cmd_startcol();
+                cc.cmdpos = 0;
+                cc.cmdspos = cmd_startcol();
                 Some(command_line_not_changed(s))
             }
 
             // End of the command line.
             Ctrl_E | K_END | K_KEND | K_S_END | K_C_END => {
-                (*cc).cmdpos = (*cc).cmdlen;
-                (*cc).cmdspos = cmd_screencol((*cc).cmdpos);
+                cc.cmdpos = cc.cmdlen;
+                cc.cmdspos = cmd_screencol(cc.cmdpos);
                 Some(command_line_not_changed(s))
             }
 
@@ -540,7 +535,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 (*s).c = get_literal(mod_mask.get() & MOD_MASK_SHIFT != 0);
 
                 (*s).do_abbr = false; // don't do abbreviation now
-                (*cc).special_char = NUL as ::core::ffi::c_char;
+                cc.special_char = NUL as ::core::ffi::c_char;
                 // May need to remove the ^ when a composing char was typed.
                 if utf_iscomposing_first((*s).c) && !cmd_silent.get() {
                     if ui_has(kUICmdline) {
@@ -548,7 +543,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                         // with true?
                         unputcmdline();
                     } else {
-                        draw_cmdline((*cc).cmdpos, (*cc).cmdlen - (*cc).cmdpos);
+                        draw_cmdline(cc.cmdpos, cc.cmdlen - cc.cmdpos);
                         msg_putchar(' ' as ::core::ffi::c_int);
                         cursorcmd();
                     }
@@ -560,7 +555,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 (*s).ignore_drag_release = true;
                 putcmdline('?' as ::core::ffi::c_char, true);
                 (*s).c = get_digraph(true);
-                (*cc).special_char = NUL as ::core::ffi::c_char;
+                cc.special_char = NUL as ::core::ffi::c_char;
 
                 if (*s).c != NUL {
                     return None;
@@ -580,8 +575,8 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             c => {
                 // Number prompts use the mouse and return on a 'q' press;
                 // otherwise 'q' FALLS THROUGH to the default arm.
-                if c == 'q' as ::core::ffi::c_int && !(*cc).mouse_used.is_null() {
-                    *(*cc).cmdbuff = NUL as ::core::ffi::c_char;
+                if c == 'q' as ::core::ffi::c_int && !cc.mouse_used.is_null() {
+                    *cc.cmdbuff = NUL as ::core::ffi::c_char;
                     return Some(0);
                 }
                 // A normal character with no special meaning. Just set
@@ -599,12 +594,12 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 
 pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core::ffi::c_int {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
 
         // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
         // For all other keys, just put it onto the cmdline and exit — which is
         // the C's `goto end`.
-        if !((*cc).one_key && (*s).c != ESC && (*s).c != Ctrl_C) {
+        if !(cc.one_key && (*s).c != ESC && (*s).c != Ctrl_C) {
             if let Some(rc) = command_line_dispatch_key(s) {
                 return rc;
             }
@@ -632,7 +627,7 @@ pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core
             (*IObuff.ptr())[j as usize] = NUL as ::core::ffi::c_char; // exclude composing chars
             put_on_cmdline(IObuff.ptr() as *mut ::core::ffi::c_char, j, true);
         }
-        if (*cc).one_key {
+        if cc.one_key {
             0
         } else {
             command_line_changed(s)

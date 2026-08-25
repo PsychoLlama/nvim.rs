@@ -34,42 +34,36 @@ fn is_cmd_alnum(c: u8) -> bool {
 /// pointing at the text to expand.
 pub unsafe fn set_expand_context(xp: *mut expand_T) {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let mut ccline = Cc::current();
 
         // Handle search commands: '/' or '?'.
-        if ((*ccline).cmdfirstc == '/' as c_int || (*ccline).cmdfirstc == '?' as c_int)
+        if (ccline.cmdfirstc == '/' as c_int || ccline.cmdfirstc == '?' as c_int)
             && may_expand_pattern.get()
         {
             (*xp).xp_context = ExpandContext::PatternInBuf;
-            (*xp).xp_search_dir = if (*ccline).cmdfirstc == '/' as c_int {
+            (*xp).xp_search_dir = if ccline.cmdfirstc == '/' as c_int {
                 FORWARD
             } else {
                 BACKWARD
             };
-            (*xp).xp_pattern = (*ccline).cmdbuff;
-            (*xp).xp_pattern_len = (*ccline).cmdpos as size_t;
+            (*xp).xp_pattern = ccline.cmdbuff;
+            (*xp).xp_pattern_len = ccline.cmdpos as size_t;
             search_first_line.set(0); // Search entire buffer
             return;
         }
 
         // Only handle ':', '>', or '=' command-lines, or expression input.
-        if (*ccline).cmdfirstc != ':' as c_int
-            && (*ccline).cmdfirstc != '>' as c_int
-            && (*ccline).cmdfirstc != '=' as c_int
-            && (*ccline).input_fn == 0
+        if ccline.cmdfirstc != ':' as c_int
+            && ccline.cmdfirstc != '>' as c_int
+            && ccline.cmdfirstc != '=' as c_int
+            && ccline.input_fn == 0
         {
             (*xp).xp_context = ExpandContext::Nothing;
             return;
         }
 
         // Fallback to command-line expansion.
-        set_cmd_context(
-            xp,
-            (*ccline).cmdbuff,
-            (*ccline).cmdlen,
-            (*ccline).cmdpos,
-            true,
-        );
+        set_cmd_context(xp, ccline.cmdbuff, ccline.cmdlen, ccline.cmdpos, true);
     }
 }
 
@@ -632,7 +626,7 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
 /// line range (e.g. `:s`, `:g`, `:v`).
 pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let mut ccline = Cc::current();
 
         let no_emsg = Suppress::emsg();
         let mut skiplen = 0;
@@ -647,12 +641,12 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
         drop(no_emsg);
 
         // Check if cursor is within search pattern.
-        if !retval || (*ccline).cmdpos <= skiplen || (*ccline).cmdpos > skiplen + patlen {
+        if !retval || ccline.cmdpos <= skiplen || ccline.cmdpos > skiplen + patlen {
             return;
         }
 
-        (*xp).xp_pattern = (*ccline).cmdbuff.offset(skiplen as isize);
-        (*xp).xp_pattern_len = ((*ccline).cmdpos - skiplen) as size_t;
+        (*xp).xp_pattern = ccline.cmdbuff.offset(skiplen as isize);
+        (*xp).xp_pattern_len = (ccline.cmdpos - skiplen) as size_t;
         (*xp).xp_context = ExpandContext::PatternInBuf;
         (*xp).xp_search_dir = FORWARD;
     }

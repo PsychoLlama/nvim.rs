@@ -58,49 +58,48 @@ const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
 /// Initialize the current command-line info.
 pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int) {
     unsafe {
-        let cc = ccline.ptr();
-        (*cc).overstrike = 0; // always start in insert mode
+        let mut cc = Cc::current();
+        cc.overstrike = 0; // always start in insert mode
         debug_assert!(indent >= 0);
 
         // Set some variables for redrawcmd().
-        (*cc).cmdfirstc = if firstc == '@' as ::core::ffi::c_int {
+        cc.cmdfirstc = if firstc == '@' as ::core::ffi::c_int {
             0
         } else {
             firstc
         };
-        (*cc).cmdindent = if firstc > 0 { indent } else { 0 };
+        cc.cmdindent = if firstc > 0 { indent } else { 0 };
 
         // Allocate the initial ccline.cmdbuff.
         alloc_cmdbuff(indent + 50);
-        (*cc).cmdlen = 0;
-        (*cc).cmdpos = 0;
-        *(*cc).cmdbuff = NUL as ::core::ffi::c_char;
+        cc.cmdlen = 0;
+        cc.cmdpos = 0;
+        *cc.cmdbuff = NUL as ::core::ffi::c_char;
 
-        (*cc).last_colors = COLORED_CMDLINE_INIT;
+        cc.last_colors = COLORED_CMDLINE_INIT;
         sb_text_start_cmdline();
 
         // Autoindent for :insert and :append.
         if firstc <= 0 {
             memset(
-                (*cc).cmdbuff as *mut ::core::ffi::c_void,
+                cc.cmdbuff as *mut ::core::ffi::c_void,
                 ' ' as ::core::ffi::c_int,
                 indent as size_t,
             );
-            *(*cc).cmdbuff.offset(indent as isize) = NUL as ::core::ffi::c_char;
-            (*cc).cmdpos = indent;
-            (*cc).cmdspos = indent;
-            (*cc).cmdlen = indent;
+            *cc.cmdbuff.offset(indent as isize) = NUL as ::core::ffi::c_char;
+            cc.cmdpos = indent;
+            cc.cmdspos = indent;
+            cc.cmdlen = indent;
         }
     }
 }
 
-pub(crate) unsafe fn ui_ext_cmdline_hide(abort: bool) {
-    unsafe {
-        if ui_has(kUICmdline) {
-            cmdline_was_last_drawn.set(false);
-            (*ccline.ptr()).redraw_state = kCmdRedrawNone;
-            ui_call_cmdline_hide((*ccline.ptr()).level as Integer, abort as Boolean);
-        }
+pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
+    if ui_has(kUICmdline) {
+        cmdline_was_last_drawn.set(false);
+        let mut cc = Cc::current();
+        cc.redraw_state = kCmdRedrawNone;
+        ui_call_cmdline_hide(cc.level as Integer, abort as Boolean);
     }
 }
 
@@ -118,7 +117,7 @@ pub(crate) unsafe fn cmdline_event_dict(
             dict,
             c"cmdlevel".as_ptr(),
             c"cmdlevel".count_bytes(),
-            (*ccline.ptr()).level as varnumber_T,
+            Cc::current().level as varnumber_T,
         );
         tv_dict_set_keys_readonly(dict);
         dict
@@ -157,10 +156,10 @@ pub(crate) unsafe fn command_line_enter(
         (*s).save_p_icm = xstrdup(p_icm.get());
         init_incsearch_state(&raw mut (*s).is_state);
 
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         let mut save_ccline: CmdlineInfo = CMDLINE_INFO_INIT;
         let mut did_save_ccline = false;
-        if !(*cc).cmdbuff.is_null() {
+        if !cc.cmdbuff.is_null() {
             // Currently ccline can never be in use if clear_ccline is false;
             // some changes would be needed if that ever stops holding.
             debug_assert!(clear_ccline);
@@ -178,11 +177,11 @@ pub(crate) unsafe fn command_line_enter(
         }
 
         init_ccline((*s).firstc, (*s).indent);
-        debug_assert!(!(*cc).cmdbuff.is_null());
+        debug_assert!(!cc.cmdbuff.is_null());
         let prompt_id = last_prompt_id.get();
         last_prompt_id.set(prompt_id.wrapping_add(1));
-        (*cc).prompt_id = prompt_id;
-        (*cc).level = cmdline_level.get();
+        cc.prompt_id = prompt_id;
+        cc.level = cmdline_level.get();
 
         let mut err: Error = ERROR_INIT;
         let mut firstcbuf: [::core::ffi::c_char; 2] = [0; 2];
@@ -195,7 +194,7 @@ pub(crate) unsafe fn command_line_enter(
             ));
         } else {
             expand_init(&raw mut (*s).xpc);
-            (*cc).xpc = &raw mut (*s).xpc;
+            cc.xpc = &raw mut (*s).xpc;
             clear_cmdline_orig();
 
             cmdmsg_rl.set(
@@ -212,16 +211,16 @@ pub(crate) unsafe fn command_line_enter(
             if !cmd_silent.get() {
                 gotocmdline(true);
                 redrawcmdprompt(); // draw the prompt or the indent
-                (*cc).cmdspos = cmd_startcol();
+                cc.cmdspos = cmd_startcol();
             }
             (*s).xpc.xp_context = ExpandContext::Nothing;
             (*s).xpc.xp_backslash = BackslashEscape::NONE;
             (*s).xpc.xp_shell = false;
 
-            if (*cc).input_fn != 0 {
-                (*s).xpc.xp_context = (*cc).xp_context;
-                (*s).xpc.xp_pattern = (*cc).cmdbuff;
-                (*s).xpc.xp_arg = (*cc).xp_arg;
+            if cc.input_fn != 0 {
+                (*s).xpc.xp_context = cc.xp_context;
+                (*s).xpc.xp_pattern = cc.cmdbuff;
+                (*s).xpc.xp_arg = cc.xp_arg;
             }
 
             // Avoid scrolling when called by a recursive do_cmdline(), e.g.
@@ -389,25 +388,22 @@ pub(crate) unsafe fn command_line_enter(
             (*s).wim_index = 0;
 
             expand_cleanup(&raw mut (*s).xpc);
-            (*cc).xpc = ::core::ptr::null_mut::<expand_T>();
+            cc.xpc = ::core::ptr::null_mut::<expand_T>();
             clear_cmdline_orig();
 
             finish_incsearch_highlighting((*s).gotesc, &raw mut (*s).is_state, false);
 
-            if !(*cc).cmdbuff.is_null() {
+            if !cc.cmdbuff.is_null() {
                 // Put the line in the history buffer (":" and "=" only when
                 // it was typed).
                 if (*s).histype != HIST_INVALID
-                    && (*cc).cmdlen != 0
+                    && cc.cmdlen != 0
                     && (*s).firstc != NUL
                     && ((*s).some_key_typed || (*s).histype == HIST_SEARCH)
                 {
                     add_to_history(
                         (*s).histype,
-                        ::core::slice::from_raw_parts(
-                            (*cc).cmdbuff as *const u8,
-                            (*cc).cmdlen as usize,
-                        ),
+                        ::core::slice::from_raw_parts(cc.cmdbuff as *const u8, cc.cmdlen as usize),
                         true,
                         if (*s).histype == HIST_SEARCH {
                             (*s).firstc as u8
@@ -417,7 +413,7 @@ pub(crate) unsafe fn command_line_enter(
                     );
                     if (*s).firstc == ':' as ::core::ffi::c_int {
                         xfree(new_last_cmdline.get() as *mut ::core::ffi::c_void);
-                        new_last_cmdline.set(xstrnsave((*cc).cmdbuff, (*cc).cmdlen as size_t));
+                        new_last_cmdline.set(xstrnsave(cc.cmdbuff, cc.cmdlen as size_t));
                     }
                 }
 
@@ -474,13 +470,13 @@ pub(crate) unsafe fn command_line_enter(
 
         // C's `theend:`.
         xfree((*s).save_p_icm as *mut ::core::ffi::c_void);
-        xfree((*cc).last_colors.cmdbuff as *mut ::core::ffi::c_void);
-        xfree((*cc).last_colors.colors.items as *mut ::core::ffi::c_void);
-        (*cc).last_colors.colors.capacity = 0;
-        (*cc).last_colors.colors.size = 0;
-        (*cc).last_colors.colors.items = ::core::ptr::null_mut::<CmdlineColorChunk>();
+        xfree(cc.last_colors.cmdbuff as *mut ::core::ffi::c_void);
+        xfree(cc.last_colors.colors.items as *mut ::core::ffi::c_void);
+        cc.last_colors.colors.capacity = 0;
+        cc.last_colors.colors.size = 0;
+        cc.last_colors.colors.items = ::core::ptr::null_mut::<CmdlineColorChunk>();
 
-        let p = (*cc).cmdbuff;
+        let p = cc.cmdbuff;
 
         if ui_has(kUICmdline) {
             // Emit cmdline_block in Ex mode unless cmdbuff is NULL, which
@@ -500,7 +496,7 @@ pub(crate) unsafe fn command_line_enter(
         if did_save_ccline {
             restore_cmdline(&raw mut save_ccline);
         } else {
-            (*cc).cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            cc.cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
 
         xfree((*s).prev_cmdbuff as *mut ::core::ffi::c_void);
@@ -513,9 +509,9 @@ pub(crate) unsafe fn command_line_enter(
 pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_int {
     unsafe {
         let s: *mut CommandLineState = state as *mut CommandLineState;
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
 
-        (*s).prev_cmdpos = (*cc).cmdpos;
+        (*s).prev_cmdpos = cc.cmdpos;
         xfree((*s).prev_cmdbuff as *mut ::core::ffi::c_void);
         (*s).prev_cmdbuff = ::core::ptr::null_mut();
 
@@ -538,8 +534,8 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
         // Trigger SafeState if nothing is pending.
         may_trigger_safestate((*s).xpc.xp_numfiles <= 0);
 
-        if !(*cc).cmdbuff.is_null() {
-            (*s).prev_cmdbuff = xstrdup((*cc).cmdbuff);
+        if !cc.cmdbuff.is_null() {
+            (*s).prev_cmdbuff = xstrdup(cc.cmdbuff);
         }
 
         // Defer the screen update to avoid pum flicker during wildtrigger().
@@ -560,7 +556,7 @@ pub(crate) unsafe fn abandon_cmdline() {
             compute_cmdrow();
         }
         // Avoid overwriting a key prompt.
-        if !(*ccline.ptr()).one_key {
+        if !Cc::current().one_key {
             msg(c"".as_ptr(), 0);
             redraw_cmdline.set(true);
         }
@@ -616,11 +612,11 @@ pub unsafe fn getcmdline_prompt(
 ) -> *mut ::core::ffi::c_char {
     unsafe {
         let msg_col_save = msg_col.get();
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
 
         let mut save_ccline: CmdlineInfo = CMDLINE_INFO_INIT;
         let mut did_save_ccline = false;
-        if !(*cc).cmdbuff.is_null() {
+        if !cc.cmdbuff.is_null() {
             // Save the values of the current cmdline and restore them below.
             save_cmdline(&raw mut save_ccline);
             did_save_ccline = true;
@@ -629,28 +625,28 @@ pub unsafe fn getcmdline_prompt(
         }
         let prompt_id = last_prompt_id.get();
         last_prompt_id.set(prompt_id.wrapping_add(1));
-        (*cc).prompt_id = prompt_id;
-        (*cc).cmdprompt = prompt as *mut ::core::ffi::c_char;
-        (*cc).hl_id = hl_id;
-        (*cc).xp_context = xp_context;
-        (*cc).xp_arg = xp_arg as *mut ::core::ffi::c_char;
-        (*cc).input_fn = (firstc == '@' as ::core::ffi::c_int) as ::core::ffi::c_int;
-        (*cc).highlight_callback = highlight_callback;
-        (*cc).one_key = one_key;
-        (*cc).mouse_used = mouse_used;
+        cc.prompt_id = prompt_id;
+        cc.cmdprompt = prompt as *mut ::core::ffi::c_char;
+        cc.hl_id = hl_id;
+        cc.xp_context = xp_context;
+        cc.xp_arg = xp_arg as *mut ::core::ffi::c_char;
+        cc.input_fn = (firstc == '@' as ::core::ffi::c_int) as ::core::ffi::c_int;
+        cc.highlight_callback = highlight_callback;
+        cc.one_key = one_key;
+        cc.mouse_used = mouse_used;
 
         let cmd_silent_saved = cmd_silent.get();
         let loud = Allow::messages();
         cmd_silent.set(false); // want to see the prompt
 
         let ret = command_line_enter(firstc, 1, 0, false) as *mut ::core::ffi::c_char;
-        (*cc).redraw_state = kCmdRedrawNone;
+        cc.redraw_state = kCmdRedrawNone;
         if did_save_ccline {
             restore_cmdline(&raw mut save_ccline);
         }
         drop(loud);
         cmd_silent.set(cmd_silent_saved);
-        if !(*cc).cmdbuff.is_null() {
+        if !cc.cmdbuff.is_null() {
             msg_col.set(msg_col_save);
         }
         ret

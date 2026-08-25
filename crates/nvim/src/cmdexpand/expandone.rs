@@ -71,21 +71,15 @@ pub(crate) unsafe fn nextwild(
     escape: bool,
 ) -> c_int {
     unsafe {
-        let ccline = get_cmdline_info();
+        let mut ccline = Cc::current();
         let from_wildtrigger_func = options.has(WildOpts::FUNC_TRIGGER);
         let wild_navigate = mode.navigates();
 
         if (*xp).xp_numfiles == -1 {
             pre_incsearch_pos.set((*xp).xp_pre_incsearch_pos);
-            if (*ccline).input_fn != 0 && (*ccline).xp_context == ExpandContext::Commands {
+            if ccline.input_fn != 0 && ccline.xp_context == ExpandContext::Commands {
                 // Expand commands typed in the input() function.
-                set_cmd_context(
-                    xp,
-                    (*ccline).cmdbuff,
-                    (*ccline).cmdlen,
-                    (*ccline).cmdpos,
-                    false,
-                );
+                set_cmd_context(xp, ccline.cmdbuff, ccline.cmdlen, ccline.cmdpos, false);
             } else {
                 may_expand_pattern.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
                 set_expand_context(xp);
@@ -111,9 +105,9 @@ pub(crate) unsafe fn nextwild(
         // Where the pattern starts within the command line.  Held as an index
         // rather than a pointer because `realloc_cmdbuff` below can move the
         // buffer out from under `xp_pattern`.
-        let at = (*xp).xp_pattern.offset_from((*ccline).cmdbuff) as c_int;
-        debug_assert!((*ccline).cmdpos >= at);
-        (*xp).xp_pattern_len = ((*ccline).cmdpos - at) as size_t;
+        let at = (*xp).xp_pattern.offset_from(ccline.cmdbuff) as c_int;
+        debug_assert!(ccline.cmdpos >= at);
+        (*xp).xp_pattern_len = (ccline.cmdpos - at) as size_t;
 
         // Skip showing matches if the prefix is invalid during wildtrigger().
         let context = (*xp).xp_context;
@@ -156,7 +150,7 @@ pub(crate) unsafe fn nextwild(
             p = expand_one(
                 xp,
                 tmp,
-                xstrnsave((*ccline).cmdbuff.offset(at as isize), (*xp).xp_pattern_len),
+                xstrnsave(ccline.cmdbuff.offset(at as isize), (*xp).xp_pattern_len),
                 use_options,
                 mode,
             );
@@ -167,7 +161,7 @@ pub(crate) unsafe fn nextwild(
             if !p.is_null() && mode == WildMode::Longest {
                 let mut literal = 0;
                 while (literal as size_t) < (*xp).xp_pattern_len {
-                    let c = *(*ccline).cmdbuff.offset((at + literal) as isize);
+                    let c = *ccline.cmdbuff.offset((at + literal) as isize);
                     if c == b'*' as c_char || c == b'?' as c_char {
                         break;
                     }
@@ -181,33 +175,31 @@ pub(crate) unsafe fn nextwild(
         }
 
         // Save the command line before inserting the selected item.
-        if !wild_navigate && !(*ccline).cmdbuff.is_null() {
+        if !wild_navigate && !ccline.cmdbuff.is_null() {
             xfree(cmdline_orig.get() as *mut c_void);
-            cmdline_orig.set(xstrnsave((*ccline).cmdbuff, (*ccline).cmdlen as size_t));
+            cmdline_orig.set(xstrnsave(ccline.cmdbuff, ccline.cmdlen as size_t));
         }
 
         if !p.is_null() && !got_int.get() && !options.has(WildOpts::NOSELECT) {
             let plen = strlen(p);
             let difflen = plen as c_int - (*xp).xp_pattern_len as c_int;
-            if (*ccline).cmdlen + difflen + 4 > (*ccline).cmdbufflen {
-                realloc_cmdbuff((*ccline).cmdlen + difflen + 4);
+            if ccline.cmdlen + difflen + 4 > ccline.cmdbufflen {
+                realloc_cmdbuff(ccline.cmdlen + difflen + 4);
                 // The buffer moved; re-derive the pattern pointer from `at`.
-                (*xp).xp_pattern = (*ccline).cmdbuff.offset(at as isize);
+                (*xp).xp_pattern = ccline.cmdbuff.offset(at as isize);
             }
-            debug_assert!((*ccline).cmdpos <= (*ccline).cmdlen);
+            debug_assert!(ccline.cmdpos <= ccline.cmdlen);
             // Open (or close) a gap of `difflen` bytes at the cursor, taking
             // the NUL along, then drop the match in at the pattern's start.
             // Both copies overlap the destination, hence `copy`.
             ptr::copy(
-                (*ccline).cmdbuff.offset((*ccline).cmdpos as isize),
-                (*ccline)
-                    .cmdbuff
-                    .offset(((*ccline).cmdpos + difflen) as isize),
-                ((*ccline).cmdlen - (*ccline).cmdpos + 1) as size_t,
+                ccline.cmdbuff.offset(ccline.cmdpos as isize),
+                ccline.cmdbuff.offset((ccline.cmdpos + difflen) as isize),
+                (ccline.cmdlen - ccline.cmdpos + 1) as size_t,
             );
-            ptr::copy(p, (*ccline).cmdbuff.offset(at as isize), plen);
-            (*ccline).cmdlen += difflen;
-            (*ccline).cmdpos += difflen;
+            ptr::copy(p, ccline.cmdbuff.offset(at as isize), plen);
+            ccline.cmdlen += difflen;
+            ccline.cmdpos += difflen;
         }
 
         redrawcmd();
@@ -301,7 +293,7 @@ unsafe fn next_match(mode: WildMode, xp: *mut expand_T) -> *mut c_char {
                 cmdline_pum_display(false);
             } else if cmdline_compl_use_pum(true) {
                 cmdline_pum_create(
-                    get_cmdline_info(),
+                    Cc::current(),
                     xp,
                     (*xp).xp_files,
                     count,

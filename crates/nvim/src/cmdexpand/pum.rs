@@ -17,7 +17,7 @@ use core::ptr;
 
 /// Create the completion popup menu with items from `matches`.
 pub(crate) unsafe fn cmdline_pum_create(
-    ccline: *mut CmdlineInfo,
+    ccline: Cc,
     xp: *mut expand_T,
     matches: *mut *mut c_char,
     numMatches: c_int,
@@ -54,7 +54,7 @@ pub(crate) unsafe fn cmdline_pum_create(
         } else {
             (*xp).xp_pattern
         };
-        let col = endpos.offset_from((*ccline).cmdbuff) as c_int;
+        let col = endpos.offset_from(ccline.cmdbuff) as c_int;
         compl_startcol.set(if ui_has(kUICmdline) && (*cmdline_win.ptr()).is_null() {
             col
         } else {
@@ -91,7 +91,7 @@ pub unsafe fn cmdline_pum_remove(defer_redraw: bool) {
     }
 }
 
-pub unsafe fn cmdline_pum_cleanup(cclp: *mut CmdlineInfo) {
+pub(crate) unsafe fn cmdline_pum_cleanup(cclp: Cc) {
     unsafe {
         cmdline_pum_remove(false);
         wildmenu_cleanup(cclp);

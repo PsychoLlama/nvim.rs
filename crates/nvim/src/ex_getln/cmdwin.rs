@@ -172,7 +172,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         // Set the "cmdwin_*" variables before any autocommand can mess
         // things up.
         cmdwin_type.set(get_cmdline_type());
-        cmdwin_level.set((*ccline.ptr()).level);
+        cmdwin_level.set(Cc::current().level);
         cmdwin_win.set(curwin.get());
         cmdwin_old_curwin.set(old_curwin);
 
@@ -282,11 +282,11 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         // the cursor there.
         ml_replace(
             (*curbuf.get()).b_ml.ml_line_count,
-            (*ccline.ptr()).cmdbuff,
+            Cc::current().cmdbuff,
             true,
         );
         (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
-        (*curwin.get()).w_cursor.col = (*ccline.ptr()).cmdpos as colnr_T;
+        (*curwin.get()).w_cursor.col = Cc::current().cmdpos as colnr_T;
         changed_line_abv_curs();
         invalidate_botline_win(curwin.get());
         ui_ext_cmdline_hide(false);
@@ -358,11 +358,11 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
                 if histtype == HIST_CMD {
                     // Execute the command directly.
-                    (*ccline.ptr()).cmdbuff =
-                        xmemdupz(p.as_ptr() as *const ::core::ffi::c_void, plen)
-                            as *mut ::core::ffi::c_char;
-                    (*ccline.ptr()).cmdlen = plen as ::core::ffi::c_int;
-                    (*ccline.ptr()).cmdbufflen = plen as ::core::ffi::c_int + 1;
+                    let mut cc = Cc::current();
+                    cc.cmdbuff = xmemdupz(p.as_ptr() as *const ::core::ffi::c_void, plen)
+                        as *mut ::core::ffi::c_char;
+                    cc.cmdlen = plen as ::core::ffi::c_int;
+                    cc.cmdbufflen = plen as ::core::ffi::c_int + 1;
                     cmdwin_result.set(CAR);
                 } else {
                     // First need to cancel what we were doing.
@@ -373,32 +373,31 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             } else if cmdwin_result.get() == Ctrl_C {
                 // ":q" or ":close": don't execute any command and don't
                 // modify the cmdline window.
-                (*ccline.ptr()).cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                Cc::current().cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
             } else {
-                (*ccline.ptr()).cmdlen = get_cursor_line_len() as ::core::ffi::c_int;
-                (*ccline.ptr()).cmdbufflen = (*ccline.ptr()).cmdlen + 1;
-                (*ccline.ptr()).cmdbuff =
-                    xstrnsave(get_cursor_line_ptr(), (*ccline.ptr()).cmdlen as size_t);
+                let mut cc = Cc::current();
+                cc.cmdlen = get_cursor_line_len() as ::core::ffi::c_int;
+                cc.cmdbufflen = cc.cmdlen + 1;
+                cc.cmdbuff = xstrnsave(get_cursor_line_ptr(), cc.cmdlen as size_t);
             }
 
-            if (*ccline.ptr()).cmdbuff.is_null() {
-                (*ccline.ptr()).cmdbuff = xmemdupz(c"".as_ptr() as *const ::core::ffi::c_void, 0)
+            let mut cc = Cc::current();
+            if cc.cmdbuff.is_null() {
+                cc.cmdbuff = xmemdupz(c"".as_ptr() as *const ::core::ffi::c_void, 0)
                     as *mut ::core::ffi::c_char;
-                (*ccline.ptr()).cmdlen = 0;
-                (*ccline.ptr()).cmdbufflen = 1;
-                (*ccline.ptr()).cmdpos = 0;
+                cc.cmdlen = 0;
+                cc.cmdbufflen = 1;
+                cc.cmdpos = 0;
                 cmdwin_result.set(Ctrl_C);
             } else {
-                (*ccline.ptr()).cmdpos = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
+                cc.cmdpos = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                 // If the cursor is on the last character, it probably should
                 // be after it.
-                if (*ccline.ptr()).cmdpos == (*ccline.ptr()).cmdlen - 1
-                    || (*ccline.ptr()).cmdpos > (*ccline.ptr()).cmdlen
-                {
-                    (*ccline.ptr()).cmdpos = (*ccline.ptr()).cmdlen;
+                if cc.cmdpos == cc.cmdlen - 1 || cc.cmdpos > cc.cmdlen {
+                    cc.cmdpos = cc.cmdlen;
                 }
                 if cmdwin_result.get() == K_IGNORE {
-                    (*ccline.ptr()).cmdspos = cmd_screencol((*ccline.ptr()).cmdpos);
+                    cc.cmdspos = cmd_screencol(cc.cmdpos);
                     redrawcmd();
                 }
             }

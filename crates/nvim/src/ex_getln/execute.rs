@@ -46,7 +46,7 @@ const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
 /// - `CTRL-\ e` prompts for an expression.
 unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         (*s).c = {
             let _raw = Keys::unmapped_with_codes();
             plain_vgetc()
@@ -57,7 +57,7 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
         if (*s).c != Ctrl_N
             && (*s).c != Ctrl_G
             && ((*s).c != 'e' as ::core::ffi::c_int
-                || ((*cc).cmdfirstc == '=' as ::core::ffi::c_int && KeyTyped.get())
+                || (cc.cmdfirstc == '=' as ::core::ffi::c_int && KeyTyped.get())
                 || cmdline_star.get() > 0)
         {
             vungetc((*s).c);
@@ -72,10 +72,10 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
 
         // Replace the command line with the result of an expression. This
         // calls getcmdline() recursively, from get_expr_register().
-        new_cmdpos.set(if (*cc).cmdpos == (*cc).cmdlen {
+        new_cmdpos.set(if cc.cmdpos == cc.cmdlen {
             99999 // keep it at the end
         } else {
-            (*cc).cmdpos
+            cc.cmdpos
         });
 
         (*s).c = get_expr_register();
@@ -90,13 +90,13 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
             if !p.is_null() {
                 let len = strlen(p) as ::core::ffi::c_int;
                 realloc_cmdbuff(len + 1);
-                (*cc).cmdlen = len;
-                strcpy((*cc).cmdbuff, p);
+                cc.cmdlen = len;
+                strcpy(cc.cmdbuff, p);
                 xfree(p as *mut ::core::ffi::c_void);
 
                 // Restore the cursor, or use the position set with
                 // set_cmdline_pos().
-                (*cc).cmdpos = (*cc).cmdlen.min(new_cmdpos.get());
+                cc.cmdpos = cc.cmdlen.min(new_cmdpos.get());
 
                 KeyTyped.set(false); // don't do 'wildchar' completion
                 redrawcmd();
@@ -149,7 +149,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(
             (*s).xpc.xp_context = ExpandContext::Nothing;
         }
         (*s).wim_index = 0;
-        wildmenu_cleanup(ccline.ptr());
+        wildmenu_cleanup(Cc::current());
     }
 }
 
@@ -167,16 +167,16 @@ pub(crate) unsafe fn command_line_execute(
 
         let display_tick_saved: disptick_T = (*curwin.get()).w_display_tick;
         let s: *mut CommandLineState = state as *mut CommandLineState;
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         (*s).c = key;
 
         // If the cmdline was replaced externally (e.g. by setcmdline() during
         // an <expr> mapping), clean up the wildmenu completion state so that
         // stale completion data is not used.
-        if (*cc).cmdbuff_replaced && (*s).xpc.xp_numfiles > 0 {
+        if cc.cmdbuff_replaced && (*s).xpc.xp_numfiles > 0 {
             command_line_end_wildmenu(s, false, -1);
         }
-        (*cc).cmdbuff_replaced = false;
+        cc.cmdbuff_replaced = false;
 
         // Skip the wildmenu during history navigation with Up/Down.
         if (*s).c == K_WILD && (*s).did_hist_navigate {
@@ -206,7 +206,7 @@ pub(crate) unsafe fn command_line_execute(
                 may_do_incsearch_highlighting((*s).firstc, (*s).count, &raw mut (*s).is_state);
             }
             // If f_setcmdline() changed the cmdline, treat it as such.
-            if (*cc).cmdbuff_replaced {
+            if cc.cmdbuff_replaced {
                 command_line_changed(s);
             }
 
@@ -390,9 +390,9 @@ pub(crate) unsafe fn command_line_execute(
             // In Ex mode a backslash escapes a newline.
             if exmode_active.get()
                 && (*s).c != ESC
-                && (*cc).cmdpos == (*cc).cmdlen
-                && (*cc).cmdpos > 0
-                && *(*cc).cmdbuff.offset(((*cc).cmdpos - 1) as isize) as ::core::ffi::c_int
+                && cc.cmdpos == cc.cmdlen
+                && cc.cmdpos > 0
+                && *cc.cmdbuff.offset((cc.cmdpos - 1) as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
             {
                 if (*s).c == K_KENTER {
@@ -501,10 +501,10 @@ pub(crate) unsafe fn command_line_execute(
 
 pub(crate) unsafe fn may_trigger_cursormovedc(s: *mut CommandLineState) {
     unsafe {
-        let cc = ccline.ptr();
-        if (*cc).cmdpos != (*s).prev_cmdpos {
+        let mut cc = Cc::current();
+        if cc.cmdpos != (*s).prev_cmdpos {
             trigger_cmd_autocmd((*s).cmdline_type, EVENT_CURSORMOVEDC);
-            (*cc).redraw_state = (*cc).redraw_state.max(kCmdRedrawPos);
+            cc.redraw_state = cc.redraw_state.max(kCmdRedrawPos);
         }
     }
 }
@@ -517,7 +517,7 @@ pub(crate) unsafe fn may_trigger_cursormovedc(s: *mut CommandLineState) {
 pub(crate) unsafe fn command_line_not_changed(s: *mut CommandLineState) -> ::core::ffi::c_int {
     unsafe {
         may_trigger_cursormovedc(s);
-        (*s).prev_cmdpos = (*ccline.ptr()).cmdpos;
+        (*s).prev_cmdpos = Cc::current().cmdpos;
         if !(*s).is_state.incsearch_postponed {
             return 1;
         }
@@ -565,7 +565,7 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
 pub(crate) unsafe fn command_line_changed(s: *mut CommandLineState) -> ::core::ffi::c_int {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         let prev_cmdpreview = cmdpreview.get();
         let preview_shown = (*s).firstc == ':' as ::core::ffi::c_int
             && current_sctx.get().sc_sid == 0 // only if interactive
@@ -587,9 +587,9 @@ pub(crate) unsafe fn command_line_changed(s: *mut CommandLineState) -> ::core::f
             }
         }
 
-        if !(*cc).cmdbuff_replaced
-            && ((*cc).cmdpos != (*s).prev_cmdpos
-                || (!(*s).prev_cmdbuff.is_null() && strcmp((*s).prev_cmdbuff, (*cc).cmdbuff) != 0))
+        if !cc.cmdbuff_replaced
+            && (cc.cmdpos != (*s).prev_cmdpos
+                || (!(*s).prev_cmdbuff.is_null() && strcmp((*s).prev_cmdbuff, cc.cmdbuff) != 0))
         {
             do_autocmd_cmdlinechanged(if (*s).firstc > 0 {
                 (*s).firstc

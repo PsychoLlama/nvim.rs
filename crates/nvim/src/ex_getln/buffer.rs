@@ -7,9 +7,9 @@
 //! escape a file name on its way in.
 //!
 //! [`Cc`] is the command line itself: one wrapper over `ccline` whose `Deref`
-//! carries every field access in the file, derived afresh at each use because
-//! the register and abbreviation machinery re-enters and can replace the
-//! whole structure.
+//! carries every field access in `ex_getln/` and its `cmdexpand/` neighbours,
+//! derived afresh at each use because the register and abbreviation machinery
+//! re-enters and can replace the whole structure.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -24,14 +24,17 @@ use core::ops::{Deref, DerefMut};
 
 /// `ccline`, the command line the editor is on.
 ///
-/// Every reader here would otherwise spell `(*ccline.ptr()).field`; the two
-/// `Deref` impls state the obligation once. A value is always derived through
-/// [`Cc::current`] at the point of use and never held across a call that can
-/// re-enter command-line mode -- [`save_cmdline`] replaces the whole
-/// structure, and [`realloc_cmdbuff`] moves the text out from under any
-/// pointer into it.
+/// Every reader would otherwise spell `(*ccline.ptr()).field`; the two `Deref`
+/// impls state the obligation once, and the whole of `ex_getln/` plus the
+/// `cmdexpand/` entry points that used to take a `*mut CmdlineInfo` go through
+/// this handle instead. It names the *cell*, whose address never moves, so
+/// holding one is sound; what moves is the value inside it, which is why a
+/// value is derived through [`Cc::current`] at the point of use and never held
+/// across a call that can re-enter command-line mode -- [`save_cmdline`]
+/// replaces the whole structure, and [`realloc_cmdbuff`] moves the text out
+/// from under any pointer into it.
 #[derive(Clone, Copy)]
-struct Cc(*mut CmdlineInfo);
+pub(crate) struct Cc(*mut CmdlineInfo);
 
 impl Deref for Cc {
     type Target = CmdlineInfo;
@@ -50,8 +53,19 @@ impl DerefMut for Cc {
 }
 
 impl Cc {
-    fn current() -> Self {
+    /// The command line the editor is on.
+    ///
+    /// Safe, and the only constructor: `ccline` is a `&'static GlobalCell`,
+    /// which is exactly the promise a raw `*mut CmdlineInfo` would have to be
+    /// told.  The *cell* never moves; its contents do, which is why the handle
+    /// is derived afresh at each use rather than held.
+    pub(crate) fn current() -> Self {
         Cc(ccline.ptr())
+    }
+
+    /// The address, for the calls that still spell a raw pointer.
+    pub(crate) fn raw(self) -> *mut CmdlineInfo {
+        self.0
     }
 
     /// The command line's own bytes: `cmdbuff[..cmdlen]`.
@@ -63,7 +77,7 @@ impl Cc {
     /// [`put_on_cmdline`] -- both move the allocation -- which is why every
     /// caller takes it inside the expression that reads it rather than
     /// binding it across a call.
-    fn bytes<'a>(self) -> &'a [::core::ffi::c_char] {
+    pub(crate) fn bytes<'a>(self) -> &'a [::core::ffi::c_char] {
         if self.cmdbuff.is_null() {
             return &[];
         }

@@ -25,7 +25,7 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
 pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
-        let cc = ccline.ptr();
+        let mut cc = Cc::current();
         let res;
         let mut options = WildOpts::NO_BEEP;
         let escape = (*s).firstc != '@' as ::core::ffi::c_int;
@@ -72,7 +72,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                 }
                 (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start;
             }
-            let cmdpos_before = (*cc).cmdpos;
+            let cmdpos_before = cc.cmdpos;
 
             // If 'wildmode' starts with "longest", get the longest common
             // part.
@@ -108,7 +108,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             // Display the matches.
             if res == OK && (*s).xpc.xp_numfiles > if wim_noselect { 0 } else { 1 } {
                 if wim_longest {
-                    let found_longest_prefix = (*cc).cmdpos != cmdpos_before;
+                    let found_longest_prefix = cc.cmdpos != cmdpos_before;
                     if wim_list || (p_wmnu.get() != 0 && wim_full) {
                         showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, true);
                     } else if !found_longest_prefix {
