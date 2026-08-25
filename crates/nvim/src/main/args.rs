@@ -30,11 +30,11 @@ use crate::guard::{SavedSctx, Script};
 use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
-    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, IObuff, MAX_ARG_CMDS,
-    SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode,
-    err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
-    exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptValTypeNumber, kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T,
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, SESSION_FILE,
+    SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode, err_arg_missing,
+    err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args, exmode_active,
+    global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile,
+    kOptValTypeNumber, kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T,
     nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write, readonlymode, recoverymode,
     silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
 };
@@ -231,17 +231,18 @@ impl Scan {
     /// `-s`, `-w` and `-W` share one complaint: a script file is already
     /// open.
     unsafe fn script_file_twice(&self) -> ! {
+        let mut complaint = [0 as c_char; IOSIZE as usize];
         // SAFETY: `argv[-1]` is the option and `argv[0]` its argument, both
         // in range by the time this is reachable.
         unsafe {
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                complaint.as_mut_ptr(),
                 IOSIZE as size_t,
                 gettext(c"Attempt to open script file again: \"%s %s\"\n".as_ptr()),
                 *self.argv.offset(-1),
                 *self.argv,
             );
-            fprintf(stderr, c"%s".as_ptr(), IObuff.ptr() as *mut c_char);
+            fprintf(stderr, c"%s".as_ptr(), complaint.as_ptr());
             os_exit(2)
         }
     }

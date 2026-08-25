@@ -30,10 +30,13 @@ pub(crate) struct Outcome {
     pub filesize: off_T,
 }
 
-/// Report what was read, in `IObuff`.
+/// Report what was read.
 pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
+    // The report. Upstream assembles it in `IObuff`, which `msg_trunc` and
+    // `set_keep_msg` reach the message machinery through.
+    let mut report = [0 as c_char; IOSIZE as usize];
     unsafe {
-        let io = IObuff.ptr().cast::<c_char>();
+        let io = report.as_mut_ptr();
         add_quoted_fname(io, IOSIZE as size_t, curbuf.get(), sfname);
         let mut noted = false;
         let mut buflen = strlen(io) as c_int;
@@ -101,10 +104,10 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
             );
             noted = true;
         }
-        if msg_add_fileformat(out.fileformat) {
+        if msg_add_fileformat(&mut report, out.fileformat) {
             noted = true;
         }
-        msg_add_lines(noted as c_int, out.linecnt, out.filesize);
+        msg_add_lines(&mut report, noted as c_int, out.linecnt, out.filesize);
 
         xfree(keep_msg.get().cast());
         keep_msg.set(ptr::null_mut());

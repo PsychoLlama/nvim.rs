@@ -15,7 +15,7 @@ use crate::event::signal::{
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
-use crate::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
+use crate::main::{curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::os::cshim::snprintf;
 use crate::types::{
@@ -189,8 +189,9 @@ fn signal_name(signum: c_int) -> &'static CStr {
 /// from Elvis). Reached from the event loop, not from a signal handler.
 fn deadly_signal(signum: c_int) -> ! {
     let name = signal_name(signum).as_ptr();
+    let mut dying = [0 as c_char; IOSIZE as usize];
     // SAFETY: main-thread editor state; both log/format calls' arguments
-    // match their format strings, and IObuff is IOSIZE chars.
+    // match their format strings, and `dying` is IOSIZE chars.
     unsafe {
         // Set the v:dying variable.
         set_vim_var_nr(Vv::Dying, 1);
@@ -206,7 +207,7 @@ fn deadly_signal(signum: c_int) -> ! {
             name,
         );
         snprintf(
-            IObuff.ptr() as *mut c_char,
+            dying.as_mut_ptr(),
             IOSIZE as usize,
             c"Nvim: Caught deadly signal '%s'\n".as_ptr(),
             name,
@@ -215,7 +216,7 @@ fn deadly_signal(signum: c_int) -> ! {
             autowrite_all();
         }
         // Preserve files and exit.
-        preserve_exit(IObuff.ptr() as *mut c_char)
+        preserve_exit(dying.as_ptr())
     }
 }
 

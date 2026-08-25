@@ -15,7 +15,7 @@ use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
 };
-use crate::types::{ExpandContext, FAIL, NUL, OK};
+use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL, OK};
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
@@ -582,6 +582,9 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
 }
 
 pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core::ffi::c_int {
+    // One character, its own buffer: `put_on_cmdline` reaches the message
+    // machinery, which writes upstream's shared `IObuff`.
+    let mut ch = [0 as ::core::ffi::c_char; MB_MAXCHAR + 1];
     unsafe {
         let mut cc = Cc::current();
 
@@ -612,9 +615,9 @@ pub(crate) unsafe fn command_line_handle_key(s: *mut CommandLineState) -> ::core
         if is_special((*s).c) || mod_mask.get() != 0 {
             put_on_cmdline(get_special_key_name((*s).c, mod_mask.get()), -1, true);
         } else {
-            let j = utf_char2bytes((*s).c, IObuff.ptr() as *mut ::core::ffi::c_char);
-            (*IObuff.ptr())[j as usize] = NUL as ::core::ffi::c_char; // exclude composing chars
-            put_on_cmdline(IObuff.ptr() as *mut ::core::ffi::c_char, j, true);
+            let j = utf_char2bytes((*s).c, ch.as_mut_ptr());
+            ch[j as usize] = NUL as ::core::ffi::c_char; // exclude composing chars
+            put_on_cmdline(ch.as_mut_ptr(), j, true);
         }
         if cc.one_key {
             0

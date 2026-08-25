@@ -396,6 +396,7 @@ unsafe fn handle_include(
     action: c_int,
     silent: bool,
 ) {
+    let mut progress = [0 as c_char; IOSIZE as usize];
     unsafe {
         // A relative name is resolved against the file the line is in.
         let p_fname = if walk.curr_fname == (*curbuf.get()).b_fname {
@@ -457,12 +458,12 @@ unsafe fn handle_include(
         if action == ACTION_EXPAND && !shortmess(ShmFlag::COMPLETIONSCAN) && !silent {
             msg_hist_off.set(true); // reset in msg_trunc()
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                progress.as_mut_ptr(),
                 IOSIZE as size_t,
                 gettext(c"Scanning included file: %s".as_ptr()),
                 name,
             );
-            msg_trunc(IObuff.ptr() as *mut c_char, true, HLF_R);
+            msg_trunc(progress.as_mut_ptr(), true, HLF_R);
         } else if p_verbose.get() >= 5 {
             verbose_enter();
             smsg_c!(0, gettext(c"Searching included file %s".as_ptr()), name);
@@ -593,6 +594,9 @@ enum After {
 /// # Safety
 /// As [`handle_include`]; `startp` must be inside `walk.line`.
 unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction) -> After {
+    // Where a joined `CTRL-X CTRL-I` line is assembled; upstream shares
+    // `IObuff`, which the completion it feeds writes again.
+    let mut joined = [0 as c_char; IOSIZE as usize];
     unsafe {
         let mut cont_s_ipos = false;
         if walk.files.depth() == -1 && walk.lnum == (*curwin.get()).w_cursor.lnum {
@@ -613,7 +617,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
 
         if compl_status_adding() && i == ins_compl_len() {
             // IOSIZE > compl_length, so the copy fits.
-            let iobuff = IObuff.ptr() as *mut c_char;
+            let iobuff = joined.as_mut_ptr();
             ptr::copy_nonoverlapping(aux, iobuff, i as usize);
 
             // Get the next line: from the current buffer below depth 0,
@@ -637,7 +641,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
                         *iobuff.offset(i as isize) = ' ' as c_char;
                         i += 1;
                     }
-                    // IObuff =~ "\(\k\|\i\).* ", so i >= 2.
+                    // `joined` =~ "\(\k\|\i\).* ", so i >= 2.
                     if p_js.get() != 0
                         && (*iobuff.offset(i as isize - 2) as c_int == '.' as c_int
                             || *iobuff.offset(i as isize - 2) as c_int == '?' as c_int

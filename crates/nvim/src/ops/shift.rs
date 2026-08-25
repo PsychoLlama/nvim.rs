@@ -33,6 +33,8 @@ use crate::types::{FAIL, IOSIZE, NUL};
 /// `oap` must point to a live `oparg_T` describing a region of the current
 /// buffer.
 pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
+    // The "N lines >ed M times" report; upstream shares `IObuff` for it.
+    let mut report = [0 as c_char; IOSIZE as usize];
     unsafe {
         if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
             return;
@@ -92,7 +94,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
                 amount as c_ulong,
             );
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                report.as_mut_ptr(),
                 IOSIZE as size_t,
                 ngettext(
                     msg_line_single,
@@ -103,7 +105,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
                 op,
                 amount,
             );
-            msg_keep(IObuff.ptr() as *mut c_char, 0, true, false);
+            msg_keep(report.as_mut_ptr(), 0, true, false);
         }
 
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {

@@ -28,13 +28,13 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    IObuff, State, allbuf_lock, autocmd_busy, curbuf, curtab, curwin, did_check_timestamps,
-    e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage,
-    firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
-    msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
-    need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
-    p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
-    redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
+    State, allbuf_lock, autocmd_busy, curbuf, curtab, curwin, did_check_timestamps, e_interr,
+    e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage, firstbuf,
+    firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite,
+    msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
+    need_wait_return, no_check_timestamps, no_wait_return, p_ar, p_ccv, p_enc, p_fencs, p_ffs,
+    p_fic, p_ur, p_verbose, readonlymode, recoverymode, redraw_cmdline, redraw_tabline,
+    restart_edit, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
@@ -161,12 +161,15 @@ pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
 /// `s` is the note to append; an empty one means the message is progress on
 /// a write that is still running.
 pub unsafe fn filemess(buf: *mut buf_T, name: *mut c_char, s: *mut c_char) {
+    // The report. Upstream builds it in `IObuff` and then calls
+    // `msg_progress`/`msg_outtrans`, which write it again.
+    let mut report = [0 as c_char; IOSIZE as usize];
     unsafe {
         let prev_msg_col = msg_col.get();
         if msg_silent.get() != 0 {
             return;
         }
-        let io = IObuff.ptr().cast::<c_char>();
+        let io = report.as_mut_ptr();
         add_quoted_fname(io, IOSIZE as size_t - 100, buf, name);
         // Avoid an over-long translation causing trouble.
         xstrlcat(io, s, IOSIZE as size_t);
@@ -327,7 +330,10 @@ pub unsafe fn add_quoted_fname(
 /// Append the file format to `IObuff`, unless it is the platform default.
 ///
 /// @return  true if something was appended.
-pub unsafe fn msg_add_fileformat(eol_type: c_int) -> bool {
+pub(crate) unsafe fn msg_add_fileformat(
+    report: &mut [c_char; IOSIZE as usize],
+    eol_type: c_int,
+) -> bool {
     unsafe {
         let note = match eol_type {
             EOL_DOS => c"[dos]",
@@ -337,7 +343,7 @@ pub unsafe fn msg_add_fileformat(eol_type: c_int) -> bool {
             _ => return false,
         };
         xstrlcat(
-            IObuff.ptr().cast::<c_char>(),
+            report.as_mut_ptr(),
             gettext(note.as_ptr()),
             IOSIZE as size_t,
         );
@@ -345,10 +351,15 @@ pub unsafe fn msg_add_fileformat(eol_type: c_int) -> bool {
     }
 }
 
-/// Append the line and character count to `IObuff`.
-pub unsafe fn msg_add_lines(insert_space: c_int, lnum: linenr_T, nchars: off_T) {
+/// Append the line and character count to `report`.
+pub(crate) unsafe fn msg_add_lines(
+    report: &mut [c_char; IOSIZE as usize],
+    insert_space: c_int,
+    lnum: linenr_T,
+    nchars: off_T,
+) {
     unsafe {
-        let io = IObuff.ptr().cast::<c_char>();
+        let io = report.as_mut_ptr();
         let mut len = strlen(io);
         let space = if insert_space != 0 { c" " } else { c"" }.as_ptr();
 

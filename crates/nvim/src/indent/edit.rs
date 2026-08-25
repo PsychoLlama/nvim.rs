@@ -20,7 +20,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_splice_cols;
 use crate::indent_c::in_cinkeys;
 use crate::main::{
-    IObuff, Insstart, State, ai_col, can_si, can_si_back, curbuf_splice_pending, did_si, e_interr,
+    Insstart, State, ai_col, can_si, can_si_back, curbuf_splice_pending, did_si, e_interr,
     e_modifiable, e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
 };
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
@@ -60,17 +60,20 @@ pub unsafe fn inindent(extra: c_int) -> bool {
     }
 }
 
-/// Writes `fmt` with `n` into `IObuff` and shows it as `:indent` progress.
+/// Writes `fmt` with `n` into a buffer of its own and shows it as
+/// `:indent` progress. Upstream shares `IObuff` for it, which
+/// `msg_progress` writes again.
 ///
 /// # Safety
 /// `fmt` must be a NUL-terminated format string taking one `int64_t`.
 unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
-    // SAFETY: `IObuff` is `IOSIZE` bytes, which is what bounds the format,
-    // and the two labels are NUL-terminated constants.
+    let mut line = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `line` is `IOSIZE` bytes, which is what bounds the format, and
+    // the two labels are NUL-terminated constants.
     unsafe {
-        snprintf(IObuff.ptr().cast(), IOSIZE as size_t, fmt, n);
+        snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, n);
         msg_progress(
-            IObuff.ptr().cast(),
+            line.as_mut_ptr(),
             c"indent".as_ptr().cast_mut(),
             status.as_ptr().cast_mut(),
             0,

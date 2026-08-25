@@ -161,8 +161,11 @@ pub(crate) unsafe fn buf_get_backup_name(
     no_prepend_dot: bool,
     backup_ext: *mut c_char,
 ) -> *mut c_char {
+    // The directory entry being tried. Upstream uses the shared `IObuff`,
+    // and the loop raises errors, which run autocommands.
+    let mut entry = [0 as c_char; IOSIZE as usize];
     unsafe {
-        let iobuff = IObuff.ptr() as *mut c_char;
+        let iobuff = entry.as_mut_ptr();
         // Isolate one directory name from 'backupdir'.
         let dir_len = copy_option_part(dirp, iobuff, IOSIZE as size_t, c",".as_ptr().cast_mut());
         let mut p = iobuff.add(dir_len as usize);

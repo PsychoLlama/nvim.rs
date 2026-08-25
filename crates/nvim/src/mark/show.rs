@@ -20,7 +20,7 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{bt_prompt, buflist_findnr, buflist_nr2name};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, IObuff, e_argreq, e_invarg, e_invarg2, got_int};
+use crate::main::{Columns, e_argreq, e_invarg, e_invarg2, got_int};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
@@ -176,7 +176,8 @@ pub(super) unsafe fn show_one_mark(
         // SAFETY: `mark_line` allocates its answer.
         name = unsafe { mark_line(pos, 15) };
     }
-    // SAFETY: `name` is null or a NUL-terminated string, and `IObuff` is
+    let mut prefix = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `name` is null or a NUL-terminated string, and `prefix` is
     // `IOSIZE` bytes of live storage.
     unsafe {
         if !message_filtered(name) {
@@ -186,14 +187,14 @@ pub(super) unsafe fn show_one_mark(
             msg_putchar('\n' as c_int);
             if !got_int.get() {
                 snprintf(
-                    IObuff.ptr().cast::<c_char>(),
+                    prefix.as_mut_ptr(),
                     IOSIZE as size_t,
                     c" %c %6d %4d ".as_ptr(),
                     c,
                     pos.lnum,
                     pos.col,
                 );
-                msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
+                msg_outtrans(prefix.as_mut_ptr(), 0, false);
                 if !name.is_null() {
                     msg_outtrans(name, if current != 0 { HLF_D } else { 0 }, false);
                 }

@@ -191,8 +191,12 @@ pub(crate) unsafe fn report_written(
     notes: &WriteNotes,
     append: bool,
 ) {
+    // The report. Upstream assembles it in `IObuff`, which `msg_progress`
+    // and `set_keep_msg` write again.
+    let mut report = [0 as c_char; IOSIZE as usize];
+    let (lnum, nchars) = (written.lnum, written.nchars as off_T);
     unsafe {
-        let iobuff = IObuff.ptr() as *mut c_char;
+        let iobuff = report.as_mut_ptr();
         add_quoted_fname(iobuff, IOSIZE as size_t, buf, fname);
         let note = |text: &'static CStr| {
             xstrlcat(iobuff, translate(text).as_ptr(), IOSIZE as size_t);
@@ -227,10 +231,10 @@ pub(crate) unsafe fn report_written(
             insert_space = true;
         }
         // May add [unix/dos/mac].
-        if msg_add_fileformat(notes.fileformat) {
+        if msg_add_fileformat(&mut report, notes.fileformat) {
             insert_space = true;
         }
-        msg_add_lines(insert_space as c_int, written.lnum, written.nchars as off_T);
+        msg_add_lines(&mut report, insert_space as c_int, lnum, nchars);
 
         if !shortmess(ShmFlag::WRITE) {
             let short = shortmess(ShmFlag::WRI);

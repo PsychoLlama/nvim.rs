@@ -30,7 +30,7 @@ use crate::fileio::{
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::main::{
-    IObuff, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
+    curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
     msg_scroll, msg_silent, need_maketitle, no_wait_return, p_bdir, p_bex, p_bk, p_bsk, p_ccv,
     p_fs, p_pm, p_wb,
 };
@@ -74,8 +74,8 @@ pub(crate) use self::lines::*;
 /// A write error, held until the cleanup path can report it.
 ///
 /// `buf_write` has a single exit that emits the message, because the file
-/// name has to be quoted into `IObuff` first and because every failure
-/// shares the "original file may be lost" handling that follows.
+/// name has to be quoted first and because every failure shares the
+/// "original file may be lost" handling that follows.
 pub(crate) struct WriteError {
     /// The `E502`-style code, printed before the quoted file name.
     num: Option<&'static CStr>,
@@ -145,11 +145,11 @@ impl WriteError {
         }
     }
 
-    /// Report the error. The quoted file name is already in `IObuff`.
-    pub(crate) unsafe fn emit(&self) {
+    /// Report the error, against the already-quoted file name in `fname`.
+    pub(crate) unsafe fn emit(&self, fname: &[::core::ffi::c_char; IOSIZE as usize]) {
         unsafe {
             let msg = self.msg.as_ptr();
-            let iobuff = IObuff.ptr() as *mut ::core::ffi::c_char;
+            let iobuff = fname.as_ptr().cast_mut();
             match (self.num, self.arg) {
                 (Some(num), 0) => {
                     semsg_c!(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg);
@@ -288,6 +288,8 @@ pub unsafe fn buf_write(
     eap: *mut exarg_T,
     req: WriteRequest,
 ) -> ::core::ffi::c_int {
+    // The quoted file name the failure path reports against.
+    let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     unsafe {
         let (mut buf, mut start, mut end) = (buf, start, end);
         let mut retval = OK;
@@ -819,13 +821,8 @@ pub unsafe fn buf_write(
 
         if let Some(err) = &err {
             // -100 to save some space for a further error message.
-            add_quoted_fname(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                (IOSIZE - 100) as size_t,
-                buf,
-                fname,
-            );
-            err.emit();
+            add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, buf, fname);
+            err.emit(&quoted);
             retval = FAIL;
             if end == 0 {
                 let hl_id = HLF_E;

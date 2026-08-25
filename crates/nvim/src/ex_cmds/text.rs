@@ -20,7 +20,7 @@ use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
-use crate::main::{IObuff, curbuf, curwin};
+use crate::main::{curbuf, curwin};
 use crate::mbyte::{
     utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
@@ -54,6 +54,9 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
     }
 
     let mut need_clear = true;
+    // The line being described. Upstream assembles it in `IObuff`, which
+    // `msg_multiline` reads again as it re-enters the message machinery.
+    let mut line = [0 as c_char; IOSIZE as usize];
     // SAFETY: message state, main thread.
     unsafe {
         msg_sb_eol();
@@ -74,7 +77,7 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
         // SAFETY: `curbuf` is the live current buffer.
         let mac = c == CAR && unsafe { get_fileformat(curbuf.get()) } == EOL_MAC;
         // SAFETY: `c` came out of the buffer.
-        unsafe { describe_byte(c, if mac { NL } else { c }, &mut need_clear) };
+        unsafe { describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line) };
         // needed for overlong ascii?
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data) } as usize;
@@ -85,7 +88,7 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
         // SAFETY: `off` is a character boundary short of the sequence's end.
         c = unsafe { utf_ptr2char(data.add(off)) };
         // SAFETY: `c` came out of the buffer.
-        unsafe { describe_char(c, off > 0, &mut need_clear) };
+        unsafe { describe_char(c, off > 0, &mut need_clear, &mut line) };
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data.add(off)) } as usize;
     }
@@ -106,7 +109,12 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Message state must be started; `need_clear` must be live.
-unsafe fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
+unsafe fn describe_byte(
+    c: c_int,
+    cval: c_int,
+    need_clear: &mut bool,
+    line: &mut [c_char; IOSIZE as usize],
+) {
     let mut nonprint: [c_char; 20] = [0; 20];
     // SAFETY: `nonprint` is 20 bytes and `transchar_nonprint` writes at most
     // seven into `raw` before the `  <%s>` wrapper takes it.
@@ -134,11 +142,12 @@ unsafe fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
         None => c"<%s>%s%s  %d,  Hex %02x,  Octal %03o",
     };
     let digraph = digraph.unwrap_or([0; 3]);
-    // SAFETY: `IObuff` is 1025 bytes and `vim_snprintf` bounds itself by the
-    // length it is given; `transchar` returns a static NUL-terminated string.
+    // SAFETY: `line` is `IOSIZE` bytes and `vim_snprintf` bounds itself by
+    // the length it is given; `transchar` returns a static NUL-terminated
+    // string.
     unsafe {
         vim_snprintf(
-            IObuff.ptr().cast::<c_char>(),
+            line.as_mut_ptr(),
             IOSIZE as usize,
             gettext(fmt.as_ptr()),
             transchar(c),
@@ -150,8 +159,8 @@ unsafe fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
             digraph.as_ptr(),
         );
     }
-    // SAFETY: `IObuff` now holds a NUL-terminated string.
-    unsafe { emit_iobuff(need_clear) };
+    // SAFETY: `line` now holds a NUL-terminated string.
+    unsafe { emit_line(line, need_clear) };
 }
 
 /// The `:ascii` line for one character of a multi-byte or combining sequence.
@@ -161,9 +170,15 @@ unsafe fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
 ///
 /// # Safety
 /// Message state must be started; `need_clear` must be live.
-unsafe fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
+unsafe fn describe_char(
+    c: c_int,
+    spaced: bool,
+    need_clear: &mut bool,
+    line: &mut [c_char; IOSIZE as usize],
+) {
     // This assumes every multi-byte char is printable...
-    let used = IObuff.with_mut(|buf| {
+    let used = {
+        let buf = &mut *line;
         let mut len = 0;
         if spaced {
             buf[len] = b' ' as c_char;
@@ -178,7 +193,7 @@ unsafe fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
         }
         // SAFETY: at most four bytes go in, with 1020 left.
         len + unsafe { utf_char2bytes(c, buf.as_mut_ptr().add(len)) } as usize
-    });
+    };
 
     // Four formats: with and without a digraph, and hex in four or eight
     // digits.  The digraph argument goes out either way (see `describe_byte`).
@@ -190,11 +205,11 @@ unsafe fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
         (false, false) => c"> %d, Hex %08x, Octal %o",
     };
     let digraph = digraph.unwrap_or([0; 3]);
-    // SAFETY: `used` bytes of `IObuff` are written and `vim_snprintf` bounds
+    // SAFETY: `used` bytes of `line` are written and `vim_snprintf` bounds
     // itself by the room reported left.
     unsafe {
         vim_snprintf(
-            IObuff.ptr().cast::<c_char>().add(used),
+            line.as_mut_ptr().add(used),
             IOSIZE as usize - used,
             gettext(fmt.as_ptr()),
             c,
@@ -203,20 +218,20 @@ unsafe fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
             digraph.as_ptr(),
         );
     }
-    // SAFETY: `IObuff` now holds a NUL-terminated string.
-    unsafe { emit_iobuff(need_clear) };
+    // SAFETY: `line` now holds a NUL-terminated string.
+    unsafe { emit_line(line, need_clear) };
 }
 
-/// Print what `IObuff` holds as one `:ascii` line.
+/// Print what `line` holds as one `:ascii` line.
 ///
 /// # Safety
-/// `IObuff` must hold a NUL-terminated string and message state must be
+/// `line` must hold a NUL-terminated string and message state must be
 /// started.
-unsafe fn emit_iobuff(need_clear: &mut bool) {
+unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool) {
     // SAFETY: caller's contract.
     unsafe {
         msg_multiline(
-            cstr_as_string(IObuff.ptr().cast::<c_char>()),
+            cstr_as_string(line.as_mut_ptr()),
             0,
             true,
             false,
