@@ -457,13 +457,23 @@ pub unsafe fn pum_display(
             }
         }
 
-        (*pum_grid.ptr()).zindex = if State.get() & MODE_CMDLINE != 0 {
+        let mut grid = pum_grid_ref();
+        grid.zindex = if State.get() & MODE_CMDLINE != 0 {
             kZIndexCmdlinePopupMenu as c_int
         } else {
             kZIndexPopupMenu as c_int
         };
         pum_redraw();
     }
+}
+
+/// The popup menu's own grid, as a handle.
+///
+/// One acquisition per path. The grid is registered with the compositor and
+/// reached from there while it is being drawn on, so it is named rather than
+/// borrowed -- see [`GridRef`] for why that matters.
+pub(crate) fn pum_grid_ref() -> GridRef {
+    GridRef::of_cell(&pum_grid)
 }
 
 /// Take the menu down.
@@ -493,6 +503,7 @@ pub unsafe fn pum_undisplay(immediate: bool) {
 /// # Safety
 /// Closing the info window runs autocommands.
 pub unsafe fn pum_check_clear() {
+    let mut grid = pum_grid_ref();
     // SAFETY: `pum_grid` is the editor's own grid.
     unsafe {
         if pum_is_visible.get() || !pum_is_drawn.get() {
@@ -501,13 +512,13 @@ pub unsafe fn pum_check_clear() {
         if pum_external.get() {
             ui_call_popupmenu_hide();
         } else {
-            ui_comp_remove_grid(pum_grid.ptr());
+            ui_comp_remove_grid(grid.raw());
             if ui_has(kUIMultigrid) {
-                ui_call_win_close((*pum_grid.ptr()).handle as Integer);
-                ui_call_grid_destroy((*pum_grid.ptr()).handle as Integer);
+                ui_call_win_close(grid.handle as Integer);
+                ui_call_grid_destroy(grid.handle as Integer);
             }
             // TODO(bfredl): consider keeping float grids allocated.
-            (*pum_grid.ptr()).free();
+            grid.free();
         }
         pum_is_drawn.set(false);
         pum_external.set(false);
@@ -622,25 +633,25 @@ pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
 /// # Safety
 /// `pum_grid` must be allocated and its placement settled.
 unsafe fn pum_send_float_pos() {
-    // SAFETY: `pum_grid` is the editor's own grid.
-    unsafe {
-        let above = pum_above.get();
-        let anchor = if above { c"SW" } else { c"NW" };
-        let row_off = if above { -pum_height.get() } else { 0 };
-        ui_call_win_float_pos(
-            (*pum_grid.ptr()).handle as Integer,
-            -1 as Window,
-            cstr_as_string(anchor.as_ptr()),
-            pum_anchor_grid.get() as Integer,
-            (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
-            (pum_left_col.get() - pum_win_col_offset.get()) as Float,
-            false,
-            (*pum_grid.ptr()).zindex as Integer,
-            (*pum_grid.ptr()).comp_index as c_int as Integer,
-            (*pum_grid.ptr()).comp_row as Integer,
-            (*pum_grid.ptr()).comp_col as Integer,
-        );
-    }
+    let grid = pum_grid_ref();
+    let above = pum_above.get();
+    let anchor = if above { c"SW" } else { c"NW" };
+    let row_off = if above { -pum_height.get() } else { 0 };
+    // SAFETY: the anchor is a literal.
+    let anchor = unsafe { cstr_as_string(anchor.as_ptr()) };
+    ui_call_win_float_pos(
+        grid.handle as Integer,
+        -1 as Window,
+        anchor,
+        pum_anchor_grid.get() as Integer,
+        (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
+        (pum_left_col.get() - pum_win_col_offset.get()) as Float,
+        false,
+        grid.zindex as Integer,
+        grid.comp_index as c_int as Integer,
+        grid.comp_row as Integer,
+        grid.comp_col as Integer,
+    );
 }
 
 /// Re-send the menu's float position if the compositor moved it since the
@@ -649,16 +660,15 @@ unsafe fn pum_send_float_pos() {
 /// # Safety
 /// Called from the UI flush, with the grid still allocated.
 pub unsafe fn pum_ui_flush() {
-    // SAFETY: `pum_grid` is the editor's own grid.
-    unsafe {
-        if ui_has(kUIMultigrid)
-            && pum_is_drawn.get()
-            && !pum_external.get()
-            && (*pum_grid.ptr()).handle != 0
-            && (*pum_grid.ptr()).pending_comp_index_update
-        {
-            pum_send_float_pos();
-            (*pum_grid.ptr()).pending_comp_index_update = false;
-        }
+    let mut grid = pum_grid_ref();
+    if ui_has(kUIMultigrid)
+        && pum_is_drawn.get()
+        && !pum_external.get()
+        && grid.handle != 0
+        && grid.pending_comp_index_update
+    {
+        // SAFETY: the caller's promise.
+        unsafe { pum_send_float_pos() };
+        grid.pending_comp_index_update = false;
     }
 }

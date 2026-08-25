@@ -246,6 +246,7 @@ pub(crate) unsafe fn pum_compute_horizontal_placement(
 /// `pum_size`, `pum_height` and `pum_base_width` must already describe the
 /// menu being shown.
 pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
+    let pum_handle = pum_grid_ref().handle;
     // SAFETY: `get_win_by_grid_handle` answers a live window or null.
     unsafe {
         let (min_row, min_col) = (0, 0);
@@ -276,7 +277,7 @@ pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
                 }
             }
         }
-        if (*pum_grid.ptr()).handle != 0 && grid == (*pum_grid.ptr()).handle {
+        if pum_handle != 0 && grid == pum_handle {
             // Repositioning the menu by right-clicking on itself.
             row += pum_row.get();
             col += pum_left_col.get();

@@ -12,6 +12,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
 use crate::grid::default_grid_ref;
 use crate::log::logmsg_c;
+use crate::popupmenu::pum_grid_ref;
 
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
@@ -221,8 +222,8 @@ pub unsafe fn nvim__inspect_cell(
             items: ::core::ptr::null_mut::<Object>(),
         };
         let mut g: GridRef = default_grid_ref();
-        if grid == (*pum_grid.ptr()).handle as Integer {
-            g = GridRef::new(pum_grid.ptr());
+        if grid == pum_grid_ref().handle as Integer {
+            g = pum_grid_ref();
         } else if grid > 1 as Integer {
             let mut wp: *mut win_T = get_win_by_grid_handle(grid as handle_T);
             if !(!wp.is_null() && (*wp).w_grid_alloc.is_allocated()) {

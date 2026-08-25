@@ -587,7 +587,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         };
         let trunc_attr = win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI });
 
-        screengrid_line_start(GridRef::new(pum_grid.ptr()), grid_row, 0);
+        screengrid_line_start(pum_grid_ref(), grid_row, 0);
 
         if style.extra_space {
             let attr = hl_combine_attr(
@@ -722,6 +722,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
 /// The menu must be displayed (`pum_display` or `pum_show_popupmenu` has run
 /// the placement) and no line batch may be in progress.
 pub unsafe fn pum_redraw() {
+    let mut grid = pum_grid_ref();
     // SAFETY: the placement functions have filled the state cells and the
     // item array is live.
     unsafe {
@@ -759,13 +760,13 @@ pub unsafe fn pum_redraw() {
             }
         }
 
-        (*pum_grid.ptr()).blending = p_pb.get() > 0 || config.shadow;
-        grid_assign_handle(&mut *pum_grid.ptr());
+        grid.blending = p_pb.get() > 0 || config.shadow;
+        grid_assign_handle(&mut grid);
 
         pum_left_col.set(pum_col.get() - col_off);
         pum_right_col.set(pum_left_col.get() + grid_width);
         let moved = ui_comp_put_grid(
-            pum_grid.ptr(),
+            grid.raw(),
             pum_row.get(),
             pum_left_col.get(),
             pum_height.get() + border.width,
@@ -778,18 +779,15 @@ pub unsafe fn pum_redraw() {
         must_redraw_pum.set(false);
 
         let (rows, cols) = (pum_height.get() + border.width, grid_width + border.width);
-        if !(*pum_grid.ptr()).is_allocated()
-            || (*pum_grid.ptr()).rows != rows
-            || (*pum_grid.ptr()).cols != cols
-        {
-            grid_alloc(&mut *pum_grid.ptr(), rows, cols, !invalid_grid, false);
+        if !grid.is_allocated() || grid.rows != rows || grid.cols != cols {
+            grid_alloc(&mut grid, rows, cols, !invalid_grid, false);
             ui_call_grid_resize(
-                (*pum_grid.ptr()).handle as Integer,
-                (*pum_grid.ptr()).cols as Integer,
-                (*pum_grid.ptr()).rows as Integer,
+                grid.handle as Integer,
+                grid.cols as Integer,
+                grid.rows as Integer,
             );
         } else if invalid_grid {
-            (*pum_grid.ptr()).invalidate();
+            grid.invalidate();
         }
         if ui_has(kUIMultigrid) {
             pum_send_float_pos();
@@ -798,7 +796,7 @@ pub unsafe fn pum_redraw() {
         let mut grid_row = 0;
         if config.border {
             grid_draw_border(
-                pum_grid.ptr(),
+                grid.raw(),
                 &raw mut config,
                 ::core::ptr::null_mut(),
                 0,

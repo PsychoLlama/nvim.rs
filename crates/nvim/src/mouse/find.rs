@@ -21,8 +21,9 @@ use core::ptr;
 
 use super::*;
 use crate::grid::get_win_by_grid_handle;
-use crate::main::{firstwin, msg_grid, msg_grid_pos, pum_grid, topframe};
+use crate::main::{firstwin, msg_grid, msg_grid_pos, topframe};
 use crate::plines::{init_charsize_arg, win_charsize};
+use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, handle_T, linenr_T};
 use crate::ui_compositor::ui_comp_mouse_focus;
 use crate::winlayer::{Frame, windows};
@@ -114,7 +115,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         // SAFETY: the compositor's layer stack is live; the grid it answers is
         // one of the layers, or null.
         let grid = unsafe { ui_comp_mouse_focus(pos.row, pos.col) };
-        if pum_grid.with(|pum| ptr::eq(grid, pum)) {
+        if ptr::eq(grid, pum_grid_ref().raw()) {
             // SAFETY: the popup menu's grid is live.
             unsafe {
                 pos.grid = (*grid).handle as c_int;

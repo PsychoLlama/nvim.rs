@@ -44,7 +44,7 @@ pub(crate) unsafe fn pum_select_mouse_pos() {
         find_win_outer(&mut pos);
     }
 
-    if pos.grid == pum_grid.with(|g| g.handle) {
+    if pos.grid == pum_grid_ref().handle {
         // On the menu itself. A box border (width 2) takes the top row.
         // SAFETY: reads the 'pumborder' option.
         let border_offset = c_int::from(unsafe { pum_border_width() } == 2);
@@ -252,7 +252,8 @@ pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
         pum_is_visible.set(true);
         pum_is_drawn.set(true);
         // Above the cmdline area: #23275.
-        pum_grid.with_mut(|g| g.zindex = kZIndexCmdlinePopupMenu as c_int);
+        let mut grid = pum_grid_ref();
+        grid.zindex = kZIndexCmdlinePopupMenu as c_int;
         // SAFETY: the menu is placed and its grid allocated; `vgetc` pumps
         // the event loop, so nothing is held across it.
         let c = unsafe {
