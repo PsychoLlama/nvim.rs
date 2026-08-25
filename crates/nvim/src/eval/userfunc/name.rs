@@ -139,14 +139,14 @@ pub(crate) unsafe fn fname_trans_sid(
         if !eval_fname_sid(name) {
             // "<SID>" or "<SNR>"
             *fname_buf.add(fname_buflen) = NUL as c_char;
-        } else if (*current_sctx.ptr()).sc_sid <= 0 {
+        } else if current_sctx.get().sc_sid <= 0 {
             *error = FCERR_SCRIPT;
         } else {
             fname_buflen += snprintf(
                 fname_buf.add(fname_buflen),
                 (FLEN_FIXED as size_t + 1).wrapping_sub(fname_buflen),
                 c"%d_".as_ptr(),
-                (*current_sctx.ptr()).sc_sid,
+                current_sctx.get().sc_sid,
             ) as size_t;
         }
         let fnamelen = fname_buflen + strlen(script_name);
@@ -329,7 +329,7 @@ unsafe fn mangle_function_name(
             if (!lv.ll_exp_name.is_null() && eval_fname_sid(lv.ll_exp_name)) || eval_fname_sid(*pp)
             {
                 // It's "s:" or "<SID>".
-                if (*current_sctx.ptr()).sc_sid <= 0 {
+                if current_sctx.get().sc_sid <= 0 {
                     emsg(gettext(&raw const e_usingsid as *const c_char));
                     return ptr::null_mut();
                 }
@@ -337,7 +337,7 @@ unsafe fn mangle_function_name(
                     sid_buf.as_mut_ptr(),
                     size_of_val(&sid_buf),
                     c"%d_".as_ptr(),
-                    (*current_sctx.ptr()).sc_sid,
+                    current_sctx.get().sc_sid,
                 ) as size_t;
                 lead += sid_buflen as c_int;
             }
@@ -585,7 +585,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
             // The function name does not have a script-local prefix.
             return ptr::null_mut();
         }
-        let sid = (*current_sctx.ptr()).sc_sid;
+        let sid = current_sctx.get().sc_sid;
         if !(sid > 0 && sid <= (*script_items.ptr()).ga_len) {
             emsg(gettext(&raw const e_usingsid as *const c_char));
             return ptr::null_mut();

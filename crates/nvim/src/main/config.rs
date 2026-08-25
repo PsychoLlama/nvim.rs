@@ -48,12 +48,12 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
         // is not immediately overridden by the first file's position.
         (*curwin.get()).w_cursor.lnum = 0;
         estack_push(ETYPE_ARGS, gettext(c"pre-vimrc command line".as_ptr()), 0);
-        (*current_sctx.ptr()).sc_sid = SID_CMDARG as scid_T;
+        current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as scid_T));
         for i in 0..count {
             do_cmdline_cmd(*cmds.offset(i as isize));
         }
         estack_pop();
-        (*current_sctx.ptr()).sc_sid = 0;
+        current_sctx.set(current_sctx.get().with_sid(0));
 
         time_msg_at(c"--cmd commands");
     }
@@ -72,8 +72,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
 
         // NB: not translated, unlike the pre-vimrc one above.
         estack_push(ETYPE_ARGS, c"command line".as_ptr() as *mut c_char, 0);
-        (*current_sctx.ptr()).sc_sid = SID_CARG as scid_T;
-        (*current_sctx.ptr()).sc_seq = 0;
+        current_sctx.set(current_sctx.get().with_sid(SID_CARG as scid_T).with_seq(0));
         for i in 0..(*parmp).n_commands {
             do_cmdline_cmd((*parmp).commands[i as usize]);
             if (*parmp).cmds_tofree[i as usize] != 0 {
@@ -81,7 +80,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
             }
         }
         estack_pop();
-        (*current_sctx.ptr()).sc_sid = 0;
+        current_sctx.set(current_sctx.get().with_sid(0));
 
         if (*curwin.get()).w_cursor.lnum == 0 {
             (*curwin.get()).w_cursor.lnum = 1;

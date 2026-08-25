@@ -245,7 +245,7 @@ pub unsafe fn find_var_in_ht(
         if varname_len == 0 {
             // Something like "s:", or `ht` would have been NULL.
             return match htname as u8 {
-                b's' => (&raw mut (*script_sv((*current_sctx.ptr()).sc_sid)).sv_var).cast(),
+                b's' => (&raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var).cast(),
                 b'g' => globvars_var.ptr().cast(),
                 b'v' => vimvars_var.ptr().cast(),
                 b'b' => (&raw mut (*curbuf.get()).b_bufvar).cast(),
@@ -339,20 +339,22 @@ pub(crate) unsafe fn find_var_ht_dict(
                 b'a' => *d = get_funccal_args_dict(),
                 b'l' => *d = get_funccal_local_dict(),
                 b's' => {
-                    let sctx = current_sctx.ptr();
-                    if ((*sctx).sc_sid > 0
-                        || (*sctx).sc_sid == SID_STR
-                        || (*sctx).sc_sid == SID_LUA)
-                        && (*sctx).sc_sid <= (*script_items.ptr()).ga_len
+                    // Both calls below fill `sctx` in, and neither reads the
+                    // cell, so the round trip through a local is what the C's
+                    // write-through-the-pointer amounts to.
+                    let mut sctx = current_sctx.get();
+                    if (sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
+                        && sctx.sc_sid <= (*script_items.ptr()).ga_len
                     {
                         // Resolve the Lua filename and line number, so that
                         // a later "Last set from" can name them.
-                        nlua_set_sctx(sctx);
-                        if (*sctx).sc_sid == SID_STR || (*sctx).sc_sid == SID_LUA {
+                        nlua_set_sctx(&raw mut sctx);
+                        if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
                             // An anonymous chunk has no script item yet.
-                            new_script_item(ptr::null_mut(), &raw mut (*sctx).sc_sid);
+                            new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid);
                         }
-                        *d = &raw mut (*script_sv((*sctx).sc_sid)).sv_dict;
+                        current_sctx.set(sctx);
+                        *d = &raw mut (*script_sv(sctx.sc_sid)).sv_dict;
                     }
                 }
                 _ => {}

@@ -568,7 +568,7 @@ pub(crate) unsafe fn command_line_changed(s: *mut CommandLineState) -> ::core::f
         let cc = ccline.ptr();
         let prev_cmdpreview = cmdpreview.get();
         let preview_shown = (*s).firstc == ':' as ::core::ffi::c_int
-            && (*current_sctx.ptr()).sc_sid == 0 // only if interactive
+            && current_sctx.get().sc_sid == 0 // only if interactive
             && *p_icm.get() as ::core::ffi::c_int != NUL // 'inccommand' is set
             && !exmode_active.get() // not in ex mode
             && cmdline_star.get() == 0 // not typing a password

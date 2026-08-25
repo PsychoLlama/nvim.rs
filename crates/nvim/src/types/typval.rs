@@ -223,6 +223,39 @@ pub struct sctx_T {
     pub sc_lnum: linenr_T,
     pub sc_chan: uint64_t,
 }
+
+impl sctx_T {
+    /// The same context under a different script id.
+    ///
+    /// A `Copy` cell's field write is a read-modify-write, and spelling it
+    /// as one expression keeps the "which field" out of the caller's
+    /// bookkeeping -- `pos_T::with_col`'s shape.
+    pub fn with_sid(self, sc_sid: scid_T) -> Self {
+        sctx_T { sc_sid, ..self }
+    }
+
+    /// The same context at a different line inside the script.
+    pub fn with_lnum(self, sc_lnum: linenr_T) -> Self {
+        sctx_T { sc_lnum, ..self }
+    }
+
+    /// The same context under a different sourcing sequence number.
+    pub fn with_seq(self, sc_seq: ::core::ffi::c_int) -> Self {
+        sctx_T { sc_seq, ..self }
+    }
+}
+
+impl Default for sctx_T {
+    /// The all-zero context: "no script is running".
+    fn default() -> Self {
+        sctx_T {
+            sc_sid: 0,
+            sc_seq: 0,
+            sc_lnum: 0,
+            sc_chan: 0,
+        }
+    }
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct staticList10_T {

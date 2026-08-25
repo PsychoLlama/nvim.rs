@@ -318,8 +318,7 @@ fn with_curbuf<R>(f: impl FnOnce(&buf_T) -> R) -> R {
 
 /// The script id of whatever is running, 0 for the user's own typing.
 fn script_id() -> c_int {
-    // SAFETY: a live global whose first field is read here and nowhere else.
-    unsafe { (*current_sctx.ptr()).sc_sid }
+    current_sctx.get().sc_sid
 }
 
 fn real_state() -> c_int {

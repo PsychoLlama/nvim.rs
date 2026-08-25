@@ -125,7 +125,7 @@ pub(crate) unsafe fn list_vim_vars(first: *mut c_int) {
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_script_vars(first: *mut c_int) {
     unsafe {
-        let sid = (*current_sctx.ptr()).sc_sid;
+        let sid = current_sctx.get().sc_sid;
         if sid > 0 && sid <= (*script_items.ptr()).ga_len {
             list_hashtable_vars(
                 &raw mut (*script_sv(sid)).sv_dict.dv_hashtab,

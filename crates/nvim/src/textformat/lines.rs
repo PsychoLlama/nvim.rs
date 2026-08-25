@@ -22,14 +22,12 @@ use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::beep_flush;
-use crate::guard::Lock;
+use crate::guard::{Lock, Script};
 use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
-use crate::main::{
-    State, curbuf, current_sctx, curtab, curwin, firstwin, got_int, p_smd, saved_cursor,
-};
+use crate::main::{State, curbuf, curtab, curwin, firstwin, got_int, p_smd, saved_cursor};
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
@@ -151,7 +149,6 @@ pub(crate) unsafe fn op_formatexpr(oap: *mut oparg_T) {
 pub(crate) unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
     unsafe {
         let use_sandbox = was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL);
-        let save_sctx = current_sctx.get();
 
         set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
         set_vim_var_nr(Vv::Count, count as varnumber_T);
@@ -159,14 +156,16 @@ pub(crate) unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_in
 
         // Copy it: the option can be changed while it is running.
         let fex = xstrdup((*curbuf.get()).b_p_fex);
-        current_sctx.set((*curbuf.get()).b_p_script_ctx[kBufOptFormatexpr as usize]);
+        // Errors go against the script that set `'formatexpr'`.
+        let script_ctx =
+            Script::context((*curbuf.get()).b_p_script_ctx[kBufOptFormatexpr as usize]);
         let r = {
             let _sandboxed = use_sandbox.then(Lock::sandbox);
             eval_to_number(fex, true) as c_int
         };
         set_vim_var_string(Vv::Char, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t);
         xfree(fex as *mut ::core::ffi::c_void);
-        current_sctx.set(save_sctx);
+        drop(script_ctx);
         r
     }
 }

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Script;
 use crate::normal::visual_active;
 use crate::semsg_c;
 use crate::types::{FAIL, OptionSetFlags, Vv};
@@ -226,9 +227,10 @@ pub(crate) unsafe fn file_name_in_line(
 /// Run `'includeexpr'` over `ptr[len]`, with the name in `v:fname`.
 pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c_char {
     unsafe {
-        let save_sctx = current_sctx.get();
         set_vim_var_string(Vv::Fname, ptr, len as ptrdiff_t);
-        current_sctx.set((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize]);
+        // Errors go against the script that set `'includeexpr'`.
+        let script_ctx =
+            Script::context((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
         let res = eval_to_string_safe(
             (*curbuf.get()).b_p_inex,
@@ -237,7 +239,7 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
         );
 
         set_vim_var_string(Vv::Fname, ptr::null(), 0);
-        current_sctx.set(save_sctx);
+        drop(script_ctx);
         res
     }
 }

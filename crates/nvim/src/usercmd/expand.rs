@@ -28,9 +28,10 @@ use super::{Scope, ucmd_list};
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
+use crate::guard::Script;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::lua::executor::nlua_do_ucmd;
-use crate::main::{cmdmod, current_sctx, curtab};
+use crate::main::{cmdmod, curtab};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::memmove;
@@ -707,11 +708,8 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
 
     // The command body runs with the defining script's id, unless it asked
     // to keep the caller's.
-    let saved = (!cmd.uc_argt.has(ExArgt::KEEPSCRIPT)).then(|| {
-        let saved = current_sctx.get();
-        current_sctx.with_mut(|sctx| sctx.sc_sid = cmd.uc_script_ctx.sc_sid);
-        saved
-    });
+    let script_ctx =
+        (!cmd.uc_argt.has(ExArgt::KEEPSCRIPT)).then(|| Script::sid(cmd.uc_script_ctx.sc_sid));
     // Nothing may touch `cmd` past here: the body can define a command,
     // which reallocates the table it points into.
     // SAFETY: module contract.
@@ -723,9 +721,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
             DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,
         );
     }
-    if let Some(saved) = saved {
-        current_sctx.set(saved);
-    }
+    drop(script_ctx);
     // SAFETY: the block is this function's.
     unsafe { xfree(buf.cast()) };
     0

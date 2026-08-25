@@ -503,21 +503,20 @@ pub(crate) fn get_default_stl_hl(
 /// and `<sfile>` name them, and return what it was pointing at.
 pub(crate) fn api_set_sctx(channel_id: uint64_t) -> sctx_T {
     let old_current_sctx = current_sctx.get();
-    // SAFETY: `script_is_lua` takes a script id, not a pointer.
-    unsafe {
-        // A call from Vimscript is already running in the right context.
-        if channel_id != VIML_INTERNAL_CALL {
-            (*current_sctx.ptr()).sc_lnum = 0;
-            if channel_id == LUA_INTERNAL_CALL {
-                // Unless the caller is a Lua script, which keeps its own id.
-                if !script_is_lua((*current_sctx.ptr()).sc_sid) {
-                    (*current_sctx.ptr()).sc_sid = SID_LUA;
-                }
-            } else {
-                (*current_sctx.ptr()).sc_sid = SID_API_CLIENT;
-                (*current_sctx.ptr()).sc_chan = channel_id;
+    // A call from Vimscript is already running in the right context.
+    if channel_id != VIML_INTERNAL_CALL {
+        let mut sctx = old_current_sctx.with_lnum(0);
+        if channel_id == LUA_INTERNAL_CALL {
+            // Unless the caller is a Lua script, which keeps its own id.
+            // SAFETY: `script_is_lua` takes a script id, not a pointer.
+            if !unsafe { script_is_lua(sctx.sc_sid) } {
+                sctx.sc_sid = SID_LUA;
             }
+        } else {
+            sctx.sc_sid = SID_API_CLIENT;
+            sctx.sc_chan = channel_id;
         }
+        current_sctx.set(sctx);
     }
     old_current_sctx
 }

@@ -604,7 +604,7 @@ pub unsafe fn eval_vars(
                 SPEC_SFLNUM => {
                     // The line the *script* is on, which is the script's own
                     // offset plus the line inside it.
-                    let lnum = (*current_sctx.ptr()).sc_lnum + sourcing_entry().es_lnum;
+                    let lnum = current_sctx.get().sc_lnum + sourcing_entry().es_lnum;
                     if lnum == 0 {
                         *errormsg = gettext(e_no_line_number_to_use_for_sflnum.as_ptr());
                         return ptr::null_mut();
@@ -618,7 +618,7 @@ pub unsafe fn eval_vars(
                     result = &raw mut strbuf as *mut c_char;
                 }
                 SPEC_SID => {
-                    if (*current_sctx.ptr()).sc_sid <= 0 {
+                    if current_sctx.get().sc_sid <= 0 {
                         *errormsg = gettext(&raw const e_usingsid as *const c_char);
                         return ptr::null_mut();
                     }
@@ -626,7 +626,7 @@ pub unsafe fn eval_vars(
                         &raw mut strbuf as *mut c_char,
                         size_of::<[c_char; 30]>(),
                         c"<SNR>%d_".as_ptr(),
-                        (*current_sctx.ptr()).sc_sid,
+                        current_sctx.get().sc_sid,
                     );
                     result = &raw mut strbuf as *mut c_char;
                 }

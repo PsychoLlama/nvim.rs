@@ -26,6 +26,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::ga_grow;
+use crate::guard::{SavedSctx, Script};
 use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
@@ -50,7 +51,7 @@ use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
     FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
-    aentry_T, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
+    aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
@@ -780,6 +781,17 @@ pub(crate) unsafe fn set_window_layout(paramp: *mut mparm_T) {
     }
 }
 
+/// The pseudo-script `$VIMINIT`/`$EXINIT` runs as, held for the scope.
+fn env_script() -> SavedSctx {
+    Script::context(
+        current_sctx
+            .get()
+            .with_sid(SID_ENV as scid_T)
+            .with_seq(0)
+            .with_lnum(0),
+    )
+}
+
 /// Run the commands in `$VIMINIT` or `$EXINIT`, if it is set.
 ///
 /// Answers `OK` when the variable existed -- which is what makes it count as
@@ -794,15 +806,12 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> c_int {
         }
 
         estack_push(ETYPE_ENV, env, 0 as linenr_T);
-        let save_current_sctx: sctx_T = current_sctx.get();
-        (*current_sctx.ptr()).sc_sid = SID_ENV as scid_T;
-        (*current_sctx.ptr()).sc_seq = 0;
-        (*current_sctx.ptr()).sc_lnum = 0 as linenr_T;
+        let sctx = env_script();
 
         do_cmdline_cmd(initstr);
 
         estack_pop();
-        current_sctx.set(save_current_sctx);
+        drop(sctx);
         xfree(initstr as *mut c_void);
         OK
     }

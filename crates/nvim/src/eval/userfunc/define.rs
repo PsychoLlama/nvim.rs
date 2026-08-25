@@ -357,9 +357,8 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                 // and when sourcing the same script again,
                                 // but only once.
                                 if (*eap).forceit == 0
-                                    && ((*fp).uf_script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
-                                        || (*fp).uf_script_ctx.sc_seq
-                                            == (*current_sctx.ptr()).sc_seq)
+                                    && ((*fp).uf_script_ctx.sc_sid != current_sctx.get().sc_sid
+                                        || (*fp).uf_script_ctx.sc_seq == current_sctx.get().sc_seq)
                                 {
                                     emsg_funcname(E_FUNCEXTS.as_ptr(), name);
                                     break 'errret_keep;

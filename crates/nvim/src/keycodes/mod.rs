@@ -617,13 +617,13 @@ pub unsafe fn replace_termcodes(
                 // script-local function's name is spelled.
                 // (Room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14.)
                 if end.offset_from(src) >= 4 && strncasecmp(src, c"<SID>".as_ptr(), 5) == 0 {
-                    if sid_arg < 0 || (sid_arg == 0 && (*current_sctx.ptr()).sc_sid <= 0) {
+                    if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
                         emsg(gettext(&raw const e_usingsid as *const c_char));
                     } else {
                         let sid = if sid_arg != 0 {
                             sid_arg
                         } else {
-                            (*current_sctx.ptr()).sc_sid
+                            current_sctx.get().sc_sid
                         };
                         src = src.add(5);
                         dlen = put_bytes(

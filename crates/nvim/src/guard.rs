@@ -1,4 +1,4 @@
-//! RAII guards over the editor's suppression and re-entrancy counters.
+//! RAII guards over the editor's suppression counters and script context.
 //!
 //! `textlock`, `sandbox`, `msg_silent`, `emsg_off`, `emsg_skip`,
 //! `no_wait_return`, `no_mapping`, `allow_keys` and `RedrawingDisabled` are
@@ -30,6 +30,11 @@
 //! let _guard = Allow::messages();         // msg_silent = 0, restored after
 //! ```
 //!
+//! [`Script`] is the odd one out: not a counter but the whole `sctx_T`
+//! saying which script the running code belongs to, overwritten for a
+//! scope and put back. It is the same save/restore shape as [`Saved`],
+//! over a value rather than an `int`.
+//!
 //! Bind to a named `_guard`, never to `let _ =`: `_` drops immediately and
 //! the scope runs unguarded. Where the C released the counter in the
 //! middle of a long body, bind without the underscore and `drop(guard)` at
@@ -48,9 +53,10 @@
 
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    RedrawingDisabled, allow_keys, emsg_off, emsg_skip, expr_map_lock, msg_silent, no_mapping,
-    no_wait_return, sandbox, textlock,
+    RedrawingDisabled, allow_keys, current_sctx, emsg_off, emsg_skip, expr_map_lock, msg_silent,
+    no_mapping, no_wait_return, sandbox, textlock,
 };
+use crate::types::{scid_T, sctx_T};
 use core::ffi::c_int;
 
 /// A counter held one higher for the lifetime of the guard.
@@ -320,6 +326,51 @@ impl Keys {
         RawKeys {
             _no_mapping: Self::unmapped(),
             _allow_keys: Bump::new(&allow_keys),
+        }
+    }
+}
+
+/// The script context put back when the guard is dropped.
+#[must_use = "the previous script context is restored as soon as the guard is dropped"]
+pub(crate) struct SavedSctx {
+    saved: sctx_T,
+}
+
+impl Drop for SavedSctx {
+    fn drop(&mut self) {
+        current_sctx.set(self.saved);
+    }
+}
+
+/// Guards over `current_sctx` — which script the code running now belongs
+/// to.
+///
+/// Every site that hands control to code written somewhere else — an
+/// autocommand, a mapping, an option's expression, a sourced file, an API
+/// call — points `current_sctx` at whoever *wrote* that code, so that
+/// `:verbose`, `<SID>`, `<sfile>` and the error messages name the script
+/// rather than whatever happened to be running when it fired.
+pub(crate) struct Script;
+
+impl Script {
+    /// Run this scope as `sctx`.
+    pub(crate) fn context(sctx: sctx_T) -> SavedSctx {
+        SavedSctx {
+            saved: current_sctx.replace(sctx),
+        }
+    }
+
+    /// [`Script::context`] changing only the script id, leaving the
+    /// sequence number and the line where they were.
+    pub(crate) fn sid(sid: scid_T) -> SavedSctx {
+        Self::context(current_sctx.get().with_sid(sid))
+    }
+
+    /// Save the context and leave it alone, for the scope that fills it in
+    /// itself or only sometimes.
+    pub(crate) fn saved() -> SavedSctx {
+        SavedSctx {
+            saved: current_sctx.get(),
         }
     }
 }

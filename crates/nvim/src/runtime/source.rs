@@ -14,6 +14,7 @@
 use super::*;
 
 use crate::ex_docmd::DoCmdOpts;
+use crate::guard::Script;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr, slice};
@@ -813,7 +814,7 @@ unsafe fn source_bracket(
     };
     // SAFETY: the entry lives on this frame until `restore_funccal` below.
     unsafe { save_funccal(&raw mut funccalp_entry) };
-    let save_current_sctx = current_sctx.get();
+    let script_ctx = Script::saved();
 
     // Always use a new sequence number.
     let seq = last_current_SID_seq.get() + 1;
@@ -897,7 +898,7 @@ unsafe fn source_bracket(
     {
         debug_break_level.set(debug_break_level.get() + 1);
     }
-    current_sctx.set(save_current_sctx);
+    drop(script_ctx);
 
     // SAFETY: paired with the `save_funccal`/`prof_child_enter` above; the
     // cookie is done being read from.
