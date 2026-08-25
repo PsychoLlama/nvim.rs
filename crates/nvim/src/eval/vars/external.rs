@@ -112,6 +112,7 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 /// # Safety
 /// `badword` and `expr` are NUL-terminated strings.
 pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut list_T {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let mut p = skipwhite(expr);
         let saved_sctx = current_sctx.get();
@@ -129,7 +130,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         // parser; anything else goes through it.
         let mut r = may_call_simple_func(p, &raw mut rettv);
         if r == NOTDONE {
-            r = eval1(&raw mut p, &raw mut rettv, EVALARG_EVALUATE.ptr());
+            r = eval1(&raw mut p, &raw mut rettv, &raw mut evalarg);
         }
         let mut list: *mut list_T = ptr::null_mut();
         if r == OK {

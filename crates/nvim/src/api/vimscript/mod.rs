@@ -6,6 +6,7 @@ use crate::api::private::helpers::{
     cstr_to_string, try_enter, try_leave,
 };
 use crate::api::private::validate::api_err_exp;
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{tv_clear, tv_dict_find};
 use crate::eval::userfunc::call_func;
 use crate::eval::{clear_evalarg, eval0};
@@ -13,8 +14,8 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    EVALARG_EVALUATE, capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col,
-    redir_off, suppress_errthrow,
+    capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col, redir_off,
+    suppress_errthrow,
 };
 use crate::memory::xfree;
 use crate::os::cshim::memmove;

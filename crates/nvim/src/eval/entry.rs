@@ -20,6 +20,7 @@ use crate::api::private::converter::vim_to_object;
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
     NumBuf, tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_get_string_buf_chk,
@@ -35,7 +36,7 @@ use crate::eval::{
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
 use crate::hashtab::hash_init;
-use crate::main::{EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2};
+use crate::main::{called_emsg, current_sctx, curwin, did_emsg, e_invexpr2};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
@@ -509,6 +510,7 @@ pub unsafe fn eval_to_string_safe(
 /// # Safety
 /// `expr` must be a NUL-terminated expression.
 pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> varnumber_T {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let mut rettv = UNSET_TV;
         let mut p = skipwhite(expr);
@@ -519,7 +521,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
             r = may_call_simple_func(expr, &raw mut rettv);
         }
         if r == NOTDONE {
-            r = eval1(&raw mut p, &raw mut rettv, EVALARG_EVALUATE.ptr());
+            r = eval1(&raw mut p, &raw mut rettv, &raw mut evalarg);
         }
 
         if r == FAIL {
@@ -663,6 +665,7 @@ pub unsafe fn call_func_retlist(
 /// # Safety
 /// `wp` and `cp` must be valid.
 pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let saved_sctx: sctx_T = current_sctx.get();
         let use_sandbox = was_set_insecurely(wp, kOptFoldexpr, OptionSetFlags::LOCAL);
@@ -676,7 +679,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
 
             let mut tv = UNSET_TV;
             let mut retval: varnumber_T = 0;
-            if eval0_simple_funccal(arg, &raw mut tv, null_mut(), EVALARG_EVALUATE.ptr()) != FAIL {
+            if eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) != FAIL {
                 if tv.v_type == VAR_NUMBER {
                     retval = tv.vval.v_number;
                 } else if tv.v_type != VAR_STRING || tv.vval.v_string.is_null() {
@@ -695,7 +698,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
             }
             retval
         };
-        clear_evalarg(EVALARG_EVALUATE.ptr(), null_mut());
+        clear_evalarg(&raw mut evalarg, null_mut());
         current_sctx.set(saved_sctx);
         retval as c_int
     }
@@ -708,6 +711,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
 /// # Safety
 /// `wp` must be valid.
 pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
+    let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     unsafe {
         /// The empty String an error answers with.
@@ -731,25 +735,25 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
         let _locked = Lock::text();
 
         let mut tv = UNSET_TV;
-        let retval =
-            if eval0_simple_funccal(arg, &raw mut tv, null_mut(), EVALARG_EVALUATE.ptr()) == FAIL {
-                empty_string()
+        let retval = if eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) == FAIL
+        {
+            empty_string()
+        } else {
+            let obj = if tv.v_type == VAR_LIST {
+                vim_to_object(&raw mut tv, null_mut::<Arena>(), false)
             } else {
-                let obj = if tv.v_type == VAR_LIST {
-                    vim_to_object(&raw mut tv, null_mut::<Arena>(), false)
-                } else {
-                    Object {
-                        type_0: kObjectTypeString,
-                        data: object_data {
-                            string: cstr_to_string(numbuf.string(&raw mut tv)),
-                        },
-                    }
-                };
-                tv_clear(&raw mut tv);
-                obj
+                Object {
+                    type_0: kObjectTypeString,
+                    data: object_data {
+                        string: cstr_to_string(numbuf.string(&raw mut tv)),
+                    },
+                }
             };
+            tv_clear(&raw mut tv);
+            obj
+        };
 
-        clear_evalarg(EVALARG_EVALUATE.ptr(), null_mut());
+        clear_evalarg(&raw mut evalarg, null_mut());
         restore_funccal();
         retval
     }

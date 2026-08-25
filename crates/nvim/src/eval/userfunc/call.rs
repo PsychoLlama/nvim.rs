@@ -48,6 +48,7 @@ pub unsafe fn call_user_func(
     lastline: linenr_T,
     selfdict: *mut dict_T,
 ) {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         static depth: GlobalCell<c_int> = GlobalCell::new(0);
 
@@ -202,12 +203,7 @@ pub unsafe fn call_user_func(
                     def_rettv.v_type = VAR_NUMBER;
                     def_rettv.vval.v_number = -1;
                     let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
-                    if eval1(
-                        &raw mut default_expr,
-                        &raw mut def_rettv,
-                        EVALARG_EVALUATE.ptr(),
-                    ) == FAIL
-                    {
+                    if eval1(&raw mut default_expr, &raw mut def_rettv, &raw mut evalarg) == FAIL {
                         default_arg_err = true;
                         break;
                     }
@@ -354,7 +350,7 @@ pub unsafe fn call_user_func(
             // expression straight rather than going through `do_cmdline`.
             let mut p = ga_strings(&(*fp).uf_lines)[0].add(c"return ".count_bytes());
             ex_nesting_level.set(ex_nesting_level.get() + 1);
-            eval1(&raw mut p, rettv, EVALARG_EVALUATE.ptr());
+            eval1(&raw mut p, rettv, &raw mut evalarg);
             ex_nesting_level.set(ex_nesting_level.get() - 1);
         } else {
             // Call do_cmdline() to execute the lines.

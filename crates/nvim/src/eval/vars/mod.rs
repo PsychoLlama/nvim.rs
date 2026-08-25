@@ -7,6 +7,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::entry::tv_init;
 use crate::eval::executor::eexe_mod_op;
@@ -44,7 +45,7 @@ use crate::hashtab::{
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    EVALARG_EVALUATE, called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg,
+    called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg,
     e_cannot_change_readonly_variable_str, e_cannot_delete_variable_str, e_cannot_mod,
     e_cannot_set_variable_in_sandbox_str, e_illvar, e_invarg, e_invarg2, e_letwrong, e_listreq,
     e_missing_close_curly_str, e_stray_closing_curly_str, e_string_required, e_trailing_arg,

@@ -30,6 +30,7 @@ use core::ptr::null_mut;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
     NumBuf, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
@@ -52,8 +53,8 @@ use crate::eval::{
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::main::{
-    EVALARG_EVALUATE, e_cannot_mod, e_dictkey, e_illvar, e_invalid_value_for_blob_nr, e_invarg2,
-    e_letwrong, e_listreq, e_trailing_arg, emsg_severe,
+    e_cannot_mod, e_dictkey, e_illvar, e_invalid_value_for_blob_nr, e_invarg2, e_letwrong,
+    e_listreq, e_trailing_arg, emsg_severe,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
@@ -325,6 +326,7 @@ pub(crate) unsafe fn get_lval_subscript(
     unlet: bool,
     flags: c_int,
 ) -> *mut c_char {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let quiet = flags & GLV_QUIET as c_int != 0;
         // The two index expressions. They are cleared and reset at the end
@@ -403,7 +405,7 @@ pub(crate) unsafe fn get_lval_subscript(
                         empty1 = true;
                     } else {
                         empty1 = false;
-                        if eval1(&raw mut p, &raw mut var1, EVALARG_EVALUATE.ptr()) == FAIL {
+                        if eval1(&raw mut p, &raw mut var1, &raw mut evalarg) == FAIL {
                             break 'done;
                         }
                         if !tv_check_str(&raw mut var1) {
@@ -434,7 +436,7 @@ pub(crate) unsafe fn get_lval_subscript(
                             (*lp).ll_empty2 = true;
                         } else {
                             (*lp).ll_empty2 = false;
-                            if eval1(&raw mut p, &raw mut var2, EVALARG_EVALUATE.ptr()) == FAIL {
+                            if eval1(&raw mut p, &raw mut var2, &raw mut evalarg) == FAIL {
                                 break 'done;
                             }
                             if !tv_check_str(&raw mut var2) {

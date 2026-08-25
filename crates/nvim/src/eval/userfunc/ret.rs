@@ -101,6 +101,9 @@ unsafe fn ex_call_inner(
     funcexe_init: *const funcexe_T,
     evalarg: *mut evalarg_T,
 ) -> bool {
+    // The subscript after `:call f()` is evaluated for real whatever the
+    // caller's `evalarg` says, so it gets one of its own.
+    let mut subscript_evalarg = EVALARG_EVALUATE;
     unsafe {
         let mut doesrange = false;
         let mut failed = false;
@@ -130,7 +133,7 @@ unsafe fn ex_call_inner(
             if handle_subscript(
                 arg as *mut *const c_char,
                 &raw mut rettv,
-                EVALARG_EVALUATE.ptr(),
+                &raw mut subscript_evalarg,
                 true,
             ) == FAIL
             {

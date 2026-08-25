@@ -147,6 +147,7 @@ pub(crate) unsafe fn list_arg_vars(
     mut arg: *const c_char,
     first: *mut c_int,
 ) -> *const c_char {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let mut error = false;
         while ends_excmd(*arg as c_int) == 0 && !got_int.get() {
@@ -194,8 +195,7 @@ pub(crate) unsafe fn list_arg_vars(
                     break 'done;
                 }
                 let arg_subsc = arg;
-                if handle_subscript(&raw mut arg, &raw mut tv, EVALARG_EVALUATE.ptr(), true) == FAIL
-                {
+                if handle_subscript(&raw mut arg, &raw mut tv, &raw mut evalarg, true) == FAIL {
                     error = true;
                     break 'done;
                 }

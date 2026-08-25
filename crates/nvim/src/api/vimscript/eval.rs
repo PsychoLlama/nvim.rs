@@ -41,6 +41,7 @@ impl Drop for RecursionGuard {
 }
 
 pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut evalarg = EVALARG_EVALUATE;
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
@@ -54,9 +55,9 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
             expr.data(),
             &raw mut rettv,
             ptr::null_mut::<exarg_T>(),
-            EVALARG_EVALUATE.ptr(),
+            &raw mut evalarg,
         );
-        clear_evalarg(EVALARG_EVALUATE.ptr(), ptr::null_mut::<exarg_T>());
+        clear_evalarg(&raw mut evalarg, ptr::null_mut::<exarg_T>());
         try_leave(&raw mut tstate, err);
         if (*err).type_0 == kErrorTypeNone {
             if ok == FAIL {
@@ -152,6 +153,7 @@ pub unsafe fn nvim_call_dict_function(
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
+    let mut evalarg = EVALARG_EVALUATE;
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
@@ -166,9 +168,9 @@ pub unsafe fn nvim_call_dict_function(
                     dict.data.string.data(),
                     &raw mut rettv,
                     ptr::null_mut::<exarg_T>(),
-                    EVALARG_EVALUATE.ptr(),
+                    &raw mut evalarg,
                 );
-                clear_evalarg(EVALARG_EVALUATE.ptr(), ptr::null_mut::<exarg_T>());
+                clear_evalarg(&raw mut evalarg, ptr::null_mut::<exarg_T>());
                 try_leave(&raw mut tstate, err);
                 if (*err).type_0 != kErrorTypeNone {
                     return Object::NIL.reported(error);

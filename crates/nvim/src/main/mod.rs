@@ -17,13 +17,13 @@ use crate::types::{
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
     UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
     bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T,
-    evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
-    int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
-    nvim_stats_s, optmagic_T, pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue,
-    uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
-    uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u,
-    uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
+    except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t,
+    int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s,
+    optmagic_T, pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
+    sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
+    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
+    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
+    uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
 };
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
@@ -85,7 +85,6 @@ pub struct AucmdWinVec {
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
-pub(crate) const EVAL_EVALUATE: c_uint = 1;
 pub(crate) const ECMD_HIDE: c_uint = 1;
 pub(crate) const ECMD_LASTL: c_int = 0;
 pub(crate) const READ_STDIN: c_uint = 4;
@@ -601,12 +600,6 @@ pub static e_unknown_option2: [c_char; 25] = c_bytes(b"E355: Unknown option: %s\
 pub static top_bot_msg: [c_char; 37] = c_bytes(b"search hit TOP, continuing at BOTTOM\0");
 pub static bot_top_msg: [c_char; 37] = c_bytes(b"search hit BOTTOM, continuing at TOP\0");
 pub static line_msg: [c_char; 7] = c_bytes(b" line \0");
-pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
-    eval_flags: EVAL_EVALUATE as c_int,
-    eval_getline: None,
-    eval_cookie: ::core::ptr::null_mut::<c_void>(),
-    eval_tofree: ::core::ptr::null_mut::<c_char>(),
-});
 pub static msg_ext_skip_flush: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_ext_overwrite: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_ext_skip_verbose: GlobalCell<bool> = GlobalCell::new(false);

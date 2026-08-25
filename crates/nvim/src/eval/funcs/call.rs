@@ -8,6 +8,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_number,
     tv_get_string_buf_chk, tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
@@ -27,7 +28,7 @@ use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
 use crate::main::{
-    EVALARG_EVALUATE, capture_ga, e_invarg2, e_invexpr2, e_libcall, e_toomanyarg, e_trailing_arg,
+    capture_ga, e_invarg2, e_invexpr2, e_libcall, e_toomanyarg, e_trailing_arg,
     e_unknown_function_str, emsg_noredir, emsg_silent, garbage_collect_at_exit, msg_col,
     need_clr_eos, redir_off, want_garbage_collect,
 };
@@ -139,6 +140,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 
 /// `eval({string})`
 pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `s` walks a string an argument owns.
@@ -149,13 +151,7 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         }
         // Kept for the message: `eval1` advances `s` past what it consumed.
         let expr_start = s;
-        if s.is_null()
-            || eval1(
-                &raw mut s as *mut *mut c_char,
-                rettv,
-                EVALARG_EVALUATE.ptr(),
-            ) == FAIL
-        {
+        if s.is_null() || eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) == FAIL {
             if !expr_start.is_null() && !aborting() {
                 semsg_c!(gettext(e_invexpr2.as_ptr()), expr_start);
             }

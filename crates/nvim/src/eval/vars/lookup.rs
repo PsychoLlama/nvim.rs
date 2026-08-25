@@ -406,6 +406,7 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
 /// # Safety
 /// `var` is a NUL-terminated string.
 pub unsafe fn var_exists(mut var: *const c_char) -> bool {
+    let mut evalarg = EVALARG_EVALUATE;
     unsafe {
         let mut tofree: *mut c_char = ptr::null_mut();
         let mut n = false;
@@ -420,8 +421,7 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
             n = eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) == OK;
             if n {
                 // Handle `d.key`, `l[idx]` and `Func()`.
-                n = handle_subscript(&raw mut var, &raw mut tv, EVALARG_EVALUATE.ptr(), false)
-                    == OK;
+                n = handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) == OK;
                 if n {
                     tv_clear(&raw mut tv);
                 }

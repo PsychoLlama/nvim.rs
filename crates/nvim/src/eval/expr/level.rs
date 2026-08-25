@@ -65,6 +65,17 @@ const BORROWED_EVALARG: evalarg_T = evalarg_T {
     eval_tofree: null_mut(),
 };
 
+/// The `evalarg_T` that says "evaluate, and read no continuation lines".
+///
+/// A value, not a cell as the C has it: the levels below write `eval_flags`
+/// while they short-circuit and restore it afterwards, so a caller sharing
+/// one with a nested evaluation would be lending it a mutable scratch. Each
+/// declares its own — `let mut evalarg = EVALARG_EVALUATE;`.
+pub(crate) const EVALARG_EVALUATE: evalarg_T = evalarg_T {
+    eval_flags: EVAL_EVALUATE as c_int,
+    ..BORROWED_EVALARG
+};
+
 /// `isalnum` in the process locale, which is what decides whether `is` and
 /// `isnot` stand as whole words. nvim calls `setlocale(LC_ALL, "")` at
 /// startup, so this is deliberately not the ASCII test.

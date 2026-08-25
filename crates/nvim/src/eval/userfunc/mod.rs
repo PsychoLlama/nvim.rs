@@ -7,6 +7,7 @@ use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
 use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
@@ -43,12 +44,12 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::main::{
-    EVALARG_EVALUATE, KeyTyped, Rows, cmdline_row, curbuf, current_sctx, curwin,
-    debug_backtrace_level, debug_tick, did_emsg, did_throw, do_profiling, e_dictkey, e_invarg2,
-    e_invexpr2, e_invrange, e_missingparen, e_not_callable_type_str, e_str_not_inside_function,
-    e_toofewarg, e_toomanyarg, e_trailing_arg, e_unknown_function_str, e_usingsid, emsg_severe,
-    ex_nesting_level, got_int, lines_left, msg_row, msg_scroll, need_wait_return, p_ic, p_mfd,
-    p_verbose, sandbox, trylevel, want_garbage_collect,
+    KeyTyped, Rows, cmdline_row, curbuf, current_sctx, curwin, debug_backtrace_level, debug_tick,
+    did_emsg, did_throw, do_profiling, e_dictkey, e_invarg2, e_invexpr2, e_invrange,
+    e_missingparen, e_not_callable_type_str, e_str_not_inside_function, e_toofewarg, e_toomanyarg,
+    e_trailing_arg, e_unknown_function_str, e_usingsid, emsg_severe, ex_nesting_level, got_int,
+    lines_left, msg_row, msg_scroll, need_wait_return, p_ic, p_mfd, p_verbose, sandbox, trylevel,
+    want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
