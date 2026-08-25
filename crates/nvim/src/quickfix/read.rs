@@ -628,19 +628,18 @@ pub(crate) unsafe fn qf_store_title(qfl: *mut qf_list_T, title: *const c_char) {
 }
 
 /// A list's default title is the command that created it, with a `:` in
-/// front. Answers a pointer to a shared buffer, so the caller must be done
-/// with it before the next call.
+/// front, in its own storage. Upstream answers a shared buffer the next
+/// call overwrites.
 ///
 /// # Safety
 ///
 /// `cmd` must be NUL-terminated.
-pub(crate) unsafe fn qf_cmdtitle(cmd: *const c_char) -> *mut c_char {
-    static TITLE: GlobalCell<[c_char; READ_CHUNK + 1]> = GlobalCell::new([0; READ_CHUNK + 1]);
-    let title = TITLE.ptr().cast::<c_char>();
+pub(crate) unsafe fn qf_cmdtitle(cmd: *const c_char) -> [c_char; READ_CHUNK + 1] {
+    let mut title = [0 as c_char; READ_CHUNK + 1];
     // SAFETY: the caller's command is NUL-terminated, and the buffer holds
     // the IOSIZE bytes `snprintf` is told about.
     unsafe {
-        snprintf(title, READ_CHUNK, c":%s".as_ptr(), cmd);
+        snprintf(title.as_mut_ptr(), READ_CHUNK, c":%s".as_ptr(), cmd);
     }
     title
 }

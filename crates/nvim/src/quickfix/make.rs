@@ -162,7 +162,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
             fname,
             errorformat,
             newlist as c_int,
-            qf_cmdtitle(*(*eap).cmdlinep),
+            qf_cmdtitle(*(*eap).cmdlinep).as_ptr(),
             enc,
         );
 

@@ -74,13 +74,12 @@ pub(crate) unsafe fn set_context_in_menu_cmd(
 ) -> *mut c_char {
     // SAFETY: the caller's obligation.
     let context = unsafe { menu_context(CStr::from_ptr(cmd), CText::new(arg), forceit) };
-    // SAFETY: the caller's obligation; both writes finish here, and the
-    // pattern is a position in the command line `xp` already describes.
-    unsafe {
-        (*xp).xp_context = context.xp_context;
-        if let Some(pattern) = context.pattern {
-            (*xp).xp_pattern = pattern.raw();
-        }
+    // SAFETY: the caller's obligation; the pattern is a position in the
+    // command line `xp` already describes.
+    unsafe { (*xp).xp_context = context.xp_context };
+    if let Some(pattern) = context.pattern {
+        // SAFETY: as above.
+        unsafe { (*xp).xp_pattern = pattern.raw() };
     }
     ptr::null_mut()
 }
@@ -259,9 +258,7 @@ pub(crate) fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_menu_name`].
-pub(crate) unsafe fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    /// Scratch for the one candidate at a time a submenu is answered with.
-    static TBUFFER: GlobalCell<[u8; TBUFFER_LEN]> = GlobalCell::new([0; TBUFFER_LEN]);
+pub(crate) unsafe fn get_menu_names(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -282,14 +279,17 @@ pub(crate) unsafe fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_ch
         // SAFETY: `name` is one of the node's display names.
         let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
         let kept = bytes.len().min(TBUFFER_LEN - 2);
-        TBUFFER.with_mut(|buf| {
-            buf[..kept].copy_from_slice(&bytes[..kept]);
-            buf[kept] = SUBMENU_MARK;
-            buf[kept + 1] = 0;
-        });
-        // The generator's contract is a borrowed string, so this hands back
-        // the scratch buffer itself.
-        TBUFFER.ptr().cast()
+        // The generator's contract is a borrowed string, so this answers
+        // from the expansion context's own scratch, which `expand_generic`
+        // copies before it asks for the next name.
+        // SAFETY: the caller's live expansion context.
+        let out = unsafe { &mut (*xp).xp_buf };
+        for (dst, src) in out.iter_mut().zip(&bytes[..kept]) {
+            *dst = *src as c_char;
+        }
+        out[kept] = SUBMENU_MARK as c_char;
+        out[kept + 1] = 0;
+        out.as_mut_ptr()
     } else {
         name
     };

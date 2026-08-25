@@ -12,6 +12,7 @@ use crate::grid::{
     GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
 use crate::highlight::HlAttrFlags;
+use crate::highlight_group::HlColorText;
 use crate::highlight_group::{
     get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
     syn_get_final_id, syn_name2id,
@@ -258,6 +259,7 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 /// `synIDattr({id}, {what} [, {mode}])`
 pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
+    let mut color: HlColorText = [0; 20];
     // SAFETY: the frame is live; `what` is the string an argument owns and
     // outlives the `highlight_color` call, and `modebuf` outlives the string
     // `tv_get_string_buf` may park in it.
@@ -281,7 +283,7 @@ pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         };
 
         let p = match attr_selector(CStr::from_ptr(what).to_bytes()) {
-            Some(Attr::Color) => highlight_color(id, what, modec),
+            Some(Attr::Color) => highlight_color(id, what, modec, &mut color),
             Some(Attr::Name) => get_highlight_name_ext(ptr::null_mut(), id - 1, false),
             Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
             None => ptr::null(),

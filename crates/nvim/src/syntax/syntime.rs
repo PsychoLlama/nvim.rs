@@ -138,7 +138,7 @@ unsafe fn syntime_report() {
         }
         if !got_int.get() {
             msg_puts(c"\n".as_ptr());
-            msg_puts(profile_msg(total_total));
+            msg_puts(profile_msg(total_total).as_ptr());
             msg_advance(13);
             msg_outnum(total_count);
             msg_puts(c"\n".as_ptr());
@@ -153,7 +153,7 @@ unsafe fn syntime_report() {
 /// what keeps two of them from running together when that happens.
 unsafe fn report_row(entry: &TimeEntry) {
     unsafe {
-        msg_puts(profile_msg(entry.total));
+        msg_puts(profile_msg(entry.total).as_ptr());
         msg_puts(c" ".as_ptr());
         msg_advance(13);
         msg_outnum(entry.count);
@@ -162,10 +162,10 @@ unsafe fn report_row(entry: &TimeEntry) {
         msg_outnum(entry.matches);
         msg_puts(c" ".as_ptr());
         msg_advance(26);
-        msg_puts(profile_msg(entry.slowest));
+        msg_puts(profile_msg(entry.slowest).as_ptr());
         msg_puts(c" ".as_ptr());
         msg_advance(38);
-        msg_puts(profile_msg(entry.average));
+        msg_puts(profile_msg(entry.average).as_ptr());
         msg_puts(c" ".as_ptr());
         msg_advance(50);
         msg_outtrans(highlight_group_name(entry.id - 1), 0, false);

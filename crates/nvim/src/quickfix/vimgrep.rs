@@ -133,7 +133,7 @@ impl Search {
                     MAXLNUM as c_int
                 },
                 regmatch: regmmatch_T::default(),
-                qf_title: Name::from_ptr(qf_cmdtitle(*(*eap).cmdlinep)),
+                qf_title: Name::from_ptr(qf_cmdtitle(*(*eap).cmdlinep).as_ptr()),
             };
 
             let p = skip_vimgrep_pat((*eap).arg, &raw mut search.spat, &raw mut search.flags);

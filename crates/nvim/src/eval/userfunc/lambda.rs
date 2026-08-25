@@ -40,19 +40,16 @@ pub(crate) unsafe fn register_closure(fp: *mut ufunc_T) {
 /// `"<lambda>"` plus `NUMBUFLEN`, the widest a `varnumber_T` prints.
 const LAMBDA_NAME_LEN: usize = 8 + 65;
 
-/// `<lambda>N` is handed back in this one buffer, so a caller must be done
-/// with the name before it asks for another.
-static lambda_name: GlobalCell<[c_char; LAMBDA_NAME_LEN]> = GlobalCell::new([0; LAMBDA_NAME_LEN]);
-
-/// The name of the next lambda, in static memory.
+/// The name of the next lambda, in `into` — the caller's, so that two
+/// names can be alive at once. Upstream answers one static buffer.
 ///
 /// # Safety
-/// The previous name must no longer be in use.
-unsafe fn get_lambda_name() -> String_0 {
+/// `into` must outlive the answer.
+unsafe fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     unsafe {
         static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
         lambda_no.set(lambda_no.get() + 1);
-        let buf = lambda_name.ptr() as *mut c_char;
+        let buf = into.as_mut_ptr();
         let n = snprintf(
             buf,
             LAMBDA_NAME_LEN,
@@ -114,6 +111,7 @@ pub unsafe fn get_lambda_tv(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
 ) -> c_int {
+    let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
     unsafe {
         let evaluate = !evalarg.is_null() && (*evalarg).eval_flags & EVAL_EVALUATE != 0;
         let mut newargs = GARRAY_EMPTY;
@@ -190,7 +188,7 @@ pub unsafe fn get_lambda_tv(
 
             if evaluate {
                 let mut flags = 0;
-                let name = get_lambda_name();
+                let name = get_lambda_name(&mut lambda_buf);
                 let fp = alloc_ufunc(name.data(), name.len());
                 let pt = xcalloc(1, size_of::<partial_T>()) as *mut partial_T;
 
@@ -356,8 +354,9 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
 /// # Safety
 /// `ref_0` is a live Lua reference the new function takes over.
 pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
+    let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
     unsafe {
-        let name = get_lambda_name();
+        let name = get_lambda_name(&mut lambda_buf);
         let fp = alloc_ufunc(name.data(), name.len());
         (*fp).uf_refcount = 1;
         (*fp).uf_varargs = 1;

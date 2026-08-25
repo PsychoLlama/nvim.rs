@@ -97,7 +97,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
             p_ef.get(),
             p_efm.get(),
             newlist as c_int,
-            qf_cmdtitle(*(*eap).cmdlinep),
+            qf_cmdtitle(*(*eap).cmdlinep).as_ptr(),
             enc,
         );
 
@@ -227,10 +227,10 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
                 title.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"%s (%s)".as_ptr(),
-                qf_title,
+                qf_title.as_ptr(),
                 (*buf).b_sfname,
             );
-            qf_title = title.as_mut_ptr();
+            qf_title[..IOSIZE as usize].copy_from_slice(&title);
         }
 
         incr_quickfix_busy();
@@ -246,7 +246,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
             newlist,
             (*eap).line1,
             (*eap).line2,
-            qf_title,
+            qf_title.as_ptr(),
             ptr::null_mut(),
         );
 
@@ -358,7 +358,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
             newlist,
             0,
             0,
-            qf_cmdtitle(*(*eap).cmdlinep),
+            qf_cmdtitle(*(*eap).cmdlinep).as_ptr(),
             ptr::null_mut(),
         );
 

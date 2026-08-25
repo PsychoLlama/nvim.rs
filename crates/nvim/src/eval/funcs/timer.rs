@@ -222,7 +222,7 @@ pub unsafe fn f_reltimestr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // which `xstrdup` copies before anything else can reuse it.
     unsafe {
         if let Some(tm) = list2proftime(args.ptr(0)) {
-            rettv.vval.v_string = xstrdup(profile_msg(tm));
+            rettv.vval.v_string = xstrdup(profile_msg(tm).as_ptr());
         }
     }
 }

@@ -9,7 +9,6 @@
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
-use crate::global_cell::GlobalCell;
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::types::{
@@ -203,11 +202,10 @@ pub(crate) fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> 
     }
 }
 
-/// Where a `#rrggbb` or decimal answer from [`highlight_color`] is formatted.
-///
-/// Static because the answer is a borrowed pointer, overwritten on the next
-/// call — which is what upstream documents for this function.
-static ANSWER: GlobalCell<[u8; 20]> = GlobalCell::new([0; 20]);
+/// Where a `#rrggbb` or decimal answer from [`highlight_color`] is
+/// formatted: the caller's, so that two answers can be alive at once.
+/// Upstream uses a static, overwritten on the next call.
+pub(crate) type HlColorText = [u8; 20];
 
 /// `synIDattr({id}, {what})` for a colour: `"fg"`, `"bg"`, `"sp"`, any of
 /// those with a `#` suffix, or `"font"`.
@@ -223,6 +221,7 @@ pub(crate) unsafe fn highlight_color(
     id: c_int,
     what: *const c_char,
     modec: c_int,
+    into: &mut HlColorText,
 ) -> *const c_char {
     if id <= 0 || id > highlight_num_groups() {
         return core::ptr::null();
@@ -255,7 +254,7 @@ pub(crate) unsafe fn highlight_color(
             if !(0..=0xffffff).contains(&n) {
                 return core::ptr::null();
             }
-            return answer(format_args!("#{n:06x}"));
+            return answer(format_args!("#{n:06x}"), into);
         }
         let (idx, value) = if fg {
             (entry.rgb_fg_idx, entry.rgb_fg)
@@ -268,7 +267,7 @@ pub(crate) unsafe fn highlight_color(
         // every answer this function gives has the same lifetime.
         let mut hexbuf: HexBuf = [0; 8];
         return match coloridx_to_name(idx, value, &mut hexbuf) {
-            Some(name) => answer(format_args!("{}", name.to_string_lossy())),
+            Some(name) => answer(format_args!("{}", name.to_string_lossy()), into),
             None => core::ptr::null(),
         };
     }
@@ -281,21 +280,19 @@ pub(crate) unsafe fn highlight_color(
         if n < 0 {
             return core::ptr::null();
         }
-        return answer(format_args!("{n}"));
+        return answer(format_args!("{n}"), into);
     }
     // `term` has no colours.
     core::ptr::null()
 }
 
-/// Parks `text` in [`ANSWER`] and hands back a pointer to it, truncating at
-/// 19 bytes as upstream's `char[20]` did.
-fn answer(text: core::fmt::Arguments) -> *const c_char {
+/// Parks `text` in `into` and hands back a pointer to it, truncating at 19
+/// bytes as upstream's `char[20]` did.
+fn answer(text: core::fmt::Arguments, into: &mut HlColorText) -> *const c_char {
     let text = text.to_string();
     let bytes = text.as_bytes();
-    ANSWER.with_mut(|buf| {
-        let len = bytes.len().min(buf.len() - 1);
-        buf[..len].copy_from_slice(&bytes[..len]);
-        buf[len] = 0;
-    });
-    ANSWER.as_raw().cast()
+    let len = bytes.len().min(into.len() - 1);
+    into[..len].copy_from_slice(&bytes[..len]);
+    into[len] = 0;
+    into.as_ptr().cast()
 }

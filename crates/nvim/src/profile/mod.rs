@@ -186,19 +186,17 @@ pub fn profile_msg_str(tm: proftime_T) -> String {
 }
 
 /// C-string flavor of [`profile_msg_str`] for the transpiled callers
-/// (syntime report, `reltimestr()`). Returns a static buffer: copy it
-/// before the next call, don't free it.
-pub fn profile_msg(tm: proftime_T) -> *const c_char {
-    static BUF: GlobalCell<[c_char; 50]> = GlobalCell::new([0; 50]);
+/// (syntime report, `reltimestr()`), in its own storage. Upstream answers a
+/// static buffer the next call overwrites.
+pub(crate) fn profile_msg(tm: proftime_T) -> [c_char; 50] {
     let s = profile_msg_str(tm);
-    BUF.with_mut(|buf| {
-        let n = s.len().min(buf.len() - 1);
-        for (dst, src) in buf.iter_mut().zip(s.as_bytes()[..n].iter()) {
-            *dst = *src as c_char;
-        }
-        buf[n] = 0;
-    });
-    BUF.as_raw() as *const c_char
+    let mut buf = [0 as c_char; 50];
+    let n = s.len().min(buf.len() - 1);
+    for (dst, src) in buf.iter_mut().zip(s.as_bytes()[..n].iter()) {
+        *dst = *src as c_char;
+    }
+    buf[n] = 0;
+    buf
 }
 
 // ---------------------------------------------------------------------------

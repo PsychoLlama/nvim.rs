@@ -247,7 +247,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         let updated = !regmatch.regprog.is_null();
         if updated {
             // Create a new quickfix list.
-            qf_new_list(qi, qf_cmdtitle(*(*eap).cmdlinep));
+            qf_new_list(qi, qf_cmdtitle(*(*eap).cmdlinep).as_ptr());
             let qfl = qf_get_curlist(qi);
 
             hgr_search_in_rtp(qfl, &raw mut regmatch, lang);
