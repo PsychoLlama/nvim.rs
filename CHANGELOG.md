@@ -20,6 +20,11 @@ and this project adheres to [CalVer](https://calver.org/).
   command modifiers of the `:source` that reached it. `:silent source` on
   such a file used to print everything the script said from the second line
   on, and `:filter /pat/ source` on one could crash the editor.
+- A message printed after `:messages` no longer takes its "kind" from freed
+  memory. `:messages` replays each history entry under the kind it was
+  written with, and that kind is the entry's own copy; once the entry aged
+  out of `'messagesopt'`'s `history:` the next message read it back — into
+  the history, and into the `msg_show` event a UI sees.
 
 ## [2026.08.23-529b135d5d]
 
