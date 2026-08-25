@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
 use std::ffi::CString;
@@ -36,8 +36,7 @@ use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
     BackslashEscape, ExpandContext, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T,
-    expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint8_t, uint32_t,
-    xp_prefix_T,
+    expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
@@ -51,7 +50,8 @@ use super::{
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
 ///
 /// `IDX` is `kOptInvalid` for a terminal option, whose two-letter name is
-/// spelled into `NAME` instead.
+/// spelled into `NAME` instead — the whole five bytes at a time, since the
+/// first two are always `t_` and the last is the terminator.
 static IDX: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
 static NAME: GlobalCell<[c_char; 5]> = GlobalCell::new([b't' as c_char, b'_' as c_char, 0, 0, 0]);
 static START_COL: GlobalCell<c_int> = GlobalCell::new(0);
@@ -295,8 +295,9 @@ unsafe fn take_option_name(
             *p = p.add(1);
             let nextchar = **p;
             // The two termcap bytes the key code packs.
-            (*NAME.ptr())[2] = (-key & 0xff) as uint8_t as c_char;
-            (*NAME.ptr())[3] = ((-key) as c_uint >> 8 & 0xff) as uint8_t as c_char;
+            let lo = (-key & 0xff) as c_char;
+            let hi = ((-key) as c_uint >> 8 & 0xff) as c_char;
+            NAME.set([b't' as c_char, b'_' as c_char, lo, hi, 0]);
             return Some((nextchar, kOptAleph, 0, true));
         }
 
@@ -311,8 +312,7 @@ unsafe fn take_option_name(
             }
             *p = p.add(1);
             let nextchar = **p;
-            (*NAME.ptr())[2] = *p.sub(2);
-            (*NAME.ptr())[3] = *p.sub(1);
+            NAME.set([b't' as c_char, b'_' as c_char, *p.sub(2), *p.sub(1), 0]);
             return Some((nextchar, kOptAleph, 0, true));
         }
 
@@ -602,7 +602,7 @@ pub(crate) unsafe fn expand_old_setting(
         // A terminal option has no table row, so it is looked up by the
         // name `set_context_in_set_cmd` spelled out.
         if IDX.get() == kOptInvalid {
-            IDX.set(find_option(CStr::from_ptr(NAME.ptr().cast::<c_char>())));
+            IDX.set(NAME.with(|name| find_option(cstr::in_chars(name))));
         }
         let mut rendered = [0 as c_char; MAXPATHL as usize];
         let var = if IDX.get() == kOptInvalid {
