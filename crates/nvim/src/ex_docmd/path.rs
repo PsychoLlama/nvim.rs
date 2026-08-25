@@ -21,9 +21,9 @@ use crate::ex_getln::allbuf_locked;
 use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
 use crate::fileio::shorten_fnames;
 use crate::main::{
-    KeyTyped, NameBuff, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path,
-    e_failed, e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path,
-    globaldir, last_chdir_reason, p_cdh, p_ffu, p_verbose,
+    KeyTyped, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path, e_failed,
+    e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path, globaldir,
+    last_chdir_reason, p_cdh, p_ffu, p_verbose,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg};
@@ -277,6 +277,9 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
 /// when the directory really differs.
 pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     let mut new_dir = new_dir;
+    // The DirChangedPre autocommand below runs while `new_dir` may point in
+    // here, which is exactly why it is not the shared `NameBuff`.
+    let mut dir = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if new_dir.is_null() || allbuf_locked() {
             return false;
@@ -290,20 +293,16 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
             new_dir = pdir;
         }
 
-        let pdir = if os_dirname(NameBuff.ptr() as *mut c_char, MAXPATHL as size_t) == OK {
-            xstrdup(NameBuff.ptr() as *mut c_char)
+        let pdir = if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) == OK {
+            xstrdup(dir.as_mut_ptr())
         } else {
             ptr::null_mut()
         };
 
         // `:cd` with no argument means home, when 'cdhome' is set.
         if *new_dir as c_int == NUL && p_cdh.get() != 0 {
-            expand_env(
-                c"$HOME".as_ptr() as *mut c_char,
-                NameBuff.ptr() as *mut c_char,
-                MAXPATHL,
-            );
-            new_dir = NameBuff.ptr() as *mut c_char;
+            expand_env(c"$HOME".as_ptr() as *mut c_char, dir.as_mut_ptr(), MAXPATHL);
+            new_dir = dir.as_mut_ptr();
         }
 
         let dir_differs = pdir.is_null() || pathcmp(pdir, new_dir, -1) != 0;
@@ -360,8 +359,9 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
 
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
 pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
+    let mut dir = [0 as c_char; MAXPATHL as usize];
     unsafe {
-        if os_dirname(NameBuff.ptr() as *mut c_char, MAXPATHL as size_t) != OK {
+        if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) != OK {
             emsg(gettext(c"E187: Unknown".as_ptr()));
             return;
         }
@@ -375,14 +375,9 @@ pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
             } else {
                 c"global".as_ptr() as *mut c_char
             };
-            smsg_c!(
-                0,
-                c"[%s] %s".as_ptr(),
-                context,
-                NameBuff.ptr() as *mut c_char,
-            );
+            smsg_c!(0, c"[%s] %s".as_ptr(), context, dir.as_mut_ptr());
         } else {
-            msg(NameBuff.ptr() as *mut c_char, 0);
+            msg(dir.as_mut_ptr(), 0);
         }
     }
 }

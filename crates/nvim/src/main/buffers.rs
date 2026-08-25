@@ -29,8 +29,8 @@ use crate::fileio::readfile;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IObuff, NameBuff, READ_NEW, READ_STDIN, SEA_DIALOG,
-    SEA_NONE, SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
+    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
+    SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
     autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, global_alist, got_int,
     kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
     no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action,
@@ -46,8 +46,9 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, Vv, aentry_T, bufref_T,
-    exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, win_T,
+    IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, Vv, aentry_T,
+    bufref_T, exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
+    win_T,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -78,6 +79,7 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) unsafe fn set_argf_var() {
+    let mut full = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the global argument list is initialised by `early_init`.
     unsafe {
         let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
@@ -85,13 +87,8 @@ pub(crate) unsafe fn set_argf_var() {
         for i in 0..(*alist).al_ga.ga_len {
             let fname = alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize));
             if !fname.is_null() {
-                vim_full_name(
-                    fname,
-                    NameBuff.ptr() as *mut c_char,
-                    size_of::<[c_char; 4096]>(),
-                    false,
-                );
-                tv_list_append_string(list, NameBuff.ptr() as *mut c_char, -1 as ssize_t);
+                vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false);
+                tv_list_append_string(list, full.as_mut_ptr(), -1 as ssize_t);
             }
         }
         tv_list_set_lock(list, VAR_FIXED);
@@ -110,8 +107,9 @@ pub(crate) unsafe fn get_fname(_parmp: *mut mparm_T) -> *mut c_char {
 ///
 /// A quickfix list that cannot be built is fatal, with status 3.
 pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
-    // SAFETY: `paramp` is the caller's live parameter block; `IObuff` is the
-    // shared scratch buffer, `IOSIZE` bytes long.
+    let mut title = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `paramp` is the caller's live parameter block, and `title`
+    // outlives the `qf_init` that reads it.
     unsafe {
         if (*paramp).edit_type != EDIT_QF as c_int {
             return;
@@ -131,7 +129,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
         }
         // The title of the list is the command that would have made it.
         vim_snprintf(
-            IObuff.ptr() as *mut c_char,
+            title.as_mut_ptr(),
             IOSIZE as size_t,
             c"cfile %s".as_ptr(),
             p_ef.get(),
@@ -141,7 +139,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
             p_ef.get(),
             p_efm.get(),
             1,
-            IObuff.ptr() as *mut c_char,
+            title.as_mut_ptr(),
             p_menc.get(),
         ) < 0
         {
@@ -154,6 +152,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
 
 /// `-t`: jump to a tag instead of opening a file.
 pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
+    let mut cmd = [0 as c_char; IOSIZE as usize];
     // SAFETY: `tagname`, when non-null, points into argv.
     unsafe {
         if tagname.is_null() {
@@ -161,12 +160,12 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
         }
         swap_exists_did_quit.set(false);
         vim_snprintf(
-            IObuff.ptr() as *mut c_char,
+            cmd.as_mut_ptr(),
             IOSIZE as size_t,
             c"ta %s".as_ptr(),
             tagname,
         );
-        do_cmdline_cmd(IObuff.ptr() as *mut c_char);
+        do_cmdline_cmd(cmd.as_mut_ptr());
         time_msg_at(c"jumping to tag");
         if swap_exists_did_quit.get() {
             quit_on_swap_exists(false);

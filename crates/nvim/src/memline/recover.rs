@@ -26,6 +26,9 @@ use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 /// `checkext`: whether the buffer's own name may itself be a swap file name,
 /// as it is for `nvim -r file.swp`.
 pub unsafe fn ml_recover(checkext: bool) {
+    // The recovery report runs autocommands between the calls that fill this,
+    // so it is this frame's rather than the shared `NameBuff`.
+    let mut path = [0 as c_char; MAXPATHL as usize];
     unsafe {
         recoverymode.set(true);
         let called_from_main = (*curbuf.get()).b_ml.ml_mfp.is_null();
@@ -196,18 +199,8 @@ pub unsafe fn ml_recover(checkext: bool) {
             // Given the swap file's name directly, the buffer takes its name
             // from what the swap file says it belongs to.
             if directly {
-                expand_env(
-                    (*b0p).b0_fname.as_mut_ptr(),
-                    NameBuff.ptr().cast(),
-                    MAXPATHL,
-                );
-                if setfname(
-                    curbuf.get(),
-                    NameBuff.ptr().cast(),
-                    core::ptr::null_mut(),
-                    true,
-                ) == FAIL
-                {
+                expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL);
+                if setfname(curbuf.get(), path.as_mut_ptr(), core::ptr::null_mut(), true) == FAIL {
                     break 'theend;
                 }
             }
@@ -217,18 +210,18 @@ pub unsafe fn ml_recover(checkext: bool) {
             home_replace(
                 core::ptr::null(),
                 mf_fname(mfp),
-                NameBuff.ptr().cast(),
+                path.as_mut_ptr(),
                 MAXPATHL as size_t,
                 true,
             );
             smsg_c!(
                 0,
                 gettext(c"Using swap file \"%s\"".as_ptr()),
-                NameBuff.ptr(),
+                path.as_ptr()
             );
             if !buf_spname(curbuf.get()).is_null() {
                 xstrlcpy(
-                    NameBuff.ptr().cast(),
+                    path.as_mut_ptr(),
                     buf_spname(curbuf.get()),
                     MAXPATHL as size_t,
                 );
@@ -236,17 +229,13 @@ pub unsafe fn ml_recover(checkext: bool) {
                 home_replace(
                     core::ptr::null(),
                     (*curbuf.get()).b_ffname,
-                    NameBuff.ptr().cast(),
+                    path.as_mut_ptr(),
                     MAXPATHL as size_t,
                     true,
                 );
             }
             msg_putchar('\n' as c_int);
-            smsg_c!(
-                0,
-                gettext(c"Original file \"%s\"".as_ptr()),
-                NameBuff.ptr().cast::<c_char>(),
-            );
+            smsg_c!(0, gettext(c"Original file \"%s\"".as_ptr()), path.as_ptr());
             msg_putchar('\n' as c_int);
             msg_ext_skip_flush.set(false);
 

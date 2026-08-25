@@ -116,6 +116,9 @@ struct Selection {
 /// # Safety
 /// `dict`, when not null, must point to a live dictionary.
 pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
+    // The report is assembled across two functions and shown at the end, so
+    // it is passed down as a sink rather than left in the shared `IObuff`.
+    let mut report = [0 as c_char; IOSIZE as usize];
     unsafe {
         let visual = visual_selection();
         let mut counts = PosCounts::default();
@@ -135,14 +138,14 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
             }
 
             if dict.is_null() {
-                report_counts(&counts, selection.as_ref());
+                report_counts(&mut report, &counts, selection.as_ref());
             }
 
             bom_count = varnumber_T::from(bomb_size());
             if dict.is_null() && bom_count > 0 {
-                let len = strlen(IObuff.ptr() as *mut c_char);
+                let len = strlen(report.as_ptr());
                 vim_snprintf(
-                    (IObuff.ptr() as *mut c_char).add(len),
+                    report.as_mut_ptr().add(len),
                     IOSIZE as size_t - len,
                     gettext(c"(+%ld for BOM)".as_ptr()),
                     bom_count,
@@ -157,7 +160,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
                     msg_start();
                     msg_scroll.set(1);
                 }
-                msg(IObuff.ptr() as *mut c_char, 0);
+                msg(report.as_mut_ptr(), 0);
                 p_shm.set(saved_shm);
             }
         }
@@ -344,7 +347,7 @@ unsafe fn count_selected_line(
     }
 }
 
-/// Build the message into `IObuff`.
+/// Build the message into `out`.
 ///
 /// Four spellings: with or without a selection, and with or without a
 /// character count -- which is left out when it would equal the byte count,
@@ -352,7 +355,11 @@ unsafe fn count_selected_line(
 ///
 /// # Safety
 /// `selection`, when given, must describe the current selection.
-unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
+unsafe fn report_counts(
+    out: &mut [c_char; IOSIZE as usize],
+    counts: &PosCounts,
+    selection: Option<&Selection>,
+) {
     unsafe {
         let same_as_bytes =
             counts.chars_cursor == counts.bytes_cursor && counts.chars == counts.bytes;
@@ -376,7 +383,7 @@ unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
             );
             if same_as_bytes {
                 vim_snprintf(
-                    IObuff.ptr() as *mut c_char,
+                    out.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(
                         c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld".as_ptr(),
@@ -392,7 +399,7 @@ unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
                 );
             } else {
                 vim_snprintf(
-                    IObuff.ptr() as *mut c_char,
+                    out.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld".as_ptr()),
                     &raw mut buf1 as *mut c_char,
@@ -436,7 +443,7 @@ unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
 
         if same_as_bytes {
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                out.as_mut_ptr(),
                 IOSIZE as size_t,
                 gettext(
                     c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes".as_ptr(),
@@ -451,7 +458,7 @@ unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
             );
         } else {
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                out.as_mut_ptr(),
                 IOSIZE as size_t,
                 gettext(c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes".as_ptr()),
                 &raw mut buf1 as *mut c_char,

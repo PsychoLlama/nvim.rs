@@ -28,8 +28,7 @@ use crate::event::proc::{proc_is_stopped, proc_stop, proc_wait};
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::main::{
-    IObuff, NameBuff, curbuf, curwin, e_channotpty, e_invarg, e_invarg2, e_invargNval, main_loop,
-    p_tgc,
+    curbuf, curwin, e_channotpty, e_invarg, e_invarg2, e_invargNval, main_loop, p_tgc,
 };
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
@@ -46,10 +45,10 @@ use crate::semsg_c;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, Integer,
-    NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, Vv, buf_T, dict_T,
-    dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
-    typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, IOSIZE,
+    Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED,
+    Vv, buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
+    typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -606,8 +605,12 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `chan` is a live channel with a running process, `cwd` and `cmd` are
 /// NUL-terminated strings.
 unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_char) {
-    // SAFETY: the caller's obligation; `NameBuff` and `IObuff` are the
-    // shared scratch buffers and are only used within this body.
+    // The autocommands below run while the name is half-built, which is why
+    // neither of these is the shared scratch buffer upstream uses.
+    let mut name = [0 as c_char; MAXPATHL as usize];
+    let mut shortened = [0 as c_char; IOSIZE as usize];
+    // SAFETY: the caller's obligation; both buffers outlive every call they
+    // are handed to below.
     unsafe {
         let pid = (*channel_proc(chan)).pid;
         let buf = curbuf.get();
@@ -631,33 +634,32 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         // which is what each of these three re-tests is for.
         if terminal_live(chan) {
             // Name the buffer `term://{cwd}//{pid}:{cmd}`.
-            vim_full_name(cwd, NameBuff.ptr() as *mut c_char, 4096, false);
+            vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false);
             let len = home_replace(
                 ptr::null(),
-                NameBuff.ptr() as *mut c_char,
-                IObuff.ptr() as *mut c_char,
-                1025,
+                name.as_mut_ptr(),
+                shortened.as_mut_ptr(),
+                IOSIZE as usize,
                 true,
             );
             // Drop a trailing separator, but keep `/` itself meaningful by
             // spelling it `/.`.
-            let io = IObuff.ptr();
-            if len != 1 && matches!((*io)[len - 1] as u8, b'\\' | b'/') {
-                (*io)[len - 1] = NUL as c_char;
+            if len != 1 && matches!(shortened[len - 1] as u8, b'\\' | b'/') {
+                shortened[len - 1] = NUL as c_char;
             }
-            if len == 1 && (*io)[0] as u8 == b'/' {
-                (*io)[1] = b'.' as c_char;
-                (*io)[2] = NUL as c_char;
+            if len == 1 && shortened[0] as u8 == b'/' {
+                shortened[1] = b'.' as c_char;
+                shortened[2] = NUL as c_char;
             }
             snprintf(
-                NameBuff.ptr() as *mut c_char,
-                4096,
+                name.as_mut_ptr(),
+                MAXPATHL as usize,
                 c"term://%s//%d:%s".as_ptr(),
-                IObuff.ptr() as *mut c_char,
+                shortened.as_ptr(),
                 pid,
                 cmd,
             );
-            setfname(buf, NameBuff.ptr() as *mut c_char, ptr::null_mut(), true);
+            setfname(buf, name.as_mut_ptr(), ptr::null_mut(), true);
             apply_autocmds(
                 EVENT_BUFFILEPOST,
                 ptr::null_mut(),

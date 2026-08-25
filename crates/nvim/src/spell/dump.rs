@@ -33,7 +33,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::hashtab::{hash_find, hash_removed};
 use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted};
-use crate::main::{IObuff, curbuf, curwin, got_int, p_ic};
+use crate::main::{curbuf, curwin, got_int, p_ic};
 use crate::mbyte::{mb_strnicmp, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::xstrlcpy;
@@ -161,6 +161,7 @@ pub unsafe fn spell_dump_compl(
     dir: *mut Direction,
     dumpflags_arg: c_int,
 ) {
+    let mut header = [0 as c_char; IOSIZE as usize];
     unsafe {
         let mut arridx = [0 as idx_T; MAXWLEN];
         let mut curi = [0 as c_int; MAXWLEN];
@@ -203,12 +204,12 @@ pub unsafe fn spell_dump_compl(
 
         if do_region && !region_names.is_null() && pat.is_null() {
             vim_snprintf(
-                IObuff.ptr() as *mut c_char,
+                header.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"/regions=%s".as_ptr(),
                 region_names,
             );
-            ml_append(lnum, IObuff.ptr() as *mut c_char, 0, false);
+            ml_append(lnum, header.as_mut_ptr(), 0, false);
             lnum += 1;
         } else {
             do_region = false;
@@ -223,12 +224,12 @@ pub unsafe fn spell_dump_compl(
 
             if pat.is_null() {
                 vim_snprintf(
-                    IObuff.ptr() as *mut c_char,
+                    header.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"# file: %s".as_ptr(),
                     (*slang).sl_fname,
                 );
-                ml_append(lnum, IObuff.ptr() as *mut c_char, 0, false);
+                ml_append(lnum, header.as_mut_ptr(), 0, false);
                 lnum += 1;
             }
 
@@ -353,6 +354,7 @@ unsafe fn dump_word(
     wordflags: c_int,
     lnum: linenr_T,
 ) {
+    let mut counted = [0 as c_char; IOSIZE as usize];
     unsafe {
         let mut keepcap = false;
         let mut cword = [0 as c_char; MAXWLEN];
@@ -416,13 +418,13 @@ unsafe fn dump_word(
                 {
                     let wc = (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) as *mut wordcount_T;
                     vim_snprintf(
-                        IObuff.ptr() as *mut c_char,
+                        counted.as_mut_ptr(),
                         IOSIZE as size_t,
                         c"%s\t%d".as_ptr(),
                         tw,
                         (*wc).wc_count as c_int,
                     );
-                    p = IObuff.ptr() as *mut c_char;
+                    p = counted.as_mut_ptr();
                 }
             }
 
