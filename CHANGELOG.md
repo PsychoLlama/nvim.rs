@@ -19,6 +19,10 @@ and this project adheres to [CalVer](https://calver.org/).
   message and an option's rejection message are owned values now, so a
   second error raised while the first was still on its way to the user
   cannot replace it.
+- Retired the last of the shared return buffers: `tv_get_string()` and the
+  two functions beside it used to answer out of one process-wide buffer per
+  function, so a caller holding two coerced values at once silently got the
+  second one twice. Every caller lends its own buffer now.
 - Renamed the library crate from `c2rust_neovim` to `neovim` and retired the
   transpiler's generated names throughout — the anonymous `C2Rust_Unnamed_*`
   types, the `c2rust_padding` filler fields and the leftover scaffolding it
@@ -26,6 +30,11 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Fixed
 
+- `sign_define()` and `complete()` no longer confuse the values of two
+  dictionary keys given as numbers. Both read several keys in a row and hold
+  all the answers at once, and a number has no string of its own, so each was
+  rendered into the same shared buffer. Defining a sign with a numeric `icon`
+  and a numeric `text` gave it the same icon as its text.
 - Sourcing a script whose first line is a `#!` shebang no longer cancels the
   command modifiers of the `:source` that reached it. `:silent source` on
   such a file used to print everything the script said from the second line
