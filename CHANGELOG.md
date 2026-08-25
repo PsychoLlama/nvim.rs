@@ -30,6 +30,11 @@ and this project adheres to [CalVer](https://calver.org/).
   command line it is setting. It used to enlarge the command line the editor
   was _not_ on and then write the new text into the one it was, so any text
   longer than that line's current buffer corrupted the heap.
+- Command-line completion over Lua names no longer leaks its matches. The
+  list `vim._expand_pat` produced was thrown away with the array that held
+  it and not the strings inside it, so every `:lua vim.<Tab>` that was typed
+  and then abandoned leaked one allocation per match, and so did any
+  completion that hit a bad entry partway down the list.
 
 ## [2026.08.23-529b135d5d]
 
