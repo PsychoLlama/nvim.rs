@@ -157,6 +157,12 @@ struct BackEdge {
 /// Upstream is a garray and `ga_len` is a bare cursor, so those entries come
 /// back with whatever they last held. `live` is that cursor and `seen` keeps
 /// what is past it, so they come back here too.
+///
+/// This is not theoretical and it is not rare: `\(a\)\@<=\(\(b\)*\)*c`
+/// against `abbbc` restores the cursor from 0 back up to 2 on the first
+/// attempt. A `Vec::truncate` in [`BackPos::rewind`] would silently drop
+/// those two — which is why the `debug_assert` below is the tripwire for
+/// anyone who tries it, and it fires on that pattern immediately.
 pub(crate) struct BackPos {
     /// Every entry written this match, whether or not it is live.
     seen: Vec<BackEdge>,
@@ -193,8 +199,10 @@ impl BackPos {
         self.live
     }
 
-    /// Put the record back to the length a [`SavedInput`] remembered.
+    /// Put the record back to the length a [`SavedInput`] remembered — which
+    /// may be longer than it is now; see the type's docs.
     fn rewind(&mut self, len: usize) {
+        // Only the *cursor* moves. Shortening `seen` would make this fail.
         debug_assert!(len <= self.seen.len());
         self.live = len.min(self.seen.len());
     }
