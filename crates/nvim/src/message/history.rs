@@ -145,6 +145,19 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
     }
 }
 
+/// Forget a message kind that is about to be freed.
+///
+/// `msg_ext_kind` holds the kind **by pointer**, and `:messages` points it at
+/// a history entry's own copy while replaying that entry (see
+/// [`msg_hist_show`]). Freeing the copy while the pointer still names it
+/// leaves the next message reading freed memory for its kind -- which
+/// [`msg_hist_add_multihl`] duplicates straight back into the new entry.
+fn forget_kind(kind: *const c_char) {
+    if msg_ext_kind.get() == kind {
+        msg_ext_kind.set(ptr::null());
+    }
+}
+
 /// Unlink `entry` from the list and free it.
 ///
 /// # Safety
@@ -165,6 +178,7 @@ unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
             msg_hist_temp.set((*entry).next);
         }
         hl_msg_free((*entry).msg.clone());
+        forget_kind((*entry).kind.cast_const());
         xfree((*entry).kind.cast());
         xfree(entry.cast());
     }
@@ -289,8 +303,9 @@ pub unsafe fn messagesopt_changed() -> c_int {
 /// # Safety
 /// `entry` must be in the history list.
 unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
+    let mut content = EMPTY_ARRAY;
+    let mut out = EMPTY_ARRAY;
     unsafe {
-        let mut content = EMPTY_ARRAY;
         for i in 0..(*entry).msg.size {
             let chunk = (*(*entry).msg.items.add(i)).clone();
             let attr = if chunk.hl_id != 0 {
@@ -308,7 +323,6 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
             array_push(&mut content, Object::array(content_entry));
         }
 
-        let mut out = EMPTY_ARRAY;
         array_push(&mut out, Object::string(cstr_to_string((*entry).kind)));
         array_push(&mut out, Object::array(content));
         array_push(&mut out, Object::boolean((*entry).append));

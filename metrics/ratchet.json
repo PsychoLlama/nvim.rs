@@ -676,7 +676,7 @@
     "crates/nvim/src/message/errors.rs": {"cell_ptr": 4, "extern_abi": 3, "pub_items": 17, "unsafe_lines": 264},
     "crates/nvim/src/message/ext.rs": {"cell_ptr": 1, "pub_items": 5, "unsafe_lines": 98},
     "crates/nvim/src/message/grid.rs": {"cell_ptr": 2, "pub_items": 16, "unsafe_lines": 223},
-    "crates/nvim/src/message/history.rs": {"pub_items": 4, "unsafe_lines": 231},
+    "crates/nvim/src/message/history.rs": {"pub_items": 4, "unsafe_lines": 230},
     "crates/nvim/src/message/mod.rs": {"cell_ptr": 5, "pub_items": 59, "unsafe_lines": 365},
     "crates/nvim/src/message/outtrans.rs": {"cell_ptr": 1, "missing_safety_doc": 12, "pub_items": 13, "unsafe_lines": 229},
     "crates/nvim/src/message/progress.rs": {"pub_items": 2, "unsafe_lines": 136},
