@@ -569,12 +569,7 @@ pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
     xp_prefix: XP_PREFIX_NONE,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_luaref: 0,
-    xp_script_ctx: sctx_T {
-        sc_sid: 0,
-        sc_seq: 0,
-        sc_lnum: 0,
-        sc_chan: 0,
-    },
+    xp_script_ctx: sctx_T::NONE,
     xp_backslash: BackslashEscape::NONE,
     xp_shell: false,
     xp_numfiles: 0,

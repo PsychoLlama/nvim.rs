@@ -68,12 +68,7 @@ const fn initial() -> [OptionState; kOptCount as usize] {
     let mut state = [OptionState {
         flags: 0,
         default: table[0].def_val,
-        script_ctx: sctx_T {
-            sc_sid: 0,
-            sc_seq: 0,
-            sc_lnum: 0,
-            sc_chan: 0,
-        },
+        script_ctx: sctx_T::NONE,
     }; kOptCount as usize];
     let mut i = 0;
     while i < state.len() {

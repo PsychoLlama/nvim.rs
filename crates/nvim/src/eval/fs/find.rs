@@ -64,12 +64,7 @@ impl Expand {
             xp_prefix: XP_PREFIX_NONE,
             xp_arg: ptr::null_mut(),
             xp_luaref: 0,
-            xp_script_ctx: sctx_T {
-                sc_sid: 0,
-                sc_seq: 0,
-                sc_lnum: 0,
-                sc_chan: 0,
-            },
+            xp_script_ctx: sctx_T::NONE,
             xp_backslash: BackslashEscape::NONE,
             xp_shell: false,
             xp_numfiles: 0,

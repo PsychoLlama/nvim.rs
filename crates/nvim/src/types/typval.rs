@@ -225,6 +225,16 @@ pub struct sctx_T {
 }
 
 impl sctx_T {
+    /// No script is running: the all-zero context every table of script
+    /// contexts starts out holding. A `const` because most of its uses are
+    /// `static` initialisers, where `Default` cannot reach.
+    pub const NONE: sctx_T = sctx_T {
+        sc_sid: 0,
+        sc_seq: 0,
+        sc_lnum: 0,
+        sc_chan: 0,
+    };
+
     /// The same context under a different script id.
     ///
     /// A `Copy` cell's field write is a read-modify-write, and spelling it
@@ -246,14 +256,8 @@ impl sctx_T {
 }
 
 impl Default for sctx_T {
-    /// The all-zero context: "no script is running".
     fn default() -> Self {
-        sctx_T {
-            sc_sid: 0,
-            sc_seq: 0,
-            sc_lnum: 0,
-            sc_chan: 0,
-        }
+        Self::NONE
     }
 }
 #[derive(Copy, Clone)]

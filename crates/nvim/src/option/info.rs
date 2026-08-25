@@ -16,7 +16,7 @@ use crate::options::*;
 use crate::types::{
     Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0, buf_T,
     int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    key_value_pair, object, object_data, scid_T, sctx_T, size_t, win_T,
+    key_value_pair, object, object_data, sctx_T, size_t, win_T,
 };
 
 use super::{
@@ -152,12 +152,7 @@ unsafe fn last_set(
         if opt_flags == OptionSetFlags::GLOBAL {
             return option_last_set(opt_idx);
         }
-        let mut script_ctx = sctx_T {
-            sc_sid: 0 as scid_T,
-            sc_seq: 0,
-            sc_lnum: 0,
-            sc_chan: 0,
-        };
+        let mut script_ctx = sctx_T::NONE;
         if option_has_scope(opt_idx, kOptScopeBuf) {
             script_ctx = (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize];
         }

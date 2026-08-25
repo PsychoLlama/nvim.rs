@@ -25,15 +25,6 @@ use crate::getchar::KeyBuffer;
 use crate::guard::Suppress;
 use crate::types::{FAIL, MAXPATHL, OK};
 
-/// A zeroed `sctx_T`; `getnextac` fills `patcmd.script_ctx` in from the
-/// autocommand it is about to run.
-const SCTX_INIT: sctx_T = sctx_T {
-    sc_sid: 0,
-    sc_seq: 0,
-    sc_lnum: 0,
-    sc_chan: 0,
-};
-
 /// An empty `save_redo_T`; `save_redobuff` fills it in.
 const SAVE_REDO_INIT: save_redo_T = save_redo_T {
     sr_redobuff: KeyBuffer::EMPTY,
@@ -416,7 +407,8 @@ pub unsafe fn apply_autocmds_group(
                 tail,
                 group,
                 event,
-                script_ctx: SCTX_INIT,
+                // `getnextac` fills this in from the autocommand it runs.
+                script_ctx: sctx_T::NONE,
                 arg_bufnr: autocmd_bufnr.get(),
                 data: ::core::ptr::null_mut(),
                 next: ::core::ptr::null_mut(),

@@ -88,14 +88,6 @@ pub(crate) struct HlGroup {
     pub parent: c_int,
 }
 
-/// An all-zero script context, for [`HlGroup::ZEROED`].
-const ZERO_SCTX: sctx_T = sctx_T {
-    sc_sid: 0,
-    sc_seq: 0,
-    sc_lnum: 0,
-    sc_chan: 0,
-};
-
 impl HlGroup {
     /// The all-zero entry: what upstream's `CLEAR_POINTER` leaves behind, and
     /// not the same thing as a freshly added group (whose colours start at
@@ -108,8 +100,8 @@ impl HlGroup {
         link: 0,
         deflink: 0,
         set: 0,
-        deflink_sctx: ZERO_SCTX,
-        script_ctx: ZERO_SCTX,
+        deflink_sctx: sctx_T::NONE,
+        script_ctx: sctx_T::NONE,
         cterm: HlAttrFlags::NONE,
         cterm_fg: 0,
         cterm_bg: 0,
