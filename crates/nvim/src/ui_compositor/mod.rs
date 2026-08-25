@@ -27,7 +27,7 @@
 mod scratch;
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::{ptr, slice};
+use core::ptr;
 
 use crate::drawscreen::windows_in_curtab;
 use crate::global_cell::GlobalCell;
@@ -727,6 +727,10 @@ pub unsafe fn ui_comp_raw_line(
         compose_debug((row, row + 1), (endcol, clearcol), clear, true);
         #[cfg(debug_assertions)]
         {
+            // The only `slice` use left in the module, and it is behind this
+            // cfg -- so the import is too, or a release build warns.
+            use core::slice;
+
             let n = (endcol - startcol).max(0) as usize;
             // SAFETY: the caller's obligation on `attrs`.
             let drawn = unsafe { slice::from_raw_parts(attrs, n) };
