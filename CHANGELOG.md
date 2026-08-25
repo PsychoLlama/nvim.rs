@@ -25,6 +25,11 @@ and this project adheres to [CalVer](https://calver.org/).
   written with, and that kind is the entry's own copy; once the entry aged
   out of `'messagesopt'`'s `history:` the next message read it back — into
   the history, and into the `msg_show` event a UI sees.
+- `setcmdline()` called while the command line is suspended — from a `<C-r>=`
+  expression, or from inside `input()` — no longer writes past the end of the
+  command line it is setting. It used to enlarge the command line the editor
+  was _not_ on and then write the new text into the one it was, so any text
+  longer than that line's current buffer corrupted the heap.
 
 ## [2026.08.23-529b135d5d]
 
