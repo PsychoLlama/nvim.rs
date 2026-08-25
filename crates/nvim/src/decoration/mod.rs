@@ -73,7 +73,7 @@ impl DecorStateRef {
     ///
     /// There is exactly one, and it is a `static`, so its *address* is always
     /// valid — which is why this is where the family's single `decor_state`
-    /// escape hatch lives. [`handles`] deliberately knows nothing about
+    /// escape hatch lives. `handles.rs` deliberately knows nothing about
     /// *which* state a handle names; the relationship with the global is this
     /// module's.
     ///
