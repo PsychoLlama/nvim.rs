@@ -38,7 +38,6 @@ use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::garray::{Gap, ga_clear, ga_concat, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::IObuff;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
 use crate::os::cshim::gettext;
@@ -243,9 +242,12 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     let partial_self_msg = tr(c"partial self dictionary");
 
     let mut msg_ga = text_garray();
-    let iobuff = IObuff.ptr().cast::<c_char>();
+    // Upstream formats each part in the shared `IObuff`; the parts are
+    // concatenated as they go, so one buffer of this frame's own serves.
+    let mut part = [0 as c_char; IOSIZE as usize];
+    let iobuff = part.as_mut_ptr();
 
-    /// Everything the arms below share: format into `IObuff` and append it.
+    /// Everything the arms below share: format into `iobuff` and append it.
     ///
     /// # Safety
     /// `fmt` must match the arguments, and `msg_ga` must be a byte garray.

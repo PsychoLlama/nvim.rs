@@ -43,9 +43,7 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
-use crate::main::{
-    IObuff, cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc,
-};
+use crate::main::{cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc};
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
@@ -117,6 +115,8 @@ pub const KS_SPECIAL: c_int = 254;
 ///
 /// The editor's globals must be live.
 pub unsafe fn show_utf8() {
+    // The hex dump. Upstream shares `IObuff`, which `msg` writes again.
+    let mut hex = [0 as c_char; IOSIZE as usize];
     unsafe {
         // The whole grapheme cluster, composing characters included.
         let line = get_cursor_pos_ptr();
@@ -126,7 +126,7 @@ pub unsafe fn show_utf8() {
             return;
         }
 
-        let out = IObuff.ptr() as *mut c_char;
+        let out = hex.as_mut_ptr();
         let mut rlen: size_t = 0;
         let mut clen = 0;
         for i in 0..len {

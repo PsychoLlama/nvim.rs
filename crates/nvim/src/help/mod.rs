@@ -36,8 +36,8 @@ use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    Columns, IObuff, KeyTyped, cmdmod, curbuf, curwin, e_noident, firstwin, p_hf, p_hh, p_hlg,
-    p_sb, restart_edit,
+    Columns, KeyTyped, cmdmod, curbuf, curwin, e_noident, firstwin, p_hf, p_hh, p_hlg, p_sb,
+    restart_edit,
 };
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::{emsg, emsg_multiline};
@@ -558,9 +558,10 @@ pub(crate) unsafe fn find_help_tags(
     keep_lang: bool,
 ) -> c_int {
     let mut err = NO_ERROR;
-    // The search pattern lives in `IObuff` between the two calls below;
-    // nothing either of them reaches wants the buffer meanwhile.
-    let iobuff = IObuff.ptr().cast::<c_char>();
+    // The search pattern lives here between the two calls below. Upstream
+    // uses the shared `IObuff`, and `find_tags` runs a tag function.
+    let mut pattern = [0 as c_char; IOSIZE as usize];
+    let iobuff = pattern.as_mut_ptr();
     let mut args = ArrayBuf::<1>::new();
     // SAFETY: `arg` is NUL-terminated and outlives the call, which only
     // reads it.
@@ -598,8 +599,8 @@ pub(crate) unsafe fn find_help_tags(
     if keep_lang {
         flags |= TAG_KEEP_LANG as c_int;
     }
-    // SAFETY: the out-parameters are the caller's, and `IObuff` holds the
-    // NUL-terminated pattern written just above.
+    // SAFETY: the out-parameters are the caller's, and `pattern` holds the
+    // NUL-terminated text written just above.
     unsafe {
         *matches = ptr::null_mut();
         *num_matches = 0;

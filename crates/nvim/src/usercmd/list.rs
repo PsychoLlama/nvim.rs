@@ -24,7 +24,7 @@ use crate::api::private::helpers::{
 use crate::eval::last_set_msg;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
-use crate::main::{Columns, IObuff, got_int, p_verbose};
+use crate::main::{Columns, got_int, p_verbose};
 use crate::memory::xfree;
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
@@ -35,7 +35,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Dict, ExArgt, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T,
+    Arena, Dict, ExArgt, IOSIZE, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -56,8 +56,9 @@ fn nargs_str(argt: ExArgt) -> &'static CStr {
     }
 }
 
-/// The fixed-width middle columns of one `:command` line, built in
-/// `IObuff` as upstream does.
+/// The fixed-width middle columns of one `:command` line, built in a
+/// buffer of the row's own — upstream uses the shared `IObuff`, which
+/// `msg_outtrans` writes again.
 ///
 /// `over` is how far the name column overran; every following column is
 /// pulled left by it, and a column that would then start before the text
@@ -157,6 +158,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
 /// # Safety
 /// Module contract.
 unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
+    let mut middle = [0 as c_char; IOSIZE as usize];
     let a = cmd.uc_argt;
     // The flag column is right-aligned in four cells.
     let mut blank = 4;
@@ -191,9 +193,9 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
         let over = len as int64_t - 22;
 
         // The middle columns are assembled in one buffer and printed once.
-        IObuff.with_mut(|buf| {
+        {
             let mut cols = Cols {
-                buf: &mut buf[..],
+                buf: &mut middle[..],
                 len: 0,
             };
             cols.put(nargs_str(a).to_bytes());
@@ -225,9 +227,9 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
             cols.pad_to(25, over);
 
             let end = cols.len;
-            buf[end] = NUL as c_char;
-        });
-        msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
+            cols.buf[end] = NUL as c_char;
+        }
+        msg_outtrans(middle.as_mut_ptr(), 0, false);
 
         if cmd.uc_luaref != LUA_NOREF {
             let text = nlua_funcref_str(cmd.uc_luaref, ptr::null_mut());

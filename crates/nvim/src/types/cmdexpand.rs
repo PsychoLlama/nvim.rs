@@ -280,7 +280,7 @@ pub struct expand_T {
     pub xp_orig: *mut ::core::ffi::c_char,
     pub xp_files: *mut *mut ::core::ffi::c_char,
     pub xp_line: *mut ::core::ffi::c_char,
-    pub xp_buf: [::core::ffi::c_char; 256],
+    pub xp_buf: [::core::ffi::c_char; 1025],
     pub xp_search_dir: Direction,
     pub xp_pre_incsearch_pos: pos_T,
 }

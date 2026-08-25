@@ -248,7 +248,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             return uf_name_ptr(fp);
         }
 
-        let buf = IObuff.ptr() as *mut c_char;
+        let buf = (*xp).xp_buf.as_mut_ptr();
         let mut len = cat_func_name(buf, IOSIZE as size_t, fp);
         if (*xp).xp_context != ExpandContext::UserFunc {
             xstrlcpy(

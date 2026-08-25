@@ -20,7 +20,7 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
 use crate::log::{LOGLVL_INF, logmsg_c};
-use crate::main::{IObuff, curbuf};
+use crate::main::curbuf;
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::terminal::terminal_buf;
@@ -169,14 +169,13 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
 
 /// `"script:line"` for whatever is executing, as an owned copy.
 fn source_name_line() -> CString {
-    IObuff.with_mut(|buf| {
-        // SAFETY: `eval_fmt_source_name_line` only `snprintf`s into the buffer
-        // it is handed, so the result is NUL-terminated within `IOSIZE`.
-        unsafe {
-            eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize);
-            CStr::from_ptr(buf.as_ptr()).to_owned()
-        }
-    })
+    let mut buf = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `eval_fmt_source_name_line` only `snprintf`s into the buffer
+    // it is handed, so the result is NUL-terminated within `IOSIZE`.
+    unsafe {
+        eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize);
+        CStr::from_ptr(buf.as_ptr()).to_owned()
+    }
 }
 
 /// Queues the `ChanOpen`/`ChanInfo` autocommand, if anything is listening.

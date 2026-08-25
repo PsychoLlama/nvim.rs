@@ -113,8 +113,10 @@ pub(crate) use self::syntime::*;
 /// How many `\(..\)` submatches a pattern can have.
 pub(crate) const NSUBEXP: ::core::ffi::c_uint = 10;
 /// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may
-/// answer from.
-pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 256;
+/// answer from. `IOSIZE`, because the callbacks that build a name out of
+/// one bound themselves by that; upstream answers the shared `IObuff` for
+/// those, which the completion machinery writes again.
+pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 1025;
 // The `expand_T::xp_context` values this module sets.
 #[derive(Copy, Clone)]
 #[repr(C)]

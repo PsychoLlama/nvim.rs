@@ -24,8 +24,7 @@ use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::main::{
-    IObuff, curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, lastbuf, p_cpo,
-    p_magic,
+    curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, lastbuf, p_cpo, p_magic,
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
@@ -193,7 +192,7 @@ pub unsafe fn call_internal_method(
 ///
 /// The user's own functions come first, then the builtins, and `idx == 0`
 /// starts the walk over. The answer for a builtin is `name(` -- or `name()`
-/// when it takes no arguments -- in the shared [`IObuff`].
+/// when it takes no arguments -- in the expansion context's own scratch.
 ///
 /// # Safety
 /// `xp` is a live expansion context.
@@ -202,7 +201,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
 
-    // SAFETY: the caller's obligation; `IObuff` is the shared scratch buffer
+    // SAFETY: the caller's obligation; `xp_buf` is the context's own scratch
     // and every builtin name plus three bytes fits in it.
     unsafe {
         if idx == 0 {
@@ -229,7 +228,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             return ptr::null_mut();
         }
         let key_len = strlen(key);
-        let buf = IObuff.ptr();
+        let buf = &raw mut (*xp).xp_buf;
         ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len);
         (*buf)[key_len] = b'(' as c_char;
         if BUILTINS[BUILTIN_IDX.get() as usize].max_argc == 0 {

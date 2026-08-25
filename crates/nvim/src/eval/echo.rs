@@ -297,20 +297,16 @@ pub unsafe fn last_set_msg(script_ctx: sctx_T) {
         if script_ctx.sc_sid == 0 {
             return;
         }
-        let mut should_free = false;
-        let p = get_scriptname(script_ctx, &raw mut should_free);
+        let p = get_scriptname(script_ctx, true);
         msg_ext_skip_verbose.set(true);
         verbose_enter();
         msg_puts(gettext(c"\n\tLast set from ".as_ptr()));
-        msg_puts(p);
+        msg_puts(p.as_ptr());
         if script_ctx.sc_lnum > 0 as linenr_T {
             msg_puts(gettext(line_msg.as_ptr()));
             msg_outnum(script_ctx.sc_lnum as c_int);
         } else if script_is_lua(script_ctx.sc_sid) {
             msg_puts(gettext(c" (run Nvim with -V1 for more details)".as_ptr()));
-        }
-        if should_free {
-            xfree(p as *mut c_void);
         }
         verbose_leave();
     }

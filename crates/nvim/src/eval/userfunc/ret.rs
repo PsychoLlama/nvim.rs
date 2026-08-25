@@ -527,6 +527,9 @@ pub unsafe fn do_return(
 /// # Safety
 /// `rettv` is null or a `typval_T`.
 pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
+    // The rendered command. Upstream shares `IObuff`, which the debugger
+    // this feeds writes again.
+    let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         let mut s: *mut c_char = ptr::null_mut();
         let mut tofree: *mut c_char = ptr::null_mut();
@@ -543,7 +546,7 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
         }
 
         const PREFIX: &CStr = c":return ";
-        let buf = IObuff.ptr() as *mut c_char;
+        let buf = line.as_mut_ptr();
         xstrlcpy(buf, PREFIX.as_ptr(), IOSIZE as size_t);
         xstrlcpy(
             buf.add(PREFIX.count_bytes()),

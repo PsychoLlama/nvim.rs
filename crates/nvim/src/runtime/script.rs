@@ -17,10 +17,12 @@
 
 use super::*;
 
+use crate::cstr;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, IOSIZE, MAXPATHL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
+use std::ffi::CString;
 
 /// Offset of `uf_name` inside `ufunc_T`: the function table's hash keys point
 /// at that inline buffer, so backing up by this recovers the function.  This is
@@ -168,21 +170,19 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
     }
 }
 
-/// A pointer to a script's name, for `":verbose set"` -- the text appended to
-/// "Last set from ".
+/// A script's name, for `":verbose set"` -- the text appended to "Last set
+/// from ".
 ///
-/// The negative script IDs are the contexts that have no file: a modeline, the
-/// `--cmd` or `-c` command line, and so on.  When `should_free` is non-null and
-/// the name really is a file path, the result is a `home_replace_save()` copy
-/// and `*should_free` is set.
-pub unsafe fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut c_char {
-    // SAFETY: an out-parameter the caller owns, when it passed one at all.
-    unsafe {
-        if !should_free.is_null() {
-            *should_free = false;
-        }
-    }
-
+/// The negative script IDs are the contexts that have no file: a modeline,
+/// the `--cmd` or `-c` command line, and so on. `fold_home` asks for a file
+/// path with the home directory folded back to `~`; without it the
+/// registry's own spelling is answered.
+///
+/// The answer is owned. Upstream answers a pointer into the shared `IObuff`
+/// for the two contexts it has to format, and a caller holding one of those
+/// across anything that shows a message loses it.
+pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CString {
+    let mut named = [0 as c_char; IOSIZE as usize];
     let fixed = match script_ctx.sc_sid {
         SID_MODELINE => c"modeline",
         SID_CMDARG => c"--cmd argument",
@@ -193,46 +193,47 @@ pub unsafe fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut
         SID_LUA => c"Lua",
         SID_STR => c"anonymous :source",
         SID_API_CLIENT => {
-            // SAFETY: `IObuff` is the shared scratch buffer, `IOSIZE` long.
-            return unsafe {
-                let iobuff = IObuff.ptr().cast::<c_char>();
+            // SAFETY: `named` is `IOSIZE` writable bytes.
+            unsafe {
                 snprintf(
-                    iobuff,
+                    named.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"API client (channel id %lu)".as_ptr()),
                     script_ctx.sc_chan,
                 );
-                iobuff
-            };
+            }
+            return cstr::in_chars(&named).to_owned();
         }
         _ => {
             // SAFETY: every other `sc_sid` is a registry index.
             let sname = unsafe { (*script_item(script_ctx.sc_sid)).sn_name };
             if sname.is_null() {
-                // SAFETY: as above.
-                return unsafe {
-                    let iobuff = IObuff.ptr().cast::<c_char>();
+                // SAFETY: `named` is `IOSIZE` writable bytes.
+                unsafe {
                     snprintf(
-                        iobuff,
+                        named.as_mut_ptr(),
                         IOSIZE as size_t,
                         gettext(c"anonymous :source (script id %d)".as_ptr()),
                         script_ctx.sc_sid,
                     );
-                    iobuff
-                };
+                }
+                return cstr::in_chars(&named).to_owned();
             }
-            if should_free.is_null() {
-                return sname;
+            if !fold_home {
+                // SAFETY: the registry's own NUL-terminated name.
+                return unsafe { CStr::from_ptr(sname) }.to_owned();
             }
-            // SAFETY: the caller asked for an owned copy and said so.
+            // SAFETY: the registry's name, folded into a fresh allocation.
             return unsafe {
-                *should_free = true;
-                home_replace_save(ptr::null_mut(), sname)
+                let folded = home_replace_save(ptr::null_mut(), sname);
+                let owned = CStr::from_ptr(folded).to_owned();
+                xfree(folded.cast::<c_void>());
+                owned
             };
         }
     };
     // SAFETY: `gettext` returns a pointer into its own catalogue.
-    unsafe { gettext(fixed.as_ptr()) }
+    unsafe { CStr::from_ptr(gettext(fixed.as_ptr())) }.to_owned()
 }
 
 /// The line number to report for a message raised under `fgetline`.

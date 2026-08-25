@@ -18,7 +18,6 @@
 
 use crate::api::private::helpers::{api_set_error, api_typename};
 
-use crate::main::IObuff;
 use crate::os::cshim::snprintf;
 use crate::types::{
     Array, Error, IOSIZE, String_0, int64_t, kErrorTypeValidation, kObjectTypeString, size_t,
@@ -174,14 +173,13 @@ pub unsafe fn check_string_array(
     disallow_nl: bool,
     err: *mut Error,
 ) -> bool {
-    // The item name is built once into the shared scratch buffer and then
-    // handed to whichever message fires -- upstream does the same, so the two
-    // cannot be built at once.
-    //
-    // SAFETY: `name` is the caller's C string and `IObuff` is the editor's
-    // own fixed-size scratch buffer.
+    // The item name is built once and then handed to whichever message
+    // fires. Upstream builds it in the shared scratch buffer, which the
+    // message machinery writes again.
+    let mut item = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `name` is the caller's C string and `item` is `IOSIZE` bytes.
     let item_name = unsafe {
-        let buf = IObuff.ptr().cast::<c_char>();
+        let buf = item.as_mut_ptr();
         snprintf(buf, IOSIZE as size_t, c"'%s' item".as_ptr(), name);
         buf
     };

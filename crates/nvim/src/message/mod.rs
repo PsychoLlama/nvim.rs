@@ -45,7 +45,7 @@ use crate::keycodes::{
 };
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
-    Columns, IObuff, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
+    Columns, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
     cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, curbuf, curwin, did_emsg, did_wait_return,
     do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode, emsg_assert_fails_context,
     emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display,
@@ -688,11 +688,14 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
 /// [`msg_iobuff`] keep.
 pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
 
-/// The shared I/O buffer the `smsg`/`swmsg`/`msg_schedule_semsg` macros
-/// format into. Their first half; not meant to be called directly.
+/// Where the `smsg`/`swmsg`/`msg_schedule_semsg` macros format: a buffer
+/// belonging to the expansion, not the shared one upstream reuses. Showing
+/// a message runs the message machinery, which writes that shared buffer,
+/// so a caller assembling one there had it overwritten. Their first half;
+/// not meant to be called directly.
 #[doc(hidden)]
-pub fn msg_iobuff() -> *mut c_char {
-    IObuff.ptr().cast()
+pub fn msg_iobuff() -> [c_char; MSG_IOBUFF_LEN] {
+    [0; MSG_IOBUFF_LEN]
 }
 
 /// Show whatever was formatted into [`msg_iobuff`]. The second half of
@@ -701,8 +704,8 @@ pub fn msg_iobuff() -> *mut c_char {
 /// # Safety
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
-pub unsafe fn smsg_finish(hl_id: c_int) -> c_int {
-    unsafe { msg(msg_iobuff(), hl_id) as c_int }
+pub unsafe fn smsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
+    unsafe { msg(buf.as_ptr(), hl_id) as c_int }
 }
 
 /// Show whatever was formatted into [`msg_iobuff`] and keep it displayed.
@@ -711,8 +714,8 @@ pub unsafe fn smsg_finish(hl_id: c_int) -> c_int {
 /// # Safety
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
-pub unsafe fn smsg_keep_finish(hl_id: c_int) -> c_int {
-    unsafe { msg_keep(msg_iobuff(), hl_id, true, false) as c_int }
+pub unsafe fn smsg_keep_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
+    unsafe { msg_keep(buf.as_ptr(), hl_id, true, false) as c_int }
 }
 
 /// Show `s`, truncated at the head if it does not fit the message area.

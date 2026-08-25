@@ -30,7 +30,7 @@ use crate::charset::{ptr2cells, vim_isprintc};
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
-use crate::main::{IObuff, NameBuff, e_markinval, e_marknotset, e_umark};
+use crate::main::{e_markinval, e_marknotset, e_umark};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xstrlcpy};
@@ -457,11 +457,13 @@ pub(super) unsafe fn fname2fnum(fm: *mut xfmark_T) {
     if fname.is_null() {
         return;
     }
-    let name_buf = NameBuff.ptr().cast::<c_char>();
-    let dir_buf = IObuff.ptr().cast::<c_char>();
+    let mut name = [0 as c_char; MAXPATHL as usize];
+    let mut dir = [0 as c_char; IOSIZE as usize];
+    let (name_buf, dir_buf) = (name.as_mut_ptr(), dir.as_mut_ptr());
     // SAFETY: `fname` is a NUL-terminated string with at least one byte, and
-    // `NameBuff`/`IObuff` are `MAXPATHL`/`IOSIZE` bytes of live storage that
-    // nothing else holds a reference into across these calls.
+    // `name`/`dir` are `MAXPATHL`/`IOSIZE` bytes of this frame's own storage.
+    // Upstream shares `NameBuff`/`IObuff`, which `buflist_new` runs
+    // autocommands over.
     unsafe {
         // `~/` is expanded here rather than by `buflist_new`, because the
         // shada file stores the tilde form and two spellings of one path

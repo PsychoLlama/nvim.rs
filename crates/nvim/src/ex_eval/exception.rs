@@ -39,7 +39,7 @@ use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
     CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER,
 };
-use super::{cause_abort, iobuff, message};
+use super::{cause_abort, message};
 use crate::ascii::ascii_isdigit;
 use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
@@ -51,7 +51,7 @@ use crate::main::{
     e_outofmem, emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
     p_verbose, suppress_errthrow, trylevel,
 };
-use crate::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
+use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::option::p_vfile;
 use crate::os::cshim::{snprintf, strncmp};
@@ -518,9 +518,9 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
     // SAFETY: caller contract.
     unsafe {
         if p_verbose.get() >= 13 || debug_break_level.get() > 0 {
-            // The report formats through IObuff, which a caller may be
-            // holding a message in.
-            let saved_iobuff = xstrdup(iobuff());
+            // Upstream saves and restores `IObuff` around this, because the
+            // report formatted through it and a caller may have been holding
+            // a message there. Nothing shares a buffer here any more.
             verbose_exception(
                 if was_finished {
                     c"Exception finished: %s"
@@ -529,8 +529,6 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
                 },
                 (*excp).value,
             );
-            xstrlcpy(iobuff(), saved_iobuff, IOSIZE as usize);
-            xfree(saved_iobuff.cast());
         }
         if (*excp).type_0 != ET_INTERRUPT {
             // An interrupt exception's value is a string literal.
@@ -566,6 +564,8 @@ pub(crate) unsafe fn discard_current_exception() {
 /// # Safety
 /// Module contract; `excp`, when non-null, is a live exception.
 unsafe fn set_exception_vars(excp: *mut except_T) {
+    // Where `v:throwpoint` is rendered; upstream shares `IObuff`.
+    let mut throwpoint = [0 as c_char; IOSIZE as usize];
     // SAFETY: caller contract.
     unsafe {
         if excp.is_null() {
@@ -581,23 +581,19 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
             set_vim_var_string(Vv::Throwpoint, ptr::null(), -1);
             return;
         }
+        let point = throwpoint.as_mut_ptr();
         let len = if (*excp).throw_lnum == 0 {
-            vim_snprintf_safelen(
-                iobuff(),
-                IOSIZE as usize,
-                c"%s".as_ptr(),
-                (*excp).throw_name,
-            )
+            vim_snprintf_safelen(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name)
         } else {
             vim_snprintf_safelen(
-                iobuff(),
+                point,
                 IOSIZE as usize,
                 c"%s, line %ld".as_ptr(),
                 (*excp).throw_name,
                 (*excp).throw_lnum as int64_t,
             )
         };
-        set_vim_var_string(Vv::Throwpoint, iobuff(), len as ptrdiff_t);
+        set_vim_var_string(Vv::Throwpoint, point, len as ptrdiff_t);
     }
 }
 
@@ -703,6 +699,9 @@ impl PendingAction {
 /// Module contract; `value` matches `pending`, and is non-null whenever
 /// `pending` carries [`CSTP_THROW`].
 unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_void) {
+    // Where the "Exception made pending" text is built; upstream shares
+    // `IObuff`, which the report it feeds writes again.
+    let mut pending_msg = [0 as c_char; IOSIZE as usize];
     debug_assert!(
         !value.is_null() || pending & CSTP_THROW == 0,
         "value || !(pending & CSTP_THROW)"
@@ -720,8 +719,9 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
             CSTP_RETURN => get_return_cmd(value),
             _ if pending & CSTP_THROW != 0 => {
                 // "%s made pending" becomes "Exception made pending: %s".
-                vim_snprintf(iobuff(), IOSIZE as usize, mesg, c"Exception".as_ptr());
-                mesg = concat_str(iobuff(), c": %s".as_ptr());
+                let out = pending_msg.as_mut_ptr();
+                vim_snprintf(out, IOSIZE as usize, mesg, c"Exception".as_ptr());
+                mesg = concat_str(out, c": %s".as_ptr());
                 (*value.cast::<except_T>()).value
             }
             _ if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 => {

@@ -154,6 +154,9 @@ pub(crate) unsafe fn show_pat_in_path(
     lnum: *mut linenr_T,
     count: c_int,
 ) {
+    // The match-number prefix; upstream shares `IObuff`, which the message
+    // machinery below writes again.
+    let mut num = [0 as c_char; IOSIZE as usize];
     unsafe {
         if did_show {
             msg_putchar('\n' as c_int); // cursor below the last one
@@ -180,7 +183,7 @@ pub(crate) unsafe fn show_pat_in_path(
                 *p.offset(1) = NUL as c_char;
             }
             if action == ACTION_SHOW_ALL {
-                let iobuff = IObuff.ptr() as *mut c_char;
+                let iobuff = num.as_mut_ptr();
                 snprintf(iobuff, IOSIZE as size_t, c"%3d: ".as_ptr(), count); // match nr
                 msg_puts(iobuff);
                 snprintf(iobuff, IOSIZE as size_t, c"%4ld".as_ptr(), *lnum as int64_t);

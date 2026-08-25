@@ -24,8 +24,8 @@ use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
-    IObuff, State, curwin, ex_normal_busy, exmode_active, highlight_match, msg_didout,
-    need_wait_return, no_u_sync, p_lz, search_match_endcol, search_match_lines,
+    State, curwin, ex_normal_busy, exmode_active, highlight_match, msg_didout, need_wait_return,
+    no_u_sync, p_lz, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmallocz, xstrdup};
@@ -216,10 +216,11 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         (*curwin.get()).w_onebuf_opt.wo_fen = save_p_fen;
     }
 
-    // SAFETY: `IObuff` is `IOSIZE` bytes, the format takes one string, and
-    // the prompt is a fresh copy of it.
+    let mut ask = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `ask` is `IOSIZE` bytes, the format takes one string, and the
+    // prompt is a fresh copy of it.
     let typed = unsafe {
-        let iobuff = IObuff.ptr() as *mut c_char;
+        let iobuff = ask.as_mut_ptr();
         snprintf(
             iobuff,
             IOSIZE as size_t,

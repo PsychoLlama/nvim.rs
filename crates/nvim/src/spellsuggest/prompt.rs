@@ -38,8 +38,8 @@ use crate::getchar::{
 };
 use crate::input::prompt_for_input;
 use crate::main::{
-    IObuff, Rows, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left, mouse_row, msg_col,
-    msg_row, msg_scroll, p_verbose,
+    Rows, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left, mouse_row, msg_col, msg_row,
+    msg_scroll, p_verbose,
 };
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
@@ -71,12 +71,6 @@ use core::{mem, ptr};
 
 /// The escape the redo buffer ends the change-word command with.
 const ESC: c_int = 0x1b;
-
-/// The shared scratch buffer messages are formatted into.
-fn iobuff() -> *mut c_char {
-    // `GlobalCell::ptr` takes the address without forming a reference.
-    IObuff.ptr() as *mut c_char
-}
 
 /// `z=`: suggest replacements for the badly spelled word under or after
 /// the cursor.
@@ -255,6 +249,10 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
 /// `sug` must have been filled by `spell_find_suggest` and its bad word
 /// must still point into a live line.
 unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c_int {
+    // Each message gets a buffer of its own; upstream shares `IObuff`,
+    // which the message machinery writes as it shows one.
+    let mut line = [0 as c_char; IOSIZE as usize];
+    let out = line.as_mut_ptr();
     // SAFETY: the caller guarantees `sug`; every message is formatted into
     // `IObuff` with its own size.
     unsafe {
@@ -271,8 +269,8 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
             // untranslated message right-to-left.
             fmt = c":ot \"%.*s\" egnahC".as_ptr().cast_mut();
         }
-        vim_snprintf(iobuff(), IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr);
-        msg_puts(iobuff());
+        vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr);
+        msg_puts(out);
         msg_clr_eos();
         msg_putchar('\n' as c_int);
 
@@ -311,6 +309,10 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
 /// `stp` must be a live suggestion and `badptr` must point into a live
 /// line.
 unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut c_char) {
+    // Each message gets a buffer of its own; upstream shares `IObuff`,
+    // which the message machinery writes as it shows one.
+    let mut line = [0 as c_char; IOSIZE as usize];
+    let out = line.as_mut_ptr();
     // SAFETY: the caller guarantees the suggestion and the line; `wcopy`
     // has room for the longest word plus what is appended to it.
     unsafe {
@@ -329,25 +331,25 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
             );
         }
 
-        vim_snprintf(iobuff(), IOSIZE as usize, c"%2d".as_ptr(), i + 1);
+        vim_snprintf(out, IOSIZE as usize, c"%2d".as_ptr(), i + 1);
         if cmdmsg_rl.get() {
-            rl_mirror_ascii(iobuff(), ptr::null_mut());
+            rl_mirror_ascii(out, ptr::null_mut());
         }
-        msg_puts(iobuff());
+        msg_puts(out);
 
-        vim_snprintf(iobuff(), IOSIZE as usize, c" \"%s\"".as_ptr(), wcopyp);
-        msg_puts(iobuff());
+        vim_snprintf(out, IOSIZE as usize, c" \"%s\"".as_ptr(), wcopyp);
+        msg_puts(out);
 
         // The word may replace more than the bad word does.
         if badlen < stp.st_orglen {
             vim_snprintf(
-                iobuff(),
+                out,
                 IOSIZE as usize,
                 gettext(c" < \"%.*s\"".as_ptr()),
                 stp.st_orglen,
                 badptr,
             );
-            msg_puts(iobuff());
+            msg_puts(out);
         }
 
         if p_verbose.get() > 0 {
@@ -362,12 +364,16 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
 ///
 /// `stp` must be a live suggestion.
 unsafe fn show_score(stp: &suggest_T) {
+    // Each message gets a buffer of its own; upstream shares `IObuff`,
+    // which the message machinery writes as it shows one.
+    let mut line = [0 as c_char; IOSIZE as usize];
+    let out = line.as_mut_ptr();
     // SAFETY: the caller guarantees the suggestion; the format strings and
     // `IObuff`'s size match.
     unsafe {
         if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
             vim_snprintf(
-                iobuff(),
+                out,
                 IOSIZE as usize,
                 c" (%s%d - %d)".as_ptr(),
                 if stp.st_salscore {
@@ -379,14 +385,14 @@ unsafe fn show_score(stp: &suggest_T) {
                 stp.st_altscore,
             );
         } else {
-            vim_snprintf(iobuff(), IOSIZE as usize, c" (%d)".as_ptr(), stp.st_score);
+            vim_snprintf(out, IOSIZE as usize, c" (%d)".as_ptr(), stp.st_score);
         }
         if cmdmsg_rl.get() {
             // Mirror the numbers, but keep the leading space.
-            rl_mirror_ascii(iobuff().add(1), ptr::null_mut());
+            rl_mirror_ascii(out.add(1), ptr::null_mut());
         }
         msg_advance(30);
-        msg_puts(iobuff());
+        msg_puts(out);
     }
 }
 
@@ -399,6 +405,9 @@ unsafe fn show_score(stp: &suggest_T) {
 /// cursor line that `sug`'s bad word points into, and the undo state must
 /// already have been saved.
 unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) {
+    // The replacement text gets a buffer of its own; upstream shares
+    // `IObuff`, which the message machinery writes as it shows a message.
+    let mut repl = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller guarantees the pointers; the new line is sized
     // from the three pieces written into it and is handed to `ml_replace`,
     // which takes it over.
@@ -414,14 +423,14 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
             // the end of the replacement.
             repl_from.set(xstrnsave(sug.su_badptr, sug.su_badlen as usize));
             vim_snprintf(
-                iobuff(),
+                repl.as_mut_ptr(),
                 IOSIZE as usize,
                 c"%s%.*s".as_ptr(),
                 stp.st_word,
                 sug.su_badlen - stp.st_orglen,
                 sug.su_badptr.offset(stp.st_orglen as isize),
             );
-            repl_to.set(xstrdup(iobuff()));
+            repl_to.set(xstrdup(repl.as_ptr()));
         } else {
             // Replacing the whole bad word, or more of the line than it
             // covers.

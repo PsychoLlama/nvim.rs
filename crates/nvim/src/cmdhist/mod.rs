@@ -26,7 +26,7 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, IObuff, got_int, maptick, p_hi};
+use crate::main::{Columns, got_int, maptick, p_hi};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
@@ -563,13 +563,13 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
 /// One `:history` row: `>` on the newest entry, the sequence number, and the
 /// text truncated to the window width.
 fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
-    // SAFETY: `entry.text` is NUL-terminated and outlives the call; `IObuff`
-    // is the shared IOSIZE-byte message scratch buffer, and the number
-    // prefix `snprintf` reports is the offset both writers continue from,
-    // each with the remaining room.
+    let mut row = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `entry.text` is NUL-terminated and outlives the call; `row` is
+    // `IOSIZE` bytes, and the number prefix `snprintf` reports is the offset
+    // both writers continue from, each with the remaining room.
     unsafe {
         msg_putchar('\n' as c_int);
-        let buf = IObuff.ptr() as *mut c_char;
+        let buf = row.as_mut_ptr();
         let marker = if newest { '>' } else { ' ' } as c_int;
         let len = snprintf(buf, IOSIZE as size_t, c"%c%6d  ".as_ptr(), marker, num);
         let text = buf.offset(len as isize);

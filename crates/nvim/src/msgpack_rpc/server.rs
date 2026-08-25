@@ -20,7 +20,7 @@ use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::main::{IObuff, main_loop};
+use crate::main::main_loop;
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
@@ -68,13 +68,17 @@ enum ListenSource {
 
 /// Opens the start-up listening socket, if there is to be one.
 ///
-/// Returns whether that succeeded. An address the user did not ask for is
-/// generated, and failing to listen on *that* is not an error — the editor
-/// runs fine without a server.
+/// Returns whether that succeeded, leaving the reason in `reason` when it
+/// did not. An address the user did not ask for is generated, and failing
+/// to listen on *that* is not an error — the editor runs fine without a
+/// server. Upstream leaves the reason in the shared `IObuff` instead.
 ///
 /// # Safety
 /// `listen_addr` is either null or a NUL-terminated string.
-pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
+pub unsafe fn server_init(
+    listen_addr: *const c_char,
+    reason: &mut [c_char; IOSIZE as usize],
+) -> bool {
     let mut listen_addr = listen_addr;
     let mut must_free = false;
     // Which of the three sources the address came from, in the order they
@@ -116,22 +120,17 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
             c"Failed $NVIM_LISTEN_ADDRESS: %s: \"%s\""
         };
         // SAFETY: `uv_strerror` answers a static string for any code, and
-        // `IObuff` is `IOSIZE` writable bytes; both verbs take a string.
+        // `reason` is `IOSIZE` writable bytes; both verbs take a string.
         unsafe {
-            let reason = if rv < 0 {
+            let text = if rv < 0 {
                 uv_strerror(rv)
             } else if rv == 1 {
                 c"empty address".as_ptr()
             } else {
                 c"?".as_ptr()
             };
-            snprintf(
-                IObuff.ptr().cast::<c_char>(),
-                IOSIZE as usize,
-                fmt.as_ptr(),
-                reason,
-                listen_addr,
-            );
+            let out = reason.as_mut_ptr();
+            snprintf(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr);
         }
         ok = false;
     }

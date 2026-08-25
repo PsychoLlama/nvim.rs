@@ -16,12 +16,11 @@ use super::{
 };
 use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
-use crate::memory::xfree;
 use crate::os::fs::os_fopen;
 use crate::runtime::{get_scriptname, script_count, script_item};
 use crate::types::{IOSIZE, proftime_T, scriptitem_T, ufunc_T};
 use ::libc::fclose;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -121,17 +120,12 @@ unsafe fn prof_sort_list(
 /// # Safety
 /// `fp` is a live function-table entry with a non-zero `uf_script_ctx`.
 unsafe fn write_func_origin(fd: &mut dyn Write, fp: &ufunc_T) -> io::Result<()> {
-    let mut should_free = false;
-    // SAFETY: `get_scriptname` answers with a NUL-terminated name, owned by
-    // the caller exactly when it says so.
+    // SAFETY: `get_scriptname` answers an owned, NUL-terminated name.
     unsafe {
-        let p = get_scriptname(fp.uf_script_ctx, &raw mut should_free);
+        let p = get_scriptname(fp.uf_script_ctx, true);
         write!(fd, "    Defined: ")?;
-        fd.write_all(CStr::from_ptr(p).to_bytes())?;
+        fd.write_all(p.to_bytes())?;
         writeln!(fd, ":{}", fp.uf_script_ctx.sc_lnum)?;
-        if should_free {
-            xfree(p as *mut c_void);
-        }
     }
     Ok(())
 }

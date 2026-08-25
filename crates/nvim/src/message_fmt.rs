@@ -172,13 +172,14 @@ macro_rules! semsg_multiline_c {
 #[macro_export]
 macro_rules! msg_schedule_semsg_c {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let mut msgbuf = $crate::message::msg_iobuff();
         $crate::strings::vim_snprintf(
-            $crate::message::msg_iobuff(),
+            msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $fmt,
             $($arg,)*
         );
-        $crate::message::msg_schedule_semsg_finish();
+        $crate::message::msg_schedule_semsg_finish(&msgbuf);
     }};
 }
 
@@ -187,13 +188,14 @@ macro_rules! msg_schedule_semsg_c {
 #[macro_export]
 macro_rules! msg_schedule_semsg_multiline_c {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let mut msgbuf = $crate::message::msg_iobuff();
         $crate::strings::vim_snprintf(
-            $crate::message::msg_iobuff(),
+            msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $fmt,
             $($arg,)*
         );
-        $crate::message::msg_schedule_semsg_multiline_finish();
+        $crate::message::msg_schedule_semsg_multiline_finish(&msgbuf);
     }};
 }
 
@@ -203,13 +205,14 @@ macro_rules! msg_schedule_semsg_multiline_c {
 macro_rules! swmsg_c {
     ($hl:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let hl = $hl;
+        let mut msgbuf = $crate::message::msg_iobuff();
         $crate::strings::vim_snprintf(
-            $crate::message::msg_iobuff(),
+            msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $fmt,
             $($arg,)*
         );
-        $crate::message::swmsg_finish(hl);
+        $crate::message::swmsg_finish(&msgbuf, hl);
     }};
 }
 
@@ -219,13 +222,14 @@ macro_rules! swmsg_c {
 macro_rules! smsg_c {
     ($hl_id:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let hl_id = $hl_id;
+        let mut msgbuf = $crate::message::msg_iobuff();
         $crate::strings::vim_snprintf(
-            $crate::message::msg_iobuff(),
+            msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $fmt,
             $($arg,)*
         );
-        $crate::message::smsg_finish(hl_id)
+        $crate::message::smsg_finish(&msgbuf, hl_id)
     }};
 }
 
@@ -234,12 +238,13 @@ macro_rules! smsg_c {
 macro_rules! smsg_keep_c {
     ($hl_id:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let hl_id = $hl_id;
+        let mut msgbuf = $crate::message::msg_iobuff();
         $crate::strings::vim_snprintf(
-            $crate::message::msg_iobuff(),
+            msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $fmt,
             $($arg,)*
         );
-        $crate::message::smsg_keep_finish(hl_id)
+        $crate::message::smsg_keep_finish(&msgbuf, hl_id)
     }};
 }

@@ -575,7 +575,7 @@ pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
     xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_buf: [0; 256],
+    xp_buf: [0; 1025],
     xp_search_dir: kDirectionNotSet,
     xp_pre_incsearch_pos: POS_INIT,
 };

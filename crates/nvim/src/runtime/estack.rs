@@ -23,6 +23,7 @@ use super::*;
 use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 /// Slack [`estack_sfile`] reserves per entry on top of the name and its type
 /// prefix: enough for the `[%d]` line number and the `..` separator.
@@ -373,7 +374,7 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                         fp,
                         ptr::null(),
                         entry.es_lnum + sctx.sc_lnum,
-                        script_path(sctx),
+                        script_path(sctx).as_ptr().cast_mut(),
                     );
                 }
             }
@@ -387,7 +388,7 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                         ptr::null_mut(),
                         entry.es_name,
                         entry.es_lnum + sctx.sc_lnum,
-                        script_path(sctx),
+                        script_path(sctx).as_ptr().cast_mut(),
                     );
                 }
             }
@@ -403,13 +404,13 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
 /// # Safety
 ///
 /// `sctx` must name a live script context.
-unsafe fn script_path(sctx: sctx_T) -> *mut c_char {
+unsafe fn script_path(sctx: sctx_T) -> CString {
     if sctx.sc_sid <= 0 {
-        return c"".as_ptr().cast_mut();
+        return c"".to_owned();
     }
-    // SAFETY: a positive `sc_sid` indexes `script_items`; passing null for
-    // `should_free` asks for the borrowed name.
-    unsafe { get_scriptname(sctx, ptr::null_mut()) }
+    // SAFETY: a positive `sc_sid` indexes `script_items`; `false` asks for
+    // the registry's own spelling, unfolded.
+    unsafe { get_scriptname(sctx, false) }
 }
 
 /// `getstacktrace()` function

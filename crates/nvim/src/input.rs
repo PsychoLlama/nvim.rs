@@ -15,8 +15,8 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::{Ctrl_C, K_IGNORE, K_LEFTMOUSE, K_SPECIAL, KS_MODIFIER, key_unescape};
 use crate::main::{
-    IObuff, State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row,
-    msg_scrolled, need_wait_return,
+    State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
+    need_wait_return,
 };
 use crate::mbyte::{utf_ptr2char, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
@@ -49,18 +49,16 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     let save_state = State.get();
     let no_prompt = Suppress::wait_return();
 
-    // SAFETY: `IObuff` is the shared scratch buffer, `IOSIZE` chars long,
-    // and the question is the one `%s` the format takes. The copy is made
-    // under the same borrow, before anything else can overwrite it.
-    let prompt = IObuff.with_mut(|buf| unsafe {
-        snprintf(
-            buf.as_mut_ptr(),
-            IOSIZE as usize,
-            gettext(c"%s (y/n)?".as_ptr()),
-            str,
-        );
+    // The question, in this frame's own buffer: upstream builds it in the
+    // shared `IObuff`, which `prompt_for_input` writes again.
+    let mut buf = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `buf` is `IOSIZE` chars long, and the question is the one
+    // `%s` the format takes.
+    let prompt = unsafe {
+        let fmt = gettext(c"%s (y/n)?".as_ptr());
+        snprintf(buf.as_mut_ptr(), IOSIZE as usize, fmt, str);
         xstrdup(buf.as_ptr())
-    });
+    };
 
     let mut r = ' ' as c_int;
     while r != 'y' as c_int && r != 'n' as c_int {

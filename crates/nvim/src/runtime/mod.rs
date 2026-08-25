@@ -57,7 +57,7 @@ use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe};
 use crate::main::{
-    GA_EMPTY_INIT_VALUE, IObuff, cmdmod, curbuf, current_sctx, debug_break_level, debug_tick,
+    GA_EMPTY_INIT_VALUE, cmdmod, curbuf, current_sctx, debug_break_level, debug_tick,
     did_source_packages, do_profiling, e_argreq, e_dirnotf, e_interr, e_invarg, e_invargNval,
     e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy, msg_col, p_enc,
     p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,

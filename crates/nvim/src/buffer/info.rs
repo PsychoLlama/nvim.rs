@@ -7,7 +7,7 @@
 //! `'title'` and `'icon'` -- the same information again, for the window
 //! manager.
 //!
-//! `NameBuff` and `IObuff` are the editor's two shared scratch buffers, and
+//! Upstream assembles the listing in `NameBuff` and `IObuff`, and
 //! the rule here is the one the rest of the tree already follows: fill them
 //! inside a `with_mut` borrow, then hand them on -- to `message_filtered`, to
 //! `msg_outtrans` -- through the cell rather than through a reference that is
@@ -26,9 +26,9 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::main::{
-    Columns, IObuff, NameBuff, curbuf, firstbuf, got_int, msg_col, msg_scroll, msg_scrolled,
-    need_maketitle, need_wait_return, no_lines_msg, p_icon, p_iconstring, p_ru, p_title,
-    p_titlelen, p_titlestring, restart_edit, stl_syntax,
+    Columns, curbuf, firstbuf, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle,
+    need_wait_return, no_lines_msg, p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring,
+    restart_edit, stl_syntax,
 };
 use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
@@ -138,6 +138,7 @@ pub unsafe fn buflist_list(eap: *mut exarg_T) {
     // With "t", the list is shown most-recently-used first.
     let sorted = has_flag(arg, b't').then(sorted_by_last_used);
     let mut walk = Walk::new(sorted.as_deref());
+    let mut name = [0 as c_char; MAXPATHL as usize];
 
     while let Some(buf) = walk.step() {
         if got_int.get() {
@@ -146,14 +147,14 @@ pub unsafe fn buflist_list(eap: *mut exarg_T) {
         if skip(buf, arg, forceit) {
             continue;
         }
-        // Fill NameBuff with the name to show, then ask the message filter
-        // about it through the cell: `message_filtered` re-enters the
-        // regexp engine.
-        NameBuff.with_mut(|name| fill_name(buf, name));
-        if unsafe { message_filtered(NameBuff.ptr().cast::<c_char>()) } {
+        // The name to show, then the message filter's verdict on it:
+        // `message_filtered` re-enters the regexp engine, and `show` the
+        // message machinery, so the line is this frame's own.
+        fill_name(buf, &mut name);
+        if unsafe { message_filtered(name.as_ptr()) } {
             continue;
         }
-        show(buf, has_flag(arg, b't'));
+        show(buf, has_flag(arg, b't'), &name);
     }
 }
 
@@ -236,7 +237,7 @@ fn skip(buf: Buf, arg: *const c_char, forceit: c_int) -> bool {
         || has_flag(arg, b'#') && (buf.raw() == curbuf.get() || alt_fnum != buf.handle)
 }
 
-/// Put the name to show for `buf` into `NameBuff`.
+/// Put the name to show for `buf` into `name`.
 fn fill_name(mut buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
     let special = special_name(buf);
     if !special.is_null() {
@@ -251,7 +252,7 @@ fn fill_name(mut buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
 
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
-fn show(mut buf: Buf, by_time: bool) {
+fn show(mut buf: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     let changed_char = if buf.b_flags.has(BufFlags::READERR) {
         b'x'
     } else if buf_changed(buf) {
@@ -297,34 +298,33 @@ fn show(mut buf: Buf, by_time: bool) {
     };
     let last_used = buf.b_last_used;
 
-    IObuff.with_mut(|io| {
-        let mut len = format_head(
-            io,
-            buf.handle,
-            [listed, current, state, ro_char, changed_char],
-        );
-        len = pad_to_column(io, len);
-        if by_time && last_used != 0 {
-            format_time(io, len, last_used);
-        } else {
-            format_lnum(io, len, lnum);
-        }
-    });
-    // Hand the assembled line on through the cell: `msg_outtrans` re-enters
-    // the message machinery, which has `IObuff` of its own.
+    let mut io = [0 as c_char; IOSIZE as usize];
+    let flags = [listed, current, state, ro_char, changed_char];
+    let mut len = format_head(&mut io, buf.handle, flags, name);
+    len = pad_to_column(&mut io, len);
+    if by_time && last_used != 0 {
+        format_time(&mut io, len, last_used);
+    } else {
+        format_lnum(&mut io, len, lnum);
+    }
     // SAFETY: a NUL-terminated line, just assembled.
-    unsafe { msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false) };
+    unsafe { msg_outtrans(io.as_mut_ptr(), 0, false) };
     line_breakcheck();
 }
 
 /// `%3d%c%c%c%c%c "%s"`: the number, the five flag columns and the name.
-fn format_head(io: &mut [c_char; IOSIZE as usize], handle: c_int, flags: [u8; 5]) -> c_int {
+fn format_head(
+    io: &mut [c_char; IOSIZE as usize],
+    handle: c_int,
+    flags: [u8; 5],
+    name: &[c_char; MAXPATHL as usize],
+) -> c_int {
     let (dst, cap) = (io.as_mut_ptr(), (IOSIZE - 20) as size_t);
     let fmt = c"%3d%c%c%c%c%c \"%s\"".as_ptr();
     let [bl, cur, st, ro, ch] = flags.map(c_int::from);
-    let name = NameBuff.ptr().cast::<c_char>();
+    let name = name.as_ptr();
     // SAFETY: `IOSIZE - 20` writable bytes, a format taking a number, five
-    // characters and a string, and `NameBuff` holding that string.
+    // characters and a string, and `name` holding that string.
     let len = unsafe { vim_snprintf_safelen(dst, cap, fmt, handle, bl, cur, st, ro, ch, name) };
     (len as c_int).min(IOSIZE - 20)
 }

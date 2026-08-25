@@ -50,8 +50,8 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, NO_BUFFERS, RedrawingDisabled,
-    Rows, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin, debug_break_level,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, NO_BUFFERS, RedrawingDisabled, Rows,
+    WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin, debug_break_level,
     embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen, global_alist,
     headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout,
     msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode,
@@ -82,8 +82,8 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    Callback, Callback_data, CallbackReader, NUL, OptInt, Vv, dict_T, int64_t, linenr_T, list_T,
-    qf_info_T, varnumber_T, win_T,
+    Callback, Callback_data, CallbackReader, IOSIZE, NUL, OptInt, Vv, dict_T, int64_t, linenr_T,
+    list_T, qf_info_T, varnumber_T, win_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -183,6 +183,9 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
 /// Never returns: it ends in `normal_enter`, which is the editor's main
 /// loop, or in one of the exits along the way.
 pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
+    // Why `server_init` gave up, when it does. Upstream leaves it in the
+    // shared `IObuff`.
+    let mut reason = [0 as c_char; IOSIZE as usize];
     // SAFETY: `argv[0..argc]` are the process arguments and live for the
     // whole process; `params` lives for the whole of this function, which
     // never returns while anything still holds a pointer into it.
@@ -301,9 +304,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             "a UI client reached the editor startup"
         );
 
-        if !server_init(params.listen_addr) {
-            // `server_init` left the reason in IObuff.
-            mainerr(IObuff.ptr() as *mut c_char, ptr::null(), ptr::null());
+        if !server_init(params.listen_addr, &mut reason) {
+            mainerr(reason.as_mut_ptr(), ptr::null(), ptr::null());
         }
         time_msg_at(c"expanding arguments");
 

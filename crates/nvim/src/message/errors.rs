@@ -441,9 +441,9 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
 /// # Safety
 /// Only that the main loop is live.
 #[doc(hidden)]
-pub unsafe fn msg_schedule_semsg_finish() {
+pub unsafe fn msg_schedule_semsg_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
     unsafe {
-        let s = xstrdup(msg_iobuff());
+        let s = xstrdup(buf.as_ptr());
         loop_schedule_deferred(
             main_loop.ptr(),
             Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]),
@@ -470,9 +470,9 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
 /// # Safety
 /// Only that the main loop is live.
 #[doc(hidden)]
-pub unsafe fn msg_schedule_semsg_multiline_finish() {
+pub unsafe fn msg_schedule_semsg_multiline_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
     unsafe {
-        let s = xstrdup(msg_iobuff());
+        let s = xstrdup(buf.as_ptr());
         loop_schedule_deferred(
             main_loop.ptr(),
             Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]),
@@ -521,6 +521,6 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
 /// # Safety
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
-pub unsafe fn swmsg_finish(hl: bool) {
-    unsafe { give_warning(msg_iobuff(), hl, true) }
+pub unsafe fn swmsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl: bool) {
+    unsafe { give_warning(buf.as_ptr(), hl, true) }
 }

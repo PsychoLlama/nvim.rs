@@ -73,7 +73,7 @@ impl Expand {
             xp_orig: ptr::null_mut(),
             xp_files: ptr::null_mut(),
             xp_line: ptr::null_mut(),
-            xp_buf: [0; 256],
+            xp_buf: [0; 1025],
             xp_search_dir: kDirectionNotSet,
             xp_pre_incsearch_pos: pos_T {
                 lnum: 0,

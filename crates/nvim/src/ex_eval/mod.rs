@@ -59,8 +59,8 @@ use crate::eval::{
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    IObuff, did_emsg, did_endif, did_throw, e_endfor, e_endif, e_endtry, e_endwhile, e_for,
-    e_invexpr2, e_str_not_inside_function, e_while, emsg_silent, force_abort, got_int, trylevel,
+    did_emsg, did_endif, did_throw, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_invexpr2,
+    e_str_not_inside_function, e_while, emsg_silent, force_abort, got_int, trylevel,
 };
 use crate::memory::xfree;
 use crate::semsg_c;
@@ -166,11 +166,6 @@ fn message<const N: usize>(msg: &'static [c_char; N]) -> *mut c_char {
 /// A message constant as an owned `eap->errmsg`.
 fn err_msg<const N: usize>(msg: &'static [c_char; N]) -> Option<CString> {
     Some(cstr::in_chars(msg).to_owned())
-}
-
-/// The shared scratch buffer the exception reports format through.
-fn iobuff() -> *mut c_char {
-    IObuff.ptr().cast::<c_char>()
 }
 
 /// Do not do something after an error, an interrupt or a throw, nor when the
