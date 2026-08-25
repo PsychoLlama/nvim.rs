@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::keycodes::Ctrl_V;
 use crate::r#move::WinValid;
 use crate::types::NUL;
 
@@ -339,13 +340,11 @@ pub unsafe fn nvim_buf_set_text(
                     kMarkAdjustApi,
                     kExtmarkNOOP,
                 );
-                if VIsual_active.get() as ::core::ffi::c_int != 0
-                    && b == curbuf.get()
-                    && VIsual_mode.get() != 22 as ::core::ffi::c_int
-                {
+                if VIsual_active.get() && b == curbuf.get() && VIsual_mode.get() != Ctrl_V {
+                    let mut anchor = VIsual.get();
                     fix_pos_col(
                         b,
-                        VIsual.ptr(),
+                        &raw mut anchor,
                         start_row as linenr_T,
                         start_col as colnr_T,
                         end_row as linenr_T,
@@ -354,6 +353,7 @@ pub unsafe fn nvim_buf_set_text(
                         last_item.len() as colnr_T,
                         1 as colnr_T,
                     );
+                    VIsual.set(anchor);
                     check_visual_pos();
                 }
                 extmark_splice(

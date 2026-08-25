@@ -286,7 +286,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
         // Just in case lines got deleted.
         check_cursor(curwin.get());
         if VIsual_active.get() {
-            check_pos(curbuf.get(), VIsual.ptr());
+            VIsual.with_mut(|anchor| check_pos(curbuf.get(), anchor));
         }
     }
 }

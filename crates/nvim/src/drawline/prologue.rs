@@ -288,13 +288,17 @@ impl LineSetup {
     /// `wp` must be a live window showing the current buffer.
     unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
         let lnum = wlv.lnum;
+        // A copy: nothing here writes through either end, and taking the
+        // anchor by value keeps the global out of the draw pass.
+        let mut anchor = VIsual.get();
+        let anchor = &raw mut anchor;
         // SAFETY: the caller's window.
         unsafe {
             let cursor = &raw mut (*curwin.get()).w_cursor;
-            let (top, bot) = if ltoreq(*cursor, VIsual.get()) {
-                (cursor, VIsual.ptr())
+            let (top, bot) = if ltoreq(*cursor, *anchor) {
+                (cursor, anchor)
             } else {
-                (VIsual.ptr(), cursor)
+                (anchor, cursor)
             };
             self.lnum_in_visual_area = lnum >= (*top).lnum && lnum <= (*bot).lnum;
 

@@ -157,7 +157,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
         (*curbuf.get()).b_op_end = (*oap).end;
         if (*oap).motion_type != kMTLineWise && !(*oap).inclusive {
             // Exclude the end position.
-            decl(&raw mut (*curbuf.get()).b_op_end);
+            decl(&mut (*curbuf.get()).b_op_end);
         }
 
         let kind = match (*oap).motion_type {

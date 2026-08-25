@@ -174,7 +174,7 @@ pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
 unsafe fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: bool) -> c_int {
     unsafe {
         let mut retval = OK;
-        let dir = if start_lnum < (*VIsual.ptr()).lnum {
+        let dir = if start_lnum < VIsual.get().lnum {
             BACKWARD as c_int
         } else {
             FORWARD as c_int
@@ -247,7 +247,7 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
         let mut start_lnum = (*curwin.get()).w_cursor.lnum;
 
         // A Visual area of more than one line is extended, not replaced.
-        if VIsual_active.get() && start_lnum != (*VIsual.ptr()).lnum {
+        if VIsual_active.get() && start_lnum != VIsual.get().lnum {
             return extend_paragraphs(start_lnum, count, include);
         }
 
@@ -325,9 +325,8 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
             if VIsual_mode.get() == 'V' as c_int && start_lnum == (*curwin.get()).w_cursor.lnum {
                 return extend_paragraphs(start_lnum, count, include);
             }
-            if (*VIsual.ptr()).lnum != start_lnum {
-                (*VIsual.ptr()).lnum = start_lnum;
-                (*VIsual.ptr()).col = 0;
+            if VIsual.get().lnum != start_lnum {
+                VIsual.set(VIsual.get().with_lnum(start_lnum).with_col(0));
             }
             VIsual_mode.set('V' as c_int);
             redraw_curbuf_later(UPD_INVERTED); // update the inversion

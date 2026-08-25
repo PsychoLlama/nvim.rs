@@ -104,7 +104,7 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
         }
         check_cursor(curwin.get());
         if VIsual_active.get() {
-            check_pos(curbuf.get(), VIsual.ptr());
+            VIsual.with_mut(|anchor| check_pos(curbuf.get(), anchor));
         }
     }
 }

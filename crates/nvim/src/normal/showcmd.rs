@@ -112,9 +112,9 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
     // `VIsual_active`, which the one caller has already tested.
     unsafe {
         let (mut top, mut bot) = if cursor_bot {
-            ((*VIsual.ptr()).lnum, (*curwin.get()).w_cursor.lnum)
+            (VIsual.get().lnum, (*curwin.get()).w_cursor.lnum)
         } else {
-            ((*curwin.get()).w_cursor.lnum, (*VIsual.ptr()).lnum)
+            ((*curwin.get()).w_cursor.lnum, VIsual.get().lnum)
         };
         has_folding(curwin.get(), top, &raw mut top, ptr::null_mut());
         has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
@@ -126,6 +126,8 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
 /// so a wrapped line does not add the leader to the column count.
 fn blockwise_width() -> c_int {
     let (mut leftcol, mut rightcol): (colnr_T, colnr_T) = (0, 0);
+    // A copy of the anchor: `getvcols` only reads it.
+    let mut anchor = VIsual.get();
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
     unsafe {
@@ -136,7 +138,7 @@ fn blockwise_width() -> c_int {
         getvcols(
             curwin.get(),
             &raw mut (*curwin.get()).w_cursor,
-            VIsual.ptr(),
+            &raw mut anchor,
             &raw mut leftcol,
             &raw mut rightcol,
         );
@@ -154,13 +156,14 @@ fn blockwise_width() -> c_int {
 /// which is what stops an invalid byte looping.
 fn charwise_extent(cursor_bot: bool) -> (c_int, c_int) {
     let (mut bytes, mut chars) = (0, 0);
+    let anchor = VIsual.get();
     // SAFETY: both pointers are into the current line, and the walk stops at
     // or before `e`.
     unsafe {
         let (mut s, e) = if cursor_bot {
-            (ml_get_pos(VIsual.ptr()), get_cursor_pos_ptr())
+            (ml_get_pos(&raw const anchor), get_cursor_pos_ptr())
         } else {
-            (get_cursor_pos_ptr(), ml_get_pos(VIsual.ptr()))
+            (get_cursor_pos_ptr(), ml_get_pos(&raw const anchor))
         };
         let exclusive = *p_sel.get() as c_int == 'e' as c_int;
         while if exclusive { s < e } else { s <= e } {
@@ -200,7 +203,7 @@ fn show_visual_size() {
                 blockwise_width() as int64_t,
             );
         } else if VIsual_mode.get() == 'V' as c_int
-            || (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum
+            || VIsual.get().lnum != (*curwin.get()).w_cursor.lnum
         {
             snprintf(buf, cap, c"%ld".as_ptr(), lines as int64_t);
         } else {

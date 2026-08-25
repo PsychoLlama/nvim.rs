@@ -106,7 +106,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         order_region(oap);
 
         // Just in case lines were deleted that make the position invalid.
-        check_pos((*curwin.get()).w_buffer, &raw mut (*oap).end);
+        check_pos((*curwin.get()).w_buffer, &mut (*oap).end);
         (*oap).line_count = (*oap).end.lnum - (*oap).start.lnum + 1;
         // Set before `VIsual_active` is reset below.
         virtual_op.set(Some(virtual_active(curwin.get())));
@@ -335,11 +335,11 @@ unsafe fn start_visual_region(cap: *mut cmdarg_T, oap: *mut oparg_T, gui_yank: b
             && (*(*cap).oap).op_type != OP_DELETE
         {
             if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-                (*VIsual.ptr()).col = 0;
+                VIsual.set(VIsual.get().with_col(0));
                 (*curwin.get()).w_cursor.col = ml_get_len((*curwin.get()).w_cursor.lnum);
             } else {
                 (*curwin.get()).w_cursor.col = 0;
-                (*VIsual.ptr()).col = ml_get_len((*VIsual.ptr()).lnum);
+                VIsual.set(VIsual.get().with_col(ml_get_len(VIsual.get().lnum)));
             }
             VIsual_mode.set('v' as c_int);
         } else if VIsual_mode.get() == 'v' as c_int {

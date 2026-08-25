@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{State, VIsual, VIsual_active, curwin, p_sel};
+use crate::main::{State, VIsual_active, curwin, p_sel};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
@@ -19,6 +19,7 @@ use core::ptr;
 
 use super::open_close::*;
 use super::*;
+use crate::normal::with_visual_anchor;
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 
@@ -151,36 +152,45 @@ pub unsafe fn fold_adjust_visual() {
     if !VIsual_active.get() || unsafe { has_any_folding(curwin.get()) } == 0 {
         return;
     }
-    // SAFETY: the caller's promise; both ends name live `pos_T`s.
-    unsafe {
-        let cursor = &raw mut (*curwin.get()).w_cursor;
-        let visual = VIsual.ptr();
-        let (start, end) = if ltoreq(VIsual.get(), *cursor) {
-            (visual, cursor)
-        } else {
-            (cursor, visual)
-        };
-        if has_folding(
-            curwin.get(),
-            (*start).lnum,
-            &raw mut (*start).lnum,
-            ptr::null_mut(),
-        ) {
-            (*start).col = 0;
+    // The anchor is adjusted as a *copy* and put back: `has_folding` may
+    // evaluate 'foldexpr', which is user code that reads the same global, so
+    // it must not be held open across the call.
+    let stretched = with_visual_anchor(|anchor| {
+        let visual = &raw mut *anchor;
+        // SAFETY: the caller's promise; both ends name live `pos_T`s.
+        unsafe {
+            let cursor = &raw mut (*curwin.get()).w_cursor;
+            let (start, end) = if ltoreq(*visual, *cursor) {
+                (visual, cursor)
+            } else {
+                (cursor, visual)
+            };
+            if has_folding(
+                curwin.get(),
+                (*start).lnum,
+                &raw mut (*start).lnum,
+                ptr::null_mut(),
+            ) {
+                (*start).col = 0;
+            }
+            if !has_folding(
+                curwin.get(),
+                (*end).lnum,
+                ptr::null_mut(),
+                &raw mut (*end).lnum,
+            ) {
+                return false;
+            }
+            (*end).col = ml_get_len((*end).lnum);
+            if (*end).col > 0 && *p_sel.get() as c_int == 'o' as c_int {
+                (*end).col -= 1;
+            }
+            true
         }
-        if !has_folding(
-            curwin.get(),
-            (*end).lnum,
-            ptr::null_mut(),
-            &raw mut (*end).lnum,
-        ) {
-            return;
-        }
-        (*end).col = ml_get_len((*end).lnum);
-        if (*end).col > 0 && *p_sel.get() as c_int == 'o' as c_int {
-            (*end).col -= 1;
-        }
-        mb_adjust_cursor();
+    });
+    if stretched {
+        // SAFETY: the caller's promise.
+        unsafe { mb_adjust_cursor() };
     }
 }
 

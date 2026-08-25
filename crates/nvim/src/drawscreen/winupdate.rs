@@ -756,7 +756,7 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
     // SAFETY: the caller's window and the global Visual state.
     unsafe {
         let cursor = (*curwin.get()).w_cursor.lnum;
-        let anchor = (*VIsual.ptr()).lnum;
+        let anchor = VIsual.get().lnum;
 
         let (mut from, mut to) = if VIsual_mode.get() != (*wp).w_old_visual_mode as c_int
             || redr_type == UPD_INVERTED_ALL
@@ -779,7 +779,7 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
                 ((*wp).w_old_cursor_lnum, cursor)
             };
             let mut to = to;
-            if anchor != (*wp).w_old_visual_lnum || (*VIsual.ptr()).col != (*wp).w_old_visual_col {
+            if anchor != (*wp).w_old_visual_lnum || VIsual.get().col != (*wp).w_old_visual_col {
                 if (*wp).w_old_visual_lnum < from && (*wp).w_old_visual_lnum != 0 {
                     from = (*wp).w_old_visual_lnum;
                 }
@@ -810,6 +810,8 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
 /// # Safety
 /// Called with `VIsual_active` and a blockwise selection.
 unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
+    // A copy of the anchor: `getvcols` only reads it.
+    let mut anchor = VIsual.get();
     // SAFETY: the caller's window and the global Visual state.
     unsafe {
         let mut fromc = 0;
@@ -823,7 +825,7 @@ unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
         }
         getvcols(
             wp,
-            VIsual.ptr(),
+            &raw mut anchor,
             &raw mut (*curwin.get()).w_cursor,
             &raw mut fromc,
             &raw mut toc,
@@ -842,7 +844,7 @@ unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
         }
 
         let cursor_lnum = (*curwin.get()).w_cursor.lnum;
-        let anchor_lnum = (*VIsual.ptr()).lnum;
+        let anchor_lnum = VIsual.get().lnum;
         let cursor_above = cursor_lnum < anchor_lnum;
         let mut pos = pos_T::default();
         toc = 0;
@@ -880,8 +882,8 @@ unsafe fn remember_visual_area(wp: *mut win_T, buf: *mut buf_T) {
         if VIsual_active.get() && buf == (*curwin.get()).w_buffer {
             (*wp).w_old_visual_mode = VIsual_mode.get() as c_char;
             (*wp).w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum;
-            (*wp).w_old_visual_lnum = (*VIsual.ptr()).lnum;
-            (*wp).w_old_visual_col = (*VIsual.ptr()).col;
+            (*wp).w_old_visual_lnum = VIsual.get().lnum;
+            (*wp).w_old_visual_col = VIsual.get().col;
             (*wp).w_old_curswant = (*curwin.get()).w_curswant;
         } else {
             (*wp).w_old_visual_mode = 0;

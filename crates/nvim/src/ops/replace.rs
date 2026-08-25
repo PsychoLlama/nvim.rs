@@ -297,7 +297,7 @@ unsafe fn replace_chars(oap: *mut oparg_T, c: c_int) {
                 (*oap).end.col -= 1;
             }
         } else if !(*oap).inclusive {
-            dec(&raw mut (*oap).end);
+            dec(&mut (*oap).end);
         }
 
         while ltoreq((*curwin.get()).w_cursor, (*oap).end) {
@@ -377,7 +377,7 @@ unsafe fn replace_virtual_tail(oap: *mut oparg_T, c: c_int) {
             } else {
                 pbyte((*curwin.get()).w_cursor, c);
             }
-            if inc(&raw mut (*curwin.get()).w_cursor) == -1 {
+            if inc(&mut (*curwin.get()).w_cursor) == -1 {
                 break;
             }
             virtcols -= 1;

@@ -147,12 +147,12 @@ pub unsafe fn current_block(
         // whose condition never changes: the loop exists only for the retry.)
         if !include {
             loop {
-                incl(&raw mut start_pos);
+                incl(&mut start_pos);
                 sol = (*curwin.get()).w_cursor.col == 0;
-                decl(&raw mut (*curwin.get()).w_cursor);
+                decl(&mut (*curwin.get()).w_cursor);
                 while inindent(1) {
                     sol = true;
-                    if decl(&raw mut (*curwin.get()).w_cursor) != 0 {
+                    if decl(&mut (*curwin.get()).w_cursor) != 0 {
                         break;
                     }
                 }
@@ -173,7 +173,7 @@ pub unsafe fn current_block(
                     break;
                 }
                 (*curwin.get()).w_cursor = old_start;
-                decl(&raw mut (*curwin.get()).w_cursor);
+                decl(&mut (*curwin.get()).w_cursor);
                 pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
                 if pos.is_null() {
                     (*curwin.get()).w_cursor = old_pos;
@@ -192,10 +192,10 @@ pub unsafe fn current_block(
 
         if VIsual_active.get() {
             if *p_sel.get() as c_int == 'e' as c_int {
-                inc(&raw mut (*curwin.get()).w_cursor);
+                inc(&mut (*curwin.get()).w_cursor);
             }
             if sol && gchar_cursor() != NUL {
-                inc(&raw mut (*curwin.get()).w_cursor); // include the line break
+                inc(&mut (*curwin.get()).w_cursor); // include the line break
             }
             VIsual.set(start_pos);
             VIsual_mode.set('v' as c_int);
@@ -206,7 +206,7 @@ pub unsafe fn current_block(
             (*oap).motion_type = kMTCharWise;
             (*oap).inclusive = false;
             if sol {
-                incl(&raw mut (*curwin.get()).w_cursor);
+                incl(&mut (*curwin.get()).w_cursor);
             } else if ltoreq(start_pos, (*curwin.get()).w_cursor) {
                 // Include the character under the cursor.
                 (*oap).inclusive = true;
@@ -260,7 +260,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
         }
         // The matching `>` must not be preceded by a `/`.
         loop {
-            if inc(&raw mut pos) < 0 {
+            if inc(&mut pos) < 0 {
                 return false;
             }
             let c = *ml_get_pos(&raw mut pos) as u8 as c_int;
@@ -291,7 +291,7 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
         let mut old_end = (*curwin.get()).w_cursor; // where we started
         let mut old_start = old_end;
         if !VIsual_active.get() || *p_sel.get() as c_int == 'e' as c_int {
-            decl(&raw mut old_end); // `old_end` is inclusive
+            decl(&mut old_end); // `old_end` is inclusive
         }
 
         // Starting on a `<aaa>` selects that block.

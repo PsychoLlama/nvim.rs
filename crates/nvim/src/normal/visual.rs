@@ -56,6 +56,19 @@ fn selection_exclusive() -> bool {
     unsafe { *p_sel.get() as c_int == 'e' as c_int }
 }
 
+/// Read-modify-write of the Visual anchor.
+///
+/// The anchor is handed to `f` as a *copy* and put back afterwards, rather
+/// than borrowed out of the cell: the callers run buffer code and, through
+/// `has_folding`, 'foldexpr' -- user code that reads the same global -- so a
+/// `with_mut` borrow held across them would be reentrant.
+pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut pos_T) -> R) -> R {
+    let mut anchor = VIsual.get();
+    let r = f(&mut anchor);
+    VIsual.set(anchor);
+    r
+}
+
 /// Leave Visual mode, remembering the selection for `gv` and `'<`/`'>`.
 pub(crate) fn end_visual_mode() {
     VIsual_select_exclu_adj.set(false);
@@ -123,10 +136,11 @@ pub(crate) unsafe fn get_visual_text(
         // SAFETY: adjusts the current window's cursor or `VIsual`.
         unsafe { unadjust_for_sel() };
     }
+    let anchor = VIsual.get();
     // SAFETY: `cap` is null or the caller's live command argument, and `pp`
     // and `lenp` are its out-parameters.
     unsafe {
-        if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
+        if anchor.lnum != (*curwin.get()).w_cursor.lnum {
             if !cap.is_null() {
                 clearopbeep((*cap).oap);
             }
@@ -138,12 +152,12 @@ pub(crate) unsafe fn get_visual_text(
         } else {
             // The earlier of the two ends is the start; the length is the
             // column difference, inclusive.
-            if lt((*curwin.get()).w_cursor, VIsual.get()) {
+            if lt((*curwin.get()).w_cursor, anchor) {
                 *pp = ml_get_pos(&raw mut (*curwin.get()).w_cursor);
-                *lenp = ((*VIsual.ptr()).col - (*curwin.get()).w_cursor.col + 1) as size_t;
+                *lenp = (anchor.col - (*curwin.get()).w_cursor.col + 1) as size_t;
             } else {
-                *pp = ml_get_pos(VIsual.ptr());
-                *lenp = ((*curwin.get()).w_cursor.col - (*VIsual.ptr()).col + 1) as size_t;
+                *pp = ml_get_pos(&raw const anchor);
+                *lenp = ((*curwin.get()).w_cursor.col - anchor.col + 1) as size_t;
             }
             if **pp as c_int == NUL {
                 *lenp = 0;
@@ -171,6 +185,9 @@ pub(crate) unsafe fn get_visual_text(
 /// the first attempt left the cursor where it started, which happens when the
 /// two columns are the same width.
 pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
+    // Only the blockwise `O` path below reads this; the charwise path returns
+    // first, having set the anchor itself.
+    let mut anchor = VIsual.get();
     // SAFETY: `curwin` is the current window and `VIsual` a live position.
     unsafe {
         if cmdchar != 'O' as c_int || VIsual_mode.get() != Ctrl_V {
@@ -186,17 +203,17 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
         getvcols(
             curwin.get(),
             &raw mut old_cursor,
-            VIsual.ptr(),
+            &raw mut anchor,
             &raw mut left,
             &raw mut right,
         );
-        (*curwin.get()).w_cursor.lnum = (*VIsual.ptr()).lnum;
+        (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
         coladvance(curwin.get(), left);
         VIsual.set((*curwin.get()).w_cursor);
         (*curwin.get()).w_cursor.lnum = old_cursor.lnum;
         (*curwin.get()).w_curswant = right;
         // An exclusive selection ends one past the last column it covers.
-        if old_cursor.lnum >= (*VIsual.ptr()).lnum && selection_exclusive() {
+        if old_cursor.lnum >= VIsual.get().lnum && selection_exclusive() {
             (*curwin.get()).w_curswant += 1;
         }
         coladvance(curwin.get(), (*curwin.get()).w_curswant);
@@ -207,8 +224,8 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
             && (!virtual_active(curwin.get())
                 || (*curwin.get()).w_cursor.coladd == old_cursor.coladd)
         {
-            (*curwin.get()).w_cursor.lnum = (*VIsual.ptr()).lnum;
-            if old_cursor.lnum <= (*VIsual.ptr()).lnum && selection_exclusive() {
+            (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
+            if old_cursor.lnum <= VIsual.get().lnum && selection_exclusive() {
                 right += 1;
             }
             coladvance(curwin.get(), right);
@@ -318,7 +335,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
             // The width is measured from the *start* line, so the cursor goes
             // there while 'curswant' is recomputed and comes back after.
             let lnum = (*curwin.get()).w_cursor.lnum;
-            (*curwin.get()).w_cursor.lnum = (*VIsual.ptr()).lnum;
+            (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
             update_curswant_force();
             (*curwin.get()).w_curswant = (*curwin.get()).w_curswant.wrapping_add(
                 resel_VIsual_vcol
@@ -532,12 +549,10 @@ pub(crate) unsafe fn unadjust_for_sel() -> bool {
     // SAFETY: `curwin` is the current window and `VIsual` a live position.
     unsafe {
         if selection_exclusive() && !equalpos(VIsual.get(), (*curwin.get()).w_cursor) {
-            let later = if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-                &raw mut (*curwin.get()).w_cursor
-            } else {
-                VIsual.ptr()
-            };
-            return unadjust_for_sel_inner(later);
+            if lt(VIsual.get(), (*curwin.get()).w_cursor) {
+                return unadjust_for_sel_inner(&raw mut (*curwin.get()).w_cursor);
+            }
+            return with_visual_anchor(|anchor| unadjust_for_sel_inner(anchor));
         }
         false
     }

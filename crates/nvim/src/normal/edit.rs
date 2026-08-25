@@ -794,7 +794,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
             (*curbuf.get()).b_visual.vi_start = (*curbuf.get()).b_op_start;
             (*curbuf.get()).b_visual.vi_end = (*curbuf.get()).b_op_end;
             if *p_sel.get() as c_int == 'e' as c_int {
-                inc(&raw mut (*curbuf.get()).b_visual.vi_end);
+                inc(&mut (*curbuf.get()).b_visual.vi_end);
             }
         }
         if emptied && *ml_get((*curbuf.get()).b_ml.ml_line_count) as c_int == NUL {

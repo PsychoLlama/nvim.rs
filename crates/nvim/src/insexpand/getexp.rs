@@ -76,8 +76,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 (*st).first_match_pos = *start_match_pos;
                 // Move the cursor back one character so that CTRL-N can match
                 // the word immediately after the cursor.
-                if ctrl_x_mode_normal() && !fuzzy_collect && dec(&raw mut (*st).first_match_pos) < 0
-                {
+                if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut (*st).first_match_pos) < 0 {
                     // Move to after the last character in the buffer, so that
                     // a word at the start of it is found correctly.
                     (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count;

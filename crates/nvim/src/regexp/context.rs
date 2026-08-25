@@ -206,8 +206,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     };
     // `\%V` is a buffer-position test, so it only applies to a multi-line
     // match in the current buffer.
-    // SAFETY: `VIsual` is the editor's own position record.
-    if rex.reg_buf() != curbuf.get() || unsafe { (*VIsual.ptr()).lnum } == 0 || !rex.multi() {
+    if rex.reg_buf() != curbuf.get() || VIsual.get().lnum == 0 || !rex.multi() {
         return false;
     }
 

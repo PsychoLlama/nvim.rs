@@ -395,7 +395,7 @@ pub unsafe fn current_word(
                 // the end of this one.
                 fwd_word(1, bigword, true);
                 if (*curwin.get()).w_cursor.col == 0 {
-                    decl(&raw mut (*curwin.get()).w_cursor);
+                    decl(&mut (*curwin.get()).w_cursor);
                 } else {
                     oneleft();
                 }
@@ -420,7 +420,7 @@ pub unsafe fn current_word(
             inclusive = true;
             if VIsual_active.get() && lt((*curwin.get()).w_cursor, VIsual.get()) {
                 // In Visual mode with the cursor at the start: move it back.
-                if decl(&raw mut (*curwin.get()).w_cursor) == -1 {
+                if decl(&mut (*curwin.get()).w_cursor) == -1 {
                     return FAIL;
                 }
                 if include != (cls() != 0) {
@@ -431,11 +431,11 @@ pub unsafe fn current_word(
                     if bckend_word(1, bigword, true) == FAIL {
                         return FAIL;
                     }
-                    incl(&raw mut (*curwin.get()).w_cursor);
+                    incl(&mut (*curwin.get()).w_cursor);
                 }
             } else {
                 // Move the cursor forward one word and/or run of white space.
-                if incl(&raw mut (*curwin.get()).w_cursor) == -1 {
+                if incl(&mut (*curwin.get()).w_cursor) == -1 {
                     return FAIL;
                 }
                 if include != (cls() == 0) {

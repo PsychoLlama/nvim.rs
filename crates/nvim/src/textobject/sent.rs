@@ -24,7 +24,7 @@ use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, Direction, FAIL, NUL, OK, oparg_T, pos_T};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
-type StepFn = unsafe fn(*mut pos_T) -> c_int;
+type StepFn = unsafe fn(&mut pos_T) -> c_int;
 
 /// Move to the start of the `count`th next sentence in `dir`, leaving the
 /// cursor there. Answers OK when one was found.
@@ -56,7 +56,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
             'found: {
                 if gchar_pos(&raw mut pos) == NUL {
                     // On an empty line: skip up to a non-empty one.
-                    while step(&raw mut pos) != -1 {
+                    while step(&mut pos) != -1 {
                         if gchar_pos(&raw mut pos) != NUL {
                             break;
                         }
@@ -76,7 +76,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                     pos.lnum += 1;
                     break 'found;
                 } else if dir as c_int == BACKWARD as c_int {
-                    decl(&raw mut pos);
+                    decl(&mut pos);
                 }
 
                 // Back to the previous non-white, non-punctuation character.
@@ -87,7 +87,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                         break;
                     }
                     let mut tpos = pos;
-                    if decl(&raw mut tpos) == -1
+                    if decl(&mut tpos) == -1
                         || (*ml_get(tpos.lnum) as c_int == NUL && dir as c_int == FORWARD as c_int)
                     {
                         break;
@@ -103,7 +103,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                     {
                         break;
                     }
-                    decl(&raw mut pos);
+                    decl(&mut pos);
                 }
 
                 // The line the search started on, so that a backward search
@@ -123,7 +123,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                     if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
                         let mut tpos = pos;
                         loop {
-                            c = inc(&raw mut tpos);
+                            c = inc(&mut tpos);
                             if c == -1 {
                                 break;
                             }
@@ -137,17 +137,17 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                             || c == NUL
                             || (cpo_j
                                 && c == ' ' as c_int
-                                && inc(&raw mut tpos) >= 0
+                                && inc(&mut tpos) >= 0
                                 && gchar_pos(&raw mut tpos) == ' ' as c_int)
                         {
                             pos = tpos;
                             if gchar_pos(&raw mut pos) == NUL {
-                                inc(&raw mut pos); // skip the NUL at end of line
+                                inc(&mut pos); // skip the NUL at end of line
                             }
                             break;
                         }
                     }
-                    if step(&raw mut pos) == -1 {
+                    if step(&mut pos) == -1 {
                         if count != 0 {
                             return FAIL;
                         }
@@ -162,14 +162,14 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                 let c = gchar_pos(&raw mut pos);
                 c == ' ' as c_int || c == '\t' as c_int
             } {
-                if incl(&raw mut pos) == -1 {
+                if incl(&mut pos) == -1 {
                     break;
                 }
             }
 
             if equalpos(prev_pos, pos) {
                 // Nothing moved: step one character and try again.
-                if step(&raw mut pos) == -1 {
+                if step(&mut pos) == -1 {
                     if count != 0 {
                         return FAIL;
                     }
@@ -192,10 +192,10 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
 /// `posp` must name a valid position in the current buffer.
 pub(crate) unsafe fn find_first_blank(posp: *mut pos_T) {
     unsafe {
-        while decl(posp) != -1 {
+        while decl(&mut *posp) != -1 {
             let c = gchar_pos(posp);
             if !ascii_iswhite(c) {
-                incl(posp);
+                incl(&mut *posp);
                 break;
             }
         }
@@ -220,7 +220,7 @@ unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
                 find_first_blank(&raw mut (*curwin.get()).w_cursor);
             }
             if count == 0 || at_start_sent {
-                decl(&raw mut (*curwin.get()).w_cursor);
+                decl(&mut (*curwin.get()).w_cursor);
             }
             at_start_sent = !at_start_sent;
         }
@@ -245,13 +245,13 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
             // that is: in the white space before a sentence, inside one or
             // just after it, or exactly at the start of one.
             let mut at_start_sent = true;
-            decl(&raw mut pos);
+            decl(&mut pos);
             while lt(pos, (*curwin.get()).w_cursor) {
                 if !ascii_iswhite(gchar_pos(&raw mut pos)) {
                     at_start_sent = false;
                     break;
                 }
-                incl(&raw mut pos);
+                incl(&mut pos);
             }
             if !at_start_sent {
                 findsent(BACKWARD, 1);
@@ -284,7 +284,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
             // The cursor is at the end of the Visual area: just before a
             // sentence, in or just before the white space in front of one, or
             // inside one.
-            incl(&raw mut pos);
+            incl(&mut pos);
             let mut at_start_sent = true;
             if !equalpos(pos, (*curwin.get()).w_cursor) {
                 // Not just before a sentence.
@@ -294,7 +294,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
                         at_start_sent = true;
                         break;
                     }
-                    incl(&raw mut pos);
+                    incl(&mut pos);
                 }
                 if at_start_sent {
                     findsent(BACKWARD, 1); // inside the sentence
@@ -334,7 +334,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
         // The cursor started on a blank: is it just before the start of the
         // next sentence?
         while ascii_iswhite(gchar_pos(&raw mut pos)) {
-            incl(&raw mut pos);
+            incl(&mut pos);
         }
         let start_blank = equalpos(pos, (*curwin.get()).w_cursor);
         if start_blank {
@@ -354,7 +354,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
         if ncount > 0 {
             findsent_forward(ncount, true);
         } else {
-            decl(&raw mut (*curwin.get()).w_cursor);
+            decl(&mut (*curwin.get()).w_cursor);
         }
 
         if include {
@@ -364,7 +364,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
             if start_blank {
                 find_first_blank(&raw mut (*curwin.get()).w_cursor);
                 if ascii_iswhite(gchar_pos(&raw mut (*curwin.get()).w_cursor)) {
-                    decl(&raw mut (*curwin.get()).w_cursor);
+                    decl(&mut (*curwin.get()).w_cursor);
                 }
             } else if !ascii_iswhite(gchar_cursor()) {
                 find_first_blank(&raw mut start_pos);
@@ -386,7 +386,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
             // Include the newline after the sentence, if there is one.
-            (*oap).inclusive = incl(&raw mut (*curwin.get()).w_cursor) == -1;
+            (*oap).inclusive = incl(&mut (*curwin.get()).w_cursor) == -1;
             (*oap).start = start_pos;
             (*oap).motion_type = kMTCharWise;
         }

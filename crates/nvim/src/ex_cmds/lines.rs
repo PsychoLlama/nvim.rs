@@ -349,7 +349,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     unsafe { appended_lines_mark(n, count) };
     if VIsual_active.get() {
         // SAFETY: `curbuf` is live and `VIsual` is a global position.
-        unsafe { check_pos(curbuf.get(), VIsual.ptr()) };
+        VIsual.with_mut(|anchor| unsafe { check_pos(curbuf.get(), anchor) });
     }
     // SAFETY: message state, main thread.
     unsafe { msgmore(count) };

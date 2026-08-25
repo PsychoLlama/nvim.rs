@@ -946,7 +946,7 @@ fn char_at(pos: Pos) -> c_int {
 /// Step `pos` one character forward, over a line break if need be.
 fn advance(pos: Pos) {
     // SAFETY: a live position in the current buffer.
-    unsafe { inc(pos.raw()) };
+    unsafe { inc(&mut *pos.raw()) };
 }
 
 /// Whether a clipboard provider is loaded, so that an unnamed register should

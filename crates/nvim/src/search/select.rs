@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::normal::with_visual_anchor;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::{FAIL, OK};
@@ -132,9 +133,9 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         if VIsual_active.get() {
             // Searching further will extend the match.
             if forward {
-                incl(&raw mut pos);
+                incl(&mut pos);
             } else {
-                decl(&raw mut pos);
+                decl(&mut pos);
             }
         }
 
@@ -186,7 +187,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
             if forward && ltoreq(VIsual.get(), (*curwin.get()).w_cursor) {
                 inc_cursor();
             } else if !forward && ltoreq((*curwin.get()).w_cursor, VIsual.get()) {
-                inc(VIsual.ptr());
+                with_visual_anchor(|anchor| inc(anchor));
             }
         }
 

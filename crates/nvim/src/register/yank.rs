@@ -305,7 +305,7 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
             }
             if yank_type != kMTLineWise && !(*oap).inclusive {
                 // An exclusive region's `']` is the character *before* the end.
-                decl(&raw mut (*curbuf.get()).b_op_end);
+                decl(&mut (*curbuf.get()).b_op_end);
             }
         }
     }

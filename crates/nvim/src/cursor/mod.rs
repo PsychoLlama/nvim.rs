@@ -440,7 +440,7 @@ pub unsafe fn getvpos(wp: *mut win_T, pos: *mut pos_T, wcol: colnr_T) -> bool {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn inc_cursor() -> c_int {
-    unsafe { inc(Win::current().cursor().raw()) }
+    unsafe { inc(&mut *Win::current().cursor().raw()) }
 }
 
 /// Move the cursor one character back; see `dec`.
@@ -448,7 +448,7 @@ pub unsafe fn inc_cursor() -> c_int {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn dec_cursor() -> c_int {
-    unsafe { dec(Win::current().cursor().raw()) }
+    unsafe { dec(&mut *Win::current().cursor().raw()) }
 }
 
 /// How far `lnum` is from the cursor, counting each closed fold in between
@@ -472,11 +472,13 @@ pub unsafe fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T {
 ///
 /// # Safety
 /// `buf` must be a valid buffer.
-pub unsafe fn check_pos(buf: *mut buf_T, pos: *mut pos_T) {
-    let (buf, pos) = unsafe { (Buf::new(buf), Pos::new(pos)) };
-    pos.set_lnum(pos.lnum().min(buf.line_count()));
-    if pos.col() > 0 {
-        pos.set_col(pos.col().min(unsafe { buf.line_len(pos.lnum()) }));
+pub unsafe fn check_pos(buf: *mut buf_T, pos: &mut pos_T) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let buf = unsafe { Buf::new(buf) };
+    pos.lnum = pos.lnum.min(buf.line_count());
+    if pos.col > 0 {
+        // SAFETY: `lnum` was just clamped to a line the buffer has.
+        pos.col = pos.col.min(unsafe { buf.line_len(pos.lnum) });
     }
 }
 

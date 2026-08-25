@@ -195,7 +195,7 @@ unsafe fn addsub_line_span(oap: *mut oparg_T, bd: &mut block_def, pos: &mut pos_
 
         // Charwise: the first and last lines are clipped to the region.
         if pos.lnum == (*oap).start.lnum && !(*oap).inclusive {
-            dec(&raw mut (*oap).end);
+            dec(&mut (*oap).end);
         }
         let mut length = ml_get_len(pos.lnum);
         pos.col = 0;

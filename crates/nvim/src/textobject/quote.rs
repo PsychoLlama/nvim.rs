@@ -17,6 +17,7 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_sel, redraw_cmdline};
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::dec;
+use crate::normal::with_visual_anchor;
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
 use crate::types::{NUL, colnr_T, oparg_T};
@@ -252,7 +253,7 @@ pub unsafe fn current_quote(
         // moved forward again after the area has been adjusted.
         if VIsual_active.get() {
             // This only works within one line.
-            if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
+            if VIsual.get().lnum != (*curwin.get()).w_cursor.lnum {
                 return false;
             }
             vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
@@ -262,7 +263,7 @@ pub unsafe fn current_quote(
                     dec_cursor();
                     did_exclusive_adj = true;
                 } else if !vis_empty {
-                    dec(VIsual.ptr());
+                    with_visual_anchor(|anchor| dec(anchor));
                     did_exclusive_adj = true;
                 }
                 vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
@@ -283,21 +284,21 @@ pub unsafe fn current_quote(
             let mut i;
             let sel_end;
             if vis_bef_curs {
-                inside_quotes = (*VIsual.ptr()).col > 0
-                    && *line.offset((*VIsual.ptr()).col as isize - 1) as u8 as c_int == quotechar
+                inside_quotes = VIsual.get().col > 0
+                    && *line.offset(VIsual.get().col as isize - 1) as u8 as c_int == quotechar
                     && *line.offset((*curwin.get()).w_cursor.col as isize) as c_int != NUL
                     && *line.offset((*curwin.get()).w_cursor.col as isize + 1) as u8 as c_int
                         == quotechar;
-                i = (*VIsual.ptr()).col as c_int;
+                i = VIsual.get().col as c_int;
                 sel_end = (*curwin.get()).w_cursor.col as c_int;
             } else {
                 inside_quotes = (*curwin.get()).w_cursor.col > 0
                     && *line.offset((*curwin.get()).w_cursor.col as isize - 1) as u8 as c_int
                         == quotechar
-                    && *line.offset((*VIsual.ptr()).col as isize) as c_int != NUL
-                    && *line.offset((*VIsual.ptr()).col as isize + 1) as u8 as c_int == quotechar;
+                    && *line.offset(VIsual.get().col as isize) as c_int != NUL
+                    && *line.offset(VIsual.get().col as isize + 1) as u8 as c_int == quotechar;
                 i = (*curwin.get()).w_cursor.col as c_int;
-                sel_end = (*VIsual.ptr()).col as c_int;
+                sel_end = VIsual.get().col as c_int;
             }
             // Is there a quote in the selection at all?
             while i <= sel_end {
@@ -362,10 +363,9 @@ pub unsafe fn current_quote(
                 || (vis_bef_curs
                     && !selected_quote
                     && (inside_quotes
-                        || (*line.offset((*VIsual.ptr()).col as isize) as u8 as c_int
-                            != quotechar
-                            && ((*VIsual.ptr()).col == 0
-                                || *line.offset((*VIsual.ptr()).col as isize - 1) as u8 as c_int
+                        || (*line.offset(VIsual.get().col as isize) as u8 as c_int != quotechar
+                            && (VIsual.get().col == 0
+                                || *line.offset(VIsual.get().col as isize - 1) as u8 as c_int
                                     != quotechar))))
             {
                 VIsual.set((*curwin.get()).w_cursor);
@@ -393,9 +393,9 @@ pub unsafe fn current_quote(
                 // a quote.
                 if inside_quotes
                     || (!selected_quote
-                        && *line.offset((*VIsual.ptr()).col as isize) as u8 as c_int != quotechar
-                        && (*line.offset((*VIsual.ptr()).col as isize) as c_int == NUL
-                            || *line.offset((*VIsual.ptr()).col as isize + 1) as u8 as c_int
+                        && *line.offset(VIsual.get().col as isize) as u8 as c_int != quotechar
+                        && (*line.offset(VIsual.get().col as isize) as c_int == NUL
+                            || *line.offset(VIsual.get().col as isize + 1) as u8 as c_int
                                 != quotechar))
                 {
                     dec_cursor();

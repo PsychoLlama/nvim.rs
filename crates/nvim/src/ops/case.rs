@@ -63,7 +63,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
                     (*oap).end.col -= 1;
                 }
             } else if !(*oap).inclusive {
-                dec(&raw mut (*oap).end);
+                dec(&mut (*oap).end);
             }
 
             if pos.lnum == (*oap).end.lnum {
@@ -79,7 +79,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
                     did_change |= swapchars((*oap).op_type, &raw mut pos, len) != 0;
                     // `inc` answers -1 at the end of the buffer; either exit
                     // leaves `pos` where the walk stopped.
-                    if ltoreq((*oap).end, pos) || inc(&raw mut pos) == -1 {
+                    if ltoreq((*oap).end, pos) || inc(&mut pos) == -1 {
                         break;
                     }
                 }
@@ -141,7 +141,7 @@ unsafe fn swapchars(op_type: OpType, pos: *mut pos_T, length: c_int) -> c_int {
                 todo -= len - 1;
             }
             did_change |= c_int::from(swapchar(op_type, pos));
-            if inc(pos) == -1 {
+            if inc(&mut *pos) == -1 {
                 // At the end of the buffer; do not run the decrement.
                 break;
             }

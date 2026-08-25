@@ -196,15 +196,15 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
         if VIsual_active.get() {
             // The Visual selection is the bad word, but only within a
             // single line.
-            if (*curwin.get()).w_cursor.lnum != (*VIsual.ptr()).lnum {
+            if (*curwin.get()).w_cursor.lnum != VIsual.get().lnum {
                 vim_beep(kOptBoFlagSpell as core::ffi::c_uint);
                 return None;
             }
-            let mut badlen = (*curwin.get()).w_cursor.col - (*VIsual.ptr()).col;
+            let mut badlen = (*curwin.get()).w_cursor.col - VIsual.get().col;
             if badlen < 0 {
                 badlen = -badlen;
             } else {
-                (*curwin.get()).w_cursor.col = (*VIsual.ptr()).col;
+                (*curwin.get()).w_cursor.col = VIsual.get().col;
             }
             badlen += 1;
             end_visual_mode();

@@ -678,7 +678,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             if lt((*s).match_start, (*s).match_end) {
                 // Start searching at the end of the match, not at the
                 // beginning of the next column.
-                decl(&raw mut t);
+                decl(&mut t);
             }
             search_flags += SEARCH_COL;
         } else {
@@ -719,19 +719,19 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
                 // Move just before the current match, so that when nv_search
                 // finishes the cursor is put back on the match.
                 (*s).search_start = t;
-                decl(&raw mut (*s).search_start);
+                decl(&mut (*s).search_start);
             } else if next_match && firstc == '?' as ::core::ffi::c_int {
                 // Move just after the current match, for the same reason.
                 (*s).search_start = t;
-                incl(&raw mut (*s).search_start);
+                incl(&mut (*s).search_start);
             }
             if lt(t, (*s).search_start) && next_match {
                 // Wrapped around.
                 (*s).search_start = t;
                 if firstc == '?' as ::core::ffi::c_int {
-                    incl(&raw mut (*s).search_start);
+                    incl(&mut (*s).search_start);
                 } else {
-                    decl(&raw mut (*s).search_start);
+                    decl(&mut (*s).search_start);
                 }
             }
 
