@@ -9,6 +9,16 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Retired `IObuff` and `NameBuff`, the editor's two shared scratch buffers,
+  and the two dozen private static buffers that worked the same way. Every
+  message, report, path and rendering that was assembled in one is now
+  assembled in a buffer belonging to the code that fills it, which removes a
+  class of bug the editor carried throughout: anything that ran an
+  autocommand, showed a message or drew the screen between the fill and the
+  read overwrote what the reader was about to use. An Ex command's error
+  message and an option's rejection message are owned values now, so a
+  second error raised while the first was still on its way to the user
+  cannot replace it.
 - Renamed the library crate from `c2rust_neovim` to `neovim` and retired the
   transpiler's generated names throughout — the anonymous `C2Rust_Unnamed_*`
   types, the `c2rust_padding` filler fields and the leftover scaffolding it
