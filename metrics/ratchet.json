@@ -1,7 +1,9 @@
 {
   "internal_exports": 0,
   "test_reached_pub": 665,
-  "cell_ptr_unlisted": 107,
+  "cell_ptr_deferred": 22,
+  "cell_ptr_keepers": 26,
+  "cell_ptr_accessors": 59,
   "cell_copy_owner": 42,
   "files_without_forbid_unsafe": 1061,
   "files_without_deny_unsafe_op": 0,
