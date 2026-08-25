@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::decoration::kMTMetaInline;
-use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;
@@ -63,8 +63,10 @@ pub(crate) unsafe fn prepare_line(
             };
             wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
 
-            if visual_active() && (*wp).w_buffer == (*curwin.get()).w_buffer {
-                s.visual_area(wlv, wp);
+            if (*wp).w_buffer == (*curwin.get()).w_buffer
+                && let Some(sel) = visual_selection()
+            {
+                s.visual_area(wlv, wp, sel);
             } else if highlight_match.get()
                 && wp == curwin.get()
                 && !s.has_foldtext
@@ -286,23 +288,21 @@ impl LineSetup {
     ///
     /// # Safety
     /// `wp` must be a live window showing the current buffer.
-    unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
+    unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, wp: *mut win_T, sel: VisualSelection) {
         let lnum = wlv.lnum;
-        // A copy: nothing here writes through either end, and taking the
-        // anchor by value keeps the global out of the draw pass.
-        let mut anchor = visual_anchor();
-        let anchor = &raw mut anchor;
+        // Both ends by value: nothing here writes through either, and copying
+        // the cursor keeps the ordering out of the unsafe region.
+        // SAFETY: the caller's window.
+        let cursor = unsafe { (*curwin.get()).w_cursor };
+        let (mut top, mut bot) = if ltoreq(cursor, sel.anchor) {
+            (cursor, sel.anchor)
+        } else {
+            (sel.anchor, cursor)
+        };
+        self.lnum_in_visual_area = lnum >= top.lnum && lnum <= bot.lnum;
         // SAFETY: the caller's window.
         unsafe {
-            let cursor = &raw mut (*curwin.get()).w_cursor;
-            let (top, bot) = if ltoreq(*cursor, *anchor) {
-                (cursor, anchor)
-            } else {
-                (anchor, cursor)
-            };
-            self.lnum_in_visual_area = lnum >= (*top).lnum && lnum <= (*bot).lnum;
-
-            if visual_mode().is_block() {
+            if sel.mode.is_block() {
                 // Blockwise: the columns were worked out for the whole
                 // selection when it last moved.
                 if self.lnum_in_visual_area {
@@ -310,38 +310,38 @@ impl LineSetup {
                     wlv.tocol = (*wp).w_old_cursor_lcol;
                 }
             } else {
-                if lnum > (*top).lnum && lnum <= (*bot).lnum {
+                if lnum > top.lnum && lnum <= bot.lnum {
                     wlv.fromcol = 0;
-                } else if lnum == (*top).lnum {
-                    if visual_mode().is_line() {
+                } else if lnum == top.lnum {
+                    if sel.mode.is_line() {
                         wlv.fromcol = 0;
                     } else {
                         getvvcol(
                             wp,
-                            top,
+                            &raw mut top,
                             &raw mut wlv.fromcol,
                             ::core::ptr::null_mut(),
                             ::core::ptr::null_mut(),
                         );
-                        if gchar_pos(top) == NUL {
+                        if gchar_pos(&raw mut top) == NUL {
                             // Empty line: invert the one cell past its end.
                             wlv.tocol = wlv.fromcol + 1;
                         }
                     }
                 }
-                if !visual_mode().is_line() && lnum == (*bot).lnum {
+                if !sel.mode.is_line() && lnum == bot.lnum {
                     if *p_sel.get() == b'e' as ::core::ffi::c_char
-                        && (*bot).col == 0
-                        && (*bot).coladd == 0
+                        && bot.col == 0
+                        && bot.coladd == 0
                     {
                         // 'selection' "exclusive" and the selection stops at
                         // the start of this line: none of it is here.
                         wlv.fromcol = -10;
                         wlv.tocol = MAXCOL as ::core::ffi::c_int;
-                    } else if (*bot).col == MAXCOL as colnr_T {
+                    } else if bot.col == MAXCOL as colnr_T {
                         wlv.tocol = MAXCOL as ::core::ffi::c_int;
                     } else {
-                        let mut pos = *bot;
+                        let mut pos = bot;
                         if *p_sel.get() == b'e' as ::core::ffi::c_char {
                             getvvcol(
                                 wp,

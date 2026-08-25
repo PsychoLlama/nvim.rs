@@ -16,7 +16,7 @@
 use super::*;
 use crate::decoration::kVPosWinCol;
 use crate::r#move::WinValid;
-use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::normal::{VisualSelection, visual_selection};
 use crate::pos::MAXCOL;
 
 /// A row index no window can reach, used as "this area is empty".
@@ -680,13 +680,13 @@ unsafe fn scroll_up(wp: *mut win_T, rg: &mut Regions) {
 unsafe fn plan_visual_area(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
     unsafe {
-        let showing_visual = visual_active() && buf == (*curwin.get()).w_buffer;
-        if !showing_visual && !((*wp).w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
+        let shown = visual_selection().filter(|_| buf == (*curwin.get()).w_buffer);
+        if shown.is_none() && !((*wp).w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
             return;
         }
 
-        let (mut from, mut to) = if showing_visual {
-            visual_line_range(wp, rg.redr_type)
+        let (mut from, mut to) = if let Some(sel) = shown {
+            visual_line_range(wp, sel, rg.redr_type)
         } else {
             // The selection is gone; use the line numbers of the old one.
             let a = (*wp).w_old_cursor_lnum;
@@ -751,14 +751,18 @@ unsafe fn plan_visual_area(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
 /// they are now.
 ///
 /// # Safety
-/// Called with `VIsual_active` and `wp` showing the current buffer.
-unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, linenr_T) {
-    // SAFETY: the caller's window and the global Visual state.
+/// `wp` must be showing the current buffer, which `sel` is a selection in.
+unsafe fn visual_line_range(
+    wp: *mut win_T,
+    sel: VisualSelection,
+    redr_type: c_int,
+) -> (linenr_T, linenr_T) {
+    // SAFETY: the caller's window.
     unsafe {
         let cursor = (*curwin.get()).w_cursor.lnum;
-        let anchor = visual_anchor().lnum;
+        let anchor = sel.anchor.lnum;
 
-        let (mut from, mut to) = if visual_mode().raw() != (*wp).w_old_visual_mode as c_int
+        let (mut from, mut to) = if sel.mode.raw() != (*wp).w_old_visual_mode as c_int
             || redr_type == UPD_INVERTED_ALL
         {
             // The kind of selection changed, or the X selection was gained or
@@ -779,7 +783,7 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
                 ((*wp).w_old_cursor_lnum, cursor)
             };
             let mut to = to;
-            if anchor != (*wp).w_old_visual_lnum || visual_anchor().col != (*wp).w_old_visual_col {
+            if anchor != (*wp).w_old_visual_lnum || sel.anchor.col != (*wp).w_old_visual_col {
                 if (*wp).w_old_visual_lnum < from && (*wp).w_old_visual_lnum != 0 {
                     from = (*wp).w_old_visual_lnum;
                 }
@@ -791,8 +795,8 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
 
         // Blockwise: a changed column or `w_curswant` means every line of the
         // selection has to be redrawn, so the actual columns are computed here.
-        if visual_mode().is_block() {
-            let (fromc, toc) = visual_block_columns(wp);
+        if sel.mode.is_block() {
+            let (fromc, toc) = visual_block_columns(wp, sel);
             if fromc != (*wp).w_old_cursor_fcol || toc != (*wp).w_old_cursor_lcol {
                 from = from.min(anchor);
                 to = to.max(anchor);
@@ -808,11 +812,11 @@ unsafe fn visual_line_range(wp: *mut win_T, redr_type: c_int) -> (linenr_T, line
 /// The first and last screen columns of a blockwise Visual selection.
 ///
 /// # Safety
-/// Called with `VIsual_active` and a blockwise selection.
-unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
+/// `wp` must be a live window and `sel` a blockwise selection in its buffer.
+unsafe fn visual_block_columns(wp: *mut win_T, sel: VisualSelection) -> (colnr_T, colnr_T) {
     // A copy of the anchor: `getvcols` only reads it.
-    let mut anchor = visual_anchor();
-    // SAFETY: the caller's window and the global Visual state.
+    let mut anchor = sel.anchor;
+    // SAFETY: the caller's window.
     unsafe {
         let mut fromc = 0;
         let mut toc = 0;
@@ -844,7 +848,7 @@ unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
         }
 
         let cursor_lnum = (*curwin.get()).w_cursor.lnum;
-        let anchor_lnum = visual_anchor().lnum;
+        let anchor_lnum = sel.anchor.lnum;
         let cursor_above = cursor_lnum < anchor_lnum;
         let mut pos = pos_T::default();
         toc = 0;
@@ -879,11 +883,11 @@ unsafe fn visual_block_columns(wp: *mut win_T) -> (colnr_T, colnr_T) {
 unsafe fn remember_visual_area(wp: *mut win_T, buf: *mut buf_T) {
     // SAFETY: the caller's window and the global Visual state.
     unsafe {
-        if visual_active() && buf == (*curwin.get()).w_buffer {
-            (*wp).w_old_visual_mode = visual_mode().raw() as c_char;
+        if let Some(sel) = visual_selection().filter(|_| buf == (*curwin.get()).w_buffer) {
+            (*wp).w_old_visual_mode = sel.mode.raw() as c_char;
             (*wp).w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum;
-            (*wp).w_old_visual_lnum = visual_anchor().lnum;
-            (*wp).w_old_visual_col = visual_anchor().col;
+            (*wp).w_old_visual_lnum = sel.anchor.lnum;
+            (*wp).w_old_visual_col = sel.anchor.col;
             (*wp).w_old_curswant = (*curwin.get()).w_curswant;
         } else {
             (*wp).w_old_visual_mode = 0;

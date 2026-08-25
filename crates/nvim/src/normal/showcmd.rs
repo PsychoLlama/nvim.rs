@@ -25,8 +25,8 @@ use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
 use crate::message::msg_grid_validate;
 use crate::normal::{
-    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
-    showcmd_visual, visual_active, visual_anchor, visual_mode,
+    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, old_showcmd_buf,
+    showcmd_is_clear, showcmd_visual, visual_selection,
 };
 use crate::optionstr::empty_option;
 use crate::os::cshim::{memmove, snprintf};
@@ -107,14 +107,13 @@ const IGNORED: [c_int; 22] = [
 
 /// The two lines the Visual selection spans, with any fold at either end
 /// opened out to its whole range.
-fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
-    // SAFETY: `curwin` is the current window and `VIsual` is only read while
-    // `VIsual_active`, which the one caller has already tested.
+fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (linenr_T, linenr_T) {
+    // SAFETY: `curwin` is the current window.
     unsafe {
         let (mut top, mut bot) = if cursor_bot {
-            (visual_anchor().lnum, (*curwin.get()).w_cursor.lnum)
+            (sel.anchor.lnum, (*curwin.get()).w_cursor.lnum)
         } else {
-            ((*curwin.get()).w_cursor.lnum, visual_anchor().lnum)
+            ((*curwin.get()).w_cursor.lnum, sel.anchor.lnum)
         };
         has_folding(curwin.get(), top, &raw mut top, ptr::null_mut());
         has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
@@ -124,10 +123,10 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
 
 /// The width of a blockwise selection, measured with 'showbreak' suppressed
 /// so a wrapped line does not add the leader to the column count.
-fn blockwise_width() -> c_int {
+fn blockwise_width(sel: VisualSelection) -> c_int {
     let (mut leftcol, mut rightcol): (colnr_T, colnr_T) = (0, 0);
     // A copy of the anchor: `getvcols` only reads it.
-    let mut anchor = visual_anchor();
+    let mut anchor = sel.anchor;
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
     unsafe {
@@ -154,9 +153,9 @@ fn blockwise_width() -> c_int {
 /// 'selection' decides whether the far end is included. A character the
 /// decoder rejects counts as one byte and one character and ends the walk,
 /// which is what stops an invalid byte looping.
-fn charwise_extent(cursor_bot: bool) -> (c_int, c_int) {
+fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
     let (mut bytes, mut chars) = (0, 0);
-    let anchor = visual_anchor();
+    let anchor = sel.anchor;
     // SAFETY: both pointers are into the current line, and the walk stops at
     // or before `e`.
     unsafe {
@@ -182,10 +181,10 @@ fn charwise_extent(cursor_bot: bool) -> (c_int, c_int) {
 }
 
 /// Describe the Visual selection into the 'showcmd' buffer.
-fn show_visual_size() {
-    // SAFETY: `VIsual_active` is set, so `VIsual` holds a real position.
-    let cursor_bot = unsafe { lt(visual_anchor(), (*curwin.get()).w_cursor) };
-    let (top, bot) = visual_line_range(cursor_bot);
+fn show_visual_size(sel: VisualSelection) {
+    // SAFETY: `curwin` is the current window.
+    let cursor_bot = unsafe { lt(sel.anchor, (*curwin.get()).w_cursor) };
+    let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
     let buf = showcmd_buf.ptr().cast::<c_char>();
@@ -194,18 +193,18 @@ fn show_visual_size() {
     // buffer, which is that long. snprintf's truncation is the behaviour
     // upstream relies on for a very wide block.
     unsafe {
-        if visual_mode().is_block() {
+        if sel.mode.is_block() {
             snprintf(
                 buf,
                 cap,
                 c"%ldx%ld".as_ptr(),
                 lines as int64_t,
-                blockwise_width() as int64_t,
+                blockwise_width(sel) as int64_t,
             );
-        } else if visual_mode().is_line() || visual_anchor().lnum != (*curwin.get()).w_cursor.lnum {
+        } else if sel.mode.is_line() || sel.anchor.lnum != (*curwin.get()).w_cursor.lnum {
             snprintf(buf, cap, c"%ld".as_ptr(), lines as int64_t);
         } else {
-            let (chars, bytes) = charwise_extent(cursor_bot);
+            let (chars, bytes) = charwise_extent(sel, cursor_bot);
             if bytes == chars {
                 snprintf(buf, cap, c"%d".as_ptr(), chars);
             } else {
@@ -223,9 +222,9 @@ pub(crate) fn clear_showcmd() {
     if p_sc.get() == 0 {
         return;
     }
-    // SAFETY: reads a flag and the typeahead state.
-    if visual_active() && unsafe { !char_avail() } {
-        show_visual_size();
+    // SAFETY: reads the typeahead state.
+    if let Some(sel) = visual_selection().filter(|_| unsafe { !char_avail() }) {
+        show_visual_size(sel);
     } else {
         showcmd_truncate(0);
         showcmd_visual.set(false);

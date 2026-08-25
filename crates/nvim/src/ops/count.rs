@@ -21,7 +21,7 @@ use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::normal::{VisualMode, visual_active, visual_anchor, visual_mode};
+use crate::normal::{VisualMode, VisualSelection, visual_selection};
 use crate::optionstr::empty_option;
 use crate::types::{IOSIZE, NUL};
 
@@ -117,8 +117,7 @@ struct Selection {
 /// `dict`, when not null, must point to a live dictionary.
 pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
     unsafe {
-        let visual_active = visual_active();
-        let visual_mode = visual_mode();
+        let visual = visual_selection();
         let mut counts = PosCounts::default();
         let mut bom_count: varnumber_T = 0;
 
@@ -128,11 +127,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
                 return;
             }
         } else {
-            let mut selection = if visual_active {
-                Some(measure_selection(visual_mode))
-            } else {
-                None
-            };
+            let mut selection = visual.map(|sel| measure_selection(sel));
 
             if !count_buffer(&mut counts, selection.as_mut()) {
                 // Interrupted part way through.
@@ -140,7 +135,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
             }
 
             if dict.is_null() {
-                report_counts(&counts, selection.as_ref(), visual_mode);
+                report_counts(&counts, selection.as_ref());
             }
 
             bom_count = varnumber_T::from(bomb_size());
@@ -168,7 +163,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
         }
 
         if !dict.is_null() {
-            store_counts(dict, &counts, bom_count, visual_active);
+            store_counts(dict, &counts, bom_count, visual.is_some());
         }
     }
 }
@@ -177,20 +172,20 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
 /// column pair `block_prep` needs.
 ///
 /// # Safety
-/// A Visual selection must be active in the current window.
-unsafe fn measure_selection(visual_mode: VisualMode) -> Selection {
+/// `sel` must be the current window's selection.
+unsafe fn measure_selection(sel: VisualSelection) -> Selection {
     unsafe {
-        let (mut min, mut max) = if lt(visual_anchor(), (*curwin.get()).w_cursor) {
-            (visual_anchor(), (*curwin.get()).w_cursor)
+        let (mut min, mut max) = if lt(sel.anchor, (*curwin.get()).w_cursor) {
+            (sel.anchor, (*curwin.get()).w_cursor)
         } else {
-            ((*curwin.get()).w_cursor, visual_anchor())
+            ((*curwin.get()).w_cursor, sel.anchor)
         };
         if *p_sel.get() as c_int == 'e' as c_int && max.col > 0 {
             max.col -= 1;
         }
 
         let mut oparg = oparg_T::ZERO;
-        if visual_mode.is_block() {
+        if sel.mode.is_block() {
             // 'showbreak' would move the columns `getvcols` answers.
             let saved_sbr = p_sbr.get();
             let saved_w_sbr = (*curwin.get()).w_onebuf_opt.wo_sbr;
@@ -222,7 +217,7 @@ unsafe fn measure_selection(visual_mode: VisualMode) -> Selection {
 
         Selection {
             line_count: (max.lnum - min.lnum + 1) as c_int,
-            mode: visual_mode,
+            mode: sel.mode,
             min,
             max,
             oparg,
@@ -357,11 +352,7 @@ unsafe fn count_selected_line(
 ///
 /// # Safety
 /// `selection`, when given, must describe the current selection.
-unsafe fn report_counts(
-    counts: &PosCounts,
-    selection: Option<&Selection>,
-    visual_mode: VisualMode,
-) {
+unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>) {
     unsafe {
         let same_as_bytes =
             counts.chars_cursor == counts.bytes_cursor && counts.chars == counts.bytes;
@@ -420,7 +411,7 @@ unsafe fn report_counts(
         };
 
         // A blockwise selection with a right edge also reports its width.
-        if visual_mode.is_block() && (*curwin.get()).w_curswant < MAXCOL {
+        if sel.mode.is_block() && (*curwin.get()).w_curswant < MAXCOL {
             let mut min = sel.min;
             let mut max = sel.max;
             getvcols(
