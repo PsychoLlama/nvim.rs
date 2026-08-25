@@ -153,7 +153,7 @@ impl Cells {
             // inline text with a lower priority has been drawn.
             if self.decor_need_recheck {
                 if !self.may_have_inline_virt {
-                    decor_recheck_draw_col(wlv.off, selected, DecorStateRef::current());
+                    decor_recheck_draw_col(wlv.off, selected, wlv.decor);
                 }
                 self.decor_need_recheck = false;
             }
@@ -166,7 +166,7 @@ impl Cells {
                     wlv.off
                 },
                 selected,
-                DecorStateRef::current(),
+                wlv.decor,
                 self.decor_provider_end_col - 1,
             );
             if !self.may_have_inline_virt {

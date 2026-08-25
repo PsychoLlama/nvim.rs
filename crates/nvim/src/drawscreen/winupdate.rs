@@ -140,10 +140,16 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
 
         win_extmark_arr.with_mut(Vec::clear);
 
-        decor_redraw_reset(wp, DecorStateRef::current());
-        decor_providers_invoke_win(wp);
+        // The redraw's decoration state, acquired ONCE here and threaded all
+        // the way down `drawline/`. A handle rather than a borrow because the
+        // provider callbacks below re-enter: an `on_line` that sets an
+        // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
+        // reaches the same state from the API side.
+        let decor = DecorStateRef::current();
+        decor_redraw_reset(wp, decor);
+        decor_providers_invoke_win(wp, decor);
 
-        add_suspended_terminal_note(buf, DecorStateRef::current());
+        add_suspended_terminal_note(buf, decor);
 
         // The sign column width is per buffer, so a change to it invalidates
         // every window showing that buffer -- including this one.
@@ -228,7 +234,7 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
             spv.spv_unchanged = rg.mod_top == 0;
         }
 
-        let old_botline = draw_window_lines(wp, buf, &mut rg, cursorline_fi, &mut spv);
+        let old_botline = draw_window_lines(wp, buf, &mut rg, cursorline_fi, &mut spv, decor);
 
         if (*wp).w_redr_type >= UPD_REDRAW_TOP {
             draw_vsep_win(wp);
@@ -260,33 +266,35 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
 /// # Safety
 /// Called from [`win_update`] with `state` reset for this window.
 unsafe fn add_suspended_terminal_note(buf: *mut buf_T, state: DecorStateRef) {
+    // Both live for the whole process: `decor_range_add_virt` stores the
+    // pointer and the range is dropped at the end of the redraw. Declarations,
+    // so they sit outside the promise below.
+    static CHUNK: GlobalCell<VirtTextChunk> = GlobalCell::new(VirtTextChunk {
+        text: c"[Process suspended]".as_ptr().cast_mut(),
+        hl_id: -1,
+    });
+    static VIRT_TEXT: GlobalCell<DecorVirtText> = GlobalCell::new(DecorVirtText {
+        flags: 0,
+        hl_mode: 0,
+        priority: DECOR_PRIORITY_BASE as DecorPriority,
+        width: 0,
+        col: 0,
+        pos: kVPosWinCol,
+        data: DecorVirtText_data {
+            virt_text: VirtText {
+                size: 1,
+                capacity: 0,
+                items: CHUNK.as_raw().cast::<VirtTextChunk>(),
+            },
+        },
+        next: ::core::ptr::null_mut(),
+    });
+
     // SAFETY: the caller's buffer.
     unsafe {
         if (*buf).terminal.is_null() || !terminal_suspended((*buf).terminal) {
             return;
         }
-        // Both live for the whole process: `decor_range_add_virt` stores the
-        // pointer and the range is dropped at the end of the redraw.
-        static CHUNK: GlobalCell<VirtTextChunk> = GlobalCell::new(VirtTextChunk {
-            text: c"[Process suspended]".as_ptr().cast_mut(),
-            hl_id: -1,
-        });
-        static VIRT_TEXT: GlobalCell<DecorVirtText> = GlobalCell::new(DecorVirtText {
-            flags: 0,
-            hl_mode: 0,
-            priority: DECOR_PRIORITY_BASE as DecorPriority,
-            width: 0,
-            col: 0,
-            pos: kVPosWinCol,
-            data: DecorVirtText_data {
-                virt_text: VirtText {
-                    size: 1,
-                    capacity: 0,
-                    items: CHUNK.as_raw().cast::<VirtTextChunk>(),
-                },
-            },
-            next: ::core::ptr::null_mut(),
-        });
         let last = (*buf).b_ml.ml_line_count - 1;
         decor_range_add_virt(state, last, 0, last, 0, VIRT_TEXT.ptr(), false);
     }

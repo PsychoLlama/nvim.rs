@@ -26,12 +26,13 @@
 //! # Deleting while drawing
 //!
 //! A decoration can be deleted by a decoration provider's Lua callback in the
-//! middle of the redraw that is reading it. [`decor_free`] therefore checks
-//! `running_decor_provider`, and puts anything freed at such a moment on a
+//! middle of the redraw that is reading it. [`decor_free`] therefore asks
+//! [`decor_provider_running`], and puts anything freed at such a moment on a
 //! to-free list that [`decor_check_to_be_deleted`] drains once the redraw is
 //! over.
 
 use crate::change::changed_lines_invalidate_buf;
+use crate::decoration_provider::decor_provider_running;
 use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
 use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
@@ -357,21 +358,24 @@ pub unsafe fn decor_free(decor: DecorInline) {
     if !decor.ext {
         return;
     }
-    // SAFETY: the caller's decoration.
+    // SAFETY: `ext` says the union holds the two chain heads.
+    let (head_vt, head_idx) = unsafe { (decor.data.ext.vt, decor.data.ext.sh_idx) };
+
+    if !decor_provider_running() {
+        // Safe to delete right now.
+        // SAFETY: the caller's chains, unreachable from any mark.
+        unsafe { decor_free_inner(head_vt, head_idx) };
+        return;
+    }
+
+    // SAFETY: the caller's chains; the two lists are this file's.
     unsafe {
-        let mut vt = decor.data.ext.vt;
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-
-        if !DecorStateRef::current().running_decor_provider {
-            // Safe to delete right now.
-            decor_free_inner(vt, idx);
-            return;
-        }
-
+        let mut vt = head_vt;
+        let mut idx: uint32_t = head_idx;
         while !vt.is_null() {
             if (*vt).next.is_null() {
                 (*vt).next = TO_FREE_VIRT.get();
-                TO_FREE_VIRT.set(decor.data.ext.vt);
+                TO_FREE_VIRT.set(head_vt);
                 break;
             }
             vt = (*vt).next;
@@ -380,7 +384,7 @@ pub unsafe fn decor_free(decor: DecorInline) {
             let sh = decor_item(idx);
             if (*sh).next == DECOR_ID_INVALID {
                 (*sh).next = TO_FREE_SH.get();
-                TO_FREE_SH.set(decor.data.ext.sh_idx);
+                TO_FREE_SH.set(head_idx);
                 break;
             }
             idx = (*sh).next;
@@ -438,7 +442,7 @@ pub unsafe fn decor_check_to_be_deleted() {
     // SAFETY: the redraw is over, so nothing holds a borrow of the state.
     let mut state = unsafe { DecorStateRef::current() };
     // The caller's precondition, restated as upstream's `assert()` does.
-    debug_assert!(!state.running_decor_provider);
+    debug_assert!(!decor_provider_running());
     // SAFETY: the two lists are this file's, and everything on them was put
     // there by `decor_free` and is unreachable from any mark.
     unsafe { decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get()) };

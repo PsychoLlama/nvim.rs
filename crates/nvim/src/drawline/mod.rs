@@ -115,8 +115,9 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// `startrow` is the first window row the line may use and `endrow` one past
 /// the last; `col_rows` is non-zero when only the info columns are being
 /// redrawn, over that many rows. `concealed` says the whole line is hidden by
-/// a decoration, `spv` carries the redraw's spell state and `foldinfo`
-/// whatever `win_update` found out about folds here.
+/// a decoration, `spv` carries the redraw's spell state, `foldinfo` whatever
+/// `win_update` found out about folds here, and `decor` is the decoration
+/// state the redraw acquired once and threads down.
 ///
 /// # Safety
 /// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
@@ -130,61 +131,65 @@ pub unsafe fn win_line(
     concealed: bool,
     spv: *mut spellvars_T,
     foldinfo: foldinfo_T,
+    decor: DecorStateRef,
 ) -> ::core::ffi::c_int {
+    debug_assert!(startrow < endrow);
+
+    // Plain construction, so it sits outside the promise below.
+    let mut wlv = WinLineVars {
+        decor,
+        lnum,
+        foldinfo,
+        startrow,
+        row: startrow,
+        vcol: 0,
+        col: 0,
+        boguscols: 0,
+        old_boguscols: 0,
+        vcol_off_co: 0,
+        off: 0,
+        cursorline_attr: 0,
+        line_attr: 0,
+        line_attr_lowprio: 0,
+        sign_num_attr: 0,
+        prev_num_attr: -1,
+        sign_cul_attr: 0,
+        // `fromcol` -10 and `tocol` MAXCOL mean "no inverted range at
+        // all", which is a different thing from an empty one.
+        fromcol: -10,
+        tocol: MAXCOL as ::core::ffi::c_int,
+        showbreak_vcol: -1,
+        need_showbreak: false,
+        char_attr: 0,
+        extra_todo: 0,
+        n_attr: 0,
+        extra_text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        extra_attr: 0,
+        extra_fill: 0,
+        extra_last: 0,
+        extra_is_virt_text: false,
+        escape_buf: [0; 11],
+        diff_hlf: HLF_NONE,
+        n_virt_lines: 0,
+        n_virt_below: 0,
+        filler_lines: 0,
+        filler_todo: 0,
+        sign_attrs: [SignTextAttrs {
+            text: [0; 2],
+            hl_id: 0,
+        }; 9],
+        linebreak_armed: false,
+        virt_inline: VIRTTEXT_EMPTY,
+        virt_inline_i: 0,
+        virt_inline_hl_mode: kHlModeUnknown,
+        reset_extra_attr: false,
+        skip_cells: 0,
+        skipped_cells: 0,
+        color_cols: ::core::ptr::null_mut::<::core::ffi::c_int>(),
+    };
+
     // SAFETY: the caller's window, line and spell state.
     unsafe {
-        debug_assert!(startrow < endrow);
-
-        let mut wlv = WinLineVars {
-            lnum,
-            foldinfo,
-            startrow,
-            row: startrow,
-            vcol: 0,
-            col: 0,
-            boguscols: 0,
-            old_boguscols: 0,
-            vcol_off_co: 0,
-            off: 0,
-            cursorline_attr: 0,
-            line_attr: 0,
-            line_attr_lowprio: 0,
-            sign_num_attr: 0,
-            prev_num_attr: -1,
-            sign_cul_attr: 0,
-            // `fromcol` -10 and `tocol` MAXCOL mean "no inverted range at
-            // all", which is a different thing from an empty one.
-            fromcol: -10,
-            tocol: MAXCOL as ::core::ffi::c_int,
-            showbreak_vcol: -1,
-            need_showbreak: false,
-            char_attr: 0,
-            extra_todo: 0,
-            n_attr: 0,
-            extra_text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            extra_attr: 0,
-            extra_fill: 0,
-            extra_last: 0,
-            extra_is_virt_text: false,
-            escape_buf: [0; 11],
-            diff_hlf: HLF_NONE,
-            n_virt_lines: 0,
-            n_virt_below: 0,
-            filler_lines: 0,
-            filler_todo: 0,
-            sign_attrs: [SignTextAttrs {
-                text: [0; 2],
-                hl_id: 0,
-            }; 9],
-            linebreak_armed: false,
-            virt_inline: VIRTTEXT_EMPTY,
-            virt_inline_i: 0,
-            virt_inline_hl_mode: kHlModeUnknown,
-            reset_extra_attr: false,
-            skip_cells: 0,
-            skipped_cells: 0,
-            color_cols: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-        };
         let buf: *mut buf_T = (*wp).w_buffer;
 
         // The two scratch buffers the loop needs but never owns: the spell

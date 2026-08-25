@@ -31,6 +31,14 @@ use crate::types::NUL;
 /// C can still be read beside it.
 #[derive(Copy, Clone)]
 pub struct WinLineVars {
+    /// The decoration state the redraw is walking, acquired once by
+    /// [`win_update`](crate::drawscreen::win_update) and threaded down. Every
+    /// `decor_*` call below this point takes it from here rather than reaching
+    /// for the global -- including the ones a decoration provider's Lua
+    /// callback re-enters through, which is why it is a handle and not a
+    /// borrow.
+    pub decor: DecorStateRef,
+
     /// Buffer line being drawn.
     pub lnum: linenr_T,
     /// Fold state of `lnum`, from `win_update`.

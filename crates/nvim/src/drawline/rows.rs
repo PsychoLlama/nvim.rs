@@ -114,7 +114,7 @@ impl Cells {
                     self.byte_col() - 1,
                     wlv.off,
                     true,
-                    DecorStateRef::current(),
+                    wlv.decor,
                     self.decor_provider_end_col - 1,
                 );
             }
@@ -256,7 +256,7 @@ impl Cells {
                     },
                 );
             } else if wlv.filler_todo <= 0 {
-                draw_virt_text(wp, buf, self.text_start_col, &mut draw_col, wlv.row);
+                draw_col = draw_virt_text(wp, buf, self.text_start_col, draw_col, wlv);
             }
 
             wlv_put_linebuf(
@@ -362,12 +362,7 @@ impl Cells {
             // 'listchars'.
             let eol_skip = ::core::ffi::c_int::from(self.lcs_eol_todo && self.eol_extra_cell == 0);
             if self.has_decor {
-                decor_redraw_eol(
-                    wp,
-                    DecorStateRef::current(),
-                    &raw mut wlv.line_attr,
-                    wlv.col + eol_skip,
-                );
+                decor_redraw_eol(wp, wlv.decor, &raw mut wlv.line_attr, wlv.col + eol_skip);
             }
 
             // Increasing virtual columns past the end of the line, so a click
@@ -403,7 +398,7 @@ impl Cells {
                     0,
                 );
             }
-            draw_virt_text(wp, buf, self.text_start_col, &mut wlv.col, wlv.row);
+            wlv.col = draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv);
             // SLF_INC_VCOL fills grid->vcols[] with increasing columns, so
             // that "curswant" (or "coladd" under 'virtualedit') is right when
             // the user clicks past the end of the line.

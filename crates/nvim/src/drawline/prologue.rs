@@ -127,8 +127,8 @@ pub(crate) unsafe fn prepare_line(
             s.ptr = s.line.offset(at as isize);
         }
 
-        decor_redraw_line(wp, lnum - 1, DecorStateRef::current());
-        if !s.has_decor && decor_has_more_decorations(DecorStateRef::current(), lnum - 1) {
+        decor_redraw_line(wp, lnum - 1, wlv.decor);
+        if !s.has_decor && decor_has_more_decorations(wlv.decor, lnum - 1) {
             s.has_decor = true;
             s.extra_check = true;
         }

@@ -308,17 +308,39 @@ pub(crate) unsafe fn decor_providers_start() {
     }
 }
 
+/// Whether a decoration provider's Lua callback is on the stack, which is
+/// what tells [`decor_free`](crate::decoration::decor_free) that a decoration
+/// it is asked to delete may still be referenced by the ranges being drawn.
+///
+/// Upstream keeps this in `DecorState`, and it is the one field there that is
+/// not about the window being drawn: it is read from every extmark deletion,
+/// which is nowhere near the draw pass, and it stays true across the whole
+/// callback rather than across a row. Leaving it in the state would have
+/// forced the state handle down every path that can delete a mark; a cell of
+/// its own, reached by `get`/`set`, costs nothing and says what it is.
+static PROVIDER_RUNNING: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Whether a decoration provider's callback is on the stack; see
+/// [`PROVIDER_RUNNING`].
+pub(crate) fn decor_provider_running() -> bool {
+    PROVIDER_RUNNING.get()
+}
+
+/// Announce that a decoration provider's callback is (no longer) running.
+fn set_provider_running(running: bool) {
+    PROVIDER_RUNNING.set(running);
+}
+
 /// Start a window: run every `on_win` callback. A provider that declines is
 /// skipped for the rest of this window.
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
+pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T, state: DecorStateRef) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     unsafe {
         // This might change in the future; then this would need
-        // `decor_state.running_decor_provider` just like "on_line" below.
-        let state = DecorStateRef::current();
+        // `set_provider_running` just like "on_line" below.
         debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
 
         if provider_count() > 0 {
@@ -367,7 +389,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     unsafe {
-        DecorStateRef::current().running_decor_provider = true;
+        set_provider_running(true);
         for idx in 0..provider_count() {
             let p = provider(idx);
             if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
@@ -389,7 +411,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
                 hl_check_ns();
             }
         }
-        DecorStateRef::current().running_decor_provider = false;
+        set_provider_running(false);
     }
 }
 
@@ -410,7 +432,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 ) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     unsafe {
-        DecorStateRef::current().running_decor_provider = true;
+        set_provider_running(true);
         for idx in 0..provider_count() {
             let p = provider(idx);
             if p.state != kDecorProviderActive || p.redraw_range == LUA_NOREF {
@@ -473,7 +495,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
             api_free_array(res);
             hl_check_ns();
         }
-        DecorStateRef::current().running_decor_provider = false;
+        set_provider_running(false);
     }
 }
 

@@ -329,7 +329,6 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     conceal_char: 0,
     conceal_attr: 0,
     spell: Some(false),
-    running_decor_provider: false,
     itr_valid: false,
 });
 pub static diff_context: GlobalCell<c_int> = GlobalCell::new(6 as c_int);

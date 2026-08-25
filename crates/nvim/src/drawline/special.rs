@@ -93,7 +93,7 @@ impl Cells {
                     self.byte_col(),
                     -1,
                     false,
-                    DecorStateRef::current(),
+                    wlv.decor,
                     self.decor_provider_end_col - 1,
                 );
             }
@@ -555,7 +555,7 @@ impl Cells {
                 || self.decor_conceal > 1;
             let have_char = (syntax_conceal && syn_get_sub_char() != NUL)
                 || (self.has_match_conc != 0 && self.match_conc != 0)
-                || (self.decor_conceal != 0 && DecorStateRef::current().conceal_char != 0)
+                || (self.decor_conceal != 0 && wlv.decor.conceal_char != 0)
                 || (*wp).w_onebuf_opt.wo_cole == 1;
             if first_of_run && have_char && (*wp).w_onebuf_opt.wo_cole != 3 {
                 if schar_cells(self.cell_char) > 1 {
@@ -565,11 +565,11 @@ impl Cells {
                 }
                 self.cell_char = if self.has_match_conc != 0 && self.match_conc != 0 {
                     schar_from_char(self.match_conc)
-                } else if self.decor_conceal != 0 && DecorStateRef::current().conceal_char != 0 {
-                    if DecorStateRef::current().conceal_attr != 0 {
-                        wlv.char_attr = DecorStateRef::current().conceal_attr;
+                } else if self.decor_conceal != 0 && wlv.decor.conceal_char != 0 {
+                    if wlv.decor.conceal_attr != 0 {
+                        wlv.char_attr = wlv.decor.conceal_attr;
                     }
-                    DecorStateRef::current().conceal_char
+                    wlv.decor.conceal_char
                 } else if syntax_conceal && syn_get_sub_char() != NUL {
                     schar_from_char(syn_get_sub_char())
                 } else if (*wp).w_p_lcs_chars.conceal != NUL as schar_T {

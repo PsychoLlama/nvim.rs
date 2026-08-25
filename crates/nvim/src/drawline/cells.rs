@@ -463,7 +463,7 @@ impl Cells {
                 self.has_match_conc = 0;
                 self.decor_conceal = 0;
                 self.did_decrement_ptr = false;
-                self.provider_chunk(wp, wlv.lnum);
+                self.provider_chunk(wp, wlv.lnum, wlv.decor);
 
                 'row_full: {
                     if self.columns_todo {
@@ -486,7 +486,7 @@ impl Cells {
                     // Still showing the '$' of a change command: stop at the
                     // cursor.
                     if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= (*wp).w_virtcol {
-                        draw_virt_text(wp, buf, self.text_start_col, &mut wlv.col, wlv.row);
+                        wlv.col = draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv);
                         // Nothing after `col` is ours to clear.
                         wlv_put_linebuf(wp, wlv, wlv.col, false, self.bg_attr, 0);
                         // Pretend the window is finished, except that
@@ -566,7 +566,12 @@ impl Cells {
     ///
     /// # Safety
     /// `wp` must be a live window and `lnum` one of its buffer's lines.
-    pub(super) unsafe fn provider_chunk(&mut self, wp: *mut win_T, lnum: linenr_T) {
+    pub(super) unsafe fn provider_chunk(
+        &mut self,
+        wp: *mut win_T,
+        lnum: linenr_T,
+        decor: DecorStateRef,
+    ) {
         // SAFETY: the caller's window and line.
         unsafe {
             if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
@@ -575,7 +580,7 @@ impl Cells {
             let at = self.byte_col();
             self.decor_provider_end_col = invoke_range_next(wp, lnum, at, 100);
             self.refetch_line(wp, lnum, at);
-            if !self.has_decor && decor_has_more_decorations(DecorStateRef::current(), lnum - 1) {
+            if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
                 self.has_decor = true;
                 self.extra_check = true;
             }
@@ -747,7 +752,7 @@ impl Cells {
                     self.byte_col(),
                     -3,
                     false,
-                    DecorStateRef::current(),
+                    wlv.decor,
                     self.decor_provider_end_col - 1,
                 );
                 // Where they go has to be decided again on the next row.
@@ -755,13 +760,13 @@ impl Cells {
             } else if !self.is_wrapped {
                 // Without wrapping, "right_align" and "win_col" virtual texts
                 // for the whole line still have to be placed.
-                decor_recheck_draw_col(-1, true, DecorStateRef::current());
+                decor_recheck_draw_col(-1, true, wlv.decor);
                 decor_redraw_col(
                     wp,
                     MAXCOL as ::core::ffi::c_int,
                     -1,
                     true,
-                    DecorStateRef::current(),
+                    wlv.decor,
                     self.decor_provider_end_col - 1,
                 );
             }

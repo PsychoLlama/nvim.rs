@@ -61,7 +61,7 @@ struct Walk {
 /// the approximation it had been carrying was wrong.
 ///
 /// # Safety
-/// `wp` must be a live window, `buf` its buffer, and the decoration and
+/// `wp` must be a live window, `buf` its buffer, and `decor` and the
 /// search-highlight state must be set up for this redraw.
 pub(crate) unsafe fn draw_window_lines(
     wp: *mut win_T,
@@ -69,21 +69,25 @@ pub(crate) unsafe fn draw_window_lines(
     rg: &mut Regions,
     cursorline_fi: foldinfo_T,
     spv: &mut spellvars_T,
+    decor: DecorStateRef,
 ) -> linenr_T {
+    // Plain construction but for the one field, so it sits outside the
+    // promise below.
+    let mut w = Walk {
+        idx: 0,
+        row: 0,
+        srow: 0,
+        // SAFETY: the caller's window.
+        lnum: unsafe { (*wp).w_topline },
+        eof: false,
+        didline: false,
+        syntax_last_parsed: 0,
+        scrolled_for_mod: false,
+        did_update: DidUpdate::None,
+    };
+
     // SAFETY: the caller's window and buffer, during a redraw.
     unsafe {
-        let mut w = Walk {
-            idx: 0,
-            row: 0,
-            srow: 0,
-            lnum: (*wp).w_topline,
-            eof: false,
-            didline: false,
-            syntax_last_parsed: 0,
-            scrolled_for_mod: false,
-            did_update: DidUpdate::None,
-        };
-
         // A 'statuscolumn' whose width changed (or errored) restarts the walk
         // from the top. Upstream spells that as a `goto` into the loop, from
         // two places -- the bottom of the loop and the filler-line draw in the
@@ -112,18 +116,18 @@ pub(crate) unsafe fn draw_window_lines(
                 w.srow = w.row;
 
                 if line_needs_drawing(wp, buf, rg, &w) {
-                    if !draw_one_line(wp, buf, rg, &mut w, cursorline_fi, spv) {
+                    if !draw_one_line(wp, buf, rg, &mut w, cursorline_fi, spv, decor) {
                         break;
                     }
                 } else {
-                    skip_one_line(wp, buf, rg, &mut w, cursorline_fi, spv);
+                    skip_one_line(wp, buf, rg, &mut w, cursorline_fi, spv, decor);
                     if w.row > (*wp).w_view_height {
                         break;
                     }
                 }
 
                 if (*wp).w_redr_statuscol {
-                    restart_for_statuscol(wp);
+                    restart_for_statuscol(wp, decor);
                     continue 'restart;
                 }
                 if w.lnum > (*buf).b_ml.ml_line_count {
@@ -171,10 +175,11 @@ pub(crate) unsafe fn draw_window_lines(
                             false,
                             &raw mut zero_spv,
                             foldinfo_T::default(),
+                            decor,
                         );
                         if (*wp).w_redr_statuscol {
                             w.eof = false;
-                            restart_for_statuscol(wp);
+                            restart_for_statuscol(wp, decor);
                             continue 'restart;
                         }
                     }
@@ -257,6 +262,7 @@ unsafe fn draw_one_line(
     w: &mut Walk,
     cursorline_fi: foldinfo_T,
     spv: &mut spellvars_T,
+    decor: DecorStateRef,
 ) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     unsafe {
@@ -331,6 +337,7 @@ unsafe fn draw_one_line(
                 concealed,
                 spv_arg,
                 foldinfo,
+                decor,
             );
 
             if display_buf_line {
@@ -593,6 +600,7 @@ unsafe fn skip_one_line(
     w: &mut Walk,
     cursorline_fi: foldinfo_T,
     spv: &mut spellvars_T,
+    decor: DecorStateRef,
 ) {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     unsafe {
@@ -620,6 +628,7 @@ unsafe fn skip_one_line(
                 false,
                 &raw mut *spv,
                 info,
+                decor,
             );
         }
 
@@ -638,14 +647,14 @@ unsafe fn skip_one_line(
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn restart_for_statuscol(wp: *mut win_T) {
-    // SAFETY: the caller's window and the redraw's decoration state.
+unsafe fn restart_for_statuscol(wp: *mut win_T, decor: DecorStateRef) {
+    // SAFETY: the caller's window and decoration state.
     unsafe {
         (*wp).w_redr_statuscol = false;
         (*wp).w_lines_valid = 0;
         (*wp).w_valid.clear(WinValid::WCOL);
-        decor_redraw_reset(wp, DecorStateRef::current());
-        decor_providers_invoke_win(wp);
+        decor_redraw_reset(wp, decor);
+        decor_providers_invoke_win(wp, decor);
     }
 }
 

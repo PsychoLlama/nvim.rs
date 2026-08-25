@@ -308,9 +308,9 @@ impl Cells {
             if self.has_decor && at > 0 {
                 // Extmarks take precedence over syntax.
                 self.decor_attr = hl_combine_attr(self.decor_attr, self.extmark_attr);
-                self.decor_conceal = DecorStateRef::current().conceal;
+                self.decor_conceal = wlv.decor.conceal;
                 // The decoration only speaks when it has an opinion.
-                can_spell = DecorStateRef::current().spell.unwrap_or(can_spell);
+                can_spell = wlv.decor.spell.unwrap_or(can_spell);
             }
 
             self.attr_base = hl_combine_attr(self.fold_attr, self.decor_attr);

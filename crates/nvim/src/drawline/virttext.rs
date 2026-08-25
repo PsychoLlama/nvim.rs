@@ -94,23 +94,25 @@ fn push_win_extmark(m: WinExtmark) {
 /// Paint every line-positioned virtual text of the row just laid out, and
 /// report any `ui_watched` mark's final column to the UI.
 ///
-/// `col_off` is where the buffer text starts (past the left columns), and
-/// `end_col` is raised to the rightmost column anything was drawn at, so the
-/// caller knows how much of the line buffer to flush.
+/// `col_off` is where the buffer text starts (past the left columns), and the
+/// answer is `end_col` raised to the rightmost column anything was drawn at,
+/// so the caller knows how much of the line buffer to flush. `wlv` carries the
+/// window row to report a `ui_watched` mark at and the decoration state the
+/// redraw is walking.
 ///
 /// # Safety
-/// `wp`/`buf` must be live and the decoration state must hold the active
-/// ranges for `state.row`.
+/// `wp`/`buf` must be live and [`WinLineVars::decor`] must hold the active
+/// ranges for its `row`.
 pub(crate) unsafe fn draw_virt_text(
     wp: *mut win_T,
     buf: *mut buf_T,
     col_off: ::core::ffi::c_int,
-    end_col: &mut ::core::ffi::c_int,
-    win_row: ::core::ffi::c_int,
-) {
-    // SAFETY: the caller's window and the redraw's decoration state.
+    mut end_col: ::core::ffi::c_int,
+    wlv: &WinLineVars,
+) -> ::core::ffi::c_int {
+    let (win_row, mut state) = (wlv.row, wlv.decor);
+    // SAFETY: the caller's window and decoration state.
     unsafe {
-        let mut state = DecorStateRef::current();
         let max_col = (*wp).w_view_width;
         let end = state.current_end;
         let do_eol = state.eol_col > -1;
@@ -216,7 +218,7 @@ pub(crate) unsafe fn draw_virt_text(
                     // The next end-of-line text starts one cell further on.
                     state.eol_col = col + 1;
                 }
-                *end_col = (*end_col).max(col);
+                end_col = end_col.max(col);
             }
 
             // Deactivate, unless it is to be repeated on every screen row of
@@ -227,6 +229,7 @@ pub(crate) unsafe fn draw_virt_text(
                 (*item).draw_col = INT_MIN;
             }
         }
+        end_col
     }
 }
 
@@ -369,14 +372,14 @@ impl WinLineVars {
     /// path to the end of the line.
     ///
     /// # Safety
-    /// The decoration state must hold this row's ranges.
+    /// [`WinLineVars::decor`] must hold this row's ranges.
     pub(crate) unsafe fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
-        // SAFETY: the redraw's decoration state.
+        // SAFETY: the redraw's decoration state, threaded in `self`.
         unsafe {
             if self.virt_inline_i < self.virt_inline.size {
                 return true;
             }
-            let state = DecorStateRef::current();
+            let state = self.decor;
             let row = state.row;
             // Both halves of `ranges_i`: the ranges active now, and the ones
             // that start later on this row.
@@ -405,17 +408,18 @@ impl WinLineVars {
     /// and the next one tried.
     ///
     /// # Safety
-    /// The decoration state must hold this row's ranges.
+    /// [`WinLineVars::decor`] must hold this row's ranges.
     pub(crate) unsafe fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
-        // SAFETY: the redraw's decoration state; `extra_text` borrows the chunk,
-        // which the decoration state owns for the rest of the redraw.
+        // SAFETY: the redraw's decoration state, threaded in `self`;
+        // `extra_text` borrows the chunk, which that state owns for the rest
+        // of the redraw.
         unsafe {
             while self.extra_todo == 0 {
                 if self.virt_inline_i >= self.virt_inline.size {
                     // Find the next inline text to start.
                     self.virt_inline = VIRTTEXT_EMPTY;
                     self.virt_inline_i = 0;
-                    let state = DecorStateRef::current();
+                    let state = self.decor;
                     let row = state.row;
                     for i in 0..state.current_end {
                         let item = decor_range_at(state, i);
