@@ -31,8 +31,9 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptVal, OptValData, OptionSetFlags,
-    ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t, win_T,
+    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptInt, OptVal, OptValData,
+    OptionSetFlags, ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
+    uint8_t, win_T,
 };
 use ::libc::{strcmp, strlen};
 
@@ -41,6 +42,7 @@ use super::{
     kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
 };
 use crate::state::MODE_TERMINAL;
+use crate::winlayer::Win;
 
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> *mut c_char {
@@ -527,5 +529,65 @@ pub(crate) unsafe fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t {
     match unsafe { (*wp).w_onebuf_opt.wo_siso } {
         local if local < 0 => p_siso.get(),
         local => local,
+    }
+}
+
+/// Which scroll margin: 'scrolloff', in lines, or 'sidescrolloff', in
+/// columns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScrollMargin {
+    Lines,
+    Columns,
+}
+
+/// The scroll margin in effect for a window: its own value where it has set
+/// one, the global option otherwise.
+///
+/// C reaches this through an `OptInt *`, because the three callers that want
+/// it *write* through it -- `showmatch`, `do_ecmd`'s `recenter` and
+/// `update_topline`'s mouse-drag arm each set the margin aside for one
+/// redraw and put it back. Resolving the fallback once and answering a
+/// `get`/`set` pair is the same thing without the address, which is also
+/// what keeps the write from landing in the wrong scope.
+#[derive(Clone, Copy)]
+pub(crate) enum ScrollOff {
+    /// The window's own value, which it has set.
+    Window(Win, ScrollMargin),
+    /// The global option, because the window has not set its own.
+    Global(ScrollMargin),
+}
+
+impl ScrollOff {
+    /// The margin `win` reads right now.
+    pub(crate) fn of(win: Win, margin: ScrollMargin) -> Self {
+        let local = match margin {
+            ScrollMargin::Lines => win.w_onebuf_opt.wo_so,
+            ScrollMargin::Columns => win.w_onebuf_opt.wo_siso,
+        };
+        if local >= 0 {
+            Self::Window(win, margin)
+        } else {
+            Self::Global(margin)
+        }
+    }
+
+    /// The value in effect.
+    pub(crate) fn get(self) -> OptInt {
+        match self {
+            Self::Window(win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so,
+            Self::Window(win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso,
+            Self::Global(ScrollMargin::Lines) => p_so.get(),
+            Self::Global(ScrollMargin::Columns) => p_siso.get(),
+        }
+    }
+
+    /// Write it back where it came from.
+    pub(crate) fn set(self, value: OptInt) {
+        match self {
+            Self::Window(mut win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so = value,
+            Self::Window(mut win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso = value,
+            Self::Global(ScrollMargin::Lines) => p_so.set(value),
+            Self::Global(ScrollMargin::Columns) => p_siso.set(value),
+        }
     }
 }

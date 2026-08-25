@@ -24,7 +24,7 @@ use crate::fold::{
 use crate::indent::tabstop_set;
 use crate::indent_c::parse_cino;
 use crate::main::{
-    bkc_flags, e_modifiable, e_unsupportedoption, p_bex, p_bkc, p_bs, p_enc, p_fenc, p_pm, secure,
+    bkc_flags, e_modifiable, e_unsupportedoption, p_bex, p_bkc, p_bs, p_enc, p_pm, secure,
 };
 use crate::mark::free_fmark;
 use crate::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
@@ -32,20 +32,20 @@ use crate::memline::ml_setflags;
 use crate::memory::xfree;
 use crate::option::option_var;
 use crate::option::{
-    get_fileformat, get_varp_scope_from, redraw_titles, set_iminsert_global, set_imsearch_global,
-    set_option_direct, skip_to_option_part,
+    get_fileformat, redraw_titles, set_iminsert_global, set_imsearch_global, set_option_direct,
+    skip_to_option_part,
 };
 use crate::options::{
-    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptIskeyword, opt_bh_values,
-    opt_bkc_values, opt_bt_values,
+    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptEncoding, kOptFileencoding,
+    kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
 use crate::os::cshim::strstr;
 use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T,
-    colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T, win_T,
+    AdditionalData, FAIL, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T,
+    colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
 use ::libc::strcmp;
@@ -55,7 +55,7 @@ use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
     did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
     e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, kOptValTypeString,
-    opt_strings_flags, valid_filetype,
+    opt_strings_mask, opt_strings_ok, valid_filetype,
 };
 use crate::pos::MAXLNUM;
 
@@ -85,39 +85,46 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
-    let (value, flags) = unsafe {
+    let value = unsafe {
         if local {
-            ((*buf).b_p_bkc, &raw mut (*buf).b_bkc_flags)
+            (*buf).b_p_bkc
         } else {
             if !opt_flags.has(OptionSetFlags::GLOBAL) {
                 // A plain `:set` drops the buffer's own answer.
                 (*buf).b_bkc_flags = 0 as c_uint;
             }
-            (p_bkc.get(), bkc_flags.ptr())
+            p_bkc.get()
+        }
+    };
+    let store = |mask: c_uint| {
+        if local {
+            // SAFETY: the frame's buffer.
+            unsafe { (*buf).b_bkc_flags = mask };
+        } else {
+            bkc_flags.set(mask);
         }
     };
 
-    // SAFETY: a C string, the table's own word list, and the mask beside it.
-    unsafe {
-        // An empty buffer-local value means "no override", not "no words".
-        if local && c_int::from(*value) == NUL {
-            *flags = 0 as c_uint;
-            return ptr::null();
-        }
-        if opt_strings_flags(value, &opt_bkc_values, flags, true) != OK {
-            return invalid();
-        }
-        let named = [kOptBkcFlagAuto, kOptBkcFlagYes, kOptBkcFlagNo]
-            .into_iter()
-            .filter(|word| *flags & *word as c_uint != 0)
-            .count();
-        if named != 1 {
-            // The mask was already rebuilt from the new value; put the old
-            // one back, since the caller only restores the string.
-            opt_strings_flags(old_value(args), &opt_bkc_values, flags, true);
-            return invalid();
-        }
+    // An empty buffer-local value means "no override", not "no words".
+    // SAFETY: an option's value is a C string.
+    if local && unsafe { c_int::from(*value) } == NUL {
+        store(0 as c_uint);
+        return ptr::null();
     }
+    // SAFETY: a C string, against the table's own word list.
+    let Some(mask) = (unsafe { opt_strings_mask(value, &opt_bkc_values, true) }) else {
+        return invalid();
+    };
+    let named = [kOptBkcFlagAuto, kOptBkcFlagYes, kOptBkcFlagNo]
+        .into_iter()
+        .filter(|word| mask & *word as c_uint != 0)
+        .count();
+    if named != 1 {
+        // Nothing was stored, so the mask still describes the old value --
+        // which is what upstream re-parses it to get back.
+        return invalid();
+    }
+    store(mask);
     ptr::null()
 }
 
@@ -149,7 +156,7 @@ pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer, and the table's own word list.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
-        did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, ptr::null_mut(), false)
+        did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, false)
     }
 }
 
@@ -166,7 +173,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
     let first = unsafe { *(*buf).b_p_bt };
     let has_terminal = unsafe { !(*buf).terminal.is_null() };
     if has_terminal != (first == b't' as c_char)
-        || unsafe { opt_strings_flags((*buf).b_p_bt, &opt_bt_values, ptr::null_mut(), false) } != OK
+        || !unsafe { opt_strings_ok((*buf).b_p_bt, &opt_bt_values, false) }
     {
         return invalid();
     }
@@ -336,12 +343,9 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
             (*args).os_idx,
         )
     };
-    // SAFETY: the option table's scope plumbing, with this buffer.
-    let gvarp =
-        unsafe { get_varp_scope_from(idx, OptionSetFlags::GLOBAL, buf, ptr::null_mut::<win_T>()) }
-            .string_var();
-
-    if gvarp == p_fenc.ptr() {
+    // 'fileencoding' is the buffer-local one of the three; the other two
+    // ('encoding' and 'makeencoding') are global and skip this block.
+    if idx == kOptFileencoding {
         // SAFETY: the frame's buffer and C string value.
         unsafe {
             if (*buf).b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
@@ -362,7 +366,7 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
         let canonical = enc_canonize(*varp);
         xfree((*varp).cast::<c_void>());
         *varp = canonical;
-        if varp == p_enc.ptr() {
+        if idx == kOptEncoding {
             if strcmp(p_enc.get(), c"utf-8".as_ptr()) != 0 {
                 return e_unsupportedoption.as_ptr();
             }

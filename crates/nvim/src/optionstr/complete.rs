@@ -26,7 +26,7 @@ use crate::types::{NUL, OK, OptionSetFlags, buf_T, optset_T};
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
     CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
-    opt_strings_flags,
+    opt_strings_mask,
 };
 
 /// The sources 'complete' accepts, one letter each.
@@ -171,21 +171,28 @@ pub unsafe fn did_set_completeitemalign(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
+    let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
-    let (value, flags) = unsafe {
-        if opt_flags.has(OptionSetFlags::LOCAL) {
-            ((*buf).b_p_cot, &raw mut (*buf).b_cot_flags)
+    let value = unsafe {
+        if local {
+            (*buf).b_p_cot
         } else {
             if !opt_flags.has(OptionSetFlags::GLOBAL) {
                 // A plain `:set` drops the buffer's own answer.
                 (*buf).b_cot_flags = 0 as c_uint;
             }
-            (p_cot.get(), cot_flags.ptr())
+            p_cot.get()
         }
     };
-    // SAFETY: a C string, the table's own word list and the mask beside it.
-    if unsafe { opt_strings_flags(value, &opt_cot_values, flags, true) } != OK {
+    // SAFETY: a C string, against the table's own word list.
+    let Some(mask) = (unsafe { opt_strings_mask(value, &opt_cot_values, true) }) else {
         return invalid();
+    };
+    if local {
+        // SAFETY: the frame's buffer.
+        unsafe { (*buf).b_cot_flags = mask };
+    } else {
+        cot_flags.set(mask);
     }
     ptr::null()
 }
@@ -306,18 +313,19 @@ pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, window and new value.
     let (wp, opt_flags, value) =
         unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data()) };
-    let words = &opt_spo_values;
-    // SAFETY: a C string, the table's own word list, and each scope's mask.
-    unsafe {
-        if !opt_flags.has(OptionSetFlags::LOCAL)
-            && opt_strings_flags(value, words, spo_flags.ptr(), true) != OK
-        {
+    let global = !opt_flags.has(OptionSetFlags::LOCAL);
+    let local = !opt_flags.has(OptionSetFlags::GLOBAL);
+    if global || local {
+        // SAFETY: a C string, against the table's own word list.
+        let Some(mask) = (unsafe { opt_strings_mask(value, &opt_spo_values, true) }) else {
             return invalid();
+        };
+        if global {
+            spo_flags.set(mask);
         }
-        if !opt_flags.has(OptionSetFlags::GLOBAL)
-            && opt_strings_flags(value, words, &raw mut (*(*wp).w_s).b_p_spo_flags, true) != OK
-        {
-            return invalid();
+        if local {
+            // SAFETY: the frame's window and its syntax block.
+            unsafe { (*(*wp).w_s).b_p_spo_flags = mask };
         }
     }
     ptr::null()
@@ -340,21 +348,23 @@ pub unsafe fn did_set_tagcase(args: *mut optset_T) -> *const c_char {
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
-    let (value, flags) = unsafe {
-        if local {
-            ((*buf).b_p_tc, &raw mut (*buf).b_tc_flags)
-        } else {
-            (p_tc.get(), tc_flags.ptr())
+    let value = unsafe { if local { (*buf).b_p_tc } else { p_tc.get() } };
+    // An empty buffer-local value means "no override".
+    // SAFETY: an option's value is a C string.
+    let mask = if local && unsafe { c_int::from(*value) } == NUL {
+        0 as c_uint
+    } else {
+        // SAFETY: a C string, against the table's own word list.
+        match unsafe { opt_strings_mask(value, &opt_tc_values, false) } {
+            Some(mask) => mask,
+            None => return invalid(),
         }
     };
-    // SAFETY: a C string, the table's own word list and the mask beside it.
-    unsafe {
-        // An empty buffer-local value means "no override".
-        if local && c_int::from(*value) == NUL {
-            *flags = 0 as c_uint;
-        } else if opt_strings_flags(value, &opt_tc_values, flags, false) != OK {
-            return invalid();
-        }
+    if local {
+        // SAFETY: the frame's buffer.
+        unsafe { (*buf).b_tc_flags = mask };
+    } else {
+        tc_flags.set(mask);
     }
     ptr::null()
 }

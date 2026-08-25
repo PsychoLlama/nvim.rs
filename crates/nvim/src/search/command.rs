@@ -13,7 +13,7 @@
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::option::cpo_has;
+use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -22,6 +22,7 @@ use crate::search::{
     SEARCH_STAT_DEF_TIMEOUT,
 };
 use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -803,21 +804,14 @@ pub unsafe fn showmatch(c: c_int) {
 
         // 'scrolloff' and 'sidescrolloff' are window-local with a global
         // fallback; the blink writes through whichever is in effect.
-        let so: *mut OptInt = if (*curwin.get()).w_onebuf_opt.wo_so >= 0 {
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_so
-        } else {
-            p_so.ptr()
-        };
-        let siso: *mut OptInt = if (*curwin.get()).w_onebuf_opt.wo_siso >= 0 {
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_siso
-        } else {
-            p_siso.ptr()
-        };
+        let win = Win::current();
+        let so = ScrollOff::of(win, ScrollMargin::Lines);
+        let siso = ScrollOff::of(win, ScrollMargin::Columns);
 
         let mpos = lpos; // save the pos, update_screen() may change it
         let save_cursor = (*curwin.get()).w_cursor;
-        let save_so = *so;
-        let save_siso = *siso;
+        let save_so = so.get();
+        let save_siso = siso.get();
 
         // Handle "$" in 'cpo': if the ')' is typed on top of the "$", stop
         // displaying the "$".
@@ -831,8 +825,8 @@ pub unsafe fn showmatch(c: c_int) {
         State.set(MODE_SHOWMATCH);
         ui_cursor_shape(); // may show a different cursor shape
         (*curwin.get()).w_cursor = mpos; // move to the matching char
-        *so = 0; // don't use 'scrolloff' here
-        *siso = 0; // don't use 'sidescrolloff' here
+        so.set(0); // don't use 'scrolloff' here
+        siso.set(0); // don't use 'sidescrolloff' here
         show_cursor_info_later(false);
         update_screen(); // show the new char
         setcursor();
@@ -851,8 +845,8 @@ pub unsafe fn showmatch(c: c_int) {
         }
 
         (*curwin.get()).w_cursor = save_cursor; // restore cursor position
-        *so = save_so;
-        *siso = save_siso;
+        so.set(save_so);
+        siso.set(save_siso);
         State.set(save_state);
         ui_cursor_shape(); // may show a different cursor shape
     }

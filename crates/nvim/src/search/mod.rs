@@ -45,8 +45,8 @@ use crate::main::{
     curbuf, curwin, dollar_vcol, e_interr, e_invarg2, e_nopresub, e_noprevre, e_patnotf2,
     fdo_flags, g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
     msg_scrolled, msg_silent, no_hlsearch, no_smartcase, p_def, p_hls, p_ic, p_inc, p_js, p_mat,
-    p_msc, p_ri, p_scs, p_sel, p_siso, p_so, p_verbose, p_ws, rc_did_emsg, sc_col,
-    search_match_endcol, search_match_lines, searchcmdlen, top_bot_msg,
+    p_msc, p_ri, p_scs, p_sel, p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol,
+    search_match_lines, searchcmdlen, top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -78,10 +78,10 @@ use crate::state::MODE_SHOWMATCH;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, buf_T,
-    cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T,
-    oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t,
-    typval_T, varnumber_T, win_T,
+    Direction, EvalFuncData, FILE, MotionType, SearchOffset, SearchPattern, buf_T, cmdarg_T,
+    colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T, oparg_T, pos_T,
+    proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t, typval_T, varnumber_T,
+    win_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};

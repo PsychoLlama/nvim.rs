@@ -28,7 +28,7 @@ use crate::winfloat::win_config_float;
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
     SHM_ALL, STL_IN_ICON, STL_IN_TITLE, check_stl_option, did_set_option_listflag,
-    did_set_str_generic, illegal_char, opt_strings_flags,
+    did_set_str_generic, illegal_char, opt_strings_mask,
 };
 
 /// # Safety
@@ -200,11 +200,11 @@ pub unsafe fn did_set_sessionoptions(args: *mut optset_T) -> *const c_char {
     }
     let both = kOptSsopFlagCurdir as c_uint | kOptSsopFlagSesdir as c_uint;
     if ssop_flags.get() & both == both {
-        // SAFETY: the frame's old value is a C string, and the table's own
-        // word list and mask.
-        unsafe {
-            let words = &opt_ssop_values;
-            opt_strings_flags(old_value(args), words, ssop_flags.ptr(), true);
+        // The caller only restores the string, so put the old value's mask
+        // back here. A value that does not parse leaves the mask alone.
+        // SAFETY: the frame's old value is a C string.
+        if let Some(mask) = unsafe { opt_strings_mask(old_value(args), &opt_ssop_values, true) } {
+            ssop_flags.set(mask);
         }
         return invalid();
     }

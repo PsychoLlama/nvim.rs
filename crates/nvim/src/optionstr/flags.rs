@@ -51,11 +51,12 @@ fn opens_with(value: &[u8], word: &[u8], list: bool) -> bool {
         && ((list && value.get(word.len()) == Some(&b',')) || value.len() == word.len())
 }
 
-/// Match an option's value against its accepted words, and store a bitmask
+/// Match an option's value against its accepted words, and answer a bitmask
 /// with bit *i* set for the *i*th accepted word the value named.
 ///
-/// Returns `FAIL` for a value naming anything that is not accepted, in which
-/// case the mask is left alone.
+/// `None` for a value naming anything that is not accepted. Upstream writes
+/// the mask through an `unsigned *` instead, which is what made six option
+/// masks reachable as raw addresses; the caller that keeps a mask stores it.
 ///
 /// The empty value is where the two shapes diverge. A list option's empty
 /// value names nothing and is fine — the loop simply does not run. A
@@ -66,23 +67,24 @@ fn opens_with(value: &[u8], word: &[u8], list: bool) -> bool {
 ///
 /// # Safety
 /// `val` is a C string, from the option table or from an option's variable.
-/// `flagp` is null or points at a writable `unsigned`.
-pub(crate) unsafe fn opt_strings_flags(
+pub(crate) unsafe fn opt_strings_mask(
     val: *const c_char,
     values: &[&CStr],
-    flagp: *mut c_uint,
     list: bool,
-) -> c_int {
+) -> Option<c_uint> {
     // SAFETY: the caller guarantees a C string.
     let value = unsafe { CStr::from_ptr(val) };
-    let Some(mask) = words_mask(value.to_bytes(), values, list) else {
-        return FAIL;
-    };
-    if !flagp.is_null() {
-        // SAFETY: the caller guarantees a writable `unsigned`.
-        unsafe { *flagp = mask };
-    }
-    OK
+    words_mask(value.to_bytes(), values, list)
+}
+
+/// Whether every word in `val` is one the option accepts — the question the
+/// callers that keep no mask are asking.
+///
+/// # Safety
+/// As [`opt_strings_mask`].
+pub(crate) unsafe fn opt_strings_ok(val: *const c_char, values: &[&CStr], list: bool) -> bool {
+    // SAFETY: the caller's obligation.
+    unsafe { opt_strings_mask(val, values, list) }.is_some()
 }
 
 /// The bitmask [`opt_strings_flags`] stores, or `None` for a value naming a
@@ -115,13 +117,12 @@ fn words_mask(mut rest: &[u8], values: &[&CStr], list: bool) -> Option<c_uint> {
 pub(crate) unsafe fn did_set_opt_flags(
     val: *const c_char,
     values: &[&CStr],
-    flagp: *mut c_uint,
     list: bool,
 ) -> *const c_char {
-    if unsafe { opt_strings_flags(val, values, flagp, list) } != OK {
-        e_invarg.as_ptr()
-    } else {
+    if unsafe { opt_strings_ok(val, values, list) } {
         ptr::null()
+    } else {
+        e_invarg.as_ptr()
     }
 }
 
@@ -178,11 +179,15 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
         varp
     };
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
-    let values = opt_values(idx);
-    // The table names the mask cell itself; an option with no mask has none.
-    let flagp = opt.flags_var.map_or(ptr::null_mut(), |cell| cell.ptr());
     // SAFETY: the option's variable holds a C string.
-    unsafe { opt_strings_flags(*varp, values, flagp, list) }
+    let Some(mask) = (unsafe { opt_strings_mask(*varp, opt_values(idx), list) }) else {
+        return FAIL;
+    };
+    // The table names the mask cell itself; an option with no mask has none.
+    if let Some(cell) = opt.flags_var {
+        cell.set(mask);
+    }
+    OK
 }
 
 /// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`.
@@ -196,7 +201,11 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
 pub unsafe fn check_ff_value(p: *mut c_char) -> c_int {
     let values = opt_values(kOptFileformat);
     // SAFETY: the caller's C string, against the table's own word list.
-    unsafe { opt_strings_flags(p, values, ptr::null_mut(), false) }
+    if unsafe { opt_strings_ok(p, values, false) } {
+        OK
+    } else {
+        FAIL
+    }
 }
 
 #[cfg(test)]

@@ -46,7 +46,7 @@ use super::{
     check_chars_options, check_signcolumn, check_str_opt, check_string_option,
     did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
     e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,
-    kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_flags, terminal_notify_theme,
+    kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
 use crate::normal::visual_active;
@@ -432,24 +432,35 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     let wp = unsafe { win(args) };
     // SAFETY: the caller's frame and window.
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
-    let (value, flags) = unsafe {
+    let value = unsafe {
         if local {
-            (
-                (*wp).w_onebuf_opt.wo_ve,
-                &raw mut (*wp).w_onebuf_opt.wo_ve_flags,
-            )
+            (*wp).w_onebuf_opt.wo_ve
         } else {
-            (p_ve.get(), ve_flags.ptr())
+            p_ve.get()
+        }
+    };
+    let store = |mask: c_uint| {
+        if local {
+            // SAFETY: the frame's window.
+            unsafe { (*wp).w_onebuf_opt.wo_ve_flags = mask };
+        } else {
+            ve_flags.set(mask);
         }
     };
 
-    // SAFETY: the option's C string value and its own mask.
+    // SAFETY: the option's C string value.
+    if local && unsafe { c_int::from(*value) } == NUL {
+        store(0 as c_uint);
+        return ptr::null();
+    }
+    // SAFETY: the same C string, against the table's own word list.
+    let Some(mask) = (unsafe { opt_strings_mask(value, &opt_ve_values, true) }) else {
+        return invalid();
+    };
+    store(mask);
+    // SAFETY: the frame's old value and window.
     unsafe {
-        if local && c_int::from(*value) == NUL {
-            *flags = 0 as c_uint;
-        } else if opt_strings_flags(value, &opt_ve_values, flags, true) != OK {
-            return invalid();
-        } else if strcmp(value, old_value(args)) != 0 {
+        if strcmp(value, old_value(args)) != 0 {
             // What column the cursor may sit in just changed.
             validate_virtcol(wp);
             coladvance(wp, (*wp).w_virtcol);

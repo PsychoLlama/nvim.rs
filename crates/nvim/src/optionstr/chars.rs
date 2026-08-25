@@ -39,6 +39,8 @@ use crate::main::{
 };
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
+use crate::option::option_var;
+use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -698,26 +700,33 @@ pub(crate) unsafe fn did_set_global_chars_option(
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame.
-    let (win, varp, flags, errbuf, errbuflen) = unsafe {
+    let (win, varp, idx, flags, errbuf, errbuflen) = unsafe {
         (
             (*args).os_win.cast::<win_T>(),
             (*args).os_varp.cast::<*mut c_char>(),
+            (*args).os_idx,
             (*args).os_flags,
             (*args).os_errbuf,
             (*args).os_errbuflen,
         )
     };
+    // 'listchars' and 'fillchars' share this callback, so the row says which
+    // option it is and the variable says which *scope*: the option's own
+    // global one, or this window's copy.
+    let which = if idx == kOptListcharsIdx {
+        kListchars
+    } else {
+        kFillchars
+    };
     // SAFETY: the caller's frame and window; the comparisons are of
     // addresses only.
     unsafe {
-        if varp == p_lcs.ptr() {
-            did_set_global_chars_option(win, *varp, kListchars, flags, errbuf, errbuflen)
-        } else if varp == p_fcs.ptr() {
-            did_set_global_chars_option(win, *varp, kFillchars, flags, errbuf, errbuflen)
-        } else if varp == &raw mut (*win).w_onebuf_opt.wo_lcs {
-            set_chars_option(win, *varp, kListchars, true, errbuf, errbuflen)
-        } else if varp == &raw mut (*win).w_onebuf_opt.wo_fcs {
-            set_chars_option(win, *varp, kFillchars, true, errbuf, errbuflen)
+        if varp == option_var(idx).string_var() {
+            did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen)
+        } else if varp == &raw mut (*win).w_onebuf_opt.wo_lcs
+            || varp == &raw mut (*win).w_onebuf_opt.wo_fcs
+        {
+            set_chars_option(win, *varp, which, true, errbuf, errbuflen)
         } else {
             ptr::null()
         }

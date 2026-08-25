@@ -26,10 +26,12 @@ use crate::autocmd::get_event_name_no_group;
 use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
-use crate::main::{IObuff, curwin, p_ei, p_lcs};
+use crate::main::IObuff;
 use crate::mbyte::get_encoding_name;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::options::{opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values};
+use crate::options::{
+    kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
+};
 use crate::os::cshim::{snprintf, strncmp};
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -304,11 +306,10 @@ pub unsafe fn expand_set_chars_option(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    // SAFETY: the caller's frame; the comparison is of addresses only.
-    let varp = unsafe { (*args).oe_varp }.cast::<*mut c_char>();
-    let is_lcs =
-        varp == p_lcs.ptr() || varp == unsafe { &raw mut (*curwin.get()).w_onebuf_opt.wo_lcs };
-    let names = if is_lcs {
+    // 'listchars' and 'fillchars' share this callback; which one is being
+    // completed is the row, at either scope.
+    // SAFETY: the caller's frame.
+    let names = if unsafe { (*args).oe_idx } == kOptListchars {
         get_listchars_name
     } else {
         get_fillchars_name
@@ -484,8 +485,10 @@ pub unsafe fn expand_set_eventignore(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    // SAFETY: the caller's frame; the comparison is of addresses only.
-    WINDOW_EVENTS.set(unsafe { (*args).oe_varp }.cast::<c_void>() != p_ei.ptr().cast::<c_void>());
+    // 'eventignore' and 'eventignorewin' share this callback, and only the
+    // second one completes the window events.
+    // SAFETY: the caller's frame.
+    WINDOW_EVENTS.set(unsafe { (*args).oe_idx } != kOptEventignore);
     unsafe { expand_set_opt_generic(args, Some(get_eventignore_name), num_matches, matches) }
 }
 

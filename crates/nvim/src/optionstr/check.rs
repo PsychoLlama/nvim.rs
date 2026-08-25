@@ -41,7 +41,7 @@ use crate::types::{FAIL, NUL, OK, buf_T, size_t, uint32_t, win_T};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
-    e_unclosed_expression_sequence, opt_strings_flags,
+    e_unclosed_expression_sequence, opt_strings_ok,
 };
 use crate::decoration::SCL_NUM;
 
@@ -293,14 +293,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     }
 
     // SAFETY: the table's own array, and no mask is wanted.
-    let listed = unsafe {
-        opt_strings_flags(
-            val.as_ptr().cast::<c_char>(),
-            &opt_scl_values,
-            ptr::null_mut(),
-            false,
-        )
-    } == OK;
+    let listed = unsafe { opt_strings_ok(val.as_ptr().cast::<c_char>(), &opt_scl_values, false) };
 
     let (min, max) = if listed {
         if wp.is_null() {

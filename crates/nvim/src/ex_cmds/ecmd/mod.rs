@@ -50,14 +50,14 @@ use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
     curbuf, curwin, exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll,
-    msg_scrolled_ign, p_awa, p_so, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
+    msg_scrolled_ign, p_awa, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{msg_check_for_delay, msg_start};
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
-use crate::option::shortmess;
+use crate::option::{ScrollMargin, ScrollOff, shortmess};
 use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
@@ -70,6 +70,7 @@ use crate::types::{
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
+use crate::winlayer::Win;
 use crate::winlayer::tab_windows;
 use ::libc::time;
 use core::ffi::{c_char, c_int};
@@ -220,15 +221,9 @@ pub unsafe fn do_ecmd(
         did_get_winopts: false,
         readfile_flags: 0,
     };
-    // SAFETY: `curwin` is the live current window; `p_so` is the global
-    // 'scrolloff', which the redraw stage borrows for one call.
-    let so_ptr: *mut OptInt = unsafe {
-        if (*curwin.get()).w_onebuf_opt.wo_so >= 0 {
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_so
-        } else {
-            p_so.ptr()
-        }
-    };
+    // SAFETY: `curwin` is the live current window, and the handle is used
+    // only inside this call.
+    let so = ScrollOff::of(unsafe { Win::current() }, ScrollMargin::Lines);
     // SAFETY: `eap` is live when non-NULL.
     let command = if eap.is_null() {
         ptr::null_mut()
@@ -459,7 +454,7 @@ pub unsafe fn do_ecmd(
         if !skip_redraw.get() {
             // SAFETY: `so_ptr` points into the current window or at the global
             // 'scrolloff', both live for this call.
-            unsafe { recenter(so_ptr, state.topline, command) };
+            unsafe { recenter(so, state.topline, command) };
         }
 
         // Change directories when the 'acd' option is set.
@@ -799,21 +794,21 @@ unsafe fn report_file_info() {
 /// autocommands left the window's top line alone and there is no `+cmd`.
 ///
 /// # Safety
-/// `so_ptr` must point at a live 'scrolloff' place -- the current window's or
-/// the global option's.
-unsafe fn recenter(so_ptr: *mut OptInt, topline: linenr_T, command: *mut c_char) {
+/// `curwin` must be live, and `so` its scroll margin.
+unsafe fn recenter(so: ScrollOff, topline: linenr_T, command: *mut c_char) {
+    let n = so.get();
+    if topline == 0 && command.is_null() {
+        // force the cursor to be vertically centered in the window
+        so.set(999);
+    }
     // SAFETY: caller's contract; `curwin` is live.
     unsafe {
-        let n = *so_ptr;
-        if topline == 0 && command.is_null() {
-            // force the cursor to be vertically centered in the window
-            *so_ptr = 999;
-        }
         update_topline(curwin.get());
         (*curwin.get()).w_scbind_pos =
             plines_m_win_fill(curwin.get(), 1, (*curwin.get()).w_topline);
-        *so_ptr = n;
-        // redraw this buffer later
-        redraw_curbuf_later(UPD_NOT_VALID);
     }
+    so.set(n);
+    // redraw this buffer later
+    // SAFETY: no argument beyond the redraw type.
+    unsafe { redraw_curbuf_later(UPD_NOT_VALID) };
 }

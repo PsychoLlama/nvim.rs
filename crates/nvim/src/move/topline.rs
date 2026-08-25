@@ -19,46 +19,11 @@ use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::grid::default_grid_ref;
 use crate::main::{
-    curtab, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, p_so, skip_update_topline,
+    curtab, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, skip_update_topline,
 };
+use crate::option::{ScrollMargin, ScrollOff};
 use crate::types::{OptInt, int64_t, linenr_T, win_T};
 use crate::winlayer::Win;
-
-/// The 'scrolloff' `update_topline()` works with: the window-local value when
-/// it is set, the global one otherwise.
-///
-/// C reaches this through an `OptInt *` because the mouse-drag arm *writes*
-/// through it and restores the old value on the way out, which is what the
-/// two variants are here to reproduce.
-#[derive(Clone, Copy)]
-enum ScrollOff {
-    Window(Win),
-    Global,
-}
-
-impl ScrollOff {
-    fn of(win: Win) -> Self {
-        if win.w_onebuf_opt.wo_so >= 0 {
-            Self::Window(win)
-        } else {
-            Self::Global
-        }
-    }
-
-    fn get(self) -> OptInt {
-        match self {
-            Self::Window(win) => win.w_onebuf_opt.wo_so,
-            Self::Global => p_so.get(),
-        }
-    }
-
-    fn set(self, value: OptInt) {
-        match self {
-            Self::Window(mut win) => win.w_onebuf_opt.wo_so = value,
-            Self::Global => p_so.set(value),
-        }
-    }
-}
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
 ///
@@ -80,7 +45,7 @@ impl Win {
 fn update_topline_win(mut win: Win) {
     let wp = win.raw();
     let mut check_botline = false;
-    let so = ScrollOff::of(win);
+    let so = ScrollOff::of(win, ScrollMargin::Lines);
     let save_so = so.get();
 
     // With 'splitkeep' the cursor is moved instead.
