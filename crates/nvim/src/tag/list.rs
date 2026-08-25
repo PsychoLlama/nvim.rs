@@ -125,7 +125,7 @@ pub(crate) unsafe fn print_tag_list(
 unsafe fn is_current(i: c_int, use_tagstack: bool) -> bool {
     // SAFETY: the caller's promise.
     unsafe {
-        if g_do_tagpreview.get() != 0 && i == (*ptag_entry.ptr()).cur_match {
+        if g_do_tagpreview.get() != 0 && i == ptag_entry_handle().position().0 {
             return true;
         }
         if !use_tagstack {

@@ -19,6 +19,52 @@ use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
+/// The preview window's stand-in for a tag stack.
+///
+/// A window carries a whole `taggy_T` stack; `:ptag` has this one entry
+/// instead, and the handle *names* it rather than borrowing it, so it
+/// survives the `'tagfunc'` call and the autocommands a jump runs.
+#[derive(Clone, Copy)]
+pub(super) struct PtagEntry(*mut taggy_T);
+
+/// The one place the preview entry's address is taken.
+pub(super) fn ptag_entry_handle() -> PtagEntry {
+    PtagEntry(ptag_entry.ptr())
+}
+
+impl PtagEntry {
+    /// The match the preview window is showing, and the buffer it came from.
+    pub(super) fn position(self) -> (c_int, c_int) {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { ((*self.0).cur_match, (*self.0).cur_fnum) }
+    }
+
+    /// Remember where the preview window got to.
+    fn set_position(self, cur_match: c_int, cur_fnum: c_int) {
+        // SAFETY: as `position`.
+        unsafe { (*self.0).cur_match = cur_match };
+        // SAFETY: as `position`.
+        unsafe { (*self.0).cur_fnum = cur_fnum };
+    }
+
+    /// The tag being previewed, or NULL when there is none.
+    fn tagname(self) -> *mut c_char {
+        // SAFETY: as `position`.
+        unsafe { (*self.0).tagname }
+    }
+
+    /// Forget the previous preview tag and take a copy of `tag`.
+    ///
+    /// # Safety
+    /// `tag` must be NUL-terminated.
+    unsafe fn restart(self, tag: *const c_char) {
+        // SAFETY: as `position`; the entry owns its name.
+        unsafe { tagstack_clear_entry(&mut *self.0) };
+        // SAFETY: the caller's NUL-terminated string.
+        unsafe { (*self.0).tagname = xstrdup(tag) };
+    }
+}
+
 /// The matches of the tag last looked up. Owned; `free_wild`d when replaced.
 static matches: GlobalCell<*mut *mut c_char> = GlobalCell::new(ptr::null_mut());
 
@@ -230,8 +276,7 @@ impl DoTag {
 
             if g_do_tagpreview.get() != 0 {
                 if !self.selecting() {
-                    (*ptag_entry.ptr()).cur_match = self.cur_match;
-                    (*ptag_entry.ptr()).cur_fnum = self.cur_fnum;
+                    ptag_entry_handle().set_position(self.cur_match, self.cur_fnum);
                 }
             } else {
                 self.record_position();
@@ -250,11 +295,8 @@ impl DoTag {
     /// # Safety
     /// `self.tag` must be NUL-terminated.
     unsafe fn start_preview_tag(&mut self) {
-        // SAFETY: the caller's promise; the entry owns its name.
-        unsafe {
-            tagstack_clear_entry(&mut *ptag_entry.ptr());
-            (*ptag_entry.ptr()).tagname = xstrdup(self.tag);
-        }
+        // SAFETY: the caller's promise.
+        unsafe { ptag_entry_handle().restart(self.tag) };
     }
 
     /// A new tag was named: put it on the stack (or on the preview entry).
@@ -265,12 +307,11 @@ impl DoTag {
         // SAFETY: the caller's promise; every entry owns its own name.
         unsafe {
             if g_do_tagpreview.get() != 0 {
-                let previous = (*ptag_entry.ptr()).tagname;
+                let previous = ptag_entry_handle().tagname();
                 if !previous.is_null() && strcmp(previous, self.tag) == 0 {
                     // Jumping to the same tag again: keep the current
                     // match, so that the CursorHold example works.
-                    self.cur_match = (*ptag_entry.ptr()).cur_match;
-                    self.cur_fnum = (*ptag_entry.ptr()).cur_fnum;
+                    (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
                 } else {
                     self.start_preview_tag();
                 }
@@ -315,7 +356,7 @@ impl DoTag {
         // SAFETY: the caller's promise.
         unsafe {
             let empty = if g_do_tagpreview.get() != 0 {
-                (*ptag_entry.ptr()).tagname.is_null()
+                ptag_entry_handle().tagname().is_null()
             } else {
                 self.len == 0
             };
@@ -418,8 +459,7 @@ impl DoTag {
         // SAFETY: the caller's promise.
         unsafe {
             if g_do_tagpreview.get() != 0 {
-                self.cur_match = (*ptag_entry.ptr()).cur_match;
-                self.cur_fnum = (*ptag_entry.ptr()).cur_fnum;
+                (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
                 return true;
             }
 
@@ -454,8 +494,7 @@ impl DoTag {
             self.prev_idx = self.idx;
 
             if g_do_tagpreview.get() != 0 {
-                self.cur_match = (*ptag_entry.ptr()).cur_match;
-                self.cur_fnum = (*ptag_entry.ptr()).cur_fnum;
+                (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
             } else {
                 self.idx = (self.idx - 1).max(0);
                 self.cur_match = (*self.entry(self.idx)).cur_match;
@@ -582,7 +621,7 @@ impl DoTag {
                 self.owned_name = Some(owned);
                 self.owned_name.as_mut().unwrap().as_mut_ptr()
             } else if g_do_tagpreview.get() != 0 {
-                (*ptag_entry.ptr()).tagname
+                ptag_entry_handle().tagname()
             } else {
                 self.tag
             }
@@ -734,8 +773,7 @@ impl DoTag {
                 self.record_choice();
                 self.idx += 1;
             } else if g_do_tagpreview.get() != 0 {
-                (*ptag_entry.ptr()).cur_match = self.cur_match;
-                (*ptag_entry.ptr()).cur_fnum = self.cur_fnum;
+                ptag_entry_handle().set_position(self.cur_match, self.cur_fnum);
             }
             true
         }

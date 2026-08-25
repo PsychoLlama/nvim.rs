@@ -104,13 +104,22 @@ static OPFUNC_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
     type_0: kCallbackNone,
 });
 
+/// The parsed `'operatorfunc'`.
+///
+/// The address, because every operation the tree has on a callback —
+/// parsing an option into it, marking it for the collector, copying it,
+/// calling it — takes a `*mut Callback`.
+fn global_opfunc() -> *mut Callback {
+    OPFUNC_CB.ptr()
+}
+
 /// Parse a new 'operatorfunc' value; `E474` if it names nothing callable.
 ///
 /// # Safety
 /// The option's current value must be a valid C string.
 pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
     unsafe {
-        if option_set_callback_func(p_opfunc.get(), OPFUNC_CB.ptr()) == FAIL {
+        if option_set_callback_func(p_opfunc.get(), global_opfunc()) == FAIL {
             return &raw const e_invarg as *const c_char;
         }
         ::core::ptr::null()
@@ -124,7 +133,7 @@ pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn set_ref_in_opfunc(copy_id: c_int) -> bool {
     unsafe {
         set_ref_in_callback(
-            OPFUNC_CB.ptr(),
+            global_opfunc(),
             copy_id,
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
@@ -186,7 +195,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
             vval: typval_vval_union { v_number: 0 },
         };
         if callback_call(
-            OPFUNC_CB.ptr(),
+            global_opfunc(),
             1,
             &raw mut argv as *mut typval_T,
             &raw mut rettv,

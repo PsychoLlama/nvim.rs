@@ -25,10 +25,11 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::nlua_exec;
 use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
-    e_invarg2, e_stdiochan2, on_print, provider_call_nesting, provider_caller_scope,
+    e_invarg2, e_stdiochan2, provider_call_nesting, provider_caller_scope,
 };
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::emsg;
+use crate::message::on_print_cb;
 use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
@@ -620,7 +621,7 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
             return;
         }
         // `on_print` is a global: there is only one stdio channel.
-        if !tv_dict_get_callback(opts, c"on_print".as_ptr(), 8, on_print.ptr()) {
+        if !tv_dict_get_callback(opts, c"on_print".as_ptr(), 8, on_print_cb()) {
             return;
         }
         on_stdin.buffered = tv_dict_get_number(opts, c"stdin_buffered".as_ptr()) != 0;

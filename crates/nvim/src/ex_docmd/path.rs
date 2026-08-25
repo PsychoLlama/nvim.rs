@@ -42,13 +42,22 @@ use crate::types::{
 };
 use ::libc::strcmp;
 
+/// The parsed `'findfunc'`.
+///
+/// The address, because every operation the tree has on a callback —
+/// parsing an option into it, marking it for the collector, copying it,
+/// calling it — takes a `*mut Callback`.
+fn global_findfunc() -> *mut Callback {
+    ffu_cb.ptr()
+}
+
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
 pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
     unsafe {
         if *(*curbuf.get()).b_p_ffu as c_int != NUL {
             &raw mut (*curbuf.get()).b_ffu_cb
         } else {
-            ffu_cb.ptr()
+            global_findfunc()
         }
     }
 }
@@ -183,7 +192,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb)
         } else {
-            let r = option_set_callback_func(p_ffu.get(), ffu_cb.ptr());
+            let r = option_set_callback_func(p_ffu.get(), global_findfunc());
             // Setting it globally without `:setglobal` clears the local one.
             if !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 callback_free(&raw mut (*buf).b_ffu_cb);
@@ -206,7 +215,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
 pub unsafe fn set_ref_in_findfunc(copy_id: c_int) -> bool {
-    unsafe { set_ref_in_callback(ffu_cb.ptr(), copy_id, ptr::null_mut(), ptr::null_mut()) }
+    unsafe { set_ref_in_callback(global_findfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
 }
 
 /// The directory `:cd -` would go back to, at this scope.

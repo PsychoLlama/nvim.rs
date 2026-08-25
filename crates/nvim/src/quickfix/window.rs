@@ -589,7 +589,7 @@ fn win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
 ///
 /// Called by the option code with a live `optset_T`.
 pub unsafe fn did_set_quickfixtextfunc(_args: *mut optset_T) -> *const c_char {
-    let (value, cb) = (p_qftf.get(), qftf_cb.ptr());
+    let (value, cb) = (p_qftf.get(), global_qftf());
     // SAFETY: the option's own value and its callback slot.
     if unsafe { option_set_callback_func(value, cb) } == FAIL {
         return &raw const e_invarg as *const c_char;

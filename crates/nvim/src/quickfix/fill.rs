@@ -273,7 +273,7 @@ unsafe fn call_qftf_func(
         let cb = if (*qfl).qf_qftf_cb.type_0 != kCallbackNone {
             &raw mut (*qfl).qf_qftf_cb
         } else {
-            qftf_cb.ptr()
+            global_qftf()
         };
         if (*cb).type_0 == kCallbackNone {
             return ptr::null_mut();

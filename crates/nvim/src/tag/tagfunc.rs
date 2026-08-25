@@ -25,6 +25,13 @@ static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     type_0: kCallbackNone,
 });
 
+/// The address, because every operation the tree has on a callback —
+/// parsing an option into it, marking it for the collector, copying it,
+/// calling it — takes a `*mut Callback`.
+fn global_tagfunc() -> *mut Callback {
+    tfu_cb.ptr()
+}
+
 /// Whether a `'tagfunc'` call is in progress.
 ///
 /// It must not start another, and it must not be allowed to rewrite the
@@ -50,7 +57,7 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func(value, &raw mut (*buf).b_tfu_cb)
         } else {
-            let retval = option_set_callback_func(value, tfu_cb.ptr());
+            let retval = option_set_callback_func(value, global_tagfunc());
             if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 // `:set` without a scope sets the buffer-local copy too.
                 set_buflocal_tfu_callback(buf);
@@ -71,7 +78,7 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
 /// Must be called from a garbage-collection sweep.
 pub unsafe fn set_ref_in_tagfunc(copyID: c_int) -> bool {
     // SAFETY: the caller's promise.
-    unsafe { set_ref_in_callback(tfu_cb.ptr(), copyID, ptr::null_mut(), ptr::null_mut()) }
+    unsafe { set_ref_in_callback(global_tagfunc(), copyID, ptr::null_mut(), ptr::null_mut()) }
 }
 
 /// Copy the global `'tagfunc'` callback into `buf`'s local one.
@@ -82,8 +89,8 @@ pub unsafe fn set_buflocal_tfu_callback(buf: *mut buf_T) {
     // SAFETY: the caller's promise; the buffer owns its own callback.
     unsafe {
         callback_free(&raw mut (*buf).b_tfu_cb);
-        if (*tfu_cb.ptr()).type_0 != kCallbackNone {
-            callback_copy(&raw mut (*buf).b_tfu_cb, tfu_cb.ptr());
+        if (*global_tagfunc()).type_0 != kCallbackNone {
+            callback_copy(&raw mut (*buf).b_tfu_cb, global_tagfunc());
         }
     }
 }

@@ -12,9 +12,18 @@ use super::*;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::types::builders::static_cstring;
-use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{Callback, NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
+
+/// The `on_print` callback an RPC client installed.
+///
+/// The address, because every operation the tree has on a callback —
+/// parsing an option into it, marking it for the collector, copying it,
+/// calling it — takes a `*mut Callback`.
+pub(crate) fn on_print_cb() -> *mut Callback {
+    on_print.ptr()
+}
 
 /// C's `ARRAY_DICT_INIT`: empty, and owning nothing.
 const EMPTY_ARRAY: Array = Array {
@@ -411,7 +420,7 @@ pub unsafe fn msg_use_printf() -> c_int {
 pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
     unsafe {
         // `vim.on_print` takes the whole message instead, if it is set.
-        if (*on_print.ptr()).type_0 != kCallbackNone as c_uint {
+        if (*on_print_cb()).type_0 != kCallbackNone as c_uint {
             let mut argv = [typval_T {
                 v_type: VAR_STRING,
                 v_lock: VAR_UNLOCKED,
@@ -424,7 +433,7 @@ pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
                 v_lock: VAR_UNLOCKED,
                 vval: typval_vval_union { v_number: 0 },
             };
-            callback_call(on_print.ptr(), 1, argv.as_mut_ptr(), &raw mut rettv);
+            callback_call(on_print_cb(), 1, argv.as_mut_ptr(), &raw mut rettv);
             tv_clear(&raw mut rettv);
             return;
         }

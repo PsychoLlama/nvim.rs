@@ -17,6 +17,16 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
+/// The parsed global `'quickfixtextfunc'`. A list-local one lives in
+/// `qf_info_T::qf_qftf_cb`.
+///
+/// The address, because every operation the tree has on a callback —
+/// parsing an option into it, marking it for the collector, copying it,
+/// calling it — takes a `*mut Callback`.
+pub(super) fn global_qftf() -> *mut Callback {
+    qftf_cb.ptr()
+}
+
 /// Whether a value can hold a reference at all. Numbers, strings and floats
 /// own nothing, so the collector never has to walk into one.
 ///
@@ -104,7 +114,7 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
         debug_assert!(!ql_info.get().is_null());
         if mark_quickfix_ctx(ql_info.get(), copy_id)
             || mark_quickfix_user_data(ql_info.get(), copy_id)
-            || set_ref_in_callback(qftf_cb.ptr(), copy_id, ptr::null_mut(), ptr::null_mut())
+            || set_ref_in_callback(global_qftf(), copy_id, ptr::null_mut(), ptr::null_mut())
         {
             return true;
         }
