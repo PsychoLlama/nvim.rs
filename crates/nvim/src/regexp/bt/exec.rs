@@ -125,10 +125,12 @@ fn match_start(rex: Rex, col: colnr_T) -> MatchPos {
 /// hold `NSUBEXP` slots each, and the match context is still the one that
 /// filled them.
 fn save_z_captures(rex: Rex) {
+    let (startzpos, endzpos) = (reg_startzpos.get(), reg_endzpos.get());
+    let (startzp, endzp) = (reg_startzp.get(), reg_endzp.get());
     unsafe {
         for i in 0..NSUBEXP as usize {
             let text = if rex.multi() {
-                let (start, end) = ((*reg_startzpos.ptr())[i], (*reg_endzpos.ptr())[i]);
+                let (start, end) = (startzpos[i], endzpos[i]);
                 // A capture that spans lines cannot be handed over as one
                 // string, so it is dropped.
                 if start.lnum < 0 || end.lnum != start.lnum || end.col < start.col {
@@ -139,7 +141,7 @@ fn save_z_captures(rex: Rex) {
                     (end.col - start.col) as usize,
                 )
             } else {
-                let (start, end) = ((*reg_startzp.ptr())[i], (*reg_endzp.ptr())[i]);
+                let (start, end) = (startzp[i], endzp[i]);
                 if start.is_null() || end.is_null() {
                     continue;
                 }

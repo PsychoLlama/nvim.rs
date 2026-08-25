@@ -463,10 +463,67 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
 /// pair of them.
 #[derive(Clone, Copy)]
 pub(crate) enum GroupSlot {
-    /// A buffer match's slot.
+    /// A buffer match's slot, in the caller's match structure.
     Pos(*mut lpos_T),
-    /// A string match's slot.
+    /// A string match's slot, in the caller's match structure.
     Ptr(*mut *mut uint8_t),
+    /// A `\z(` group's slot. Those arrays are the engine's own rather than
+    /// the caller's, so the slot is *named* — the array and the index — and
+    /// never addressed.
+    Z(ZSlot, usize),
+}
+
+/// Which of the four `\z(` arrays a [`GroupSlot::Z`] is in.
+#[derive(Clone, Copy)]
+pub(crate) enum ZSlot {
+    /// `reg_startzpos`: where a buffer match's `\z(` group opened.
+    PosStart,
+    /// `reg_endzpos`: where it closed.
+    PosEnd,
+    /// `reg_startzp`: where a string match's `\z(` group opened.
+    PtrStart,
+    /// `reg_endzp`: where it closed.
+    PtrEnd,
+}
+
+impl ZSlot {
+    /// What the slot holds.
+    fn get(self, no: usize) -> MatchPos {
+        match self {
+            ZSlot::PosStart => MatchPos::from_pos(reg_startzpos.get()[no]),
+            ZSlot::PosEnd => MatchPos::from_pos(reg_endzpos.get()[no]),
+            ZSlot::PtrStart => MatchPos::from_ptr(reg_startzp.get()[no]),
+            ZSlot::PtrEnd => MatchPos::from_ptr(reg_endzp.get()[no]),
+        }
+    }
+
+    /// Put `at` in the slot. The arrays are ten entries of a pointer each,
+    /// so a whole-value read/modify/write is cheaper than a borrow would be
+    /// and needs no `unsafe` at all.
+    fn set(self, no: usize, at: MatchPos) {
+        match self {
+            ZSlot::PosStart => {
+                let mut a = reg_startzpos.get();
+                a[no] = at.as_pos();
+                reg_startzpos.set(a);
+            }
+            ZSlot::PosEnd => {
+                let mut a = reg_endzpos.get();
+                a[no] = at.as_pos();
+                reg_endzpos.set(a);
+            }
+            ZSlot::PtrStart => {
+                let mut a = reg_startzp.get();
+                a[no] = at.as_ptr();
+                reg_startzp.set(a);
+            }
+            ZSlot::PtrEnd => {
+                let mut a = reg_endzp.get();
+                a[no] = at.as_ptr();
+                reg_endzp.set(a);
+            }
+        }
+    }
 }
 
 impl GroupSlot {
@@ -482,6 +539,7 @@ impl GroupSlot {
             // shape it holds because the match's own kind chose it.
             GroupSlot::Pos(p) => MatchPos::from_pos(unsafe { *p }),
             GroupSlot::Ptr(p) => MatchPos::from_ptr(unsafe { *p }),
+            GroupSlot::Z(which, no) => which.get(no),
         }
     }
 
@@ -496,6 +554,7 @@ impl GroupSlot {
             // SAFETY: as `get`.
             GroupSlot::Pos(p) => unsafe { *p = at.as_pos() },
             GroupSlot::Ptr(p) => unsafe { *p = at.as_ptr() },
+            GroupSlot::Z(which, no) => which.set(no, at),
         }
     }
 }
@@ -505,9 +564,13 @@ impl GroupSlot {
 ///
 /// The `\z(` groups live in this module's own arrays rather than in the
 /// caller's match structure, which is the only reason there are four families
-/// and not two. Picking the array is safe — it is `no` that has to be in
-/// range, and the *kind* that has to be settled first, because the pair this
-/// match does not use is null for the whole run.
+/// and not two — and it is why those two come back *named* rather than
+/// addressed: nothing outside needs their address, so nothing outside gets
+/// one, and their slots are reached with `get`/`set`.
+///
+/// The caller's two are still addresses, and there the *kind* has to be
+/// settled before one is formed at all, because the pair this match does not
+/// use is null for the whole run.
 ///
 /// # Safety
 ///
@@ -519,8 +582,8 @@ pub(crate) unsafe fn capture_slot(rex: Rex, state: regstate_T, no: usize) -> Gro
         let array = match state {
             RS_MOPEN => rex.reg_startpos(),
             RS_MCLOSE => rex.reg_endpos(),
-            RS_ZOPEN => reg_startzpos.ptr().cast::<lpos_T>(),
-            _ => reg_endzpos.ptr().cast::<lpos_T>(),
+            RS_ZOPEN => return GroupSlot::Z(ZSlot::PosStart, no),
+            _ => return GroupSlot::Z(ZSlot::PosEnd, no),
         };
         // SAFETY: the caller promises the group, and this is the array a
         // buffer match fills.
@@ -529,8 +592,8 @@ pub(crate) unsafe fn capture_slot(rex: Rex, state: regstate_T, no: usize) -> Gro
         let array = match state {
             RS_MOPEN => rex.reg_startp(),
             RS_MCLOSE => rex.reg_endp(),
-            RS_ZOPEN => reg_startzp.ptr().cast::<*mut uint8_t>(),
-            _ => reg_endzp.ptr().cast::<*mut uint8_t>(),
+            RS_ZOPEN => return GroupSlot::Z(ZSlot::PtrStart, no),
+            _ => return GroupSlot::Z(ZSlot::PtrEnd, no),
         };
         // SAFETY: as above, for a string match's array.
         GroupSlot::Ptr(unsafe { array.add(no) })

@@ -19,10 +19,11 @@
 
 use core::ffi::{c_char, c_int};
 
+use super::submatch::Rsm;
 use super::{
     BtProg, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, cstrncmp,
     nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
-    reg_tofree, reg_tofreelen, rsm,
+    reg_tofree, reg_tofreelen,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::main::{curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg};
@@ -71,8 +72,8 @@ impl LineOrigin {
     fn first(self, rex: Rex) -> linenr_T {
         match self {
             LineOrigin::Exec => rex.reg_firstlnum(),
-            // SAFETY: `rsm` is the snapshot `can_f_submatch` says is live.
-            LineOrigin::Submatch => unsafe { (*rsm.ptr()).sm_firstlnum },
+            // SAFETY: `can_f_submatch` gates every path that gets here.
+            LineOrigin::Submatch => unsafe { Rsm::acquire() }.firstlnum(),
         }
     }
 
@@ -81,7 +82,7 @@ impl LineOrigin {
         match self {
             LineOrigin::Exec => rex.reg_maxline(),
             // SAFETY: as `first`.
-            LineOrigin::Submatch => unsafe { (*rsm.ptr()).sm_maxline },
+            LineOrigin::Submatch => unsafe { Rsm::acquire() }.maxline(),
         }
     }
 }
@@ -305,39 +306,40 @@ fn cleanup(rex: Rex, z: bool) {
     if need == 0 {
         return;
     }
-    // SAFETY: the caller's match structure and this module's own arrays
-    // both hold NSUBEXP of each.
-    unsafe {
-        // A buffer match records positions and marks a slot unset with -1;
-        // a string match records pointers and marks it unset with NULL.
-        let multi = rex.multi();
-        let n = NSUBEXP as usize;
-        if multi {
-            let (starts, ends) = if z {
-                (reg_startzpos.ptr().cast(), reg_endzpos.ptr().cast())
-            } else {
-                (rex.reg_startpos(), rex.reg_endpos())
-            };
-            blank(
-                core::slice::from_raw_parts_mut(starts, n),
-                lpos_T { lnum: -1, col: -1 },
-            );
-            blank(
-                core::slice::from_raw_parts_mut(ends, n),
-                lpos_T { lnum: -1, col: -1 },
-            );
+    // A buffer match records positions and marks a slot unset with -1; a
+    // string match records pointers and marks it unset with NULL.
+    let n = NSUBEXP as usize;
+    if z {
+        // The `\z(` arrays are this module's own, so blanking them is a
+        // whole-value write rather than a walk over the caller's memory.
+        if rex.multi() {
+            reg_startzpos.set([UNSET_POS; NSUBEXP as usize]);
+            reg_endzpos.set([UNSET_POS; NSUBEXP as usize]);
         } else {
-            let (starts, ends) = if z {
-                (reg_startzp.ptr().cast(), reg_endzp.ptr().cast())
-            } else {
-                (rex.reg_startp(), rex.reg_endp())
-            };
+            reg_startzp.set([core::ptr::null_mut(); NSUBEXP as usize]);
+            reg_endzp.set([core::ptr::null_mut(); NSUBEXP as usize]);
+        }
+    } else if rex.multi() {
+        // SAFETY: the caller's match structure holds NSUBEXP of each.
+        unsafe {
             blank(
-                core::slice::from_raw_parts_mut(starts, n),
+                core::slice::from_raw_parts_mut(rex.reg_startpos(), n),
+                UNSET_POS,
+            );
+            blank(
+                core::slice::from_raw_parts_mut(rex.reg_endpos(), n),
+                UNSET_POS,
+            );
+        }
+    } else {
+        // SAFETY: as above.
+        unsafe {
+            blank(
+                core::slice::from_raw_parts_mut(rex.reg_startp(), n),
                 core::ptr::null_mut::<uint8_t>(),
             );
             blank(
-                core::slice::from_raw_parts_mut(ends, n),
+                core::slice::from_raw_parts_mut(rex.reg_endp(), n),
                 core::ptr::null_mut::<uint8_t>(),
             );
         }
@@ -348,6 +350,9 @@ fn cleanup(rex: Rex, z: bool) {
         rex.set_need_clear_subexpr(0);
     }
 }
+
+/// What a buffer match's unset capture slot holds.
+const UNSET_POS: lpos_T = lpos_T { lnum: -1, col: -1 };
 
 fn blank<T: Copy>(slots: &mut [T], unset: T) {
     slots.fill(unset);

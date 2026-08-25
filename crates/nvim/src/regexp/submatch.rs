@@ -12,7 +12,10 @@
 
 use core::ffi::{c_char, c_int};
 
-use super::{LineOrigin, Rex, can_f_submatch, reg_line, reg_line_len, rsm};
+use super::{
+    LineOrigin, Rex, can_f_submatch, reg_line, reg_line_len, regmatch_T, regmmatch_T,
+    regsubmatch_T, rsm,
+};
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
 };
@@ -20,6 +23,68 @@ use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
 use crate::types::{NUL, VAR_STRING, colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T};
 use ::libc::{strcpy, strncpy};
+
+/// The snapshot `submatch()` answers about.
+///
+/// Obtained once with [`Rsm::acquire`] and passed around by value, for the
+/// same reason [`Rex`] is: `regsubmatch_T` holds two pointers into the
+/// caller's match structures, and copying the whole thing out of the cell
+/// would leave a second holder of them. The handle names the cell instead —
+/// every accessor reads one field through it and nothing hands out a
+/// reference into it.
+#[derive(Clone, Copy)]
+pub(crate) struct Rsm(*mut regsubmatch_T);
+
+impl Rsm {
+    /// The snapshot of the substitution being evaluated.
+    ///
+    /// # Safety
+    ///
+    /// `can_f_submatch` must say a snapshot is live, and it must stay live
+    /// for as long as the handle does — [`super::substitute`] sets it around
+    /// one evaluation and puts the outer one back afterwards. Nothing else
+    /// may hold a reference into the cell meanwhile.
+    #[inline(always)]
+    pub(crate) unsafe fn acquire() -> Rsm {
+        Rsm(rsm.ptr())
+    }
+
+    /// The string match the snapshot is about, or null for a buffer match.
+    #[inline(always)]
+    pub(crate) fn match_(self) -> *mut regmatch_T {
+        // SAFETY: the handle is a claim that the snapshot is live.
+        unsafe { (*self.0).sm_match }
+    }
+
+    /// The buffer match it is about — meaningful only when [`Rsm::match_`]
+    /// is null.
+    #[inline(always)]
+    pub(crate) fn mmatch(self) -> *mut regmmatch_T {
+        // SAFETY: as `match_`.
+        unsafe { (*self.0).sm_mmatch }
+    }
+
+    /// The buffer line the snapshot's line 0 sits on.
+    #[inline(always)]
+    pub(crate) fn firstlnum(self) -> linenr_T {
+        // SAFETY: as `match_`.
+        unsafe { (*self.0).sm_firstlnum }
+    }
+
+    /// The last line it reaches, relative to [`Rsm::firstlnum`].
+    #[inline(always)]
+    pub(crate) fn maxline(self) -> linenr_T {
+        // SAFETY: as `match_`.
+        unsafe { (*self.0).sm_maxline }
+    }
+
+    /// Whether the match treated `\n` as an ordinary character.
+    #[inline(always)]
+    pub(crate) fn line_lbr(self) -> bool {
+        // SAFETY: as `match_`.
+        unsafe { (*self.0).sm_line_lbr != 0 }
+    }
+}
 
 /// The text of the submatch line `lnum` lines into the match `submatch()`
 /// and a `\=` expression see.
@@ -59,7 +124,8 @@ pub(crate) unsafe fn fill_submatch_list(
         tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T);
 
         // A `staticList10_T` always has exactly ten items, one per capture.
-        let match_ = (*rsm.ptr()).sm_match;
+        // SAFETY: the caller promises a live string match.
+        let match_ = Rsm::acquire().match_();
         let mut li = tv_list_first((*listarg).vval.v_list);
         for i in 0..10 {
             let start = (*match_).startp[i];
@@ -96,21 +162,21 @@ pub(crate) unsafe fn clear_submatch_list(sl: *mut staticList10_T) {
 /// the walk runs twice: round 1 measures and allocates, round 2 copies.
 /// Both rounds must agree, so keep them in step.
 pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
+    if !can_f_submatch.get() || no < 0 {
+        return core::ptr::null_mut();
+    }
+    let no = no as usize;
     // SAFETY: guarded by `can_f_submatch`, which is only set while `rsm`
-    // describes a live match; `no` is bounds-checked against the ten
+    // describes a live match — so the context still names the buffer the
+    // submatch lines are read from; `no` is bounds-checked against the ten
     // capture slots by its caller (`submatch()` rejects anything else).
     unsafe {
-        if !can_f_submatch.get() || no < 0 {
-            return core::ptr::null_mut();
-        }
-        let no = no as usize;
-        // SAFETY: `can_f_submatch` says a match is live, so the context
-        // still names the buffer the submatch lines are read from.
         let rex = Rex::acquire();
 
         // A string match has no lines to cross.
-        if !(*rsm.ptr()).sm_match.is_null() {
-            let match_ = (*rsm.ptr()).sm_match;
+        let snapshot = Rsm::acquire();
+        if !snapshot.match_().is_null() {
+            let match_ = snapshot.match_();
             let start = (*match_).startp[no];
             if start.is_null() || (*match_).endp[no].is_null() {
                 return core::ptr::null_mut();
@@ -118,7 +184,7 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
             return xstrnsave(start, (*match_).endp[no].offset_from(start) as usize);
         }
 
-        let mmatch = (*rsm.ptr()).sm_mmatch;
+        let mmatch = snapshot.mmatch();
         let mut retval: *mut c_char = core::ptr::null_mut();
         for round in 1..=2 {
             let mut lnum = (*mmatch).startpos[no].lnum;
@@ -192,19 +258,18 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
 /// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
 /// text apart from the line breaks, because each line is its own item.
 pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
+    if !can_f_submatch.get() || no < 0 {
+        return core::ptr::null_mut();
+    }
+    let no = no as usize;
     // SAFETY: as [`reg_submatch`].
     unsafe {
-        if !can_f_submatch.get() || no < 0 {
-            return core::ptr::null_mut();
-        }
-        let no = no as usize;
-        // SAFETY: `can_f_submatch` says a match is live, so the context
-        // still names the buffer the submatch lines are read from.
         let rex = Rex::acquire();
 
         // A string match is one item.
-        if !(*rsm.ptr()).sm_match.is_null() {
-            let match_ = (*rsm.ptr()).sm_match;
+        let snapshot = Rsm::acquire();
+        if !snapshot.match_().is_null() {
+            let match_ = snapshot.match_();
             let start = (*match_).startp[no];
             if start.is_null() || (*match_).endp[no].is_null() {
                 return core::ptr::null_mut();
@@ -215,7 +280,7 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
             return list;
         }
 
-        let mmatch = (*rsm.ptr()).sm_mmatch;
+        let mmatch = snapshot.mmatch();
         let slnum = (*mmatch).startpos[no].lnum;
         let elnum = (*mmatch).endpos[no].lnum;
         if slnum < 0 || elnum < 0 {

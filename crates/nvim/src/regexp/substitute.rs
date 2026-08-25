@@ -22,7 +22,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::api::with_rex;
-use super::submatch::{clear_submatch_list, fill_submatch_list};
+use super::submatch::{Rsm, clear_submatch_list, fill_submatch_list};
 use super::{
     CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, Rex, TAB,
     can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
@@ -465,9 +465,11 @@ unsafe fn eval_replacement(
         // keep answering about the outermost match, so hand it this one and
         // put back whatever the caller above was showing.
         let outer_can_f_submatch = can_f_submatch.get();
-        let outer_rsm = outer_can_f_submatch.then(|| rsm.get());
         can_f_submatch.set(true);
-        rsm.set(regsubmatch_T {
+        // `replace` rather than a `get` and a `set`: the snapshot holds the
+        // outer match's structures, and a copy alongside the cell would be a
+        // second holder of them for the length of the evaluation.
+        let outer_rsm = rsm.replace(regsubmatch_T {
             sm_match: rex.reg_match(),
             sm_mmatch: rex.reg_mmatch(),
             sm_firstlnum: rex.reg_firstlnum(),
@@ -496,7 +498,7 @@ unsafe fn eval_replacement(
         (*EVAL_RESULT.ptr())[nested] = text;
 
         can_f_submatch.set(outer_can_f_submatch);
-        if let Some(outer_rsm) = outer_rsm {
+        if outer_can_f_submatch {
             rsm.set(outer_rsm);
         }
     }
@@ -576,7 +578,7 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
 unsafe fn line_breaks_to_cr(text: *mut c_char) -> bool {
     // SAFETY: `text` is a NUL-terminated allocation this module owns.
     unsafe {
-        let literal_nl = (*rsm.ptr()).sm_line_lbr != 0;
+        let literal_nl = Rsm::acquire().line_lbr();
         let mut had_backslash = false;
         let mut s = text;
         while *s != NUL as c_char {
