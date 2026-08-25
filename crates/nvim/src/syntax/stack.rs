@@ -435,14 +435,21 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
 
 /// Copy a cached state stack into the current state.
 pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
-    unsafe {
-        clear_current_state();
-        validate_current_state();
-        keepend_level.set(-1);
+    clear_current_state();
+    validate_current_state();
+    keepend_level.set(-1);
 
-        let size = (*from).sst_stacksize;
-        if size != 0 {
-            ga_grow(current_state.ptr(), size);
+    // SAFETY: the caller's cached state entry.
+    let size = unsafe { (*from).sst_stacksize };
+    if size != 0 {
+        current_state.with_mut(|stack| {
+            if let Some(items) = stack {
+                items.resize(size as usize, EMPTY_STATE_ITEM);
+            }
+        });
+        // SAFETY: `entry_states` answers the entry's own `size` items, and
+        // the stack was just grown to hold them.
+        unsafe {
             let bp = entry_states(from, size);
             let mut i = 0;
             while i < size {
@@ -466,8 +473,10 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
                 update_si_attr(i);
                 i += 1;
             }
-            (*current_state.ptr()).ga_len = size;
         }
+    }
+    // SAFETY: the caller's cached state entry.
+    unsafe {
         current_next_list.set((*from).sst_next_list);
         current_next_flags.set((*from).sst_next_flags);
         current_lnum.set((*from).sst_lnum);

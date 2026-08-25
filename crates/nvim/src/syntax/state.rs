@@ -127,8 +127,8 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
 /// Upstream spells this `VALID_STATE`, and stores the answer in the growarray's
 /// `ga_itemsize`: `invalidate_current_state` zeroes it.
 #[inline]
-pub(crate) unsafe fn current_state_valid() -> bool {
-    unsafe { (*current_state.ptr()).ga_itemsize != 0 }
+pub(crate) fn current_state_valid() -> bool {
+    current_state.with(Option::is_some)
 }
 
 /// How many lines apart to store cache entries for lines that are not
@@ -226,20 +226,15 @@ pub(crate) unsafe fn clear_syn_state(p: *mut synstate_T) {
     }
 }
 
-/// Empty the current state stack, releasing its extmatch references.
-pub(crate) unsafe fn clear_current_state() {
-    unsafe {
-        let gap = current_state.ptr();
-        if !(*gap).ga_data.is_null() {
-            let mut i = 0;
-            while i < (*gap).ga_len {
-                unref_extmatch(
-                    (*((*gap).ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch,
-                );
-                i += 1;
-            }
-        }
-        ga_clear(gap);
+/// Empty the current state stack, releasing its extmatch references. The
+/// stack stays valid, as upstream's `ga_clear` leaves it.
+pub(crate) fn clear_current_state() {
+    // The items move out first: `unref_extmatch` frees, and nothing is run
+    // while the cell is borrowed.
+    let items = current_state.with_mut(|stack| stack.as_mut().map(core::mem::take));
+    for item in items.into_iter().flatten() {
+        // SAFETY: the item held its own reference to the extmatch.
+        unsafe { unref_extmatch(item.si_extmatch) };
     }
 }
 
@@ -350,21 +345,21 @@ pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
 }
 
 /// Throw the current state away and mark it invalid.
-pub(crate) unsafe fn invalidate_current_state() {
-    unsafe {
-        clear_current_state();
-        (*current_state.ptr()).ga_itemsize = 0; // marks current_state invalid
-        current_next_list.set(::core::ptr::null_mut());
-        keepend_level.set(-1);
-    }
+pub(crate) fn invalidate_current_state() {
+    clear_current_state();
+    current_state.set(None); // marks current_state invalid
+    current_next_list.set(::core::ptr::null_mut());
+    keepend_level.set(-1);
 }
 
-/// Mark the current state valid and ready to be pushed onto.
-pub(crate) unsafe fn validate_current_state() {
-    unsafe {
-        (*current_state.ptr()).ga_itemsize = ::core::mem::size_of::<stateitem_T>() as c_int;
-        ga_set_growsize(current_state.ptr(), 3);
-    }
+/// Mark the current state valid and ready to be pushed onto. A stack that is
+/// already valid keeps whatever it holds, as upstream's does.
+pub(crate) fn validate_current_state() {
+    current_state.with_mut(|stack| {
+        if stack.is_none() {
+            *stack = Some(Vec::new());
+        }
+    });
 }
 
 /// Has the syntax at the start of `lnum` changed since last time?

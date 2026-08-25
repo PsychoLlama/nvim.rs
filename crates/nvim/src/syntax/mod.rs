@@ -198,14 +198,6 @@ pub(crate) struct syn_opt_arg_T {
     pub cont_in_list: *mut int16_t,
     pub next_list: *mut int16_t,
 }
-pub(crate) const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: 0 as ::core::ffi::c_int,
-    ga_growsize: 1 as ::core::ffi::c_int,
-    ga_data: NULL,
-};
 pub(crate) const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -362,7 +354,37 @@ static current_state_stored: GlobalCell<bool> = GlobalCell::new(false);
 /// Whether the line has been parsed to its end.
 static current_finished: GlobalCell<bool> = GlobalCell::new(false);
 /// The state stack: a `garray_T` of [`stateitem_T`], outermost item first.
-static current_state: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
+/// The syntax state stack, outermost item first: what the parser is inside
+/// at [`current_col`].
+///
+/// `None` is upstream's "invalid state", which it marks by zeroing the
+/// growarray's `ga_itemsize` — a flag about the value, so it belongs in the
+/// value's type. Reach it through [`items::state_len`]/[`items::state_at`]
+/// and the `*_current_state` family, never directly.
+static current_state: GlobalCell<Option<Vec<stateitem_T>>> = GlobalCell::new(None);
+
+/// A cleared state item: what upstream's `GA_APPEND_VIA_PTR` slot holds
+/// once `ga_grow` has zeroed it.
+const EMPTY_STATE_ITEM: stateitem_T = stateitem_T {
+    si_idx: 0,
+    si_id: 0,
+    si_trans_id: 0,
+    si_m_lnum: 0,
+    si_m_startcol: 0,
+    si_m_endpos: lpos_T { lnum: 0, col: 0 },
+    si_h_startpos: lpos_T { lnum: 0, col: 0 },
+    si_h_endpos: lpos_T { lnum: 0, col: 0 },
+    si_eoe_pos: lpos_T { lnum: 0, col: 0 },
+    si_end_idx: 0,
+    si_ends: 0,
+    si_attr: 0,
+    si_flags: SynFlags::NONE,
+    si_seqnr: 0,
+    si_cchar: 0,
+    si_cont_list: ::core::ptr::null_mut(),
+    si_next_list: ::core::ptr::null_mut(),
+    si_extmatch: ::core::ptr::null_mut(),
+};
 /// The `nextgroup=` list in effect, or NULL.
 static current_next_list: GlobalCell<*mut int16_t> = GlobalCell::new(::core::ptr::null_mut());
 /// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.

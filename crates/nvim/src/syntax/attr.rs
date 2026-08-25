@@ -49,7 +49,7 @@ pub(crate) unsafe fn get_syntax_attr(
             current_seqnr.set(0);
             return 0;
         }
-        if (*current_state.ptr()).ga_itemsize == 0 {
+        if !current_state_valid() {
             validate_current_state();
         }
 

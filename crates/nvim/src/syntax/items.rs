@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
+use core::ptr;
 
 use super::*;
 use crate::pos::MAXCOL;
@@ -17,17 +18,24 @@ use crate::types::NUL;
 
 /// Number of items on the current state stack.
 #[inline(always)]
-pub(crate) unsafe fn state_len() -> c_int {
-    unsafe { (*current_state.ptr()).ga_len }
+pub(crate) fn state_len() -> c_int {
+    current_state.with(|stack| stack.as_ref().map_or(0, |items| items.len() as c_int))
 }
 
 /// The item at `i` on the current state stack (0 is the outermost).
 ///
-/// A pointer and not a borrow: the array is a `garray_T` that any push can
-/// reallocate, and several callers address two items at once.
+/// A pointer and not a borrow: any push can reallocate the stack, and
+/// several callers address two items at once.
+///
+/// # Safety
+/// `i` must be below [`state_len`], and the pointer is invalidated by
+/// anything that pushes onto or clears the stack.
 #[inline(always)]
 pub(crate) unsafe fn state_at(i: c_int) -> *mut stateitem_T {
-    unsafe { ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize) }
+    current_state.with_mut(|stack| match stack {
+        Some(items) => items.as_mut_ptr().wrapping_add(i as usize),
+        None => ptr::null_mut(),
+    })
 }
 
 /// The innermost item on the current state stack. Only valid when
@@ -364,28 +372,37 @@ pub(crate) unsafe fn update_si_end(sip: *mut stateitem_T, startcol: c_int, force
 }
 
 /// Push a cleared item for pattern `idx` onto the state stack.
-pub(crate) unsafe fn push_current_state(idx: c_int) {
-    unsafe {
-        let p = ga_append_via_ptr(current_state.ptr(), ::core::mem::size_of::<stateitem_T>())
-            as *mut stateitem_T;
-        p.write_bytes(0, 1);
-        (*p).si_idx = idx;
-    }
+///
+/// A push on an invalid stack is dropped; upstream would grow the garray it
+/// had just declared dead.
+pub(crate) fn push_current_state(idx: c_int) {
+    let item = stateitem_T {
+        si_idx: idx,
+        ..EMPTY_STATE_ITEM
+    };
+    current_state.with_mut(|stack| {
+        if let Some(items) = stack {
+            items.push(item);
+        }
+    });
 }
 
 /// Pop the innermost item off the state stack.
-pub(crate) unsafe fn pop_current_state() {
-    unsafe {
-        if state_len() > 0 {
-            unref_extmatch((*state_top()).si_extmatch);
-            (*current_state.ptr()).ga_len -= 1;
-        }
-        // After the end of a pattern, try matching a keyword or pattern again.
-        next_match_idx.set(-1);
-        // If the first "keepend" item was the one popped, there is no keepend
-        // level any more.
-        if keepend_level.get() >= state_len() {
-            keepend_level.set(-1);
-        }
+pub(crate) fn pop_current_state() {
+    if state_len() > 0 {
+        // SAFETY: the stack is not empty, so `state_top` is one of its items.
+        unsafe { unref_extmatch((*state_top()).si_extmatch) };
+        current_state.with_mut(|stack| {
+            if let Some(items) = stack {
+                items.pop();
+            }
+        });
+    }
+    // After the end of a pattern, try matching a keyword or pattern again.
+    next_match_idx.set(-1);
+    // If the first "keepend" item was the one popped, there is no keepend
+    // level any more.
+    if keepend_level.get() >= state_len() {
+        keepend_level.set(-1);
     }
 }
