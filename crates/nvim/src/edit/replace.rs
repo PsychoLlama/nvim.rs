@@ -27,6 +27,15 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::types::NUL;
 
+/// The Replace-mode stack of overwritten bytes, by address.
+///
+/// Every operation on it — push, pop, join — grows or shrinks it in place
+/// while Insert mode is running, so the address is what the family works
+/// from and it is taken here once.
+pub(super) fn replace_stack_ref() -> *mut ReplaceStack {
+    replace_stack.ptr()
+}
+
 /// Truncate the white space at the end of a line, keeping the replace stack
 /// in step.
 ///
@@ -136,7 +145,7 @@ const fn kv_roundup32(n: size_t) -> size_t {
 /// `str` must point to `len` readable bytes.
 pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
     unsafe {
-        let stack = replace_stack.ptr();
+        let stack = replace_stack_ref();
         if (*stack).size < replace_offset.get() as size_t {
             return; // nothing to do
         }
@@ -189,7 +198,7 @@ pub(crate) unsafe fn replace_push_nul() {
 /// Must run with a live replace stack.
 pub(crate) unsafe fn replace_pop_if_nul() -> c_int {
     unsafe {
-        let stack = replace_stack.ptr();
+        let stack = replace_stack_ref();
         let ch = if (*stack).size != 0 {
             *(*stack).items.add((*stack).size - 1) as uint8_t as c_int
         } else {
@@ -208,7 +217,7 @@ pub(crate) unsafe fn replace_pop_if_nul() -> c_int {
 /// Must run with a live replace stack.
 pub(crate) unsafe fn replace_join(mut off: c_int) {
     unsafe {
-        let stack = replace_stack.ptr();
+        let stack = replace_stack_ref();
         let mut i = (*stack).size as ssize_t;
         while i > 0 {
             i -= 1;
@@ -262,7 +271,7 @@ pub(crate) unsafe fn replace_pop_ins() {
 /// The replace stack's top entry must be non-empty.
 pub(crate) unsafe fn mb_replace_pop_ins() {
     unsafe {
-        let stack = replace_stack.ptr();
+        let stack = replace_stack_ref();
         let len = utf_head_off((*stack).items, (*stack).items.add((*stack).size - 1)) + 1;
         (*stack).size -= len as size_t;
         ins_bytes_len((*stack).items.add((*stack).size), len as size_t);

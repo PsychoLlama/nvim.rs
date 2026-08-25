@@ -182,12 +182,12 @@ pub(crate) unsafe fn buf_do_map(
         let map_table: *mut *mut mapblock_T = if (*args).buffer {
             buf_table
         } else {
-            MAPHASH.ptr().cast()
+            global_map_heads()
         };
         let abbr_table: *mut *mut mapblock_T = if (*args).buffer {
             &raw mut (*buf).b_first_abbr
         } else {
-            FIRST_ABBR.ptr()
+            global_abbr_head()
         };
         let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
 
@@ -327,7 +327,7 @@ pub(crate) unsafe fn buf_do_map(
                                 if !has_lhs {
                                     // Show all entries.
                                     if (*mp).m_simplified == 0 {
-                                        showmap(mp, map_table != MAPHASH.ptr().cast());
+                                        showmap(mp, map_table != global_map_heads());
                                         did_it = true;
                                     }
                                     break 'entry;
@@ -371,7 +371,7 @@ pub(crate) unsafe fn buf_do_map(
                                 } else if !has_rhs {
                                     // Show the matching entry.
                                     if (*mp).m_simplified == 0 {
-                                        showmap(mp, map_table != MAPHASH.ptr().cast());
+                                        showmap(mp, map_table != global_map_heads());
                                         did_it = true;
                                     }
                                 } else if n != len {

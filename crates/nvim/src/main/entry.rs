@@ -66,7 +66,7 @@ use crate::message::msg_putchar;
 use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
-use crate::normal::{check_scrollbind, init_normal_cmds, normal_enter};
+use crate::normal::{check_scrollbind, normal_enter};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
@@ -157,7 +157,6 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
         } else {
             c"nvim".as_ptr()
         });
-        init_normal_cmds();
         runtime_init();
         highlight_init();
         time_msg_at(c"early init");

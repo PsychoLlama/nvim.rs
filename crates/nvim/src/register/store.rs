@@ -42,7 +42,7 @@ pub unsafe fn get_unname_register() -> c_int {
         if y_previous.get().is_null() {
             -1
         } else {
-            y_previous.get().offset_from(y_regs.ptr() as *mut yankreg_T) as c_int
+            y_previous.get().offset_from(get_y_register(0)) as c_int
         }
     }
 }
@@ -151,7 +151,7 @@ pub unsafe fn op_global_reg_iter(
     reg: *mut yankreg_T,
     is_unnamed: *mut bool,
 ) -> *const c_void {
-    unsafe { op_reg_iter(iter, y_regs.ptr() as *mut yankreg_T, name, reg, is_unnamed) }
+    unsafe { op_reg_iter(iter, get_y_register(0), name, reg, is_unnamed) }
 }
 
 /// Put `reg` in the register named `name`, freeing whatever was there.
@@ -167,7 +167,7 @@ pub unsafe fn op_reg_set(name: c_char, reg: yankreg_T, is_unnamed: bool) -> bool
             return false;
         }
         free_register(get_y_register(i));
-        (*y_regs.ptr())[i as usize] = reg;
+        *get_y_register(i) = reg;
         if is_unnamed {
             y_previous.set(get_y_register(i));
         }
@@ -335,13 +335,13 @@ pub unsafe fn shift_delete_registers(y_append: bool) {
     unsafe {
         free_register(get_y_register(9));
         for n in (2..=9).rev() {
-            (*y_regs.ptr())[n as usize] = (*y_regs.ptr())[(n - 1) as usize];
+            *get_y_register(n) = *get_y_register(n - 1);
         }
         if !y_append {
             y_previous.set(get_y_register(1));
         }
         // `"1`'s array now belongs to `"2`: forget it rather than free it.
-        (*y_regs.ptr())[1].y_array = ::core::ptr::null_mut();
+        (*get_y_register(1)).y_array = ::core::ptr::null_mut();
     }
 }
 

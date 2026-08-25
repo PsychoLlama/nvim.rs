@@ -19,6 +19,40 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::types::{FAIL, NUL, OK};
 
+/// The buffer `.` repeats, by address.
+///
+/// A handle rather than `get`/`set`: `String_0` is `Copy` and this cell owns
+/// the allocation, so a `get` would hand out a second owner of it. Every
+/// borrow taken here is a view, and the one place that frees is `replace`.
+#[derive(Clone, Copy)]
+pub(super) struct LastInsert(*mut String_0);
+
+/// The one place the last-insert buffer's address is taken.
+pub(super) fn last_insert_slot() -> LastInsert {
+    LastInsert(last_insert.ptr())
+}
+
+impl LastInsert {
+    /// The whole buffer as a borrowed view; the bytes belong to the cell.
+    fn borrow(self) -> String_0 {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { *self.0 }
+    }
+
+    /// Free what is there and take ownership of `text`.
+    ///
+    /// # Safety
+    /// `text` must own its allocation, and nothing may still be holding a
+    /// [`borrow`](Self::borrow) of the old one.
+    pub(super) unsafe fn replace(self, text: String_0) {
+        // SAFETY: the cell's own allocation, replaced in one step.
+        unsafe {
+            xfree((*self.0).data().cast());
+            *self.0 = text;
+        }
+    }
+}
+
 /// Set the last inserted text to the single character `c`.
 ///
 /// Used by `r`.  What is stored is the *redo buffer* spelling: a CTRL-V in
@@ -29,12 +63,7 @@ use crate::types::{FAIL, NUL, OK};
 /// Must run on the main thread; frees and replaces `last_insert`.
 pub(crate) unsafe fn set_last_insert(c: c_int) {
     unsafe {
-        xfree((*last_insert.ptr()).data() as *mut ::core::ffi::c_void);
-        (*last_insert.ptr()).set_data(
-            xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) as *mut ::core::ffi::c_char,
-        );
-
-        let start = (*last_insert.ptr()).data();
+        let start = xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) as *mut ::core::ffi::c_char;
         let mut s = start;
         // The CTRL-V is only needed to enter a special character.
         if c < ' ' as c_int || c == DEL {
@@ -46,7 +75,8 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
         s = s.offset(1);
         *s = NUL as c_char;
 
-        (*last_insert.ptr()).set_len(s.offset_from(start) as size_t);
+        let len = s.offset_from(start) as size_t;
+        last_insert_slot().replace(String_0::from_raw_parts(start, len));
         last_insert_skip.set(0);
     }
 }
@@ -130,18 +160,15 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
 /// # Safety
 /// The answer is invalidated by the next [`set_last_insert`] or insert.
 pub(crate) unsafe fn get_last_insert() -> String_0 {
-    unsafe {
-        if (*last_insert.ptr()).data().is_null() {
-            String_0::NULL
-        } else {
-            String_0::from_raw_parts(
-                (*last_insert.ptr())
-                    .data()
-                    .offset(last_insert_skip.get() as isize),
-                (*last_insert.ptr()).len() - last_insert_skip.get() as size_t,
-            )
-        }
+    let all = last_insert_slot().borrow();
+    if all.data().is_null() {
+        return String_0::NULL;
     }
+    let skip = last_insert_skip.get() as size_t;
+    // SAFETY: `last_insert_skip` counts bytes this module put on the front,
+    // so it never runs past the buffer.
+    let from = unsafe { all.data().add(skip as usize) };
+    String_0::from_raw_parts(from, all.len() - skip)
 }
 
 /// The last inserted text as a fresh allocation, with the trailing `<Esc>`

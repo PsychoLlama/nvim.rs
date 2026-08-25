@@ -123,12 +123,12 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         let map_table: *mut *mut mapblock_T = if buffer {
             (&raw mut (*curbuf.get()).b_maphash).cast()
         } else {
-            MAPHASH.ptr().cast()
+            global_map_heads()
         };
         let abbr_table: *mut *mut mapblock_T = if buffer {
             &raw mut (*curbuf.get()).b_first_abbr
         } else {
-            FIRST_ABBR.ptr()
+            global_abbr_head()
         };
 
         // Delete any existing mapping for this lhs and mode.

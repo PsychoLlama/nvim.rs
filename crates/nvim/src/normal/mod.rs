@@ -186,7 +186,12 @@ const fn cmd(cmd_char: c_int, cmd_func: nv_func_T, cmd_flags: c_int, cmd_arg: c_
     }
 }
 
-static nv_cmds: [nv_cmd; 188] = [
+/// The Normal-mode command table, in source order.
+///
+/// A `const` so that [`NV_CMD_IDX`](crate::normal::NV_CMD_IDX) can be sorted
+/// at compile time; `nv_cmds` is the `static` everything indexes, so the rows
+/// exist once.
+pub(crate) const NV_CMDS: [nv_cmd; 188] = [
     cmd(NUL, Some(nv_error), 0, 0),
     cmd(Ctrl_A, Some(nv_addsub), 0, 0),
     cmd(Ctrl_B, Some(nv_page), NV_STS, BACKWARD as c_int),
@@ -596,14 +601,13 @@ static nv_cmds: [nv_cmd; 188] = [
         0,
     ),
 ];
+static nv_cmds: [nv_cmd; 188] = NV_CMDS;
 pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
     .wrapping_div(::core::mem::size_of::<nv_cmd>())
     .wrapping_div(
         (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())
             == 0) as c_int as usize,
     );
-static nv_cmd_idx: GlobalCell<[int16_t; 188]> = GlobalCell::new([0; 188]);
-static nv_max_linear: GlobalCell<c_int> = GlobalCell::new(0);
 static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null_mut::<oparg_T>());
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);

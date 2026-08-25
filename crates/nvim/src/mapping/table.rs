@@ -29,6 +29,21 @@ pub(crate) static FIRST_ABBR: GlobalCell<*mut mapblock_T> = GlobalCell::new(ptr:
 pub(crate) static MAPHASH: GlobalCell<[*mut mapblock_T; MAX_MAPHASH]> =
     GlobalCell::new([ptr::null_mut(); MAX_MAPHASH]);
 
+/// The global mapping table as a row of list *heads*, one per hash bucket.
+///
+/// A `*mut *mut mapblock_T` rather than a borrow: the whole family walks and
+/// unlinks through the link itself, and a `&mut` to the array would
+/// invalidate a cursor that points into it — which is what
+/// [`map_clear_mode`] does when a re-hash moves an entry.
+pub(crate) fn global_map_heads() -> *mut *mut mapblock_T {
+    MAPHASH.ptr().cast()
+}
+
+/// The head of the global abbreviation list. See [`global_map_heads`].
+pub(crate) fn global_abbr_head() -> *mut *mut mapblock_T {
+    FIRST_ABBR.ptr()
+}
+
 /// The modes whose mappings hash on the LHS byte itself.
 const NORMAL_SIDE: c_int =
     MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING | MODE_TERMINAL;
@@ -228,11 +243,11 @@ pub unsafe fn map_clear_mode(buf: *mut buf_T, mode: c_int, local: bool, abbr: bo
         for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
             let mut mpp: *mut *mut mapblock_T = match (local, abbr) {
                 (true, true) => &raw mut (*buf).b_first_abbr,
-                (false, true) => FIRST_ABBR.ptr(),
+                (false, true) => global_abbr_head(),
                 (true, false) => (&raw mut (*buf).b_maphash)
                     .cast::<*mut mapblock_T>()
                     .add(hash),
-                (false, false) => MAPHASH.ptr().cast::<*mut mapblock_T>().add(hash),
+                (false, false) => global_map_heads().add(hash),
             };
             while !(*mpp).is_null() {
                 let mp = *mpp;
@@ -252,7 +267,7 @@ pub unsafe fn map_clear_mode(buf: *mut buf_T, mode: c_int, local: bool, abbr: bo
                         let head: *mut *mut mapblock_T = if local {
                             (&raw mut (*buf).b_maphash).cast()
                         } else {
-                            MAPHASH.ptr().cast()
+                            global_map_heads()
                         };
                         (*mp).m_next = *head.add(new_hash);
                         *head.add(new_hash) = mp;

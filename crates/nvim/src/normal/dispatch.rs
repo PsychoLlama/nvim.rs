@@ -43,12 +43,12 @@ use crate::mbyte::{
 };
 use crate::memory::xfree;
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL, NV_CMDS_SIZE,
-    NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL, NV_CMDS,
+    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
     check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
     normal_handle_special_visual_command, normal_need_additional_char,
-    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
-    nv_max_linear, set_vcount_ca, set_visual_select, start_selection, visual_active, visual_select,
+    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
+    set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{do_pending_operator, get_op_type};
 use crate::register::get_default_register_name;
@@ -61,7 +61,6 @@ use crate::types::{
     oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
-use ::libc::qsort;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::getchar::{
@@ -75,49 +74,69 @@ const _: () = assert!(NV_CMDS_SIZE <= i16::MAX as usize);
 
 /// Order two `nv_cmds` rows by the character they answer to.
 ///
-/// A special key is a negative character; it sorts by its magnitude, which is
-/// what lets `find_command` search for `-cmdchar`.
-///
-/// Kept `extern "C"`: `qsort` calls it through a C function pointer.
-unsafe extern "C" fn nv_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    // SAFETY: `qsort` hands back pointers to two elements of `nv_cmd_idx`,
-    // each a valid row index.
-    unsafe {
-        let c1 = nv_cmds[*(s1 as *const int16_t) as usize].cmd_char.abs();
-        let c2 = nv_cmds[*(s2 as *const int16_t) as usize].cmd_char.abs();
-        c1.cmp(&c2) as c_int
-    }
-}
-
-/// Build the sorted index into `nv_cmds`, and measure how far a direct index
+/// `nv_cmds` in ascending `|cmd_char|` order, and how far a direct index
 /// works.
 ///
-/// After the sort, `nv_cmd_idx[i]` is the row whose character is `i`th
-/// smallest. For a leading run the `i`th smallest character *is* `i` -- the
-/// control characters are dense and start at NUL -- so `find_command` can
-/// index straight in below `nv_max_linear` and only binary-search above it.
-pub(crate) fn init_normal_cmds() {
-    // SAFETY: both arrays are `NV_CMDS_SIZE` long and `nv_compare` only reads
-    // row indices out of the one being sorted.
-    unsafe {
-        for i in 0..NV_CMDS_SIZE {
-            (*nv_cmd_idx.ptr())[i] = i as int16_t;
-        }
-        qsort(
-            nv_cmd_idx.ptr().cast::<c_void>(),
-            NV_CMDS_SIZE,
-            size_of::<int16_t>(),
-            Some(nv_compare),
-        );
-        let mut i = 0;
-        while i < NV_CMDS_SIZE as c_int
-            && i == nv_cmds[(*nv_cmd_idx.ptr())[i as usize] as usize].cmd_char
-        {
-            i += 1;
-        }
-        nv_max_linear.set(i - 1);
+/// Upstream builds this with `qsort` at startup, and then measures the
+/// leading run where the `i`th smallest character *is* `i` — the control
+/// characters are dense and start at NUL — so that `find_command` can index
+/// straight in below that and only binary-search above it. The table is a
+/// `const`, so both answers are: an insertion sort over 188 rows is nothing
+/// to a `const fn`, and there is no startup pass and no `qsort` comparator
+/// left to keep an `extern "C"` signature for.
+///
+/// A special key is stored as a negative character and sorts by magnitude,
+/// which is what lets `find_command` search for `-cmdchar`.
+const fn sorted_nv_cmds() -> ([int16_t; NV_CMDS_SIZE], c_int) {
+    let mut idx = [0 as int16_t; NV_CMDS_SIZE];
+    let mut i = 0;
+    while i < NV_CMDS_SIZE {
+        idx[i] = i as int16_t;
+        i += 1;
     }
+    // Insertion sort: `qsort` is not stable, so this leans on no two rows
+    // sharing a character, which the assertion below holds them to.
+    let mut i = 1;
+    while i < NV_CMDS_SIZE {
+        let mut j = i;
+        while j > 0
+            && NV_CMDS[idx[j - 1] as usize].cmd_char.abs() > NV_CMDS[idx[j] as usize].cmd_char.abs()
+        {
+            let swap = idx[j - 1];
+            idx[j - 1] = idx[j];
+            idx[j] = swap;
+            j -= 1;
+        }
+        i += 1;
+    }
+    let mut linear = 0;
+    while linear < NV_CMDS_SIZE as c_int
+        && linear == NV_CMDS[idx[linear as usize] as usize].cmd_char
+    {
+        linear += 1;
+    }
+    (idx, linear - 1)
 }
+
+/// [`sorted_nv_cmds`]'s two answers.
+const NV_SORTED: ([int16_t; NV_CMDS_SIZE], c_int) = sorted_nv_cmds();
+const NV_CMD_IDX: [int16_t; NV_CMDS_SIZE] = NV_SORTED.0;
+const NV_MAX_LINEAR: c_int = NV_SORTED.1;
+
+/// No two rows share a character: the sort above is stable and `find_command`
+/// answers with the first match, so a duplicate would make which row wins
+/// depend on the table's source order.
+const _: () = {
+    let mut i = 1;
+    while i < NV_CMDS_SIZE {
+        assert!(
+            NV_CMDS[NV_CMD_IDX[i - 1] as usize].cmd_char.abs()
+                < NV_CMDS[NV_CMD_IDX[i] as usize].cmd_char.abs(),
+            "two nv_cmds rows share a command character"
+        );
+        i += 1;
+    }
+};
 
 /// The row of `nv_cmds` that answers to `cmdchar`, or -1.
 pub(crate) fn find_command(cmdchar: c_int) -> c_int {
@@ -126,22 +145,19 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
     }
     // A special key is stored negative and searched for by magnitude.
     let cmdchar = cmdchar.abs();
-    debug_assert!(nv_max_linear.get() < NV_CMDS_SIZE as c_int);
+    const _: () = assert!(NV_MAX_LINEAR < NV_CMDS_SIZE as c_int);
 
-    // SAFETY: every index below is bounded by `NV_CMDS_SIZE`.
-    unsafe {
-        if cmdchar <= nv_max_linear.get() {
-            return (*nv_cmd_idx.ptr())[cmdchar as usize] as c_int;
+    {
+        if cmdchar <= NV_MAX_LINEAR {
+            return NV_CMD_IDX[cmdchar as usize] as c_int;
         }
-        let mut bot = nv_max_linear.get() + 1;
+        let mut bot = NV_MAX_LINEAR + 1;
         let mut top = NV_CMDS_SIZE as c_int - 1;
         while bot <= top {
             let i = (top + bot) / 2;
-            let c = nv_cmds[(*nv_cmd_idx.ptr())[i as usize] as usize]
-                .cmd_char
-                .abs();
+            let c = NV_CMDS[NV_CMD_IDX[i as usize] as usize].cmd_char.abs();
             if cmdchar == c {
-                return (*nv_cmd_idx.ptr())[i as usize] as c_int;
+                return NV_CMD_IDX[i as usize] as c_int;
             } else if cmdchar > c {
                 bot = i + 1;
             } else {

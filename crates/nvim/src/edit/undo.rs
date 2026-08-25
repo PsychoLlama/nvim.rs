@@ -145,8 +145,8 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
         stop_redo_ins();
 
         // Abandon the replace stack (this reinitialises it).
-        xfree((*replace_stack.ptr()).items as *mut ::core::ffi::c_void);
-        *replace_stack.ptr() = REPLACE_STACK_EMPTY;
+        xfree((*replace_stack_ref()).items as *mut ::core::ffi::c_void);
+        *replace_stack_ref() = REPLACE_STACK_EMPTY;
 
         // Save the inserted text for a later `.`/CTRL-@/CTRL-A.  Not when
         // `restart_edit` was set and nothing was inserted, or `CTRL-O w`
@@ -158,8 +158,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             inserted.len() as c_int - new_insert_skip.get()
         };
         if did_restart_edit.get() == 0 || added > 0 {
-            xfree((*last_insert.ptr()).data() as *mut ::core::ffi::c_void);
-            last_insert.set(inserted); // structure copy
+            last_insert_slot().replace(inserted);
             last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
         } else {
             xfree(inserted.data() as *mut ::core::ffi::c_void);
