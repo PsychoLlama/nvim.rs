@@ -498,22 +498,19 @@ pub unsafe fn stl_clear_click_defs(click_defs: *mut StlClickDefinition, click_de
     unsafe { ClickArena::new(click_defs, click_defs_size) }.clear();
 }
 
-/// C's `stl_alloc_click_defs()`.
+/// C's `stl_alloc_click_defs()`: the grown array and its new size.
 ///
 /// # Safety
 /// As [`stl_clear_click_defs`]; `size` must be the owner's own record.
 pub unsafe fn stl_alloc_click_defs(
     cdp: *mut StlClickDefinition,
     width: ::core::ffi::c_int,
-    size: *mut size_t,
-) -> *mut StlClickDefinition {
-    // SAFETY: the caller's promise -- `size` is a live `size_t`.
-    let mut arena = unsafe { ClickArena::new(cdp, *size) };
+    size: size_t,
+) -> (*mut StlClickDefinition, size_t) {
+    // SAFETY: the caller's promise -- `size` is what `cdp` was allocated at.
+    let mut arena = unsafe { ClickArena::new(cdp, size) };
     arena.reserve(width);
-    let (defs, new_size) = arena.parts();
-    // SAFETY: the caller's out-parameter.
-    unsafe { *size = new_size };
-    defs
+    arena.parts()
 }
 
 // ---------------------------------------------------------------------------

@@ -49,12 +49,12 @@ pub unsafe fn default_grid_alloc() -> bool {
         // at the old size, because the wrong size is a crash.
         grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
-        stl_clear_click_defs(tab_page_click_defs.get(), tab_page_click_defs_size.get());
-        tab_page_click_defs.set(stl_alloc_click_defs(
-            tab_page_click_defs.get(),
-            Columns.get(),
-            tab_page_click_defs_size.ptr(),
-        ));
+        let defs = tab_page_click_defs.get();
+        let size = tab_page_click_defs_size.get();
+        stl_clear_click_defs(defs, size);
+        let (defs, size) = stl_alloc_click_defs(defs, Columns.get(), size);
+        tab_page_click_defs.set(defs);
+        tab_page_click_defs_size.set(size);
 
         grid.comp_height = Rows.get();
         grid.comp_width = Columns.get();

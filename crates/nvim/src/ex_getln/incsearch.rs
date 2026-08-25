@@ -92,7 +92,7 @@ pub(crate) unsafe fn set_search_match(t: *mut pos_T) {
 /// (bytes before the pattern), `patlen`, `search_delim`, `search_first_line`
 /// and `search_last_line`.
 pub unsafe fn parse_pattern_and_range(
-    incsearch_start: *mut pos_T,
+    incsearch_start: pos_T,
     search_delim: *mut ::core::ffi::c_int,
     skiplen: *mut ::core::ffi::c_int,
     patlen: *mut ::core::ffi::c_int,
@@ -237,7 +237,7 @@ pub unsafe fn parse_pattern_and_range(
 
         // Parse the address range.
         let save_cursor = (*curwin.get()).w_cursor;
-        (*curwin.get()).w_cursor = *incsearch_start;
+        (*curwin.get()).w_cursor = incsearch_start;
 
         parse_cmd_address(&raw mut ea, &raw mut dummy, true);
 
@@ -291,12 +291,7 @@ pub(crate) unsafe fn do_incsearch_highlighting(
         }
 
         let _no_emsg = Suppress::emsg();
-        parse_pattern_and_range(
-            &raw mut (*is_state).search_start,
-            search_delim,
-            skiplen,
-            patlen,
-        )
+        parse_pattern_and_range((*is_state).search_start, search_delim, skiplen, patlen)
     }
 }
 

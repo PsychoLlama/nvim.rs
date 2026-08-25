@@ -633,7 +633,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
         let mut dummy = 0;
         let mut patlen = 0;
         let retval = parse_pattern_and_range(
-            pre_incsearch_pos.ptr(),
+            pre_incsearch_pos.get(),
             &raw mut dummy,
             &raw mut skiplen,
             &raw mut patlen,

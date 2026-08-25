@@ -757,15 +757,15 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
                 changed_bytes((*curwin.get()).w_cursor.lnum, 0);
             }
             // Correct the saved cursor position if it is on this line.
-            let saved = saved_cursor.ptr();
-            if (*saved).lnum == (*curwin.get()).w_cursor.lnum {
-                if (*saved).col >= old_offset {
+            let saved = saved_cursor.get();
+            if saved.lnum == (*curwin.get()).w_cursor.lnum {
+                if saved.col >= old_offset {
                     // It was after the indent: shift it by the byte delta.
-                    (*saved).col += ind_len - old_offset;
-                } else if (*saved).col >= new_offset {
+                    saved_cursor.set(saved.with_col(saved.col + ind_len - old_offset));
+                } else if saved.col >= new_offset {
                     // It was inside the indent and is now past it (spaces
                     // replaced by a tab): put it back at the indent's end.
-                    (*saved).col = new_offset;
+                    saved_cursor.set(saved.with_col(new_offset));
                 }
             }
             retval = true;
