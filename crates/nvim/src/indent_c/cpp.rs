@@ -290,11 +290,10 @@ pub(crate) unsafe fn get_baseclass_amount(col: c_int) -> c_int {
     unsafe {
         let mut amount = if col == 0 {
             let mut amount = get_indent();
-            if find_last_paren(get_cursor_line_ptr(), b'(', b')') {
-                let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                if !trypos.is_null() {
-                    amount = get_indent_lnum((*trypos).lnum);
-                }
+            if find_last_paren(get_cursor_line_ptr(), b'(', b')')
+                && let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen)
+            {
+                amount = get_indent_lnum(trypos.lnum);
             }
             if !cin_ends_in(get_cursor_line_ptr(), b",") {
                 amount += (*curbuf.get()).b_ind_cpp_baseclass;

@@ -56,7 +56,7 @@ pub unsafe fn current_block(
     other: c_int,
 ) -> c_int {
     unsafe {
-        let mut pos = ::core::ptr::null_mut::<pos_T>();
+        let mut pos: Option<pos_T> = None;
         let mut start_pos = pos_T {
             lnum: 0,
             col: 0,
@@ -103,7 +103,7 @@ pub unsafe fn current_block(
         // finds one anyway. Upstream's probe *is* the first `pos`, which is
         // why it is kept rather than discarded.
         pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
-        let unbounded = pos.is_null();
+        let unbounded = pos.is_none();
         loop {
             let this = count;
             count -= 1;
@@ -120,26 +120,24 @@ pub unsafe fn current_block(
             } else {
                 findmatch(::core::ptr::null_mut::<oparg_T>(), what)
             };
-            if pos.is_null() {
+            let Some(found) = pos else {
                 break;
-            }
-            (*curwin.get()).w_cursor = *pos;
-            // The `findmatch` for `end_pos` overwrites what `pos` points at.
-            start_pos = *pos;
+            };
+            (*curwin.get()).w_cursor = found;
+            start_pos = found;
         }
         p_cpo.set(save_cpo);
 
         // Then the matching closing bracket.
-        if pos.is_null() {
+        if pos.is_none() {
             (*curwin.get()).w_cursor = old_pos;
             return FAIL;
         }
-        let mut end_pos = findmatch(::core::ptr::null_mut::<oparg_T>(), other);
-        if end_pos.is_null() {
+        let Some(mut end_pos) = findmatch(::core::ptr::null_mut::<oparg_T>(), other) else {
             (*curwin.get()).w_cursor = old_pos;
             return FAIL;
-        }
-        (*curwin.get()).w_cursor = *end_pos;
+        };
+        (*curwin.get()).w_cursor = end_pos;
 
         // Without `include`, leave the brackets out. A closing bracket
         // preceded only by indent takes that indent with it -- but only if
@@ -159,7 +157,7 @@ pub unsafe fn current_block(
                 }
 
                 // In Visual mode, an empty result means there is no inner block.
-                if equalpos(start_pos, *end_pos) && visual_active() {
+                if equalpos(start_pos, end_pos) && visual_active() {
                     (*curwin.get()).w_cursor = old_pos;
                     return FAIL;
                 }
@@ -176,18 +174,18 @@ pub unsafe fn current_block(
                 (*curwin.get()).w_cursor = old_start;
                 decl(&mut (*curwin.get()).w_cursor);
                 pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
-                if pos.is_null() {
+                let Some(found) = pos else {
                     (*curwin.get()).w_cursor = old_pos;
                     return FAIL;
-                }
-                start_pos = *pos;
-                (*curwin.get()).w_cursor = *pos;
-                end_pos = findmatch(::core::ptr::null_mut::<oparg_T>(), other);
-                if end_pos.is_null() {
+                };
+                start_pos = found;
+                (*curwin.get()).w_cursor = found;
+                let Some(found_end) = findmatch(::core::ptr::null_mut::<oparg_T>(), other) else {
                     (*curwin.get()).w_cursor = old_pos;
                     return FAIL;
-                }
-                (*curwin.get()).w_cursor = *end_pos;
+                };
+                end_pos = found_end;
+                (*curwin.get()).w_cursor = end_pos;
             }
         }
 

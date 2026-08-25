@@ -104,7 +104,7 @@ unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
         (*wp).w_cursor.col = 0;
 
         // Restrict the search for the end of the comment to "maxlines".
-        if !find_start_comment((*syn_block.get()).b_syn_sync_maxlines as c_int).is_null() {
+        if find_start_comment((*syn_block.get()).b_syn_sync_maxlines as c_int).is_some() {
             let mut idx = syn_pattern_count();
             while idx > 0 {
                 idx -= 1;

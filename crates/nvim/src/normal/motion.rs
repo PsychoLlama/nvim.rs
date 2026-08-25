@@ -622,14 +622,14 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             (*(*cap).oap).motion_type = kMTCharWise;
             (*(*cap).oap).use_reg_one = true;
             let pos = findmatch((*cap).oap, NUL);
-            if pos.is_null() {
-                clearopbeep((*cap).oap);
-            } else {
+            if let Some(pos) = pos {
                 setpcmark();
-                (*win).w_cursor = *pos;
+                (*win).w_cursor = pos;
                 (*win).w_set_curswant = true;
                 (*win).w_cursor.coladd = 0;
                 adjust_for_sel(cap);
+            } else {
+                clearopbeep((*cap).oap);
             }
         }
         if lnum != (*win).w_cursor.lnum {

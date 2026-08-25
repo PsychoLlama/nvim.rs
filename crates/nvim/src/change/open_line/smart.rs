@@ -50,9 +50,8 @@ unsafe fn indent_of_comment_start(mut ptr: *mut c_char) -> Option<c_int> {
                 // End of a C comment: line the indent up with the line
                 // holding the start of it.
                 (*curwin.get()).w_cursor.col = p.offset_from(ptr) as colnr_T;
-                let pos = findmatch(::core::ptr::null_mut(), NUL);
-                if !pos.is_null() {
-                    (*curwin.get()).w_cursor.lnum = (*pos).lnum;
+                if let Some(pos) = findmatch(::core::ptr::null_mut(), NUL) {
+                    (*curwin.get()).w_cursor.lnum = pos.lnum;
                     return Some(get_indent());
                 }
                 // findmatch may have made `ptr` stale; fetch it again.
@@ -134,9 +133,8 @@ unsafe fn smart_indent_forward(
         //     }
         if c_int::from(*p) == ')' as c_int {
             (*curwin.get()).w_cursor.col = p.offset_from(ptr) as colnr_T;
-            let pos = findmatch(::core::ptr::null_mut(), '(' as c_int);
-            if !pos.is_null() {
-                (*curwin.get()).w_cursor.lnum = (*pos).lnum;
+            if let Some(pos) = findmatch(::core::ptr::null_mut(), '(' as c_int) {
+                (*curwin.get()).w_cursor.lnum = pos.lnum;
                 newindent = get_indent();
                 ptr = get_cursor_line_ptr();
             }

@@ -15,7 +15,6 @@ use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::types::{CpoFlag, NUL};
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 const FM_BACKWARD: c_int = super::FM_BACKWARD as c_int;
 const FM_FORWARD: c_int = super::FM_FORWARD as c_int;
@@ -23,21 +22,12 @@ const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP as c_int;
 const FORWARD: c_int = super::FORWARD as c_int;
 const BACKWARD: c_int = super::BACKWARD as c_int;
 
-/// The position [`findmatchlimit`] answers. It is a static because every
-/// caller takes the pointer rather than the value; the next call
-/// overwrites it.
-static match_at: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-    lnum: 0,
-    col: 0,
-    coladd: 0,
-});
-
 /// Find the match for the bracket under the cursor.
 ///
 /// # Safety
 /// `oap` must be null or valid; the current window and buffer must be
 /// valid.
-pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_T {
+pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> Option<pos_T> {
     unsafe { findmatchlimit(oap, initc, 0, 0) }
 }
 
@@ -60,23 +50,14 @@ pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_T {
 ///
 /// # Safety
 /// `oap` must be null or valid; the current window and buffer must be
-/// valid. The answer points at a static and is invalidated by the next
-/// call.
+/// valid.
 pub unsafe fn findmatchlimit(
     oap: *mut oparg_T,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
-) -> *mut pos_T {
-    unsafe {
-        match find_match(oap, initc, flags, maxtravel) {
-            Some(pos) => {
-                match_at.set(pos);
-                match_at.ptr()
-            }
-            None => ptr::null_mut(),
-        }
-    }
+) -> Option<pos_T> {
+    unsafe { find_match(oap, initc, flags, maxtravel) }
 }
 
 // ---------------------------------------------------------------------

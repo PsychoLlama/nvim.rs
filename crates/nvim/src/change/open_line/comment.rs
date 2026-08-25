@@ -635,12 +635,12 @@ pub(crate) unsafe fn indent_after_comment_end(
         }
         let old_cursor = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor.col = comment_end.offset_from(saved_line) as colnr_T;
-        let pos = findmatch(::core::ptr::null_mut(), NUL);
-        let newindent = if pos.is_null() {
-            newindent
-        } else {
-            (*curwin.get()).w_cursor.lnum = (*pos).lnum;
-            get_indent()
+        let newindent = match findmatch(::core::ptr::null_mut(), NUL) {
+            None => newindent,
+            Some(pos) => {
+                (*curwin.get()).w_cursor.lnum = pos.lnum;
+                get_indent()
+            }
         };
         (*curwin.get()).w_cursor = old_cursor;
         newindent

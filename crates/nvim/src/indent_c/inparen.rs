@@ -80,13 +80,13 @@ unsafe fn previous_line_under_same_paren(
 
                 // Skip a comment or raw string.
                 let trypos = ind_find_start_comment_or_raw_string(None);
-                if !trypos.is_null() {
-                    lnum = (*trypos).lnum + 1;
+                if let Some(trypos) = trypos {
+                    lnum = trypos.lnum + 1;
                 } else {
                     let trypos = find_match_paren(corr_ind_maxparen(&line.cur_curpos));
-                    if !trypos.is_null()
-                        && (*trypos).lnum == our_paren_pos.lnum
-                        && (*trypos).col == our_paren_pos.col
+                    if let Some(trypos) = trypos
+                        && trypos.lnum == our_paren_pos.lnum
+                        && trypos.col == our_paren_pos.col
                     {
                         amount = get_indent_lnum(lnum);
                         if line.starts_with(b')') {
@@ -127,11 +127,10 @@ unsafe fn align_with_unclosed_paren(
             loop {
                 (*curwin.get()).w_cursor.lnum = outermost.lnum;
                 (*curwin.get()).w_cursor.col = outermost.col;
-                let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                if trypos.is_null() || (*trypos).lnum != outermost.lnum {
-                    break;
+                match find_match_paren((*curbuf.get()).b_ind_maxparen) {
+                    Some(pos) if pos.lnum == outermost.lnum => outermost = pos,
+                    _ => break,
                 }
-                outermost = *trypos;
             }
             (*curwin.get()).w_cursor = cursor_save;
             let text = ml_get(outermost.lnum);
@@ -154,11 +153,11 @@ unsafe fn align_with_unclosed_paren(
                 0,
                 int64_t::from((*curbuf.get()).b_ind_maxparen),
             );
-            if !trypos.is_null()
-                && (*trypos).lnum == our_paren_pos.lnum
-                && (*trypos).col < our_paren_pos.col
+            if let Some(trypos) = trypos
+                && trypos.lnum == our_paren_pos.lnum
+                && trypos.col < our_paren_pos.col
             {
-                ignore_paren_col = (*trypos).col + 1;
+                ignore_paren_col = trypos.col + 1;
             }
             (*curwin.get()).w_cursor.lnum = save_lnum;
             look = ml_get(our_paren_pos.lnum).offset(look_col as isize);
@@ -248,7 +247,7 @@ unsafe fn align_with_unclosed_paren(
             } else {
                 (*curwin.get()).w_cursor.lnum = our_paren_pos.lnum;
                 (*curwin.get()).w_cursor.col = col;
-                if !find_match_paren_after_brace((*curbuf.get()).b_ind_maxparen).is_null() {
+                if find_match_paren_after_brace((*curbuf.get()).b_ind_maxparen).is_some() {
                     amount += (*curbuf.get()).b_ind_unclosed2;
                 } else if is_if_for_while {
                     amount += (*curbuf.get()).b_ind_if_for_while;

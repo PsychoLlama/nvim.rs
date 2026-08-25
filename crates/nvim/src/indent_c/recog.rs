@@ -264,7 +264,8 @@ pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: linenr_T) -> bool {
             0,
             int64_t::from((*curbuf.get()).b_ind_maxparen),
         );
-        let retval = !trypos.is_null() && *cin_skipcomment(ml_get_pos(trypos).add(1)) as u8 == b';';
+        let retval = trypos
+            .is_some_and(|pos| *cin_skipcomment(ml_get_pos(&raw const pos).add(1)) as u8 == b';');
         (*curwin.get()).w_cursor = cursor_save;
         retval
     }
@@ -352,14 +353,13 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
                     // "while" before the matching '('.
                     let i = p.offset_from(line);
                     (*curwin.get()).w_cursor.col = i as colnr_T;
-                    let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                    if !trypos.is_null() {
-                        let mut s = cin_skipcomment(ml_get((*trypos).lnum));
+                    if let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen) {
+                        let mut s = cin_skipcomment(ml_get(trypos.lnum));
                         if *s as u8 == b'}' {
                             s = cin_skipcomment(s.add(1)); // accept "} while (cond);"
                         }
                         if cin_starts_with(s, b"while") {
-                            (*curwin.get()).w_cursor.lnum = (*trypos).lnum;
+                            (*curwin.get()).w_cursor.lnum = trypos.lnum;
                             return true;
                         }
                     }

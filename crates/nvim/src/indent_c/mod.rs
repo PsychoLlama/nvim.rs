@@ -30,7 +30,6 @@ use crate::charset::{
 };
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::eval::typval::tv_get_lnum;
-use crate::global_cell::GlobalCell;
 use crate::indent::{fixthisline, get_expr_indent, get_indent, get_indent_lnum, get_sw_value};
 use crate::keycodes::get_special_key_code;
 use crate::main::{State, curbuf, curwin, p_paste};

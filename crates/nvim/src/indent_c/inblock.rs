@@ -97,11 +97,10 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
             // the start of *that*, by matching the rightmost paren.
             (*curwin.get()).w_cursor.lnum = ourscope;
             let mut lnum = ourscope;
-            if find_last_paren(start, b'(', b')') {
-                let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                if !trypos.is_null() {
-                    lnum = (*trypos).lnum;
-                }
+            if find_last_paren(start, b'(', b')')
+                && let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen)
+            {
+                lnum = trypos.lnum;
             }
 
             // It could have been something like

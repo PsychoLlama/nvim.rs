@@ -148,17 +148,12 @@ unsafe fn enclosing_open() -> Option<pos_T> {
     // SAFETY: the caller's contract; `findmatch` answers a pointer into
     // static storage that stays valid until the next call.
     unsafe {
-        let round = findmatch(::core::ptr::null_mut(), '(' as c_int);
-        if round.is_null() {
-            let square = findmatch(::core::ptr::null_mut(), '[' as c_int);
-            return (!square.is_null()).then(|| *square);
-        }
-        let paren = *round;
-        let square = findmatch(::core::ptr::null_mut(), '[' as c_int);
-        if square.is_null() || lt(*square, paren) {
-            Some(paren)
-        } else {
-            Some(*square)
+        let Some(paren) = findmatch(::core::ptr::null_mut(), '(' as c_int) else {
+            return findmatch(::core::ptr::null_mut(), '[' as c_int);
+        };
+        match findmatch(::core::ptr::null_mut(), '[' as c_int) {
+            Some(square) if !lt(square, paren) => Some(square),
+            _ => Some(paren),
         }
     }
 }

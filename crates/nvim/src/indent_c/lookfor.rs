@@ -85,9 +85,8 @@ impl BlockScan<'_> {
                     return Step::Done;
                 }
 
-                let trypos = ind_find_start_comment_or_raw_string(None);
-                if !trypos.is_null() {
-                    self.resume_at((*trypos).lnum);
+                if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
+                    self.resume_at(trypos.lnum);
                     return Step::Again;
                 }
 
@@ -139,9 +138,8 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
 
-            let trypos = ind_find_start_comment_or_raw_string(None);
-            if !trypos.is_null() {
-                self.resume_at((*trypos).lnum);
+            if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
+                self.resume_at(trypos.lnum);
                 return Step::Again;
             }
 
@@ -178,15 +176,15 @@ impl BlockScan<'_> {
             if terminated != b';' {
                 // Skip parens and braces: position on the rightmost paren so
                 // that matching it takes us to the start of the line.
-                let mut trypos = ::core::ptr::null_mut::<pos_T>();
+                let mut trypos = None;
                 if find_last_paren(l, b'(', b')') {
                     trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
                 }
-                if trypos.is_null() && find_last_paren(l, b'{', b'}') {
+                if trypos.is_none() && find_last_paren(l, b'{', b'}') {
                     trypos = find_start_brace();
                 }
-                if !trypos.is_null() {
-                    self.resume_at((*trypos).lnum);
+                if let Some(trypos) = trypos {
+                    self.resume_at(trypos.lnum);
                     return Step::Again;
                 }
             }
@@ -207,8 +205,8 @@ impl BlockScan<'_> {
         unsafe {
             // In a comment or raw string now: skip to the start of it.
             let trypos = ind_find_start_comment_or_raw_string(Some(&mut self.raw_string_start));
-            if !trypos.is_null() {
-                self.resume_at((*trypos).lnum);
+            if let Some(trypos) = trypos {
+                self.resume_at(trypos.lnum);
                 return Step::Again;
             }
 
@@ -224,11 +222,10 @@ impl BlockScan<'_> {
             // Looking for a switch() label or scope declaration: ignore other
             // lines and skip `{}` blocks whole.
             if self.lookfor == LOOKFOR_CASE || self.lookfor == LOOKFOR_SCOPEDECL {
-                if find_last_paren(l, b'{', b'}') {
-                    let trypos = find_start_brace();
-                    if !trypos.is_null() {
-                        self.resume_at((*trypos).lnum);
-                    }
+                if find_last_paren(l, b'{', b'}')
+                    && let Some(trypos) = find_start_brace()
+                {
+                    self.resume_at(trypos.lnum);
                 }
                 return Step::Again;
             }
@@ -363,8 +360,7 @@ impl BlockScan<'_> {
                 || (!iscase && self.lookfor == LOOKFOR_SCOPEDECL)
             {
                 // Check that this label is not for another switch().
-                let trypos = find_start_brace();
-                if trypos.is_null() || (*trypos).lnum == self.ourscope {
+                if find_start_brace().is_none_or(|trypos| trypos.lnum == self.ourscope) {
                     self.amount = get_indent();
                     return Step::Done;
                 }
@@ -522,12 +518,12 @@ impl BlockScan<'_> {
                 let mut l = get_cursor_line_ptr().cast_const();
                 if find_last_paren(l, b'(', b')') {
                     let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                    if !trypos.is_null() {
+                    if let Some(trypos) = trypos {
                         // Check whether we are on a case label now; that is
                         // handled above.
                         //         case xx:  if ( asdf &&
                         //                          asdf)
-                        (*curwin.get()).w_cursor = *trypos;
+                        (*curwin.get()).w_cursor = trypos;
                         l = get_cursor_line_ptr();
                         if cin_iscase(l, false) || cin_isscopedecl(l) {
                             // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
@@ -568,8 +564,7 @@ impl BlockScan<'_> {
                     && cin_iselse(l)
                     && self.whilelevel == 0
                 {
-                    let trypos = find_start_brace();
-                    if trypos.is_null() || !find_match(LOOKFOR_IF, (*trypos).lnum) {
+                    if find_start_brace().is_none_or(|pos| !find_match(LOOKFOR_IF, pos.lnum)) {
                         return Step::Done;
                     }
                     return Step::Again;
@@ -579,8 +574,8 @@ impl BlockScan<'_> {
                 l = get_cursor_line_ptr();
                 if find_last_paren(l, b'{', b'}') {
                     let trypos = find_start_brace();
-                    if !trypos.is_null() {
-                        (*curwin.get()).w_cursor = *trypos;
+                    if let Some(trypos) = trypos {
+                        (*curwin.get()).w_cursor = trypos;
                         // If not "else {", check for terminated again; but
                         // skip the block for "} else {".
                         l = cin_skipcomment(get_cursor_line_ptr());
@@ -618,28 +613,28 @@ impl BlockScan<'_> {
             // the start of the line, and ignore a match before the block.
             find_last_paren(l, b'(', b')');
             let mut trypos = find_match_paren(corr_ind_maxparen(&self.line.cur_curpos));
-            if !trypos.is_null()
-                && ((*trypos).lnum < self.brace.lnum
-                    || ((*trypos).lnum == self.brace.lnum && (*trypos).col < self.brace.col))
+            if let Some(pos) = trypos
+                && (pos.lnum < self.brace.lnum
+                    || (pos.lnum == self.brace.lnum && pos.col < self.brace.col))
             {
-                trypos = ::core::ptr::null_mut::<pos_T>();
+                trypos = None;
             }
             l = get_cursor_line_ptr();
 
             // Looking for a ',' means matching braces count too.
-            if trypos.is_null() && terminated == b',' {
+            if trypos.is_none() && terminated == b',' {
                 if find_last_paren(l, b'{', b'}') {
                     trypos = find_start_brace();
                 }
                 l = get_cursor_line_ptr();
             }
 
-            if !trypos.is_null() {
+            if let Some(trypos) = trypos {
                 // Check whether we are on a case label now; that is handled
                 // above.
                 //     case xx:  if ( asdf &&
                 //                        asdf)
-                (*curwin.get()).w_cursor = *trypos;
+                (*curwin.get()).w_cursor = trypos;
                 l = get_cursor_line_ptr();
                 if cin_iscase(l, false) || cin_isscopedecl(l) {
                     // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
@@ -764,8 +759,7 @@ impl BlockScan<'_> {
                     (*curwin.get()).w_cursor.col =
                         l.offset_from(get_cursor_line_ptr()) as colnr_T + 1;
                 }
-                let trypos = find_start_brace();
-                if trypos.is_null() || !find_match(LOOKFOR_IF, (*trypos).lnum) {
+                if find_start_brace().is_none_or(|pos| !find_match(LOOKFOR_IF, pos.lnum)) {
                     return Step::Done;
                 }
             }
@@ -850,14 +844,13 @@ impl BlockScan<'_> {
                     return Step::Done;
                 }
                 self.lookfor = LOOKFOR_COMMA;
-                let trypos = find_match_char(b'[', (*curbuf.get()).b_ind_maxparen);
-                if !trypos.is_null() {
-                    if (*trypos).lnum == (*curwin.get()).w_cursor.lnum - 1 {
+                if let Some(trypos) = find_match_char(b'[', (*curbuf.get()).b_ind_maxparen) {
+                    if trypos.lnum == (*curwin.get()).w_cursor.lnum - 1 {
                         // The current line is the first inside [], so line up
                         // with it.
                         return Step::Done;
                     }
-                    self.ourscope = (*trypos).lnum;
+                    self.ourscope = trypos.lnum;
                 }
                 return Step::Again;
             }

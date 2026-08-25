@@ -224,14 +224,14 @@ pub unsafe fn may_do_si() -> bool {
 ///
 /// # Safety
 /// `pos` must be a position in the current buffer.
-unsafe fn si_indent_like_open_brace(pos: *mut pos_T) {
+unsafe fn si_indent_like_open_brace(pos: pos_T) {
     // SAFETY: the caller's position, and the cursor is put back before the
     // indent is applied.
     unsafe {
         let win = curwin.get();
         let old_pos = (*win).w_cursor;
-        let ptr = ml_get((*pos).lnum);
-        let mut i = (*pos).col as c_int;
+        let ptr = ml_get(pos.lnum);
+        let mut i = pos.col as c_int;
         if i > 0 {
             // Skip the blanks before the '{'.
             while {
@@ -239,13 +239,12 @@ unsafe fn si_indent_like_open_brace(pos: *mut pos_T) {
                 i > 0 && ascii_iswhite(*ptr.offset(i as isize) as c_int)
             } {}
         }
-        (*win).w_cursor.lnum = (*pos).lnum;
+        (*win).w_cursor.lnum = pos.lnum;
         (*win).w_cursor.col = i as colnr_T;
-        if *ptr.offset(i as isize) == b')' as c_char {
-            let open = findmatch(ptr::null_mut(), '(' as c_int);
-            if !open.is_null() {
-                (*win).w_cursor = *open;
-            }
+        if *ptr.offset(i as isize) == b')' as c_char
+            && let Some(open) = findmatch(ptr::null_mut(), '(' as c_int)
+        {
+            (*win).w_cursor = open;
         }
         let indent = get_indent();
         (*win).w_cursor = old_pos;
@@ -299,9 +298,9 @@ pub unsafe fn ins_try_si(c: c_int) {
             let matching = if c == '}' as c_int {
                 findmatch(ptr::null_mut(), '{' as c_int)
             } else {
-                ptr::null_mut()
+                None
             };
-            if !matching.is_null() {
+            if let Some(matching) = matching {
                 si_indent_like_open_brace(matching);
             } else if (*win).w_cursor.col > 0 {
                 let shift = !(c == '{' as c_int

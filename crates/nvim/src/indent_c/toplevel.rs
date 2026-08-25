@@ -86,9 +86,8 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             (*curwin.get()).w_cursor.col = 0;
 
             // In a comment or raw string now: skip to the start of it.
-            let trypos = ind_find_start_comment_or_raw_string(None);
-            if !trypos.is_null() {
-                (*curwin.get()).w_cursor.lnum = (*trypos).lnum + 1;
+            if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
+                (*curwin.get()).w_cursor.lnum = trypos.lnum + 1;
                 (*curwin.get()).w_cursor.col = 0;
                 continue;
             }
@@ -119,11 +118,10 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             let ends_in_backslash = *l != 0 && *l.add(strlen(l) - 1) as u8 == b'\\';
             if cin_ends_in(l, b",") || ends_in_backslash {
                 // Take us back to the opening paren.
-                if find_last_paren(l, b'(', b')') {
-                    let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                    if !trypos.is_null() {
-                        (*curwin.get()).w_cursor = *trypos;
-                    }
+                if find_last_paren(l, b'(', b')')
+                    && let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen)
+                {
+                    (*curwin.get()).w_cursor = trypos;
                 }
 
                 // A line ending in ',' that is a continuation line: go back
@@ -221,9 +219,8 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             // rightmost paren first, so that matching it takes us to the
             // start of the line.
             find_last_paren(l, b'(', b')');
-            let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-            if !trypos.is_null() {
-                (*curwin.get()).w_cursor = *trypos;
+            if let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen) {
+                (*curwin.get()).w_cursor = trypos;
             }
             return get_indent();
         }

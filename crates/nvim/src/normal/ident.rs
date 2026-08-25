@@ -412,15 +412,13 @@ pub(crate) unsafe fn find_decl(
             if thisblock && found {
                 // Refuse a match whose enclosing block closes before the
                 // cursor: it is a different scope.
-                let maxtravel = (old_pos.lnum - (*curwin.get()).w_cursor.lnum + 1) as int64_t;
-                let close = findmatchlimit(
-                    ptr::null_mut(),
-                    '}' as c_int,
-                    FM_FORWARD as c_int,
-                    maxtravel,
-                );
-                if !close.is_null() && (*close).lnum < old_pos.lnum {
-                    (*curwin.get()).w_cursor = *close;
+                let travel = (old_pos.lnum - (*curwin.get()).w_cursor.lnum + 1) as int64_t;
+                let end =
+                    findmatchlimit(ptr::null_mut(), '}' as c_int, FM_FORWARD as c_int, travel);
+                if let Some(end) = end
+                    && end.lnum < old_pos.lnum
+                {
+                    (*curwin.get()).w_cursor = end;
                     continue;
                 }
             }

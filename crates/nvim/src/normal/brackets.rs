@@ -73,7 +73,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
             col: 0,
             coladd: 0,
         };
-        let mut pos: *mut pos_T = ptr::null_mut();
+        let mut pos: Option<pos_T> = None;
 
         // `[*` and `]*` are spelled `[/` and `]/` to findmatchlimit.
         if (*cap).nchar == '*' as c_int {
@@ -93,22 +93,22 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
 
         while n > 0 {
             pos = findmatchlimit((*cap).oap, findc, match_direction(cap), 0);
-            if pos.is_null() {
+            let Some(found) = pos else {
                 if new_pos.lnum == 0 {
                     // Nothing found at all. A method search says so by leaving
-                    // `pos` null for the second pass to notice.
+                    // `pos` empty for the second pass to notice.
                     if !method {
                         clearopbeep((*cap).oap);
                     }
                 } else {
                     // Ran out of enclosing blocks: the last one found is it.
-                    pos = &raw mut new_pos;
+                    pos = Some(new_pos);
                 }
                 break;
-            }
+            };
             prev_pos = new_pos;
-            (*curwin.get()).w_cursor = *pos;
-            new_pos = *pos;
+            (*curwin.get()).w_cursor = found;
+            new_pos = found;
             n -= 1;
         }
         (*curwin.get()).w_cursor = *old_pos;
@@ -119,13 +119,13 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
             let norm = (findc == '{' as c_int) == ((*cap).nchar == 'm' as c_int);
             n = (*cap).count1;
             if prev_pos.lnum != 0 {
-                pos = &raw mut prev_pos;
+                pos = Some(prev_pos);
                 (*curwin.get()).w_cursor = prev_pos;
                 if norm {
                     n -= 1;
                 }
             } else {
-                pos = ptr::null_mut();
+                pos = None;
             }
             while n > 0 {
                 loop {
@@ -136,7 +136,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
                     };
                     if stepped < 0 {
                         // Hit the end of the buffer with nothing found.
-                        if pos.is_null() {
+                        if pos.is_none() {
                             clearopbeep((*cap).oap);
                         }
                         n = 0;
@@ -148,19 +148,18 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
                     }
                     if (c == findc && norm) || (n == 1 && !norm) {
                         new_pos = (*curwin.get()).w_cursor;
-                        pos = &raw mut new_pos;
+                        pos = Some(new_pos);
                         n = 0;
                     } else if new_pos.lnum == 0 {
                         new_pos = (*curwin.get()).w_cursor;
-                        pos = &raw mut new_pos;
+                        pos = Some(new_pos);
                     } else {
                         // A brace of the other kind: step over the block it
                         // opens or closes.
                         pos = findmatchlimit((*cap).oap, findc, match_direction(cap), 0);
-                        if pos.is_null() {
-                            n = 0;
-                        } else {
-                            (*curwin.get()).w_cursor = *pos;
+                        match pos {
+                            None => n = 0,
+                            Some(found) => (*curwin.get()).w_cursor = found,
                         }
                     }
                     break;
@@ -169,14 +168,14 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
             }
             (*curwin.get()).w_cursor = *old_pos;
             // A position was found on the way out but lost on the way back in.
-            if pos.is_null() && new_pos.lnum != 0 {
+            if pos.is_none() && new_pos.lnum != 0 {
                 clearopbeep((*cap).oap);
             }
         }
 
-        if !pos.is_null() {
+        if let Some(pos) = pos {
             setpcmark();
-            (*curwin.get()).w_cursor = *pos;
+            (*curwin.get()).w_cursor = pos;
             (*curwin.get()).w_set_curswant = true;
             may_fold_open(cap, kOptFdoFlagBlock as c_uint);
         }

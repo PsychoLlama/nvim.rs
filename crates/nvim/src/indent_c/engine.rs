@@ -114,12 +114,12 @@ pub unsafe fn get_c_indent() -> c_int {
 unsafe fn c_indent(line: &Line) -> Option<c_int> {
     unsafe {
         // A raw string wins over a comment only if it starts *earlier*; a raw
-        // string inside a comment is just comment text.  `findmatchlimit`
-        // answers out of one static, so the comment position is copied by
-        // value before the second search overwrites it.
-        let mut comment_pos = ind_find_start_comment().as_ref().copied();
+        // string inside a comment is just comment text.
+        let mut comment_pos = ind_find_start_comment();
         let raw_string = find_start_rawstring((*curbuf.get()).b_ind_maxcomment);
-        if !raw_string.is_null() && comment_pos.is_none_or(|comment| lt(*raw_string, comment)) {
+        if let Some(raw) = raw_string
+            && comment_pos.is_none_or(|comment| lt(raw, comment))
+        {
             return None;
         }
 
@@ -162,43 +162,39 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
         }
 
         // A `]` that has a match lines up with the line holding the `[`.
-        if *skipwhite(line.theline) as u8 == b']' {
-            let trypos = find_match_char(b'[', (*curbuf.get()).b_ind_maxparen);
-            if !trypos.is_null() {
-                return Some(get_indent_lnum((*trypos).lnum));
-            }
+        if *skipwhite(line.theline) as u8 == b']'
+            && let Some(trypos) = find_match_char(b'[', (*curbuf.get()).b_ind_maxparen)
+        {
+            return Some(get_indent_lnum(trypos.lnum));
         }
 
         // Inside parentheses or braces?  Upstream spells the test as
         // `(paren && !java) || (brace = find_start_brace()) || paren`, so the
         // brace search runs in every case but "a paren, and not Java".
         let mut paren = find_match_paren((*curbuf.get()).b_ind_maxparen);
-        let mut brace = if !paren.is_null() && (*curbuf.get()).b_ind_java == 0 {
-            ::core::ptr::null_mut::<pos_T>()
+        let mut brace = if paren.is_some() && (*curbuf.get()).b_ind_java == 0 {
+            None
         } else {
             find_start_brace()
         };
-        if paren.is_null() && brace.is_null() {
-            return Some(toplevel::indent_at_top_level(line));
-        }
-        if !paren.is_null() && !brace.is_null() {
+        if let (Some(p), Some(b)) = (paren, brace) {
             // Both unmatched: take the one closer to the cursor.
-            let paren_is_further_up = if (*paren).lnum != (*brace).lnum {
-                (*paren).lnum < (*brace).lnum
+            let paren_is_further_up = if p.lnum != b.lnum {
+                p.lnum < b.lnum
             } else {
-                (*paren).col < (*brace).col
+                p.col < b.col
             };
             if paren_is_further_up {
-                paren = ::core::ptr::null_mut::<pos_T>();
+                paren = None;
             } else {
-                brace = ::core::ptr::null_mut::<pos_T>();
+                brace = None;
             }
         }
 
-        let mut amount = if paren.is_null() {
-            indent_in_block(line, *brace)
-        } else {
-            inparen::indent_in_parens(line, *paren)
+        let mut amount = match (paren, brace) {
+            (Some(paren), _) => inparen::indent_in_parens(line, paren),
+            (None, Some(brace)) => indent_in_block(line, brace),
+            (None, None) => return Some(toplevel::indent_at_top_level(line)),
         };
 
         // Extra indent for a comment.

@@ -23,7 +23,7 @@ use core::ffi::{CStr, c_char, c_int};
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn ind_find_start_comment() -> *mut pos_T {
+pub(crate) unsafe fn ind_find_start_comment() -> Option<pos_T> {
     unsafe { find_start_comment((*curbuf.get()).b_ind_maxcomment) }
 }
 
@@ -36,7 +36,7 @@ pub(crate) unsafe fn ind_find_start_comment() -> *mut pos_T {
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> *mut pos_T {
+pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<pos_T> {
     unsafe {
         let mut cur_maxcomment = int64_t::from(ind_maxcomment);
         loop {
@@ -45,13 +45,13 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> *mut pos_T {
                 c_int::from(b'*'),
                 FM_BACKWARD,
                 cur_maxcomment,
-            );
-            if pos.is_null() || !is_pos_in_string(ml_get((*pos).lnum), (*pos).col) {
-                return pos;
+            )?;
+            if !is_pos_in_string(ml_get(pos.lnum), pos.col) {
+                return Some(pos);
             }
-            cur_maxcomment = int64_t::from((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1);
+            cur_maxcomment = int64_t::from((*curwin.get()).w_cursor.lnum - pos.lnum - 1);
             if cur_maxcomment <= 0 {
-                return ::core::ptr::null_mut::<pos_T>();
+                return None;
             }
         }
     }
@@ -61,7 +61,7 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> *mut pos_T {
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> *mut pos_T {
+pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T> {
     unsafe {
         let mut cur_maxcomment = ind_maxcomment;
         loop {
@@ -70,13 +70,13 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> *mut pos_T {
                 c_int::from(b'R'),
                 FM_BACKWARD,
                 int64_t::from(cur_maxcomment),
-            );
-            if pos.is_null() || !is_pos_in_string(ml_get((*pos).lnum), (*pos).col) {
-                return pos;
+            )?;
+            if !is_pos_in_string(ml_get(pos.lnum), pos.col) {
+                return Some(pos);
             }
-            cur_maxcomment = ((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1) as c_int;
+            cur_maxcomment = ((*curwin.get()).w_cursor.lnum - pos.lnum - 1) as c_int;
             if cur_maxcomment <= 0 {
-                return ::core::ptr::null_mut::<pos_T>();
+                return None;
             }
         }
     }
@@ -93,29 +93,21 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> *mut pos_T {
 /// Reads the current buffer and window; the current line may be unlocked.
 pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
     is_raw: Option<&mut linenr_T>,
-) -> *mut pos_T {
+) -> Option<pos_T> {
     unsafe {
-        // `findmatchlimit` answers out of one static, and the raw-string
-        // search below is another call into it, so the comment answer has to
-        // be copied before it is overwritten.
-        static COMMENT_POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        });
-
-        let mut comment_pos = find_start_comment((*curbuf.get()).b_ind_maxcomment);
-        if !comment_pos.is_null() {
-            COMMENT_POS_COPY.set(*comment_pos);
-            comment_pos = COMMENT_POS_COPY.ptr();
-        }
+        let comment_pos = find_start_comment((*curbuf.get()).b_ind_maxcomment);
         let rs_pos = find_start_rawstring((*curbuf.get()).b_ind_maxcomment);
 
-        if comment_pos.is_null() || (!rs_pos.is_null() && lt(*rs_pos, *comment_pos)) {
+        let raw_wins = match (comment_pos, rs_pos) {
+            (None, _) => true,
+            (Some(comment), Some(raw)) => lt(raw, comment),
+            (Some(_), None) => false,
+        };
+        if raw_wins {
             if let Some(is_raw) = is_raw
-                && !rs_pos.is_null()
+                && let Some(raw) = rs_pos
             {
-                *is_raw = (*rs_pos).lnum;
+                *is_raw = raw.lnum;
             }
             return rs_pos;
         }

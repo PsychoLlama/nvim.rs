@@ -8,10 +8,8 @@
 //! search start in the right place.  [`find_match`] is the other kind of
 //! matching: the `if` an `else` belongs to, or the `do` a `while` closes.
 //!
-//! `findmatchlimit` answers out of one static, so every function here that
-//! calls it twice has to copy the first answer before making the second
-//! call.  That is what the `GlobalCell`s are for, and it is also why these
-//! answers are pointers rather than values: the callers pass them on.
+//! Every answer here is a `pos_T` by value: the searches call `findmatch`
+//! more than once and each one used to overwrite the last answer's storage.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -24,11 +22,11 @@ use core::ffi::{c_char, c_int};
 ///
 /// # Safety
 /// Reads the buffer; may unlock the current line.
-pub(crate) unsafe fn cin_skip2pos(trypos: *mut pos_T) -> c_int {
+pub(crate) unsafe fn cin_skip2pos(trypos: pos_T) -> c_int {
     unsafe {
-        let line = ml_get((*trypos).lnum);
+        let line = ml_get(trypos.lnum);
         let mut p = line.cast_const();
-        while *p != 0 && (p.offset_from(line) as colnr_T) < (*trypos).col {
+        while *p != 0 && (p.offset_from(line) as colnr_T) < trypos.col {
             if cin_iscomment(p) {
                 p = cin_skipcomment(p);
             } else {
@@ -48,13 +46,8 @@ pub(crate) unsafe fn cin_skip2pos(trypos: *mut pos_T) -> c_int {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_start_brace() -> *mut pos_T {
+pub(crate) unsafe fn find_start_brace() -> Option<pos_T> {
     unsafe {
-        static POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        });
         let cursor_save = (*curwin.get()).w_cursor;
         let mut trypos;
         loop {
@@ -64,23 +57,20 @@ pub(crate) unsafe fn find_start_brace() -> *mut pos_T {
                 FM_BLOCKSTOP,
                 0,
             );
-            if trypos.is_null() {
+            let Some(brace) = trypos else {
                 break;
-            }
-            // Copy it: the next `findmatchlimit` overwrites the static.
-            POS_COPY.set(*trypos);
-            trypos = POS_COPY.ptr();
-            (*curwin.get()).w_cursor = *trypos;
+            };
+            (*curwin.get()).w_cursor = brace;
 
-            let mut pos = ::core::ptr::null_mut::<pos_T>();
-            if cin_skip2pos(trypos) == (*trypos).col && {
+            let mut pos = None;
+            if cin_skip2pos(brace) == brace.col && {
                 pos = ind_find_start_comment_or_raw_string(None);
-                pos.is_null()
+                pos.is_none()
             } {
                 break;
             }
-            if !pos.is_null() {
-                (*curwin.get()).w_cursor = *pos;
+            if let Some(pos) = pos {
+                (*curwin.get()).w_cursor = pos;
             }
         }
         (*curwin.get()).w_cursor = cursor_save;
@@ -92,7 +82,7 @@ pub(crate) unsafe fn find_start_brace() -> *mut pos_T {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> *mut pos_T {
+pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<pos_T> {
     unsafe { find_match_char(b'(', ind_maxparen) }
 }
 
@@ -106,52 +96,41 @@ pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> *mut pos_T {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> *mut pos_T {
+pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<pos_T> {
     unsafe {
-        static POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        });
         let cursor_save = (*curwin.get()).w_cursor;
         let mut ind_maxp_wk = ind_maxparen;
 
         let found = loop {
-            let mut trypos = findmatchlimit(
+            let Some(trypos) = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 c_int::from(c),
                 0,
                 int64_t::from(ind_maxp_wk),
-            );
-            if trypos.is_null() {
-                break trypos;
-            }
+            ) else {
+                break None;
+            };
 
             // Is the match inside a `//` comment?
-            if cin_skip2pos(trypos) > (*trypos).col {
-                ind_maxp_wk = ind_maxparen - (cursor_save.lnum - (*trypos).lnum);
+            if cin_skip2pos(trypos) > trypos.col {
+                ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos.lnum);
                 if ind_maxp_wk <= 0 {
-                    break ::core::ptr::null_mut::<pos_T>();
+                    break None;
                 }
-                (*curwin.get()).w_cursor = *trypos;
-                (*curwin.get()).w_cursor.col = 0;
+                (*curwin.get()).w_cursor = trypos.with_col(0);
                 continue;
             }
 
-            // Copy it: the `ind_find_start_comment_or_raw_string` below overwrites the static.
-            POS_COPY.set(*trypos);
-            trypos = POS_COPY.ptr();
-            (*curwin.get()).w_cursor = *trypos;
+            (*curwin.get()).w_cursor = trypos;
 
-            let trypos_wk = ind_find_start_comment_or_raw_string(None);
-            if trypos_wk.is_null() {
-                break trypos;
-            }
-            ind_maxp_wk = ind_maxparen - (cursor_save.lnum - (*trypos_wk).lnum);
+            let Some(trypos_wk) = ind_find_start_comment_or_raw_string(None) else {
+                break Some(trypos);
+            };
+            ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos_wk.lnum);
             if ind_maxp_wk <= 0 {
-                break ::core::ptr::null_mut::<pos_T>();
+                break None;
             }
-            (*curwin.get()).w_cursor = *trypos_wk;
+            (*curwin.get()).w_cursor = trypos_wk;
         };
 
         (*curwin.get()).w_cursor = cursor_save;
@@ -163,24 +142,17 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> *mut pos_T {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> *mut pos_T {
+pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<pos_T> {
     unsafe {
-        let trypos = find_match_paren(ind_maxparen);
-        if trypos.is_null() {
-            return trypos;
-        }
-        let brace = find_start_brace();
-        let brace_is_further_down = !brace.is_null()
-            && if (*trypos).lnum != (*brace).lnum {
-                (*trypos).lnum < (*brace).lnum
+        let trypos = find_match_paren(ind_maxparen)?;
+        let brace_is_further_down = find_start_brace().is_some_and(|brace| {
+            if trypos.lnum != brace.lnum {
+                trypos.lnum < brace.lnum
             } else {
-                (*trypos).col < (*brace).col
-            };
-        if brace_is_further_down {
-            ::core::ptr::null_mut::<pos_T>()
-        } else {
-            trypos
-        }
+                trypos.col < brace.col
+            }
+        });
+        (!brace_is_further_down).then_some(trypos)
     }
 }
 
@@ -275,12 +247,14 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: linenr_T) -> bool {
 
             // Outside the braces entirely, or enclosed by a brace further
             // back than ours: out of scope either way.
-            let theirscope = find_start_brace();
-            if theirscope.is_null() || (*theirscope).lnum < ourscope {
+            let Some(theirscope) = find_start_brace() else {
+                return false;
+            };
+            if theirscope.lnum < ourscope {
                 return false;
             }
             // Enclosed by a *deeper* brace: a different scope, ignore it.
-            if (*theirscope).lnum > ourscope {
+            if theirscope.lnum > ourscope {
                 continue;
             }
 

@@ -53,7 +53,7 @@ pub(crate) unsafe fn cin_islabel() -> bool {
         if cin_isdefault(s) || cin_isscopedecl(s) || !cin_islabel_skip(&mut s) {
             return false;
         }
-        if !ind_find_start_comment_or_raw_string(None).is_null() {
+        if ind_find_start_comment_or_raw_string(None).is_some() {
             return false; // not a label in a comment or a raw string
         }
 
@@ -61,9 +61,8 @@ pub(crate) unsafe fn cin_islabel() -> bool {
         while (*curwin.get()).w_cursor.lnum > 1 {
             (*curwin.get()).w_cursor.lnum -= 1;
             (*curwin.get()).w_cursor.col = 0;
-            let trypos = ind_find_start_comment_or_raw_string(None);
-            if !trypos.is_null() {
-                (*curwin.get()).w_cursor = *trypos;
+            if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
+                (*curwin.get()).w_cursor = trypos;
             }
 
             let mut line = get_cursor_line_ptr().cast_const();
@@ -255,16 +254,15 @@ pub(crate) unsafe fn cin_isfuncdecl(
         // Position on the rightmost unmatched paren so that matching it
         // takes us to the line the declaration starts on.
         (*curwin.get()).w_cursor.lnum = lnum;
-        if find_last_paren(s, b'(', b')') {
-            let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-            if !trypos.is_null() {
-                lnum = (*trypos).lnum;
-                if lnum < min_lnum {
-                    (*curwin.get()).w_cursor.lnum = save_lnum;
-                    return false;
-                }
-                s = ml_get(lnum);
+        if find_last_paren(s, b'(', b')')
+            && let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen)
+        {
+            lnum = trypos.lnum;
+            if lnum < min_lnum {
+                (*curwin.get()).w_cursor.lnum = save_lnum;
+                return false;
             }
+            s = ml_get(lnum);
         }
         (*curwin.get()).w_cursor.lnum = save_lnum;
 

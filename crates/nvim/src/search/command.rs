@@ -777,12 +777,11 @@ pub unsafe fn showmatch(c: c_int) {
             return;
         }
 
-        let lpos = findmatch(ptr::null_mut(), NUL);
-        if lpos.is_null() {
+        let Some(mut lpos) = findmatch(ptr::null_mut(), NUL) else {
             vim_beep(kOptBoFlagShowmatch); // no match, so beep
             return;
-        }
-        if (*lpos).lnum < (*curwin.get()).w_topline || (*lpos).lnum >= (*curwin.get()).w_botline {
+        };
+        if lpos.lnum < (*curwin.get()).w_topline || lpos.lnum >= (*curwin.get()).w_botline {
             return;
         }
 
@@ -790,7 +789,7 @@ pub unsafe fn showmatch(c: c_int) {
         if (*curwin.get()).w_onebuf_opt.wo_wrap == 0 {
             getvcol(
                 curwin.get(),
-                lpos,
+                &raw mut lpos,
                 ptr::null_mut(),
                 &raw mut vcol,
                 ptr::null_mut(),
@@ -815,7 +814,7 @@ pub unsafe fn showmatch(c: c_int) {
             p_siso.ptr()
         };
 
-        let mpos = *lpos; // save the pos, update_screen() may change it
+        let mpos = lpos; // save the pos, update_screen() may change it
         let save_cursor = (*curwin.get()).w_cursor;
         let save_so = *so;
         let save_siso = *siso;

@@ -110,12 +110,9 @@ impl Oap {
     }
 
     /// The match for the item under the cursor, as `%` would find it.
-    fn findmatch(self) -> Option<Pos> {
-        // SAFETY: the constructor's promise; the answer is a live static
-        // position or null.
-        let pos = unsafe { findmatch(self.0, NUL) };
-        // SAFETY: as above.
-        (!pos.is_null()).then(|| unsafe { Pos::new(pos) })
+    fn findmatch(self) -> Option<pos_T> {
+        // SAFETY: the constructor's promise.
+        unsafe { findmatch(self.0, NUL) }
     }
 
     /// Where `jump_to_mouse` records whether the motion is inclusive.
@@ -919,7 +916,7 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
         return false;
     };
 
-    win.w_cursor = *pos;
+    win.w_cursor = pos;
     if oap.motion_type == kMTLineWise {
         set_visual_mode(VisualMode::LINE);
     } else if selection_exclusive() {
