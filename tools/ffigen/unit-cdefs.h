@@ -3853,7 +3853,6 @@ static const int EXFLAG_PRINT = 4;
 static const int EXIT_FAILURE = 1;
 static const int EXPAND_ARG_BUFFER = 4;
 static const int EXPAND_BUF_LEN = 256;
-static const int EXPAND_GROWSIZE = 80;
 static const int EXPR_EQUAL = 1;
 static const int EXPR_GEQUAL = 4;
 static const int EXPR_GREATER = 3;
