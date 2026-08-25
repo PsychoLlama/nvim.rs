@@ -448,3 +448,52 @@ impl LineBuf {
         }
     }
 }
+
+/// The cells of one `grid_line` event, on the UI-client side.
+///
+/// The msgpack decoder writes cells straight in as it reads them rather than
+/// building an array per event, and `ui_client_event_raw_line` hands the
+/// whole run to the TUI. Kept as wide as the widest grid the server has
+/// announced -- see `Unpacker::widen_grid_line_buf`.
+pub(crate) struct RawLine {
+    chars: Vec<schar_T>,
+    attrs: Vec<sattr_T>,
+}
+
+impl RawLine {
+    /// No buffer at all, which is what the cell holds until the first
+    /// `grid_resize`.
+    pub(crate) const fn empty() -> RawLine {
+        RawLine {
+            chars: Vec::new(),
+            attrs: Vec::new(),
+        }
+    }
+
+    /// How many cells the buffer holds. A column at or past it is a protocol
+    /// error: the server may not send more cells than the grid it announced.
+    pub(crate) fn width(&self) -> size_t {
+        self.chars.len()
+    }
+
+    /// Widen the buffer to `width` cells, if it is narrower. The contents are
+    /// not preserved; each event fills what it reports.
+    pub(crate) fn widen(&mut self, width: size_t) {
+        if self.width() < width {
+            self.chars.resize(width, 0);
+            self.attrs.resize(width, 0);
+        }
+    }
+
+    /// Write one decoded cell.
+    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T) {
+        self.chars[col] = ch;
+        self.attrs[col] = attr;
+    }
+
+    /// The two arrays, for the `tui_raw_line` call that takes them by
+    /// pointer.
+    pub(crate) fn as_ptrs(&self) -> (*const schar_T, *const sattr_T) {
+        (self.chars.as_ptr(), self.attrs.as_ptr())
+    }
+}

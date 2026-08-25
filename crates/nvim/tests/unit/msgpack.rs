@@ -22,10 +22,9 @@
 
 use std::ffi::{c_char, c_int};
 
-use neovim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
 use neovim::memory::{xcalloc, xfree};
 use neovim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
-use neovim::types::{GridLineEvent, Unpacker, sattr_T, schar_T};
+use neovim::types::{GridLineEvent, Unpacker};
 
 /// An unpacker that tears itself down, so a case can return without a
 /// cleanup dance.
@@ -139,45 +138,17 @@ fn a_grid_line_with_no_cells_decodes() {
     assert_eq!(stream.event().expect("a completed grid_line").ncells, 0);
 }
 
-/// The UI client's shared line buffers, stood up for the duration of a case.
+/// The UI client's shared decode buffer, made wide enough for a case.
 ///
 /// A cell that is not a trailing run of spaces is written straight into the
-/// UI client's shared line buffers, which only `ui_client_init` allocates.
-/// A case that wants to decode one therefore has to stand them up itself —
-/// under the editor lock, because they are process-wide.
-struct LineBuf {
-    chars: Vec<schar_T>,
-    attrs: Vec<sattr_T>,
-    saved: (usize, *mut schar_T, *mut sattr_T),
-    _editor: crate::support::Editor,
-}
-
-impl LineBuf {
-    fn install(width: usize) -> LineBuf {
-        let editor = crate::support::editor_lock();
-        let mut buf = LineBuf {
-            chars: vec![0; width],
-            attrs: vec![0; width],
-            saved: (
-                grid_line_buf_size.get(),
-                grid_line_buf_char.get(),
-                grid_line_buf_attr.get(),
-            ),
-            _editor: editor,
-        };
-        grid_line_buf_size.set(width);
-        grid_line_buf_char.set(buf.chars.as_mut_ptr());
-        grid_line_buf_attr.set(buf.attrs.as_mut_ptr());
-        buf
-    }
-}
-
-impl Drop for LineBuf {
-    fn drop(&mut self) {
-        grid_line_buf_size.set(self.saved.0);
-        grid_line_buf_char.set(self.saved.1);
-        grid_line_buf_attr.set(self.saved.2);
-    }
+/// buffer, which only a `grid_resize` from the server widens. A case that
+/// wants to decode one therefore has to widen it itself — under the editor
+/// lock, because it is process-wide. Nothing is restored on the way out: the
+/// buffer only ever grows, and each event fills what it reports.
+fn wide_decode_buffer(width: usize) -> crate::support::Editor {
+    let editor = crate::support::editor_lock();
+    Unpacker::widen_grid_line_buf(width);
+    editor
 }
 
 /// Every prefix of the message is a legal pause point, and none of them may
@@ -189,7 +160,7 @@ fn no_prefix_of_a_grid_line_reports_an_event() {
         0x92, 0x93, 0xa1, b'a', 0x00, 0x02, 0x93, 0xa1, b'b', 0x01, 0x03,
     ];
     let payload = redraw_grid_line(&cells);
-    let _bufs = LineBuf::install(16);
+    let _bufs = wide_decode_buffer(16);
 
     for prefix in 0..payload.len() {
         let mut stream = Stream::new();
@@ -218,7 +189,7 @@ fn no_prefix_of_a_grid_line_reports_an_event() {
 #[test]
 fn a_grid_line_delivered_one_byte_at_a_time_still_arrives() {
     let payload = redraw_grid_line(&[0x91, 0x93, 0xa1, b'x', 0x00, 0x05]);
-    let _bufs = LineBuf::install(16);
+    let _bufs = wide_decode_buffer(16);
     let mut stream = Stream::new();
     stream.feed(&payload, 0);
     let mut finished = false;

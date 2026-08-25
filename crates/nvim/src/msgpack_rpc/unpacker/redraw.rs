@@ -12,17 +12,74 @@
 use core::ffi::c_char;
 
 use crate::grid::schar_from_buf;
-use crate::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
+
+use crate::global_cell::GlobalCell;
 use crate::memory::ARENA_EMPTY;
 use crate::mpack::conv::mpack_unpack_boolean;
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::types::{
-    Array, GridLineEvent, Unpacker, mpack_token_t, mpack_token_type_t, schar_T, size_t,
+    Array, GridLineEvent, RawLine, Unpacker, mpack_token_t, mpack_token_type_t, sattr_T, schar_T,
+    size_t,
 };
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
 use ::libc::abort;
 
 use super::protocol;
+
+/// The cells of the `grid_line` event being decoded.
+///
+/// The decoder writes them straight in rather than building an array per
+/// event, and [`ui_client_event_raw_line`] hands the run to the TUI.
+///
+/// [`ui_client_event_raw_line`]: crate::ui_client::ui_client_event_raw_line
+static GRID_LINE_BUF: GlobalCell<RawLine> = GlobalCell::new(RawLine::empty());
+
+/// The decode buffer, as a handle.
+///
+/// Named rather than borrowed, for the reason every handle in this tree is:
+/// the cells outlive the decode -- `ui_client_event_raw_line` reads them
+/// after the unpacker has returned -- so no `&mut` spans their life. Every
+/// borrow lasts one accessor call.
+#[derive(Clone, Copy)]
+struct RawLineRef(*mut RawLine);
+
+impl ::core::ops::Deref for RawLineRef {
+    type Target = RawLine;
+
+    fn deref(&self) -> &RawLine {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { &*self.0 }
+    }
+}
+
+impl ::core::ops::DerefMut for RawLineRef {
+    fn deref_mut(&mut self) -> &mut RawLine {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { &mut *self.0 }
+    }
+}
+
+/// The one `grid_line` decode buffer.
+fn grid_line_buf() -> RawLineRef {
+    RawLineRef(GRID_LINE_BUF.ptr())
+}
+
+impl Unpacker {
+    /// Widen the shared `grid_line` decode buffer to `width` cells.
+    ///
+    /// The server may not send more cells than the grid it announced, so the
+    /// buffer only has to hold the widest one: `ui_client_event_grid_resize`
+    /// calls this, and a column past the width is a protocol error.
+    pub fn widen_grid_line_buf(width: size_t) {
+        grid_line_buf().widen(width);
+    }
+
+    /// The decoded cells, for the `tui_raw_line` call that takes them by
+    /// pointer. Nothing between here and that call can widen the buffer.
+    pub(crate) fn grid_line_cells() -> (*const schar_T, *const sattr_T) {
+        grid_line_buf().as_ptrs()
+    }
+}
 use super::{MPACK_EOF, TOKEN_ARRAY, TOKEN_BOOLEAN, TOKEN_SINT, TOKEN_STR, TOKEN_UINT};
 
 /// Why a redraw parse stopped short.
@@ -258,15 +315,11 @@ fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<()
         let Ok(coloff) = usize::try_from(g.coloff) else {
             return Err(Halt::Invalid);
         };
-        if coloff >= grid_line_buf_size.get() {
+        let mut cells = grid_line_buf();
+        if coloff >= cells.width() {
             return Err(Halt::Invalid);
         }
-        // SAFETY: the two line buffers hold `grid_line_buf_size` cells each,
-        // which the bound above keeps `coloff` inside.
-        unsafe {
-            *(*grid_line_buf_char.ptr()).add(coloff) = sc;
-            *(*grid_line_buf_attr.ptr()).add(coloff) = g.cur_attr as _;
-        }
+        cells.put(coloff, sc, g.cur_attr as _);
         g.coloff += 1;
     }
     Ok(())

@@ -36,9 +36,9 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
 use crate::main::{
-    grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size, main_loop, os_exit, stderr_isatty,
-    stdin_isatty, stdout_isatty, t_colors, time_fd, ui_client_attached, ui_client_channel_id,
-    ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
+    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, t_colors, time_fd,
+    ui_client_attached, ui_client_channel_id, ui_client_error_exit, ui_client_exit_status,
+    ui_client_forward_stdin,
 };
 use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -61,9 +61,9 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, dict_T, garray_T,
+    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T, garray_T,
     kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
+    kObjectTypeInteger, kObjectTypeString, proftime_T, uint16_t,
 };
 use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -680,15 +680,7 @@ pub(crate) unsafe fn ui_client_event_grid_resize(args: Array) {
 
         // The decoder writes cells straight into these rather than
         // building an array, so they have to hold the widest grid.
-        if grid_line_buf_size.get() < width as usize {
-            xfree(grid_line_buf_char.get().cast());
-            xfree(grid_line_buf_attr.get().cast());
-            grid_line_buf_size.set(width as usize);
-            grid_line_buf_char
-                .set(xmalloc(width as usize * size_of::<schar_T>()).cast::<schar_T>());
-            grid_line_buf_attr
-                .set(xmalloc(width as usize * size_of::<sattr_T>()).cast::<sattr_T>());
-        }
+        Unpacker::widen_grid_line_buf(width as usize);
     }
 }
 
@@ -711,6 +703,7 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
         let endcol = Integer::from(startcol + (*g).coloff);
         let clearcol = endcol + Integer::from((*g).clear_width);
         let flags = if (*g).wrap { kLineFlagWrap } else { 0 };
+        let (chars, attrs) = Unpacker::grid_line_cells();
         tui_raw_line(
             &mut *tui.get(),
             Integer::from(grid),
@@ -720,8 +713,8 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
             clearcol,
             Integer::from((*g).cur_attr),
             flags,
-            grid_line_buf_char.get().cast_const(),
-            grid_line_buf_attr.get(),
+            chars,
+            attrs,
         );
     }
 }
