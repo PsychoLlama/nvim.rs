@@ -98,7 +98,7 @@ unsafe fn nlua_state_init(lstate: *mut lua_State) -> bool {
 
         // Only `--startuptime` needs `require` wrapped, and the wrapper needs
         // the original to delegate to.
-        if !(*time_fd.ptr()).is_null() {
+        if !time_fd.get().is_null() {
             lua_getglobal(lstate, c"require".as_ptr());
             require_ref.set(nlua_ref_global(lstate, -1));
             lua_pop(lstate, 1);

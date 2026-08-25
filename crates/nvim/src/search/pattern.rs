@@ -89,16 +89,13 @@ static saved_search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
 /// The copy shares `pat` and `additional_data` with the slot; it is a
 /// borrow of those, not ownership.
 fn spat(idx: c_int) -> SearchPattern {
-    // SAFETY: `idx` is one of the two slot indices; no reference to the
-    // cell is outstanding.
-    unsafe { (*spats.ptr())[idx as usize] }
+    spats.get()[idx as usize]
 }
 
 /// Store `pat` at `idx`. Whatever was there is dropped on the floor —
 /// callers that owned it call [`free_spat`] first.
 fn put_spat(idx: c_int, pat: SearchPattern) {
-    // SAFETY: as `spat`.
-    unsafe { (*spats.ptr())[idx as usize] = pat }
+    spats.with_mut(|slots| slots[idx as usize] = pat);
 }
 
 /// Release a slot's owned string and its ShaDa extras.
@@ -274,7 +271,8 @@ pub fn save_search_patterns() {
     // the cells.
     unsafe {
         for idx in [RE_SEARCH, RE_SUBST] {
-            (*saved_spats.ptr())[idx as usize] = clone_spat(idx);
+            let clone = clone_spat(idx);
+            saved_spats.with_mut(|slots| slots[idx as usize] = clone);
         }
         if compiled_pat.get().is_null() {
             saved_compiled_pat.set(ptr::null_mut());
@@ -298,7 +296,7 @@ pub fn restore_search_patterns() {
     unsafe {
         for idx in [RE_SEARCH, RE_SUBST] {
             free_spat(&spat(idx));
-            put_spat(idx, (*saved_spats.ptr())[idx as usize]);
+            put_spat(idx, saved_spats.get()[idx as usize]);
         }
         set_vv_searchforward();
         xfree(compiled_pat.get() as *mut c_void);
@@ -346,9 +344,8 @@ pub fn restore_last_search_pattern() {
     // which the assignment below puts back.
     unsafe {
         xfree(spat(RE_SEARCH).pat as *mut c_void);
-        put_spat(RE_SEARCH, saved_last_search_spat.get());
-        (*saved_last_search_spat.ptr()).pat = ptr::null_mut();
-        (*saved_last_search_spat.ptr()).patlen = 0;
+        let saved = saved_last_search_spat.replace(no_pattern(false, 0));
+        put_spat(RE_SEARCH, saved);
         set_vv_searchforward();
         last_idx.set(saved_last_idx.get());
         set_no_hlsearch(saved_no_hlsearch.get());
@@ -549,7 +546,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
             last_idx.set(idx);
         }
         if save_level.get() != 0 {
-            free_spat(&(*saved_spats.ptr())[idx as usize]);
+            free_spat(&saved_spats.get()[idx as usize]);
             // Upstream takes the flags from slot 0 whichever slot is being
             // set, then overwrites only the string. Preserved.
             let mut saved = spat(RE_SEARCH);
@@ -563,7 +560,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
             } else {
                 spat(idx).patlen
             };
-            (*saved_spats.ptr())[idx as usize] = saved;
+            saved_spats.with_mut(|slots| slots[idx as usize] = saved);
             saved_spats_last_idx.set(last_idx.get());
         }
         // With 'hlsearch' a changed pattern means a redraw.

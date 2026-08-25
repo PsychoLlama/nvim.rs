@@ -80,7 +80,7 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
         }
 
         let cache = if *through { &BLEND_THROUGH } else { &BLEND };
-        let cached = (*cache.ptr()).get(back_attr, front_attr);
+        let cached = cache.with(|c| c.get(back_attr, front_attr));
         if cached > 0 {
             return cached;
         }
@@ -113,7 +113,7 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
             id2: front_attr,
         });
         if id > 0 {
-            (*cache.ptr()).insert(back_attr, front_attr, id);
+            cache.with_mut(|c| c.insert(back_attr, front_attr, id));
         }
         id
     }

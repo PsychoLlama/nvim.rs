@@ -33,7 +33,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
         let mut len: size_t = 0;
         let mut src: *const ::core::ffi::c_char =
             lua_tolstring(L, 2 as ::core::ffi::c_int, &raw mut len);
-        tslua_query_parse_count.set((*tslua_query_parse_count.ptr()).wrapping_add(1));
+        tslua_query_parse_count.set(tslua_query_parse_count.get().wrapping_add(1));
         let mut error_offset: uint32_t = 0;
         let mut error_type: TSQueryError = TSQueryErrorNone;
         let mut query: *mut TSQuery = ts_query_new(

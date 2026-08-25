@@ -86,9 +86,9 @@ pub unsafe fn spell_add_word(
         let mut new_spf = false;
 
         let fname = if idx == 0 {
-            if (*int_wordlist.ptr()).is_null() {
+            if int_wordlist.get().is_null() {
                 int_wordlist.set(vim_tempname());
-                if (*int_wordlist.ptr()).is_null() {
+                if int_wordlist.get().is_null() {
                     return;
                 }
             }

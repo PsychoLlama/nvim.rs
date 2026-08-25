@@ -529,7 +529,7 @@ pub unsafe fn eval_vars(
                 SPEC_AFILE => {
                     // The autocommand's file name is shortened on first use
                     // and the shortened form is kept.
-                    if !(*autocmd_fname.ptr()).is_null() && !autocmd_fname_full.get() {
+                    if !autocmd_fname.get().is_null() && !autocmd_fname_full.get() {
                         autocmd_fname_full.set(true);
                         result = full_name_save(autocmd_fname.get(), false);
                         xstrlcpy(autocmd_fname.get(), result, MAXPATHL as size_t);

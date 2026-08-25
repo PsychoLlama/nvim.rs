@@ -119,7 +119,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         saved_cursor.set(pos);
         format_lines(-1, false);
         (*curwin.get()).w_cursor = saved_cursor.get();
-        (*saved_cursor.ptr()).lnum = 0;
+        saved_cursor.set(saved_cursor.get().with_lnum(0));
 
         if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_ml.ml_line_count {
             // "cannot happen"

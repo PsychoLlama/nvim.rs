@@ -237,7 +237,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
         }
         if (scope as c_int) < kCdScopeGlobal as c_int {
             let pdir = get_prevdir(scope);
-            if (*globaldir.ptr()).is_null() && !pdir.is_null() {
+            if globaldir.get().is_null() && !pdir.is_null() {
                 globaldir.set(xstrdup(pdir));
             }
         }
@@ -361,7 +361,7 @@ pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
             return;
         }
         if p_verbose.get() > 0 as OptInt {
-            let context = if !(*last_chdir_reason.ptr()).is_null() {
+            let context = if !last_chdir_reason.get().is_null() {
                 last_chdir_reason.get()
             } else if !(*curwin.get()).w_localdir.is_null() {
                 c"window".as_ptr() as *mut c_char

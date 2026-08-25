@@ -528,7 +528,7 @@ pub(crate) unsafe fn qf_init_ext(
             // and frees it whenever the option text changes — would then
             // free what this loop is still walking. Owning it here costs
             // the re-entrant call a recompile and nothing otherwise.
-            let mut compiled = (*EFM_CACHE.ptr()).take();
+            let mut compiled = EFM_CACHE.take();
             let text = CStr::from_ptr(efm).to_bytes();
             if !compiled.as_ref().is_some_and(|(had, _)| had == text) {
                 compiled = Efm::compile(efm).map(|parsed| (text.to_vec(), parsed));
@@ -537,7 +537,7 @@ pub(crate) unsafe fn qf_init_ext(
                 Some((_, parsed)) => read_lines(qfl, &mut reader, parsed),
                 None => false,
             };
-            *EFM_CACHE.ptr() = compiled;
+            EFM_CACHE.set(compiled);
 
             if built {
                 retval = (*qfl).qf_count;

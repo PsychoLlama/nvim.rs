@@ -438,7 +438,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
             let mut round = 0;
             while round == 0 || *spf != 0 {
                 if round == 0 {
-                    if (*int_wordlist.ptr()).is_null() {
+                    if int_wordlist.get().is_null() {
                         round += 1;
                         continue;
                     }
@@ -617,7 +617,7 @@ unsafe fn find_region(rp: *const c_char, region: *const c_char) -> c_int {
 /// Delete the internal word list and its compiled `.spl`.
 pub unsafe fn spell_delete_wordlist() {
     unsafe {
-        if (*int_wordlist.ptr()).is_null() {
+        if int_wordlist.get().is_null() {
             return;
         }
 

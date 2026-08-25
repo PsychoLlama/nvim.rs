@@ -269,6 +269,9 @@ pub(crate) fn trigger_undo_ftplugin(mut buf: Buf, mut win: Win) {
 pub(crate) struct BufRef(bufref_T);
 
 impl BufRef {
+    /// The reference that names no buffer, for a cell's initial value.
+    pub(crate) const NONE: Self = BufRef(bufref_T::new());
+
     /// `set_bufref()`: remember `buf`, which may be null.
     pub(crate) fn of_raw(buf: *mut buf_T) -> Self {
         // SAFETY: a null pointer is never dereferenced below.

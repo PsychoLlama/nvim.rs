@@ -60,18 +60,21 @@ static default_shada_file: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
 /// `<state directory>/shada/main.shada`.
 unsafe fn shada_get_default_file() -> *const c_char {
-    unsafe {
-        if (*default_shada_file.ptr()).is_none() {
+    if default_shada_file.with(Option::is_none) {
+        // SAFETY: both helpers answer an owned NUL-terminated string.
+        unsafe {
             let shada_dir = stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false);
             let full = concat_fnames_realloc(shada_dir, c"main.shada".as_ptr(), true);
-            *default_shada_file.ptr() = Some(CStr::from_ptr(full).to_owned());
+            default_shada_file.set(Some(CStr::from_ptr(full).to_owned()));
             xfree(full.cast::<c_void>());
         }
-        match &*default_shada_file.ptr() {
-            Some(file) => file.as_ptr(),
-            None => core::ptr::null(),
-        }
     }
+    // The cell is written once and never replaced, so the string it owns
+    // stays where it is for as long as the editor runs.
+    default_shada_file.with(|file| match file {
+        Some(file) => file.as_ptr(),
+        None => core::ptr::null(),
+    })
 }
 
 /// Which ShaDa file to use, or `None` if ShaDa is turned off.

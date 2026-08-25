@@ -293,7 +293,7 @@ pub(crate) fn normal_redraw_mode_message() {
     // SAFETY: `keep_msg` is null or an owned string; the copy is what makes
     // it safe to pass to `msg`, which may free the global.
     unsafe {
-        if must_redraw.get() != 0 && !(*keep_msg.ptr()).is_null() && !emsg_on_display.get() {
+        if must_redraw.get() != 0 && !keep_msg.get().is_null() && !emsg_on_display.get() {
             // The redraw must not print the kept message itself, so it is
             // taken out of the global for the duration and put back after.
             let kmsg = keep_msg.get();
@@ -462,7 +462,7 @@ fn normal_redraw() {
             }
         }
         (*curbuf.get()).b_last_used = time(ptr::null_mut());
-        if !(*keep_msg.ptr()).is_null() {
+        if !keep_msg.get().is_null() {
             // `msg` may free the global, so it is handed a copy -- and the
             // message is not added to the history a second time.
             let copy = xstrdup(keep_msg.get());
@@ -530,7 +530,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
             normal_redraw();
             do_redraw.set(false);
             // The first screen update is the end of startup profiling.
-            if !(*time_fd.ptr()).is_null() {
+            if !time_fd.get().is_null() {
                 time_msg(c"first screen update".as_ptr(), ptr::null());
                 time_finish();
             }

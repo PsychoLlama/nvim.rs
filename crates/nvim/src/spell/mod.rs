@@ -269,7 +269,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
         let save_ws = p_ws.get() != 0;
         let mut prev_lnum: linenr_T = 0;
 
-        if (*repl_from.ptr()).is_null() || (*repl_to.ptr()).is_null() {
+        if repl_from.get().is_null() || repl_to.get().is_null() {
             emsg(gettext(c"E752: No previous spell replacement".as_ptr()));
             return;
         }

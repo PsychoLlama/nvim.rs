@@ -33,18 +33,18 @@ pub unsafe fn nvim__id_float(flt: Float) -> Float {
 pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
     unsafe {
         let mut rv: Dict = arena_dict(arena, 6 as size_t);
-        dict_put(&mut rv, c"fsync", Object::integer((*g_stats.ptr()).fsync));
+        dict_put(&mut rv, c"fsync", Object::integer(g_stats.get().fsync));
         dict_put(
             &mut rv,
             c"log_skip",
-            Object::integer((*g_stats.ptr()).log_skip as Integer),
+            Object::integer(g_stats.get().log_skip as Integer),
         );
         dict_put(
             &mut rv,
             c"lua_refcount",
             Object::integer(nlua_get_global_ref_count() as Integer),
         );
-        dict_put(&mut rv, c"redraw", Object::integer((*g_stats.ptr()).redraw));
+        dict_put(&mut rv, c"redraw", Object::integer(g_stats.get().redraw));
         dict_put(
             &mut rv,
             c"arena_alloc_count",

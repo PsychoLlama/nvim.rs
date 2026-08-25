@@ -401,7 +401,7 @@ unsafe fn changed_common(
             && lnum <= (*curwin.get()).w_cursor.lnum
             && lnume + xtra.abs() > (*curwin.get()).w_cursor.lnum
         {
-            (*last_cursormoved.ptr()).lnum = 0;
+            last_cursormoved.set(last_cursormoved.get().with_lnum(0));
         }
     }
 }

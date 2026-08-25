@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::file_search::Name;
 use crate::types::{CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo};
 use core::ffi::{c_char, c_int, c_uint};
@@ -22,7 +23,7 @@ use core::ptr;
 /// named. Consecutive entries usually name the same file, so remembering
 /// the last answer saves a `buflist_new` lookup per entry.
 static last_bufname: GlobalCell<Option<Name>> = GlobalCell::new(None);
-static last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
+static last_bufref: GlobalCell<BufRef> = GlobalCell::new(BufRef::NONE);
 
 /// Throw the cache away. The buffer it names may have been wiped out since,
 /// and a stale hit would file entries under a dead buffer.
@@ -42,13 +43,13 @@ unsafe fn buffer_for(bufname: *mut c_char) -> *mut buf_T {
             Some(name) => strcmp(bufname, name.as_ptr()) == 0,
             None => false,
         });
-        if cached && bufref_valid(last_bufref.ptr()) {
-            return (*last_bufref.ptr()).br_buf;
+        if cached && last_bufref.get().valid() {
+            return last_bufref.get().raw();
         }
         let buf = buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int);
         let name = Name::from_ptr(bufname);
         last_bufname.with_mut(|slot| *slot = Some(name));
-        set_bufref(last_bufref.ptr(), buf);
+        last_bufref.set(BufRef::of_raw(buf));
         buf
     }
 }

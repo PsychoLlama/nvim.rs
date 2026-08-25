@@ -96,7 +96,7 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
         }
         if keep_cursor {
             (*curwin.get()).w_cursor = saved_cursor.get();
-            (*saved_cursor.ptr()).lnum = 0;
+            saved_cursor.set(saved_cursor.get().with_lnum(0));
             // Formatting may have made the position invalid.
             check_cursor(curwin.get());
         }

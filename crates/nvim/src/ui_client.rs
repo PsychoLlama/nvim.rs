@@ -280,7 +280,7 @@ unsafe fn api_version() -> Dict {
 ///
 /// `step` must outlive the log entry.
 unsafe fn log_startup_step(step: &'static CStr) {
-    if unsafe { !(*time_fd.ptr()).is_null() } {
+    if !time_fd.get().is_null() {
         unsafe { time_msg(step.as_ptr(), core::ptr::null::<proftime_T>()) };
     }
 }
