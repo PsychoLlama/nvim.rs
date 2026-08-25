@@ -2,9 +2,10 @@
 //! typed, and the size of the Visual selection while there is one.
 //!
 //! `add_to_showcmd` runs once per keystroke, so everything here follows the
-//! per-key rules: no `GlobalCell::with`, no iterator adaptors on a path a
-//! character takes, and the buffer stays the C `[c_char; SHOWCMD_BUFLEN]`
-//! that `drawscreen.rs` and `getchar.rs` also write.
+//! per-key rules: no iterator adaptors on a path a character takes. The text
+//! itself is a [`ShowCmd`] value -- the C `[char; SHOWCMD_BUFLEN]` with its
+//! length beside it -- which the cell hands out by copy, so no caller holds
+//! a borrow of it across the redraw the display functions run.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -12,34 +13,35 @@ use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_isprintc};
+use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::setcursor;
 use crate::fold::has_folding;
 use crate::getchar::char_avail;
+use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
     Rows, curwin, ex_normal_busy, hl_attr_active, msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc,
-    redraw_tabline, sc_col, showcmd_buf,
+    redraw_tabline, sc_col,
 };
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
-    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, old_showcmd_buf,
-    showcmd_is_clear, showcmd_visual, visual_selection,
+    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear,
+    showcmd_visual, visual_selection,
 };
 use crate::optionstr::empty_option;
-use crate::os::cshim::{memmove, snprintf};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
 use crate::types::{
-    Array, Integer, NUL, Object, OptInt, colnr_T, int64_t, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, linenr_T, object, size_t,
+    Array, Integer, NUL, Object, OptInt, colnr_T, kObjectTypeArray, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, linenr_T, object,
 };
 use crate::ui::{ui_call_msg_showcmd, ui_has};
-use ::libc::{strcat, strcpy, strlen};
-use core::ffi::{c_char, c_int, c_void};
+use ::libc::strcpy;
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::highlight_group::HLF_MSG;
 use crate::keycodes::{
@@ -51,20 +53,85 @@ use crate::keycodes::{
 use crate::types::object_data;
 use crate::types::ui::kUIMessages;
 
-/// The buffer holds a NUL-terminated C string; this is its length.
-#[inline(always)]
-fn showcmd_len() -> usize {
-    // SAFETY: `showcmd_buf` is a `[c_char; SHOWCMD_BUFLEN]` and every writer
-    // in the tree keeps it NUL-terminated.
-    unsafe { strlen(showcmd_buf.ptr().cast::<c_char>()) as usize }
+/// The 'showcmd' text: at most `SHOWCMD_BUFLEN - 1` bytes and the
+/// terminator C consumers still expect, carried by value.
+///
+/// The C buffer was a shared global with no length, so every reader had to
+/// walk it for one and any writer reached from a redraw could move the text
+/// under a reader. Owning it as a `Copy` value retires both.
+#[derive(Clone, Copy)]
+pub(crate) struct ShowCmd {
+    /// `len` bytes of text, then a NUL, then whatever the last longer text
+    /// left behind.
+    chars: [c_char; SHOWCMD_BUFLEN as usize],
+    len: usize,
 }
 
-/// Truncate the echoed text to `at` bytes.
-#[inline(always)]
-fn showcmd_truncate(at: usize) {
-    // SAFETY: callers pass an index within the array.
-    unsafe { (*showcmd_buf.ptr())[at] = NUL as c_char }
+impl ShowCmd {
+    /// The longest text that fits, terminator excluded.
+    const CAP: usize = SHOWCMD_BUFLEN as usize - 1;
+
+    const fn new() -> Self {
+        Self {
+            chars: [0; SHOWCMD_BUFLEN as usize],
+            len: 0,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// The text as the NUL-terminated string a C consumer takes.
+    pub(crate) fn as_cstr(&self) -> &CStr {
+        cstr::in_chars(&self.chars)
+    }
+
+    /// The whole array, for a caller that wants a fixed number of cells and
+    /// lets the terminator stop it early.
+    pub(crate) fn cells(&self, n: usize) -> &[c_char] {
+        &self.chars[..n.min(SHOWCMD_BUFLEN as usize)]
+    }
+
+    /// Drop everything past `at` bytes.
+    fn truncate(&mut self, at: usize) {
+        if at < self.len {
+            self.len = at;
+            self.chars[at] = NUL as c_char;
+        }
+    }
+
+    /// Replace the text with `text`, cut at the tail to what fits -- which
+    /// is what the `snprintf` upstream formats it with does.
+    fn set_text(&mut self, text: &[u8]) {
+        self.len = text.len().min(Self::CAP);
+        for (at, &b) in text[..self.len].iter().enumerate() {
+            self.chars[at] = b as c_char;
+        }
+        self.chars[self.len] = NUL as c_char;
+    }
+
+    /// Append `text`, shifting the oldest bytes out rather than refusing to
+    /// grow once the total passes `limit`.
+    fn append(&mut self, text: &[u8], limit: usize) {
+        let limit = limit.min(Self::CAP);
+        let text = &text[text.len().saturating_sub(limit)..];
+        let overflow = (self.len + text.len()).saturating_sub(limit);
+        self.chars.copy_within(overflow..self.len, 0);
+        self.len -= overflow;
+        for &b in text {
+            self.chars[self.len] = b as c_char;
+            self.len += 1;
+        }
+        self.chars[self.len] = NUL as c_char;
+    }
 }
+
+/// The 'showcmd' area's text.
+pub(crate) static showcmd_buf: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
+
+/// What [`push_showcmd`] parked, for [`pop_showcmd`] to put back.
+static old_showcmd_buf: GlobalCell<ShowCmd> = GlobalCell::new(ShowCmd::new());
 
 /// How many bytes of command may be shown. The message UI gets the whole
 /// buffer; the last screen line gets the ten columns reserved for it.
@@ -187,32 +254,25 @@ fn show_visual_size(sel: VisualSelection) {
     let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
-    let buf = showcmd_buf.ptr().cast::<c_char>();
-    let cap = SHOWCMD_BUFLEN as size_t;
-    // SAFETY: every call writes at most `SHOWCMD_BUFLEN` bytes into the
-    // buffer, which is that long. snprintf's truncation is the behaviour
-    // upstream relies on for a very wide block.
-    unsafe {
-        if sel.mode.is_block() {
-            snprintf(
-                buf,
-                cap,
-                c"%ldx%ld".as_ptr(),
-                lines as int64_t,
-                blockwise_width(sel) as int64_t,
-            );
-        } else if sel.mode.is_line() || sel.anchor.lnum != (*curwin.get()).w_cursor.lnum {
-            snprintf(buf, cap, c"%ld".as_ptr(), lines as int64_t);
+    // SAFETY: `curwin` is the current window.
+    let same_line = unsafe { sel.anchor.lnum == (*curwin.get()).w_cursor.lnum };
+    let text = if sel.mode.is_block() {
+        format!("{lines}x{}", blockwise_width(sel))
+    } else if sel.mode.is_line() || !same_line {
+        format!("{lines}")
+    } else {
+        let (chars, bytes) = charwise_extent(sel, cursor_bot);
+        if bytes == chars {
+            format!("{chars}")
         } else {
-            let (chars, bytes) = charwise_extent(sel, cursor_bot);
-            if bytes == chars {
-                snprintf(buf, cap, c"%d".as_ptr(), chars);
-            } else {
-                snprintf(buf, cap, c"%d-%d".as_ptr(), chars, bytes);
-            }
+            format!("{chars}-{bytes}")
         }
-    }
-    showcmd_truncate(showcmd_limit());
+    };
+
+    let mut sc = showcmd_buf.get();
+    sc.set_text(text.as_bytes());
+    sc.truncate(showcmd_limit());
+    showcmd_buf.set(sc);
     showcmd_visual.set(true);
 }
 
@@ -226,7 +286,7 @@ pub(crate) fn clear_showcmd() {
     if let Some(sel) = visual_selection().filter(|_| unsafe { !char_avail() }) {
         show_visual_size(sel);
     } else {
-        showcmd_truncate(0);
+        showcmd_buf.set(ShowCmd::new());
         showcmd_visual.set(false);
         if showcmd_is_clear.get() {
             return;
@@ -245,7 +305,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     }
     // A Visual size sitting in the area is replaced, not appended to.
     if showcmd_visual.get() {
-        showcmd_truncate(0);
+        showcmd_buf.set(ShowCmd::new());
         showcmd_visual.set(false);
     }
     if c < 0 && IGNORED.contains(&c) {
@@ -253,9 +313,10 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     }
 
     let mut mbyte_buf: [c_char; 7] = [0; 7];
-    // SAFETY: `transchar` answers a pointer to a static buffer; the
-    // multibyte branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`.
-    let p = unsafe {
+    // SAFETY: `transchar` answers a pointer to a static buffer it keeps
+    // NUL-terminated; the multibyte branch writes at most MB_MAXBYTES + 1
+    // into `mbyte_buf`, and the borrow ends with the statement.
+    let extra = unsafe {
         if c <= 0x7f || !vim_isprintc(c) {
             let p = transchar(c);
             // A space is shown as its byte value, so it is not lost in the
@@ -263,33 +324,17 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
             if *p as c_int == ' ' as c_int {
                 strcpy(p, c"<20>".as_ptr().cast_mut());
             }
-            p
+            CStr::from_ptr(p)
         } else {
             let n = utf_char2bytes(c, mbyte_buf.as_mut_ptr());
             mbyte_buf[n as usize] = NUL as c_char;
-            mbyte_buf.as_mut_ptr()
+            CStr::from_ptr(mbyte_buf.as_ptr())
         }
     };
 
-    let buf = showcmd_buf.ptr().cast::<c_char>();
-    // SAFETY: both are NUL-terminated C strings.
-    let (old_len, extra_len) = unsafe { (showcmd_len(), strlen(p) as usize) };
-    let limit = showcmd_limit();
-    // Overflowing shifts the oldest bytes out rather than refusing to grow.
-    if old_len + extra_len > limit {
-        let overflow = old_len + extra_len - limit;
-        // SAFETY: `overflow <= old_len`, so the source range and the length
-        // (including the terminator) are both inside the buffer.
-        unsafe {
-            memmove(
-                buf.cast::<c_void>(),
-                buf.add(overflow).cast::<c_void>(),
-                (old_len - overflow + 1) as size_t,
-            );
-        }
-    }
-    // SAFETY: the shift above left room for `extra_len` more bytes.
-    unsafe { strcat(buf, p) };
+    let mut sc = showcmd_buf.get();
+    sc.append(extra.to_bytes(), showcmd_limit());
+    showcmd_buf.set(sc);
 
     // SAFETY: reads the typeahead state.
     if unsafe { char_avail() } {
@@ -311,9 +356,9 @@ pub(crate) fn del_from_showcmd(len: c_int) {
     if p_sc.get() == 0 {
         return;
     }
-    let old_len = showcmd_len();
-    let len = (len as usize).min(old_len);
-    showcmd_truncate(old_len - len);
+    let mut sc = showcmd_buf.get();
+    sc.truncate(sc.len.saturating_sub(len as usize));
+    showcmd_buf.set(sc);
     // SAFETY: reads the typeahead state.
     if unsafe { !char_avail() } {
         display_showcmd();
@@ -323,13 +368,7 @@ pub(crate) fn del_from_showcmd(len: c_int) {
 /// Save the partial command across something that shows its own.
 pub(crate) fn push_showcmd() {
     if p_sc.get() != 0 {
-        // SAFETY: both arrays are SHOWCMD_BUFLEN long and NUL-terminated.
-        unsafe {
-            strcpy(
-                old_showcmd_buf.ptr().cast::<c_char>(),
-                showcmd_buf.ptr().cast::<c_char>(),
-            )
-        };
+        old_showcmd_buf.set(showcmd_buf.get());
     }
 }
 
@@ -338,22 +377,15 @@ pub(crate) fn pop_showcmd() {
     if p_sc.get() == 0 {
         return;
     }
-    // SAFETY: as above.
-    unsafe {
-        strcpy(
-            showcmd_buf.ptr().cast::<c_char>(),
-            old_showcmd_buf.ptr().cast::<c_char>(),
-        )
-    };
+    showcmd_buf.set(old_showcmd_buf.get());
     display_showcmd();
 }
 
 /// Hand the area's current contents to whichever of the four places
 /// 'showcmdloc' names is showing it.
 pub(crate) fn display_showcmd() {
-    // SAFETY: reads the first byte of the buffer.
-    showcmd_is_clear.set(unsafe { (*showcmd_buf.ptr())[0] as c_int == NUL });
-    let clear = showcmd_is_clear.get();
+    let clear = showcmd_buf.get().is_empty();
+    showcmd_is_clear.set(clear);
 
     // SAFETY: 'showcmdloc' is a non-empty string option.
     let loc = unsafe { *p_sloc.get() as c_int };
@@ -398,6 +430,10 @@ pub(crate) fn display_showcmd() {
 /// Both arrays borrow stack storage for the length of the call, which is
 /// what upstream does too -- `ui_call_msg_showcmd` copies what it keeps.
 fn show_through_ui(clear: bool) {
+    // The text outlives the call, which is all `cstr_as_string`'s borrow
+    // needs: `ui_call_msg_showcmd` copies what it keeps.
+    let sc = showcmd_buf.get();
+    let text = sc.as_cstr();
     let mut chunk_items: [Object; 3] = [NIL; 3];
     let mut content_items: [Object; 1] = [NIL; 1];
     let mut chunk: Array = ARRAY_DICT_INIT;
@@ -415,7 +451,7 @@ fn show_through_ui(clear: bool) {
             *chunk.items.add(1) = object {
                 type_0: kObjectTypeString,
                 data: object_data {
-                    string: cstr_as_string(showcmd_buf.ptr().cast::<c_char>()),
+                    string: cstr_as_string(text.as_ptr()),
                 },
             };
             *chunk.items.add(2) = integer_object(0);
@@ -446,6 +482,7 @@ fn integer_object(n: Integer) -> Object {
 /// The built-in form: write the text into the reserved columns of the last
 /// screen line, then blank the rest of them.
 fn draw_on_last_line(clear: bool) {
+    let sc = showcmd_buf.get();
     // SAFETY: the message view is the message grid and `showcmd_row` is its
     // last row; `grid_line_puts` bounds itself to the line it was started on.
     unsafe {
@@ -455,7 +492,7 @@ fn draw_on_last_line(clear: bool) {
         let attr = *hl_attr_active.get().offset(HLF_MSG as isize);
         let mut len = 0;
         if !clear {
-            len = grid_line_puts(sc_col.get(), showcmd_buf.ptr().cast::<c_char>(), -1, attr);
+            len = grid_line_puts(sc_col.get(), sc.as_cstr().as_ptr(), -1, attr);
         }
         // The padding is the same ten spaces every time; only the tail past
         // what was written is drawn.

@@ -46,7 +46,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::normal::{set_visual_active, visual_active};
+use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -65,7 +65,7 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
 use crate::main::{
     KeyTyped, State, curbuf, curwin, did_emsg, msg_loclist, msg_qflist, p_sc, p_sloc,
-    redraw_not_allowed, showcmd_buf, updating_screen,
+    redraw_not_allowed, updating_screen,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
@@ -333,7 +333,7 @@ impl Env {
                 return;
             }
         }
-        showcmd_buf.with(|buf| text.extend_from_slice(cstr::in_chars(buf).to_bytes()));
+        text.extend_from_slice(showcmd_buf.get().as_cstr().to_bytes());
     }
 
     /// How wide the fold column is here, which is what `%C` draws.

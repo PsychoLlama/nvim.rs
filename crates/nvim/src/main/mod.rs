@@ -1653,7 +1653,6 @@ const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
 pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
 pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-pub static showcmd_buf: GlobalCell<[c_char; 41]> = GlobalCell::new([0; 41]);
 pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);

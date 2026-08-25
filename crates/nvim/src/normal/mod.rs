@@ -18,7 +18,7 @@ use crate::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, SpellAddType,
     VimState, cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 
 mod state;
 pub(crate) use self::state::*;
@@ -605,7 +605,6 @@ pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
 static nv_cmd_idx: GlobalCell<[int16_t; 188]> = GlobalCell::new([0; 188]);
 static nv_max_linear: GlobalCell<c_int> = GlobalCell::new(0);
 static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null_mut::<oparg_T>());
-static old_showcmd_buf: GlobalCell<[c_char; 41]> = GlobalCell::new([0; 41]);
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;

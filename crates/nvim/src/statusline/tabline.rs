@@ -27,10 +27,11 @@ use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::main::{
     Columns, curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, p_sc, p_sloc, p_tal,
-    redraw_tabline, showcmd_buf, t_colors, tab_page_click_defs, tab_page_click_defs_size, topframe,
+    redraw_tabline, t_colors, tab_page_click_defs, tab_page_click_defs_size, topframe,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
@@ -380,13 +381,12 @@ fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     if width <= 0 {
         return;
     }
-    showcmd_buf.with(|buf| {
-        paint_text(
-            Columns.get() - width - c_int::from(tabcount > 1) * 2,
-            &buf[..width as usize],
-            attr,
-        );
-    });
+    let sc = showcmd_buf.get();
+    paint_text(
+        Columns.get() - width - c_int::from(tabcount > 1) * 2,
+        sc.cells(width as usize),
+        attr,
+    );
 }
 
 /// Claim `cols` of the tab page line for tab page `tabnr`.
