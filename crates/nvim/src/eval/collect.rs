@@ -31,6 +31,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::{null, null_mut};
 
+use crate::autocmd::aucmd_wins;
 use crate::eval::gc::{gc_first_dict, gc_first_list};
 use crate::eval::typval::{
     tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
@@ -53,7 +54,7 @@ use crate::global_cell::GlobalCell;
 use crate::hashtab::hash_removed;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
 use crate::main::{
-    aucmd_win_vec, channels, curtab, first_tabpage, firstbuf, firstwin, garbage_collect_at_exit,
+    channels, curtab, first_tabpage, firstbuf, firstwin, garbage_collect_at_exit,
     may_garbage_collect, p_verbose, want_garbage_collect,
 };
 use crate::mark::mark_global_iter;
@@ -191,9 +192,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         }
 
         // window-local variables in the autocommand windows
-        let wins = aucmd_win_vec.ptr();
-        for i in 0..(*wins).size as isize {
-            let win = (*(*wins).items.offset(i)).auc_win;
+        let wins = aucmd_wins();
+        for i in 0..wins.len() {
+            let win = (*wins.slot(i)).auc_win;
             if !win.is_null() {
                 abort = abort
                     || set_ref_in_item(

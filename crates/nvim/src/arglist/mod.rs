@@ -119,7 +119,7 @@ const EMPTY_GARRAY: garray_T = garray_T {
 /// The global argument list — `GARGLIST`/`GARGCOUNT` upstream. It is the one
 /// list that is never freed, which is why several tests here compare against
 /// its address rather than a flag.
-fn global_arglist() -> *mut alist_T {
+pub(crate) fn global_arglist() -> *mut alist_T {
     global_alist.ptr()
 }
 

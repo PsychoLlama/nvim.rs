@@ -118,7 +118,7 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     update_ext();
     unsafe { ui_refresh() };
     if checkerr {
-        let ns = unsafe { describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr()) };
+        let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
         unsafe {
             msg_schedule_semsg_c!(
                 c"Excessive errors in vim.ui_attach() callback (ns=%s)".as_ptr(),
@@ -264,7 +264,7 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
 ///
 /// `name` and `msg` must be valid C strings.
 unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
-    let ns = unsafe { describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr()) };
+    let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
     let format = c"Error in \"%s\" UI event handler (ns=%s):\n%s".as_ptr();
     unsafe {
         logmsg_c!(

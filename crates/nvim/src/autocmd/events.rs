@@ -195,7 +195,8 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
 
 /// Whether any autocommand is defined for `event`.
 pub unsafe fn has_event(event: event_T) -> bool {
-    unsafe { (*autocmds.ptr())[event as usize].size != 0 }
+    // SAFETY: the table's own row for `event`.
+    unsafe { (*au_event_vec(event)).size != 0 }
 }
 
 /// Whether a `CursorHold` autocommand exists for the mode we are in.

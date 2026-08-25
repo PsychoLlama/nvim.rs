@@ -19,6 +19,7 @@ use core::mem::{size_of, size_of_val};
 use core::ptr;
 
 use crate::api::private::helpers::{api_metadata_raw, cstr_as_string};
+use crate::arglist::global_arglist;
 use crate::arglist::{alist_add, alist_name};
 use crate::ascii::ascii_isdigit;
 use crate::diff::diffopt_horizontal;
@@ -33,10 +34,10 @@ use crate::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, SESSION_FILE,
     SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode, err_arg_missing,
     err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args, exmode_active,
-    global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile,
-    kOptValTypeNumber, kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T,
-    nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write, readonlymode, recoverymode,
-    silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
+    headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptValTypeNumber,
+    kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T, nlua_disable_preload, p_lpl,
+    p_shadafile, p_uc, p_verbose, p_write, readonlymode, recoverymode, silent_mode, stderr_isatty,
+    stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
@@ -593,7 +594,7 @@ impl Scan {
             }
             (*self.parmp).edit_type = EDIT_FILE as c_int;
 
-            let alist = global_alist.ptr();
+            let alist = global_arglist();
             ga_grow(&raw mut (*alist).al_ga, 1);
             let mut path = xstrdup(self.arg());
 

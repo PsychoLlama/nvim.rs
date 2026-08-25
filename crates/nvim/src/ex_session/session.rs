@@ -30,14 +30,15 @@ use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_do_win, ses_escape_fname, ses_fname,
     ses_put_fname,
 };
+use crate::arglist::global_arglist;
 use crate::buffer::{bt_help, bt_nofilename, bt_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::hashtab::hash_removed;
 use crate::main::{
-    Columns, Rows, curtab, curwin, first_tabpage, firstbuf, firstwin, global_alist, globaldir,
-    p_shm, p_stal, p_wh, p_wiw, topframe,
+    Columns, Rows, curtab, curwin, first_tabpage, firstbuf, firstwin, globaldir, p_shm, p_stal,
+    p_wh, p_wiw, topframe,
 };
 use crate::memory::xfree;
 use crate::options::{
@@ -120,7 +121,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
         ses_arglist(
             out,
             c"argglobal",
-            &raw mut (*global_alist.ptr()).al_ga,
+            &raw mut (*global_arglist()).al_ga,
             !opts.has(kOptSsopFlagCurdir),
         )
     } {

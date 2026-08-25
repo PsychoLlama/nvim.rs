@@ -92,9 +92,76 @@ unsafe fn map_get_string_int(
     }
 }
 
+/// The name -> id map every named namespace is registered in.
+///
+/// A `Copy` handle rather than a borrow: `nvim_get_namespaces` and
+/// `describe_ns` both walk it in the khash's own order, which the API
+/// observes (F-P21-9), and a walk can outlive any borrow the tree would take.
+#[derive(Clone, Copy)]
+pub(crate) struct NamespaceIds(*mut Map_String_int);
+
+/// The one place the namespace map's address is taken.
+pub(crate) fn namespace_id_map() -> NamespaceIds {
+    NamespaceIds(namespace_ids.ptr())
+}
+
+impl NamespaceIds {
+    /// The address, for the `map_*`/`mh_*` operations that take one.
+    pub(crate) fn raw(self) -> *mut Map_String_int {
+        self.0
+    }
+
+    /// How many names are registered.
+    fn len(self) -> uint32_t {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { (*self.0).set.h.size }
+    }
+
+    /// The registered `(name, id)` pairs, in the map's own order.
+    fn entries(self) -> impl Iterator<Item = (String_0, handle_T)> {
+        // SAFETY: as `len`; `n_keys` bounds both arrays, which the map keeps
+        // in step.
+        let (n, keys, values) =
+            unsafe { ((*self.0).set.h.n_keys, (*self.0).set.keys, (*self.0).values) };
+        // SAFETY: `i` is below `n_keys`.
+        (0..n).map(move |i| unsafe { (*keys.add(i as usize), *values.add(i as usize) as handle_T) })
+    }
+}
+
+/// The namespaces that are window-local rather than visible everywhere.
+///
+/// The same shape as [`NamespaceIds`], for the set that goes with it.
+#[derive(Clone, Copy)]
+pub(crate) struct LocalScopes(*mut Set_uint32_t);
+
+/// The one place the local-scope set's address is taken.
+pub(crate) fn local_scopes() -> LocalScopes {
+    LocalScopes(namespace_localscope.ptr())
+}
+
+impl LocalScopes {
+    /// Whether namespace `ns_id` is window-local.
+    pub(crate) fn contains(self, ns_id: uint32_t) -> bool {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { set_has_uint32_t(self.0, ns_id) }
+    }
+
+    /// Make namespace `ns_id` window-local.
+    fn insert(self, ns_id: uint32_t) {
+        // SAFETY: as `contains`.
+        unsafe { set_put_uint32_t(self.0, ns_id, ::core::ptr::null_mut()) };
+    }
+
+    /// Make namespace `ns_id` visible everywhere again.
+    fn remove(self, ns_id: uint32_t) {
+        // SAFETY: as `contains`.
+        unsafe { set_del_uint32_t(self.0, ns_id) };
+    }
+}
+
 pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     unsafe {
-        let mut id: handle_T = map_get_string_int(namespace_ids.ptr(), name);
+        let mut id: handle_T = map_get_string_int(namespace_id_map().raw(), name);
         if id > 0 as ::core::ffi::c_int {
             return id as Integer;
         }
@@ -102,7 +169,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
         next_namespace_id.set(id + 1);
         if name.len() > 0 as size_t {
             let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
-            map_put_string_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
+            map_put_string_int(namespace_id_map().raw(), name_alloc, id);
         }
         id as Integer
     }
@@ -110,44 +177,25 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 
 pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
     unsafe {
-        let mut retval: Dict = arena_dict(arena, (*namespace_ids.ptr()).set.h.size as size_t);
-        let mut name: String_0 = String_0::NULL;
-        let mut id: handle_T = 0;
-        let mut __i: uint32_t = 0;
-        __i = 0 as uint32_t;
-        while __i < (*namespace_ids.ptr()).set.h.n_keys {
-            name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
-            id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
+        let mut retval: Dict = arena_dict(arena, namespace_id_map().len() as size_t);
+        for (name, id) in namespace_id_map().entries() {
             dict_put_str(
                 &mut retval,
                 cstr_as_string(name.data()),
                 Object::integer(id as Integer),
             );
-            __i = __i.wrapping_add(1);
         }
         retval
     }
 }
 
-pub unsafe fn describe_ns(
-    mut ns_id: NS,
-    mut unknown: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        let mut name: String_0 = String_0::NULL;
-        let mut id: handle_T = 0;
-        let mut __i: uint32_t = 0;
-        __i = 0 as uint32_t;
-        while __i < (*namespace_ids.ptr()).set.h.n_keys {
-            name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
-            id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
-            if id == ns_id && !name.is_empty() {
-                return name.data();
-            }
-            __i = __i.wrapping_add(1);
+pub fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
+    for (name, id) in namespace_id_map().entries() {
+        if id == ns_id && !name.is_empty() {
+            return name.data();
         }
-        unknown
     }
+    unknown
 }
 
 pub fn ns_initialized(mut ns: uint32_t) -> bool {
@@ -245,14 +293,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                 keys: ::core::ptr::null_mut::<ptr_t>(),
             };
         }
-        if set_scoped as ::core::ffi::c_int != 0
-            && !set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t)
-        {
-            set_put_uint32_t(
-                namespace_localscope.ptr(),
-                ns_id as uint32_t,
-                ::core::ptr::null_mut::<*mut uint32_t>(),
-            );
+        if set_scoped && !local_scopes().contains(ns_id as uint32_t) {
+            local_scopes().insert(ns_id as uint32_t);
             let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp_0.is_null() {
                 let mut wp_1: *mut win_T = if tp_0 == curtab.get() {
@@ -273,11 +315,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                 }
                 tp_0 = (*tp_0).tp_next as *mut tabpage_T;
             }
-        } else if !set_scoped
-            && set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t) as ::core::ffi::c_int
-                != 0
-        {
-            set_del_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t);
+        } else if !set_scoped && local_scopes().contains(ns_id as uint32_t) {
+            local_scopes().remove(ns_id as uint32_t);
             let mut tp_1: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp_1.is_null() {
                 let mut wp_2: *mut win_T = if tp_1 == curtab.get() {
@@ -321,7 +360,7 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
             );
             return opts.reported(error);
         }
-        if !set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t) {
+        if !local_scopes().contains(ns_id as uint32_t) {
             return opts.reported(error);
         }
         let mut count: size_t = 0 as size_t;

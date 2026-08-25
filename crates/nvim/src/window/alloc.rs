@@ -18,6 +18,8 @@ use core::ptr;
 
 use super::*;
 use crate::arglist::alist_unlink;
+use crate::arglist::global_arglist;
+use crate::autocmd::aucmd_wins;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{WinInfos, buflist_new};
 use crate::decoration::clear_virttext;
@@ -27,8 +29,8 @@ use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::main::{
-    Columns, Rows, au_pending_free_win, aucmd_win_vec, autocmd_busy, curbuf, curtab, curwin,
-    firstwin, global_alist, lastwin, p_ch, prevwin, topframe, window_handles,
+    Columns, Rows, au_pending_free_win, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin,
+    p_ch, prevwin, topframe, window_handles,
 };
 use crate::map::map_del_int_ptr_t;
 use crate::mark::free_jumplist;
@@ -105,7 +107,7 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
     // SAFETY: a hidden float over a fresh scratch buffer, and a live `Error`.
     let win = unsafe { win_new_float(ptr::null_mut::<win_T>(), true, fconfig, &raw mut err) };
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
-    unsafe { (*(*aucmd_win_vec.ptr()).items.offset(idx as isize)).auc_win = win };
+    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win };
     // SAFETY: `win_new_float` answers a live window here.
     let mut win = unsafe { Win::new(win) };
     win.buffer().b_nwindows -= 1;
@@ -138,7 +140,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
             win.w_buffer = buf.raw();
             win.w_s = &raw mut buf.b_s;
             buf.b_nwindows = 1;
-            win.w_alist = global_alist.ptr();
+            win.w_alist = global_arglist();
             curwin_init();
         }
         Some(oldwin) => {

@@ -17,24 +17,77 @@
 
 use super::*;
 use crate::guard::Suppress;
+use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
+
+/// The stack of autocommand windows, one slot per nesting level.
+///
+/// A `Copy` handle rather than a borrow: `win_alloc_aucmd_win` writes back
+/// into a slot while [`aucmd_prepbuf`] is still choosing one, and the
+/// autocommands then run with a slot marked in use, so nothing here can hold
+/// a `&mut` across the calls that matter.
+#[derive(Clone, Copy)]
+pub(crate) struct AucmdWins(*mut AucmdWinVec);
+
+/// The one place the autocommand-window stack's address is taken.
+pub(crate) fn aucmd_wins() -> AucmdWins {
+    AucmdWins(aucmd_win_vec.ptr())
+}
+
+impl AucmdWins {
+    /// How many slots the stack has.
+    pub(crate) fn len(self) -> usize {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { (*self.0).size }
+    }
+
+    /// Slot `idx`, which must be below [`len`](Self::len).
+    pub(crate) fn slot(self, idx: usize) -> *mut aucmdwin_T {
+        // SAFETY: as `len`; the array holds `size` initialised slots.
+        unsafe { (*self.0).items.add(idx) }
+    }
+
+    /// Push an unused slot, growing the array if it is full.
+    fn push_empty(self) {
+        let vec = self.0;
+        // SAFETY: as `len`; the array and its length are updated together.
+        unsafe {
+            if (*vec).size == (*vec).capacity {
+                (*vec).capacity = if (*vec).capacity != 0 {
+                    (*vec).capacity << 1
+                } else {
+                    8
+                };
+                (*vec).items = xrealloc(
+                    (*vec).items.cast::<::core::ffi::c_void>(),
+                    ::core::mem::size_of::<aucmdwin_T>().wrapping_mul((*vec).capacity),
+                )
+                .cast::<aucmdwin_T>();
+            }
+            *(*vec).items.add((*vec).size) = aucmdwin_T {
+                auc_win: ::core::ptr::null_mut(),
+                auc_win_used: false,
+            };
+            (*vec).size = (*vec).size.wrapping_add(1);
+        }
+    }
+}
 
 /// Whether `win` is one of the autocommand windows currently in use.
 pub unsafe fn is_aucmd_win(win: *mut win_T) -> bool {
-    unsafe {
-        let vec = aucmd_win_vec.ptr();
-        (0..(*vec).size).any(|i| {
-            let entry = (*vec).items.add(i);
-            (*entry).auc_win_used && (*entry).auc_win == win
-        })
-    }
+    let vec = aucmd_wins();
+    (0..vec.len()).any(|i| {
+        // SAFETY: `i` is below `len`, so the slot is initialised.
+        let entry = unsafe { &*vec.slot(i) };
+        entry.auc_win_used && entry.auc_win == win
+    })
 }
 
 /// Make `buf` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
 pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
     unsafe {
-        let entry = |idx: usize| (*aucmd_win_vec.ptr()).items.add(idx);
+        let entry = |idx: usize| aucmd_wins().slot(idx);
 
         let same_buffer = buf == curbuf.get();
 
@@ -58,34 +111,17 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
         // Allocate an autocommand window when there is no window to use.
         let mut need_append = true;
         let mut auc_win: *mut win_T = ::core::ptr::null_mut();
-        let mut auc_idx = (*aucmd_win_vec.ptr()).size;
+        let mut auc_idx = aucmd_wins().len();
         if win.is_null() {
             auc_idx = 0;
-            while auc_idx < (*aucmd_win_vec.ptr()).size && (*entry(auc_idx)).auc_win_used {
+            while auc_idx < aucmd_wins().len() && (*entry(auc_idx)).auc_win_used {
                 auc_idx += 1;
             }
 
             // All of them are in use -- an autocommand fired from inside
             // another one -- so push an empty slot for this nesting level.
-            if auc_idx == (*aucmd_win_vec.ptr()).size {
-                let vec = aucmd_win_vec.ptr();
-                if (*vec).size == (*vec).capacity {
-                    (*vec).capacity = if (*vec).capacity != 0 {
-                        (*vec).capacity << 1
-                    } else {
-                        8
-                    };
-                    (*vec).items = xrealloc(
-                        (*vec).items.cast::<::core::ffi::c_void>(),
-                        ::core::mem::size_of::<aucmdwin_T>().wrapping_mul((*vec).capacity),
-                    )
-                    .cast::<aucmdwin_T>();
-                }
-                *(*vec).items.add((*vec).size) = aucmdwin_T {
-                    auc_win: ::core::ptr::null_mut(),
-                    auc_win_used: false,
-                };
-                (*vec).size = (*vec).size.wrapping_add(1);
+            if auc_idx == aucmd_wins().len() {
+                aucmd_wins().push_empty();
             }
 
             // The slot may have been pushed empty either just now or by an
@@ -166,7 +202,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
     unsafe {
         if (*aco).use_aucmd_win_idx >= 0 {
             let idx = (*aco).use_aucmd_win_idx as usize;
-            let awp = (*(*aucmd_win_vec.ptr()).items.add(idx)).auc_win;
+            let awp = (*aucmd_wins().slot(idx)).auc_win;
 
             // Go to `awp`.  It cannot have been closed, but the autocommand
             // may have moved it to another tab page.
@@ -207,7 +243,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
             }
 
             // The window is given back, not freed: it is used again.
-            (*(*aucmd_win_vec.ptr()).items.add(idx)).auc_win_used = false;
+            (*aucmd_wins().slot(idx)).auc_win_used = false;
 
             if valid_tabpage_win(curtab.get()) == 0 {
                 close_tabpage(curtab.get());

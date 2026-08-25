@@ -149,7 +149,7 @@ pub(crate) fn sign_nth_group(idx: usize) -> Option<Integer> {
 /// # Safety
 /// `group` must be a NUL-terminated string.
 unsafe fn namespace_id(group: *const c_char) -> c_int {
-    let map = namespace_ids.ptr();
+    let map = namespace_id_map().raw();
     // SAFETY: the caller's group name, and the editor's own namespace table.
     let k = unsafe { mh_get_string(&raw mut (*map).set, cstr_as_string(group)) };
     if k == u32::MAX {

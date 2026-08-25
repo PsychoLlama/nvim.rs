@@ -103,9 +103,7 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_cha
         Expand::List | Expand::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
         Expand::SignNames => sign_nth_name(at(idx)),
         Expand::SignGroups => match sign_nth_group(at(idx)).map(number_as_int) {
-            // SAFETY: the namespace came out of the group list, so it is one
-            // `nvim_create_namespace` handed out.
-            Some(ns) => unsafe { describe_ns(ns, c"".as_ptr()).cast_mut() },
+            Some(ns) => describe_ns(ns, c"".as_ptr()).cast_mut(),
             None => ::core::ptr::null_mut(),
         },
         Expand::Nothing => ::core::ptr::null_mut(),

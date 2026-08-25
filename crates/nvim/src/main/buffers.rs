@@ -31,10 +31,9 @@ use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
     SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
-    autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, global_alist, got_int,
-    kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
-    no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action,
-    swap_exists_did_quit, time_msg_at,
+    autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, got_int, kOptErrorfile,
+    kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm,
+    p_fdls, p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -56,6 +55,7 @@ use crate::window::{
     win_equal,
 };
 
+use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
 
@@ -83,7 +83,7 @@ pub(crate) unsafe fn set_argf_var() {
     // SAFETY: the global argument list is initialised by `early_init`.
     unsafe {
         let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-        let alist = global_alist.ptr();
+        let alist = global_arglist();
         for i in 0..(*alist).al_ga.ga_len {
             let fname = alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize));
             if !fname.is_null() {
@@ -100,7 +100,7 @@ pub(crate) unsafe fn set_argf_var() {
 /// files or recovers one.
 pub(crate) unsafe fn get_fname(_parmp: *mut mparm_T) -> *mut c_char {
     // SAFETY: only reached when the argument list is non-empty.
-    unsafe { alist_name((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T) }
+    unsafe { alist_name((*global_arglist()).al_ga.ga_data as *mut aentry_T) }
 }
 
 /// `-q`: read the errorfile and set up the quickfix list.
@@ -261,7 +261,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
         }
         if (*parmp).window_count == 0 {
             // `-o`/`-O`/`-p` with no count: one per file.
-            (*parmp).window_count = (*global_alist.ptr()).al_ga.ga_len;
+            (*parmp).window_count = (*global_arglist()).al_ga.ga_len;
         }
         if (*parmp).window_count > 1 {
             // Leave the layout alone if a vimrc command already split it.
@@ -430,7 +430,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
             if curbuf.get() == (*firstwin.get()).w_buffer || (*curbuf.get()).b_ffname.is_null() {
                 (*curwin.get()).w_arg_idx = arg_idx;
                 swap_exists_did_quit.set(false);
-                let alist = global_alist.ptr();
+                let alist = global_arglist();
                 do_ecmd(
                     0,
                     if arg_idx < (*alist).al_ga.ga_len {

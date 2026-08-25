@@ -23,9 +23,10 @@ use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_escape_fname, ses_fname, ses_get_fname,
     ses_put_fname,
 };
+use crate::arglist::global_arglist;
 use crate::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, buflist_findnr};
 use crate::fold::put_folds;
-use crate::main::{curbuf, curwin, global_alist, ssop_flags};
+use crate::main::{curbuf, curwin, ssop_flags};
 use crate::mapping::makemap;
 use crate::memory::xfree;
 use crate::option::{makefoldset, makeset};
@@ -66,7 +67,7 @@ pub(crate) unsafe fn put_view(
     // list.
     unsafe {
         // The argument list: the global one, or a local copy written out.
-        if (*wp).w_alist == global_alist.ptr() {
+        if (*wp).w_alist == global_arglist() {
             if !out.line(c"argglobal") {
                 return false;
             }

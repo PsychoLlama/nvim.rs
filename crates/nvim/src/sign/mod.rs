@@ -33,6 +33,7 @@ use core::ops::{Deref, DerefMut};
 use core::slice;
 use std::ffi::CString;
 
+use crate::api::extmark::namespace_id_map;
 use crate::api::extmark::{describe_ns, nvim_create_namespace};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -62,7 +63,7 @@ use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::main::{
     curwin, e_argreq, e_dictreq, e_invalid_buffer_name_str, e_invarg, e_invarg2, e_listreq,
-    e_trailing_arg, firstbuf, got_int, namespace_ids,
+    e_trailing_arg, firstbuf, got_int,
 };
 use crate::map::mh_get_string;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};

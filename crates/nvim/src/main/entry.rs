@@ -13,6 +13,7 @@ use core::ptr;
 
 use crate::api::ui::remote_ui_wait_for_attach;
 use crate::arglist::alist_init;
+use crate::arglist::global_arglist;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_VIMENTER, apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
@@ -52,11 +53,11 @@ use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, NO_BUFFERS, RedrawingDisabled, Rows,
     WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin, debug_break_level,
-    embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen, global_alist,
-    headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout,
-    msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode,
-    resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty, stdin_isatty,
-    stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
+    embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen, headless_mode,
+    kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll,
+    no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit,
+    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -166,8 +167,8 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
         win_alloc_first();
         time_msg_at(c"init first window");
 
-        alist_init(global_alist.ptr());
-        (*global_alist.ptr()).id = 0;
+        alist_init(global_arglist());
+        (*global_arglist()).id = 0;
         init_homedir();
         set_init_1(!paramp.is_null() && (*paramp).clean);
         log_init();
@@ -256,7 +257,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
 
         let mut fname: *mut c_char = ptr::null_mut();
-        if (*global_alist.ptr()).al_ga.ga_len > 0 {
+        if (*global_arglist()).al_ga.ga_len > 0 {
             fname = get_fname(&raw mut params);
         }
         if recoverymode.get() && fname.is_null() {

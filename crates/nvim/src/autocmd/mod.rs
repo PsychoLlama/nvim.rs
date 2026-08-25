@@ -613,7 +613,7 @@ static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([AUTOCMDVEC_INI
 /// one of these across a call into user code.  `wrapping_add` keeps the
 /// whole table's provenance and needs no `unsafe`; only reading through
 /// the result does.
-fn au_event_vec(event: event_T) -> *mut AutoCmdVec {
+pub(super) fn au_event_vec(event: event_T) -> *mut AutoCmdVec {
     autocmds
         .ptr()
         .cast::<AutoCmdVec>()
