@@ -64,6 +64,40 @@ pub use self::signs::*;
 pub use self::state::*;
 
 // ---------------------------------------------------------------------------
+// The one state, named
+// ---------------------------------------------------------------------------
+
+impl DecorStateRef {
+    /// The decoration state the redraw is walking.
+    ///
+    /// There is exactly one, and it is a `static`, so its *address* is always
+    /// valid — which is why this is where the family's single `decor_state`
+    /// escape hatch lives. [`handles`] deliberately knows nothing about
+    /// *which* state a handle names; the relationship with the global is this
+    /// module's.
+    ///
+    /// **Almost every caller should take the state from its own caller
+    /// instead.** The draw pass acquires it once, in
+    /// [`win_update`](crate::drawscreen::win_update), and threads it down
+    /// through `drawline/`; this is for the three places that are genuinely
+    /// outside that thread — the deferred free, the spelling-navigation scan
+    /// that puts the state aside and rebuilds it per line, and the ephemeral
+    /// extmark a provider's Lua callback sets, which re-enters the draw pass
+    /// from the API.
+    ///
+    /// # Safety
+    /// No `with`/`with_mut` borrow of `decor_state` may be outstanding: the
+    /// handle dereferences the cell directly and is exempt from borrow
+    /// tracking, exactly as [`GlobalCell::ptr`] is.
+    #[inline(always)]
+    pub unsafe fn current() -> Self {
+        // SAFETY: a `static`'s address is valid for the whole process; the
+        // caller's promise is the borrow half.
+        unsafe { Self::new(decor_state.ptr()) }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The shapes a decoration is made of
 // ---------------------------------------------------------------------------
 
@@ -328,7 +362,7 @@ pub unsafe fn decor_free(decor: DecorInline) {
         let mut vt = decor.data.ext.vt;
         let mut idx: uint32_t = decor.data.ext.sh_idx;
 
-        if !(*decor_state.ptr()).running_decor_provider {
+        if !DecorStateRef::current().running_decor_provider {
             // Safe to delete right now.
             decor_free_inner(vt, idx);
             return;
@@ -401,15 +435,16 @@ unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
 /// # Safety
 /// Must not be called while a decoration provider is running.
 pub unsafe fn decor_check_to_be_deleted() {
-    // SAFETY: the caller's precondition — restated as a debug assertion, as
-    // upstream's `assert()` is — and the lists are this file's.
-    unsafe {
-        debug_assert!(!(*decor_state.ptr()).running_decor_provider);
-        decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get());
-        TO_FREE_VIRT.set(ptr::null_mut());
-        TO_FREE_SH.set(DECOR_ID_INVALID);
-        (*decor_state.ptr()).win = ptr::null_mut();
-    }
+    // SAFETY: the redraw is over, so nothing holds a borrow of the state.
+    let mut state = unsafe { DecorStateRef::current() };
+    // The caller's precondition, restated as upstream's `assert()` does.
+    debug_assert!(!state.running_decor_provider);
+    // SAFETY: the two lists are this file's, and everything on them was put
+    // there by `decor_free` and is unreachable from any mark.
+    unsafe { decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get()) };
+    TO_FREE_VIRT.set(ptr::null_mut());
+    TO_FREE_SH.set(DECOR_ID_INVALID);
+    state.win = ptr::null_mut();
 }
 
 /// Frees the chunks of a virtual text and empties it.

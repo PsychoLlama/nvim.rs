@@ -254,9 +254,9 @@ impl Buf {
 
 /// A [`DecorState`] the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct State(*mut DecorState);
+pub struct DecorStateRef(*mut DecorState);
 
-impl Deref for State {
+impl Deref for DecorStateRef {
     type Target = DecorState;
 
     #[inline(always)]
@@ -266,7 +266,7 @@ impl Deref for State {
     }
 }
 
-impl DerefMut for State {
+impl DerefMut for DecorStateRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut DecorState {
         // SAFETY: the constructor's promise — a live state.
@@ -274,7 +274,7 @@ impl DerefMut for State {
     }
 }
 
-impl State {
+impl DecorStateRef {
     /// # Safety
     /// `state` must stay a live `DecorState` for as long as the value is
     /// used.

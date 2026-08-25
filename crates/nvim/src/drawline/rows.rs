@@ -114,7 +114,7 @@ impl Cells {
                     self.byte_col() - 1,
                     wlv.off,
                     true,
-                    decor_state.ptr(),
+                    DecorStateRef::current(),
                     self.decor_provider_end_col - 1,
                 );
             }
@@ -364,7 +364,7 @@ impl Cells {
             if self.has_decor {
                 decor_redraw_eol(
                     wp,
-                    decor_state.ptr(),
+                    DecorStateRef::current(),
                     &raw mut wlv.line_attr,
                     wlv.col + eol_skip,
                 );

@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::decoration::SIGN_WIDTH;
+use crate::decoration::{DecorStateRef, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
@@ -644,7 +644,7 @@ unsafe fn restart_for_statuscol(wp: *mut win_T) {
         (*wp).w_redr_statuscol = false;
         (*wp).w_lines_valid = 0;
         (*wp).w_valid.clear(WinValid::WCOL);
-        decor_redraw_reset(wp, decor_state.ptr());
+        decor_redraw_reset(wp, DecorStateRef::current());
         decor_providers_invoke_win(wp);
     }
 }

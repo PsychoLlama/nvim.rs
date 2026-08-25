@@ -9,7 +9,7 @@ use crate::charset::{
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::{
-    clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
+    DecorStateRef, clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
     decor_range_count, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
     decor_redraw_line, decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
     kHlModeUnknown, next_virt_text_chunk,
@@ -36,10 +36,10 @@ use crate::highlight_group::{
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
-    State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, decor_state, did_emsg,
-    dollar_vcol, dy_flags, highlight_attr, highlight_match, hl_attr_active, linebuf_attr,
-    linebuf_char, linebuf_vcol, normal_bg, p_sel, screen_search_hl, search_match_endcol,
-    search_match_lines, spell_redraw_lnum, win_extmark_arr,
+    State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol, dy_flags,
+    highlight_attr, highlight_match, hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol,
+    normal_bg, p_sel, screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum,
+    win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,

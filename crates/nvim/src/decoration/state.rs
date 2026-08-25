@@ -34,16 +34,16 @@
 //! a [`Cursor`](crate::marktree::cursor::Cursor). The iterator is
 //! a *field of the state*, kept between rows of a redraw, and a `Cursor` would
 //! have to hold a pointer to it across the state's own field writes — which
-//! `State`'s `DerefMut` invalidates, because that reborrows the whole struct.
-//! So the four walk steps are [`State`] accessors that derive the iterator
+//! `DecorStateRef`'s `DerefMut` invalidates, because that reborrows the whole struct.
+//! So the four walk steps are [`DecorStateRef`] accessors that derive the iterator
 //! afresh each call, out of the raw pointer and inside the one statement that
 //! uses it. Same promise, taken at the same place; it just cannot be cached.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    Range, Sh, State, Virt, decor_sh_from_inline, kSHConceal, kSHHlEol, kSHIsSign, kSHSpellOff,
-    kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, ns_in_win, slot_range,
+    DecorStateRef, Range, Sh, Virt, decor_sh_from_inline, kSHConceal, kSHHlEol, kSHIsSign,
+    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, ns_in_win, slot_range,
 };
 use crate::decoration::{
     clear_virttext, kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines,
@@ -62,8 +62,8 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::types::{
     DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
-    DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTKey,
-    MTPair, MTPos, VirtTextPos, buf_T, uint32_t, win_T,
+    DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
+    VirtTextPos, buf_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -83,7 +83,7 @@ const DRAW_COL_NEVER: c_int = c_int::MIN;
 // The state's walk, and its slab
 // ---------------------------------------------------------------------------
 
-impl State {
+impl DecorStateRef {
     /// The mark the state's walk is on — an invalid key once it has run off
     /// the end.
     fn mark(self) -> MTKey {
@@ -96,25 +96,25 @@ impl State {
 
     /// Positions the walk at the first mark of `buf` at or after `row`.
     fn seek(self, buf: Buf, row: c_int) {
-        // SAFETY: as [`State::mark`]; this is what positions the iterator.
+        // SAFETY: as [`DecorStateRef::mark`]; this is what positions the iterator.
         unsafe { marktree_itr_get(&mut *tree_of(buf), row, 0, &mut (*self.raw()).itr[0]) };
     }
 
     /// Steps the walk to the next mark of `buf`.
     fn step(self, buf: Buf) {
-        // SAFETY: as [`State::mark`].
+        // SAFETY: as [`DecorStateRef::mark`].
         unsafe { marktree_itr_next(&mut *tree_of(buf), &mut (*self.raw()).itr[0]) };
     }
 
     /// Positions the walk to enumerate the ranges *covering* (`row`, 0).
     fn seek_overlap(self, buf: Buf, row: c_int) -> bool {
-        // SAFETY: as [`State::mark`].
+        // SAFETY: as [`DecorStateRef::mark`].
         unsafe { marktree_itr_get_overlap(&mut *tree_of(buf), row, 0, &mut (*self.raw()).itr[0]) }
     }
 
-    /// One more range covering the position [`State::seek_overlap`] was given.
+    /// One more range covering the position [`DecorStateRef::seek_overlap`] was given.
     fn step_overlap(self, buf: Buf, pair: &mut MTPair) -> bool {
-        // SAFETY: as [`State::mark`].
+        // SAFETY: as [`DecorStateRef::mark`].
         unsafe { marktree_itr_step_overlap(&mut *tree_of(buf), &mut (*self.raw()).itr[0], pair) }
     }
 
@@ -204,12 +204,7 @@ impl Range {
 // ---------------------------------------------------------------------------
 
 /// How many entries `ranges_i` has, active and future together.
-///
-/// # Safety
-/// `state` must point to a live `DecorState`.
-pub unsafe fn decor_range_count(state: *const DecorState) -> c_int {
-    // SAFETY: the caller's state.
-    let state = unsafe { State::new(state.cast_mut()) };
+pub fn decor_range_count(state: DecorStateRef) -> c_int {
     state.ranges_i.len() as c_int
 }
 
@@ -218,11 +213,9 @@ pub unsafe fn decor_range_count(state: *const DecorState) -> c_int {
 /// A pointer, not a borrow: the drawing code holds several of these at once
 /// and writes `draw_col` through them while reading the rest of the state.
 ///
-/// # Safety
-/// `state` must be live and `i` a valid index into `ranges_i`.
-pub unsafe fn decor_range_at(state: *mut DecorState, i: c_int) -> *mut DecorRange {
-    // SAFETY: the caller's state and index.
-    let state = unsafe { State::new(state) };
+/// # Panics
+/// If `i` is not an index into `ranges_i`.
+pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
     state.range_at(i).raw()
 }
 
@@ -244,11 +237,7 @@ pub unsafe fn decor_state_invalidate(buf: *mut buf_T) {
 /// Releases the two vectors. The ranges themselves are not owned here — see
 /// [`decor_redraw_reset`], which is what frees the ephemeral ones.
 ///
-/// # Safety
-/// `state` must point to a live `DecorState`.
-pub unsafe fn decor_state_free(state: *mut DecorState) {
-    // SAFETY: the caller's state.
-    let mut state = unsafe { State::new(state) };
+pub fn decor_state_free(mut state: DecorStateRef) {
     state.slots = Vec::new();
     state.ranges_i = Vec::new();
 }
@@ -260,10 +249,10 @@ pub unsafe fn decor_state_free(state: *mut DecorState) {
 /// to bother with the rest of the machinery.
 ///
 /// # Safety
-/// `wp` and `state` must be live.
-pub unsafe fn decor_redraw_reset(wp: *mut win_T, state: *mut DecorState) -> bool {
-    // SAFETY: the caller's window and state.
-    let (wp, mut state) = unsafe { (Win::new(wp), State::new(state)) };
+/// `wp` must be live.
+pub unsafe fn decor_redraw_reset(wp: *mut win_T, mut state: DecorStateRef) -> bool {
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
     state.row = -1;
     state.win = wp.raw();
 
@@ -309,10 +298,10 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 /// `top_row` and reach into it.
 ///
 /// # Safety
-/// `wp` and `state` must be live.
-pub unsafe fn decor_redraw_start(wp: *mut win_T, top_row: c_int, state: *mut DecorState) -> bool {
-    // SAFETY: the caller's window and state.
-    let (wp, mut state) = unsafe { (Win::new(wp), State::new(state)) };
+/// `wp` must be live.
+pub unsafe fn decor_redraw_start(wp: *mut win_T, top_row: c_int, mut state: DecorStateRef) -> bool {
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
     let buf = wp.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
@@ -353,11 +342,7 @@ pub unsafe fn decor_redraw_start(wp: *mut win_T, top_row: c_int, state: *mut Dec
 /// `ranges_i`, so that the future list does not walk off to infinity as the
 /// window is drawn.
 ///
-/// # Safety
-/// `state` must be live.
-pub(crate) unsafe fn decor_state_pack(state: *mut DecorState) {
-    // SAFETY: the caller's state.
-    let mut state = unsafe { State::new(state) };
+pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
     let count = state.ranges_i.len();
     let cur_end = state.current_end as usize;
     let fut_beg = state.future_begin as usize;
@@ -374,16 +359,15 @@ pub(crate) unsafe fn decor_state_pack(state: *mut DecorState) {
 /// Moves the state on to `row`.
 ///
 /// # Safety
-/// `wp` and `state` must be live.
-pub unsafe fn decor_redraw_line(wp: *mut win_T, row: c_int, state: *mut DecorState) {
-    // SAFETY: the caller's window and state.
-    let (wp, mut state) = unsafe { (Win::new(wp), State::new(state)) };
-    // SAFETY: as above.
-    unsafe { decor_state_pack(state.raw()) };
+/// `wp` must be live.
+pub unsafe fn decor_redraw_line(wp: *mut win_T, row: c_int, mut state: DecorStateRef) {
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
+    decor_state_pack(state);
 
     if state.row == -1 {
         // SAFETY: as above.
-        unsafe { decor_redraw_start(wp.raw(), row, state.raw()) };
+        unsafe { decor_redraw_start(wp.raw(), row, state) };
     } else if !state.itr_valid {
         state.seek(wp.buffer(), row);
         state.itr_valid = true;
@@ -396,11 +380,7 @@ pub unsafe fn decor_redraw_line(wp: *mut win_T, row: c_int, state: *mut DecorSta
 
 /// Whether there are (likely) more decorations on `row`.
 ///
-/// # Safety
-/// `state` must be live.
-pub unsafe fn decor_has_more_decorations(state: *mut DecorState, row: c_int) -> bool {
-    // SAFETY: the caller's state.
-    let state = unsafe { State::new(state) };
+pub fn decor_has_more_decorations(state: DecorStateRef, row: c_int) -> bool {
     if state.current_end != 0 || state.future_begin != state.ranges_i.len() as c_int {
         return true;
     }
@@ -416,7 +396,7 @@ pub unsafe fn decor_has_more_decorations(state: *mut DecorState, row: c_int) -> 
 /// carry a chain of virtual texts and a chain of sign/highlight items.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn decor_range_add_from_inline(
-    state: State,
+    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -450,7 +430,7 @@ pub(crate) fn decor_range_add_from_inline(
 
 /// Files `range` in a slot and puts its index in the future list, which stays
 /// sorted by starting position.
-fn decor_range_insert(mut state: State, range: &mut DecorRange) {
+fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
     range.ordering = state.new_range_ordering;
     state.new_range_ordering += 1;
 
@@ -494,10 +474,10 @@ fn decor_range_insert(mut state: State, range: &mut DecorRange) {
 /// Adds the range a virtual text or virtual-lines block occupies.
 ///
 /// # Safety
-/// `state` and `vt` must be live; `vt` is borrowed for as long as the range
-/// is, unless `owned` says the range took it over.
+/// `vt` must be live; it is borrowed for as long as the range is, unless
+/// `owned` says the range took it over.
 pub unsafe fn decor_range_add_virt(
-    state: *mut DecorState,
+    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -505,14 +485,14 @@ pub unsafe fn decor_range_add_virt(
     vt: *mut DecorVirtText,
     owned: bool,
 ) {
-    // SAFETY: the caller's state and virtual text.
-    let (state, vt) = unsafe { (State::new(state), Virt::new(vt)) };
+    // SAFETY: the caller's virtual text.
+    let vt = unsafe { Virt::new(vt) };
     decor_range_add_virt_h(state, start_row, start_col, end_row, end_col, vt, owned);
 }
 
 /// [`decor_range_add_virt`] for handles the caller has already promised.
 fn decor_range_add_virt_h(
-    state: State,
+    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -550,10 +530,10 @@ fn decor_range_add_virt_h(
 /// One `sh` can produce two ranges: a highlight and a UI-watched position.
 ///
 /// # Safety
-/// `state` and `sh` must be live.
+/// `sh` must be live.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn decor_range_add_sh(
-    state: *mut DecorState,
+    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -564,8 +544,8 @@ pub unsafe fn decor_range_add_sh(
     mark_id: uint32_t,
     subpriority: DecorPriority,
 ) {
-    // SAFETY: the caller's state and sign/highlight item.
-    let (state, mut sh) = unsafe { (State::new(state), Sh::new(sh)) };
+    // SAFETY: the caller's sign/highlight item.
+    let mut sh = unsafe { Sh::new(sh) };
     add_sh(
         state,
         start_row,
@@ -583,7 +563,7 @@ pub unsafe fn decor_range_add_sh(
 /// [`decor_range_add_sh`] for a state the caller has already promised.
 #[allow(clippy::too_many_arguments)]
 fn add_sh(
-    state: State,
+    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -674,11 +654,7 @@ fn init_draw_col(win_col: c_int, hidden: bool, mut item: Range) {
 /// Assigns a column to every range still waiting for one, now that the
 /// caller knows where it is.
 ///
-/// # Safety
-/// `state` must be live.
-pub unsafe fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: *mut DecorState) {
-    // SAFETY: the caller's state.
-    let state = unsafe { State::new(state) };
+pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef) {
     for i in 0..state.current_end {
         let r = state.range_at(i);
         if r.draw_col == DRAW_COL_PENDING {
@@ -698,17 +674,17 @@ pub unsafe fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: *mut D
 /// `decor_redraw_col` skip this entirely for most columns.
 ///
 /// # Safety
-/// `wp` and `state` must be live.
+/// `wp` must be live.
 pub unsafe fn decor_redraw_col_impl(
     wp: *mut win_T,
     col: c_int,
     win_col: c_int,
     hidden: bool,
-    state: *mut DecorState,
+    mut state: DecorStateRef,
     max_col_last: c_int,
 ) -> c_int {
-    // SAFETY: the caller's window and state.
-    let (wp, mut state) = unsafe { (Win::new(wp), State::new(state)) };
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
     let buf = wp.buffer();
     let row = state.row;
     let mut col_last = max_col_last;
@@ -888,22 +864,20 @@ pub unsafe fn decor_redraw_col_impl(
 /// column has not passed the point the last answer holds to.
 ///
 /// # Safety
-/// `wp` and `state` must be live.
+/// `wp` must be live.
 #[inline(always)]
 pub unsafe fn decor_redraw_col(
     wp: *mut win_T,
     col: c_int,
     win_col: c_int,
     hidden: bool,
-    state: *mut DecorState,
+    state: DecorStateRef,
     max_col_last: c_int,
 ) -> c_int {
-    // SAFETY: the caller's state.
-    let handle = unsafe { State::new(state) };
-    if col <= handle.col_last {
-        return handle.current;
+    if col <= state.col_last {
+        return state.current;
     }
-    // SAFETY: the caller's window and state.
+    // SAFETY: the caller's window.
     unsafe { decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last) }
 }
 
@@ -911,17 +885,17 @@ pub unsafe fn decor_redraw_col(
 /// end of the text, and says whether anything virtual still wants drawing.
 ///
 /// # Safety
-/// `wp` and `state` must be live; `eol_attr` must be writable.
+/// `wp` must be live and `eol_attr` writable.
 pub unsafe fn decor_redraw_eol(
     wp: *mut win_T,
-    state: *mut DecorState,
+    mut state: DecorStateRef,
     eol_attr: *mut c_int,
     eol_col: c_int,
 ) -> bool {
-    // SAFETY: the caller's state and out-parameter.
-    let (mut state, eol_attr) = unsafe { (State::new(state), &mut *eol_attr) };
-    // SAFETY: the caller's window and state.
-    unsafe { decor_redraw_col(wp, MAXCOL, MAXCOL, false, state.raw(), MAXCOL) };
+    // SAFETY: the caller's out-parameter.
+    let eol_attr = unsafe { &mut *eol_attr };
+    // SAFETY: the caller's window.
+    unsafe { decor_redraw_col(wp, MAXCOL, MAXCOL, false, state, MAXCOL) };
     state.eol_col = eol_col;
 
     let mut has_virt_pos = false;

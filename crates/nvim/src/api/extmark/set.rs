@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
 
 pub unsafe fn nvim_buf_set_extmark(
@@ -622,8 +623,8 @@ pub unsafe fn nvim_buf_set_extmark(
                                 col2 = 0 as ::core::ffi::c_int as colnr_T;
                             }
                             if (*opts).ephemeral as ::core::ffi::c_int != 0
-                                && !(*decor_state.ptr()).win.is_null()
-                                && (*(*decor_state.ptr()).win).w_buffer == b
+                                && !DecorStateRef::current().win.is_null()
+                                && (*DecorStateRef::current().win).w_buffer == b
                             {
                                 let mut r: ::core::ffi::c_int = line as ::core::ffi::c_int;
                                 let mut c: ::core::ffi::c_int = col as ::core::ffi::c_int;
@@ -652,7 +653,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                                 if virt_text.data.virt_text.size != 0 {
                                     decor_range_add_virt(
-                                        decor_state.ptr(),
+                                        DecorStateRef::current(),
                                         r,
                                         c,
                                         line2,
@@ -666,7 +667,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                                 if virt_lines.data.virt_lines.size != 0 {
                                     decor_range_add_virt(
-                                        decor_state.ptr(),
+                                        DecorStateRef::current(),
                                         r,
                                         c,
                                         line2,
@@ -682,7 +683,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     let mut sh: DecorSignHighlight = decor_sh_from_inline(hl);
                                     sh.url = url;
                                     decor_range_add_sh(
-                                        decor_state.ptr(),
+                                        DecorStateRef::current(),
                                         r,
                                         c,
                                         line2,

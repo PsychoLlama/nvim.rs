@@ -575,7 +575,7 @@ impl Cells {
             let at = self.byte_col();
             self.decor_provider_end_col = invoke_range_next(wp, lnum, at, 100);
             self.refetch_line(wp, lnum, at);
-            if !self.has_decor && decor_has_more_decorations(decor_state.ptr(), lnum - 1) {
+            if !self.has_decor && decor_has_more_decorations(DecorStateRef::current(), lnum - 1) {
                 self.has_decor = true;
                 self.extra_check = true;
             }
@@ -747,7 +747,7 @@ impl Cells {
                     self.byte_col(),
                     -3,
                     false,
-                    decor_state.ptr(),
+                    DecorStateRef::current(),
                     self.decor_provider_end_col - 1,
                 );
                 // Where they go has to be decided again on the next row.
@@ -755,13 +755,13 @@ impl Cells {
             } else if !self.is_wrapped {
                 // Without wrapping, "right_align" and "win_col" virtual texts
                 // for the whole line still have to be placed.
-                decor_recheck_draw_col(-1, true, decor_state.ptr());
+                decor_recheck_draw_col(-1, true, DecorStateRef::current());
                 decor_redraw_col(
                     wp,
                     MAXCOL as ::core::ffi::c_int,
                     -1,
                     true,
-                    decor_state.ptr(),
+                    DecorStateRef::current(),
                     self.decor_provider_end_col - 1,
                 );
             }

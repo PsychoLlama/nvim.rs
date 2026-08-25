@@ -33,7 +33,7 @@ use core::mem;
 
 use crate::charset::{getwhitecols, skipwhite};
 use crate::decoration::{
-    decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
+    DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::main::{bot_top_msg, curwin, decor_state, got_int, p_ws, top_bot_msg};
@@ -68,13 +68,13 @@ unsafe fn decor_spell_nav_col(
 ) -> Option<bool> {
     unsafe {
         if *decor_lnum != lnum {
-            decor_redraw_reset(wp, decor_state.ptr());
+            decor_redraw_reset(wp, DecorStateRef::current());
             decor_providers_invoke_spell(wp, lnum as c_int - 1, col, lnum as c_int - 1, -1);
-            decor_redraw_line(wp, lnum as c_int - 1, decor_state.ptr());
+            decor_redraw_line(wp, lnum as c_int - 1, DecorStateRef::current());
             *decor_lnum = lnum;
         }
-        decor_redraw_col(wp, col, 0, false, decor_state.ptr(), MAXCOL as c_int);
-        (*decor_state.ptr()).spell
+        decor_redraw_col(wp, col, 0, false, DecorStateRef::current(), MAXCOL as c_int);
+        DecorStateRef::current().spell
     }
 }
 
@@ -327,7 +327,7 @@ pub unsafe fn spell_move_to(
             line_breakcheck();
         }
 
-        decor_state_free(decor_state.ptr());
+        decor_state_free(DecorStateRef::current());
         decor_state.with_mut(|state| *state = saved_decor_start);
         xfree(buf as *mut core::ffi::c_void);
         ret

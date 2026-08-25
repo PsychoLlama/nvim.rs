@@ -110,10 +110,10 @@ pub(crate) unsafe fn draw_virt_text(
 ) {
     // SAFETY: the caller's window and the redraw's decoration state.
     unsafe {
-        let state = decor_state.ptr();
+        let mut state = DecorStateRef::current();
         let max_col = (*wp).w_view_width;
-        let end = (*state).current_end;
-        let do_eol = (*state).eol_col > -1;
+        let end = state.current_end;
+        let do_eol = state.eol_col > -1;
 
         // Walks leftwards as window-right-aligned texts are placed.
         let mut right_pos = max_col;
@@ -125,7 +125,7 @@ pub(crate) unsafe fn draw_virt_text(
 
         for i in 0..end {
             let item = decor_range_at(state, i);
-            if (*item).start_row != (*state).row || !decor_virt_pos(item) {
+            if (*item).start_row != state.row || !decor_virt_pos(item) {
                 continue;
             }
 
@@ -143,7 +143,7 @@ pub(crate) unsafe fn draw_virt_text(
                         if total_eol_right_width == 0 {
                             for j in i..end {
                                 let ahead = decor_range_at(state, j);
-                                if (*ahead).start_row != (*state).row
+                                if (*ahead).start_row != state.row
                                     || !decor_virt_pos(ahead)
                                     || (*ahead).draw_col != -1
                                 {
@@ -162,17 +162,17 @@ pub(crate) unsafe fn draw_virt_text(
                             }
                             // ...but none after the last one.
                             total_eol_right_width -= 1;
-                            if total_eol_right_width <= right_pos - (*state).eol_col {
-                                eol_offset = right_pos - total_eol_right_width - (*state).eol_col;
+                            if total_eol_right_width <= right_pos - state.eol_col {
+                                eol_offset = right_pos - total_eol_right_width - state.eol_col;
                             }
                         }
-                        Some((*state).eol_col + eol_offset)
+                        Some(state.eol_col + eol_offset)
                     }
                     kVPosRightAlign => {
                         right_pos -= (*vt).width;
                         Some(right_pos)
                     }
-                    kVPosEndOfLine if do_eol => Some((*state).eol_col),
+                    kVPosEndOfLine if do_eol => Some(state.eol_col),
                     kVPosWinCol => Some((col_off + (*vt).col).max(0)),
                     // Inline, overlay, or an eol form with no end of line to
                     // hang off: placed elsewhere, or not at all.
@@ -214,7 +214,7 @@ pub(crate) unsafe fn draw_virt_text(
                 if do_eol && ((*vt).pos == kVPosEndOfLine || (*vt).pos == kVPosEndOfLineRightAlign)
                 {
                     // The next end-of-line text starts one cell further on.
-                    (*state).eol_col = col + 1;
+                    state.eol_col = col + 1;
                 }
                 *end_col = (*end_col).max(col);
             }
@@ -376,13 +376,13 @@ impl WinLineVars {
             if self.virt_inline_i < self.virt_inline.size {
                 return true;
             }
-            let state = decor_state.ptr();
-            let row = (*state).row;
+            let state = DecorStateRef::current();
+            let row = state.row;
             // Both halves of `ranges_i`: the ranges active now, and the ones
             // that start later on this row.
             let spans = [
-                (0, (*state).current_end),
-                ((*state).future_begin, decor_range_count(state)),
+                (0, state.current_end),
+                (state.future_begin, decor_range_count(state)),
             ];
             for (from, to) in spans {
                 for i in from..to {
@@ -415,9 +415,9 @@ impl WinLineVars {
                     // Find the next inline text to start.
                     self.virt_inline = VIRTTEXT_EMPTY;
                     self.virt_inline_i = 0;
-                    let state = decor_state.ptr();
-                    let row = (*state).row;
-                    for i in 0..(*state).current_end {
+                    let state = DecorStateRef::current();
+                    let row = state.row;
+                    for i in 0..state.current_end {
                         let item = decor_range_at(state, i);
                         if (*item).draw_col == -3 {
                             // Nothing inline can precede this non-inline text

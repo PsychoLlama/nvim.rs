@@ -25,13 +25,13 @@ use crate::api::extmark::describe_ns;
 use crate::api::private::helpers::{
     api_clear_error, api_free_array, api_free_object, api_object_to_bool,
 };
-use crate::decoration::{decor_check_to_be_deleted, decor_range_count};
+use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_count};
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::main::{decor_state, display_tick, ns_hl_active};
+use crate::main::{display_tick, ns_hl_active};
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline_c;
 use crate::types::builders::ArrayBuf;
@@ -318,10 +318,8 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
     unsafe {
         // This might change in the future; then this would need
         // `decor_state.running_decor_provider` just like "on_line" below.
-        debug_assert!(
-            (*decor_state.ptr()).current_end == 0
-                && (*decor_state.ptr()).future_begin == decor_range_count(decor_state.ptr())
-        );
+        let state = DecorStateRef::current();
+        debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
 
         if provider_count() > 0 {
             validate_botline_win(wp);
@@ -369,7 +367,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     unsafe {
-        (*decor_state.ptr()).running_decor_provider = true;
+        DecorStateRef::current().running_decor_provider = true;
         for idx in 0..provider_count() {
             let p = provider(idx);
             if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
@@ -391,7 +389,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
                 hl_check_ns();
             }
         }
-        (*decor_state.ptr()).running_decor_provider = false;
+        DecorStateRef::current().running_decor_provider = false;
     }
 }
 
@@ -412,7 +410,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 ) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     unsafe {
-        (*decor_state.ptr()).running_decor_provider = true;
+        DecorStateRef::current().running_decor_provider = true;
         for idx in 0..provider_count() {
             let p = provider(idx);
             if p.state != kDecorProviderActive || p.redraw_range == LUA_NOREF {
@@ -475,7 +473,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
             api_free_array(res);
             hl_check_ns();
         }
-        (*decor_state.ptr()).running_decor_provider = false;
+        DecorStateRef::current().running_decor_provider = false;
     }
 }
 

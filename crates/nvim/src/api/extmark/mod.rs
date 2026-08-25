@@ -19,8 +19,7 @@ use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_high;
 use crate::main::{
-    curtab, decor_state, first_tabpage, firstwin, namespace_ids, namespace_localscope,
-    next_namespace_id,
+    curtab, first_tabpage, firstwin, namespace_ids, namespace_localscope, next_namespace_id,
 };
 use crate::map::{
     map_put_ref_string_int, mh_delete_uint32_t, mh_get_ptr_t, mh_get_string, mh_put_ptr_t,

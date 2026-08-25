@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::decoration::kVPosWinCol;
+use crate::decoration::{DecorStateRef, kVPosWinCol};
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::pos::MAXCOL;
@@ -140,10 +140,10 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
 
         win_extmark_arr.with_mut(Vec::clear);
 
-        decor_redraw_reset(wp, decor_state.ptr());
+        decor_redraw_reset(wp, DecorStateRef::current());
         decor_providers_invoke_win(wp);
 
-        add_suspended_terminal_note(buf);
+        add_suspended_terminal_note(buf, DecorStateRef::current());
 
         // The sign column width is per buffer, so a change to it invalidates
         // every window showing that buffer -- including this one.
@@ -258,9 +258,9 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
 /// decoration state the rest of the redraw already reads.
 ///
 /// # Safety
-/// Called from [`win_update`] with the decoration state reset for this window.
-unsafe fn add_suspended_terminal_note(buf: *mut buf_T) {
-    // SAFETY: the caller's buffer and the redraw's decoration state.
+/// Called from [`win_update`] with `state` reset for this window.
+unsafe fn add_suspended_terminal_note(buf: *mut buf_T, state: DecorStateRef) {
+    // SAFETY: the caller's buffer.
     unsafe {
         if (*buf).terminal.is_null() || !terminal_suspended((*buf).terminal) {
             return;
@@ -288,7 +288,7 @@ unsafe fn add_suspended_terminal_note(buf: *mut buf_T) {
             next: ::core::ptr::null_mut(),
         });
         let last = (*buf).b_ml.ml_line_count - 1;
-        decor_range_add_virt(decor_state.ptr(), last, 0, last, 0, VIRT_TEXT.ptr(), false);
+        decor_range_add_virt(state, last, 0, last, 0, VIRT_TEXT.ptr(), false);
     }
 }
 
