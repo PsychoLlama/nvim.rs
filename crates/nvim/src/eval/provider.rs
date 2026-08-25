@@ -206,7 +206,7 @@ pub unsafe fn eval_call_provider(
             next: null_mut(),
         };
         save_funccal(&raw mut funccal_entry);
-        *provider_call_nesting.ptr() += 1;
+        provider_call_nesting.set(provider_call_nesting.get() + 1);
 
         let mut argvars: [typval_T; 3] = [
             typval_T {
@@ -242,7 +242,7 @@ pub unsafe fn eval_call_provider(
         tv_list_unref(arguments);
         restore_funccal();
         provider_caller_scope.set(saved_provider_caller_scope);
-        *provider_call_nesting.ptr() -= 1;
+        provider_call_nesting.set(provider_call_nesting.get() - 1);
         debug_assert!(provider_call_nesting.get() >= 0);
 
         if discard {

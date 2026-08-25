@@ -167,10 +167,10 @@ pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: 
     // SAFETY: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
     unsafe {
-        *cmdline_star.ptr() += 1;
+        cmdline_star.set(cmdline_star.get() + 1);
         INPUTSECRET.set(true);
         f_input(argvars, rettv, fptr);
-        *cmdline_star.ptr() -= 1;
+        cmdline_star.set(cmdline_star.get() - 1);
         INPUTSECRET.set(false);
     }
 }

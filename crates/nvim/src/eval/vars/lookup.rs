@@ -172,7 +172,7 @@ pub unsafe fn eval_variable(
 /// `name` points at `len` readable bytes.
 pub unsafe fn check_vars(name: *const c_char, len: size_t) {
     unsafe {
-        if (*eval_lavars_used.ptr()).is_null() {
+        if eval_lavars_used.get().is_null() {
             return;
         }
         let mut varname: *const c_char = ptr::null();

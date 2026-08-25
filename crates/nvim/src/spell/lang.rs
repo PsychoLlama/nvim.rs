@@ -639,7 +639,7 @@ pub unsafe fn spell_free_all() {
             buf = (*buf).b_next;
         }
 
-        while !(*first_lang.ptr()).is_null() {
+        while !first_lang.get().is_null() {
             let slang = first_lang.get();
             first_lang.set((*slang).sl_next);
             slang_free(slang);

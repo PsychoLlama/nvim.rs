@@ -103,7 +103,7 @@ pub unsafe fn nvim_open_win(
         }
         let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut tp: *mut tabpage_T = curtab.get();
-        debug_assert!(!(*curwin.ptr()).is_null(), "curwin != NULL");
+        debug_assert!(!curwin.get().is_null(), "curwin != NULL");
         let mut parent: *mut win_T = if (*config).win == 0 as ::core::ffi::c_int {
             curwin.get()
         } else {

@@ -696,7 +696,7 @@ pub(crate) unsafe fn eval7(
             semsg_c!(gettext(e_expression_too_recursive_str.as_ptr()), *arg);
             return FAIL;
         }
-        *RECURSE.ptr() += 1;
+        RECURSE.set(RECURSE.get() + 1);
 
         match **arg as u8 {
             b'0'..=b'9' => {
@@ -795,7 +795,7 @@ pub(crate) unsafe fn eval7(
         if ret == OK && evaluate && end_leader > start_leader {
             ret = eval7_leader(rettv, false, start_leader, &raw mut end_leader);
         }
-        *RECURSE.ptr() -= 1;
+        RECURSE.set(RECURSE.get() - 1);
         ret
     }
 }

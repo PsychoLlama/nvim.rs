@@ -250,7 +250,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
         did_throw.set(false);
         need_rethrow.set(false);
         did_emsg.set(0);
-        (*trylevel.ptr()) += 1;
+        trylevel.set(trylevel.get() + 1);
     }
 }
 
@@ -260,7 +260,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
     // SAFETY: `tstate` is what the matching `try_enter` filled in.
     unsafe {
         debug_assert!(trylevel.get() > 0);
-        (*trylevel.ptr()) -= 1;
+        trylevel.set(trylevel.get() - 1);
         did_emsg.set(0);
         force_abort.set(false);
 

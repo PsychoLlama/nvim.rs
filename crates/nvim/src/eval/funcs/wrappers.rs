@@ -223,7 +223,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             }
         }
 
-        *BUILTIN_IDX.ptr() += 1;
+        BUILTIN_IDX.set(BUILTIN_IDX.get() + 1);
         let key = BUILTINS[BUILTIN_IDX.get() as usize].name;
         if key.is_null() {
             return ptr::null_mut();
@@ -263,7 +263,7 @@ pub unsafe fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
                 return name;
             }
         }
-        *VAR_IDX.ptr() += 1;
+        VAR_IDX.set(VAR_IDX.get() + 1);
         get_user_var_name(xp, VAR_IDX.get())
     }
 }

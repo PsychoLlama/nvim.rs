@@ -163,9 +163,9 @@ pub unsafe fn callback_call(
         funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = partial;
-        *callback_depth.ptr() += 1;
+        callback_depth.set(callback_depth.get() + 1);
         let ret = call_func(name, -1, rettv, argcount_in, argvars_in, &raw mut funcexe);
-        *callback_depth.ptr() -= 1;
+        callback_depth.set(callback_depth.get() - 1);
         ret != 0
     }
 }

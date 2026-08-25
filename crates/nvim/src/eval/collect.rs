@@ -94,8 +94,7 @@ const EXESTACK_GROWSIZE: usize = 50;
 /// odd value in between.
 pub unsafe fn get_copy_id() -> c_int {
     static CURRENT_COPY_ID: GlobalCell<c_int> = GlobalCell::new(0);
-    // SAFETY: a plain counter in a cell nothing else touches.
-    unsafe { *CURRENT_COPY_ID.ptr() += COPYID_INC };
+    CURRENT_COPY_ID.set(CURRENT_COPY_ID.get() + COPYID_INC);
     CURRENT_COPY_ID.get()
 }
 
@@ -651,7 +650,7 @@ pub unsafe fn var_item_copy(
             emsg(gettext(e_variable_nested_too_deep_for_making_copy.as_ptr()));
             return FAIL;
         }
-        *RECURSE.ptr() += 1;
+        RECURSE.set(RECURSE.get() + 1);
 
         let mut ret = OK;
         match (*from).v_type {
@@ -719,7 +718,7 @@ pub unsafe fn var_item_copy(
             _ => {}
         }
 
-        *RECURSE.ptr() -= 1;
+        RECURSE.set(RECURSE.get() - 1);
         ret
     }
 }

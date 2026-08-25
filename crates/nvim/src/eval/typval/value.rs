@@ -148,7 +148,7 @@ pub unsafe fn tv_item_lock(
         if deep == 0 {
             return;
         }
-        (*recurse.ptr()) += 1;
+        recurse.set(recurse.get() + 1);
 
         // lock/unlock the item itself
         (*tv).v_lock = change_lock(lock, (*tv).v_lock);
@@ -189,7 +189,7 @@ pub unsafe fn tv_item_lock(
             _ => {}
         }
 
-        (*recurse.ptr()) -= 1;
+        recurse.set(recurse.get() - 1);
     }
 }
 
@@ -294,7 +294,7 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             tv_equal_recurse_limit.set(1000);
         }
         if recursive_cnt.get() >= tv_equal_recurse_limit.get() {
-            (*tv_equal_recurse_limit.ptr()) -= 1;
+            tv_equal_recurse_limit.set(tv_equal_recurse_limit.get() - 1);
             return true;
         }
 
@@ -304,15 +304,15 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
         // there would be an indirect call on a measured phase.
         match (*tv1).v_type {
             VAR_LIST => {
-                (*recursive_cnt.ptr()) += 1;
+                recursive_cnt.set(recursive_cnt.get() + 1);
                 let r = tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic);
-                (*recursive_cnt.ptr()) -= 1;
+                recursive_cnt.set(recursive_cnt.get() - 1);
                 r
             }
             VAR_DICT => {
-                (*recursive_cnt.ptr()) += 1;
+                recursive_cnt.set(recursive_cnt.get() + 1);
                 let r = tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic);
-                (*recursive_cnt.ptr()) -= 1;
+                recursive_cnt.set(recursive_cnt.get() - 1);
                 r
             }
             VAR_PARTIAL | VAR_FUNC => {
@@ -321,9 +321,9 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
                 {
                     return false;
                 }
-                (*recursive_cnt.ptr()) += 1;
+                recursive_cnt.set(recursive_cnt.get() + 1);
                 let r = func_equal(tv1, tv2, ic);
-                (*recursive_cnt.ptr()) -= 1;
+                recursive_cnt.set(recursive_cnt.get() - 1);
                 r
             }
             VAR_BLOB => tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob),

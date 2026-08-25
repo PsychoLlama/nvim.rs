@@ -146,7 +146,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
 /// `value` is readable for `value_len` bytes, or NUL-terminated.
 pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
     unsafe {
-        if (*redir_lval.ptr()).is_null() {
+        if redir_lval.get().is_null() {
             return;
         }
         let len = if value_len == -1 {
@@ -164,9 +164,9 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
 /// Nothing; a call with no redirection running only frees.
 pub unsafe fn var_redir_stop() {
     unsafe {
-        if !(*redir_lval.ptr()).is_null() {
+        if !redir_lval.get().is_null() {
             // Store the text, unless the start failed.
-            if !(*redir_endp.ptr()).is_null() {
+            if !redir_endp.get().is_null() {
                 ga_append(redir_ga.ptr(), NUL as uint8_t);
                 let mut tv = typval_T {
                     v_type: VAR_STRING,

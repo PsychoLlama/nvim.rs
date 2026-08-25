@@ -51,7 +51,7 @@ static lambda_name: GlobalCell<[c_char; LAMBDA_NAME_LEN]> = GlobalCell::new([0; 
 unsafe fn get_lambda_name() -> String_0 {
     unsafe {
         static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
-        *lambda_no.ptr() += 1;
+        lambda_no.set(lambda_no.get() + 1);
         let buf = lambda_name.ptr() as *mut c_char;
         let n = snprintf(
             buf,
