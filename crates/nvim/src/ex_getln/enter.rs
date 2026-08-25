@@ -157,15 +157,14 @@ pub(crate) unsafe fn command_line_enter(
         init_incsearch_state(&raw mut (*s).is_state);
 
         let mut cc = Cc::current();
-        let mut save_ccline: CmdlineInfo = CMDLINE_INFO_INIT;
         let mut did_save_ccline = false;
         if !cc.cmdbuff.is_null() {
             // Currently ccline can never be in use if clear_ccline is false;
             // some changes would be needed if that ever stops holding.
             debug_assert!(clear_ccline);
             // Being called recursively. Since ccline is global we have to
-            // save the current buffer and restore it when returning.
-            save_cmdline(&raw mut save_ccline);
+            // suspend the current line and resume it when returning.
+            save_cmdline();
             did_save_ccline = true;
         } else if clear_ccline {
             ccline.set(CMDLINE_INFO_INIT);
@@ -494,7 +493,7 @@ pub(crate) unsafe fn command_line_enter(
         (*cmdline_level.ptr()) -= 1;
 
         if did_save_ccline {
-            restore_cmdline(&raw mut save_ccline);
+            restore_cmdline();
         } else {
             cc.cmdbuff = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
@@ -614,11 +613,10 @@ pub unsafe fn getcmdline_prompt(
         let msg_col_save = msg_col.get();
         let mut cc = Cc::current();
 
-        let mut save_ccline: CmdlineInfo = CMDLINE_INFO_INIT;
         let mut did_save_ccline = false;
         if !cc.cmdbuff.is_null() {
-            // Save the values of the current cmdline and restore them below.
-            save_cmdline(&raw mut save_ccline);
+            // Suspend the current cmdline and resume it below.
+            save_cmdline();
             did_save_ccline = true;
         } else {
             ccline.set(CMDLINE_INFO_INIT);
@@ -642,7 +640,7 @@ pub unsafe fn getcmdline_prompt(
         let ret = command_line_enter(firstc, 1, 0, false) as *mut ::core::ffi::c_char;
         cc.redraw_state = kCmdRedrawNone;
         if did_save_ccline {
-            restore_cmdline(&raw mut save_ccline);
+            restore_cmdline();
         }
         drop(loud);
         cmd_silent.set(cmd_silent_saved);

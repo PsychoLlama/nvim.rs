@@ -27,12 +27,13 @@ use core::ops::{Deref, DerefMut};
 /// Every reader would otherwise spell `(*ccline.ptr()).field`; the two `Deref`
 /// impls state the obligation once, and the whole of `ex_getln/` plus the
 /// `cmdexpand/` entry points that used to take a `*mut CmdlineInfo` go through
-/// this handle instead. It names the *cell*, whose address never moves, so
-/// holding one is sound; what moves is the value inside it, which is why a
-/// value is derived through [`Cc::current`] at the point of use and never held
-/// across a call that can re-enter command-line mode -- [`save_cmdline`]
-/// replaces the whole structure, and [`realloc_cmdbuff`] moves the text out
-/// from under any pointer into it.
+/// this handle instead. It names a *place* that does not move -- the `ccline`
+/// cell, or one boxed entry of the saved stack ([`cmdline_at`]) -- so holding
+/// one is sound; what moves is the value inside it, which is why a value is
+/// derived at the point of use and never held across a call that can re-enter
+/// command-line mode: [`save_cmdline`] moves the whole structure onto the
+/// saved stack, and [`realloc_cmdbuff`] moves the text out from under any
+/// pointer into it.
 #[derive(Clone, Copy)]
 pub(crate) struct Cc(*mut CmdlineInfo);
 
@@ -252,24 +253,43 @@ fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
     }
 }
 
-/// Save `ccline`, because obtaining the `=` register may execute
-/// `normal :cmd` and overwrite it.
-pub(crate) unsafe fn save_cmdline(ccp: *mut CmdlineInfo) {
-    // SAFETY: the caller's promise -- a slot to save into.
-    // The command line moves out of the cell: it owns `cmdbuff` and a
-    // highlight `Callback`, and leaving a second copy behind in `ccline`
-    // would be two owners of both. `replace` is the take, spelled once.
-    unsafe { *ccp = ccline.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT)) };
-    let mut cc = Cc::current();
-    cc.prev_ccline = ccp;
-    cc.cmdbuff = ::core::ptr::null_mut(); // signal that ccline is not in use
+/// Suspend `ccline` onto the saved stack, because obtaining the `=` register
+/// may execute `normal :cmd` and overwrite it.
+///
+/// The command line *moves* out of the cell: it owns `cmdbuff` and a
+/// highlight `Callback`, and leaving a second copy behind in `ccline` would
+/// be two owners of both. What is left is [`CMDLINE_INFO_INIT`], whose null
+/// `cmdbuff` is the signal that no command line is in use.
+pub(crate) fn save_cmdline() {
+    // Both closures are leaves -- a move out of the cell and a push onto a
+    // `Vec` -- so neither exclusive borrow can overlap another.
+    let saved = ccline.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT));
+    saved_cmdlines.with_mut(|stack| stack.push(Box::new(saved)));
 }
 
-/// Restore `ccline` after it has been saved with [`save_cmdline`].
-pub(crate) unsafe fn restore_cmdline(ccp: *mut CmdlineInfo) {
-    // SAFETY: the caller's promise -- a saved command line.
-    // The saved line moves back in; `ccp`'s slot is dead from here.
-    ccline.set(unsafe { ccp.read() });
+/// Resume the command line [`save_cmdline`] suspended.
+///
+/// Panics if nothing was suspended: the two callers pair the calls on a
+/// `did_save_ccline` flag, and an unpaired restore would otherwise silently
+/// leave the wrong line current.
+pub(crate) fn restore_cmdline() {
+    let saved = saved_cmdlines.with_mut(|stack| stack.pop());
+    ccline.set(*saved.expect("restore_cmdline without save_cmdline"));
+}
+
+/// The command line `depth` levels out: 0 is the one being edited, 1 the one
+/// suspended under it, and so on.  `None` past the bottom of the stack.
+///
+/// The closure is a leaf that takes the address of a `Box`'s target -- which
+/// the `Vec` cannot move, however it grows -- and does nothing else.
+pub(crate) fn cmdline_at(depth: usize) -> Option<Cc> {
+    if depth == 0 {
+        return Some(Cc::current());
+    }
+    saved_cmdlines.with_mut(|stack| {
+        let i = stack.len().checked_sub(depth)?;
+        Some(Cc(&raw mut *stack[i]))
+    })
 }
 
 // ---------------------------------------------------------------------------

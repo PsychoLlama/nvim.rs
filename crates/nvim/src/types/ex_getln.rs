@@ -52,7 +52,6 @@ pub struct cmdline_info {
     pub highlight_callback: Callback,
     pub last_colors: ColoredCmdline,
     pub level: ::core::ffi::c_int,
-    pub prev_ccline: *mut CmdlineInfo,
     pub special_char: ::core::ffi::c_char,
     pub special_shift: bool,
     pub redraw_state: CmdRedraw,

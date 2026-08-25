@@ -466,8 +466,8 @@ static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::
 
 /// An all-zero [`CmdlineInfo`].
 ///
-/// This is C's `CLEAR_FIELD(ccline)` and the initial value of every
-/// `save_ccline` local, which the C leaves to `save_cmdline()` to fill.
+/// This is C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`] leaves behind
+/// when it moves the command line onto the saved stack.
 /// `kCallbackNone` and a null `funcref` are both zero, so this really is the
 /// zero value and the C's `CLEAR_FIELD` and this constant agree bit for bit.
 pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
@@ -503,7 +503,6 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
         },
     },
     level: 0,
-    prev_ccline: ::core::ptr::null_mut::<CmdlineInfo>(),
     special_char: 0,
     special_shift: false,
     redraw_state: kCmdRedrawNone,
@@ -735,6 +734,19 @@ pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
 };
 
 static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
+/// The command lines suspended under [`ccline`], innermost last.
+///
+/// C threads these on a `prev_ccline` pointer through the stack frame of
+/// whoever called `save_cmdline()`, so the chain is only as sound as every
+/// caller's promise to restore before returning. Here they are owned values
+/// on an explicit stack: [`save_cmdline`] pushes and [`restore_cmdline`]
+/// pops. The `Box` is what makes an entry's address stable, because the
+/// Vimscript face still answers about the enclosing command line by pointer.
+// The `Box` is the point, not an oversight: `get_ccline_ptr()` hands the
+// address of an entry to the Vimscript functions, and a bare `Vec` would move
+// every entry the next `save_cmdline` grows it.
+#[allow(clippy::vec_box)]
+static saved_cmdlines: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);

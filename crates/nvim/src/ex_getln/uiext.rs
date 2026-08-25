@@ -208,54 +208,58 @@ pub fn ui_ext_cmdline_block_leave() {
 
 /// Extra redrawing needed for `:redraw!` and on `ui_attach`.
 pub unsafe fn cmdline_screen_cleared() {
-    unsafe {
-        if !ui_has(kUICmdline) {
-            return;
-        }
-
-        if !cmdline_block.with(CmdlineBlock::is_empty) {
-            ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
-        }
-
-        let mut prev_level = Cc::current().level - 1;
-        let mut line = Cc::current().prev_ccline;
-        while prev_level > 0 && !line.is_null() {
-            if (*line).level == prev_level {
-                // Don't redraw a command line already shown in the cmdline
-                // window.
-                if prev_level != cmdwin_level.get() {
-                    (*line).redraw_state = kCmdRedrawAll;
-                }
-                prev_level -= 1;
-            }
-            line = (*line).prev_ccline;
-        }
-        redrawcmd();
+    if !ui_has(kUICmdline) {
+        return;
     }
+
+    if !cmdline_block.with(CmdlineBlock::is_empty) {
+        ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
+    }
+
+    // Every command line suspended under this one wants redrawing too.
+    let mut prev_level = Cc::current().level - 1;
+    let mut depth = 1;
+    while prev_level > 0 {
+        let Some(mut line) = cmdline_at(depth) else {
+            break;
+        };
+        if line.level == prev_level {
+            // Don't redraw a command line already shown in the cmdline window.
+            if prev_level != cmdwin_level.get() {
+                line.redraw_state = kCmdRedrawAll;
+            }
+            prev_level -= 1;
+        }
+        depth += 1;
+    }
+    // SAFETY: redraws the command line the editor is on.
+    unsafe { redrawcmd() };
 }
 
 /// Called by `ui_flush`: send whatever redraws keep the externalised command
 /// line up to date.
-pub unsafe fn cmdline_ui_flush() {
-    unsafe {
-        if !ui_has(kUICmdline) {
-            return;
-        }
-        let mut level = Cc::current().level;
-        let mut line = Cc::current().raw();
-        while level > 0 && !line.is_null() {
-            if (*line).level == level {
-                let redraw_state = (*line).redraw_state;
-                (*line).redraw_state = kCmdRedrawNone;
-                if redraw_state == kCmdRedrawAll {
-                    cmdline_was_last_drawn.set(true);
-                    ui_ext_cmdline_show(line);
-                } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
-                    ui_call_cmdline_pos((*line).cmdpos as Integer, (*line).level as Integer);
-                }
-                level -= 1;
+pub fn cmdline_ui_flush() {
+    if !ui_has(kUICmdline) {
+        return;
+    }
+    let mut level = Cc::current().level;
+    let mut depth = 0;
+    while level > 0 {
+        let Some(mut line) = cmdline_at(depth) else {
+            break;
+        };
+        if line.level == level {
+            let redraw_state = line.redraw_state;
+            line.redraw_state = kCmdRedrawNone;
+            if redraw_state == kCmdRedrawAll {
+                cmdline_was_last_drawn.set(true);
+                // SAFETY: a live command line, from `cmdline_at`.
+                unsafe { ui_ext_cmdline_show(line.raw()) };
+            } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
+                ui_call_cmdline_pos(line.cmdpos as Integer, line.level as Integer);
             }
-            line = (*line).prev_ccline;
+            level -= 1;
         }
+        depth += 1;
     }
 }

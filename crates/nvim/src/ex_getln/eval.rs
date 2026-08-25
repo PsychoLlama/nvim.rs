@@ -31,22 +31,17 @@ pub fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
 /// The command line info the Vimscript functions should answer about, or NULL
 /// when there is none.
 ///
-/// `save_cmdline()` clears `ccline` and moves the previous value to
-/// `prev_ccline`, so inside a `<C-r>=` expression the *enclosing* command
-/// line is the one with the text.
-pub(crate) unsafe fn get_ccline_ptr() -> *mut CmdlineInfo {
-    unsafe {
-        if State.get() & MODE_CMDLINE == 0 {
-            ::core::ptr::null_mut::<CmdlineInfo>()
-        } else if !Cc::current().cmdbuff.is_null() {
-            Cc::current().raw()
-        } else if !Cc::current().prev_ccline.is_null()
-            && !(*Cc::current().prev_ccline).cmdbuff.is_null()
-        {
-            Cc::current().prev_ccline
-        } else {
-            ::core::ptr::null_mut::<CmdlineInfo>()
-        }
+/// `save_cmdline()` suspends `ccline` onto the saved stack, so inside a
+/// `<C-r>=` expression the *enclosing* command line -- one level out -- is
+/// the one with the text.
+pub(crate) fn get_ccline_ptr() -> *mut CmdlineInfo {
+    if State.get() & MODE_CMDLINE == 0 {
+        return ::core::ptr::null_mut::<CmdlineInfo>();
+    }
+    let depth = usize::from(Cc::current().cmdbuff.is_null());
+    match cmdline_at(depth) {
+        Some(cc) if !cc.cmdbuff.is_null() => cc.raw(),
+        _ => ::core::ptr::null_mut::<CmdlineInfo>(),
     }
 }
 
@@ -249,15 +244,12 @@ pub(crate) unsafe fn set_cmdline_str(
 /// It is not applied here but after `CTRL-\ e` or `CTRL-R =` has finished
 /// changing the command line.  Answers 1 when there is no command line, 0 on
 /// success.
-pub(crate) unsafe fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    unsafe {
-        let p = get_ccline_ptr();
-        if p.is_null() {
-            return 1;
-        }
-        new_cmdpos.set(pos.max(0));
-        0
+pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    if get_ccline_ptr().is_null() {
+        return 1;
     }
+    new_cmdpos.set(pos.max(0));
+    0
 }
 
 /// `setcmdline()` function.
