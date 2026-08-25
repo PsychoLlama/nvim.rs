@@ -697,7 +697,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
         }
 
         let arg = escape_k_special((*eap).arg);
-        *ex_normal_busy.ptr() += 1;
+        ex_normal_busy.set(ex_normal_busy.get() + 1);
         let mut save_state = save_state_T::default();
         if save_current_state(&raw mut save_state) {
             loop {
@@ -725,7 +725,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
         }
         update_topline_cursor();
         restore_current_state(&raw mut save_state);
-        *ex_normal_busy.ptr() -= 1;
+        ex_normal_busy.set(ex_normal_busy.get() - 1);
         setmouse();
         ui_cursor_shape();
         xfree(arg as *mut c_void);

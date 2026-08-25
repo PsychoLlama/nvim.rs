@@ -115,7 +115,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
             // NL to a new line, BS back, NL again: don't save the new line
             // for undo twice. Errors are ignored.
             u_save_cursor();
-            *vr_lines_changed.ptr() += 1;
+            vr_lines_changed.set(vr_lines_changed.get() + 1);
         }
         ml_replace((*curwin.get()).w_cursor.lnum, p_extra, true);
         changed_bytes((*curwin.get()).w_cursor.lnum, 0);
@@ -535,7 +535,7 @@ pub unsafe fn open_line(
             end_comment_pending.set(NUL); // there was no leader after all
         }
 
-        *curbuf_splice_pending.ptr() += 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
         let old_cursor = (*curwin.get()).w_cursor;
         let old_cmod_flags = cmdmod_flags();
         let mut prompt_moved: *mut c_char = ::core::ptr::null_mut();
@@ -553,11 +553,11 @@ pub unsafe fn open_line(
                 break 'theend;
             };
 
-            *inhibit_delete_count.ptr() += 1;
+            inhibit_delete_count.set(inhibit_delete_count.get() + 1);
             if newindent != 0 || did_si.get() {
                 apply_new_indent(newindent, saved_line, &mut less_cols, &mut newcol, no_si);
             }
-            *inhibit_delete_count.ptr() -= 1;
+            inhibit_delete_count.set(inhibit_delete_count.get() - 1);
 
             // One NUL on the replace stack per character of the leader, for
             // when BS deletes it.
@@ -612,7 +612,7 @@ pub unsafe fn open_line(
                     true,
                 );
             }
-            *curbuf_splice_pending.ptr() -= 1;
+            curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
 
             (*curwin.get()).w_cursor.col = newcol;
             (*curwin.get()).w_cursor.coladd = 0;

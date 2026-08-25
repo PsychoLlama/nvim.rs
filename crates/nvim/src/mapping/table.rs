@@ -176,7 +176,7 @@ pub(crate) unsafe fn map_add(
             if map_table == (&raw mut (*buf).b_maphash).cast() {
                 (*buf).b_mapped_ctrl_c |= mode;
             } else {
-                *mapped_ctrl_c.ptr() |= mode;
+                mapped_ctrl_c.set(mapped_ctrl_c.get() | mode);
             }
         }
 

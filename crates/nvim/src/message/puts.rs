@@ -53,7 +53,7 @@ pub unsafe fn msg_start() {
         if p_ch.get() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
             msg_grid_validate();
             msg_scroll_up(false, true);
-            *msg_scrolled.ptr() += 1;
+            msg_scrolled.set(msg_scrolled.get() + 1);
             cmdline_row.set(Rows.get() - 1);
         }
 
@@ -264,7 +264,7 @@ pub(crate) unsafe fn msg_puts_display(
                     break;
                 }
                 msg_col.set(0);
-                *msg_row.ptr() += 1;
+                msg_row.set(msg_row.get() + 1);
                 msg_didout.set(false);
             }
 
@@ -284,10 +284,10 @@ pub(crate) unsafe fn msg_puts_display(
                     need_wait_return.set(true); // may need wait_return() in main()
                     redraw_cmdline.set(true);
                     if cmdline_row.get() > 0 && !exmode_active.get() {
-                        *cmdline_row.ptr() -= 1;
+                        cmdline_row.set(cmdline_row.get() - 1);
                     }
                     if lines_left.get() > 0 {
-                        *lines_left.ptr() -= 1;
+                        lines_left.set(lines_left.get() - 1);
                     }
                     // Screen full and 'more' set: wait for a character.
                     if p_more.get() != 0
@@ -345,7 +345,7 @@ pub(crate) unsafe fn msg_puts_display(
                     s = s.add(l as usize);
                 }
                 msg_didout.set(true); // remember that the line is not empty
-                *msg_col.ptr() += cw;
+                msg_col.set(msg_col.get() + cw);
                 continue;
             }
 
@@ -354,13 +354,13 @@ pub(crate) unsafe fn msg_puts_display(
                 NL => {
                     msg_didout.set(false); // remember that the line is empty
                     msg_col.set(0);
-                    *msg_row.ptr() += 1;
+                    msg_row.set(msg_row.get() + 1);
                     store(&mut sb_str, s, &mut sb_col, 1);
                 }
                 CAR => msg_col.set(0),
                 BS => {
                     if msg_col.get() != 0 {
-                        *msg_col.ptr() -= 1;
+                        msg_col.set(msg_col.get() - 1);
                     }
                 }
                 TAB => {
@@ -368,7 +368,7 @@ pub(crate) unsafe fn msg_puts_display(
                     // eight or the end of the line.
                     loop {
                         grid_line_puts(msg_col.get(), c" ".as_ptr(), 1, print_attr);
-                        *msg_col.ptr() += 1;
+                        msg_col.set(msg_col.get() + 1);
                         if msg_col.get() == Columns.get() || msg_col.get() & 7 == 0 {
                             break;
                         }
@@ -457,7 +457,7 @@ pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
                 msg_col.set(0);
                 msg_didout.set(false);
             } else {
-                *msg_col.ptr() += utf_char2cells(utf_ptr2char(s));
+                msg_col.set(msg_col.get() + utf_char2cells(utf_ptr2char(s)));
                 msg_didout.set(true);
             }
             s = s.add(len as usize);

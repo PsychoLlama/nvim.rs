@@ -91,13 +91,13 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
             let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
             msg_scroll.set(0);
             if !dangerous {
-                (*ex_normal_busy.ptr()) += 1;
+                ex_normal_busy.set(ex_normal_busy.get() + 1);
             }
             exec_normal(true, lowlevel);
             if !dangerous {
-                (*ex_normal_busy.ptr()) -= 1;
+                ex_normal_busy.set(ex_normal_busy.get() - 1);
             }
-            (*msg_scroll.ptr()) |= save_msg_scroll;
+            msg_scroll.set(msg_scroll.get() | save_msg_scroll);
         }
     }
 }

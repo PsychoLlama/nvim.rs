@@ -382,7 +382,7 @@ pub unsafe fn apply_autocmds_group(
             autocmd_busy.set(true);
             filechangeshell_busy.set(event == EVENT_FILECHANGEDSHELL);
             // See the matching decrement below.
-            *nesting.ptr() += 1;
+            nesting.set(nesting.get() + 1);
 
             // Remembered for `did_filetype()`.
             if event == EVENT_FILETYPE {
@@ -452,7 +452,7 @@ pub unsafe fn apply_autocmds_group(
                     DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
                 );
 
-                *did_emsg.ptr() += save_did_emsg;
+                did_emsg.set(did_emsg.get() + save_did_emsg);
                 set_pressedreturn(save_ex_pressedreturn);
 
                 if nesting.get() == 1 {
@@ -497,7 +497,7 @@ pub unsafe fn apply_autocmds_group(
             xfree(fname.cast::<::core::ffi::c_void>());
             xfree(sfname.cast::<::core::ffi::c_void>());
             // See the matching increment above.
-            *nesting.ptr() -= 1;
+            nesting.set(nesting.get() - 1);
 
             // The outermost firing puts the search patterns and the redo
             // buffer back, and frees what the handlers deferred.
@@ -547,13 +547,11 @@ pub unsafe fn apply_autocmds_group(
 /// Turn autocommands off editor-wide, nestably.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn block_autocmds() {
-    unsafe {
-        // Remember that we may need to fire `TermResponse` later.
-        if !is_autocmd_blocked() {
-            termresponse_changed.set(false);
-        }
-        *autocmd_blocked.ptr() += 1;
+    // Remember that we may need to fire `TermResponse` later.
+    if !is_autocmd_blocked() {
+        termresponse_changed.set(false);
     }
+    autocmd_blocked.set(autocmd_blocked.get() + 1);
 }
 
 /// Undo one [`block_autocmds`], firing the `TermResponse` that arrived
@@ -561,7 +559,7 @@ pub unsafe extern "C" fn block_autocmds() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unblock_autocmds() {
     unsafe {
-        *autocmd_blocked.ptr() -= 1;
+        autocmd_blocked.set(autocmd_blocked.get() - 1);
         if !is_autocmd_blocked() && termresponse_changed.get() && has_event(EVENT_TERMRESPONSE) {
             let sequence = cstr_to_string(get_vim_var_str(Vv::Termresponse));
             do_termresponse_autocmd(sequence);

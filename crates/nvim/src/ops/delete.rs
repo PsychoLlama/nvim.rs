@@ -464,7 +464,7 @@ unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> Result<(), UndoFailed>
             (*curwin.get()).w_cursor.lnum + (*oap).line_count,
         ))?;
 
-        *curbuf_splice_pending.ptr() += 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
         let startpos = (*curwin.get()).w_cursor;
         let deleted_bytes = get_region_bytecount(
             curbuf.get(),
@@ -492,7 +492,7 @@ unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> Result<(), UndoFailed>
 
         (*curwin.get()).w_cursor = curpos;
         do_join(2, false, false, false, false);
-        *curbuf_splice_pending.ptr() -= 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
 
         extmark_splice(
             curbuf.get(),

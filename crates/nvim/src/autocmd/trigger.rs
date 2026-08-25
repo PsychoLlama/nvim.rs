@@ -385,7 +385,7 @@ pub unsafe fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
 
         let secure_save = secure.get();
         secure.set(0);
-        *ft_recursive.ptr() += 1;
+        ft_recursive.set(ft_recursive.get() + 1);
 
         (*buf).b_did_filetype = true;
         let ret = apply_autocmds(
@@ -396,7 +396,7 @@ pub unsafe fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
             buf,
         );
 
-        *ft_recursive.ptr() -= 1;
+        ft_recursive.set(ft_recursive.get() - 1);
         secure.set(secure_save);
         ret
     }

@@ -476,9 +476,8 @@ pub unsafe fn do_search(
     options: c_int,
     sia: *mut searchit_arg_T,
 ) -> c_int {
+    searchcmdlen.set(0);
     unsafe {
-        searchcmdlen.set(0);
-
         // A line offset is not remembered; this is vi compatible.
         let mut off = search_offset();
         if off.line && cpo_has(CpoFlag::LINEOFF) {
@@ -577,7 +576,8 @@ pub unsafe fn do_search(
                         // prefix of a longer command line — the copy can
                         // be longer, and C's size_t difference is then
                         // the negative number this wants.
-                        (*searchcmdlen.ptr()) += cmd.patlen.wrapping_sub(len) as c_int;
+                        let extra = cmd.patlen.wrapping_sub(len) as c_int;
+                        searchcmdlen.set(searchcmdlen.get() + extra);
                         cmd.pat = copied;
                         cmd.patlen = len;
                         searchstr = copied;
@@ -595,7 +595,7 @@ pub unsafe fn do_search(
                     // Compute the length of the search command, for
                     // get_address().
                     let consumed = p.offset_from(cmd.pat) as size_t;
-                    (*searchcmdlen.ptr()) += consumed as c_int;
+                    searchcmdlen.set(searchcmdlen.get() + consumed as c_int);
                     cmd.patlen = cmd.patlen.wrapping_sub(consumed);
                     cmd.pat = p; // put pat after the search command
                 }

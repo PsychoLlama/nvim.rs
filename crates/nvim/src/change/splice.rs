@@ -388,7 +388,7 @@ unsafe fn changed_common(
                 redraw_win_for_change(wp, lnum, col, lnume, xtra);
             }
             if wp == curwin.get() && xtra != 0 && search_hl_has_cursor_lnum.get() >= lnum {
-                *search_hl_has_cursor_lnum.ptr() += xtra;
+                search_hl_has_cursor_lnum.set(search_hl_has_cursor_lnum.get() + xtra);
             }
         }
 

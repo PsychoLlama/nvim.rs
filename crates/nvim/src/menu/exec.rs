@@ -156,7 +156,7 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(menu: Menu, bit: usize) {
     let mut state = save_state_T::default();
-    ex_normal_busy_adjust(1);
+    ex_normal_busy.set(ex_normal_busy.get() + 1);
     // SAFETY: `state` is a live local for the whole call, and the rhs is a
     // NUL-terminated string owned by a node that outlives the run.
     unsafe {
@@ -165,7 +165,7 @@ fn run_now(menu: Menu, bit: usize) {
         }
         restore_current_state(&raw mut state);
     }
-    ex_normal_busy_adjust(-1);
+    ex_normal_busy.set(ex_normal_busy.get() - 1);
 }
 
 /// Put the rhs into the typeahead, as if the user had typed it.
@@ -339,9 +339,4 @@ fn char_at_cursor() -> c_int {
 fn selection_style() -> u8 {
     // SAFETY: the option always holds a non-empty NUL-terminated string.
     unsafe { *p_sel.get() as u8 }
-}
-
-fn ex_normal_busy_adjust(by: c_int) {
-    // SAFETY: a plain counter behind the escape hatch.
-    unsafe { *ex_normal_busy.ptr() += by };
 }

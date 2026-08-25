@@ -191,14 +191,14 @@ pub(crate) unsafe fn do_one_cmd(
         let save_reg_executing = reg_executing.get();
         let save_pending_end_reg_executing = pending_end_reg_executing.get();
         let mut ea = fresh_exarg();
-        *ex_nesting_level.ptr() += 1;
+        ex_nesting_level.set(ex_nesting_level.get() + 1);
 
         // When the last file has not been edited `:q` has to be typed twice.
         // A `'statusline'` function call and an autocommand (QuitPre) both
         // reach here without the user having typed anything, so neither
         // spends the second `:q`.
         if quitmore_is_pending(fgetline, cookie) {
-            *quitmore.ptr() -= 1;
+            quitmore.set(quitmore.get() - 1);
         }
 
         // Modifiers are restored on the way out, for recursive calls. The
@@ -601,7 +601,7 @@ pub(crate) unsafe fn do_one_cmd(
             ea.nextcmd = ptr::null_mut();
         }
 
-        *ex_nesting_level.ptr() -= 1;
+        ex_nesting_level.set(ex_nesting_level.get() - 1);
         xfree(ea.cmdline_tofree as *mut c_void);
 
         ea.nextcmd

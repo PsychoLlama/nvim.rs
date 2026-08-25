@@ -397,7 +397,7 @@ pub(crate) unsafe fn open_source(
             return Err(retval);
         }
 
-        (*no_wait_return.ptr()) += 1; // don't wait for return yet
+        no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
         // Set the '[ mark to the line above where the lines go, line 1 if
         // zero.
@@ -469,7 +469,7 @@ pub(crate) unsafe fn open_source(
 
             if aborting() {
                 // Autocommands may abort script processing.
-                (*no_wait_return.ptr()) -= 1;
+                no_wait_return.set(no_wait_return.get() - 1);
                 msg_scroll.set(msg_save);
                 (*curbuf.get()).b_p_ro = true as c_int; // must use "w!" now
                 return Err(retval);
@@ -485,7 +485,7 @@ pub(crate) unsafe fn open_source(
                     fd < 0
                 })
             {
-                (*no_wait_return.ptr()) -= 1;
+                no_wait_return.set(no_wait_return.get() - 1);
                 msg_scroll.set(msg_save);
                 emsg(gettext(
                     if fd < 0 {

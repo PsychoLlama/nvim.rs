@@ -333,7 +333,7 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
 
         // `<afile>` is the file being edited. Changing directory is not
         // allowed from here.
-        *allbuf_lock.ptr() += 1;
+        allbuf_lock.set(allbuf_lock.get() + 1);
         apply_autocmds(
             EVENT_SWAPEXISTS,
             (*buf).b_fname,
@@ -341,7 +341,7 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
             false,
             core::ptr::null_mut(),
         );
-        *allbuf_lock.ptr() -= 1;
+        allbuf_lock.set(allbuf_lock.get() - 1);
 
         set_vim_var_string(Vv::Swapname, core::ptr::null(), -1);
 

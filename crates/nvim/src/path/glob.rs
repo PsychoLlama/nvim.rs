@@ -299,12 +299,12 @@ pub(crate) unsafe fn do_path_expand(
         };
         let silent = flags.has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD);
         if silent {
-            *emsg_silent.ptr() += 1;
+            emsg_silent.set(emsg_silent.get() + 1);
         }
         let nobreak = flags.has(ExpandFlags::NOBREAK);
         regmatch.regprog = vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 });
         if silent {
-            *emsg_silent.ptr() -= 1;
+            emsg_silent.set(emsg_silent.get() - 1);
         }
         xfree(pat.cast());
         if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {

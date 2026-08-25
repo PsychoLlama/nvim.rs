@@ -315,7 +315,7 @@ unsafe fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: 
 
         // The four edits below are one splice as far as extmarks and the
         // buffer-update RPC are concerned.
-        *curbuf_splice_pending.ptr() += 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
 
         let mut t = count as linenr_T - 1;
         loop {
@@ -388,7 +388,7 @@ unsafe fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: 
         (*curwin.get()).w_cursor.lnum += 1;
         del_lines(count as linenr_T - 1, false);
         (*curwin.get()).w_cursor.lnum = joined_lnum;
-        *curbuf_splice_pending.ptr() -= 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
         (*curbuf.get()).deleted_bytes2 = 0;
 
         // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*

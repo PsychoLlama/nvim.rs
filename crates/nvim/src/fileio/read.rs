@@ -793,7 +793,7 @@ pub(crate) unsafe fn readfile(
                 os_remove(tmpname); // delete the converted file
                 xfree(tmpname.cast());
             }
-            (*no_wait_return.ptr()) -= 1; // may wait for return now
+            no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
 
             // In recovery mode everything but autocommands is skipped.
             if !recoverymode.get() {

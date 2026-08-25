@@ -253,7 +253,7 @@ unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, ha
         }
 
         ml_replace((*curwin.get()).w_cursor.lnum, newp, false);
-        *curbuf_splice_pending.ptr() += 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
         let baselnum = (*curwin.get()).w_cursor.lnum;
         if !after_p.is_null() {
             ml_append(
@@ -267,7 +267,7 @@ unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, ha
             (*oap).end.lnum += 1;
             xfree(after_p as *mut c_void);
         }
-        *curbuf_splice_pending.ptr() -= 1;
+        curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
         extmark_splice(
             curbuf.get(),
             baselnum as c_int - 1,

@@ -149,7 +149,7 @@ pub unsafe fn do_exmode() {
                         msg_scroll_flush();
                         msg_row.set(prev_msg_row);
                         if prev_msg_row == Rows.get() - 1 {
-                            *msg_row.ptr() -= 1;
+                            msg_row.set(msg_row.get() - 1);
                         }
                     }
                     msg_col.set(0);
@@ -197,27 +197,23 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
 ///
 /// The limit only bites above a floor of 200: a low 'maxfuncdepth' must
 /// still leave room for the editor's own nesting.
-pub(crate) unsafe fn do_cmdline_start() -> c_int {
-    unsafe {
-        debug_assert!(cmdline_call_depth.get() >= 0);
-        if cmdline_call_depth.get() >= 200 && cmdline_call_depth.get() as OptInt >= p_mfd.get() {
-            return FAIL;
-        }
-        *cmdline_call_depth.ptr() += 1;
-        // Clipboard writes are batched across the whole command line, so
-        // that a `:while` that yanks repeatedly sets the selection once.
-        start_batch_changes();
-        OK
+pub(crate) fn do_cmdline_start() -> c_int {
+    debug_assert!(cmdline_call_depth.get() >= 0);
+    if cmdline_call_depth.get() >= 200 && cmdline_call_depth.get() as OptInt >= p_mfd.get() {
+        return FAIL;
     }
+    cmdline_call_depth.set(cmdline_call_depth.get() + 1);
+    // Clipboard writes are batched across the whole command line, so
+    // that a `:while` that yanks repeatedly sets the selection once.
+    start_batch_changes();
+    OK
 }
 
 /// Leave it.
-pub(crate) unsafe fn do_cmdline_end() {
-    unsafe {
-        *cmdline_call_depth.ptr() -= 1;
-        debug_assert!(cmdline_call_depth.get() >= 0);
-        end_batch_changes();
-    }
+pub(crate) fn do_cmdline_end() {
+    cmdline_call_depth.set(cmdline_call_depth.get() - 1);
+    debug_assert!(cmdline_call_depth.get() >= 0);
+    end_batch_changes();
 }
 
 /// Report an exception that reached the outermost `:try`, and discard it.

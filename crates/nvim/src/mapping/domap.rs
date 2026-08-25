@@ -438,7 +438,7 @@ pub(crate) unsafe fn buf_do_map(
                         if map_table == buf_table {
                             (*buf).b_mapped_ctrl_c &= !mode;
                         } else {
-                            *mapped_ctrl_c.ptr() &= !mode;
+                            mapped_ctrl_c.set(mapped_ctrl_c.get() & !mode);
                         }
                     }
                     continue;

@@ -210,7 +210,7 @@ pub unsafe fn eval_map_expr(mp: *mut mapblock_T, c: c_int) -> *mut c_char {
 
         // Forbid changing text or using ":normal", which rules out most of
         // the bad side effects, and restore the cursor position afterwards.
-        *expr_map_lock.ptr() += 1;
+        expr_map_lock.set(expr_map_lock.get() + 1);
         set_vim_var_char(c); // set v:char to the typed character
         let save_cursor = (*curwin.get()).w_cursor;
         let save_msg_col = msg_col.get();
@@ -243,7 +243,7 @@ pub unsafe fn eval_map_expr(mp: *mut mapblock_T, c: c_int) -> *mut c_char {
             xfree(expr.cast());
         }
 
-        *expr_map_lock.ptr() -= 1;
+        expr_map_lock.set(expr_map_lock.get() - 1);
         (*curwin.get()).w_cursor = save_cursor;
         msg_col.set(save_msg_col);
         msg_row.set(save_msg_row);

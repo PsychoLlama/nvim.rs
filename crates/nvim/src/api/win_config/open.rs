@@ -267,16 +267,16 @@ pub unsafe fn nvim_open_win(
                 {
                     let au_no_enter_leave: bool = curwin.get() != wp && !noautocmd;
                     if au_no_enter_leave {
-                        (*autocmd_no_enter.ptr()) += 1;
-                        (*autocmd_no_leave.ptr()) += 1;
+                        autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+                        autocmd_no_leave.set(autocmd_no_leave.get() + 1);
                     }
                     win_set_buf(wp, b, err);
                     if !noautocmd {
                         tp = win_find_tabpage(wp);
                     }
                     if au_no_enter_leave {
-                        (*autocmd_no_enter.ptr()) -= 1;
-                        (*autocmd_no_leave.ptr()) -= 1;
+                        autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+                        autocmd_no_leave.set(autocmd_no_leave.get() - 1);
                     }
                 }
                 if tp.is_null() {

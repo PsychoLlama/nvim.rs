@@ -56,7 +56,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
     flags: c_int,
 ) -> c_int {
     unsafe {
-        (*in_fast_callback.ptr()) += 1;
+        in_fast_callback.set(in_fast_callback.get() + 1);
         let top = lua_gettop(lstate);
         let status = nlua_pcall(lstate, nargs, nresult);
         let retval = if status != 0 {
@@ -77,7 +77,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
             }
             nresult
         };
-        (*in_fast_callback.ptr()) -= 1;
+        in_fast_callback.set(in_fast_callback.get() - 1);
         retval
     }
 }

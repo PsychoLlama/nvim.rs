@@ -234,7 +234,7 @@ unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Rea
             name.count_bytes() as ptrdiff_t,
         );
         set_vim_var_string(Vv::FcsChoice, c"".as_ptr(), 0);
-        (*allbuf_lock.ptr()) += 1;
+        allbuf_lock.set(allbuf_lock.get() + 1);
         let handled = apply_autocmds(
             EVENT_FILECHANGEDSHELL,
             (*buf).b_fname,
@@ -242,7 +242,7 @@ unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Rea
             false,
             buf,
         );
-        (*allbuf_lock.ptr()) -= 1;
+        allbuf_lock.set(allbuf_lock.get() - 1);
         BUSY.set(false);
 
         if !handled {

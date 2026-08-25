@@ -325,10 +325,10 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
                 );
 
                 if (*curwin.get()).w_cursor.lnum != prev_lnum {
-                    *sub_nlines.ptr() += 1;
+                    sub_nlines.set(sub_nlines.get() + 1);
                     prev_lnum = (*curwin.get()).w_cursor.lnum;
                 }
-                *sub_nsubs.ptr() += 1;
+                sub_nsubs.set(sub_nsubs.get() + 1);
             }
             (*curwin.get()).w_cursor.col += repl_to_len as colnr_T;
         }

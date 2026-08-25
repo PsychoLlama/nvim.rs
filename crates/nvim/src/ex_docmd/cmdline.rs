@@ -191,7 +191,7 @@ pub unsafe fn do_cmdline(
         // Inside a function, use a higher nesting level.
         let mut getline_is_func = getline_equal(fgetline, cookie, Some(get_func_line));
         if getline_is_func && ex_nesting_level.get() == func_level(real_cookie) {
-            *ex_nesting_level.ptr() += 1;
+            ex_nesting_level.set(ex_nesting_level.get() + 1);
         }
 
         // Where the next breakpoint line and the debug tick live, for
@@ -421,7 +421,7 @@ pub unsafe fn do_cmdline(
             // Run one `|`-separated command. `cmdline_copy` can change
             // under this call — `%` and `#` expansion reallocate it — and
             // the answer is null when nothing followed a `|`.
-            *RECURSIVE.ptr() += 1;
+            RECURSIVE.set(RECURSIVE.get() + 1);
             next_cmdline = do_one_cmd(
                 &raw mut cmdline_copy,
                 flags,
@@ -429,7 +429,7 @@ pub unsafe fn do_cmdline(
                 cmd_getline,
                 cmd_cookie,
             );
-            *RECURSIVE.ptr() -= 1;
+            RECURSIVE.set(RECURSIVE.get() - 1);
 
             if cmd_cookie == &raw mut cmd_loop_cookie as *mut c_void {
                 // Defining a function reads further lines through the loop
@@ -688,7 +688,7 @@ pub unsafe fn do_cmdline(
             }
         } else {
             if getline_equal(fgetline, cookie, Some(get_func_line)) {
-                *ex_nesting_level.ptr() -= 1;
+                ex_nesting_level.set(ex_nesting_level.get() - 1);
             }
             // Single-stepping out of a function drops back into the
             // debugger.

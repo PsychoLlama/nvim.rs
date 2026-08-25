@@ -74,9 +74,9 @@ pub unsafe fn get_expr_line() -> *mut c_char {
         if nested.get() >= 10 {
             return expr_copy;
         }
-        *nested.ptr() += 1;
+        nested.set(nested.get() + 1);
         let rv = eval_to_string(expr_copy, true, false);
-        *nested.ptr() -= 1;
+        nested.set(nested.get() - 1);
         xfree(expr_copy as *mut c_void);
         rv
     }

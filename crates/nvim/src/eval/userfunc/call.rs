@@ -353,9 +353,9 @@ pub unsafe fn call_user_func(
             // A lambda's body is one line, "return <expr>"; evaluate the
             // expression straight rather than going through `do_cmdline`.
             let mut p = ga_strings(&(*fp).uf_lines)[0].add(c"return ".count_bytes());
-            *ex_nesting_level.ptr() += 1;
+            ex_nesting_level.set(ex_nesting_level.get() + 1);
             eval1(&raw mut p, rettv, EVALARG_EVALUATE.ptr());
-            *ex_nesting_level.ptr() -= 1;
+            ex_nesting_level.set(ex_nesting_level.get() - 1);
         } else {
             // Call do_cmdline() to execute the lines.
             do_cmdline(

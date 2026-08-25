@@ -270,13 +270,13 @@ pub unsafe fn nvim_open_tabpage(
         // SAFETY: the two counters are the editor's own `int` globals.
         unsafe {
             if au_no_enter_leave {
-                (*autocmd_no_enter.ptr()) += 1;
-                (*autocmd_no_leave.ptr()) += 1;
+                autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+                autocmd_no_leave.set(autocmd_no_leave.get() + 1);
             }
             win_set_buf(w.raw(), b.raw(), &raw mut err);
             if au_no_enter_leave {
-                (*autocmd_no_enter.ptr()) -= 1;
-                (*autocmd_no_leave.ptr()) -= 1;
+                autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+                autocmd_no_leave.set(autocmd_no_leave.get() - 1);
             }
         }
         if !valid_tabpage(tp.raw()) {
