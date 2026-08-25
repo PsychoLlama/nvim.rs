@@ -139,11 +139,13 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     let is_stl = idx as c_int == kOptStatusline as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
     if is_stl && global && unsafe { c_int::from(*s) } == NUL {
+        let mut expansion = None;
+        let default = get_option_default(idx, flags, &mut expansion);
         // SAFETY: the option's own variable, and the table's default for
         // it, which is a string.
         unsafe {
             xfree((*varp).cast::<c_void>());
-            *varp = xstrdup(get_option_default(idx, flags).data.string.data());
+            *varp = xstrdup(default.data.string.data());
             s = *varp;
         }
     }

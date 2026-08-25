@@ -16,6 +16,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::buffer::buf_is_empty;
@@ -371,7 +372,16 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 
 /// The default `:set opt&` would install: the table's, with the environment
 /// expanded, or the unset value for a `:setlocal` on a global-local option.
-pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
+///
+/// The answer *borrows*: from the option table, or — when the default held
+/// an environment variable — from `expansion`, which the caller must keep
+/// alive for as long as it reads the value. Upstream borrows the shared
+/// `NameBuff` for that case instead.
+pub(crate) fn get_option_default(
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+    expansion: &mut Option<CString>,
+) -> OptVal {
     // Running as root, 'modeline' defaults off: a modeline is arbitrary
     // code from whoever wrote the file.
     // SAFETY: `getuid` and the option table.
@@ -391,7 +401,8 @@ pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -
         }
         match option_expand(opt_idx, default.data.string.data()) {
             None => default,
-            Some(expanded) => owned(expanded.as_ptr().cast_mut()),
+            // Borrowed: the bytes are `expansion`'s, and nothing frees this.
+            Some(e) => owned(expansion.insert(e).as_ptr().cast_mut()),
         }
     }
 }
@@ -415,7 +426,9 @@ pub(crate) fn change_option_default(opt_idx: OptIndex, value: OptVal) {
 /// a default cannot have come from a modeline.
 fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     let both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
-    let def_val = get_option_default(opt_idx, opt_flags);
+    // `get_option_default`'s answer borrows this when the default expands.
+    let mut expansion = None;
+    let def_val = get_option_default(opt_idx, opt_flags, &mut expansion);
     // SAFETY: `current_sctx`, `curwin` and the option table are the
     // editor's own.
     unsafe {

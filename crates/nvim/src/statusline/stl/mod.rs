@@ -812,12 +812,9 @@ pub unsafe fn build_stl_str_hl(
     // An error here would mess up the display and might loop redrawing;
     // avoid that by setting the option back to its default.
     if opt_idx as c_int != kOptInvalid as c_int && did_emsg.get() > did_emsg_before {
-        set_option_direct(
-            opt_idx,
-            get_option_default(opt_idx, opt_scope),
-            opt_scope,
-            SID_ERROR,
-        );
+        let mut expansion = None;
+        let default = get_option_default(opt_idx, opt_scope, &mut expansion);
+        set_option_direct(opt_idx, default, opt_scope, SID_ERROR);
     }
 
     // A user function may reset KeyTyped; restore it.

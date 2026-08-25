@@ -283,6 +283,9 @@ unsafe fn get_option_newval(
     debug_assert!(!varp.is_none());
 
     let nil = NIL_OPTVAL;
+    let global = OptionSetFlags::GLOBAL;
+    // `get_option_default`'s answer borrows this when the default expands.
+    let mut expansion = None;
 
     // SAFETY: the caller's `varp` is this option's variable, and `*argp` is
     // NUL-terminated.
@@ -304,7 +307,7 @@ unsafe fn get_option_newval(
         // that a `:setlocal opt&` on a global-local option gets the real
         // default rather than the unset marker.
         if nextchar == '&' as c_int {
-            return optval_copy(get_option_default(opt_idx, OptionSetFlags::GLOBAL));
+            return optval_copy(get_option_default(opt_idx, global, &mut expansion));
         }
         // `:set opt<` resets to the global value; `:setlocal opt<` copies it
         // into the local one.
