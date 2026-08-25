@@ -275,6 +275,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// `rettv` is the cleared return value.
 unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
+    let appname = get_appname(false);
     // SAFETY: the caller's obligation. `dirs` is owned here; `vim_env_iter`
     // hands back slices of it and null when the walk is done.
     unsafe {
@@ -286,7 +287,6 @@ unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
         if dirs.is_null() {
             return;
         }
-        let appname = get_appname(false);
         let mut iter: *const c_void = ptr::null();
         loop {
             let mut dir_len: usize = 0;
@@ -300,7 +300,8 @@ unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
             );
             if !dir.is_null() && dir_len > 0 {
                 let dir = xmemdupz(dir as *const c_void, dir_len) as *mut c_char;
-                tv_list_append_allocated_string(list, concat_fnames_realloc(dir, appname, true));
+                let path = concat_fnames_realloc(dir, appname.as_ptr(), true);
+                tv_list_append_allocated_string(list, path);
             }
             if iter.is_null() {
                 break;

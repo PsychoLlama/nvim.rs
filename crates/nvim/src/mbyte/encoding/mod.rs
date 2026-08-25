@@ -264,6 +264,7 @@ pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
 ///
 /// The editor's globals must be live. The result is `xmalloc`'d.
 pub unsafe fn enc_locale() -> *mut c_char {
+    let mut env = env_buf();
     unsafe {
         let mut s = nl_langinfo(CODESET);
         if s.is_null() || *s == 0 {
@@ -272,11 +273,11 @@ pub unsafe fn enc_locale() -> *mut c_char {
                 // Upstream's chain, reproduced as written: each step
                 // *replaces* `s` rather than keeping what it just found, so
                 // a set `LC_ALL` means `LANG` is what ends up being read.
-                s = os_getenv_noalloc(c"LC_ALL".as_ptr());
+                s = os_getenv_into(c"LC_ALL".as_ptr(), &mut env);
                 if !s.is_null() {
-                    s = os_getenv_noalloc(c"LC_CTYPE".as_ptr());
+                    s = os_getenv_into(c"LC_CTYPE".as_ptr(), &mut env);
                     if !s.is_null() {
-                        s = os_getenv_noalloc(c"LANG".as_ptr());
+                        s = os_getenv_into(c"LANG".as_ptr(), &mut env);
                     }
                 }
             }

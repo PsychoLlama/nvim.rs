@@ -24,7 +24,7 @@
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
-use crate::os::env::os_getenv_noalloc;
+use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{FAIL, OK, expand_T, garray_T, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -64,9 +64,9 @@ unsafe fn owned_name(s: *const c_char) -> Option<CString> {
 /// enumeration never mentions.
 fn all_usernames() -> Vec<CString> {
     let mut names = Vec::new();
-    // SAFETY: the pwd walk is libc's own iterator, and `$USER` lands in a
-    // shared static buffer (`os_getenv_noalloc` writes into `NameBuff`).
-    // Every string is copied before the next call can invalidate it.
+    let mut env = env_buf();
+    // SAFETY: the pwd walk is libc's own iterator, and `$USER` lands in
+    // `env`, which outlives the copy taken out of it.
     unsafe {
         libc::setpwent();
         while let Some(pw) = libc::getpwent().as_ref() {
@@ -74,7 +74,7 @@ fn all_usernames() -> Vec<CString> {
         }
         libc::endpwent();
 
-        if let Some(user_env) = owned_name(os_getenv_noalloc(c"USER".as_ptr()))
+        if let Some(user_env) = owned_name(os_getenv_into(c"USER".as_ptr(), &mut env))
             && !names.contains(&user_env)
             && let Some(pw) = libc::getpwnam(user_env.as_ptr()).as_ref()
         {

@@ -5825,6 +5825,7 @@ static const int TYPE_NOTIFICATION = 2;
 static const int TYPE_REQUEST = 0;
 static const int TYPE_RESPONSE = 1;
 static const int TYPVAL_ENCODE_ALLOW_SPECIALS = 0;
+static const int TZ_LEN = 64;
 static const int T_ANY = 0;
 static const int T_ARRAY = 5;
 static const int T_BOOLEAN = 1;

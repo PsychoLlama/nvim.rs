@@ -51,8 +51,8 @@ use crate::main::{
     emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display,
     emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting, exmode_active, full_screen,
     global_busy, got_int, headless_mode, hl_attr_active, in_assert_fails, info_message, keep_msg,
-    keep_msg_hl_id, lines_left, main_loop, mode_displayed, msg_buf, msg_col, msg_did_scroll,
-    msg_didany, msg_didout, msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid,
+    keep_msg_hl_id, lines_left, main_loop, mode_displayed, msg_col, msg_did_scroll, msg_didany,
+    msg_didout, msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid,
     msg_grid_pos, msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row,
     msg_scroll, msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_clr_eos, need_fileinfo, need_highlight_changed, need_wait_return,
@@ -814,6 +814,11 @@ pub unsafe fn messaging() -> bool {
 /// # Safety
 /// Only that the message statics are consistent.
 pub unsafe fn msgmore(n: c_int) {
+    // The report is assembled here and copied by `msg`/`set_keep_msg`, so
+    // it wants a buffer of its own rather than the shared `msg_buf` an
+    // autocmd reached from either could overwrite mid-assembly.
+    let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
+    let text = buf.as_mut_ptr();
     unsafe {
         if global_busy.get() != 0 || !messaging() {
             // Don't report when :global is executing.
@@ -834,20 +839,20 @@ pub unsafe fn msgmore(n: c_int) {
             (c"%d line less", c"%d fewer lines")
         };
         vim_snprintf(
-            msg_buf.ptr().cast(),
+            text,
             MSG_BUF_LEN as size_t,
             ngettext(one.as_ptr(), many.as_ptr(), pn as ::core::ffi::c_ulong),
             pn,
         );
         if got_int.get() {
             xstrlcat(
-                msg_buf.ptr().cast(),
+                text,
                 gettext(c" (Interrupted)".as_ptr()),
                 MSG_BUF_LEN as size_t,
             );
         }
-        if msg(msg_buf.ptr().cast(), 0) {
-            set_keep_msg(msg_buf.ptr().cast(), 0);
+        if msg(text, 0) {
+            set_keep_msg(text, 0);
             keep_msg_more.set(true);
         }
     }

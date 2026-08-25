@@ -273,7 +273,7 @@
 {"path":"neovim::os::env::os_get_pid","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_getenv","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_getenv_buf","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
-{"path":"neovim::os::env::os_getenv_noalloc","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
+{"path":"neovim::os::env::os_getenv_into","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_getenvname_at_index","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_setenv","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::os::env::os_setenv_append_path","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}

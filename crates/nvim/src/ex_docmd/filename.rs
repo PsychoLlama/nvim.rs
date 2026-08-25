@@ -322,7 +322,7 @@ pub(crate) unsafe fn repl_cmdline(
         }
         // The `+cmd` argument, unless it is the shared `$` constant, which
         // is not in the command line at all.
-        if !ea.do_ecmd_cmd.is_null() && ea.do_ecmd_cmd != dollar_command.ptr() as *mut c_char {
+        if !ea.do_ecmd_cmd.is_null() && !ptr::eq(ea.do_ecmd_cmd, dollar_command.as_ptr()) {
             ea.do_ecmd_cmd = new_cmdline.offset(ea.do_ecmd_cmd.offset_from(*cmdlinep));
         }
 

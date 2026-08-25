@@ -32,9 +32,9 @@ use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
     Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
-    e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_buf,
-    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, p_report, p_sh,
-    p_shq, p_srr, p_stmp, p_warn, silent_mode,
+    e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_col,
+    msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, p_report, p_sh, p_shq,
+    p_srr, p_stmp, p_warn, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -615,13 +615,14 @@ unsafe fn do_filter(
     }
 }
 
-/// `:range!cmd`'s "N lines filtered", kept in `msg_buf` so that it can survive
-/// a redraw.
+/// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it
+/// survives the redraw without a buffer outliving this call.
 fn report_filtered(linecount: linenr_T) {
-    let buf = msg_buf.ptr() as *mut c_char;
-    // SAFETY: `msg_buf` is `MSG_BUF_LEN` bytes and no reference into it is
-    // outstanding; one `%ld` for one `int64_t`.  `msg` and `set_keep_msg` copy
-    // what they are given.
+    let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
+    let buf = scratch.as_mut_ptr();
+    // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call; one
+    // `%ld` for one `int64_t`.  `msg` and `set_keep_msg` copy what they are
+    // given.
     unsafe {
         vim_snprintf(
             buf,

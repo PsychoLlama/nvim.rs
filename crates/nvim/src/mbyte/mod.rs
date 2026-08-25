@@ -54,7 +54,7 @@ use crate::r#move::changed_window_setting_all;
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::{__ctype_b_loc, gettext, memmove, snprintf, strchr, strncasecmp};
-use crate::os::env::os_getenv_noalloc;
+use crate::os::env::{env_buf, os_getenv_into};
 use crate::pos::MAXCOL;
 use crate::strings::vim_strchr;
 use crate::types::{

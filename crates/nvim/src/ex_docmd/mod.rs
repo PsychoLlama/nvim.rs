@@ -277,10 +277,15 @@ static e_no_script_file_name_to_substitute_for_script: [c_char; 56] =
     c_bytes(b"E1274: No script file name to substitute for \"<script>\"\0");
 static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
-static dollar_command: GlobalCell<[c_char; 2]> = GlobalCell::new(['$' as c_char, 0 as c_char]);
+/// The `+cmd` argument a bare `+` stands for. Never written, and
+/// recognised by *address* in `expand_filename`, which is why it is one
+/// static rather than a literal at each of its two uses.
+static dollar_command: [c_char; 2] = c_bytes(b"$\0");
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_error_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
-static exmode_plus: GlobalCell<[c_char; 2]> = GlobalCell::new(c_bytes(b"+\0"));
+/// The command Ex mode substitutes for a bare newline. Never written, and
+/// recognised by address in `ex_range_without_command`.
+static exmode_plus: [c_char; 2] = c_bytes(b"+\0");
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<c_char>(),

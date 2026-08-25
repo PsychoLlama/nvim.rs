@@ -21,7 +21,7 @@ use std::ptr;
 
 use neovim::os::env::expand::expand_env_esc;
 use neovim::os::env::{
-    os_env_exists, os_get_hostname, os_get_pid, os_getenv, os_getenv_buf, os_getenv_noalloc,
+    os_env_exists, os_get_hostname, os_get_pid, os_getenv, os_getenv_buf, os_getenv_into,
     os_getenvname_at_index, os_setenv_append_path, os_shell_is_cmdexe,
 };
 use neovim::types::MAXPATHL;
@@ -91,12 +91,14 @@ impl Env {
             .map_or_else(|| Some(read_c_string(&buf)), |()| None)
     }
 
-    /// `os_getenv_noalloc`, which stages the answer in the shared `NameBuff`.
+    /// `os_getenv_into`, which stages the answer in a buffer of the
+    /// caller's.
     fn get_noalloc(&self, name: &str) -> Option<String> {
-        // SAFETY: the name is this frame's; the answer points into `NameBuff`,
-        // which the editor lock makes ours, and is copied out immediately.
+        let mut buf = [0 as c_char; MAXPATHL as usize];
+        // SAFETY: the name is this frame's; the answer points into `buf`,
+        // and is copied out before it goes away.
         unsafe {
-            let value = os_getenv_noalloc(cstr(name).as_ptr());
+            let value = os_getenv_into(cstr(name).as_ptr(), &mut buf);
             (!value.is_null()).then(|| {
                 std::ffi::CStr::from_ptr(value)
                     .to_string_lossy()

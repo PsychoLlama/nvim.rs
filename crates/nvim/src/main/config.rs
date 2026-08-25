@@ -31,7 +31,7 @@ use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::types::{FAIL, OK, lua_State, qf_info_T, scid_T, size_t};
-use ::libc::{fprintf, memcpy, strlen};
+use ::libc::{fprintf, memcpy};
 
 /// Run the `--cmd` commands, which come before any config.
 pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
@@ -183,11 +183,11 @@ unsafe fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bo
 /// Source the system-wide vimrc: the first `<config dir>/<appname>/sysinit.vim`
 /// that exists, or the compiled-in path if none do.
 pub(crate) unsafe fn do_system_initialization() {
-    // SAFETY: sources at most one file; `get_appname` hands over a borrowed
-    // string that outlives the walk.
+    let appname = get_appname(false);
+    let appname_len = appname.count_bytes();
+    // SAFETY: sources at most one file; `appname` outlives the walk.
     unsafe {
-        let appname = get_appname(false);
-        let appname_len = strlen(appname);
+        let appname = appname.as_ptr();
         let sourced = for_each_config_dir(|dir, dir_len| {
             let vimrc = config_subpath(dir, dir_len, appname, appname_len, c"/sysinit.vim", true);
             let ok = do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) != FAIL;
@@ -270,7 +270,8 @@ pub(crate) unsafe fn do_user_initialization() -> bool {
         }
 
         let appname = get_appname(false);
-        let appname_len = strlen(appname);
+        let appname_len = appname.count_bytes();
+        let appname = appname.as_ptr();
         let mut from_dirs: Option<bool> = None;
         for_each_config_dir(|dir, dir_len| {
             let init_lua = config_subpath(dir, dir_len, appname, appname_len, c"/init.lua", false);

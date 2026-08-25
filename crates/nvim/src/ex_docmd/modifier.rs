@@ -148,7 +148,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                 && getline_equal(ea.ea_getline, ea.cookie, Some(getexline))
                 && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
             {
-                ea.cmd = exmode_plus.ptr() as *mut c_char;
+                ea.cmd = exmode_plus.as_ptr().cast_mut();
                 use_plus_cmd = true;
                 if !skip_only {
                     ex_pressedreturn.set(true);
@@ -391,7 +391,7 @@ unsafe fn restore_visual_range(
     unsafe {
         if !has_visual_range {
             if use_plus_cmd {
-                ea.cmd = exmode_plus.ptr() as *mut c_char;
+                ea.cmd = exmode_plus.as_ptr().cast_mut();
             }
             return;
         }

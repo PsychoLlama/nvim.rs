@@ -3,11 +3,8 @@
 //!
 //! # Boundary
 //!
-//! [`get_appname`] returns a pointer into the shared `NameBuff` scratch
-//! buffer, as upstream does — the next call to it, or to anything else
-//! that writes `NameBuff`, invalidates the result. Everything else here
-//! returns freshly allocated C strings that the caller releases with
-//! `xfree`.
+//! [`get_appname`] answers an owned string. Everything else here returns
+//! freshly allocated C strings that the caller releases with `xfree`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -18,10 +15,10 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::fileio::vim_gettempdir;
-use crate::main::{IObuff, NameBuff};
-use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup};
-use crate::os::env::{expand_env_save, os_env_exists, os_getenv, os_getenv_noalloc};
+use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::os::env::{env_buf, expand_env_save, os_env_exists, os_getenv, os_getenv_into};
 use crate::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
 use crate::types::{IOSIZE, XDGVarType, size_t};
 use core::ffi::{CStr, c_char};
@@ -62,52 +59,45 @@ const XDG_DEFAULTS: [Option<&CStr>; 7] = [
     Some(c"/usr/local/share/:/usr/share/"),
 ];
 
-/// `$NVIM_APPNAME`, or "nvim" when unset.
+/// `$NVIM_APPNAME`, or "nvim" when unset, as a string the caller owns.
 ///
-/// The value lives in `NameBuff`, so the returned pointer is only good
-/// until the next thing that writes there.
+/// Upstream stages it in the shared `NameBuff` and answers a pointer there,
+/// so the answer was only good until the next path anything in the editor
+/// formatted -- which is why [`get_xdg_home`] copied it into `IObuff`
+/// before building a path out of it, and why two of the four callers
+/// document how long they may hold it. Owning it retires all of that.
 ///
 /// `namelike` additionally flattens path separators to `-`, for callers
-/// that need a single name rather than a relative path. The substitution
-/// runs over the whole buffer, past the terminator, exactly as upstream's
-/// `memchrsub(NameBuff, ..., sizeof(NameBuff))` did.
-pub fn get_appname(namelike: bool) -> *const c_char {
-    // SAFETY: "noalloc" means it writes the value into `NameBuff` and
-    // returns a pointer to it, or NULL when the variable is unset. No
-    // borrow of `NameBuff` may be outstanding across the call.
-    let is_set = unsafe { !os_getenv_noalloc(c"NVIM_APPNAME".as_ptr()).is_null() };
-    const SLASH: c_char = b'/'.cast_signed();
-    const BACKSLASH: c_char = b'\\'.cast_signed();
-    const DASH: c_char = b'-'.cast_signed();
-    NameBuff.with_mut(|buf| {
-        if !is_set {
-            for (slot, byte) in buf.iter_mut().zip(b"nvim\0") {
-                *slot = byte.cast_signed();
+/// that need a single name rather than a relative path.
+pub fn get_appname(namelike: bool) -> CString {
+    let mut buf = env_buf();
+    // SAFETY: the value lands in `buf`, which is as long as the call is
+    // told it is, and is copied out before `buf` goes away.
+    let value = unsafe { os_getenv_into(c"NVIM_APPNAME".as_ptr(), &mut buf) };
+    let mut name = if value.is_null() {
+        b"nvim".to_vec()
+    } else {
+        cstr::in_chars(&buf).to_bytes().to_vec()
+    };
+    if namelike {
+        for byte in &mut name {
+            if *byte == b'/' || *byte == b'\\' {
+                *byte = b'-';
             }
         }
-        if namelike {
-            for slot in buf.iter_mut() {
-                if *slot == SLASH || *slot == BACKSLASH {
-                    *slot = DASH;
-                }
-            }
-        }
-    });
-    NameBuff.ptr().cast::<c_char>()
+    }
+    cstr::owned(&name)
 }
 
 /// Whether `$NVIM_APPNAME` is usable: a name or a relative path, with no
 /// way to escape the directory it names.
 pub fn appname_is_valid() -> bool {
     let appname = get_appname(false);
-    // SAFETY: `get_appname` returns `NameBuff`, which is NUL-terminated
-    // and stays valid while this function runs.
-    let name = unsafe {
-        if path_is_absolute(appname) {
-            return false;
-        }
-        CStr::from_ptr(appname).to_bytes()
-    };
+    // SAFETY: `appname` is this frame's own NUL-terminated string.
+    if unsafe { path_is_absolute(appname.as_ptr()) } {
+        return false;
+    }
+    let name = appname.to_bytes();
     // `path_is_absolute` does not call "/" absolute, hence the explicit
     // cases (upstream carries a TODO about that).
     !matches!(name, b"/" | b"\\" | b"." | b"..")
@@ -200,23 +190,17 @@ pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
 /// The caller owns the result.
 pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
     let dir = stdpaths_get_xdg_var(idx);
-    // SAFETY: `get_appname` returns NUL-terminated `NameBuff`; `IObuff` is
-    // the scratch buffer this copy is sized against, and no borrow of it
-    // is outstanding. `dir` is owned, and `concat_fnames_realloc` consumes
-    // it.
-    unsafe {
-        let appname = get_appname(false);
-        let appname_len = CStr::from_ptr(appname).to_bytes().len();
-        // Windows appends "-data" to the data/state homes; the headroom is
-        // asserted on every platform.
-        let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
-        debug_assert!(appname_len < iosize - c"-data".count_bytes() - 1);
-        if dir.is_null() {
-            return dir;
-        }
-        xmemcpyz(IObuff.ptr().cast(), appname.cast(), appname_len);
-        concat_fnames_realloc(dir, IObuff.ptr().cast::<c_char>(), true)
+    let appname = get_appname(false);
+    // Windows appends "-data" to the data/state homes; the headroom upstream
+    // needed for that in `IObuff` is asserted on every platform.
+    let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
+    debug_assert!(appname.count_bytes() < iosize - c"-data".count_bytes() - 1);
+    if dir.is_null() {
+        return dir;
     }
+    // SAFETY: `dir` is owned and `concat_fnames_realloc` consumes it;
+    // `appname` outlives the call.
+    unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) }
 }
 
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`. The caller owns the result.

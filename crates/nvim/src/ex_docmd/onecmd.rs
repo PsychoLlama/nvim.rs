@@ -719,7 +719,7 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> *mut c_char 
         let ea = &mut *eap;
         let mut errormsg: *mut c_char = ptr::null_mut();
         if *ea.cmd as c_int == '|' as c_int
-            || (exmode_active.get() && ea.cmd != (exmode_plus.ptr() as *mut c_char).add(1))
+            || (exmode_active.get() && !ptr::eq(ea.cmd, exmode_plus.as_ptr().add(1)))
         {
             ea.cmdidx = CMD_print;
             ea.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;

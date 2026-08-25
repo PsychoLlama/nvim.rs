@@ -52,7 +52,7 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
         arg = arg.add(1);
         let command;
         if ascii_isspace(*arg as c_int) || *arg as c_int == NUL {
-            command = dollar_command.ptr() as *mut c_char;
+            command = dollar_command.as_ptr().cast_mut();
         } else {
             command = arg;
             arg = skip_cmd_arg(command, true);

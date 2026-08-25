@@ -21,7 +21,7 @@ use crate::message::emsg;
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
 use crate::os::cshim::{gettext, strncmp, strstr};
-use crate::os::env::os_getenv_noalloc;
+use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::types::{
     Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
@@ -219,6 +219,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
 pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
+    let mut env = env_buf();
     unsafe {
         let mut err = Error {
             type_0: kErrorTypeNone,
@@ -272,7 +273,7 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
 
         // The check failed to load at all, which almost always means the
         // runtime files are not where the editor thinks.
-        let vimruntime = os_getenv_noalloc(c"VIMRUNTIME".as_ptr());
+        let vimruntime = os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env);
         if vimruntime.is_null() {
             emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
         } else if !strstr(p_rtp.get(), vimruntime).is_null() {

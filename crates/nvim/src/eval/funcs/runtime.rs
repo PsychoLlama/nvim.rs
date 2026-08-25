@@ -594,7 +594,7 @@ pub unsafe fn f_windowsversion(_argvars: *mut typval_T, rettv: *mut typval_T, _f
     // owns the duplicate.
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = xstrdup(windowsVersion.ptr() as *const c_char);
+        (*rettv).vval.v_string = xstrdup(windowsVersion.as_ptr());
     }
 }
 

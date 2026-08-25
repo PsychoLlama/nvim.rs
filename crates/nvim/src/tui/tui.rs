@@ -36,7 +36,7 @@ use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg_c};
 use crate::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
-use crate::os::env::{os_getenv, os_getenv_noalloc};
+use crate::os::env::{env_buf, os_getenv, os_getenv_into};
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
@@ -716,10 +716,11 @@ unsafe fn tui_guess_size(tui: *mut TUIData) {
 /// # Safety
 /// `out` must be valid for writes.
 unsafe fn env_size(name: &CStr, out: *mut c_int) -> bool {
-    // SAFETY: `os_getenv_noalloc` returns null or a NUL-terminated string,
-    // and `%d%n` writes one int and one int.
+    let mut env = env_buf();
+    // SAFETY: `os_getenv_into` answers null or a NUL-terminated string in
+    // `env`, and `%d%n` writes one int and one int.
     unsafe {
-        let value = os_getenv_noalloc(name.as_ptr());
+        let value = os_getenv_into(name.as_ptr(), &mut env);
         if value.is_null() {
             return false;
         }

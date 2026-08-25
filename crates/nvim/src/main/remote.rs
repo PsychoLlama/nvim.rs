@@ -23,7 +23,7 @@ use crate::main::{
 };
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
-use crate::os::env::os_getenv_noalloc;
+use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
     dict_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
@@ -130,6 +130,7 @@ pub(crate) unsafe fn remote_request(
     argv: *mut *mut c_char,
     ui_only: bool,
 ) {
+    let mut env = env_buf();
     // SAFETY: `argv[0..argc]` are the process arguments and `params` is the
     // caller's live parameter block.
     unsafe {
@@ -149,7 +150,7 @@ pub(crate) unsafe fn remote_request(
                     connect_error,
                 );
                 os_exit(1);
-            } else if strequal(server_addr, os_getenv_noalloc(c"NVIM".as_ptr())) {
+            } else if strequal(server_addr, os_getenv_into(c"NVIM".as_ptr(), &mut env)) {
                 // $NVIM in a `:terminal` child names its own parent, and a UI
                 // attached to that is a loop.
                 fprintf(

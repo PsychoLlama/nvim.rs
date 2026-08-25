@@ -905,8 +905,6 @@ pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static IObuff: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
 pub static NameBuff: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
-pub static msg_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
-pub static os_buf: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
 pub static RedrawingDisabled: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
@@ -991,7 +989,9 @@ pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mu
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static windowsVersion: GlobalCell<[c_char; 20]> = GlobalCell::new([0 as c_char; 20]);
+/// The Windows release `windowsversion()` reports. Nothing here writes it,
+/// so it stays the empty string a non-Windows build always answered.
+pub static windowsVersion: [c_char; 20] = [0 as c_char; 20];
 pub static magic_overruled: GlobalCell<optmagic_T> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
 pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);

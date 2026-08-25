@@ -17,8 +17,8 @@ use crate::buffer::{buf_ensure_loaded, buflist_findnr};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub, kOptValTypeString};
 use crate::main::{
-    KeyTyped, curbuf, curwin, e_interr, got_int, msg_buf, p_icm, p_rdt, p_report, p_shm,
-    sub_nlines, sub_nsubs,
+    KeyTyped, curbuf, curwin, e_interr, got_int, p_icm, p_rdt, p_report, p_shm, sub_nlines,
+    sub_nsubs,
 };
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
 use crate::memory::{xfree, xrealloc, xstrdup};
@@ -93,12 +93,13 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
         && (KeyTyped.get() || sub_nlines.get() > 1 as linenr_T || p_report.get() < 1 as OptInt);
     // SAFETY: message state.
     if (worth_reporting || count_only) && unsafe { messaging() } {
-        let buf = msg_buf.ptr() as *mut c_char;
+        let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
+        let buf = scratch.as_mut_ptr();
         let forms = report_forms(count_only);
         let nsubs = sub_nsubs.get();
         let nlines = sub_nlines.get();
-        // SAFETY: `msg_buf` is `MSG_BUF_LEN` bytes and no reference into it
-        // is outstanding; the format strings come from the catalogue and take
+        // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call;
+        // the format strings come from the catalogue and take
         // exactly the two `int64_t` given.
         unsafe {
             if got_int.get() {

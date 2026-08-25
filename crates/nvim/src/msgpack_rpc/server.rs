@@ -20,7 +20,7 @@ use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::main::{IObuff, NameBuff, main_loop};
+use crate::main::{IObuff, main_loop};
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
@@ -184,8 +184,7 @@ pub fn server_teardown() {
 
 /// Generates an address in the runtime directory, unique to this process.
 ///
-/// `name` names the socket; without one the editor's own name is used, which
-/// `get_appname` has just written into `NameBuff`.
+/// `name` names the socket; without one the editor's own name is used.
 ///
 /// # Safety
 /// `name` is either null or a NUL-terminated string.
@@ -196,14 +195,14 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
     let sequence = SEQUENCE.get();
     SEQUENCE.set(sequence.wrapping_add(1));
 
-    // SAFETY: `stdpaths_get_xdg_var` answers an owned string, `get_appname`
-    // fills `NameBuff` with one, the caller's `name` is the other candidate,
-    // and `address` is `SOCKET_ADDR_LEN` writable bytes.
+    let appname = get_appname(true);
+    // SAFETY: `stdpaths_get_xdg_var` answers an owned string, `appname` is
+    // this frame's, the caller's `name` is the other candidate, and
+    // `address` is `SOCKET_ADDR_LEN` writable bytes.
     let written = unsafe {
         let dir = stdpaths_get_xdg_var(XDG_RUNTIME_DIR);
-        get_appname(true);
         let base = if name.is_null() {
-            NameBuff.ptr().cast::<c_char>().cast_const()
+            appname.as_ptr()
         } else {
             name
         };

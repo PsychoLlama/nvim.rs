@@ -29,7 +29,7 @@ use crate::event::libuv::{
 };
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg_c};
-use crate::main::{IObuff, NameBuff, didset_vim, didset_vimruntime, nvim_testing, os_buf};
+use crate::main::{didset_vim, didset_vimruntime, nvim_testing};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
 use crate::os::cshim::{environ, strchr, strncmp};
@@ -168,13 +168,30 @@ pub unsafe fn os_getenv_buf(name: *const c_char, buf: *mut c_char, bufsize: size
     }
 }
 
-/// [`os_getenv_buf`] into `NameBuff`.
+/// A buffer big enough for any environment value [`os_getenv_into`] will
+/// answer: what the shared `NameBuff` used to lend out.
+pub(crate) type EnvBuf = [c_char; MAXPATHL as usize];
+
+/// An empty [`EnvBuf`], for a caller about to fill one.
+pub(crate) const fn env_buf() -> EnvBuf {
+    [0; MAXPATHL as usize]
+}
+
+/// [`os_getenv_buf`] into the caller's own [`EnvBuf`], answering a pointer
+/// into it or NULL.
+///
+/// Upstream lends out `NameBuff` here, so the answer stayed valid only until
+/// the next path was formatted into it -- and several callers hold it across
+/// exactly such a call. The buffer is the caller's instead.
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub unsafe fn os_getenv_noalloc(name: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's contract; `NameBuff` is `MAXPATHL` bytes.
-    unsafe { os_getenv_buf(name, NameBuff.ptr().cast(), MAXPATHL as usize) }
+pub unsafe fn os_getenv_into(
+    name: *const c_char,
+    buf: &mut [c_char; MAXPATHL as usize],
+) -> *mut c_char {
+    // SAFETY: the caller's contract; an `EnvBuf` is `MAXPATHL` bytes.
+    unsafe { os_getenv_buf(name, buf.as_mut_ptr(), MAXPATHL as usize) }
 }
 
 /// Whether environment variable `name` is defined, empty or not.
@@ -351,8 +368,11 @@ pub(crate) static homedir: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 /// 3. the path each of those resolves to through its links,
 /// 4. and, failing all of that, the current working directory.
 pub fn init_homedir() {
-    // SAFETY: every path below is a NUL-terminated string, and `IObuff` and
-    // `os_buf` are the tree's scratch buffers, `IOSIZE` and `MAXPATHL` long.
+    let mut uv_home = env_buf();
+    let mut resolved = [0 as c_char; IOSIZE as usize];
+    let mut cwd = env_buf();
+    // SAFETY: every path below is a NUL-terminated string, and each of the
+    // three buffers is as long as the call filling it is told it is.
     unsafe {
         // In case this is a second call.
         xfree(homedir.get().cast());
@@ -362,16 +382,15 @@ pub fn init_homedir() {
         let tofree = var;
 
         if var.is_null() {
-            var = os_uv_homedir();
+            var = os_uv_homedir(&mut uv_home);
         }
         // Resolve links, so the answer is the "real" directory.
-        if !var.is_null() && !os_realpath(var, IObuff.ptr().cast(), IOSIZE as usize).is_null() {
-            var = IObuff.ptr().cast();
+        if !var.is_null() && !os_realpath(var, resolved.as_mut_ptr(), IOSIZE as usize).is_null() {
+            var = resolved.as_mut_ptr();
         }
         // Last resort: wherever nvim was started.
-        if (var.is_null() || *var == 0) && os_dirname(os_buf.ptr().cast(), MAXPATHL as usize) == OK
-        {
-            var = os_buf.ptr().cast();
+        if (var.is_null() || *var == 0) && os_dirname(cwd.as_mut_ptr(), MAXPATHL as usize) == OK {
+            var = cwd.as_mut_ptr();
         }
         if !var.is_null() {
             homedir.set(xstrdup(var));
@@ -380,15 +399,12 @@ pub fn init_homedir() {
     }
 }
 
-/// libuv's answer for the home directory, in a static buffer, or NULL.
-static homedir_buf: GlobalCell<[c_char; MAXPATHL as usize]> =
-    GlobalCell::new([0; MAXPATHL as usize]);
-
-fn os_uv_homedir() -> *mut c_char {
-    // SAFETY: `homedir_buf` is this module's own static and libuv writes at
-    // most `homedir_size` bytes into it.
+/// libuv's answer for the home directory, in `buf`, or NULL.
+fn os_uv_homedir(buf: &mut EnvBuf) -> *mut c_char {
+    // SAFETY: libuv writes at most `homedir_size` bytes into `buf`, which is
+    // that long, and the answer borrows the caller's buffer.
     unsafe {
-        let buf = homedir_buf.ptr().cast::<c_char>();
+        let buf = buf.as_mut_ptr();
         *buf = 0;
         let mut homedir_size: size_t = MAXPATHL as usize;
         // http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir
@@ -434,7 +450,8 @@ pub unsafe fn get_env_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `fname` must be an absolute, NUL-terminated path.
 pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
-    // SAFETY: the caller's contract; `os_buf` is `MAXPATHL` bytes and the
+    let mut dir = env_buf();
+    // SAFETY: the caller's contract; `dir` is `MAXPATHL` bytes and the
     // assertion below is what keeps the directory inside it.
     unsafe {
         if !path_is_absolute(fname) {
@@ -444,7 +461,7 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
         let tail = path_tail_with_sep(fname.cast_mut());
         let dirlen = tail.offset_from(fname) as size_t;
         debug_assert!(tail >= fname.cast_mut() && dirlen + 1 < MAXPATHL as usize);
-        xmemcpyz(os_buf.ptr().cast(), fname.cast(), dirlen);
+        xmemcpyz(dir.as_mut_ptr().cast(), fname.cast(), dirlen);
 
         let path = os_getenv(c"PATH".as_ptr());
         let pathlen = if path.is_null() { 0 } else { strlen(path) };
@@ -460,7 +477,7 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
                     xstrlcat(temp, ENV_SEPSTR.as_ptr(), newlen);
                 }
             }
-            xstrlcat(temp, os_buf.ptr().cast(), newlen);
+            xstrlcat(temp, dir.as_ptr(), newlen);
             os_setenv(c"PATH".as_ptr(), temp, 1);
             xfree(temp.cast());
             retval = true;
@@ -475,14 +492,15 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
 /// # Safety
 /// `sh` must be a NUL-terminated string.
 pub unsafe fn os_shell_is_cmdexe(sh: *const c_char) -> bool {
+    let mut comspec_buf = env_buf();
     // SAFETY: the caller's contract; `path_tail` answers a pointer inside its
-    // argument, and `$COMSPEC` lands in `NameBuff`.
+    // argument, and `$COMSPEC` lands in `comspec_buf`.
     unsafe {
         if *sh == 0 {
             return false;
         }
         if striequal(sh, c"$COMSPEC".as_ptr()) {
-            let comspec = os_getenv_noalloc(c"COMSPEC".as_ptr());
+            let comspec = os_getenv_into(c"COMSPEC".as_ptr(), &mut comspec_buf);
             return striequal(c"cmd.exe".as_ptr(), path_tail(comspec));
         }
         if striequal(sh, c"cmd.exe".as_ptr()) || striequal(sh, c"cmd".as_ptr()) {

@@ -6,6 +6,7 @@
 //! and returns plain values.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 #[cfg(not(miri))]
 use crate::event::libuv::uv_hrtime;
 use crate::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
@@ -14,8 +15,8 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg_c};
 use crate::main::{got_int, main_loop};
 use crate::memory::{xstrlcat, xstrlcpy};
-use crate::os::cshim::{gettext, strncmp, tzset};
-use crate::os::env::os_getenv_noalloc;
+use crate::os::cshim::{gettext, tzset};
+use crate::os::env::{env_buf, os_getenv_into};
 use crate::os::input::os_input_ready;
 use crate::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
 use ::libc::{localtime_r, strftime, strptime, time};
@@ -150,25 +151,39 @@ pub fn os_sleep(ms: u64) {
 /// `localtime_r` to re-read the zone the way `localtime` does, and calling
 /// `tzset` on every conversion is too expensive, so the value is cached and
 /// the zone is only refreshed when it changes. 63 octets plus terminator.
-static TZ_CACHE: GlobalCell<[c_char; 64]> = GlobalCell::new([0; 64]);
+static TZ_CACHE: GlobalCell<[c_char; TZ_LEN]> = GlobalCell::new([0; TZ_LEN]);
+
+/// What fits in [`TZ_CACHE`], terminator included.
+const TZ_LEN: usize = 64;
 
 /// Thread-safe local-time conversion. Returns false if `clock` could not be
 /// converted, leaving `result` untouched.
 pub fn os_localtime_r(clock: time_t, result: &mut tm) -> bool {
-    // SAFETY: os_getenv_noalloc yields a NUL-terminated string or NULL; the
-    // cache is a NUL-terminated buffer of exactly the length passed alongside
-    // it; localtime_r fills `result`, which is live for the call.
-    unsafe {
-        const LEN: usize = 64;
-        let tz = os_getenv_noalloc(c"TZ".as_ptr());
-        let tz = if tz.is_null() { c"".as_ptr() } else { tz };
-        let cache = TZ_CACHE.ptr() as *mut c_char;
-        if strncmp(cache, tz, LEN - 1) != 0 {
-            tzset();
-            xstrlcpy(cache, tz, LEN);
+    let mut env = env_buf();
+    // SAFETY: `$TZ` is NUL-terminated where it is not NULL, and it lands in
+    // `env`, which outlives the borrow.
+    let tz = unsafe {
+        let value = os_getenv_into(c"TZ".as_ptr(), &mut env);
+        if value.is_null() {
+            c""
+        } else {
+            CStr::from_ptr(value)
         }
-        !localtime_r(&raw const clock, result).is_null()
+    };
+    // Upstream compares only what the cache can hold, so a `$TZ` longer than
+    // that does not re-`tzset` on every conversion.
+    let head = &tz.to_bytes()[..tz.to_bytes().len().min(TZ_LEN - 1)];
+    if TZ_CACHE.with(|cache| cstr::in_chars(cache).to_bytes() != head) {
+        let mut cache = [0 as c_char; TZ_LEN];
+        for (slot, &b) in cache.iter_mut().zip(head) {
+            *slot = b.cast_signed();
+        }
+        // SAFETY: re-reads the zone for the value just cached.
+        unsafe { tzset() };
+        TZ_CACHE.set(cache);
     }
+    // SAFETY: `localtime_r` fills `result`, which is live for the call.
+    unsafe { !localtime_r(&raw const clock, result).is_null() }
 }
 
 /// [`os_localtime_r`] for the current time.

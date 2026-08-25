@@ -208,6 +208,7 @@ pub unsafe fn get_lib_dir() -> *mut c_char {
 /// Reads the environment; must run on the main thread, like every other
 /// caller of `stdpaths_get_xdg_var`.
 pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
+    let appname = get_appname(false);
     // SAFETY: every pointer below is either null or an owned NUL-terminated
     // string, freed once at the end and not borrowed past that point.
     unsafe {
@@ -229,7 +230,7 @@ pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
         let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
 
         let rtp = RtpParts {
-            appname: bytes_of(get_appname(false)),
+            appname: appname.to_bytes(),
             config_home: bytes_of(config_home),
             config_dirs: bytes_of(config_dirs),
             data_home: bytes_of(data_home),
