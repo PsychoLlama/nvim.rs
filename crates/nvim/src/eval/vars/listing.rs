@@ -109,14 +109,7 @@ pub(crate) unsafe fn list_tab_vars(first: *mut c_int) {
 /// # Safety
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_vim_vars(first: *mut c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*vimvardict.ptr()).dv_hashtab,
-            c"v:".as_ptr(),
-            false,
-            first,
-        )
-    }
+    unsafe { list_hashtable_vars(get_vimvar_ht(), c"v:".as_ptr(), false, first) }
 }
 
 /// The current script's `s:` scope, if there is one.

@@ -20,7 +20,7 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc_len,
     tv_list_alloc, tv_list_ref,
 };
-use crate::eval::vars::eval_msgpack_type_lists;
+use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
 use crate::types::{
@@ -63,7 +63,7 @@ pub(crate) unsafe fn create_special_dict(
             tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len());
         (*type_di).di_tv.v_type = VAR_LIST;
         (*type_di).di_tv.v_lock = VAR_UNLOCKED;
-        (*type_di).di_tv.vval.v_list = (*eval_msgpack_type_lists.ptr())[type_ as usize] as *mut _;
+        (*type_di).di_tv.vval.v_list = msgpack_type_list(type_);
         tv_list_ref((*type_di).di_tv.vval.v_list);
         tv_dict_add(dict, type_di);
 

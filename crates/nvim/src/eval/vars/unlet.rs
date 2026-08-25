@@ -255,9 +255,9 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             let mut d = get_current_funccal_dict(ht);
             if d.is_null() {
                 if ht == get_globvar_ht() {
-                    d = globvardict.ptr();
-                } else if ht == compat_hashtab.ptr() {
-                    d = vimvardict.ptr();
+                    d = get_globvar_dict();
+                } else if ht == get_compat_ht() {
+                    d = get_vimvar_dict();
                 } else {
                     // The scope's own dictionary item holds it.
                     let di = find_var_in_ht(ht, *name as c_int, c"".as_ptr(), 0, false);

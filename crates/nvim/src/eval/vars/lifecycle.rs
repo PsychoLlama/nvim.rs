@@ -10,6 +10,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::MessagePackType;
 use crate::types::{FAIL, NUL};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
@@ -19,13 +20,13 @@ use crate::types::{FAIL, NUL};
 /// Called once, before anything reads a variable.
 pub unsafe fn evalvars_init() {
     unsafe {
-        init_var_dict(get_globvar_dict(), globvars_var.ptr(), VAR_DEF_SCOPE);
-        init_var_dict(vimvardict.ptr(), vimvars_var.ptr(), VAR_SCOPE);
-        (*vimvardict.ptr()).dv_lock = VAR_FIXED;
-        hash_init(compat_hashtab.ptr());
+        init_var_dict(get_globvar_dict(), globvar_scope_item(), VAR_DEF_SCOPE);
+        init_var_dict(get_vimvar_dict(), vimvar_scope_item(), VAR_SCOPE);
+        (*get_vimvar_dict()).dv_lock = VAR_FIXED;
+        hash_init(get_compat_ht());
 
-        for i in 0..(*vimvars.ptr()).len() {
-            let p = (vimvars.ptr() as *mut VimVar).add(i);
+        for i in 0..VIMVAR_COUNT {
+            let p = vimvar_table().add(i);
             // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
             // in the table fits in.
             debug_assert!(strlen((*p).vv_name) <= 16);
@@ -43,14 +44,11 @@ pub unsafe fn evalvars_init() {
             // Into the `v:` scope dictionary -- unless the value is not
             // always available, which is what a `VAR_UNKNOWN` row means.
             if (*p).vv_di.di_tv.v_type != VAR_UNKNOWN {
-                hash_add(
-                    &raw mut (*vimvardict.ptr()).dv_hashtab,
-                    (&raw mut (*p).vv_di.di_key).cast(),
-                );
+                hash_add(get_vimvar_ht(), (&raw mut (*p).vv_di.di_key).cast());
             }
             if flags.has(VimVarFlags::COMPAT) {
                 // ... and into the scope that has no prefix at all.
-                hash_add(compat_hashtab.ptr(), (&raw mut (*p).vv_di.di_key).cast());
+                hash_add(get_compat_ht(), (&raw mut (*p).vv_di.di_key).cast());
             }
         }
 
@@ -64,6 +62,7 @@ pub unsafe fn evalvars_init() {
         // `v:msgpack_types`: eight empty, locked lists, compared by identity
         // by the msgpack encoder and decoder rather than by name.
         let msgpack_types_dict = tv_dict_alloc();
+        let mut type_lists = eval_msgpack_type_lists.get();
         for (i, name) in msgpack_type_names.iter().enumerate() {
             let type_list = tv_list_alloc(0);
             tv_list_set_lock(type_list, VAR_FIXED);
@@ -75,12 +74,13 @@ pub unsafe fn evalvars_init() {
                 v_lock: VAR_UNLOCKED,
                 vval: typval_vval_union { v_list: type_list },
             };
-            (*eval_msgpack_type_lists.ptr())[i] = type_list;
+            type_lists[i] = type_list;
             if tv_dict_add(msgpack_types_dict, di) == FAIL {
                 // The names are distinct by construction.
                 abort();
             }
         }
+        eval_msgpack_type_lists.set(type_lists);
         (*msgpack_types_dict).dv_lock = VAR_FIXED;
         set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict);
 
@@ -135,13 +135,7 @@ pub unsafe fn evalvars_init() {
 /// # Safety
 /// Called from the collector, with `copyID` its current mark.
 pub unsafe fn garbage_collect_globvars(copyID: c_int) -> c_int {
-    unsafe {
-        set_ref_in_ht(
-            &raw mut (*globvardict.ptr()).dv_hashtab,
-            copyID,
-            ptr::null_mut(),
-        ) as c_int
-    }
+    unsafe { set_ref_in_ht(get_globvar_ht(), copyID, ptr::null_mut()) as c_int }
 }
 
 /// [`garbage_collect_globvars`] for `v:`.
@@ -149,13 +143,7 @@ pub unsafe fn garbage_collect_globvars(copyID: c_int) -> c_int {
 /// # Safety
 /// As [`garbage_collect_globvars`].
 pub unsafe fn garbage_collect_vimvars(copyID: c_int) -> bool {
-    unsafe {
-        set_ref_in_ht(
-            &raw mut (*vimvardict.ptr()).dv_hashtab,
-            copyID,
-            ptr::null_mut(),
-        )
-    }
+    unsafe { set_ref_in_ht(get_vimvar_ht(), copyID, ptr::null_mut()) }
 }
 
 /// [`garbage_collect_globvars`] for every script's `s:`.
@@ -198,7 +186,7 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
 /// Nothing.
 pub unsafe fn del_menutrans_vars() {
     unsafe {
-        let ht = &raw mut (*globvardict.ptr()).dv_hashtab;
+        let ht = get_globvar_ht();
         // The walk removes entries as it goes, so the table has to be locked
         // against the rehash that would otherwise move `ht_array`.
         hash_lock(ht);
@@ -225,6 +213,39 @@ pub fn get_globvar_ht() -> *mut hashtab_T {
 /// The `v:` scope, as a dictionary.
 pub fn get_vimvar_dict() -> *mut dict_T {
     vimvardict.ptr()
+}
+
+/// The `v:` scope, as a hashtab.
+pub(crate) fn get_vimvar_ht() -> *mut hashtab_T {
+    // SAFETY: a field of a `static`, never dereferenced here.
+    unsafe { &raw mut (*vimvardict.ptr()).dv_hashtab }
+}
+
+/// The `v:` variable table, whose rows are the `Vv` discriminants in order.
+pub(crate) fn vimvar_table() -> *mut VimVar {
+    vimvars.ptr().cast()
+}
+
+/// The scope that has no prefix at all: the names that mean `v:version`
+/// wherever they are written. Upstream's `compat_hashtab`.
+pub(crate) fn get_compat_ht() -> *mut hashtab_T {
+    compat_hashtab.ptr()
+}
+
+/// The `dictitem_T` a bare `g:` resolves to.
+pub(crate) fn globvar_scope_item() -> *mut ScopeDictDictItem {
+    globvars_var.ptr()
+}
+
+/// The `dictitem_T` a bare `v:` resolves to.
+pub(crate) fn vimvar_scope_item() -> *mut ScopeDictDictItem {
+    vimvars_var.ptr()
+}
+
+/// The `v:msgpack_types` list for `type_`, compared by identity by the
+/// msgpack encoder and decoder.
+pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut list_T {
+    eval_msgpack_type_lists.get()[type_ as usize].cast_mut()
 }
 
 /// Give script `id` its own `s:` scope.

@@ -94,7 +94,7 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             Some((*hi.get()).hi_key)
         };
 
-        if let Some(key) = step(&gdone, &raw const (*globvardict.ptr()).dv_hashtab) {
+        if let Some(key) = step(&gdone, get_globvar_ht()) {
             if strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) == 0 {
                 return cat_prefix_varname(b'g' as c_int, key);
             }
@@ -247,8 +247,8 @@ pub unsafe fn find_var_in_ht(
             // Something like "s:", or `ht` would have been NULL.
             return match htname as u8 {
                 b's' => (&raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var).cast(),
-                b'g' => globvars_var.ptr().cast(),
-                b'v' => vimvars_var.ptr().cast(),
+                b'g' => globvar_scope_item().cast(),
+                b'v' => vimvar_scope_item().cast(),
                 b'b' => (&raw mut (*curbuf.get()).b_bufvar).cast(),
                 b'w' => (&raw mut (*curwin.get()).w_winvar).cast(),
                 b't' => (&raw mut (*curtab.get()).tp_winvar).cast(),
@@ -312,8 +312,8 @@ pub(crate) unsafe fn find_var_ht_dict(
             *varname = name;
 
             // "version" is "v:version" in every scope.
-            if (*hash_find_len(compat_hashtab.ptr(), name, name_len)).is_kept() {
-                return compat_hashtab.ptr();
+            if (*hash_find_len(get_compat_ht(), name, name_len)).is_kept() {
+                return get_compat_ht();
             }
 
             *d = get_funccal_local_dict();

@@ -91,7 +91,7 @@ pub unsafe fn set_var_const(
             // a side effect on assignment; `before_set_vvar` is both, and it
             // answers false when it has already done the store itself.
             let mut type_error = false;
-            if ht == &raw mut (*vimvardict.ptr()).dv_hashtab
+            if ht == get_vimvar_ht()
                 && !before_set_vvar(varname, di, tv, copy, watched, &raw mut type_error)
             {
                 if type_error {
@@ -109,7 +109,7 @@ pub unsafe fn set_var_const(
             tv_clear(&raw mut (*di).di_tv);
         } else {
             // A new variable. `v:` and `a:` do not take one.
-            if ht == &raw mut (*vimvardict.ptr()).dv_hashtab || ht == get_funccal_args_ht() {
+            if ht == get_vimvar_ht() || ht == get_funccal_args_ht() {
                 semsg_c!(gettext(&raw const e_illvar as *const c_char), name);
                 return;
             }

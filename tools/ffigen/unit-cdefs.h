@@ -5995,6 +5995,7 @@ static const int VGR_NOJUMP = 2;
 static const int VIMSPELLVERSION = 50;
 static const int VIMSUGMAGICL = 6;
 static const int VIMSUGVERSION = 1;
+static const int VIMVAR_COUNT = 106;
 static const int VIM_ALL = 5;
 static const int VIM_CANCEL = 4;
 static const int VIM_DISCARDALL = 6;

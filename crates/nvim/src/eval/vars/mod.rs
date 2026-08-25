@@ -295,7 +295,9 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
     }
 }
 
-static vimvars: GlobalCell<[VimVar; 106]> = GlobalCell::new([
+/// How many rows the `v:` table has; one per `Vv` discriminant.
+pub(crate) const VIMVAR_COUNT: usize = 106;
+static vimvars: GlobalCell<[VimVar; VIMVAR_COUNT]> = GlobalCell::new([
     vv(c"count", VAR_NUMBER, VimVarFlags::RO),
     vv(c"count1", VAR_NUMBER, VimVarFlags::RO),
     vv(c"prevcount", VAR_NUMBER, VimVarFlags::RO),

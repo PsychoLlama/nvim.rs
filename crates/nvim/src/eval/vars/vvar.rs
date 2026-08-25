@@ -28,16 +28,13 @@ use crate::types::{NUL, OK};
 /// `idx` names a `v:` variable and `save_tv` is writable.
 pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
     unsafe {
-        let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
+        let vv = vimvar_table().offset(idx as isize);
         *save_tv = (*vv).vv_di.di_tv;
         (*vv).vv_di.di_tv.vval.v_string = ptr::null_mut();
         if (*vv).vv_di.di_tv.v_type == VAR_UNKNOWN {
             // `v:val` and `v:key` have no type until something sets one, and
             // are absent from the dictionary until then.
-            hash_add(
-                &raw mut (*vimvardict.ptr()).dv_hashtab,
-                (&raw mut (*vv).vv_di.di_key).cast(),
-            );
+            hash_add(get_vimvar_ht(), (&raw mut (*vv).vv_di.di_key).cast());
         }
     }
 }
@@ -48,17 +45,14 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
 /// As [`prepare_vimvar`], with the `save_tv` it filled.
 pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
     unsafe {
-        let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
+        let vv = vimvar_table().offset(idx as isize);
         (*vv).vv_di.di_tv = *save_tv;
         if (*vv).vv_di.di_tv.v_type != VAR_UNKNOWN {
             return;
         }
-        let hi = hash_find(
-            &raw mut (*vimvardict.ptr()).dv_hashtab,
-            (&raw mut (*vv).vv_di.di_key).cast(),
-        );
+        let hi = hash_find(get_vimvar_ht(), (&raw mut (*vv).vv_di.di_key).cast());
         if (*hi).is_kept() {
-            hash_remove(&raw mut (*vimvardict.ptr()).dv_hashtab, hi);
+            hash_remove(get_vimvar_ht(), hi);
         } else {
             internal_error(c"restore_vimvar()".as_ptr());
         }
@@ -82,7 +76,8 @@ pub unsafe fn set_vim_var_tv(idx: Vv, tv: *mut typval_T) {
 /// # Safety
 /// `idx` names a `v:` variable.
 pub unsafe fn get_vim_var_name(idx: Vv) -> *mut c_char {
-    unsafe { (*vimvars.ptr())[idx as usize].vv_name }
+    // SAFETY: `idx` is a `Vv` discriminant, so it is a row of the table.
+    unsafe { (*vimvar_table().add(idx as usize)).vv_name }
 }
 
 /// The value of `v:` variable `idx`, which the caller may write through.
@@ -90,11 +85,7 @@ pub unsafe fn get_vim_var_name(idx: Vv) -> *mut c_char {
 /// # Safety
 /// `idx` names a `v:` variable.
 pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut typval_T {
-    unsafe {
-        &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
-            .vv_di
-            .di_tv
-    }
+    unsafe { &raw mut (*vimvar_table().offset(idx as isize)).vv_di.di_tv }
 }
 
 /// `v:` variable `idx` as a Number.  The caller knows its declared type.
@@ -507,7 +498,7 @@ pub unsafe fn before_set_vvar(
             }
             if watched {
                 tv_dict_watcher_notify(
-                    vimvardict.ptr(),
+                    get_vimvar_dict(),
                     varname,
                     &raw mut (*di).di_tv,
                     &raw mut oldtv,
@@ -530,7 +521,7 @@ pub unsafe fn before_set_vvar(
             }
             if watched {
                 tv_dict_watcher_notify(
-                    vimvardict.ptr(),
+                    get_vimvar_dict(),
                     varname,
                     &raw mut (*di).di_tv,
                     &raw mut oldtv,
@@ -574,7 +565,7 @@ pub(crate) unsafe fn set_vvar_item(
 ) {
     unsafe {
         let varname = tv_dict_item_key(di);
-        let watched = tv_dict_is_watched(vimvardict.ptr());
+        let watched = tv_dict_is_watched(get_vimvar_dict());
 
         // `+=` and friends act on the current value, so evaluate them into a
         // temporary first and enforce the type on the *result*.
@@ -628,7 +619,7 @@ pub(crate) unsafe fn set_vvar_item(
         }
         if watched {
             tv_dict_watcher_notify(
-                vimvardict.ptr(),
+                get_vimvar_dict(),
                 varname,
                 &raw mut (*di).di_tv,
                 &raw mut oldtv,
