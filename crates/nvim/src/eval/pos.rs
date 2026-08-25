@@ -9,7 +9,6 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::buflist_findnr;
 use crate::eval::kMarkAll;
 use crate::eval::typval::{tv_get_string_chk, tv_list_find, tv_list_find_nr, tv_list_len};
-use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin};
 use crate::mark::mark_get;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
@@ -87,10 +86,6 @@ pub unsafe fn buf_charidx_to_byteidx(
 /// Resolve a position expression — a `[lnum, col]` List, `.`, `v`, `'m`,
 /// `w0`, `w$` or `$` — against the window `wp`.
 ///
-/// The answer points at one shared static, so a caller must be done with it
-/// before asking again. That is upstream's design and several callers rely
-/// on writing through it.
-///
 /// # Safety
 /// `tv`, `ret_fnum` and `wp` must be valid.
 pub unsafe fn var2fpos(
@@ -99,38 +94,31 @@ pub unsafe fn var2fpos(
     ret_fnum: *mut c_int,
     charcol: bool,
     wp: *mut win_T,
-) -> *mut pos_T {
-    /// The one position every answer is written into.
-    static POS: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    });
-
+) -> Option<pos_T> {
     unsafe {
-        let pos = POS.ptr();
+        let mut pos = pos_T::default();
         let bp: *mut buf_T = (*wp).w_buffer;
 
         // `[lnum, col]`, `[lnum, col, off]`.
         if (*tv).v_type == VAR_LIST {
             let l: *mut list_T = (*tv).vval.v_list;
             if l.is_null() {
-                return null_mut();
+                return None;
             }
             let mut error = false;
-            (*pos).lnum = tv_list_find_nr(l, 0, &raw mut error) as linenr_T;
-            if error || (*pos).lnum <= 0 || (*pos).lnum > (*bp).b_ml.ml_line_count {
-                return null_mut();
+            pos.lnum = tv_list_find_nr(l, 0, &raw mut error) as linenr_T;
+            if error || pos.lnum <= 0 || pos.lnum > (*bp).b_ml.ml_line_count {
+                return None;
             }
-            (*pos).col = tv_list_find_nr(l, 1, &raw mut error) as colnr_T;
+            pos.col = tv_list_find_nr(l, 1, &raw mut error) as colnr_T;
             if error {
-                return null_mut();
+                return None;
             }
 
             let len = if charcol {
-                mb_charlen(ml_get_buf(bp, (*pos).lnum))
+                mb_charlen(ml_get_buf(bp, pos.lnum))
             } else {
-                ml_get_buf_len(bp, (*pos).lnum) as c_int
+                ml_get_buf_len(bp, pos.lnum) as c_int
             };
             // The column may be spelled `"$"`, meaning end of line.
             let li: *mut listitem_T = tv_list_find(l, 1);
@@ -139,93 +127,92 @@ pub unsafe fn var2fpos(
                 && !(*li).li_tv.vval.v_string.is_null()
                 && strcmp((*li).li_tv.vval.v_string, c"$".as_ptr()) == 0
             {
-                (*pos).col = len + 1;
+                pos.col = len + 1;
             }
-            if (*pos).col == 0 || (*pos).col > len + 1 {
-                return null_mut();
+            if pos.col == 0 || pos.col > len + 1 {
+                return None;
             }
-            (*pos).col -= 1;
+            pos.col -= 1;
 
-            (*pos).coladd = tv_list_find_nr(l, 2, &raw mut error) as colnr_T;
+            pos.coladd = tv_list_find_nr(l, 2, &raw mut error) as colnr_T;
             if error {
-                (*pos).coladd = 0;
+                pos.coladd = 0;
             }
-            return pos;
+            return Some(pos);
         }
 
         let name = tv_get_string_chk(tv);
         if name.is_null() {
-            return null_mut();
+            return None;
         }
 
         // A zero line number is the "nothing matched yet" marker for the
         // three forms below.
-        (*pos).lnum = 0;
         if *name.add(0) == b'.' as c_char {
-            POS.set((*wp).w_cursor);
+            pos = (*wp).w_cursor;
         } else if *name.add(0) == b'v' as c_char && *name.add(1) as c_int == NUL {
             // The other end of the Visual selection — but only in the
             // window that owns it.
             if visual_active() && wp == curwin.get() {
-                POS.set(visual_anchor());
+                pos = visual_anchor();
             } else {
-                POS.set((*wp).w_cursor);
+                pos = (*wp).w_cursor;
             }
         } else if *name.add(0) == b'\'' as c_char {
             let mname = *name.add(1) as uint8_t as c_int;
             let fm: *const fmark_T = mark_get(bp, wp, null_mut::<fmark_T>(), kMarkAll, mname);
             if fm.is_null() || (*fm).mark.lnum <= 0 {
-                return null_mut();
+                return None;
             }
-            POS.set((*fm).mark);
+            pos = (*fm).mark;
             // Only the file marks carry a buffer of their own.
             if (mname >= b'A' as c_int && mname <= b'Z' as c_int) || ascii_isdigit(mname) {
                 *ret_fnum = (*fm).fnum;
             }
         }
 
-        if (*pos).lnum != 0 {
+        if pos.lnum != 0 {
             if charcol {
-                (*pos).col = buf_byteidx_to_charidx(bp, (*pos).lnum, (*pos).col) as colnr_T;
+                pos.col = buf_byteidx_to_charidx(bp, pos.lnum, pos.col) as colnr_T;
             }
-            return pos;
+            return Some(pos);
         }
 
-        (*pos).coladd = 0;
+        pos.coladd = 0;
         if *name.add(0) == b'w' as c_char && dollar_lnum {
             check_cursor_moved(wp);
-            (*pos).col = 0;
+            pos.col = 0;
             if *name.add(1) == b'0' as c_char {
                 update_topline(wp);
-                (*pos).lnum = (*wp).w_topline.max(1);
-                return pos;
+                pos.lnum = (*wp).w_topline.max(1);
+                return Some(pos);
             }
             if *name.add(1) == b'$' as c_char {
                 validate_botline_win(wp);
-                (*pos).lnum = if (*wp).w_botline > 0 {
+                pos.lnum = if (*wp).w_botline > 0 {
                     (*wp).w_botline - 1
                 } else {
                     0
                 };
-                return pos;
+                return Some(pos);
             }
         } else if *name.add(0) == b'$' as c_char {
             // `$` is the last line where a line number is wanted, and the
             // end of the current line where a column is.
             if dollar_lnum {
-                (*pos).lnum = (*bp).b_ml.ml_line_count;
-                (*pos).col = 0;
+                pos.lnum = (*bp).b_ml.ml_line_count;
+                pos.col = 0;
             } else {
-                (*pos).lnum = (*wp).w_cursor.lnum;
-                (*pos).col = if charcol {
+                pos.lnum = (*wp).w_cursor.lnum;
+                pos.col = if charcol {
                     mb_charlen(ml_get_buf(bp, (*wp).w_cursor.lnum))
                 } else {
                     ml_get_buf_len(bp, (*wp).w_cursor.lnum)
                 };
             }
-            return pos;
+            return Some(pos);
         }
-        null_mut()
+        None
     }
 }
 

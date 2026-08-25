@@ -133,18 +133,20 @@ unsafe fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         let mut fnum = (*bp).handle as c_int;
         let fp = var2fpos(args.ptr(0), false, &raw mut fnum, charcol, wp);
         let mut col: colnr_T = 0;
-        if !fp.is_null() && fnum == (*bp).handle {
-            if (*fp).col == END_OF_LINE {
+        if let Some(mut fp) = fp
+            && fnum == (*bp).handle
+        {
+            if fp.col == END_OF_LINE {
                 // MAXCOL means "end of line"; past the last line there is
                 // no line to measure, so it stays MAXCOL.
-                col = if (*fp).lnum <= (*bp).b_ml.ml_line_count {
-                    ml_get_buf_len(bp, (*fp).lnum) + 1
+                col = if fp.lnum <= (*bp).b_ml.ml_line_count {
+                    ml_get_buf_len(bp, fp.lnum) + 1
                 } else {
                     END_OF_LINE
                 };
             } else {
-                col = (*fp).col + 1;
-                col += virtualedit_tail(wp, bp, fp);
+                col = fp.col + 1;
+                col += virtualedit_tail(wp, bp, &raw mut fp);
             }
         }
         rettv.vval.v_number = col as varnumber_T;
@@ -154,6 +156,12 @@ unsafe fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
 /// With 'virtualedit' on, a cursor sitting past the last character of the
 /// line reports the column *after* it rather than on it — but only when it
 /// is past the whole character, and only for the cursor itself.
+///
+/// Upstream tests `fp == &wp->w_cursor` for "the cursor itself", but
+/// `var2fpos` — the only source of `fp` here — always answers a position of
+/// its own, so the test never holds and the adjustment never applies. That
+/// is preserved: `fp` is still an address so the comparison keeps its
+/// (always false) answer. See F-P22-36.
 ///
 /// # Safety
 /// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
@@ -203,20 +211,23 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             let bp = (*wp).w_buffer;
             let mut fnum = (*bp).handle as c_int;
             let fp = var2fpos(args.ptr(0), false, &raw mut fnum, false, wp);
-            if !fp.is_null() && (*fp).lnum <= (*bp).b_ml.ml_line_count && fnum == (*bp).handle {
-                // Clamped in place, which is why a position handed in as
-                // a List comes back changed.
-                if (*fp).col < 0 {
-                    (*fp).col = 0;
+            if let Some(mut fp) = fp
+                && fp.lnum <= (*bp).b_ml.ml_line_count
+                && fnum == (*bp).handle
+            {
+                // Clamped before it is measured, as upstream clamps the
+                // shared position it answered out of.
+                if fp.col < 0 {
+                    fp.col = 0;
                 } else {
-                    let len = ml_get_buf_len(bp, (*fp).lnum);
-                    if (*fp).col > len {
-                        (*fp).col = len;
+                    let len = ml_get_buf_len(bp, fp.lnum);
+                    if fp.col > len {
+                        fp.col = len;
                     }
                 }
                 getvvcol(
                     wp,
-                    fp,
+                    &raw mut fp,
                     &raw mut vcol_start,
                     ptr::null_mut(),
                     &raw mut vcol_end,
@@ -238,15 +249,14 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// `line({expr} [, {winid}])`.
 pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments are live typvals and `var2fpos` hands back a
-    // pointer into the named window or buffer.
+    // SAFETY: the arguments are live typvals.
     let fp = unsafe {
         let mut fnum: c_int = 0;
         if !args.has(1) {
             var2fpos(args.ptr(0), true, &raw mut fnum, false, curwin.get())
         } else {
             match win_and_tab_by_id(tv_get_number(args.ptr(1)) as c_int) {
-                None => ptr::null_mut(),
+                None => None,
                 Some((wp, _)) => {
                     let wp = wp.raw();
                     // Resolving a position in another window moves its
@@ -267,12 +277,7 @@ pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             }
         }
     };
-    // SAFETY: `fp` is null or a live position.
-    rettv.vval.v_number = if fp.is_null() {
-        0
-    } else {
-        unsafe { (*fp).lnum as varnumber_T }
-    };
+    rettv.vval.v_number = fp.map_or(0, |fp| fp.lnum as varnumber_T);
 }
 
 /// `getpos({expr})`.
@@ -314,52 +319,45 @@ pub unsafe fn f_getcursorcharpos(
 /// # Safety
 /// The arguments and `rettv` are live typvals.
 unsafe fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: bool) {
-    // SAFETY: the caller's obligation. `pos` outlives the list building it
-    // feeds, which is the only reason `fp` may point at it.
+    // SAFETY: the caller's obligation.
     unsafe {
-        let mut pos = NOWHERE;
         let mut wp = curwin.get();
         let mut fnum: c_int = -1;
         let fp = if !getcurpos {
             var2fpos(args.ptr(0), true, &raw mut fnum, charcol, curwin.get())
         } else {
-            let mut fp: *mut pos_T = ptr::null_mut();
-            if args.has(0) {
+            let mut fp = if args.has(0) {
                 // `wp` is overwritten even when the lookup fails: a
                 // `getcurpos()` on a window that does not exist answers 0
                 // for 'curswant' rather than the current window's.
                 wp = find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw);
-                if !wp.is_null() {
-                    fp = &raw mut (*wp).w_cursor;
-                }
+                (!wp.is_null()).then(|| (*wp).w_cursor)
             } else {
-                fp = &raw mut (*curwin.get()).w_cursor;
-            }
-            if !fp.is_null() && charcol {
-                pos = *fp;
+                Some((*curwin.get()).w_cursor)
+            };
+            if let Some(pos) = &mut fp
+                && charcol
+            {
                 pos.col = buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col) as colnr_T;
-                fp = &raw mut pos;
             }
             fp
         };
 
         let l = tv_list_alloc_ret(rettv, 4 + isize::from(getcurpos));
         tv_list_append_number(l, if fnum != -1 { fnum as varnumber_T } else { 0 });
-        let (lnum, col, coladd) = if fp.is_null() {
-            (0, 0, 0)
-        } else {
+        let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
             // MAXCOL is passed through rather than made one-based.
-            let col = if (*fp).col == END_OF_LINE {
+            let col = if fp.col == END_OF_LINE {
                 END_OF_LINE
             } else {
-                (*fp).col + 1
+                fp.col + 1
             };
             (
-                (*fp).lnum as varnumber_T,
+                fp.lnum as varnumber_T,
                 col as varnumber_T,
-                (*fp).coladd as varnumber_T,
+                fp.coladd as varnumber_T,
             )
-        };
+        });
         tv_list_append_number(l, lnum);
         tv_list_append_number(l, col);
         tv_list_append_number(l, coladd);
