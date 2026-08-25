@@ -33,11 +33,11 @@ use crate::mbyte::{
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::{getc, gettext};
-use crate::spell::{byte_in_str, clear_spell_chartab, count_common_word};
+use crate::spell::{ascii_spell_chartab, byte_in_str, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
     FILE, NUL, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
-    size_t, slang_T, spelltab_T, uint8_t,
+    size_t, slang_T, uint8_t,
 };
 use ::libc::{memset, strlen, ungetc};
 
@@ -844,8 +844,7 @@ unsafe fn set_spell_charflags(flags_in: *const c_char, cnt: c_int, fol: *const c
     // `cnt` flag bytes and stops at `fol`'s terminator.
     unsafe {
         let flags = flags_in.cast::<uint8_t>();
-        let mut new_st: spelltab_T = core::mem::zeroed();
-        clear_spell_chartab(&raw mut new_st);
+        let mut new_st = ascii_spell_chartab();
 
         // Only the high half is described; the low half is fixed.
         let mut p = fol;

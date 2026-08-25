@@ -50,19 +50,17 @@ use super::lookup::{find_prefix, find_word};
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
     SP_BAD, SP_BANNED, SP_OK, SP_RARE, WF_ALLCAP, WF_FIXCAP, WF_KEEPCAP, WF_ONECAP,
-    count_common_word, matchinf_T, spelltab,
+    count_common_word, matchinf_T, spelltab_isu,
 };
 use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 
 /// Whether `c` is upper case, by the spell table below 128 and the general
 /// rules above it.
 fn is_upper(c: c_int) -> bool {
-    unsafe {
-        if c >= 128 {
-            mb_isupper(c)
-        } else {
-            (*spelltab.ptr()).st_isu[c as usize]
-        }
+    if c >= 128 {
+        mb_isupper(c)
+    } else {
+        spelltab_isu(c as usize)
     }
 }
 

@@ -41,7 +41,7 @@ use crate::hashtab::{hash_find, hash_removed};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
 use crate::memory::xmemcpyz;
-use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab};
+use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
@@ -68,10 +68,7 @@ pub(super) fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
         utf_fold(c)
     } else {
-        // SAFETY: `spelltab` is main-thread editor state and this reads one
-        // byte out of it without keeping a reference (see `GlobalCell`).
-        // Indices are 0..128 by the branch above.
-        unsafe { (*spelltab.ptr()).st_fold[c as usize] as c_int }
+        spelltab_fold(c as usize) as c_int
     }
 }
 
@@ -81,9 +78,7 @@ pub(super) fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {
-        // SAFETY: reads one byte of main-thread editor state without
-        // keeping a reference.
-        unsafe { (*spelltab.ptr()).st_isu[c as usize] }
+        spelltab_isu(c as usize)
     }
 }
 

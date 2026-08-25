@@ -60,9 +60,10 @@ mod slang;
 mod soundfold;
 
 pub use chartab::{
-    allcap_copy, byte_in_str, captype, clear_spell_chartab, init_spell_chartab, make_case_word,
+    allcap_copy, ascii_spell_chartab, byte_in_str, captype, init_spell_chartab, make_case_word,
     nofold_len, onecap_copy, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
+pub(crate) use chartab::{spelltab_fold, spelltab_isu, spelltab_isw, spelltab_upper};
 pub use check::{
     check_need_cap, expand_spelling, no_spell_checking, spell_check, spell_check_window,
     spell_expand_check_cap, spell_to_word_end, spell_valid_case, spell_word_start,

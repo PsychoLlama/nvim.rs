@@ -35,56 +35,86 @@ use ::libc::strcpy;
 
 use super::{FAIL, MAXWLEN, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
 
-/// Fill `sp` with the ASCII answers: digits and letters are word
+/// A table holding the ASCII answers: digits and letters are word
 /// characters, `A`-`Z` are upper case, and everything else maps to itself.
 ///
 /// Digits are included even though a word may not *start* with one; that
 /// restriction is handled where words are looked up.
-pub unsafe fn clear_spell_chartab(sp: *mut spelltab_T) {
-    unsafe {
-        let sp = &mut *sp;
-        sp.st_isw = [false; 256];
-        sp.st_isu = [false; 256];
-        for i in 0..256 {
-            sp.st_fold[i] = i as uint8_t;
-            sp.st_upper[i] = i as uint8_t;
-        }
-        for i in b'0'..=b'9' {
-            sp.st_isw[i as usize] = true;
-        }
-        for i in b'A'..=b'Z' {
-            sp.st_isw[i as usize] = true;
-            sp.st_isu[i as usize] = true;
-            sp.st_fold[i as usize] = i + 0x20;
-        }
-        for i in b'a'..=b'z' {
-            sp.st_isw[i as usize] = true;
-            sp.st_upper[i as usize] = i - 0x20;
-        }
+pub fn ascii_spell_chartab() -> spelltab_T {
+    let mut sp = spelltab_T {
+        st_isw: [false; 256],
+        st_isu: [false; 256],
+        st_fold: [0; 256],
+        st_upper: [0; 256],
+    };
+    for i in 0..256 {
+        sp.st_fold[i] = i as uint8_t;
+        sp.st_upper[i] = i as uint8_t;
     }
+    for i in b'0'..=b'9' {
+        sp.st_isw[i as usize] = true;
+    }
+    for i in b'A'..=b'Z' {
+        sp.st_isw[i as usize] = true;
+        sp.st_isu[i as usize] = true;
+        sp.st_fold[i as usize] = i + 0x20;
+    }
+    for i in b'a'..=b'z' {
+        sp.st_isw[i as usize] = true;
+        sp.st_upper[i as usize] = i - 0x20;
+    }
+    sp
+}
+
+/// The four one-byte questions the spell-check path asks the table in force.
+///
+/// They read a single element rather than copying the table, which is a
+/// kilobyte and is asked about once per character.
+///
+/// `c` must be a byte value; every caller has already ruled out anything
+/// above 255.
+pub(crate) fn spelltab_isw(c: usize) -> bool {
+    // SAFETY: reads one `bool` out of a `static`'s array.
+    unsafe { (*spelltab.ptr()).st_isw[c] }
+}
+
+/// Whether byte `c` is upper case. See [`spelltab_isw`].
+pub(crate) fn spelltab_isu(c: usize) -> bool {
+    // SAFETY: as `spelltab_isw`.
+    unsafe { (*spelltab.ptr()).st_isu[c] }
+}
+
+/// Byte `c` folded to lower case. See [`spelltab_isw`].
+pub(crate) fn spelltab_fold(c: usize) -> uint8_t {
+    // SAFETY: as `spelltab_isw`.
+    unsafe { (*spelltab.ptr()).st_fold[c] }
+}
+
+/// Byte `c` raised to upper case. See [`spelltab_isw`].
+pub(crate) fn spelltab_upper(c: usize) -> uint8_t {
+    // SAFETY: as `spelltab_isw`.
+    unsafe { (*spelltab.ptr()).st_upper[c] }
 }
 
 /// Reset [`spelltab`] to what the current encoding says, discarding
 /// anything a `.spl` file installed. Called once at startup and again
 /// whenever the spell files are reloaded.
-pub unsafe fn init_spell_chartab() {
-    unsafe {
-        did_set_spelltab.set(false);
-        clear_spell_chartab(spelltab.ptr());
-        let tab = &mut *spelltab.ptr();
-        for i in 128..256 {
-            let f = utf_fold(i);
-            let u = mb_toupper(i);
+pub fn init_spell_chartab() {
+    did_set_spelltab.set(false);
+    let mut tab = ascii_spell_chartab();
+    for i in 128..256 {
+        let f = utf_fold(i);
+        let u = mb_toupper(i);
 
-            tab.st_isu[i as usize] = mb_isupper(i);
-            tab.st_isw[i as usize] = tab.st_isu[i as usize] || mb_islower(i);
-            // The folded and upper-cased values of 0xb5 differ between
-            // latin1 and utf-8, which used to raise E763 for no good
-            // reason. Keep the latin1 answer for both.
-            tab.st_fold[i as usize] = if f < 256 { f as uint8_t } else { i as uint8_t };
-            tab.st_upper[i as usize] = if u < 256 { u as uint8_t } else { i as uint8_t };
-        }
+        tab.st_isu[i as usize] = mb_isupper(i);
+        tab.st_isw[i as usize] = tab.st_isu[i as usize] || mb_islower(i);
+        // The folded and upper-cased values of 0xb5 differ between latin1
+        // and utf-8, which used to raise E763 for no good reason. Keep the
+        // latin1 answer for both.
+        tab.st_fold[i as usize] = if f < 256 { f as uint8_t } else { i as uint8_t };
+        tab.st_upper[i as usize] = if u < 256 { u as uint8_t } else { i as uint8_t };
     }
+    spelltab.set(tab);
 }
 
 /// Whether `p` points at a word character.
@@ -119,7 +149,7 @@ pub unsafe fn spell_iswordp(p: *const c_char, wp: *const win_T) -> bool {
         if c > 255 {
             return spell_mb_isword_class(mb_get_class(s), wp);
         }
-        (*spelltab.ptr()).st_isw[c as usize]
+        spelltab_isw(c as usize)
     }
 }
 
@@ -130,7 +160,7 @@ pub unsafe fn spell_iswordp_nmw(p: *const c_char, wp: *const win_T) -> bool {
         if c > 255 {
             return spell_mb_isword_class(mb_get_class(p), wp);
         }
-        (*spelltab.ptr()).st_isw[c as usize]
+        spelltab_isw(c as usize)
     }
 }
 
@@ -162,7 +192,7 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], wp: *const win_T) -> bool {
         if c > 255 {
             return spell_mb_isword_class(utf_class(c), wp);
         }
-        (*spelltab.ptr()).st_isw[c as usize]
+        spelltab_isw(c as usize)
     }
 }
 
@@ -204,7 +234,7 @@ pub unsafe fn spell_casefold(
             } else if c >= 128 {
                 c = utf_fold(c);
             } else {
-                c = (*spelltab.ptr()).st_fold[c as usize] as c_int;
+                c = spelltab_fold(c as usize) as c_int;
             }
             outi += utf_char2bytes(c, buf.offset(outi as isize));
         }
@@ -267,25 +297,21 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> c_int {
 
 /// Whether `c` is upper case, by the spell table below 128 and by the
 /// general rules above it.
-unsafe fn is_upper(c: c_int) -> bool {
-    unsafe {
-        if c >= 128 {
-            mb_isupper(c)
-        } else {
-            (*spelltab.ptr()).st_isu[c as usize]
-        }
+fn is_upper(c: c_int) -> bool {
+    if c >= 128 {
+        mb_isupper(c)
+    } else {
+        spelltab_isu(c as usize)
     }
 }
 
 /// The upper-case form of `c`, by the spell table below 128 and the
 /// general rules above it.
-pub(super) unsafe fn spell_toupper(c: c_int) -> c_int {
-    unsafe {
-        if c >= 128 {
-            mb_toupper(c)
-        } else {
-            (*spelltab.ptr()).st_upper[c as usize] as c_int
-        }
+pub(super) fn spell_toupper(c: c_int) -> c_int {
+    if c >= 128 {
+        mb_toupper(c)
+    } else {
+        spelltab_upper(c as usize) as c_int
     }
 }
 
@@ -299,12 +325,12 @@ pub unsafe fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) 
             if c >= 128 {
                 mb_toupper(c)
             } else {
-                (*spelltab.ptr()).st_upper[c as usize] as c_int
+                spelltab_upper(c as usize) as c_int
             }
         } else if c >= 128 {
             utf_fold(c)
         } else {
-            (*spelltab.ptr()).st_fold[c as usize] as c_int
+            spelltab_fold(c as usize) as c_int
         };
         let l = utf_char2bytes(c, wcopy);
         xstrlcpy(wcopy.offset(l as isize), p, MAXWLEN - l as usize);
@@ -331,7 +357,7 @@ pub unsafe fn allcap_copy(word: *const c_char, wcopy: *mut c_char) {
             } else if c >= 128 {
                 c = mb_toupper(c);
             } else {
-                c = (*spelltab.ptr()).st_upper[c as usize] as c_int;
+                c = spelltab_upper(c as usize) as c_int;
             }
 
             if d.offset_from(wcopy) >= MAXWLEN as isize - MB_MAXBYTES as isize {

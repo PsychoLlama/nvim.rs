@@ -41,7 +41,7 @@ use crate::mbyte::utf_char2bytes;
 use crate::message::emsg;
 use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
-use crate::spell::spelltab;
+use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
 use crate::types::{FILE, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
 use ::libc::{fclose, fputc, fwrite, qsort, strcmp, strlen, time};
 
@@ -232,20 +232,18 @@ unsafe fn put_charflags(w: &mut SplWriter, spin: &spellinfo_T) {
         let mut folchars: [c_char; 1024] = [0; 1024];
         let mut folen = 0usize;
         for i in 128..256 {
-            folen += utf_char2bytes(
-                (*spelltab.ptr()).st_fold[i] as c_int,
-                folchars.as_mut_ptr().add(folen),
-            ) as usize;
+            folen += utf_char2bytes(spelltab_fold(i) as c_int, folchars.as_mut_ptr().add(folen))
+                as usize;
         }
 
         w.section(SN_CHARFLAGS as c_int, SNF_REQUIRED, 1 + 128 + 2 + folen);
         fputc(128, w.fd);
         for i in 128..256 {
             let mut flags = 0;
-            if (*spelltab.ptr()).st_isw[i] {
+            if spelltab_isw(i) {
                 flags |= CF_WORD as c_int;
             }
-            if (*spelltab.ptr()).st_isu[i] {
+            if spelltab_isu(i) {
                 flags |= CF_UPPER as c_int;
             }
             fputc(flags, w.fd);

@@ -28,7 +28,7 @@ use crate::hashtab::{hash_add, hash_find, hash_removed};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
 use crate::os::cshim::{gettext, snprintf};
-use crate::spell::{onecap_copy, spelltab};
+use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
 use ::libc::{atoi, strcmp, strcpy, strlen};
@@ -277,7 +277,7 @@ pub(super) unsafe fn postpone_prefix(
             let c_up = if c >= 128 {
                 mb_toupper(c)
             } else {
-                (*spelltab.ptr()).st_upper[c as usize] as c_int
+                spelltab_upper(c as usize) as c_int
             };
             if c_up != c && ((*entry).ae_cond.is_null() || utf_ptr2char((*entry).ae_cond) == c) {
                 // Step back to the last character of what is added.
