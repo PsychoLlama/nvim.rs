@@ -20,10 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::global_cell::GlobalCell;
-use crate::types::{
-    AlignTextPos, CharsOption, OptValType, WinSplit, WinStyle, fcs_chars_T, lcs_chars_T, schar_T,
-};
+use crate::types::{AlignTextPos, CharsOption, OptValType, WinSplit, WinStyle};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
@@ -115,45 +112,4 @@ pub(crate) const e_conflicts_with_value_of_listchars: &CStr =
 /// "E835: Conflicts with value of 'fillchars'", as above.
 pub(crate) const e_conflicts_with_value_of_fillchars: &CStr =
     c"E835: Conflicts with value of 'fillchars'";
-static fcs_chars: GlobalCell<fcs_chars_T> = GlobalCell::new(fcs_chars_T {
-    stl: 0,
-    stlnc: 0,
-    wbr: 0,
-    horiz: 0,
-    horizup: 0,
-    horizdown: 0,
-    vert: 0,
-    vertleft: 0,
-    vertright: 0,
-    verthoriz: 0,
-    fold: 0,
-    foldopen: 0,
-    foldclosed: 0,
-    foldsep: 0,
-    foldinner: 0,
-    diff: 0,
-    msgsep: 0,
-    eob: 0,
-    lastline: 0,
-    trunc: 0,
-    truncrl: 0,
-});
-static lcs_chars: GlobalCell<lcs_chars_T> = GlobalCell::new(lcs_chars_T {
-    eol: 0,
-    ext: 0,
-    prec: 0,
-    nbsp: 0,
-    space: 0,
-    tab1: 0,
-    tab2: 0,
-    tab3: 0,
-    leadtab1: 0,
-    leadtab2: 0,
-    leadtab3: 0,
-    lead: 0,
-    trail: 0,
-    multispace: ::core::ptr::null_mut::<schar_T>(),
-    leadmultispace: ::core::ptr::null_mut::<schar_T>(),
-    conceal: 0,
-});
 pub const INT_MAX: c_int = 2147483647;

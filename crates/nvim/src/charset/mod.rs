@@ -975,9 +975,5 @@ unsafe fn copy_unescaped(mut src: Bytes, dst: *mut c_char) {
 
 /// Whether a line may be broken before `c`, per the 'breakat' option.
 pub fn vim_isbreak(c: c_int) -> bool {
-    // SAFETY: the cell holds a live 256-byte array indexed by a byte. Read
-    // raw rather than through `with`, whose debug-build borrow tracking is
-    // far more expensive than the load: 'linebreak' asks this once per
-    // character of every drawn line.
-    unsafe { (*breakat_flags.ptr())[c as uint8_t as usize] != 0 }
+    breakat_flags.get().has(c as uint8_t)
 }

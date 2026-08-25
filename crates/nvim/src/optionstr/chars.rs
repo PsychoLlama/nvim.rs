@@ -29,7 +29,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
-use core::ptr;
+use core::{ptr, slice};
 
 use crate::charset::{char2cells, hexhex2nr, ptr2cells};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -50,8 +50,54 @@ use crate::types::{
 
 use super::{
     clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
-    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, fcs_chars,
-    kFillchars, kListchars, lcs_chars,
+    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
+    kListchars,
+};
+
+/// A 'fillchars' struct with every field blank -- what the assignment round
+/// starts from, before the defaults and then the value fill it in.
+const NO_FILL_CHARS: fcs_chars_T = fcs_chars_T {
+    stl: 0,
+    stlnc: 0,
+    wbr: 0,
+    horiz: 0,
+    horizup: 0,
+    horizdown: 0,
+    vert: 0,
+    vertleft: 0,
+    vertright: 0,
+    verthoriz: 0,
+    fold: 0,
+    foldopen: 0,
+    foldclosed: 0,
+    foldsep: 0,
+    foldinner: 0,
+    diff: 0,
+    msgsep: 0,
+    eob: 0,
+    lastline: 0,
+    trunc: 0,
+    truncrl: 0,
+};
+
+/// A 'listchars' struct with every field blank, owning no runs.
+const NO_LIST_CHARS: lcs_chars_T = lcs_chars_T {
+    eol: 0,
+    ext: 0,
+    prec: 0,
+    nbsp: 0,
+    space: 0,
+    tab1: 0,
+    tab2: 0,
+    tab3: 0,
+    leadtab1: 0,
+    leadtab2: 0,
+    leadtab3: 0,
+    lead: 0,
+    trail: 0,
+    multispace: ::core::ptr::null_mut::<schar_T>(),
+    leadmultispace: ::core::ptr::null_mut::<schar_T>(),
+    conceal: 0,
 };
 
 /// What a field does with the characters it is given, beyond the one
@@ -317,13 +363,20 @@ unsafe fn field_value_err(
     errbuf
 }
 
-/// The character struct the fields of `what` write into, as raw bytes.
-fn chars_base(what: CharsOption) -> *mut u8 {
-    if is_listchars(what) {
-        lcs_chars.ptr().cast::<u8>()
-    } else {
-        fcs_chars.ptr().cast::<u8>()
-    }
+/// A character struct as raw bytes, for the fields the table addresses by
+/// `offset_of!` rather than by name.
+///
+/// Derived fresh at each use rather than held: the named fields are written
+/// directly, and a pointer kept across such a write would be stale.
+fn chars_bytes<T>(chars: &mut T) -> &mut [u8] {
+    // SAFETY: any value is readable and writable as its own bytes, and the
+    // exclusive borrow is what keeps this the only way in while it lasts.
+    unsafe { slice::from_raw_parts_mut(ptr::from_mut(chars).cast::<u8>(), size_of::<T>()) }
+}
+
+/// Write `value` into the `schar_T` field at byte offset `slot`.
+fn store_field(chars: &mut [u8], slot: usize, value: schar_T) {
+    chars[slot..slot + size_of::<schar_T>()].copy_from_slice(&value.to_ne_bytes());
 }
 
 /// Set 'fillchars' or 'listchars' for one window.
@@ -364,7 +417,10 @@ pub unsafe fn set_chars_option(
     };
     // SAFETY: an option value is a C string.
     let value = unsafe { CStr::from_ptr(value) };
-    let base = chars_base(what);
+    // The struct this call fills in and, when `apply`, hands to the window.
+    // Only one of the two is ever used; which one is `listchars`.
+    let mut lcs = NO_LIST_CHARS;
+    let mut fcs = NO_FILL_CHARS;
 
     // The offset of the last "multispace:"/"leadmultispace:" field in the
     // value, and how many characters it names. The first round works these
@@ -381,17 +437,19 @@ pub unsafe fn set_chars_option(
         let mut has_leadtab = false;
 
         if round > 0 {
-            unsafe { install_defaults(base, tab) };
             if listchars {
-                // SAFETY: the module's own character struct.
+                install_defaults(chars_bytes(&mut lcs), tab);
+                lcs.tab1 = NUL as schar_T;
+                lcs.tab3 = NUL as schar_T;
+                lcs.leadtab1 = NUL as schar_T;
+                lcs.leadtab3 = NUL as schar_T;
+                // SAFETY: both runs are handed to the window with the struct.
                 unsafe {
-                    (*lcs_chars.ptr()).tab1 = NUL as schar_T;
-                    (*lcs_chars.ptr()).tab3 = NUL as schar_T;
-                    (*lcs_chars.ptr()).leadtab1 = NUL as schar_T;
-                    (*lcs_chars.ptr()).leadtab3 = NUL as schar_T;
-                    (*lcs_chars.ptr()).multispace = alloc_run(multispace_len);
-                    (*lcs_chars.ptr()).leadmultispace = alloc_run(lead_multispace_len);
+                    lcs.multispace = alloc_run(multispace_len);
+                    lcs.leadmultispace = alloc_run(lead_multispace_len);
                 }
+            } else {
+                install_defaults(chars_bytes(&mut fcs), tab);
             }
         }
 
@@ -448,12 +506,10 @@ pub unsafe fn set_chars_option(
                         // Only the last mention of the field fills the run;
                         // any earlier one is walked past and dropped.
                         let fills = *last == Some(p);
-                        let run = unsafe {
-                            if lead {
-                                (*lcs_chars.ptr()).leadmultispace
-                            } else {
-                                (*lcs_chars.ptr()).multispace
-                            }
+                        let run = if lead {
+                            lcs.leadmultispace
+                        } else {
+                            lcs.multispace
                         };
                         let mut into = 0;
                         while !at_field_end(bytes, s) {
@@ -505,23 +561,23 @@ pub unsafe fn set_chars_option(
                         return count_err(field.name);
                     }
                     if round > 0 {
-                        // SAFETY: the slots come from `offset_of!` on the
-                        // struct `base` points at.
-                        unsafe {
-                            match field.shape {
-                                Shape::Tab => {
-                                    (*lcs_chars.ptr()).tab1 = c1;
-                                    (*lcs_chars.ptr()).tab2 = c2;
-                                    (*lcs_chars.ptr()).tab3 = c3;
-                                }
-                                Shape::LeadTab => {
-                                    (*lcs_chars.ptr()).leadtab1 = c1;
-                                    (*lcs_chars.ptr()).leadtab2 = c2;
-                                    (*lcs_chars.ptr()).leadtab3 = c3;
-                                }
-                                _ => {
-                                    if let Some(slot) = field.slot {
-                                        *base.add(slot).cast::<schar_T>() = c1;
+                        match field.shape {
+                            Shape::Tab => {
+                                lcs.tab1 = c1;
+                                lcs.tab2 = c2;
+                                lcs.tab3 = c3;
+                            }
+                            Shape::LeadTab => {
+                                lcs.leadtab1 = c1;
+                                lcs.leadtab2 = c2;
+                                lcs.leadtab3 = c3;
+                            }
+                            _ => {
+                                if let Some(slot) = field.slot {
+                                    if listchars {
+                                        store_field(chars_bytes(&mut lcs), slot, c1);
+                                    } else {
+                                        store_field(chars_bytes(&mut fcs), slot, c1);
                                     }
                                 }
                             }
@@ -543,33 +599,18 @@ pub unsafe fn set_chars_option(
 
     if apply {
         // SAFETY: the caller's window; the two runs it held are this
-        // module's to free, and the new ones are handed over with the
-        // struct.
+        // module's to free, and the new ones move into the struct with it.
         unsafe {
             if listchars {
                 xfree((*wp).w_p_lcs_chars.multispace.cast::<c_void>());
                 xfree((*wp).w_p_lcs_chars.leadmultispace.cast::<c_void>());
-                (*wp).w_p_lcs_chars = take_lcs_chars();
+                (*wp).w_p_lcs_chars = lcs;
             } else {
-                // Nothing in `fcs_chars_T` is owned, so this really is a copy.
-                (*wp).w_p_fcs_chars = fcs_chars.get();
+                (*wp).w_p_fcs_chars = fcs;
             }
         }
     }
     ptr::null()
-}
-
-/// Take the module's scratch 'listchars' struct, leaving it owning neither
-/// of the two "multispace" runs: they belong to the window from here on.
-/// It is a move rather than a copy, which is why `lcs_chars_T` is not
-/// `Copy` and this cannot be a `GlobalCell::get`.
-fn take_lcs_chars() -> lcs_chars_T {
-    lcs_chars.with_mut(|chars| {
-        let taken = chars.clone();
-        chars.multispace = ptr::null_mut();
-        chars.leadmultispace = ptr::null_mut();
-        taken
-    })
 }
 
 /// Does the field named `name` start at `p`? A field name is followed by a
@@ -595,9 +636,8 @@ fn at_end(value: &[u8], at: usize) -> bool {
 /// is not used; the field falls back, and a field with neither ends up
 /// blank.
 ///
-/// # Safety
-/// `base` points at the character struct `tab`'s slots were taken from.
-unsafe fn install_defaults(base: *mut u8, tab: &[Field]) {
+/// `chars` is the character struct `tab`'s slots were taken from, as bytes.
+fn install_defaults(chars: &mut [u8], tab: &[Field]) {
     for field in tab {
         let Some(slot) = field.slot else {
             continue;
@@ -608,9 +648,8 @@ unsafe fn install_defaults(base: *mut u8, tab: &[Field]) {
             .is_some_and(|def| unsafe { ptr2cells(def.as_ptr()) } == 1);
         let text = if narrow { field.def } else { field.fallback };
         let text = text.map_or(ptr::null(), CStr::as_ptr);
-        // SAFETY: the slot is an `offset_of!` into the struct at `base`;
-        // `schar_from_str` accepts a null pointer as "nothing".
-        unsafe { *base.add(slot).cast::<schar_T>() = schar_from_str(text) };
+        // SAFETY: `schar_from_str` accepts a null pointer as "nothing".
+        store_field(chars, slot, unsafe { schar_from_str(text) });
     }
 }
 

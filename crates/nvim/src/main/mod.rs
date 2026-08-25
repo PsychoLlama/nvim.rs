@@ -11,8 +11,8 @@ use crate::options::{
 };
 use crate::profile::time_msg;
 use crate::types::{
-    AdditionalData, Array, Callback, Callback_data, CmdModFlags, DecorState, FILE, Loop, LuaRef,
-    LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
+    AdditionalData, Array, BreakAt, Callback, Callback_data, CmdModFlags, DecorState, FILE, Loop,
+    LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
     UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
@@ -1024,7 +1024,7 @@ pub static bkc_flags: GlobalCell<c_uint> = GlobalCell::new(0);
 pub static p_bdir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_bex: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_bo: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static breakat_flags: GlobalCell<[c_char; 256]> = GlobalCell::new([0; 256]);
+pub(crate) static breakat_flags: GlobalCell<BreakAt> = GlobalCell::new(BreakAt::NONE);
 pub static bo_flags: GlobalCell<c_uint> = GlobalCell::new(0);
 pub static p_bsk: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_breakat: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());

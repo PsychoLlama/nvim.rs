@@ -34,8 +34,8 @@ use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig, buf_T, colnr_T,
-    kErrorTypeNone, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
+    BreakAt, Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig, buf_T,
+    colnr_T, kErrorTypeNone, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
 use ::libc::strcmp;
@@ -43,10 +43,11 @@ use ::libc::strcmp;
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
-    check_chars_options, check_signcolumn, check_str_opt, check_string_option,
-    did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
-    e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,
-    kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
+    check_chars_options, check_signcolumn, check_str_opt, did_set_option_listflag,
+    did_set_statustabline_rulerformat, did_set_str_generic,
+    e_showbreak_contains_unprintable_or_wide_character, empty_option, free_string_option,
+    kAlignLeft, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_mask,
+    terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
 use crate::normal::visual_active;
@@ -117,7 +118,11 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
             } else {
                 c"light".as_ptr()
             }));
-            check_string_option(p_bg.ptr());
+            // `check_string_option` for a cell: `xstrdup` never answers
+            // null, but upstream guards anyway.
+            if p_bg.get().is_null() {
+                p_bg.set(empty_option());
+            }
             init_highlight(false, false);
         }
     }
@@ -142,16 +147,15 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_breakat(_args: *mut optset_T) -> *const c_char {
-    // SAFETY: the module's own lookup table and option variable.
-    unsafe {
-        (*breakat_flags.ptr()) = [0 as c_char; 256];
-        let value = p_breakat.get();
-        if !value.is_null() {
-            for &byte in CStr::from_ptr(value).to_bytes() {
-                (*breakat_flags.ptr())[byte as usize] = 1;
-            }
+    let value = p_breakat.get();
+    let mut chars = BreakAt::NONE;
+    if !value.is_null() {
+        // SAFETY: the option's own value is a C string.
+        for &byte in unsafe { CStr::from_ptr(value) }.to_bytes() {
+            chars.insert(byte);
         }
     }
+    breakat_flags.set(chars);
     ptr::null()
 }
 
