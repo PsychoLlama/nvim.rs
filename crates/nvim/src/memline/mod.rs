@@ -30,8 +30,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    NameBuff, allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout,
-    got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
+    allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout, got_int,
+    inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
     need_wait_return, no_lines_msg, p_dir, p_shm, p_uc, p_verbose, recoverymode,
     swap_exists_action,
 };

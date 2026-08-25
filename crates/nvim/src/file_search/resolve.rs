@@ -26,8 +26,6 @@ use core::{ptr, slice};
 /// `Can't find file "<file>" in path`; on repeating calls,
 /// `No more file "<file>" found in path`.
 ///
-/// Uses `NameBuff`.
-///
 /// @param ptr  file name
 /// @param len  length of file name
 /// @param first  use count'th matching file name
@@ -66,8 +64,6 @@ pub(crate) unsafe fn find_file_in_path(
 /// options:
 /// - `FileNameOpts::MESS`   give error message when not found
 /// - `FileNameOpts::UNESC`  unescape backslashes
-///
-/// Uses `NameBuff`.
 ///
 /// @param ptr  file name
 /// @param len  length of file name
@@ -110,12 +106,13 @@ unsafe fn prepare_name(
     options: FileNameOpts,
     file_to_find: *mut *mut c_char,
 ) {
+    let mut expanded = [0 as c_char; MAXPATHL as usize];
     unsafe {
         // expand_env_esc wants a NUL-terminated name, and the caller's is a
         // slice of a longer line.
         let save_char = *ptr.add(len);
         *ptr.add(len) = 0;
-        let name_buff = NameBuff.ptr().cast::<c_char>();
+        let name_buff = expanded.as_mut_ptr();
         let written = expand_env_esc(
             ptr,
             name_buff,
@@ -160,11 +157,16 @@ unsafe fn rel_to_curdir(name: *const c_char) -> bool {
 /// Try `name`, then `name` with each part of `'suffixesadd'` appended, and
 /// answer the first that exists and is of the wanted kind.
 ///
-/// The candidate is built in `NameBuff`, which already holds `name` for
+/// The candidate is built in `name_buff`, which already holds the name for
 /// `namelen` bytes.
-unsafe fn try_suffixes(namelen: size_t, find_what: c_int, suffixes: *mut c_char) -> *mut c_char {
+unsafe fn try_suffixes(
+    name_buff: &mut [c_char; MAXPATHL as usize],
+    namelen: size_t,
+    find_what: c_int,
+    suffixes: *mut c_char,
+) -> *mut c_char {
     unsafe {
-        let name_buff = NameBuff.ptr().cast::<c_char>();
+        let name_buff = name_buff.as_mut_ptr();
         let mut len = namelen;
         let mut suffix = suffixes;
         loop {
@@ -204,12 +206,15 @@ unsafe fn find_without_path(
     rel_fname: *const c_char,
     suffixes: *mut c_char,
 ) -> *mut c_char {
+    // The candidate being tried. Upstream shares `NameBuff` between this
+    // and `try_suffixes`, which appends to it.
+    let mut candidate = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if path_with_url(file_to_find) != 0 {
             return xmemdupz(file_to_find.cast(), file_to_findlen).cast();
         }
 
-        let name_buff = NameBuff.ptr().cast::<c_char>();
+        let name_buff = candidate.as_mut_ptr();
         let rel_fnamelen = if rel_fname.is_null() {
             0
         } else {
@@ -242,7 +247,7 @@ unsafe fn find_without_path(
                 file_to_findlen
             };
 
-            let found = try_suffixes(len, find_what, suffixes);
+            let found = try_suffixes(&mut candidate, len, find_what, suffixes);
             if !found.is_null() {
                 return found;
             }

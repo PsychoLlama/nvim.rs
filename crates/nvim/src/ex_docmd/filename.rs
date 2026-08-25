@@ -32,8 +32,8 @@ use crate::ex_docmd::{
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::main::{
-    NameBuff, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf,
-    current_sctx, e_usingsid, escape_chars, p_gp, p_mp, p_wic,
+    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf, current_sctx,
+    e_usingsid, escape_chars, p_gp, p_mp, p_wic,
 };
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::{emsg, msg_make};
@@ -115,6 +115,9 @@ pub(crate) unsafe fn expand_filename(
     // `eval_vars` answers a static message or the empty marker, never a
     // shared buffer, so the copy below is the whole of what owning it costs.
     let mut msg: *const c_char = ptr::null();
+    // Where the environment variables in a file argument are expanded;
+    // upstream shares `NameBuff`.
+    let mut expanded = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let ea = &mut *eap;
         // A `:vimgrep` pattern is not a file name, so the scan starts after
@@ -220,22 +223,10 @@ pub(crate) unsafe fn expand_filename(
             if !vim_strchr(ea.arg, '$' as c_int).is_null()
                 || !vim_strchr(ea.arg, '~' as c_int).is_null()
             {
-                expand_env_esc(
-                    ea.arg,
-                    NameBuff.ptr() as *mut c_char,
-                    MAXPATHL,
-                    true,
-                    true,
-                    ptr::null_mut(),
-                );
-                has_wildcards = path_has_wildcard(NameBuff.ptr() as *mut c_char);
-                repl_cmdline(
-                    eap,
-                    ea.arg,
-                    strlen(ea.arg),
-                    NameBuff.ptr() as *mut c_char,
-                    cmdlinep,
-                );
+                let out = expanded.as_mut_ptr();
+                expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut());
+                has_wildcards = path_has_wildcard(out);
+                repl_cmdline(eap, ea.arg, strlen(ea.arg), out, cmdlinep);
             }
         }
         if !has_wildcards {

@@ -30,9 +30,6 @@
 //! * [`GridRef`] is the screen grid a line is painted on, and the `paint_*`
 //!   family below is the one-line batch API with its "a batch is in
 //!   progress" obligation discharged once here.
-//! * [`with_name_buff`] hands out the shared `NameBuff` scratch buffer,
-//!   which `get_trans_bufname()` fills and both the tab line and the
-//!   `ext_tabline` event read back.
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
@@ -52,7 +49,7 @@ use crate::grid::{
 };
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
-use crate::main::{NameBuff, hl_attr_active};
+use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
@@ -636,18 +633,6 @@ pub(crate) fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
 pub(crate) fn push(array: &mut Array, value: Object) {
     // SAFETY: the invariant above.
     unsafe { array_add(array, value) };
-}
-
-// ---------------------------------------------------------------------------
-// The shared name scratch
-// ---------------------------------------------------------------------------
-
-/// Run `f` over `NameBuff`, the editor's shared path scratch buffer.
-///
-/// `get_trans_bufname()` fills it and the tab line reads it back, so the two
-/// have to be separate borrows: the fill re-enters here.
-pub(crate) fn with_name_buff<R>(f: impl FnOnce(&mut [c_char; MAXPATHL as usize]) -> R) -> R {
-    NameBuff.with_mut(f)
 }
 
 // ---------------------------------------------------------------------------

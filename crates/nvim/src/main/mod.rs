@@ -903,7 +903,6 @@ pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
 pub(crate) const SEA_QUIT: c_int = 2 as c_int;
 pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
-pub static NameBuff: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
 pub static RedrawingDisabled: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);

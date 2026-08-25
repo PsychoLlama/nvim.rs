@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::siemsg_c;
+use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
@@ -100,6 +101,8 @@ pub(crate) unsafe fn ml_get_buf_impl(
     lnum: linenr_T,
     will_change: bool,
 ) -> *mut c_char {
+    // Where the E316 report's buffer name goes; upstream shares `NameBuff`.
+    let mut name = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if (*buf).b_ml.ml_mfp.is_null() {
             // There are no lines at all.
@@ -137,14 +140,14 @@ pub(crate) unsafe fn ml_get_buf_impl(
             if hp.is_null() {
                 if ml_get_recursive.get() == 0 {
                     ml_get_recursive.set(1);
-                    get_trans_bufname(buf);
-                    shorten_dir(NameBuff.ptr().cast::<c_char>());
+                    get_trans_bufname(buf, &mut name);
+                    shorten_dir(name.as_mut_ptr());
                     // The missing space before "in buffer" is upstream's.
                     siemsg_c!(
                         gettext(c"E316: ml_get: Cannot find line %ldin buffer %d %s".as_ptr()),
                         lnum as int64_t,
                         (*buf).handle,
-                        NameBuff.ptr().cast::<c_char>(),
+                        name.as_ptr(),
                     );
                     ml_get_recursive.set(0);
                 }

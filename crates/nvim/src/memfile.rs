@@ -910,7 +910,7 @@ pub(crate) unsafe fn mf_need_trans(mfp: *mut memfile_T) -> bool {
 /// when this fails, in which case the memfile stays memory-only.
 unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) -> bool {
     unsafe {
-        // `fname` cannot be NameBuff: it has to have been allocated.
+        // `fname` has to have been allocated.
         mf_set_fnames(mfp, fname);
         debug_assert!(!mf_fname(mfp).is_null());
 

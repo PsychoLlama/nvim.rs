@@ -41,10 +41,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    NameBuff, Rows, State, cmd_silent, cmdline_row, curbuf, curwin, debug_backtrace_level,
-    debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg, emsg_silent,
-    ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left, msg_row, msg_scroll,
-    need_wait_return, redir_off,
+    Rows, State, cmd_silent, cmdline_row, curbuf, curwin, debug_backtrace_level, debug_break_level,
+    debug_did_msg, debug_mode, debug_tick, did_emsg, emsg_silent, ex_nesting_level, ex_normal_busy,
+    got_int, ignore_script, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{msg, msg_starthere};
@@ -620,9 +619,10 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
         smsg!(0, "No breakpoints defined");
         return;
     }
-    // The scratch buffer `home_replace` shortens a file name into. Nothing
-    // between the write and the message it feeds touches it.
-    let namebuff = NameBuff.ptr().cast::<c_char>();
+    // Where `home_replace` shortens each file name; upstream shares
+    // `NameBuff`, which the message it feeds writes again.
+    let mut shortened = [0 as c_char; MAXPATHL as usize];
+    let namebuff = shortened.as_mut_ptr();
 
     for i in 0..list.len() {
         // SAFETY: `i` is below `ga_len`; the entry's name is owned and

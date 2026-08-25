@@ -110,6 +110,7 @@ unsafe fn current_window_of(tp: *mut tabpage_T) -> Win {
 unsafe fn ui_ext_tabline_update() {
     let mut arena: Arena = ARENA_EMPTY;
     let arenap = &raw mut arena;
+    let mut name = [0 as c_char; MAXPATHL as usize];
 
     // SAFETY: every list walk, handle read and name copy below is of the
     // editor's own live objects (the caller's promise); the arena outlives
@@ -120,11 +121,11 @@ unsafe fn ui_ext_tabline_update() {
         let mut info = arena_dict(arenap, 2);
         let (handle, cwp) = unsafe { ((*tp).handle as Tabpage, current_window_of(tp)) };
         put(&mut info, c"tab", Object::tabpage(handle));
-        unsafe { get_trans_bufname(cwp.buffer().raw()) };
+        unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_buff_in(arenap) }),
+            Object::string(unsafe { name_in(arenap, &name) }),
         );
         push(&mut tabs, Object::dict(info));
     }
@@ -139,11 +140,11 @@ unsafe fn ui_ext_tabline_update() {
             c"buffer",
             Object::buffer(unsafe { (*buf).handle }),
         );
-        unsafe { get_trans_bufname(buf) };
+        unsafe { get_trans_bufname(buf, &mut name) };
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_buff_in(arenap) }),
+            Object::string(unsafe { name_in(arenap, &name) }),
         );
         push(&mut bufs, Object::dict(info));
     }
@@ -159,16 +160,14 @@ unsafe fn ui_ext_tabline_update() {
     }
 }
 
-/// A copy of `NameBuff`'s contents in `arena`.
+/// A copy of `name` in `arena`.
 ///
 /// # Safety
-/// `arena` must be live for as long as the copy is.
-unsafe fn name_buff_in(arena: *mut Arena) -> String_0 {
-    with_name_buff(|name| {
-        // SAFETY: the caller's promise, and `NameBuff` is NUL-terminated by
-        // whoever last filled it.
-        unsafe { arena_string(arena, cstr_as_string(name.as_mut_ptr())) }
-    })
+/// `arena` must be live for as long as the copy is, and `name` must be
+/// NUL-terminated.
+unsafe fn name_in(arena: *mut Arena, name: &[c_char; MAXPATHL as usize]) -> String_0 {
+    // SAFETY: the caller's promise.
+    unsafe { arena_string(arena, cstr_as_string(name.as_ptr())) }
 }
 
 /// Draw the tab pages line at the top of the editor.
@@ -219,6 +218,7 @@ pub unsafe fn draw_tabline() {
 /// # Safety
 /// The editor's tab page and window lists must be live.
 unsafe fn draw_default_tabline() {
+    let mut name = [0 as c_char; MAXPATHL as usize];
     let attr_nosel = hl_attr(HLF_TP);
     let attr_fill = hl_attr(HLF_TPF);
     // Without colours the tabs are separated by `|` and underlined with `_`.
@@ -295,8 +295,8 @@ unsafe fn draw_default_tabline() {
         let room = scol - col + tabwidth - 1;
         if room > 0 {
             // SAFETY: a live window's buffer.
-            unsafe { get_trans_bufname(cwp.buffer().raw()) };
-            col += paint_bufname(col, room, attr);
+            unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
+            col += paint_bufname(col, room, attr, &mut name);
         }
         paint_schar(col, schar_from_ascii(b' '), attr);
         col += 1;
@@ -329,48 +329,50 @@ unsafe fn draw_default_tabline() {
 /// Draw the window count of a tab page, answering how many cells it took --
 /// or `None` when it does not fit, which ends the whole line.
 fn paint_wincount(col: c_int, wincount: c_int, attr: c_int, cwp: Win) -> Option<c_int> {
-    with_name_buff(|name| {
-        let (out, room, fmt) = (name.as_mut_ptr(), MAXPATHL as size_t, c"%d".as_ptr());
-        // SAFETY: `NameBuff` is `MAXPATHL` bytes and the format takes
-        // exactly the one integer.
-        let len = unsafe { vim_snprintf(out, room, fmt, wincount) };
-        if col + len >= Columns.get() - 3 {
-            return None;
-        }
-        paint_text(
-            col,
-            &name[..len as usize],
-            combine_attr(attr, win_hl(cwp, HLF_T)),
-        );
-        Some(len)
-    })
+    let mut name = [0 as c_char; MAXPATHL as usize];
+    let (out, room, fmt) = (name.as_mut_ptr(), MAXPATHL as size_t, c"%d".as_ptr());
+    // SAFETY: `name` is `MAXPATHL` bytes and the format takes exactly the
+    // one integer.
+    let len = unsafe { vim_snprintf(out, room, fmt, wincount) };
+    if col + len >= Columns.get() - 3 {
+        return None;
+    }
+    paint_text(
+        col,
+        &name[..len as usize],
+        combine_attr(attr, win_hl(cwp, HLF_T)),
+    );
+    Some(len)
 }
 
-/// Draw the buffer name `get_trans_bufname()` left in `NameBuff`, shortened
-/// to fit in `room` cells, answering how many cells it took.
+/// Draw the buffer name `get_trans_bufname()` left in `name`, shortened to
+/// fit in `room` cells, answering how many cells it took.
 ///
 /// The name is cut from the *front*: what matters about a path is its tail.
-fn paint_bufname(col: c_int, room: c_int, attr: c_int) -> c_int {
-    with_name_buff(|name| {
-        // SAFETY: `NameBuff` holds a NUL-terminated path, and every walk
-        // below stops at that terminator.
-        let mut len = unsafe {
-            shorten_dir(name.as_mut_ptr());
-            vim_strsize(name.as_ptr())
-        };
-        let mut at = 0;
-        while len > room {
-            // SAFETY: `at` is a character boundary inside the path, and the
-            // walk cannot pass the terminator: its width is zero.
-            unsafe {
-                len -= ptr2cells(name[at..].as_ptr());
-                at += utfc_ptr2len(name[at..].as_ptr()) as usize;
-            }
+fn paint_bufname(
+    col: c_int,
+    room: c_int,
+    attr: c_int,
+    name: &mut [c_char; MAXPATHL as usize],
+) -> c_int {
+    // SAFETY: `name` holds a NUL-terminated path, and every walk below
+    // stops at that terminator.
+    let mut len = unsafe {
+        shorten_dir(name.as_mut_ptr());
+        vim_strsize(name.as_ptr())
+    };
+    let mut at = 0;
+    while len > room {
+        // SAFETY: `at` is a character boundary inside the path, and the
+        // walk cannot pass the terminator: its width is zero.
+        unsafe {
+            len -= ptr2cells(name[at..].as_ptr());
+            at += utfc_ptr2len(name[at..].as_ptr()) as usize;
         }
-        // SAFETY: `at` is a character boundary inside the path.
-        paint_cstr(col, unsafe { CStr::from_ptr(name[at..].as_ptr()) }, attr);
-        len.min(Columns.get() - col - 1)
-    })
+    }
+    // SAFETY: `at` is a character boundary inside the path.
+    paint_cstr(col, unsafe { CStr::from_ptr(name[at..].as_ptr()) }, attr);
+    len.min(Columns.get() - col - 1)
 }
 
 /// Draw the `'showcmd'` text at the right-hand end of the tab line.

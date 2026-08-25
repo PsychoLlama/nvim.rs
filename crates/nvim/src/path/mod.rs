@@ -26,7 +26,7 @@ use crate::garray::{
     ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{NameBuff, curbuf, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig};
+use crate::main::{curbuf, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig};
 use crate::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
@@ -585,6 +585,7 @@ unsafe fn path_to_absolute(
 /// `argv0` must be a NUL-terminated string and `buf` writable for `bufsize`
 /// bytes.
 pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize: size_t) {
+    let mut candidate = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let path = os_getenv(c"PATH".as_ptr());
         if path.is_null() || path_is_absolute(argv0) {
@@ -598,8 +599,8 @@ pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize
             xstrlcat(buf, argv0, bufsize);
         } else {
             // Search $PATH for a plausible location.
-            let name = NameBuff.ptr().cast::<c_char>();
-            let size = size_of::<[c_char; MAXPATHL as usize]>();
+            let name = candidate.as_mut_ptr();
+            let size = candidate.len();
             let mut iter: *const core::ffi::c_void = core::ptr::null();
             loop {
                 let mut dir: *const c_char = core::ptr::null();

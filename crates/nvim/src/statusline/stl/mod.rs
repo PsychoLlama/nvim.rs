@@ -177,15 +177,17 @@ impl Env {
     pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
         // SAFETY: a live buffer; `buf_spname` answers a string or null.
         let name = unsafe { buf_spname(self.buf.raw()) };
-        with_name_buff(|nb| {
+        let mut buf = [0 as c_char; MAXPATHL as usize];
+        {
+            let nb = &mut buf;
             if name.is_null() {
                 let path = if full {
                     self.buf.b_ffname
                 } else {
                     self.buf.b_fname
                 };
-                // SAFETY: `NameBuff` is `MAXPATHL` bytes, which is the size
-                // both of these are told about.
+                // SAFETY: `nb` is `MAXPATHL` bytes, which is the size both
+                // of these are told about.
                 unsafe {
                     home_replace(
                         self.buf.raw(),
@@ -201,19 +203,20 @@ impl Env {
             }
             // SAFETY: as above.
             unsafe { trans_characters(nb.as_mut_ptr(), MAXPATHL) };
-        });
-        with_name_buff(|nb| {
+        }
+        {
+            let nb = &mut buf;
             let bytes = cstr::in_chars(nb).to_bytes();
             let from = if tail {
-                // SAFETY: `NameBuff` was just NUL-terminated by the fill
-                // above; `path_tail` answers a position inside it.
+                // SAFETY: `nb` was just NUL-terminated by the fill above;
+                // `path_tail` answers a position inside it.
                 let p = unsafe { path_tail(nb.as_ptr()) };
                 (p as usize).saturating_sub(nb.as_ptr() as usize)
             } else {
                 0
             };
             text.extend_from_slice(&bytes[from.min(bytes.len())..]);
-        });
+        }
     }
 
     /// The byte offset of the cursor line, for `%o`/`%O`.

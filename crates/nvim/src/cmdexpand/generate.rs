@@ -11,11 +11,12 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
+use crate::syntax::EXPAND_BUF_LEN;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::types::{
-    ArrayBuf, BackslashEscape, ExpandContext, FAIL, MAXPATHL, OK, kErrorTypeNone, static_cstring,
+    ArrayBuf, BackslashEscape, ExpandContext, FAIL, OK, kErrorTypeNone, static_cstring,
 };
 
 /// Expand a file or directory pattern.
@@ -150,23 +151,19 @@ pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 
 /// The sourced scripts, for `":scriptnames"`.
 ///
-/// Answers a pointer into the shared `NameBuff`, so the caller must copy it
-/// before asking for the next one — which `expand_generic` does.
-pub(crate) unsafe fn get_scriptnames_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+/// Answers a pointer into the expansion context's own scratch, so the
+/// caller must copy it before asking for the next one — which
+/// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
+pub(crate) unsafe fn get_scriptnames_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         let sid = idx + 1;
         if !script_id_valid(sid) {
             return ptr::null_mut();
         }
         let si = script_item(sid);
-        home_replace(
-            ptr::null::<buf_T>(),
-            (*si).sn_name,
-            NameBuff.ptr() as *mut c_char,
-            MAXPATHL as size_t,
-            true,
-        );
-        NameBuff.ptr() as *mut c_char
+        let (out, room) = ((*xp).xp_buf.as_mut_ptr(), EXPAND_BUF_LEN as size_t);
+        home_replace(ptr::null::<buf_T>(), (*si).sn_name, out, room, true);
+        out
     }
 }
 

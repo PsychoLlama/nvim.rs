@@ -139,7 +139,7 @@ pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: upd_block0_T) {
 /// Write the file's name, timestamp and inode into block zero, and set
 /// `buf->b_mtime` from the same `stat`.
 ///
-/// Must not use `NameBuff`: it is in use by some of the callers.
+/// Must not use the caller's name buffer: some of them still hold it.
 pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     unsafe {
         if (*buf).b_ffname.is_null() {
@@ -456,6 +456,9 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
 ///
 /// Also publishes [`proc_running`], which the dialog below reads.
 pub(crate) unsafe fn swapfile_is_for_other_file(buf: *mut buf_T, fname: *mut c_char) -> bool {
+    // The expanded name out of block zero; upstream shares `NameBuff`, and
+    // `set_b0_fname` above documents that its callers hold it.
+    let mut expanded = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let mut differ = false;
         if let Ok(mut b0) = ZeroBlock::read(fname) {
@@ -471,12 +474,9 @@ pub(crate) unsafe fn swapfile_is_for_other_file(buf: *mut buf_T, fname: *mut c_c
                 // The name in the swap file may be "~user/path/file".
                 // Symlinks can point at the same file under two names, so the
                 // inode has the last word.
-                expand_env(b0.b0_fname.as_mut_ptr(), NameBuff.ptr().cast(), MAXPATHL);
-                differ = files_differ(
-                    (*buf).b_ffname,
-                    NameBuff.ptr().cast(),
-                    b0_read_number(&b0.b0_ino),
-                );
+                expand_env(b0.b0_fname.as_mut_ptr(), expanded.as_mut_ptr(), MAXPATHL);
+                let (name, ino) = (expanded.as_mut_ptr(), b0_read_number(&b0.b0_ino));
+                differ = files_differ((*buf).b_ffname, name, ino);
             }
         }
         differ

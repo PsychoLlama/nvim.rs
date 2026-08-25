@@ -26,6 +26,9 @@ pub(crate) unsafe fn script_at(at: c_int) -> *mut FileDescriptor {
 /// # Safety
 /// `name` must point at a NUL-terminated file name.
 pub unsafe fn openscript(name: *mut c_char, directly: bool) {
+    // The expanded name; upstream shares `NameBuff`, which the error path
+    // below reaches the message machinery through.
+    let mut expanded = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if curscript.get() + 1 == NSCRIPT as c_int {
             emsg(gettext(&raw const e_nesting as *const c_char));
@@ -42,11 +45,10 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         }
 
         curscript.set(curscript.get() + 1);
-        // NameBuff is the scratch space for the expanded name.
-        expand_env(name, NameBuff.ptr().cast(), MAXPATHL);
+        expand_env(name, expanded.as_mut_ptr(), MAXPATHL);
         let error = file_open(
             script_at(curscript.get()),
-            NameBuff.ptr().cast(),
+            expanded.as_ptr(),
             kFileReadOnly as c_int,
             0,
         );

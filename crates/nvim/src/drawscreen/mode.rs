@@ -43,6 +43,9 @@ pub unsafe fn skip_showmode() -> bool {
 /// `redraw_mode` asks for the mode to be shown or taken away even when there is
 /// none to show.
 pub unsafe fn showmode() -> c_int {
+    // Where the keymap name is wrapped in parentheses; upstream shares
+    // `NameBuff`, which the message machinery writes again.
+    let mut keymap = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the message layer on the main thread; every pointer read below is
     // a global the editor keeps live.
     unsafe {
@@ -157,7 +160,7 @@ pub unsafe fn showmode() -> c_int {
                         if (*curwin.get()).w_onebuf_opt.wo_arab != 0 {
                             put_translated(c" Arabic");
                         } else if let Some(keymap_name) = keymap_str(curwin.get()) {
-                            let buf = NameBuff.ptr().cast::<c_char>();
+                            let buf = keymap.as_mut_ptr();
                             let plen = vim_snprintf(
                                 buf,
                                 MAXPATHL as size_t,

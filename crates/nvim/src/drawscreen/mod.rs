@@ -36,7 +36,7 @@ use crate::highlight_group::{
 };
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
-    Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, clear_cmdline, cmdline_row,
+    Columns, KeyTyped, RedrawingDisabled, Rows, State, clear_cmdline, cmdline_row,
     cmdline_was_last_drawn, curbuf, curtab, curwin, display_tick, do_redraw, dollar_vcol, dy_flags,
     edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exiting, exmode_active,
     first_tabpage, firstwin, global_busy, got_int, hl_attr_active, lines_left, mode_displayed,

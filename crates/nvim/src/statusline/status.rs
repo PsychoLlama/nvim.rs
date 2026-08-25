@@ -109,26 +109,27 @@ pub unsafe fn stl_connected(wp: *mut win_T) -> bool {
     false
 }
 
-/// Put the displayable name of `buf` in `NameBuff`: its special name if it
-/// has one, else its file name with `$HOME` folded back to `~`, with the
+/// Put the displayable name of `buf` in `name`: its special name if it has
+/// one, else its file name with `$HOME` folded back to `~`, with the
 /// unprintable characters replaced by their display forms.
+///
+/// Upstream fills the shared `NameBuff` and leaves the readers to find it
+/// there, which is why the fill and each read had to be separate borrows.
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn get_trans_bufname(buf: *mut buf_T) {
+pub(crate) unsafe fn get_trans_bufname(buf: *mut buf_T, name: &mut [c_char; MAXPATHL as usize]) {
     // SAFETY: the caller's promise.
     let spname = unsafe { buf_spname(buf) };
-    with_name_buff(|name| {
-        let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
-        // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes,
-        // which each of the three writes below is told.
-        unsafe {
-            if spname.is_null() {
-                home_replace(buf, (*buf).b_fname, out, room, true);
-            } else {
-                xstrlcpy(out, spname, room);
-            }
-            trans_characters(out, MAXPATHL);
+    let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
+    // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes, which
+    // each of the three writes below is told.
+    unsafe {
+        if spname.is_null() {
+            home_replace(buf, (*buf).b_fname, out, room, true);
+        } else {
+            xstrlcpy(out, spname, room);
         }
-    });
+        trans_characters(out, MAXPATHL);
+    }
 }
