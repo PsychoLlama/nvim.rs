@@ -19,7 +19,6 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{bt_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::global_cell::GlobalCell;
 use crate::main::listcmd_busy;
 use crate::message::emsg;
 use crate::pos::{MAXCOL, lt};
@@ -359,11 +358,15 @@ pub unsafe fn getnextmark(startpos: *mut pos_T, dir: c_int, begin_line: c_int) -
 /// `fm` must be null or point at a live `fmark_T`, and the editor's globals
 /// must be live.
 pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes {
-    /// The mark being jumped to, copied out before the buffer switch: loading
-    /// another file can free the store `fm` points into (a jumplist entry, a
-    /// global slot whose buffer is wiped), and the position is still needed
-    /// afterwards.
-    static IN_FLIGHT: GlobalCell<fmark_T> = GlobalCell::new(UNSET_FMARK);
+    // The mark being jumped to, copied out before the buffer switch: loading
+    // another file can free the store `fm` points into (a jumplist entry, a
+    // global slot whose buffer is wiped), and the position is still needed
+    // afterwards.
+    //
+    // This frame's own, not a `static` as the C has it: the file the switch
+    // loads runs autocommands, and one of those jumping to a mark of its own
+    // would otherwise overwrite the copy this call is still holding.
+    let mut in_flight = UNSET_FMARK;
 
     let mut errormsg = None;
     // SAFETY: the caller promised a live record or null.
@@ -380,9 +383,9 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     let (mark, buf) = unsafe { (Fmark::new(fm), Buf::current()) };
     let mut res: MarkMoveRes = kMarkMoveSuccess;
     if mark.fnum() != buf.handle {
-        IN_FLIGHT.set(mark.read());
-        fm = IN_FLIGHT.ptr();
-        // SAFETY: `IN_FLIGHT` is a live record for the whole run.
+        in_flight = mark.read();
+        fm = &raw mut in_flight;
+        // SAFETY: `in_flight` outlives every use of `fm` below.
         res |= unsafe { switch_to_mark_buf(fm, flags as c_uint & kMarkJumpList as c_uint == 0) };
         if res & kMarkMoveFailed != 0 {
             return res;
@@ -404,7 +407,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
 
     // SAFETY: `curwin` is live from startup to exit.
     let mut win = unsafe { Win::current() };
-    // SAFETY: `fm` is either the caller's live record or the static.
+    // SAFETY: `fm` is either the caller's live record or `in_flight`.
     let pos = unsafe { Fmark::new(fm) }.pos();
     let prev_pos = win.w_cursor;
     win.w_cursor = pos;
