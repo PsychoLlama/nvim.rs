@@ -19,8 +19,8 @@
 
 use crate::global_cell::GlobalCell;
 use crate::types::{
-    MarkGet, buf_T, colnr_T, garray_T, int16_t, int64_t, linenr_T, lpos_T, magic_T, proftime_T,
-    regengine, regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
+    MarkGet, buf_T, colnr_T, int16_t, int64_t, linenr_T, lpos_T, magic_T, proftime_T, regengine,
+    regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -400,12 +400,6 @@ pub(crate) struct regbehind_S {
     pub save_start: [MatchPos; 10],
     pub save_end: [MatchPos; 10],
 }
-pub(crate) type backpos_T = backpos_S;
-#[derive(Copy, Clone)]
-pub(crate) struct backpos_S {
-    pub bp_scan: *mut uint8_t,
-    pub bp_pos: SavedInput,
-}
 pub const BACKTRACKING_ENGINE: c_uint = 1;
 pub const NFA_ENGINE: c_uint = 2;
 pub const INT32_MAX: c_int = 2147483647;
@@ -413,13 +407,6 @@ pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 1,
-    ga_data: core::ptr::null_mut(),
-};
 pub const REGMAGIC: c_int = 0o234;
 pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =
@@ -602,12 +589,8 @@ static regcode: GlobalCell<*mut uint8_t> = GlobalCell::new(core::ptr::null_mut::
 static regsize: GlobalCell<int64_t> = GlobalCell::new(0);
 static reg_toolong: GlobalCell<c_int> = GlobalCell::new(0);
 static had_endbrace: GlobalCell<[uint8_t; 10]> = GlobalCell::new([0; 10]);
-static brace_min: GlobalCell<[int64_t; 10]> = GlobalCell::new([0; 10]);
-static brace_max: GlobalCell<[int64_t; 10]> = GlobalCell::new([0; 10]);
-static brace_count: GlobalCell<[c_int; 10]> = GlobalCell::new([0; 10]);
 static one_exactly: GlobalCell<c_int> = GlobalCell::new(0);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
-static backpos: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 static behind_pos: GlobalCell<SavedInput> = GlobalCell::new(SavedInput::NOWHERE);
 pub const REGSTACK_INITIAL: c_int = 2048;
 pub const BACKPOS_INITIAL: c_int = 64;

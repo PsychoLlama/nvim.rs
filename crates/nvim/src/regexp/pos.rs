@@ -46,8 +46,6 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::c_int;
-
 use crate::types::{lpos_T, uint8_t};
 
 /// Which shape a match records positions in. Fixed for the whole of one
@@ -247,7 +245,7 @@ impl Capture {
 #[derive(Clone, Copy)]
 pub(crate) struct SavedInput {
     pub(crate) pos: MatchPos,
-    pub(crate) backpos_len: c_int,
+    pub(crate) backpos_len: usize,
 }
 
 impl SavedInput {

@@ -17,8 +17,7 @@ use core::ffi::{c_char, c_int};
 
 use super::compile::BtProg;
 use super::matcher::regmatch;
-use super::state::{capture_slot, regstack};
-use crate::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
+use super::state::{BT_STATE, capture_slot};
 use crate::main::{e_null, got_int, re_extmatch_out};
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
@@ -26,10 +25,10 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    BACKPOS_INITIAL, MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN,
-    Rex, backpos, backpos_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec,
-    init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline,
-    reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, unref_extmatch,
+    MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
+    cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
+    make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline, reg_startzp,
+    reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
@@ -173,39 +172,21 @@ unsafe fn aim_at_capture_arrays(rex: Rex, line: *mut uint8_t) -> *mut uint8_t {
     }
 }
 
-/// The loop back-edge record is kept between calls, so that an ordinary match
-/// never allocates. `bt_regexec_both` is not re-entered: nothing the matcher
-/// runs calls back into the editor. The saved-state stack does the same for
-/// itself, in `RegStack`.
-fn open_backpos() {
-    // SAFETY: `backpos` is this engine's own garray, live for the process.
-    unsafe {
-        if (*backpos.ptr()).ga_data.is_null() {
-            ga_init(
-                backpos.ptr(),
-                size_of::<backpos_T>() as c_int,
-                BACKPOS_INITIAL,
-            );
-            ga_grow(backpos.ptr(), BACKPOS_INITIAL);
-            ga_set_growsize(backpos.ptr(), BACKPOS_INITIAL * 8);
-        }
-    }
-}
-
 /// Hand back what a pathological pattern made the working set grow to.
+///
+/// The buffers themselves are kept between calls, so that an ordinary match
+/// never allocates; only a run that grew them past what is worth keeping
+/// gives them back. `bt_regexec_both` is not re-entered — nothing the matcher
+/// runs calls back into the editor — so one set of them is enough.
 fn trim_working_set() {
     if reg_tofreelen.get() > REG_TOFREE_KEEP {
         // SAFETY: `reg_tofree` is this engine's own line copy.
         unsafe { xfree(reg_tofree.get().cast()) };
         reg_tofree.set(core::ptr::null_mut());
     }
-    // SAFETY: the two stacks are this engine's own and no match is running.
-    unsafe {
-        (*regstack.ptr()).trim();
-        if (*backpos.ptr()).ga_maxlen > BACKPOS_INITIAL {
-            ga_clear(backpos.ptr());
-        }
-    }
+    // SAFETY: no match is running, so nothing else holds the state — see
+    // `BT_STATE` for why it is taken raw.
+    unsafe { (*BT_STATE.ptr()).trim() };
 }
 
 /// Match `rex`'s program against `line`, starting at `startcol`.
@@ -218,8 +199,6 @@ fn bt_regexec_both(
     tm: *const proftime_T,
     timed_out: *mut c_int,
 ) -> c_int {
-    open_backpos();
-
     let mut col = startcol;
     // SAFETY: the caller pointed the context at a live match structure.
     let line = unsafe { aim_at_capture_arrays(rex, line) };

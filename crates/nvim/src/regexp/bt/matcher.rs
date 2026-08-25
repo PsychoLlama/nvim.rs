@@ -19,8 +19,7 @@ use core::ffi::{c_char, c_int};
 use super::compile::regnext;
 use super::resume::resume;
 use super::single::match_one;
-use super::state::{RegStack, capture_slot, regstack};
-use crate::garray::ga_append_via_ptr;
+use super::state::{BT_STATE, BackPos, Braces, BtState, RegStack, capture_slot};
 use crate::main::{e_re_corr, got_int};
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::{iemsg, internal_error};
@@ -31,9 +30,9 @@ use crate::regexp::{
     LAST_NL, MATCH, MAX_LIMIT, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, PLUS, RA_BREAK,
     RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE,
     RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT,
-    RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, backpos_T, bl_maxval,
-    bl_minval, brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr,
-    reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture, save_subexpr,
+    RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, bl_maxval, bl_minval, cleanup_subexpr,
+    cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture,
+    save_subexpr,
 };
 use crate::types::{NUL, int16_t, int64_t, proftime_T, uint8_t};
 
@@ -74,19 +73,43 @@ pub(crate) fn regmatch(
     tm: *const proftime_T,
     timed_out: *mut c_int,
 ) -> bool {
-    // SAFETY: `start` is a node in the compiled program and `rex` describes a
-    // match that is set up and running; every pointer below either comes from
-    // the program, from `rex`, or from the two garrays this function owns for
-    // the duration of the call.
+    // The working state is taken once, here, and threaded down by `&mut`:
+    // `reg_save` and `reg_restore` are called far too often to pay for a
+    // borrow each, and the three fields are handed over separately so that
+    // saving *into* the back-edge record does not borrow the whole of it.
+    // SAFETY: nothing the walk runs re-enters the engine, so this call owns
+    // the state until it returns — see `BT_STATE` for why it is taken raw.
+    let bt = unsafe { &mut *BT_STATE.ptr() };
+    bt.begin();
+    let BtState {
+        stack,
+        backpos,
+        braces,
+    } = bt;
+    // SAFETY: `start` is a node in the compiled program and `rex` describes
+    // a match that is set up and running; every pointer below either comes
+    // from the program or from `rex`.
+    unsafe { walk(rex, stack, backpos, braces, start, tm, timed_out) }
+}
+
+/// [`regmatch`]'s loop, with the working state already borrowed.
+///
+/// # Safety
+/// As [`regmatch`].
+unsafe fn walk(
+    rex: Rex,
+    stack: &mut RegStack,
+    backpos: &mut BackPos,
+    braces: &mut Braces,
+    start: *mut uint8_t,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> bool {
+    // SAFETY: the caller promises the program and the match.
     unsafe {
         let mut scan = start;
         let mut tm_count = 0;
         let mut status;
-        // The stack is reserved for this call: nothing the walk below runs
-        // re-enters `regmatch`.
-        let stack = &mut *regstack.ptr();
-        stack.begin();
-        (*backpos.ptr()).ga_len = 0;
 
         loop {
             reg_breakcheck(rex);
@@ -139,7 +162,7 @@ pub(crate) fn regmatch(
                     let c = rex.char_here();
                     status = match match_one(rex, op, scan, next, c) {
                         Some(status) => status,
-                        None => push_frame(rex, stack, op, scan, &mut next),
+                        None => push_frame(rex, stack, backpos, braces, op, scan, &mut next),
                     };
                 }
 
@@ -149,7 +172,7 @@ pub(crate) fn regmatch(
                 scan = next;
             }
 
-            resume(rex, stack, &mut scan, &mut status);
+            resume(rex, stack, backpos, braces, &mut scan, &mut status);
 
             if status == RA_CONT {
                 continue;
@@ -174,6 +197,8 @@ pub(crate) fn regmatch(
 fn push_frame(
     rex: Rex,
     stack: &mut RegStack,
+    backpos: &mut BackPos,
+    braces: &mut Braces,
     op: c_int,
     scan: *mut uint8_t,
     next: &mut *mut uint8_t,
@@ -186,26 +211,11 @@ fn push_frame(
             // A loop's back edge. Coming back to the same node at the same
             // input position means the loop is not making progress.
             BACK => {
-                let seen = || (*backpos.ptr()).ga_data.cast::<backpos_T>();
-                let count = (*backpos.ptr()).ga_len;
-                let mut i = 0;
-                while i < count && (*seen().add(i as usize)).bp_scan != scan {
-                    i += 1;
+                if backpos.stepped(rex, scan) {
+                    RA_CONT
+                } else {
+                    RA_NOMATCH
                 }
-                let mut status = RA_CONT;
-                if i == count {
-                    // Appending can move the array, so `seen` is re-read
-                    // rather than held across the call.
-                    let fresh = ga_append_via_ptr(backpos.ptr(), size_of::<backpos_T>())
-                        .cast::<backpos_T>();
-                    (*fresh).bp_scan = scan;
-                } else if rex.is_at((*seen().add(i as usize)).bp_pos.pos) {
-                    status = RA_NOMATCH;
-                }
-                if status != RA_NOMATCH {
-                    reg_save(rex, &mut (*seen().add(i as usize)).bp_pos, backpos.ptr());
-                }
-                status
             }
 
             // The capture-group boundaries. Each remembers the slot it is
@@ -259,10 +269,10 @@ fn push_frame(
                     bl_maxval.set(operand_u32(scan, 7));
                     RA_CONT
                 } else if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&next_op) {
-                    let no = (next_op - BRACE_COMPLEX) as usize;
-                    (*brace_min.ptr())[no] = operand_u32(scan, 3);
-                    (*brace_max.ptr())[no] = operand_u32(scan, 7);
-                    (*brace_count.ptr())[no] = 0;
+                    let brace = braces.slot((next_op - BRACE_COMPLEX) as usize);
+                    brace.min = operand_u32(scan, 3);
+                    brace.max = operand_u32(scan, 7);
+                    brace.count = 0;
                     RA_CONT
                 } else {
                     internal_error(c"BRACE_LIMITS".as_ptr());
@@ -271,7 +281,7 @@ fn push_frame(
             }
 
             BRACE_COMPLEX..=BRACE_COMPLEX_9 => {
-                brace_complex(rex, stack, op - BRACE_COMPLEX, scan, next)
+                brace_complex(rex, stack, backpos, braces, op - BRACE_COMPLEX, scan, next)
             }
 
             BRACE_SIMPLE | STAR | PLUS => counted_repeat(rex, stack, op, scan),
@@ -283,7 +293,7 @@ fn push_frame(
                     return RA_FAIL;
                 };
                 rp.rs_no = op as int16_t;
-                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+                rp.rs_saved = reg_save(rex, backpos);
                 *next = scan.add(3);
                 RA_CONT
             }
@@ -298,7 +308,7 @@ fn push_frame(
                 let (rp, bp) = stack.top_behind();
                 save_subexpr(rex, bp);
                 rp.rs_no = op as int16_t;
-                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+                rp.rs_saved = reg_save(rex, backpos);
                 RA_CONT
             }
 
@@ -348,17 +358,17 @@ unsafe fn push_capture(
 unsafe fn brace_complex(
     rex: Rex,
     stack: &mut RegStack,
+    backpos: &mut BackPos,
+    braces: &mut Braces,
     no: c_int,
     scan: *mut uint8_t,
     next: &mut *mut uint8_t,
 ) -> c_int {
     // SAFETY: as `push_frame`.
     unsafe {
-        let slot = no as usize;
-        (*brace_count.ptr())[slot] += 1;
-        let count = (*brace_count.ptr())[slot] as int64_t;
-        let min = (*brace_min.ptr())[slot];
-        let max = (*brace_max.ptr())[slot];
+        let brace = braces.slot(no as usize);
+        brace.count += 1;
+        let (count, min, max) = (brace.count, brace.min, brace.max);
         let greedy = min <= max;
 
         // Still below the smaller bound: another pass is mandatory.
@@ -367,7 +377,7 @@ unsafe fn brace_complex(
                 return RA_FAIL;
             };
             rp.rs_no = no as int16_t;
-            reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+            rp.rs_saved = reg_save(rex, backpos);
             *next = scan.add(3);
         } else if greedy {
             // Another pass is allowed; try it, and fall back to stopping.
@@ -376,7 +386,7 @@ unsafe fn brace_complex(
                     return RA_FAIL;
                 };
                 rp.rs_no = no as int16_t;
-                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+                rp.rs_saved = reg_save(rex, backpos);
                 *next = scan.add(3);
             }
         } else if count <= min {
@@ -384,7 +394,7 @@ unsafe fn brace_complex(
             let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
                 return RA_FAIL;
             };
-            reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+            rp.rs_saved = reg_save(rex, backpos);
         }
         RA_CONT
     }

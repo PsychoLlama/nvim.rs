@@ -5,9 +5,15 @@
 //! run rather than from the value — see that type for why.
 //!
 //! [`RegStack`] is the saved-state stack the matcher pushes decisions onto,
-//! and `backpos` the record of where each loop back-edge has already been — a
-//! [`SavedInput`]'s `backpos_len` is the `backpos` length to truncate to, so
+//! and [`BackPos`] the record of where each loop back-edge has already been — a
+//! [`SavedInput`]'s `backpos_len` is the `BackPos` length to put back, so
 //! undoing a decision also forgets the loop positions discovered after it.
+//!
+//! Both are fields of [`BtState`], which the matcher borrows **once per
+//! match** and threads down by `&mut`. That is not tidiness: `reg_save` and
+//! `reg_restore` run millions of times in a regexp-heavy session, and a
+//! `GlobalCell::with_mut` per call is a thread-local lookup and a hash-map
+//! insert per call in a debug build.
 //!
 //! ## Why the stack charges C sizes
 //!
@@ -40,11 +46,11 @@ use crate::main::p_mmp;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP, REGSTACK_INITIAL, RS_MCLOSE,
-    RS_MOPEN, RS_ZOPEN, Rex, SavedInput, reg_endzp, reg_endzpos, reg_getline, reg_startzp,
-    reg_startzpos, regbehind_T, regitem_T, regstar_T, regstate_T,
+    BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,
+    REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, Rex, SavedInput, reg_endzp, reg_endzpos,
+    reg_getline, reg_startzp, reg_startzpos, regbehind_T, regitem_T, regstar_T, regstate_T,
 };
-use crate::types::{garray_T, lpos_T, uint8_t};
+use crate::types::{int64_t, lpos_T, uint8_t};
 
 /// How many `\1`..`\9` slots a match has.
 const NSUBEXP_SLOTS: usize = NSUBEXP as usize;
@@ -71,12 +77,196 @@ const BLANK_BEHIND: regbehind_T = regbehind_T {
 /// made it larger; this is the same threshold counted in frames.
 const KEEP_FRAMES: usize = REGSTACK_INITIAL as usize / size_of::<regitem_T>();
 
-/// The saved-state stack, live for the duration of one `regmatch`.
+/// How many back-edge entries the record keeps between matches, for the same
+/// reason: upstream pre-grew its garray to this and freed it again whenever a
+/// match had made it larger.
+const KEEP_EDGES: usize = BACKPOS_INITIAL as usize;
+
+/// Everything one `regmatch` works in, live for the duration of that call.
 ///
 /// It is a global rather than a local of the match so that an ordinary match
-/// never allocates: the frames a previous one needed are still there. Nothing
-/// the matcher runs re-enters `regmatch`, so one stack is enough.
-pub(crate) static regstack: GlobalCell<RegStack> = GlobalCell::new(RegStack::new());
+/// never allocates: the buffers a previous one needed are still there.
+/// Nothing the matcher runs re-enters `regmatch` — `bt_regexec_both` calls
+/// nothing that calls back into the editor — so one of these is enough, and
+/// [`super::matcher::regmatch`] takes it once and threads its three fields
+/// down separately.
+///
+/// **It is taken raw, not through [`GlobalCell::with_mut`], and that is
+/// measured rather than sloppy.** `regmatch` runs once per start column, so
+/// the debug borrow table's thread-local lookup and hash-map insert land on
+/// it hundreds of thousands of times in a single `:%s`: wrapping the two
+/// entry points in `with_mut` made a regexp-heavy debug workload **3.7×
+/// slower** (2.7 s → 10.2 s). It is the same bargain
+/// [`super::super::rex::Rex::acquire`] makes, for the same reason, and it is
+/// why `reg_save`/`reg_restore` take a `&mut` rather than reaching the cell.
+pub(crate) static BT_STATE: GlobalCell<BtState> = GlobalCell::new(BtState::new());
+
+/// The backtracker's working state for one match.
+pub(crate) struct BtState {
+    /// What the forward walk decided, and how to undo it.
+    pub(crate) stack: RegStack,
+    /// Where each loop back-edge has already been.
+    pub(crate) backpos: BackPos,
+    /// The `\{n,m}` bounds and counters of the complex repeats.
+    pub(crate) braces: Braces,
+}
+
+impl BtState {
+    const fn new() -> BtState {
+        BtState {
+            stack: RegStack::new(),
+            backpos: BackPos::new(),
+            braces: Braces::new(),
+        }
+    }
+
+    /// Start a match with nothing remembered.
+    pub(crate) fn begin(&mut self) {
+        self.stack.begin();
+        self.backpos.begin();
+    }
+
+    /// Hand back what a pathological pattern made the buffers grow to.
+    pub(crate) fn trim(&mut self) {
+        self.stack.trim();
+        self.backpos.trim();
+    }
+}
+
+/// One `BACK` node and the input position the walk last reached it at.
+#[derive(Clone, Copy)]
+struct BackEdge {
+    /// The `BACK` node, which is what identifies the loop.
+    scan: *mut uint8_t,
+    /// Where the input was the last time the walk came round to it.
+    pos: MatchPos,
+}
+
+/// Where each loop back-edge has already been, this match.
+///
+/// A loop that arrives back at its own `BACK` node without the input having
+/// moved cannot do anything the last pass did not, so the match fails there
+/// rather than spinning. That is all these entries are for.
+///
+/// ## Why the buffer is longer than the record
+///
+/// Undoing a decision puts the record back to the length
+/// [`SavedInput::backpos_len`] kept — and that length can be *larger* than
+/// the current one, because a look-behind restores to `save_after` after an
+/// attempt that discovered fewer edges than were live when it was saved.
+/// Upstream is a garray and `ga_len` is a bare cursor, so those entries come
+/// back with whatever they last held. `live` is that cursor and `seen` keeps
+/// what is past it, so they come back here too.
+pub(crate) struct BackPos {
+    /// Every entry written this match, whether or not it is live.
+    seen: Vec<BackEdge>,
+    /// How many of them the record currently holds.
+    live: usize,
+}
+
+impl BackPos {
+    const fn new() -> BackPos {
+        BackPos {
+            seen: Vec::new(),
+            live: 0,
+        }
+    }
+
+    /// Start a match with nothing seen.
+    fn begin(&mut self) {
+        self.live = 0;
+        if self.seen.capacity() < KEEP_EDGES {
+            self.seen.reserve(KEEP_EDGES);
+        }
+    }
+
+    /// Hand back what a pathological pattern made the record grow to.
+    fn trim(&mut self) {
+        if self.seen.capacity() > KEEP_EDGES {
+            self.seen = Vec::new();
+            self.live = 0;
+        }
+    }
+
+    /// How many entries are live — what a [`SavedInput`] remembers.
+    pub(crate) fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Put the record back to the length a [`SavedInput`] remembered.
+    fn rewind(&mut self, len: usize) {
+        debug_assert!(len <= self.seen.len());
+        self.live = len.min(self.seen.len());
+    }
+
+    /// A loop's back edge has come round to `scan`. Records where the input
+    /// is now and reports whether it moved since the last time the walk was
+    /// here — a loop that did not move can only spin, so `false` means the
+    /// match has to fail at this node.
+    pub(crate) fn stepped(&mut self, rex: Rex, scan: *mut uint8_t) -> bool {
+        let found = self.seen[..self.live].iter().position(|e| e.scan == scan);
+        match found {
+            Some(i) if rex.is_at(self.seen[i].pos) => false,
+            Some(i) => {
+                self.seen[i].pos = rex.here();
+                true
+            }
+            None => {
+                let edge = BackEdge {
+                    scan,
+                    pos: rex.here(),
+                };
+                // Past the cursor the buffer still holds an older match's
+                // entries; overwrite one rather than growing.
+                if self.live < self.seen.len() {
+                    self.seen[self.live] = edge;
+                } else {
+                    self.seen.push(edge);
+                }
+                self.live += 1;
+                true
+            }
+        }
+    }
+}
+
+/// One complex `\{n,m}`: the bounds the `BRACE_LIMITS` node in front of it
+/// left, and how many passes the walk has taken.
+#[derive(Clone, Copy)]
+pub(crate) struct Brace {
+    /// The lower bound — the *upper* one when the repeat is non-greedy, which
+    /// is how `\{-n,m}` is spelled in the program.
+    pub(crate) min: int64_t,
+    /// The other bound.
+    pub(crate) max: int64_t,
+    /// Passes taken so far.
+    pub(crate) count: int64_t,
+}
+
+/// The complex repeats' bounds and counters, one per `BRACE_COMPLEX` operand.
+///
+/// The compiler bounds the operand to nine, so ten slots is all there can be.
+pub(crate) struct Braces([Brace; NSUBEXP_SLOTS]);
+
+impl Braces {
+    const fn new() -> Braces {
+        Braces(
+            [Brace {
+                min: 0,
+                max: 0,
+                count: 0,
+            }; NSUBEXP_SLOTS],
+        )
+    }
+
+    /// The slot a `BRACE_COMPLEX` operand names.
+    ///
+    /// # Panics
+    /// If `no` is not an operand the compiler could have emitted.
+    pub(crate) fn slot(&mut self, no: usize) -> &mut Brace {
+        &mut self.0[no]
+    }
+}
 
 pub(crate) struct RegStack {
     /// One frame per decision, innermost last.
@@ -235,24 +425,31 @@ impl RegStack {
     }
 }
 
-/// Record the current input position, and how much of `gap` — always
-/// `backpos` — belongs to it.
-pub(crate) fn reg_save(rex: Rex, save: &mut SavedInput, gap: *mut garray_T) {
-    save.pos = rex.here();
-    // SAFETY: `gap` is the backpos garray of the running match.
-    save.backpos_len = unsafe { (*gap).ga_len };
+/// Where the input is now, and how much of the back-edge record belongs to
+/// that — everything undoing a decision needs to put both back.
+///
+/// This is by value rather than through an out-parameter because the one
+/// caller that saves *into* the record ([`BackPos::stepped`]) would otherwise
+/// be borrowing it twice.
+#[inline(always)]
+pub(crate) fn reg_save(rex: Rex, backpos: &BackPos) -> SavedInput {
+    SavedInput {
+        pos: rex.here(),
+        backpos_len: backpos.len(),
+    }
 }
 
 /// Put the input position back to what [`reg_save`] recorded, refetching the
-/// line if the match has moved off it since.
-pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, gap: *mut garray_T) {
+/// line if the match has moved off it since, and forget the loop positions
+/// discovered after it.
+#[inline(always)]
+pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
     if rex.multi() && rex.lnum() != save.pos.as_pos().lnum {
         rex.set_lnum(save.pos.as_pos().lnum);
         rex.set_line(reg_getline(rex, rex.lnum()).cast());
     }
     rex.seek_col_of(save.pos);
-    // SAFETY: as `reg_save`.
-    unsafe { (*gap).ga_len = save.backpos_len };
+    backpos.rewind(save.backpos_len);
 }
 
 /// One end of one capture group, in whichever of the four slot arrays holds

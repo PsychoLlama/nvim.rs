@@ -4267,6 +4267,7 @@ static const int IUTF8 = 16384;
 static const int IXON = 1024;
 static const int JUMPLISTSIZE = 100;
 static const int JUST_CALC_SIZE = -1;
+static const int KEEP_EDGES = 64;
 static const int KEYLEN_PART_KEY = -1;
 static const int KEYLEN_PART_MAP = -2;
 static const int KEYMAP_INIT = 1;

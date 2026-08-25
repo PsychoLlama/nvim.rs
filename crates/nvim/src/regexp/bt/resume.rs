@@ -13,22 +13,29 @@ use core::ffi::{c_char, c_int};
 use super::compile::regnext;
 use super::matcher::operand_u32;
 use super::repeat::regrepeat;
-use super::state::{RegStack, capture_slot};
+use super::state::{BackPos, Braces, RegStack, capture_slot};
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::regexp::{
     BEHIND, BRANCH, MatchPos, NOBEHIND, NOMATCH, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH,
     RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE,
     RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SUBPAT,
-    SavedInput, backpos, behind_pos, brace_count, reg_breakcheck, reg_getline, reg_getline_len,
-    reg_restore, reg_save, regstate_T, restore_subexpr,
+    SavedInput, behind_pos, reg_breakcheck, reg_getline, reg_getline_len, reg_restore, reg_save,
+    regstate_T, restore_subexpr,
 };
 use crate::types::{NUL, colnr_T, int64_t, uint8_t};
 use ::libc::strlen;
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.
-pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: &mut c_int) {
+pub(crate) fn resume(
+    rex: Rex,
+    stack: &mut RegStack,
+    backpos: &mut BackPos,
+    braces: &mut Braces,
+    scan: &mut *mut uint8_t,
+    status: &mut c_int,
+) {
     while stack.depth() > 0 && *status != RA_FAIL {
         let depth = stack.depth();
         match stack.top().rs_state {
@@ -56,7 +63,7 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
                     // RA_BREAK means the branch was only just pushed and the
                     // walk has not moved yet.
                     if *status != RA_BREAK {
-                        reg_restore(rex, &stack.top().rs_saved, backpos.ptr());
+                        reg_restore(rex, &stack.top().rs_saved, backpos);
                         *scan = stack.top().rs_scan;
                     }
                     // SAFETY: `scan` is null or a node of the running
@@ -69,7 +76,7 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
                         let next = regnext(*scan);
                         let rp = stack.top_mut();
                         rp.rs_scan = next;
-                        reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+                        rp.rs_saved = reg_save(rex, backpos);
                         // SAFETY: as above.
                         *scan = unsafe { scan.add(3) };
                     }
@@ -81,8 +88,8 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
             RS_BRCPLX_MORE => {
                 if *status == RA_NOMATCH {
                     let rp = stack.top();
-                    reg_restore(rex, &rp.rs_saved, backpos.ptr());
-                    give_back_a_pass(rp.rs_no as usize);
+                    reg_restore(rex, &rp.rs_saved, backpos);
+                    braces.slot(rp.rs_no as usize).count -= 1;
                 }
                 stack.pop(scan);
             }
@@ -90,8 +97,8 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
             RS_BRCPLX_LONG => {
                 if *status == RA_NOMATCH {
                     let rp = stack.top();
-                    reg_restore(rex, &rp.rs_saved, backpos.ptr());
-                    give_back_a_pass(rp.rs_no as usize);
+                    reg_restore(rex, &rp.rs_saved, backpos);
+                    braces.slot(rp.rs_no as usize).count -= 1;
                     *status = RA_CONT;
                 }
                 stack.pop(scan);
@@ -103,7 +110,7 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
             // failure take another pass after all.
             RS_BRCPLX_SHORT => {
                 if *status == RA_NOMATCH {
-                    reg_restore(rex, &stack.top().rs_saved, backpos.ptr());
+                    reg_restore(rex, &stack.top().rs_saved, backpos);
                 }
                 stack.pop(scan);
                 if *status == RA_NOMATCH {
@@ -124,7 +131,7 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
                 } else {
                     *status = RA_CONT;
                     if no != SUBPAT {
-                        reg_restore(rex, &stack.top().rs_saved, backpos.ptr());
+                        reg_restore(rex, &stack.top().rs_saved, backpos);
                     }
                 }
                 stack.pop(scan);
@@ -136,9 +143,9 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
             // SAFETY: the frames these three read were pushed by this match
             // and still describe live positions in the program and the
             // input; `rex` is the running match.
-            RS_BEHIND1 => unsafe { behind_start(rex, stack, scan, status) },
-            RS_BEHIND2 => unsafe { behind_step(rex, stack, scan, status) },
-            RS_STAR_LONG | RS_STAR_SHORT => unsafe { star(rex, stack, scan, status) },
+            RS_BEHIND1 => unsafe { behind_start(rex, stack, backpos, scan, status) },
+            RS_BEHIND2 => unsafe { behind_step(rex, stack, backpos, scan, status) },
+            RS_STAR_LONG | RS_STAR_SHORT => unsafe { star(rex, stack, backpos, scan, status) },
             _ => {}
         }
 
@@ -162,13 +169,6 @@ unsafe fn undo_capture(rex: Rex, state: regstate_T, no: usize, saved: MatchPos) 
     unsafe { capture_slot(rex, state, no).set(saved) };
 }
 
-/// Undo one `\{n,m}` pass of the counted repeat in slot `no`.
-fn give_back_a_pass(no: usize) {
-    // SAFETY: `brace_count` is a fixed ten-slot global and `no` is a
-    // `BRACE_COMPLEX` operand, which the compiler bounds to nine.
-    unsafe { (*brace_count.ptr())[no] -= 1 };
-}
-
 /// `RS_BEHIND1`: the pattern *after* the look-behind has been reached, so now
 /// the look-behind's own operand has to be run, ending here.
 ///
@@ -180,6 +180,7 @@ fn give_back_a_pass(no: usize) {
 unsafe fn behind_start(
     rex: Rex,
     stack: &mut RegStack,
+    backpos: &mut BackPos,
     scan: &mut *mut uint8_t,
     status: &mut c_int,
 ) {
@@ -188,12 +189,12 @@ unsafe fn behind_start(
         return;
     }
     let (rp, bp) = stack.top_behind();
-    reg_save(rex, &mut bp.save_after, backpos.ptr());
+    bp.save_after = reg_save(rex, backpos);
     bp.save_behind = behind_pos.get();
     // The position the operand has to end at.
     behind_pos.set(rp.rs_saved);
     rp.rs_state = RS_BEHIND2;
-    reg_restore(rex, &rp.rs_saved, backpos.ptr());
+    reg_restore(rex, &rp.rs_saved, backpos);
     // Past the node header and the four-byte limit.
     // SAFETY: the caller promises a look-behind node, which is seven bytes
     // of header and limit followed by its operand.
@@ -206,14 +207,20 @@ unsafe fn behind_start(
 ///
 /// # Safety
 /// As [`behind_start`], for an `RS_BEHIND2` frame.
-unsafe fn behind_step(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: &mut c_int) {
+unsafe fn behind_step(
+    rex: Rex,
+    stack: &mut RegStack,
+    backpos: &mut BackPos,
+    scan: &mut *mut uint8_t,
+    status: &mut c_int,
+) {
     let (rp, bp) = stack.top_behind();
 
     // It matched, and it ended exactly where the look-behind sits.
     if *status == RA_MATCH && rex.is_at(behind_pos.get().pos) {
         behind_pos.set(bp.save_behind);
         if rp.rs_no as c_int == BEHIND {
-            reg_restore(rex, &bp.save_after, backpos.ptr());
+            reg_restore(rex, &bp.save_after, backpos);
         } else {
             // `\@<!` wanted it *not* to match.
             *status = RA_NOMATCH;
@@ -232,14 +239,14 @@ unsafe fn behind_step(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, s
     // SAFETY: `rex` is the running match and `rs_saved` a position in it.
     let stepped = unsafe {
         if rex.multi() {
-            step_back_lines(rex, &mut rp.rs_saved, stop, limit)
+            step_back_lines(rex, backpos, &mut rp.rs_saved, stop, limit)
         } else {
             step_back_string(rex, &mut rp.rs_saved, stop, limit)
         }
     };
 
     if stepped {
-        reg_restore(rex, &rp.rs_saved, backpos.ptr());
+        reg_restore(rex, &rp.rs_saved, backpos);
         // SAFETY: as the `limit` read above.
         *scan = unsafe { rp.rs_scan.add(3 + 4) };
         if *status == RA_MATCH {
@@ -252,7 +259,7 @@ unsafe fn behind_step(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, s
         // Nowhere left to look.
         behind_pos.set(bp.save_behind);
         if rp.rs_no as c_int == NOBEHIND {
-            reg_restore(rex, &bp.save_after, backpos.ptr());
+            reg_restore(rex, &bp.save_after, backpos);
             *status = RA_MATCH;
         } else if *status == RA_MATCH {
             *status = RA_NOMATCH;
@@ -273,6 +280,7 @@ unsafe fn behind_step(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, s
 /// `rex` must be a live buffer match, and `start` a position in it.
 unsafe fn step_back_lines(
     rex: Rex,
+    backpos: &mut BackPos,
     start: &mut SavedInput,
     stop: MatchPos,
     limit: int64_t,
@@ -296,7 +304,7 @@ unsafe fn step_back_lines(
         } {
             return false;
         }
-        reg_restore(rex, start, backpos.ptr());
+        reg_restore(rex, start, backpos);
         // SAFETY: as above.
         start.pos.pos_mut().col = unsafe { strlen(rex.line().cast()) } as colnr_T;
     } else {
@@ -343,14 +351,20 @@ unsafe fn step_back_string(
 ///
 /// The top frame must be an `RS_STAR_*` one this match pushed, so that it
 /// names a repeat node of the running program and carries a `regstar_T`.
-unsafe fn star(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: &mut c_int) {
+unsafe fn star(
+    rex: Rex,
+    stack: &mut RegStack,
+    backpos: &mut BackPos,
+    scan: &mut *mut uint8_t,
+    status: &mut c_int,
+) {
     if *status == RA_MATCH {
         stack.pop_star(scan);
         return;
     }
     let (rp, rst) = stack.top_star();
     if *status != RA_BREAK {
-        reg_restore(rex, &rp.rs_saved, backpos.ptr());
+        reg_restore(rex, &rp.rs_saved, backpos);
     }
 
     loop {
@@ -413,7 +427,7 @@ unsafe fn star(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: 
         {
             continue;
         }
-        reg_save(rex, &mut rp.rs_saved, backpos.ptr());
+        rp.rs_saved = reg_save(rex, backpos);
         *scan = regnext(rp.rs_scan);
         *status = RA_CONT;
         break;
