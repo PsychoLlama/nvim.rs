@@ -9,6 +9,23 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- The editor's state is owned rather than shared. Every family of mutable
+  global the editor kept — the command line, the three screen grids, the
+  completion session, the Visual selection, the option table and its values,
+  both regexp engines' matcher state, the typeahead and the recorded
+  buffers beside it, the command modifiers, the decoration pass, the const
+  tables and the handle registries' access — now belongs to the code that
+  uses it and is passed on, rather than being read and written through a raw
+  address from anywhere in the program. Normal editing is unaffected; what
+  changes is what happens when something re-enters the editor in the middle
+  of an operation — an autocommand, a Lua callback, an expression mapping, a
+  provider, a `:substitute` with a function in its replacement — where the
+  old shape let the inner call quietly overwrite state the outer one was
+  still using. Most of the crashes and wrong answers listed under Fixed here
+  and in the last few releases were that shape, and the ones that remain now
+  need a named exception rather than passing unnoticed: what is still
+  reached by raw address is an enumerated list of addresses libuv and libc
+  own, plus a register of the handle registries left for the next pass.
 - Retired `IObuff` and `NameBuff`, the editor's two shared scratch buffers,
   and the two dozen private static buffers that worked the same way. Every
   message, report, path and rendering that was assembled in one is now
