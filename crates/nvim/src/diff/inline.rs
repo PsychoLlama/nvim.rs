@@ -308,15 +308,15 @@ pub unsafe fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut di
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
 pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
-        static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
-        static fnum: GlobalCell<c_int> = GlobalCell::new(0);
-        static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
-        static change_start: GlobalCell<c_int> = GlobalCell::new(0);
-        static change_end: GlobalCell<c_int> = GlobalCell::new(0);
-        static hlID: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
+    static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
+    static fnum: GlobalCell<c_int> = GlobalCell::new(0);
+    static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
+    static change_start: GlobalCell<c_int> = GlobalCell::new(0);
+    static change_end: GlobalCell<c_int> = GlobalCell::new(0);
+    static hlID: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
 
+    unsafe {
         let mut diffline = diffline_S {
             changes: ::core::ptr::null_mut::<diffline_change_T>(),
             num_changes: 0,
@@ -374,19 +374,23 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             } else {
                 hlID.set(HLF_CHD);
                 for i in 0..diffline.num_changes {
+                    // Out-parameters of this frame: the cached pair above is
+                    // only ever read on the other side of this `if`.
+                    let mut start = 0;
+                    let mut end = 0;
                     let added = diff_change_parse(
                         &raw mut diffline,
                         diffline.changes.offset(i as isize),
-                        change_start.ptr(),
-                        change_end.ptr(),
+                        &raw mut start,
+                        &raw mut end,
                     );
-                    if col >= change_start.get() && col < change_end.get() {
+                    if col >= start && col < end {
                         hlID.set(if added { HLF_TXA } else { HLF_TXD });
                         break;
                     }
                     // The ranges are in column order, so a column left of
                     // this one's start is left of all the rest too.
-                    if col < change_start.get() {
+                    if col < start {
                         break;
                     }
                 }

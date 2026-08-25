@@ -276,11 +276,11 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
 /// it by failing; that is why the `chdir` and the event are only reached
 /// when the directory really differs.
 pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
+    let mut new_dir = new_dir;
     unsafe {
         if new_dir.is_null() || allbuf_locked() {
             return false;
         }
-        let mut new_dir = new_dir;
         if strcmp(new_dir, c"-".as_ptr()) == 0 {
             let pdir = get_prevdir(scope);
             if pdir.is_null() {
@@ -316,17 +316,22 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
             }
         }
 
+        // The global slot is written back through a copy, so that the one
+        // place that can hold the address is this frame rather than a
+        // caller of the cell.
+        let mut global_prevdir = prev_dir.get();
         let pp: *mut *mut c_char = match scope as c_int {
             s if s == kCdScopeTabpage as c_int => &raw mut (*curtab.get()).tp_prevdir,
             s if s == kCdScopeWindow as c_int => &raw mut (*curwin.get()).w_prevdir,
-            _ => prev_dir.ptr(),
+            _ => &raw mut global_prevdir,
         };
         xfree(*pp as *mut c_void);
         *pp = pdir;
+        prev_dir.set(global_prevdir);
 
         post_chdir(scope, dir_differs);
-        true
     }
+    true
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.

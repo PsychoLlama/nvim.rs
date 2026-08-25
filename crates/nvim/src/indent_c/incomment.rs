@@ -46,21 +46,20 @@ fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
 pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
     unsafe {
         let mut trypos = find_line_comment();
-        let mut fallback = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        if trypos.is_null() && (*curwin.get()).w_cursor.lnum > 1 {
+        if trypos.is_none() && (*curwin.get()).w_cursor.lnum > 1 {
             // There may be a statement before the comment; search from the
             // end of the line above for a comment start.
-            fallback.col = check_linecomment(ml_get((*curwin.get()).w_cursor.lnum - 1));
-            if fallback.col != MAXCOL {
-                fallback.lnum = (*curwin.get()).w_cursor.lnum - 1;
-                trypos = &raw mut fallback;
+            let col = check_linecomment(ml_get((*curwin.get()).w_cursor.lnum - 1));
+            if col != MAXCOL {
+                let lnum = (*curwin.get()).w_cursor.lnum - 1;
+                trypos = Some(pos_T {
+                    lnum,
+                    col,
+                    coladd: 0,
+                });
             }
         }
-        (!trypos.is_null()).then(|| line_vcol((*trypos).lnum, (*trypos).col))
+        trypos.map(|pos| line_vcol(pos.lnum, pos.col))
     }
 }
 

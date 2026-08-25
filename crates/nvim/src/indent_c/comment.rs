@@ -291,27 +291,21 @@ pub(crate) unsafe fn cin_nocode(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// Reads the current buffer and window.
-pub(crate) unsafe fn find_line_comment() -> *mut pos_T {
+pub(crate) unsafe fn find_line_comment() -> Option<pos_T> {
     unsafe {
-        static POS: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        });
-        POS.set((*curwin.get()).w_cursor);
+        let mut pos = (*curwin.get()).w_cursor;
         loop {
-            (*POS.ptr()).lnum -= 1;
-            if (*POS.ptr()).lnum <= 0 {
-                return ::core::ptr::null_mut::<pos_T>();
+            pos.lnum -= 1;
+            if pos.lnum <= 0 {
+                return None;
             }
-            let line = ml_get((*POS.ptr()).lnum);
+            let line = ml_get(pos.lnum);
             let p = skipwhite(line);
             if cin_islinecomment(p) {
-                (*POS.ptr()).col = p.offset_from(line) as colnr_T;
-                return POS.ptr();
+                return Some(pos.with_col(p.offset_from(line) as colnr_T));
             }
             if *p as c_int != NUL {
-                return ::core::ptr::null_mut::<pos_T>();
+                return None;
             }
         }
     }

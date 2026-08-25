@@ -266,12 +266,12 @@ unsafe fn find_along_option(
     file_to_findlen: size_t,
     search_ctx: *mut *mut FindContext,
 ) -> *mut c_char {
-    unsafe {
-        // Where the last call had got to in the option.
-        static DIR: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-        // Whether `*search_ctx` is a context a `vim_findfile` may resume.
-        static INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
+    // Where the last call had got to in the option.
+    static DIR: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+    // Whether `*search_ctx` is a context a `vim_findfile` may resume.
+    static INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
 
+    unsafe {
         if first {
             // vim_findfile_free_visited can handle a possible NULL pointer
             vim_findfile_free_visited((*search_ctx).cast());
@@ -298,12 +298,14 @@ unsafe fn find_along_option(
             }
 
             let mut buf = vec![0 as c_char; MAXPATHL as usize];
+            let mut dir = DIR.get();
             copy_option_part(
-                DIR.ptr(),
+                &raw mut dir,
                 buf.as_mut_ptr(),
                 MAXPATHL as usize,
                 c" ,".as_ptr().cast_mut(),
             );
+            DIR.set(dir);
             // Splits the entry at an unescaped ';', leaving the entry in
             // `buf` and answering the stop directories after it.
             let stopdirs = vim_findfile_stopdir(buf.as_mut_ptr());
