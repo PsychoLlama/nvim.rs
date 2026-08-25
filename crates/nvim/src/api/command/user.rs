@@ -66,7 +66,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
     unsafe {
         let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
         if buf == -1 as ::core::ffi::c_int {
-            gap = ucmds.ptr();
+            gap = global_ucmds();
         } else {
             let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {

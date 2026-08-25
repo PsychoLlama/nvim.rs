@@ -249,7 +249,7 @@ pub unsafe fn nvim_parse_cmd(
         let args = parse_args(&ea, arena);
         let nth = |ga_data: *mut c_void| ga_data.cast::<ucmd_T>().add(ea.useridx as usize);
         let cmd: *mut ucmd_T = match ea.cmdidx {
-            CMD_USER => ucmds.with(|ga| nth(ga.ga_data)),
+            CMD_USER => nth((*global_ucmds()).ga_data),
             CMD_USER_BUF => nth((*curbuf.get()).b_ucmds.ga_data),
             _ => ptr::null_mut(),
         };

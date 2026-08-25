@@ -83,13 +83,26 @@ pub(crate) const UC_BUFFER: c_int = 1;
 pub(crate) const LUA_NOREF: c_int = -2;
 
 /// The global user commands. A buffer's own live in its `b_ucmds`.
-pub(crate) static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
+///
+/// Still a `garray_T`, and still reached by address, which is the one
+/// escape hatch this family keeps. The buffer-local table is the *same
+/// type inside an `xcalloc`ed `buf_T`*, where a `Vec` cannot live — a
+/// zeroed `Vec` is not a valid one — and every walker here is written
+/// against `*mut garray_T` precisely so that one function serves both
+/// scopes. Converting only the global half would split that in two.
+static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: size_of::<ucmd_T>() as c_int,
     ga_growsize: 4,
     ga_data: ptr::null_mut(),
 });
+
+/// The global command table, by address. The one place [`ucmds`]' escape
+/// hatch is used; see its note for why it is still a `garray_T`.
+pub(crate) fn global_ucmds() -> *mut garray_T {
+    ucmds.ptr()
+}
 
 /// Which of the two command tables a walk is standing on.
 ///
@@ -118,7 +131,7 @@ impl Scope {
         match self {
             // SAFETY: caller contract.
             Scope::Buffer => unsafe { &raw mut (*(*prevwin_curwin()).w_buffer).b_ucmds },
-            Scope::Global => ucmds.ptr(),
+            Scope::Global => global_ucmds(),
         }
     }
 }
@@ -356,7 +369,7 @@ pub(crate) unsafe fn uc_add_command(
             gap
         }
     } else {
-        ucmds.ptr()
+        global_ucmds()
     };
 
     // SAFETY: caller contract.
@@ -585,7 +598,7 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
-        uc_clear(ucmds.ptr());
+        uc_clear(global_ucmds());
         if !curbuf.get().is_null() {
             uc_clear(&raw mut (*curbuf.get()).b_ucmds);
         }

@@ -17,7 +17,7 @@
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
-use super::{LUA_NOREF, Scope, ucmd_list, ucmd_name, ucmds};
+use super::{LUA_NOREF, Scope, global_ucmds, ucmd_list, ucmd_name};
 use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
 };
@@ -281,7 +281,7 @@ fn dict_of<const N: usize>(
 /// dispatcher's.
 pub(crate) unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict {
     let gap: *mut garray_T = if buf.is_null() {
-        ucmds.ptr()
+        global_ucmds()
     } else {
         // SAFETY: caller contract.
         unsafe { &raw mut (*buf).b_ucmds }

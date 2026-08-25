@@ -39,8 +39,8 @@ use crate::types::{
     kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint64_t,
 };
 use crate::usercmd::{
-    commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
-    uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
+    commands_array, free_ucmd, get_user_command_name, global_ucmds, parse_addr_type_arg,
+    parse_compl_arg, uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::{memcpy, strcmp, strlen, strtol};
