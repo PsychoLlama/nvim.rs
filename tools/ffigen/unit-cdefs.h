@@ -6007,7 +6007,6 @@ static const int VIM_WARNING = 2;
 static const int VIM_YES = 2;
 static const int VINTR = 0;
 static const int VISUAL_BELL_MS = 100;
-static const int VISUAL_LINE = 86;
 static const int VKILL = 3;
 static const int VLNEXT = 15;
 static const int VMIN = 6;

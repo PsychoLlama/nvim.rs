@@ -8,7 +8,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::normal::with_visual_anchor;
+use crate::normal::{
+    VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, visual_active,
+    visual_anchor, with_visual_anchor,
+};
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::{FAIL, OK};
@@ -112,12 +115,12 @@ unsafe fn search_around(
 /// The current window and buffer must be valid.
 pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
     unsafe {
-        let save_visual = VIsual.get();
+        let save_visual = visual_anchor();
 
         // Correct the cursor when 'selection' is exclusive.
-        if VIsual_active.get()
+        if visual_active()
             && *p_sel.get() as c_int == 'e' as c_int
-            && lt(VIsual.get(), (*curwin.get()).w_cursor)
+            && lt(visual_anchor(), (*curwin.get()).w_cursor)
         {
             dec_cursor();
         }
@@ -126,11 +129,11 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         // Visual area, skip the first backward search, or it would not
         // move.
         let skip_first_backward =
-            forward && VIsual_active.get() && lt((*curwin.get()).w_cursor, VIsual.get());
+            forward && visual_active() && lt((*curwin.get()).w_cursor, visual_anchor());
 
         let orig_pos = (*curwin.get()).w_cursor; // where the cursor started
         let mut pos = orig_pos; // position after the pattern
-        if VIsual_active.get() {
+        if visual_active() {
             // Searching further will extend the match.
             if forward {
                 incl(&mut pos);
@@ -156,19 +159,19 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         let Some(found) = search_around(pos, count, forward, skip_first_backward, zero_width != 0)
         else {
             (*curwin.get()).w_cursor = orig_pos;
-            if VIsual_active.get() {
-                VIsual.set(save_visual);
+            if visual_active() {
+                set_visual_anchor(save_visual);
             }
             return FAIL;
         };
 
-        if !VIsual_active.get() {
-            VIsual.set(found.start);
+        if !visual_active() {
+            set_visual_anchor(found.start);
         }
 
         // Put the cursor after the match.
         (*curwin.get()).w_cursor = found.end;
-        if lt(VIsual.get(), found.end) && forward {
+        if lt(visual_anchor(), found.end) && forward {
             if skip_first_backward {
                 // Put the cursor on the start of the match.
                 (*curwin.get()).w_cursor = found.start;
@@ -176,17 +179,17 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
                 // Put the cursor on the last character of the match.
                 dec_cursor();
             }
-        } else if VIsual_active.get() && lt((*curwin.get()).w_cursor, VIsual.get()) && forward {
+        } else if visual_active() && lt((*curwin.get()).w_cursor, visual_anchor()) && forward {
             (*curwin.get()).w_cursor = found.start;
         }
-        VIsual_active.set(true);
-        VIsual_mode.set('v' as c_int);
+        set_visual_active(true);
+        set_visual_mode(VisualMode::CHAR);
 
         if *p_sel.get() as c_int == 'e' as c_int {
             // Correction for exclusive selection depends on the direction.
-            if forward && ltoreq(VIsual.get(), (*curwin.get()).w_cursor) {
+            if forward && ltoreq(visual_anchor(), (*curwin.get()).w_cursor) {
                 inc_cursor();
-            } else if !forward && ltoreq((*curwin.get()).w_cursor, VIsual.get()) {
+            } else if !forward && ltoreq((*curwin.get()).w_cursor, visual_anchor()) {
                 with_visual_anchor(|anchor| inc(anchor));
             }
         }

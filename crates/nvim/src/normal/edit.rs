@@ -27,8 +27,7 @@ use crate::getchar::{
 use crate::guard::Suppress;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, K_DEL, K_INS, K_KDEL, K_KINS};
 use crate::main::{
-    State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, p_sel,
-    p_sta, p_to, p_ww, restart_edit,
+    State, cb_flags, curbuf, curwin, e_modifiable, got_int, p_sel, p_sta, p_to, p_ww, restart_edit,
 };
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
@@ -37,8 +36,9 @@ use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
     CA_COMMAND_BUSY, CAR, DEL, ESC, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR,
-    REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq, clearop, clearopbeep,
-    nv_object, nv_operator, prep_redo, prep_redo_cmd, v_swap_corners, v_visop,
+    REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, VisualMode, checkclearop, checkclearopq, clearop,
+    clearopbeep, nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active,
+    set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -78,7 +78,7 @@ pub(crate) unsafe fn nv_addsub(cap: *mut cmdarg_T) {
         if prompt_refuses(cap) {
             return;
         }
-        if !VIsual_active.get() && (*(*cap).oap).op_type == OP_NOP {
+        if !visual_active() && (*(*cap).oap).op_type == OP_NOP {
             // Not an operator: run it here and then put the operator back.
             prep_redo_cmd(cap);
             (*(*cap).oap).op_type = if (*cap).cmdchar == Ctrl_A {
@@ -88,7 +88,7 @@ pub(crate) unsafe fn nv_addsub(cap: *mut cmdarg_T) {
             };
             op_addsub((*cap).oap, (*cap).count1 as linenr_T, (*cap).arg != 0);
             (*(*cap).oap).op_type = OP_NOP;
-        } else if VIsual_active.get() {
+        } else if visual_active() {
             nv_operator(cap);
         } else {
             clearop((*cap).oap);
@@ -118,7 +118,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
             clearopbeep((*cap).oap);
             return;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             // The selection form is an operator; the interrupt a long
             // selection may have raised is not this command's business.
             if got_int.get() {
@@ -239,12 +239,12 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_replace_mode(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() {
+        if visual_active() {
             // A selection is replaced linewise, which is `c` over whole lines.
             (*cap).cmdchar = 'c' as c_int;
             (*cap).nchar = NUL;
-            VIsual_mode_orig.set(VIsual_mode.get());
-            VIsual_mode.set('V' as c_int);
+            VIsual_mode_orig.set(visual_mode());
+            set_visual_mode(VisualMode::LINE);
             nv_operator(cap);
             return;
         }
@@ -275,7 +275,7 @@ pub(crate) unsafe fn nv_replace_mode(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_vreplace(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() {
+        if visual_active() {
             (*cap).cmdchar = 'r' as c_int;
             (*cap).nchar = (*cap).extra_char;
             nv_replace(cap);
@@ -372,12 +372,12 @@ pub(crate) unsafe fn nv_subst(cap: *mut cmdarg_T) {
         if prompt_refuses(cap) {
             return;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             if (*cap).cmdchar == 'S' as c_int {
                 // `S` on a selection is linewise however the selection was
                 // made; the original kind is remembered for the redo.
-                VIsual_mode_orig.set(VIsual_mode.get());
-                VIsual_mode.set('V' as c_int);
+                VIsual_mode_orig.set(visual_mode());
+                set_visual_mode(VisualMode::LINE);
             }
             (*cap).cmdchar = 'c' as c_int;
             nv_operator(cap);
@@ -394,7 +394,7 @@ pub(crate) unsafe fn nv_abbrev(cap: *mut cmdarg_T) {
         if (*cap).cmdchar == K_DEL || (*cap).cmdchar == K_KDEL {
             (*cap).cmdchar = 'x' as c_int;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             v_visop(cap);
         } else {
             nv_optrans(cap);
@@ -494,7 +494,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if p_to.get() == 0 && !VIsual_active.get() && (*(*cap).oap).op_type != OP_TILDE {
+        if p_to.get() == 0 && !visual_active() && (*(*cap).oap).op_type != OP_TILDE {
             if prompt_refuses(cap) {
                 return;
             }
@@ -533,13 +533,12 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
         }
         // With a selection up, `A` and `I` insert at every line's end or
         // start; `a` and `i` name a text object instead.
-        if VIsual_active.get() && ((*cap).cmdchar == 'A' as c_int || (*cap).cmdchar == 'I' as c_int)
-        {
+        if visual_active() && ((*cap).cmdchar == 'A' as c_int || (*cap).cmdchar == 'I' as c_int) {
             v_visop(cap);
             return;
         }
         if ((*cap).cmdchar == 'a' as c_int || (*cap).cmdchar == 'i' as c_int)
-            && ((*(*cap).oap).op_type != OP_NOP || VIsual_active.get())
+            && ((*(*cap).oap).op_type != OP_NOP || visual_active())
         {
             nv_object(cap);
             return;
@@ -616,7 +615,7 @@ pub(crate) unsafe fn invoke_edit(cap: *mut cmdarg_T, repl: c_int, cmd: c_int, st
 pub(crate) unsafe fn nv_join(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() {
+        if visual_active() {
             nv_operator(cap);
             return;
         }
@@ -722,7 +721,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
             flags |= PUT_BLOCK_INNER as c_int;
         }
 
-        let was_visual = VIsual_active.get();
+        let was_visual = visual_active();
         let mut savereg: *mut yankreg_T = ptr::null_mut();
         let mut emptied = false;
         if was_visual {
@@ -746,8 +745,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
             (*win).w_onebuf_opt.wo_fen = 0;
             // The condition is upstream's; only the `.` register on a
             // charwise selection skips the delete.
-            if !VIsual_active.get() || VIsual_mode.get() == 'V' as c_int || regname != '.' as c_int
-            {
+            if !visual_active() || visual_mode().is_line() || regname != '.' as c_int {
                 (*cap).cmdchar = 'd' as c_int;
                 (*cap).nchar = NUL;
                 (*(*cap).oap).regname = if keep_registers { '_' as c_int } else { NUL };
@@ -760,25 +758,24 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
                 drop(silenced);
                 (*(*cap).oap).regname = regname;
             }
-            if VIsual_mode.get() == 'V' as c_int {
+            if visual_mode().is_line() {
                 flags |= PUT_LINE as c_int;
-            } else if VIsual_mode.get() == 'v' as c_int {
+            } else if visual_mode().is_char() {
                 flags |= PUT_LINE_SPLIT as c_int;
             }
-            if VIsual_mode.get() == Ctrl_V && dir == FORWARD as c_int {
+            if visual_mode().is_block() && dir == FORWARD as c_int {
                 flags |= PUT_LINE_FORWARD as c_int;
             }
             // Put where the selection was, which is where the delete left the
             // cursor -- forwards only when it left it before the start.
             dir = BACKWARD as c_int;
-            if (VIsual_mode.get() != 'V' as c_int
-                && (*win).w_cursor.col < (*curbuf.get()).b_op_start.col)
-                || (VIsual_mode.get() == 'V' as c_int
+            if (!visual_mode().is_line() && (*win).w_cursor.col < (*curbuf.get()).b_op_start.col)
+                || (visual_mode().is_line()
                     && (*win).w_cursor.lnum < (*curbuf.get()).b_op_start.lnum)
             {
                 dir = FORWARD as c_int;
             }
-            VIsual_active.set(true);
+            set_visual_active(true);
         }
 
         do_put((*(*cap).oap).regname, savereg, dir, (*cap).count1, flags);
@@ -819,7 +816,7 @@ pub(crate) unsafe fn nv_open(cap: *mut cmdarg_T) {
             clearop((*cap).oap);
             debug_assert!((*cap).opcount >= 0);
             nv_diffgetput(false, (*cap).opcount as size_t);
-        } else if VIsual_active.get() {
+        } else if visual_active() {
             v_swap_corners((*cap).cmdchar);
         } else if bt_prompt(curbuf.get())
             && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_prompt_start.mark.lnum

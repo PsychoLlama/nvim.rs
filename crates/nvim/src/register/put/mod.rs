@@ -24,6 +24,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
+use crate::normal::{set_visual_active, visual_active, visual_mode};
 use crate::types::{FAIL, NUL};
 
 mod block;
@@ -66,7 +67,7 @@ pub(crate) struct Put {
 /// The cursor must be on a valid line.
 unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint) {
     unsafe {
-        let non_linewise_vis = VIsual_active.get() && VIsual_mode.get() != 'V' as c_int;
+        let non_linewise_vis = visual_active() && !visual_mode().is_line();
 
         // A Visual selection is replaced (`c`); `PUT_LINE` opens its own line
         // below, so it inserts at the start of it.
@@ -510,7 +511,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
         }
 
         if (*curbuf.get()).terminal.is_null() {
-            VIsual_active.set(false);
+            set_visual_active(false);
         }
 
         adjust_cursor_eol();

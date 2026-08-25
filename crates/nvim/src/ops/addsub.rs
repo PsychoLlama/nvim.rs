@@ -30,6 +30,7 @@ use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::normal::{visual_active, visual_mode};
 use crate::types::{FAIL, NUL};
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and
@@ -100,7 +101,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         // the buffer mid-operation.
         *disable_fold_update.ptr() += 1;
 
-        if !VIsual_active.get() {
+        if !visual_active() {
             let mut pos = (*curwin.get()).w_cursor;
             if u_save_cursor() == FAIL {
                 *disable_fold_update.ptr() -= 1;
@@ -227,7 +228,7 @@ pub unsafe fn do_addsub(
 ) -> bool {
     unsafe {
         let fmt = NrFormats::current();
-        let visual = VIsual_active.get();
+        let visual = visual_active();
         let save_cursor = (*curwin.get()).w_cursor;
 
         let mut save_coladd: colnr_T = 0;
@@ -560,7 +561,7 @@ unsafe fn replace_number(
         // How far the number may run. Only bounded in Visual mode, and not for
         // a linewise selection or one opened with `$`.
         let mut maxlen = 0;
-        if visual && VIsual_mode.get() != 'V' as c_int {
+        if visual && !visual_mode().is_line() {
             maxlen = if (*curbuf.get()).b_visual.vi_curswant == MAXCOL {
                 linelen - col
             } else {

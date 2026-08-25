@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::guard::Suppress;
+use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 
 /// Whether `win` is one of the autocommand windows currently in use.
 pub unsafe fn is_aucmd_win(win: *mut win_T) -> bool {
@@ -151,10 +152,10 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
         (*aco).new_curwin_handle = (*curwin.get()).handle;
         set_bufref(&raw mut (*aco).new_curbuf, curbuf.get());
 
-        (*aco).save_VIsual_active = VIsual_active.get();
+        (*aco).save_VIsual_active = visual_active();
         if !same_buffer {
             // The Visual area's positions mean nothing in another buffer.
-            VIsual_active.set(false);
+            set_visual_active(false);
         }
     }
 }
@@ -244,7 +245,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
             globaldir.set((*aco).globaldir);
 
             // The buffer's contents may have changed under the cursor.
-            VIsual_active.set((*aco).save_VIsual_active);
+            set_visual_active((*aco).save_VIsual_active);
             check_cursor(curwin.get());
             if (*curwin.get()).w_topline > (*curbuf.get()).b_ml.ml_line_count {
                 (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count;
@@ -277,16 +278,16 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
 
                 // The autocommand may have left the cursor where curbuf has
                 // no such position.
-                VIsual_active.set((*aco).save_VIsual_active);
+                set_visual_active((*aco).save_VIsual_active);
                 check_cursor(curwin.get());
             }
         }
 
-        VIsual_active.set((*aco).save_VIsual_active);
+        set_visual_active((*aco).save_VIsual_active);
         // Just in case lines got deleted.
         check_cursor(curwin.get());
-        if VIsual_active.get() {
-            VIsual.with_mut(|anchor| check_pos(curbuf.get(), anchor));
+        if visual_active() {
+            with_visual_anchor(|anchor| check_pos(curbuf.get(), anchor));
         }
     }
 }

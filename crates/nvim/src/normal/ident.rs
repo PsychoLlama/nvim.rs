@@ -19,8 +19,8 @@ use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
 use crate::main::{
-    KeyTyped, VIsual_active, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor,
-    msg_silent, no_smartcase, p_kp, p_scs, p_ws, restart_edit,
+    KeyTyped, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor, msg_silent,
+    no_smartcase, p_kp, p_scs, p_ws, restart_edit,
 };
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
@@ -31,7 +31,7 @@ use crate::message::{emsg, messaging};
 use crate::normal::{
     DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH,
     POUND, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop, clearopbeep,
-    get_visual_text, normal_search,
+    get_visual_text, normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -671,7 +671,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
         // under the cursor.
         let mut visual_sel = false;
         if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
-            if VIsual_active.get() && !get_visual_text(cap, &raw mut word, &raw mut n) {
+            if visual_active() && !get_visual_text(cap, &raw mut word, &raw mut n) {
                 return;
             }
             visual_sel = !word.is_null();

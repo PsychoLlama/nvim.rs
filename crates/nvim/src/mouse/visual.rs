@@ -22,8 +22,10 @@ use super::{
     MOD_MASK_ALT, MOD_MASK_CTRL, MOD_MASK_SHIFT, MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS,
     MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
 };
-use crate::keycodes::Ctrl_V;
-use crate::main::{State, VIsual, VIsual_active, VIsual_mode, mod_mask};
+use crate::main::{State, mod_mask};
+use crate::normal::{
+    VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
+};
 use crate::pos::lt;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::pos_T;
@@ -49,7 +51,7 @@ pub(crate) fn visual_jump_flags(
         if is_click {
             // Stop Visual mode for a left click in a window, but not when on
             // a status line.
-            if VIsual_active.get() {
+            if visual_active() {
                 *jump_flags |= MOUSE_MAY_STOP_VIS;
             }
         } else {
@@ -67,8 +69,8 @@ pub(crate) fn visual_jump_flags(
     }
 
     // Remember the start and end of visual before moving the cursor.
-    let corners = (is_click && VIsual_active.get()).then(|| {
-        let (cursor, visual) = (old_curwin.w_cursor, VIsual.get());
+    let corners = (is_click && visual_active()).then(|| {
+        let (cursor, visual) = (old_curwin.w_cursor, visual_anchor());
         if lt(cursor, visual) {
             (cursor, visual)
         } else {
@@ -86,10 +88,10 @@ pub(crate) fn visual_jump_flags(
 pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: pos_T, mut end_visual: pos_T) {
     // When ALT is pressed make Visual mode blockwise.
     if mod_mask.get() & MOD_MASK_ALT != 0 {
-        VIsual_mode.set(Ctrl_V);
+        set_visual_mode(VisualMode::BLOCK);
     }
 
-    if VIsual_mode.get() == Ctrl_V {
+    if visual_mode().is_block() {
         let (leftcol, rightcol) = vcols_between(win, start_visual, end_visual);
         end_visual.col = if win.w_curswant > (leftcol + rightcol) / 2 {
             leftcol
@@ -104,7 +106,7 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: pos_T, mut end
         start_visual = win.w_cursor; // save the cursor pos
         win.w_cursor = end_visual;
         win.coladvance(end_visual.col);
-        VIsual.set(win.w_cursor);
+        set_visual_anchor(win.w_cursor);
         win.w_cursor = start_visual; // restore the cursor
         return;
     }
@@ -113,7 +115,7 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: pos_T, mut end
     // click is after the end of visual, change the end.  If the click is
     // inside the visual, change the closest side.
     let cursor = win.w_cursor;
-    VIsual.set(if lt(cursor, start_visual) {
+    set_visual_anchor(if lt(cursor, start_visual) {
         end_visual
     } else if lt(end_visual, cursor) {
         start_visual

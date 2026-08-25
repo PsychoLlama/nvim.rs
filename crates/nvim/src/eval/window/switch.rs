@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
 use crate::types::VAR_STRING;
 
@@ -103,8 +104,8 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
             }
         }
         check_cursor(curwin.get());
-        if VIsual_active.get() {
-            VIsual.with_mut(|anchor| check_pos(curbuf.get(), anchor));
+        if visual_active() {
+            with_visual_anchor(|anchor| check_pos(curbuf.get(), anchor));
         }
     }
 }
@@ -175,8 +176,8 @@ pub unsafe fn switch_win_noblock(
         switchwin.sw_same_win = true;
     } else {
         // A Visual selection belongs to the window it was made in.
-        switchwin.sw_visual_active = VIsual_active.get();
-        VIsual_active.set(false);
+        switchwin.sw_visual_active = visual_active();
+        set_visual_active(false);
     }
     // SAFETY: a live tab page or NULL, and `win_valid` re-checks the window
     // before it is entered -- entering the tab page can close it.
@@ -239,7 +240,7 @@ pub unsafe fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool)
         }
     }
     if !switchwin.sw_same_win {
-        VIsual_active.set(switchwin.sw_visual_active);
+        set_visual_active(switchwin.sw_visual_active);
     }
     // SAFETY: the saved window is live or freed, which `win_valid` tells
     // apart, and a live window's buffer is live.

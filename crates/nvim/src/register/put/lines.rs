@@ -18,6 +18,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
 use crate::edit::BeginlineOpts;
+use crate::normal::visual_active;
 use crate::register::*;
 use crate::types::{FAIL, NUL};
 
@@ -36,7 +37,7 @@ impl Put {
             let mut vcol: colnr_T = 0;
             let mut totlen: size_t = 0;
 
-            if VIsual_active.get() {
+            if visual_active() {
                 end_lnum = (*curbuf.get())
                     .b_visual
                     .vi_end
@@ -62,7 +63,7 @@ impl Put {
             }
 
             if self.count == 0 || yanklen == 0 {
-                if VIsual_active.get() {
+                if visual_active() {
                     lnum = end_lnum;
                 }
             } else if self.count > c_int::MAX / yanklen {
@@ -89,9 +90,9 @@ impl Put {
                     // A Visual line too short to reach the column is skipped
                     // -- upstream's `continue`, which in its do-while jumps
                     // straight to the condition at the bottom.
-                    if VIsual_active.get() && col > oldlen {
+                    if visual_active() && col > oldlen {
                         lnum += 1;
-                        if !(VIsual_active.get() && lnum <= end_lnum) {
+                        if !(visual_active() && lnum <= end_lnum) {
                             break;
                         }
                         continue;
@@ -136,14 +137,14 @@ impl Put {
                         totlen as c_int,
                         kExtmarkUndo,
                     );
-                    if VIsual_active.get() {
+                    if visual_active() {
                         lnum += 1;
                     }
-                    if !(VIsual_active.get() && lnum <= end_lnum) {
+                    if !(visual_active() && lnum <= end_lnum) {
                         break;
                     }
                 }
-                if VIsual_active.get() {
+                if visual_active() {
                     lnum -= 1; // back to the last Visual line
                 }
             }

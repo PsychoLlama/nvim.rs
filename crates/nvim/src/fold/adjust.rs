@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{State, VIsual_active, curwin, p_sel};
+use crate::main::{State, curwin, p_sel};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
@@ -19,7 +19,7 @@ use core::ptr;
 
 use super::open_close::*;
 use super::*;
-use crate::normal::with_visual_anchor;
+use crate::normal::{visual_active, with_visual_anchor};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 
@@ -149,7 +149,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
 /// The current window must be live.
 pub unsafe fn fold_adjust_visual() {
     // SAFETY: the caller's promise.
-    if !VIsual_active.get() || unsafe { has_any_folding(curwin.get()) } == 0 {
+    if !visual_active() || unsafe { has_any_folding(curwin.get()) } == 0 {
         return;
     }
     // The anchor is adjusted as a *copy* and put back: `has_folding` may

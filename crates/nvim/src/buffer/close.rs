@@ -35,13 +35,14 @@ use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_init, hash_remove};
 use crate::main::{
-    VIsual_active, au_pending_free_buf, autocmd_busy, buffer_handles, curbuf, curtab, curwin,
-    e_auabort, exiting, firstbuf, lastbuf, updating_screen,
+    au_pending_free_buf, autocmd_busy, buffer_handles, curbuf, curtab, curwin, e_auabort, exiting,
+    firstbuf, lastbuf, updating_screen,
 };
 use crate::map::map_del_int_ptr_t;
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
+use crate::normal::visual_active;
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::state::MAP_ALL_MODES;
@@ -481,7 +482,7 @@ fn close_buffer_inner(
 
     // When closing the current buffer stop Visual mode before freeing
     // anything.
-    if is_curbuf && VIsual_active.get() {
+    if is_curbuf && visual_active() {
         end_visual();
     }
 

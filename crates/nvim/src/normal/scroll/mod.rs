@@ -12,10 +12,11 @@ use crate::diff::diff_set_topline;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
+use crate::main::{curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo};
+use crate::normal::{
+    MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, set_visual_active, set_visual_select,
+    visual_active, visual_select,
 };
-use crate::normal::{MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep};
 use crate::plines::plines_m_win_fill;
 use crate::strings::vim_strchr;
 use crate::types::{Direction, buf_T, cmdarg_T, colnr_T, linenr_T, win_T};
@@ -93,8 +94,8 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
     unsafe {
         let old_curwin = curwin.get();
         let old_curbuf = curbuf.get();
-        let old_visual_select = VIsual_select.get();
-        let old_visual_active = VIsual_active.get();
+        let old_visual_select = visual_select();
+        let old_visual_active = visual_active();
         let tgt_leftcol = (*old_curwin).w_leftcol;
         // Two windows in diff mode are always bound vertically; otherwise
         // 'scrollopt' says so.
@@ -102,8 +103,8 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
             || (!vim_strchr(p_sbo.get(), 'v' as c_int).is_null() && vtopline_diff != 0);
         let want_hor = !vim_strchr(p_sbo.get(), 'h' as c_int).is_null()
             && (leftcol_diff != 0 || vtopline_diff != 0);
-        VIsual_active.set(false);
-        VIsual_select.set(VIsual_active.get());
+        set_visual_active(false);
+        set_visual_select(visual_active());
 
         // Upstream asks `curtab == curtab`, so this always walks the current
         // tab page's windows however it reads.
@@ -147,8 +148,8 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
             wp = (*wp).w_next;
         }
 
-        VIsual_select.set(old_visual_select);
-        VIsual_active.set(old_visual_active);
+        set_visual_select(old_visual_select);
+        set_visual_active(old_visual_active);
         curwin.set(old_curwin);
         curbuf.set(old_curbuf);
     }

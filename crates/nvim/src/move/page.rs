@@ -22,12 +22,12 @@ use crate::drawscreen::UPD_VALID;
 use crate::edit::{BeginlineOpts, beginline, cursor_down_inner, cursor_up_inner};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    Rows, VIsual_active, VIsual_select, curbuf, curwin, firstwin, lastwin, p_sol, p_window,
-    restart_edit,
-};
+use crate::main::{Rows, curbuf, curwin, firstwin, lastwin, p_sol, p_window, restart_edit};
 use crate::mbyte::mb_adjust_cursor;
-use crate::normal::{nv_g_home_m_cmd, nv_screengo};
+use crate::normal::{
+    nv_g_home_m_cmd, nv_screengo, set_visual_active, set_visual_select, visual_active,
+    visual_select,
+};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
@@ -231,12 +231,12 @@ pub unsafe fn do_check_cursorbind() {
     let set_curswant = old_curwin.w_set_curswant;
     // SAFETY: `curbuf` is set from startup to exit.
     let old_curbuf = unsafe { Buf::current() };
-    let old_visual_select = VIsual_select.get();
-    let old_visual_active = VIsual_active.get();
+    let old_visual_select = visual_select();
+    let old_visual_active = visual_active();
 
     // Loop through the cursorbound windows.
-    VIsual_active.set(false);
-    VIsual_select.set(false);
+    set_visual_active(false);
+    set_visual_select(false);
     // Upstream asks the tab page for its window list, but the *current* tab
     // page's windows always hang off `firstwin` -- `tp_firstwin` is only
     // filled in when a tab page is left.
@@ -285,8 +285,8 @@ pub unsafe fn do_check_cursorbind() {
         next = win.next();
     }
 
-    VIsual_select.set(old_visual_select);
-    VIsual_active.set(old_visual_active);
+    set_visual_select(old_visual_select);
+    set_visual_active(old_visual_active);
     curwin.set(old_curwin.raw());
     curbuf.set(old_curbuf.raw());
 }

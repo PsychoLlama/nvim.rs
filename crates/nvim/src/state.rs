@@ -28,10 +28,10 @@ use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::keycodes::{Ctrl_V, K_EVENT, get_special_key_name};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
-    State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
-    global_busy, got_int, last_mode, mod_mask, motion_force, must_redraw, need_wait_return,
-    restart_VIsual_select, restart_edit, virtual_op,
+    State, curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, mod_mask,
+    motion_force, must_redraw, need_wait_return, restart_VIsual_select, restart_edit, virtual_op,
 };
+use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
@@ -200,7 +200,7 @@ pub unsafe fn virtual_active(wp: *mut win_T) -> bool {
     }
     // SAFETY: the caller's window.
     let flags = unsafe { get_ve_flags(wp) };
-    ve_flags_allow(flags, State.get(), VIsual_active.get(), VIsual_mode.get())
+    ve_flags_allow(flags, State.get(), visual_active(), visual_mode().raw())
 }
 
 /// The `'virtualedit'` half of [`virtual_active`], as a function of the
@@ -227,8 +227,8 @@ fn ve_flags_allow(
 pub fn get_real_state() -> c_int {
     real_state(
         State.get(),
-        VIsual_active.get(),
-        VIsual_select.get(),
+        visual_active(),
+        visual_select(),
         finish_op.get(),
     )
 }
@@ -414,9 +414,9 @@ pub unsafe fn get_mode() -> ModeName {
         exmode_active: exmode_active.get(),
         ins_compl_active: ins_compl_active(),
         ctrl_x_pending: ctrl_x_mode_not_defined_yet(),
-        visual_active: VIsual_active.get(),
-        visual_select: VIsual_select.get(),
-        visual_mode: VIsual_mode.get(),
+        visual_active: visual_active(),
+        visual_select: visual_select(),
+        visual_mode: visual_mode().raw(),
         restart_visual_select: restart_VIsual_select.get() != 0,
         // SAFETY: the editor is initialized, so `curbuf` is live.
         terminal_buffer: !unsafe { (*curbuf.get()).terminal }.is_null(),

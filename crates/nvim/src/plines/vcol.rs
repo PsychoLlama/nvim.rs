@@ -8,6 +8,7 @@
 //! functions.
 
 use super::*;
+use crate::normal::{visual_active, visual_anchor};
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -100,8 +101,8 @@ pub(crate) unsafe fn getvcol(
                 && State.get() & MODE_NORMAL != 0
                 && (*wp).w_onebuf_opt.wo_list == 0
                 && !virtual_active(wp)
-                && !(VIsual_active.get()
-                    && (*p_sel.get() == b'e' as c_char || ltoreq(*pos, VIsual.get())));
+                && !(visual_active()
+                    && (*p_sel.get() == b'e' as c_char || ltoreq(*pos, visual_anchor())));
             if cursor_at_tab_end {
                 *cursor = vcol + incr - 1;
             } else {

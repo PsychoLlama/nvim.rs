@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::normal::visual_active;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
 
 /// The window with id `id`, in whichever tab page holds it.
@@ -325,7 +326,7 @@ pub unsafe fn f_win_gotoid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     };
     // SAFETY: a live window in a live tab page.
     unsafe {
-        if VIsual_active.get() && wp.buffer().raw() != curbuf.get() {
+        if visual_active() && wp.buffer().raw() != curbuf.get() {
             end_visual_mode();
         }
         goto_tabpage_win(tp.raw(), wp.raw());

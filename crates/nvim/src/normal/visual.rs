@@ -19,10 +19,11 @@ use crate::drawscreen::{
 };
 use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
+use crate::global_cell::GlobalCell;
 use crate::main::{
-    VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, VIsual_select_exclu_adj,
-    VIsual_select_reg, curbuf, curwin, finish_op, motion_force, mouse_dragging, msg_silent, p_sel,
-    p_slm, p_smd, redraw_cmdline, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, curbuf, curwin, finish_op,
+    motion_force, mouse_dragging, msg_silent, p_sel, p_slm, p_smd, redraw_cmdline,
+    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
 };
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
@@ -56,32 +57,206 @@ fn selection_exclusive() -> bool {
     unsafe { *p_sel.get() as c_int == 'e' as c_int }
 }
 
-/// Read-modify-write of the Visual anchor.
+// ---------------------------------------------------------------------------
+// The selection itself
+
+/// The kind of area a selection covers: `v` charwise, `V` linewise, CTRL-V
+/// blockwise.
+///
+/// A newtype over the character rather than an enum, because the value space
+/// is not closed. `b_visual.vi_mode` is read back verbatim from an undo file
+/// (`undo/file.rs`, `undo_read_4c`) and `gv` copies it into the live mode, so
+/// any `c_int` is representable; upstream's chain of equality tests falls
+/// through to charwise for anything else, and so does this.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct VisualMode(c_int);
+
+impl VisualMode {
+    /// Charwise, entered with `v`.
+    pub(crate) const CHAR: Self = Self(b'v' as c_int);
+    /// Linewise, entered with `V`.
+    pub(crate) const LINE: Self = Self(b'V' as c_int);
+    /// Blockwise, entered with CTRL-V.
+    pub(crate) const BLOCK: Self = Self(Ctrl_V);
+    /// The `NUL` that `resel_VIsual_mode` and `VIsual_mode_orig` use to mean
+    /// "nothing remembered".
+    pub(crate) const NONE: Self = Self(NUL);
+
+    /// The mode a stored character names.
+    pub(crate) const fn from_raw(mode: c_int) -> Self {
+        Self(mode)
+    }
+
+    /// The character `b_visual.vi_mode`, `v:` variables and the undo file
+    /// store.
+    pub(crate) const fn raw(self) -> c_int {
+        self.0
+    }
+
+    pub(crate) fn is_char(self) -> bool {
+        self == Self::CHAR
+    }
+
+    pub(crate) fn is_line(self) -> bool {
+        self == Self::LINE
+    }
+
+    pub(crate) fn is_block(self) -> bool {
+        self == Self::BLOCK
+    }
+}
+
+/// A Visual or Select selection: one of its two ends, and what kind of area
+/// the pair covers.
+///
+/// The other end is the cursor, which belongs to the window. Holding one of
+/// these is what it takes to read the anchor, and [`visual_selection`] is the
+/// only thing that makes one -- which is the whole point: upstream leaves
+/// `VIsual` set after a selection ends and guards every read of it with a
+/// separate `VIsual_active`, an invariant no reader is obliged to honour.
+#[derive(Clone, Copy)]
+pub(crate) struct VisualSelection {
+    /// Upstream's `VIsual`: where the selection was started.
+    pub(crate) anchor: pos_T,
+    pub(crate) mode: VisualMode,
+    /// Select mode rather than Visual mode: printable input replaces the
+    /// selection instead of being read as a command.
+    pub(crate) select: bool,
+}
+
+/// `VIsual`, `VIsual_active`, `VIsual_mode` and `VIsual_select`, which
+/// upstream keeps as four unrelated globals that have to agree.
+#[derive(Clone, Copy)]
+struct VisualState {
+    /// Upstream's `VIsual_active`.
+    active: bool,
+    /// The selection the other three globals describe.
+    ///
+    /// It outlives `active` on purpose, because upstream's does: ending a
+    /// selection only lowers the flag, and a dozen places lower it and put it
+    /// back around code that must not see a selection (a `:normal` inside a
+    /// statusline expression, the autocommand window, a scroll) and expect
+    /// the anchor to still be there afterwards. Only [`visual_selection`]
+    /// hands the three out together, and only while `active`.
+    sel: VisualSelection,
+}
+
+/// The Visual selection, live or last.
+static VISUAL: GlobalCell<VisualState> = GlobalCell::new(VisualState {
+    active: false,
+    sel: VisualSelection {
+        anchor: pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        mode: VisualMode::CHAR,
+        select: false,
+    },
+});
+
+/// The selection, or `None` when there is none.
+///
+/// This is the read to prefer: it cannot answer an anchor that no selection
+/// is using.
+pub(crate) fn visual_selection() -> Option<VisualSelection> {
+    let visual = VISUAL.get();
+    visual.active.then_some(visual.sel)
+}
+
+/// Whether a Visual or Select selection is up (upstream's `VIsual_active`).
+pub(crate) fn visual_active() -> bool {
+    VISUAL.get().active
+}
+
+/// Raise or lower the flag without disturbing the selection under it.
+///
+/// The savers -- `switchwin`, `aucmd_prepbuf`, the statusline, `:normal`,
+/// paste, a page scroll -- restore the flag alone, so this deliberately does
+/// not take a whole selection.
+pub(crate) fn set_visual_active(active: bool) {
+    VISUAL.set(VisualState {
+        active,
+        ..VISUAL.get()
+    });
+}
+
+/// The kind of the selection, live or last (upstream's `VIsual_mode`).
+pub(crate) fn visual_mode() -> VisualMode {
+    VISUAL.get().sel.mode
+}
+
+pub(crate) fn set_visual_mode(mode: VisualMode) {
+    let mut visual = VISUAL.get();
+    visual.sel.mode = mode;
+    VISUAL.set(visual);
+}
+
+/// Whether the selection is a Select-mode one (upstream's `VIsual_select`).
+pub(crate) fn visual_select() -> bool {
+    VISUAL.get().sel.select
+}
+
+pub(crate) fn set_visual_select(select: bool) {
+    let mut visual = VISUAL.get();
+    visual.sel.select = select;
+    VISUAL.set(visual);
+}
+
+/// The stored anchor, whether or not a selection is up.
+///
+/// Upstream's bare `VIsual`. Prefer [`visual_selection`], which cannot hand
+/// back an anchor nothing is selecting; this is for the callers that reach
+/// the anchor with the flag tested somewhere further up the call stack.
+pub(crate) fn visual_anchor() -> pos_T {
+    VISUAL.get().sel.anchor
+}
+
+pub(crate) fn set_visual_anchor(anchor: pos_T) {
+    let mut visual = VISUAL.get();
+    visual.sel.anchor = anchor;
+    VISUAL.set(visual);
+}
+
+/// Whether any selection has been made since startup.
+///
+/// `reg_match_visual` (`\%V`) asks this as `VIsual.lnum == 0`, and asks it of
+/// the *global* anchor rather than of the current buffer's remembered area --
+/// so `\%V` in a buffer that has never been in Visual mode still matches
+/// nothing until some buffer has.
+pub(crate) fn visual_ever_started() -> bool {
+    VISUAL.get().sel.anchor.lnum != 0
+}
+
+/// Read-modify-write of the anchor.
 ///
 /// The anchor is handed to `f` as a *copy* and put back afterwards, rather
 /// than borrowed out of the cell: the callers run buffer code and, through
-/// `has_folding`, 'foldexpr' -- user code that reads the same global -- so a
-/// `with_mut` borrow held across them would be reentrant.
+/// `has_folding`, 'foldexpr' -- user code that reads the same state -- so a
+/// borrow held across them would be reentrant.
 pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut pos_T) -> R) -> R {
-    let mut anchor = VIsual.get();
+    let mut anchor = visual_anchor();
     let r = f(&mut anchor);
-    VIsual.set(anchor);
+    set_visual_anchor(anchor);
     r
 }
+
+// ---------------------------------------------------------------------------
+// Entering and leaving
 
 /// Leave Visual mode, remembering the selection for `gv` and `'<`/`'>`.
 pub(crate) fn end_visual_mode() {
     VIsual_select_exclu_adj.set(false);
-    VIsual_active.set(false);
+    set_visual_active(false);
     // SAFETY: all of this is the current buffer's and window's own state.
     unsafe {
         setmouse();
         mouse_dragging.set(0);
-        (*curbuf.get()).b_visual.vi_mode = VIsual_mode.get();
-        (*curbuf.get()).b_visual.vi_start = VIsual.get();
+        (*curbuf.get()).b_visual.vi_mode = visual_mode().raw();
+        (*curbuf.get()).b_visual.vi_start = visual_anchor();
         (*curbuf.get()).b_visual.vi_end = (*curwin.get()).w_cursor;
         (*curbuf.get()).b_visual.vi_curswant = (*curwin.get()).w_curswant;
-        (*curbuf.get()).b_visual_mode_eval = VIsual_mode.get();
+        (*curbuf.get()).b_visual_mode_eval = visual_mode().raw();
         if !virtual_active(curwin.get()) {
             (*curwin.get()).w_cursor.coladd = 0;
         }
@@ -93,7 +268,7 @@ pub(crate) fn end_visual_mode() {
 
 /// Leave Visual mode and forget the selection, so `gv` will not bring it back.
 pub(crate) fn reset_VIsual_and_resel() {
-    if VIsual_active.get() {
+    if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
         unsafe { redraw_curbuf_later(UPD_INVERTED) };
@@ -103,7 +278,7 @@ pub(crate) fn reset_VIsual_and_resel() {
 
 /// As [`reset_VIsual_and_resel`], but only when there was a selection.
 pub(crate) fn reset_VIsual() {
-    if VIsual_active.get() {
+    if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
         unsafe { redraw_curbuf_later(UPD_INVERTED) };
@@ -114,10 +289,10 @@ pub(crate) fn reset_VIsual() {
 /// Put back the Visual mode `v_visop` forced to linewise for an uppercase
 /// operator.
 pub(crate) fn restore_visual_mode() {
-    if VIsual_mode_orig.get() != NUL {
+    if VIsual_mode_orig.get() != VisualMode::NONE {
         // SAFETY: `curbuf` is the current buffer.
-        unsafe { (*curbuf.get()).b_visual.vi_mode = VIsual_mode_orig.get() };
-        VIsual_mode_orig.set(NUL);
+        unsafe { (*curbuf.get()).b_visual.vi_mode = VIsual_mode_orig.get().raw() };
+        VIsual_mode_orig.set(VisualMode::NONE);
     }
 }
 
@@ -132,11 +307,11 @@ pub(crate) unsafe fn get_visual_text(
     pp: *mut *mut c_char,
     lenp: *mut size_t,
 ) -> bool {
-    if VIsual_mode.get() != 'V' as c_int {
+    if !visual_mode().is_line() {
         // SAFETY: adjusts the current window's cursor or `VIsual`.
         unsafe { unadjust_for_sel() };
     }
-    let anchor = VIsual.get();
+    let anchor = visual_anchor();
     // SAFETY: `cap` is null or the caller's live command argument, and `pp`
     // and `lenp` are its out-parameters.
     unsafe {
@@ -146,7 +321,7 @@ pub(crate) unsafe fn get_visual_text(
             }
             return false;
         }
-        if VIsual_mode.get() == 'V' as c_int {
+        if visual_mode().is_line() {
             *pp = get_cursor_line_ptr();
             *lenp = get_cursor_line_len() as size_t;
         } else {
@@ -187,13 +362,13 @@ pub(crate) unsafe fn get_visual_text(
 pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     // Only the blockwise `O` path below reads this; the charwise path returns
     // first, having set the anchor itself.
-    let mut anchor = VIsual.get();
+    let mut anchor = visual_anchor();
     // SAFETY: `curwin` is the current window and `VIsual` a live position.
     unsafe {
-        if cmdchar != 'O' as c_int || VIsual_mode.get() != Ctrl_V {
+        if cmdchar != 'O' as c_int || !visual_mode().is_block() {
             let old_cursor = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = VIsual.get();
-            VIsual.set(old_cursor);
+            (*curwin.get()).w_cursor = visual_anchor();
+            set_visual_anchor(old_cursor);
             (*curwin.get()).w_set_curswant = true;
             return;
         }
@@ -207,13 +382,13 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
             &raw mut left,
             &raw mut right,
         );
-        (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
+        (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
         coladvance(curwin.get(), left);
-        VIsual.set((*curwin.get()).w_cursor);
+        set_visual_anchor((*curwin.get()).w_cursor);
         (*curwin.get()).w_cursor.lnum = old_cursor.lnum;
         (*curwin.get()).w_curswant = right;
         // An exclusive selection ends one past the last column it covers.
-        if old_cursor.lnum >= VIsual.get().lnum && selection_exclusive() {
+        if old_cursor.lnum >= visual_anchor().lnum && selection_exclusive() {
             (*curwin.get()).w_curswant += 1;
         }
         coladvance(curwin.get(), (*curwin.get()).w_curswant);
@@ -224,12 +399,12 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
             && (!virtual_active(curwin.get())
                 || (*curwin.get()).w_cursor.coladd == old_cursor.coladd)
         {
-            (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
-            if old_cursor.lnum <= VIsual.get().lnum && selection_exclusive() {
+            (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
+            if old_cursor.lnum <= visual_anchor().lnum && selection_exclusive() {
                 right += 1;
             }
             coladvance(curwin.get(), right);
-            VIsual.set((*curwin.get()).w_cursor);
+            set_visual_anchor((*curwin.get()).w_cursor);
             (*curwin.get()).w_cursor.lnum = old_cursor.lnum;
             coladvance(curwin.get(), left);
             (*curwin.get()).w_curswant = left;
@@ -261,9 +436,9 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).cmdchar >= 'A' as c_int && (*cap).cmdchar <= 'Z' as c_int {
-            if VIsual_mode.get() != Ctrl_V {
-                VIsual_mode_orig.set(VIsual_mode.get());
-                VIsual_mode.set('V' as c_int);
+            if !visual_mode().is_block() {
+                VIsual_mode_orig.set(visual_mode());
+                set_visual_mode(VisualMode::LINE);
             } else if (*cap).cmdchar == 'C' as c_int || (*cap).cmdchar == 'D' as c_int {
                 (*curwin.get()).w_curswant = MAXCOL as colnr_T;
             }
@@ -286,8 +461,8 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
 unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        VIsual.set((*curwin.get()).w_cursor);
-        VIsual_active.set(true);
+        set_visual_anchor((*curwin.get()).w_cursor);
+        set_visual_active(true);
         VIsual_reselect.set(1);
         if (*cap).arg == 0 {
             may_start_select('c' as c_int);
@@ -302,7 +477,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         // `check_cursor`/`coladvance` clamp whatever comes out -- so wrapping
         // is both what the C produces and safe. The transpile used Rust's
         // checked operators here and aborted the debug build instead.
-        if resel_VIsual_mode.get() != 'v' as c_int || resel_VIsual_line_count.get() > 1 {
+        if !resel_VIsual_mode.get().is_char() || resel_VIsual_line_count.get() > 1 {
             (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum.wrapping_add(
                 resel_VIsual_line_count
                     .get()
@@ -311,9 +486,9 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
             );
             check_cursor(curwin.get());
         }
-        VIsual_mode.set(resel_VIsual_mode.get());
+        set_visual_mode(resel_VIsual_mode.get());
 
-        if VIsual_mode.get() == 'v' as c_int {
+        if visual_mode().is_char() {
             if resel_VIsual_line_count.get() <= 1 {
                 update_curswant_force();
                 (*curwin.get()).w_curswant = (*curwin.get())
@@ -331,11 +506,11 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         if resel_VIsual_vcol.get() == MAXCOL as c_int {
             (*curwin.get()).w_curswant = MAXCOL as colnr_T;
             coladvance(curwin.get(), MAXCOL as c_int);
-        } else if VIsual_mode.get() == Ctrl_V {
+        } else if visual_mode().is_block() {
             // The width is measured from the *start* line, so the cursor goes
             // there while 'curswant' is recomputed and comes back after.
             let lnum = (*curwin.get()).w_cursor.lnum;
-            (*curwin.get()).w_cursor.lnum = VIsual.get().lnum;
+            (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
             update_curswant_force();
             (*curwin.get()).w_curswant = (*curwin.get()).w_curswant.wrapping_add(
                 resel_VIsual_vcol
@@ -374,19 +549,19 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
             return;
         }
 
-        VIsual_select.set((*cap).arg != 0);
-        if VIsual_active.get() {
+        set_visual_select((*cap).arg != 0);
+        if visual_active() {
             // The same key again leaves Visual mode; a different one switches
             // to that kind of selection.
-            if VIsual_mode.get() == (*cap).cmdchar {
+            if visual_mode() == VisualMode::from_raw((*cap).cmdchar) {
                 end_visual_mode();
             } else {
-                VIsual_mode.set((*cap).cmdchar);
+                set_visual_mode(VisualMode::from_raw((*cap).cmdchar));
                 showmode();
                 may_trigger_modechanged();
             }
             redraw_curbuf_later(UPD_INVERTED);
-        } else if (*cap).count0 > 0 && resel_VIsual_mode.get() != NUL {
+        } else if (*cap).count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
             reselect_scaled(cap);
         } else {
             if (*cap).arg == 0 {
@@ -395,7 +570,7 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
             n_start_visual_mode((*cap).cmdchar);
             // An exclusive selection needs one more character to cover the
             // same text, so the count is raised before it is spent.
-            if VIsual_mode.get() != 'V' as c_int && selection_exclusive() {
+            if !visual_mode().is_line() && selection_exclusive() {
                 (*cap).count1 += 1;
             } else {
                 VIsual_select_exclu_adj.set(false);
@@ -405,9 +580,9 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
                 (*cap).count1 -= 1;
                 (*cap).count1 > 0
             } {
-                if VIsual_mode.get() == 'v' as c_int || VIsual_mode.get() == Ctrl_V {
+                if visual_mode().is_char() || visual_mode().is_block() {
                     nv_right(cap);
-                } else if VIsual_mode.get() == 'V' as c_int {
+                } else if visual_mode().is_line() {
                     nv_down(cap);
                 }
             }
@@ -431,13 +606,13 @@ pub(crate) fn may_start_select(c: c_int) {
     // SAFETY: 'selectmode' is a C string option.
     let by_selectmode = unsafe { !vim_strchr(p_slm.get(), c).is_null() };
     let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
-    VIsual_select.set(typed && by_selectmode);
+    set_visual_select(typed && by_selectmode);
 }
 
 /// Enter Visual mode of kind `c` at the cursor.
 pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
-    VIsual_mode.set(c);
-    VIsual_active.set(true);
+    set_visual_mode(VisualMode::from_raw(c));
+    set_visual_active(true);
     VIsual_reselect.set(1);
     // SAFETY: `curwin` is the current window.
     unsafe {
@@ -450,7 +625,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
             validate_virtcol(curwin.get());
             coladvance(curwin.get(), (*curwin.get()).w_virtcol);
         }
-        VIsual.set((*curwin.get()).w_cursor);
+        set_visual_anchor((*curwin.get()).w_cursor);
         fold_adjust_visual();
         may_trigger_modechanged();
         setmouse();
@@ -485,35 +660,35 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
         }
 
         let tpos;
-        if VIsual_active.get() {
-            let mode = VIsual_mode.get();
-            VIsual_mode.set((*vi).vi_mode);
-            (*vi).vi_mode = mode;
-            (*curbuf.get()).b_visual_mode_eval = mode;
+        if visual_active() {
+            let mode = visual_mode();
+            set_visual_mode(VisualMode::from_raw((*vi).vi_mode));
+            (*vi).vi_mode = mode.raw();
+            (*curbuf.get()).b_visual_mode_eval = mode.raw();
             let curswant = (*curwin.get()).w_curswant;
             (*curwin.get()).w_curswant = (*vi).vi_curswant;
             (*vi).vi_curswant = curswant;
             tpos = (*vi).vi_end;
             (*vi).vi_end = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor = (*vi).vi_start;
-            (*vi).vi_start = VIsual.get();
+            (*vi).vi_start = visual_anchor();
         } else {
-            VIsual_mode.set((*vi).vi_mode);
+            set_visual_mode(VisualMode::from_raw((*vi).vi_mode));
             (*curwin.get()).w_curswant = (*vi).vi_curswant;
             tpos = (*vi).vi_end;
             (*curwin.get()).w_cursor = (*vi).vi_start;
         }
 
-        VIsual_active.set(true);
+        set_visual_active(true);
         VIsual_reselect.set(1);
         // Both ends are checked against the buffer: it may have shrunk since.
         check_cursor(curwin.get());
-        VIsual.set((*curwin.get()).w_cursor);
+        set_visual_anchor((*curwin.get()).w_cursor);
         (*curwin.get()).w_cursor = tpos;
         check_cursor(curwin.get());
         update_topline(curwin.get());
         if (*cap).arg != 0 {
-            VIsual_select.set(true);
+            set_visual_select(true);
             VIsual_select_reg.set(0);
         } else {
             may_start_select('c' as c_int);
@@ -529,11 +704,11 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get()
+        if visual_active()
             && (*(*cap).oap).inclusive
             && selection_exclusive()
             && gchar_cursor() != NUL
-            && lt(VIsual.get(), (*curwin.get()).w_cursor)
+            && lt(visual_anchor(), (*curwin.get()).w_cursor)
         {
             inc_cursor();
             (*(*cap).oap).inclusive = false;
@@ -548,8 +723,8 @@ pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn unadjust_for_sel() -> bool {
     // SAFETY: `curwin` is the current window and `VIsual` a live position.
     unsafe {
-        if selection_exclusive() && !equalpos(VIsual.get(), (*curwin.get()).w_cursor) {
-            if lt(VIsual.get(), (*curwin.get()).w_cursor) {
+        if selection_exclusive() && !equalpos(visual_anchor(), (*curwin.get()).w_cursor) {
+            if lt(visual_anchor(), (*curwin.get()).w_cursor) {
                 return unadjust_for_sel_inner(&raw mut (*curwin.get()).w_cursor);
             }
             return with_visual_anchor(|anchor| unadjust_for_sel_inner(anchor));
@@ -588,8 +763,8 @@ pub(crate) unsafe fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool {
 
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
 pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
-    if VIsual_active.get() {
-        VIsual_select.set(true);
+    if visual_active() {
+        set_visual_select(true);
         VIsual_select_reg.set(0);
     } else if VIsual_reselect.get() != 0 {
         // Re-enter through `gv`, which is where the reselection lives.

@@ -54,7 +54,8 @@ use crate::drawscreen::{
     redraw_win_line, redrawing, win_cursorline_standout,
 };
 use crate::fold::fold_adjust_cursor;
-use crate::main::{VIsual_active, cmdwin_win, curbuf};
+use crate::main::{cmdwin_win, curbuf};
+use crate::normal::visual_active;
 use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
 use crate::plines::{
@@ -405,7 +406,7 @@ fn redraw_for_cursorcolumn(win: Win) {
         win.redraw_later(UPD_VALID);
     }
     // The current buffer's cursor moving in Visual mode changes the highlight.
-    if VIsual_active.get() && win.w_buffer == curbuf.get() {
+    if visual_active() && win.w_buffer == curbuf.get() {
         // SAFETY: `curbuf` is set from startup to exit.
         unsafe { redraw_buf_later(curbuf.get(), UPD_INVERTED) };
     }

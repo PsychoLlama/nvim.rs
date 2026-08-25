@@ -54,11 +54,11 @@ use crate::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
 use crate::main::{
-    Columns, VIsual_active, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, current_sctx,
-    curtab, curwin, default_grid, did_emsg, e_cmdwin, e_invchan, ex_normal_busy, first_tabpage,
-    firstbuf, firstwin, g_stats, lines_left, msg_didany, msg_no_more, msg_scroll, must_redraw,
-    need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz, pum_grid, redraw_tabline,
-    tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
+    Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, current_sctx, curtab, curwin,
+    default_grid, did_emsg, e_cmdwin, e_invchan, ex_normal_busy, first_tabpage, firstbuf, firstwin,
+    g_stats, lines_left, msg_didany, msg_no_more, msg_scroll, must_redraw, need_wait_return,
+    ns_hl_fast, ns_hl_global, p_cpo, p_lz, pum_grid, redraw_tabline, tslua_query_parse_count,
+    typebuf_was_filled, vgetc_busy,
 };
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;

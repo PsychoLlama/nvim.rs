@@ -14,11 +14,8 @@
 use core::ffi::CStr;
 
 use super::*;
-use crate::keycodes::Ctrl_V;
+use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::types::{MAXPATHL, NUL, ShmFlag, Vv};
-
-/// `VIsual_mode` for a linewise selection.
-const VISUAL_LINE: c_int = 'V' as c_int;
 
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
 ///
@@ -60,7 +57,7 @@ pub unsafe fn showmode() -> c_int {
             && (State.get() & MODE_TERMINAL != 0
                 || State.get() & MODE_INSERT != 0
                 || restart_edit.get() != NUL
-                || VIsual_active.get());
+                || visual_active());
         let can_show_mode = p_ch.get() != 0 || ui_has(kUIMessages);
 
         if (do_mode || reg_recording.get() != 0) && can_show_mode {
@@ -177,7 +174,7 @@ pub unsafe fn showmode() -> c_int {
                         put_translated(c" (paste)");
                     }
 
-                    if VIsual_active.get() {
+                    if visual_active() {
                         // Upstream spells this as arithmetic over a `switch`,
                         // and does not concatenate the two words: the whole
                         // phrase is one translatable string.
@@ -187,9 +184,9 @@ pub unsafe fn showmode() -> c_int {
                         // be both, so nothing observes the difference.
                         put_translated(
                             match (
-                                VIsual_select.get(),
-                                VIsual_mode.get() == Ctrl_V,
-                                VIsual_mode.get() == VISUAL_LINE,
+                                visual_select(),
+                                visual_mode().is_block(),
+                                visual_mode().is_line(),
                             ) {
                                 (false, true, _) => c" VISUAL BLOCK",
                                 (false, _, true) => c" VISUAL LINE",
@@ -233,7 +230,7 @@ pub unsafe fn showmode() -> c_int {
         msg_ext_flush_showmode();
 
         // In Visual mode the size of the selection is redrawn.
-        if VIsual_active.get() {
+        if visual_active() {
             clear_showcmd();
         }
 

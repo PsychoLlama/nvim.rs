@@ -24,6 +24,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, FoFlag, NUL, OK};
 
@@ -243,7 +244,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
 
                 // `<C-S-Right>` may have started Visual mode; adjust its
                 // position for the characters just deleted.
-                if VIsual_active.get() {
+                if visual_active() {
                     check_visual_pos();
                 }
             }

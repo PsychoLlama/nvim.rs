@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -18,7 +19,7 @@ use crate::cursor::{
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::eval::funcs::do_searchpair;
 use crate::indent::inindent;
-use crate::main::{VIsual, VIsual_active, VIsual_mode, curwin, p_cpo, p_sel, p_ws};
+use crate::main::{curwin, p_cpo, p_sel, p_ws};
 use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{decl, inc, incl, ml_get_pos};
@@ -68,7 +69,7 @@ pub unsafe fn current_block(
         let mut old_start = old_end;
 
         // Starting on a bracket takes the whole block, brackets included.
-        if !VIsual_active.get() || equalpos(VIsual.get(), (*curwin.get()).w_cursor) {
+        if !visual_active() || equalpos(visual_anchor(), (*curwin.get()).w_cursor) {
             setpcmark();
             if what == '{' as c_int {
                 // Ignore the indent.
@@ -82,11 +83,11 @@ pub unsafe fn current_block(
                 // On the opening bracket: move just past it.
                 (*curwin.get()).w_cursor.col += 1;
             }
-        } else if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-            old_start = VIsual.get();
-            (*curwin.get()).w_cursor = VIsual.get(); // cursor at the low end
+        } else if lt(visual_anchor(), (*curwin.get()).w_cursor) {
+            old_start = visual_anchor();
+            (*curwin.get()).w_cursor = visual_anchor(); // cursor at the low end
         } else {
-            old_end = VIsual.get();
+            old_end = visual_anchor();
         }
 
         // Search backwards for the unclosed bracket. Quotes are ignored here,
@@ -158,7 +159,7 @@ pub unsafe fn current_block(
                 }
 
                 // In Visual mode, an empty result means there is no inner block.
-                if equalpos(start_pos, *end_pos) && VIsual_active.get() {
+                if equalpos(start_pos, *end_pos) && visual_active() {
                     (*curwin.get()).w_cursor = old_pos;
                     return FAIL;
                 }
@@ -168,7 +169,7 @@ pub unsafe fn current_block(
                 if lt(start_pos, old_start)
                     || lt(old_end, (*curwin.get()).w_cursor)
                     || equalpos(start_pos, (*curwin.get()).w_cursor)
-                    || !VIsual_active.get()
+                    || !visual_active()
                 {
                     break;
                 }
@@ -190,15 +191,15 @@ pub unsafe fn current_block(
             }
         }
 
-        if VIsual_active.get() {
+        if visual_active() {
             if *p_sel.get() as c_int == 'e' as c_int {
                 inc(&mut (*curwin.get()).w_cursor);
             }
             if sol && gchar_cursor() != NUL {
                 inc(&mut (*curwin.get()).w_cursor); // include the line break
             }
-            VIsual.set(start_pos);
-            VIsual_mode.set('v' as c_int);
+            set_visual_anchor(start_pos);
+            set_visual_mode(VisualMode::CHAR);
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
             showmode();
         } else {
@@ -290,12 +291,12 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
         let old_pos = (*curwin.get()).w_cursor;
         let mut old_end = (*curwin.get()).w_cursor; // where we started
         let mut old_start = old_end;
-        if !VIsual_active.get() || *p_sel.get() as c_int == 'e' as c_int {
+        if !visual_active() || *p_sel.get() as c_int == 'e' as c_int {
             decl(&mut old_end); // `old_end` is inclusive
         }
 
         // Starting on a `<aaa>` selects that block.
-        if !VIsual_active.get() || equalpos(VIsual.get(), (*curwin.get()).w_cursor) {
+        if !visual_active() || equalpos(visual_anchor(), (*curwin.get()).w_cursor) {
             setpcmark();
             // Ignore the indent.
             while inindent(1) {
@@ -320,11 +321,11 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
                 dec_cursor();
                 old_end = (*curwin.get()).w_cursor;
             }
-        } else if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-            old_start = VIsual.get();
-            (*curwin.get()).w_cursor = VIsual.get(); // cursor at the low end
+        } else if lt(visual_anchor(), (*curwin.get()).w_cursor) {
+            old_start = visual_anchor();
+            (*curwin.get()).w_cursor = visual_anchor(); // cursor at the low end
         } else {
-            old_end = VIsual.get();
+            old_end = visual_anchor();
         }
 
         let mut start_pos;
@@ -419,7 +420,7 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
                 // new line, leave the cursor where it is and make the
                 // operation exclusive instead, so the line feed is selected.
                 if *c as c_int == '<' as c_int
-                    && !VIsual_active.get()
+                    && !visual_active()
                     && (*curwin.get()).w_cursor.col == 0
                 {
                     is_inclusive = false;
@@ -447,10 +448,7 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
 
                 // In Visual mode with exactly the text we already had, take
                 // the tags in and try again.
-                if VIsual_active.get()
-                    && equalpos(start_pos, old_start)
-                    && equalpos(end_pos, old_end)
-                {
+                if visual_active() && equalpos(start_pos, old_start) && equalpos(end_pos, old_end) {
                     do_include = true;
                     (*curwin.get()).w_cursor = old_start;
                     count = count_arg;
@@ -460,7 +458,7 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
             break;
         }
 
-        if VIsual_active.get() {
+        if visual_active() {
             // An end before the start means there is no text between the
             // tags: select the character under the cursor.
             if lt(end_pos, start_pos) {
@@ -468,8 +466,8 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
             } else if *p_sel.get() as c_int == 'e' as c_int {
                 inc_cursor();
             }
-            VIsual.set(start_pos);
-            VIsual_mode.set('v' as c_int);
+            set_visual_anchor(start_pos);
+            set_visual_mode(VisualMode::CHAR);
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
             showmode();
         } else {

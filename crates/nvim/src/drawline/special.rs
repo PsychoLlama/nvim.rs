@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::keycodes::Ctrl_V;
+use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -199,8 +199,8 @@ impl Cells {
             let want = self.lcs_eol_todo
                 && ((self.area_attr != 0
                     && wlv.vcol == wlv.fromcol
-                    && (VIsual_mode.get() != Ctrl_V
-                        || wlv.lnum == VIsual.get().lnum
+                    && (!visual_mode().is_block()
+                        || wlv.lnum == visual_anchor().lnum
                         || wlv.lnum == (*curwin.get()).w_cursor.lnum))
                     || prevcol_hl_flag);
             if !want {
@@ -254,8 +254,8 @@ impl Cells {
                 self.eol_cell(wlv, wp);
             } else if self.cell_char != NUL as schar_T {
                 self.escaped(wlv, wp);
-            } else if VIsual_active.get()
-                && (VIsual_mode.get() == Ctrl_V || VIsual_mode.get() == 'v' as ::core::ffi::c_int)
+            } else if visual_active()
+                && (visual_mode().is_block() || visual_mode().is_char())
                 && virtual_active(wp)
                 && wlv.tocol != MAXCOL as ::core::ffi::c_int
                 && wlv.vcol < wlv.tocol
@@ -474,7 +474,7 @@ impl Cells {
             ((*wp).w_onebuf_opt.wo_list != 0
                 || ((wlv.fromcol >= 0 || self.fromcol_prev >= 0)
                     && wlv.tocol > wlv.vcol
-                    && VIsual_mode.get() != Ctrl_V
+                    && !visual_mode().is_block()
                     && wlv.col < self.view_width
                     && !(self.noinvcur
                         && wlv.lnum == (*wp).w_cursor.lnum

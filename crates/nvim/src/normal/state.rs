@@ -32,10 +32,10 @@ use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::main::{
-    KeyTyped, State, VIsual_active, clear_cmdline, cmdwin_result, curbuf, curtab, curwin,
-    did_check_timestamps, did_emsg, did_throw, did_wait_return, diff_need_scrollbind, do_redraw,
-    emsg_on_display, emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, global_busy,
-    got_int, in_assert_fails, keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, last_cursormoved,
+    KeyTyped, State, clear_cmdline, cmdwin_result, curbuf, curtab, curwin, did_check_timestamps,
+    did_emsg, did_throw, did_wait_return, diff_need_scrollbind, do_redraw, emsg_on_display,
+    emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, global_busy, got_int,
+    in_assert_fails, keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, last_cursormoved,
     last_cursormoved_win, may_garbage_collect, mod_mask, msg_didany, msg_didout, msg_hist_off,
     msg_nowait, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo,
     need_wait_return, opcount, p_smd, quit_more, redraw_cmdline, redraw_mode, reg_executing,
@@ -46,7 +46,7 @@ use crate::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
     NormalState, check_scrollbind, clearop, clearopbeep, current_oap, end_visual_mode,
-    find_command, normal_execute, nv_cmds, unshift_special,
+    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::options::kOptFdoFlagAll;
@@ -245,7 +245,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
                     && reg_recording.get() == 0
                     && reg_executing.get() == 0
                 || (cmdchar == 'a' as c_int || cmdchar == 'i' as c_int)
-                    && (pending_op || VIsual_active.get()))
+                    && (pending_op || visual_active()))
     }
 }
 
@@ -257,7 +257,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
         let showing_mode = p_smd.get() != 0
             && msg_silent.get() == 0
             && (restart_edit.get() != 0
-                || VIsual_active.get()
+                || visual_active()
                     && (*s).old_pos.lnum == (*curwin.get()).w_cursor.lnum
                     && (*s).old_pos.col == (*curwin.get()).w_cursor.col)
             && (clear_cmdline.get() || redraw_cmdline.get())
@@ -267,7 +267,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
         // The other way in: an error is on display and insert mode is
         // pending, with no Visual selection to describe instead.
         let error_on_display = restart_edit.get() != 0
-            && !VIsual_active.get()
+            && !visual_active()
             && msg_scroll.get() != 0
             && emsg_on_display.get();
 

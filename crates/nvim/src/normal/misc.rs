@@ -17,15 +17,16 @@ use crate::getchar::{
 use crate::help::ex_help;
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, K_COMMAND, K_IGNORE, K_LUA};
 use crate::main::{
-    KeyTyped, VIsual_active, VIsual_select, clear_cmdline, cmdwin_result, cmdwin_type, curbuf,
-    curwin, did_emsg, ex_normal_busy, finish_op, firstwin, got_int, may_garbage_collect,
-    mode_displayed, redraw_mode, restart_VIsual_select, restart_edit, typebuf_was_empty,
+    KeyTyped, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curwin, did_emsg, ex_normal_busy,
+    finish_op, firstwin, got_int, may_garbage_collect, mode_displayed, redraw_mode,
+    restart_VIsual_select, restart_edit, typebuf_was_empty,
 };
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
     CA_COMMAND_BUSY, GETF_ALT, GETF_SETMARK, NULL, checkclearop, checkclearopq, clearop,
-    clearopbeep, end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, v_visop,
+    clearopbeep, end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, set_visual_select,
+    v_visop, visual_active, visual_select,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
@@ -73,7 +74,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         let is_lua = (*cap).cmdchar == K_LUA;
         // A plain `:` during a selection is the `:` *operator*, which puts the
         // selection's range on the command line. The synthetic keys are not.
-        if VIsual_active.get() && !is_cmdkey && !is_lua {
+        if visual_active() && !is_cmdkey && !is_lua {
             nv_operator(cap);
             return;
         }
@@ -134,8 +135,8 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() {
-            VIsual_select.set(!VIsual_select.get());
+        if visual_active() {
+            set_visual_select(!visual_select());
             may_trigger_modechanged();
             showmode();
         } else if !checkclearop((*cap).oap) {
@@ -148,7 +149,7 @@ pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_ctrlh(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() && VIsual_select.get() {
+        if visual_active() && visual_select() {
             (*cap).cmdchar = 'x' as c_int;
             v_visop(cap);
         } else {
@@ -182,8 +183,8 @@ pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_ctrlo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if VIsual_active.get() && VIsual_select.get() {
-            VIsual_select.set(false);
+        if visual_active() && visual_select() {
+            set_visual_select(false);
             may_trigger_modechanged();
             showmode();
             // 2 means "one command, then back to Select mode".
@@ -233,7 +234,7 @@ pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         clearop((*cap).oap);
-        if VIsual_active.get() {
+        if visual_active() {
             end_visual_mode();
         }
         do_cmdline_cmd(c"st".as_ptr());
@@ -257,7 +258,7 @@ pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
         if cmdwin_type.get() != 0 {
             cmdwin_result.set(Ctrl_C);
         }
-        if VIsual_active.get() {
+        if visual_active() {
             end_visual_mode();
             redraw_curbuf_later(UPD_INVERTED);
         }
@@ -276,11 +277,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
             && (*cap).count0 == 0
             && (*(*cap).oap).regname == 0;
         if (*cap).arg != 0 {
-            if restart_edit.get() == 0
-                && cmdwin_type.get() == 0
-                && !VIsual_active.get()
-                && no_reason
-            {
+            if restart_edit.get() == 0 && cmdwin_type.get() == 0 && !visual_active() && no_reason {
                 let hint = if any_buf_is_changed() {
                     c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
                 } else {
@@ -303,7 +300,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
             cmdwin_result.set(K_IGNORE);
             return;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             end_visual_mode();
             check_cursor_col(curwin.get());
             (*curwin.get()).w_set_curswant = true;

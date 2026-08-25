@@ -20,9 +20,10 @@ use crate::cursor::{check_cursor, gchar_cursor};
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
 use crate::main::{
-    State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, curbuf, current_sctx, curwin,
-    e_invarg2, ex_normal_busy, p_sel, restart_edit,
+    State, VIsual_reselect, curbuf, current_sctx, curwin, e_invarg2, ex_normal_busy, p_sel,
+    restart_edit,
 };
+use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{buf_T, colnr_T, exarg_T, linenr_T, pos_T, save_state_T, win_T};
@@ -118,7 +119,7 @@ fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
 fn select_range(line1: linenr_T, line2: linenr_T) {
     let visual = with_curbuf(|buf| buf.b_visual);
     let end = if visual.vi_start.lnum == line1 && visual.vi_end.lnum == line2 {
-        VIsual_mode.set(visual.vi_mode);
+        set_visual_mode(VisualMode::from_raw(visual.vi_mode));
         with_curwin(|win| {
             win.w_cursor = visual.vi_start;
             win.w_curswant = visual.vi_curswant;
@@ -126,7 +127,7 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
         visual.vi_end
     } else {
         // Line-wise over the range.
-        VIsual_mode.set(c_int::from(b'V'));
+        set_visual_mode(VisualMode::LINE);
         with_curwin(|win| {
             win.w_cursor.lnum = line1;
             win.w_cursor.col = 1;
@@ -138,10 +139,10 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
         }
     };
 
-    VIsual_active.set(true);
+    set_visual_active(true);
     VIsual_reselect.set(1);
     check_cursor_now();
-    VIsual.set(with_curwin(|win| win.w_cursor));
+    set_visual_anchor(with_curwin(|win| win.w_cursor));
     with_curwin(|win| win.w_cursor = end);
     check_cursor_now();
 

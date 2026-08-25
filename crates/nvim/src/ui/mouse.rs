@@ -9,7 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::main::{State, VIsual_active, curbuf, p_mouse};
+use crate::main::{State, curbuf, p_mouse};
+use crate::normal::visual_active;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
@@ -44,7 +45,7 @@ pub unsafe fn ui_check_mouse() {
         return;
     }
     let state = State.get();
-    let checkfor = if VIsual_active.get() {
+    let checkfor = if visual_active() {
         MOUSE_VISUAL
     } else if state == MODE_HITRETURN || state == MODE_ASKMORE || state == MODE_SETWSIZE {
         MOUSE_RETURN

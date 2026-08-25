@@ -20,11 +20,9 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_getln::text_or_buf_locked;
 use crate::getchar::beep_flush;
-use crate::main::{
-    VIsual_active, curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw,
-};
+use crate::main::{curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::message::{emsg, iemsg};
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::{reset_VIsual_and_resel, visual_active};
 use crate::types::{FAIL, OK, OptInt, frame_T, win_T};
 use crate::winlayer::{Frame, Win, frames};
 
@@ -161,7 +159,7 @@ pub(crate) fn exchange(prenum: c_int) {
 
     if wp.w_buffer != curbuf.get() {
         reset_VIsual_and_resel();
-    } else if VIsual_active.get() {
+    } else if visual_active() {
         wp.w_cursor = cur.w_cursor;
     }
     // SAFETY: a live window; nothing derived from it is read afterwards.

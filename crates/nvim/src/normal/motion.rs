@@ -18,15 +18,15 @@ use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::main::{
-    VIsual_active, VIsual_mode, VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf,
-    curwin, ins_at_eol, mod_mask, p_sel, p_ww, restart_edit,
+    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf, curwin, ins_at_eol, mod_mask,
+    p_sel, p_ww, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
     CA_NO_ADJ_OP_END, CAR, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel, clearopbeep,
-    kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel,
+    kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
 use crate::options::{
@@ -315,7 +315,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
         // With an inclusive selection the cursor may sit one past the last
         // character; 'virtualedit' handles that itself.
         let past_line =
-            VIsual_active.get() && *p_sel.get() as c_int != 'o' as c_int && !virtual_active(win);
+            visual_active() && *p_sel.get() as c_int != 'o' as c_int && !virtual_active(win);
 
         // Which 'whichwrap' flag lets this key wrap to the next line.
         let wrap_flag = if (*cap).cmdchar == ' ' as c_int {
@@ -550,8 +550,8 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
         // made; the search has to run against the real cursor position.
         let mut cursor_dec = false;
         if *p_sel.get() as c_int == 'e' as c_int
-            && VIsual_active.get()
-            && VIsual_mode.get() == 'v' as c_int
+            && visual_active()
+            && visual_mode().is_char()
             && VIsual_select_exclu_adj.get()
         {
             unadjust_for_sel();
@@ -779,7 +779,7 @@ pub(crate) unsafe fn adjust_cursor(oap: *mut oparg_T) {
     unsafe {
         if (*curwin.get()).w_cursor.col > 0
             && gchar_cursor() == NUL
-            && (!VIsual_active.get() || *p_sel.get() as c_int == 'o' as c_int)
+            && (!visual_active() || *p_sel.get() as c_int == 'o' as c_int)
             && !virtual_active(curwin.get())
             && get_ve_flags(curwin.get()) & kOptVeFlagOnemore as c_uint == 0
         {

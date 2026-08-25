@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
+use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
 use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -347,9 +348,9 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
 
         if c == 'v' as c_int {
             // Redo a Visual-mode operator over the same area.
-            VIsual.set((*curwin.get()).w_cursor);
-            VIsual_active.set(true);
-            VIsual_select.set(false);
+            set_visual_anchor((*curwin.get()).w_cursor);
+            set_visual_active(true);
+            set_visual_select(false);
             VIsual_reselect.set(1);
             redo_VIsual_busy.set(true);
             c = read_redo(false, old_redo);

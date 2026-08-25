@@ -27,13 +27,13 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
 use crate::main::{
-    VIsual_active, curbuf, curwin, firstwin, globaldir, last_chdir_reason, msg_scrolled, p_acd,
-    p_spk, p_wh, p_wiw, prevwin, redraw_tabline, restart_edit,
+    curbuf, curwin, firstwin, globaldir, last_chdir_reason, msg_scrolled, p_acd, p_spk, p_wh,
+    p_wiw, prevwin, redraw_tabline, restart_edit,
 };
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::{reset_VIsual_and_resel, visual_active};
 use crate::option::buf_copy_options;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
@@ -63,7 +63,7 @@ pub(crate) fn goto_win(wp: Win) {
     if wp.w_buffer != curbuf.get() {
         // careful: triggers ModeChanged autocommand
         reset_VIsual_and_resel();
-    } else if VIsual_active.get() {
+    } else if visual_active() {
         wp.w_cursor = cur_win().w_cursor;
     }
 

@@ -33,6 +33,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::r#move::WinValid;
+use crate::normal::visual_mode;
 use crate::types::NUL;
 
 /// Insert `s` into every line of the block below the first, before the block
@@ -493,8 +494,7 @@ pub unsafe fn charwise_block_prep(
 /// buffer.
 pub(crate) unsafe fn get_op_vcol(oap: *mut oparg_T, redo_visual_vcol: colnr_T, initial: bool) {
     unsafe {
-        if VIsual_mode.get() != Ctrl_V
-            || (!initial && (*oap).end.col < (*curwin.get()).w_view_width)
+        if !visual_mode().is_block() || (!initial && (*oap).end.col < (*curwin.get()).w_view_width)
         {
             return;
         }

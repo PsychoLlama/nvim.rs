@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use crate::normal::with_visual_anchor;
+use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
 
 pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
@@ -269,11 +269,11 @@ pub unsafe fn nvim_buf_set_lines(
                     kMarkAdjustApi,
                     kExtmarkNOOP,
                 );
-                if VIsual_active.get() as ::core::ffi::c_int != 0
+                if visual_active() as ::core::ffi::c_int != 0
                     && b == curbuf.get()
-                    && VIsual.get().lnum >= start as linenr_T
+                    && visual_anchor().lnum >= start as linenr_T
                 {
-                    if VIsual.get().lnum >= end as linenr_T {
+                    if visual_anchor().lnum >= end as linenr_T {
                         with_visual_anchor(|a| a.lnum += extra as linenr_T);
                     }
                     check_visual_pos();

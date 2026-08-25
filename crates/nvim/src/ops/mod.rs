@@ -45,12 +45,12 @@ use crate::indent::{
 use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
-    IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
-    VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, curbuf, curbuf_splice_pending,
-    curwin, did_ai, disable_fold_update, e_invarg, e_modifiable, finish_op, got_int, motion_force,
-    mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sbr,
-    p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline, repeat_luaref,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
+    IObuff, Insstart, KeyTyped, State, VIsual_reselect, VIsual_select_reg, ai_col, bangredo,
+    can_si, curbuf, curbuf_splice_pending, curwin, did_ai, disable_fold_update, e_invarg,
+    e_modifiable, finish_op, got_int, motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch,
+    p_fp, p_js, p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy,
+    repeat_cmdline, repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+    restart_edit, virtual_op,
 };
 use crate::mark::{mark_col_adjust, mark_mb_adjustpos};
 use crate::mbyte::{

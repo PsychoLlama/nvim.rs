@@ -41,13 +41,11 @@ use crate::eval::typval::{
     tv_list_append_dict, tv_list_append_string,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    State, VIsual_active, VIsual_select, curbuf, e_cannot_change_menus_while_listing, finish_op,
-    root_menu,
-};
+use crate::main::{State, curbuf, e_cannot_change_menus_while_listing, finish_op, root_menu};
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
+use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
 use crate::semsg_c;
@@ -673,8 +671,8 @@ pub(crate) fn get_menu_mode() -> c_int {
     if State.get() & MODE_TERMINAL != 0 {
         return MENU_INDEX_TERMINAL;
     }
-    if VIsual_active.get() {
-        return if VIsual_select.get() {
+    if visual_active() {
+        return if visual_select() {
             MENU_INDEX_SELECT
         } else {
             MENU_INDEX_VISUAL

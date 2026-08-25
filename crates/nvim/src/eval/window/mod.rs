@@ -60,8 +60,7 @@ use crate::eval::typval::{
 use crate::ex_getln::text_or_buf_locked;
 use crate::garray::{ga_append, ga_concat_len, ga_init};
 use crate::main::{
-    VIsual, VIsual_active, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage,
-    lastwin, p_acd, prevwin,
+    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, lastwin, p_acd, prevwin,
 };
 use crate::memory::{strequal, xfree, xmallocz, xstrdup};
 use crate::r#move::{

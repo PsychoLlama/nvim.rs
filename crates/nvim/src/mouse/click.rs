@@ -18,11 +18,9 @@ use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;
 use crate::eval::typval::tv_clear;
-use crate::keycodes::Ctrl_V;
-use crate::main::{
-    Rows, VIsual, VIsual_active, VIsual_mode, mod_mask, mouse_grid, mouse_row, p_ch,
-};
+use crate::main::{Rows, mod_mask, mouse_grid, mouse_row, p_ch};
 use crate::menu::show_popupmenu;
+use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::{lt, ltoreq};
 use crate::types::{
     OptInt, VAR_FIXED, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, typval_T,
@@ -136,7 +134,7 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> 
     if jump_flags != 0 {
         // SAFETY: `inclusive` is allowed to be null.
         jump_flags = unsafe { jump_to_mouse(jump_flags, ptr::null_mut(), which_button) };
-        let redraw = if VIsual_active.get() {
+        let redraw = if visual_active() {
             UPD_INVERTED
         } else {
             UPD_VALID
@@ -161,7 +159,7 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> 
 ///
 /// Upstream notes that this "might have false negative here".
 fn leaves_selection(m_pos_flag: c_int, mut m_pos: pos_T) -> bool {
-    if !VIsual_active.get() {
+    if !visual_active() {
         return true;
     }
     if m_pos_flag != IN_BUFFER {
@@ -171,9 +169,9 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: pos_T) -> bool {
     // SAFETY: `curwin` is live from startup to exit.
     let win = unsafe { Win::current() };
     let cursor = win.w_cursor;
-    let visual = VIsual.get();
+    let visual = visual_anchor();
 
-    if VIsual_mode.get() == 'V' as c_int {
+    if visual_mode().is_line() {
         return (cursor.lnum <= visual.lnum
             && (m_pos.lnum < cursor.lnum || visual.lnum < m_pos.lnum))
             || (visual.lnum < cursor.lnum
@@ -184,7 +182,7 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: pos_T) -> bool {
     {
         return true;
     }
-    if VIsual_mode.get() == Ctrl_V {
+    if visual_mode().is_block() {
         let (leftcol, rightcol) = vcols_between(win, cursor, visual);
         // The click's own virtual column, as the cursor would show it.
         // SAFETY: a live local position in the current buffer.

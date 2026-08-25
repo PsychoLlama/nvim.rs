@@ -10,11 +10,12 @@ use crate::buffer::buflist_findnr;
 use crate::eval::kMarkAll;
 use crate::eval::typval::{tv_get_string_chk, tv_list_find, tv_list_find_nr, tv_list_len};
 use crate::global_cell::GlobalCell;
-use crate::main::{VIsual, VIsual_active, curbuf, curwin};
+use crate::main::{curbuf, curwin};
 use crate::mark::mark_get;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
+use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
     FAIL, NUL, OK, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
     pos_T, typval_T, uint8_t, win_T,
@@ -165,8 +166,8 @@ pub unsafe fn var2fpos(
         } else if *name.add(0) == b'v' as c_char && *name.add(1) as c_int == NUL {
             // The other end of the Visual selection — but only in the
             // window that owns it.
-            if VIsual_active.get() && wp == curwin.get() {
-                POS.set(VIsual.get());
+            if visual_active() && wp == curwin.get() {
+                POS.set(visual_anchor());
             } else {
                 POS.set((*wp).w_cursor);
             }

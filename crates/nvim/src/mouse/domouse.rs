@@ -39,14 +39,17 @@ use crate::keycodes::{
     get_mouse_button,
 };
 use crate::main::{
-    Columns, KeyStuffed, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select,
-    cmdwin_type, mod_mask, mode_displayed, mouse_col, mouse_dragging, mouse_grid,
-    mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd, redraw_cmdline, restart_edit,
-    where_paste_started,
+    Columns, KeyStuffed, State, VIsual_reselect, cmdwin_type, mod_mask, mode_displayed, mouse_col,
+    mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd,
+    redraw_cmdline, restart_edit, where_paste_started,
 };
 use crate::memline::{gchar_pos, inc};
 use crate::r#move::scroll_redraw;
-use crate::normal::{clearop, clearopbeep, end_visual_mode, may_start_select, prep_redo};
+use crate::normal::{
+    VisualMode, clearop, clearopbeep, end_visual_mode, may_start_select, prep_redo,
+    set_visual_active, set_visual_anchor, set_visual_mode, visual_active, visual_anchor,
+    visual_mode, visual_select, with_visual_anchor,
+};
 use crate::pos::{equalpos, lt};
 use crate::register::{do_put, insert_reg, yank_register_mline};
 use crate::search::{FORWARD, findmatch};
@@ -274,12 +277,12 @@ pub(crate) unsafe fn do_mouse(
     }
 
     // JUMP!
-    let old_active = VIsual_active.get();
+    let old_active = visual_active();
     let save_cursor = old_curwin.w_cursor;
 
     // Even though we gate *_VIS flags above, we want to make sure the cursor
     // doesn't move in visual mode unless it is set as a mouse option.
-    if !VIsual_active.get() || mouse_can_visual {
+    if !visual_active() || mouse_can_visual {
         let inclusive = oap.map_or(ptr::null_mut(), Oap::inclusive);
         // SAFETY: `inclusive` is a field of the live operator, or null.
         jump_flags = unsafe { jump_to_mouse(jump_flags, inclusive, which_button) };
@@ -329,7 +332,7 @@ pub(crate) unsafe fn do_mouse(
 
     // Set global flag that we are extending the Visual area with mouse
     // dragging; temporarily minimize 'scrolloff'.
-    if VIsual_active.get() && is_drag && win.scrolloff() != 0 {
+    if visual_active() && is_drag && win.scrolloff() != 0 {
         // In the very first line, allow scrolling one line.
         mouse_dragging.set(if mouse_row.get() == 0 { 2 } else { 1 });
     }
@@ -341,11 +344,11 @@ pub(crate) unsafe fn do_mouse(
         mouse_row.set(0);
     }
 
-    let old_mode = VIsual_mode.get();
+    let old_mode = visual_mode();
     if let Some((start_visual, end_visual)) = visual_corner {
         // Right click in Visual mode.
         extend_visual_block(win, start_visual, end_visual);
-    } else if State.get() & MODE_INSERT != 0 && VIsual_active.get() {
+    } else if State.get() & MODE_INSERT != 0 && visual_active() {
         // If Visual mode started in insert mode, execute "CTRL-O".
         stuff_char(Ctrl_O);
     }
@@ -368,11 +371,11 @@ pub(crate) unsafe fn do_mouse(
     );
 
     // If Visual mode changed show it later.
-    if (!VIsual_active.get() && old_active && mode_displayed.get())
-        || (VIsual_active.get()
+    if (!visual_active() && old_active && mode_displayed.get())
+        || (visual_active()
             && p_smd.get() != 0
             && msg_silent.get() == 0
-            && (!old_active || VIsual_mode.get() != old_mode))
+            && (!old_active || visual_mode() != old_mode))
     {
         redraw_cmdline.set(true);
     }
@@ -496,8 +499,8 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
         // If visual was active, yank the highlighted text and put it before
         // the mouse pointer position.  In Select mode replace the highlighted
         // text with the clipboard.
-        if VIsual_active.get() {
-            if VIsual_select.get() {
+        if visual_active() {
+            if visual_select() {
                 stuff_char(Ctrl_G);
                 // SAFETY: a NUL-terminated literal.
                 unsafe { stuff_readbuf(c"\"+p".as_ptr()) };
@@ -792,7 +795,7 @@ fn dispatch_action(a: Action, win: Win) {
     if mods & MOD_MASK_SHIFT != 0 {
         // Shift-Mouse click searches for the next occurrence of the word
         // under the mouse pointer.
-        if State.get() & MODE_INSERT != 0 || (VIsual_active.get() && VIsual_select.get()) {
+        if State.get() & MODE_INSERT != 0 || (visual_active() && visual_select()) {
             stuff_char(Ctrl_O);
         }
         stuff_char(if which_button == MOUSE_LEFT {
@@ -817,37 +820,37 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    if VIsual_active.get() && !old_active {
-        VIsual_mode.set(if mods & MOD_MASK_ALT != 0 {
+    if visual_active() && !old_active {
+        set_visual_mode(VisualMode::from_raw(if mods & MOD_MASK_ALT != 0 {
             Ctrl_V
         } else {
             'v' as c_int
-        });
+        }));
     }
 }
 
 /// A double, triple or quadruple click starts or widens a Visual selection: a
 /// word, a line, or -- for a double click on a bracket -- the block it opens.
 fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mods: c_int) {
-    if is_click || !VIsual_active.get() {
-        if VIsual_active.get() {
-            orig_cursor.set(VIsual.get());
+    if is_click || !visual_active() {
+        if visual_active() {
+            orig_cursor.set(visual_anchor());
         } else {
-            VIsual.set(win.w_cursor);
-            orig_cursor.set(VIsual.get());
-            VIsual_active.set(true);
+            set_visual_anchor(win.w_cursor);
+            orig_cursor.set(visual_anchor());
+            set_visual_active(true);
             VIsual_reselect.set(1);
             // Start Select mode if 'selectmode' contains "mouse".
             may_start_select('o' as c_int);
             setmouse();
         }
-        VIsual_mode.set(match mods & MOD_MASK_MULTI_CLICK {
+        set_visual_mode(match mods & MOD_MASK_MULTI_CLICK {
             // Double click with ALT pressed makes it blockwise.
-            MOD_MASK_2CLICK if mods & MOD_MASK_ALT != 0 => Ctrl_V,
-            MOD_MASK_2CLICK => 'v' as c_int,
-            MOD_MASK_3CLICK => 'V' as c_int,
-            MOD_MASK_4CLICK => Ctrl_V,
-            _ => VIsual_mode.get(),
+            MOD_MASK_2CLICK if mods & MOD_MASK_ALT != 0 => VisualMode::BLOCK,
+            MOD_MASK_2CLICK => VisualMode::CHAR,
+            MOD_MASK_3CLICK => VisualMode::LINE,
+            MOD_MASK_4CLICK => VisualMode::BLOCK,
+            _ => visual_mode(),
         });
     }
 
@@ -902,14 +905,14 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
     };
     oap.motion_type = kMTCharWise;
 
-    if VIsual_mode.get() != 'v' as c_int {
+    if !visual_mode().is_char() {
         return false;
     }
     // SAFETY: reads the character-class tables.
     if unsafe { vim_iswordc(char_at(probe)) } {
         return false;
     }
-    if !equalpos(win.w_cursor, VIsual.get()) {
+    if !equalpos(win.w_cursor, visual_anchor()) {
         return false;
     }
     let Some(pos) = oap.findmatch() else {
@@ -918,10 +921,10 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
 
     win.w_cursor = *pos;
     if oap.motion_type == kMTLineWise {
-        VIsual_mode.set('V' as c_int);
+        set_visual_mode(VisualMode::LINE);
     } else if selection_exclusive() {
-        if lt(win.w_cursor, VIsual.get()) {
-            VIsual.with_mut(|visual| visual.col += 1);
+        if lt(win.w_cursor, visual_anchor()) {
+            with_visual_anchor(|visual| visual.col += 1);
         } else {
             win.w_cursor.col += 1;
         }
@@ -959,8 +962,8 @@ fn has_clipboard_provider() -> bool {
 /// Run `f` over the Visual anchor through a copy: the word walk it is used for
 /// reads the buffer line, which must not happen with the cell borrowed.
 fn with_visual(f: unsafe fn(Pos)) {
-    let mut visual = VIsual.get();
+    let mut visual = visual_anchor();
     // SAFETY: a live local position in the current buffer.
     unsafe { f(Pos::new(&raw mut visual)) };
-    VIsual.set(visual);
+    set_visual_anchor(visual);
 }

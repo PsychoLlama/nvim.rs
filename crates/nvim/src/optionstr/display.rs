@@ -22,9 +22,9 @@ use crate::ex_getln::check_opt_wim;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
 use crate::main::{
-    VIsual_active, breakat_flags, cmdpreview, curwin, e_unsupportedoption, firstbuf, km_startsel,
-    km_stopsel, p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert,
-    p_pumborder, p_ve, p_winborder, ve_flags,
+    breakat_flags, cmdpreview, curwin, e_unsupportedoption, firstbuf, km_startsel, km_stopsel,
+    p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pumborder, p_ve,
+    p_winborder, ve_flags,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
@@ -49,6 +49,7 @@ use super::{
     kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_flags, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
+use crate::normal::visual_active;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.
@@ -236,7 +237,7 @@ pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
         return errmsg;
     }
     // The Visual-mode cursor shape is drawn as part of the line.
-    if VIsual_active.get() {
+    if visual_active() {
         // SAFETY: the current window is live.
         unsafe { redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum) };
     }
@@ -361,7 +362,7 @@ pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
     }
     // Whether the character under the cursor is inside the selection just
     // changed.
-    if VIsual_active.get() {
+    if visual_active() {
         // SAFETY: marks the current buffer's windows.
         unsafe { redraw_curbuf_later(UPD_INVERTED) };
     }

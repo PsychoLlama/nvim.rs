@@ -33,6 +33,10 @@ use core::ffi::{c_int, c_void};
 use super::*;
 use crate::keycodes::{K_COMMAND, K_LUA};
 use crate::r#move::WinValid;
+use crate::normal::{
+    VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, set_visual_select,
+    visual_active, visual_anchor, visual_mode, visual_select,
+};
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FoFlag, NUL, OK};
 
@@ -81,7 +85,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         let lbr_saved = (*curwin.get()).w_onebuf_opt.wo_lbr;
         let old_cursor = (*curwin.get()).w_cursor;
 
-        if (!finish_op.get() && !VIsual_active.get()) || (*oap).op_type == OP_NOP {
+        if (!finish_op.get() && !visual_active()) || (*oap).op_type == OP_NOP {
             restore_lbr(lbr_saved != 0);
             return;
         }
@@ -92,14 +96,14 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
 
         // Unwanted line breaks would move every column measured below.
         reset_lbr();
-        (*oap).is_VIsual = VIsual_active.get();
+        (*oap).is_VIsual = visual_active();
         apply_motion_force(oap);
         record_operator_redo(cap, oap, redo_yank);
 
         let mut include_line_break = false;
         if redo_VIsual_busy.get() {
             resume_redo_visual(cap, oap);
-        } else if VIsual_active.get() {
+        } else if visual_active() {
             include_line_break = start_visual_region(cap, oap, gui_yank);
         }
 
@@ -111,7 +115,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         // Set before `VIsual_active` is reset below.
         virtual_op.set(Some(virtual_active(curwin.get())));
 
-        if VIsual_active.get() || redo_VIsual_busy.get() {
+        if visual_active() || redo_VIsual_busy.get() {
             get_op_vcol(oap, REDO_VISUAL.get().rv_vcol, true);
             prepare_visual_redo(cap, oap, gui_yank, redo_yank);
             finish_visual_region(oap, include_line_break, gui_yank, lbr_saved);
@@ -191,12 +195,12 @@ unsafe fn apply_motion_force(oap: *mut oparg_T) {
             (*oap).motion_type = kMTCharWise;
         } else if (*oap).motion_force == Ctrl_V {
             // Turn a line- or charwise motion into a Visual block.
-            if !VIsual_active.get() {
-                VIsual_active.set(true);
-                VIsual.set((*oap).start);
+            if !visual_active() {
+                set_visual_active(true);
+                set_visual_anchor((*oap).start);
             }
-            VIsual_mode.set(Ctrl_V);
-            VIsual_select.set(false);
+            set_visual_mode(VisualMode::BLOCK);
+            set_visual_select(false);
             VIsual_reselect.set(0);
         }
     }
@@ -223,7 +227,7 @@ unsafe fn record_operator_redo(cap: *mut cmdarg_T, oap: *mut oparg_T, redo_yank:
                 | OP_FOLDDELREC
         );
         let replayable = (redo_yank || (*oap).op_type != OP_YANK)
-            && (!VIsual_active.get()
+            && (!visual_active()
                 || (*oap).motion_force != 0
                 // Also redo Operator-pending Visual mode mappings.
                 || ((is_ex_cmdchar(cap) || (*cap).cmdchar == K_LUA)
@@ -287,10 +291,10 @@ unsafe fn resume_redo_visual(cap: *mut cmdarg_T, oap: *mut oparg_T) {
             .w_cursor
             .lnum
             .min((*curbuf.get()).b_ml.ml_line_count);
-        VIsual_mode.set(redo.rv_mode);
+        set_visual_mode(VisualMode::from_raw(redo.rv_mode));
 
-        if redo.rv_vcol == MAXCOL || VIsual_mode.get() == 'v' as c_int {
-            if VIsual_mode.get() != 'v' as c_int {
+        if redo.rv_vcol == MAXCOL || visual_mode().is_char() {
+            if !visual_mode().is_char() {
                 (*curwin.get()).w_curswant = MAXCOL;
             } else if redo.rv_line_count <= 1 {
                 // A one-line charwise region is that many columns *from the
@@ -320,35 +324,32 @@ unsafe fn start_visual_region(cap: *mut cmdarg_T, oap: *mut oparg_T, gui_yank: b
 
         if !gui_yank {
             // Keep the area for `'<`/`'>` and for `gv`.
-            (*curbuf.get()).b_visual.vi_start = VIsual.get();
+            (*curbuf.get()).b_visual.vi_start = visual_anchor();
             (*curbuf.get()).b_visual.vi_end = (*curwin.get()).w_cursor;
-            (*curbuf.get()).b_visual.vi_mode = VIsual_mode.get();
+            (*curbuf.get()).b_visual.vi_mode = visual_mode().raw();
             restore_visual_mode();
             (*curbuf.get()).b_visual.vi_curswant = (*curwin.get()).w_curswant;
-            (*curbuf.get()).b_visual_mode_eval = VIsual_mode.get();
+            (*curbuf.get()).b_visual_mode_eval = visual_mode().raw();
         }
 
         // In Select mode a linewise selection is operated on like a charwise
         // one. `gH<Del>`, which deletes the last line, is the exception.
-        if VIsual_select.get()
-            && VIsual_mode.get() == 'V' as c_int
-            && (*(*cap).oap).op_type != OP_DELETE
-        {
-            if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-                VIsual.set(VIsual.get().with_col(0));
+        if visual_select() && visual_mode().is_line() && (*(*cap).oap).op_type != OP_DELETE {
+            if lt(visual_anchor(), (*curwin.get()).w_cursor) {
+                set_visual_anchor(visual_anchor().with_col(0));
                 (*curwin.get()).w_cursor.col = ml_get_len((*curwin.get()).w_cursor.lnum);
             } else {
                 (*curwin.get()).w_cursor.col = 0;
-                VIsual.set(VIsual.get().with_col(ml_get_len(VIsual.get().lnum)));
+                set_visual_anchor(visual_anchor().with_col(ml_get_len(visual_anchor().lnum)));
             }
-            VIsual_mode.set('v' as c_int);
-        } else if VIsual_mode.get() == 'v' as c_int {
+            set_visual_mode(VisualMode::CHAR);
+        } else if visual_mode().is_char() {
             // 'selection' "exclusive": back off one character.
             include_line_break = unadjust_for_sel();
         }
 
-        (*oap).start = VIsual.get();
-        if VIsual_mode.get() == 'V' as c_int {
+        (*oap).start = visual_anchor();
+        if visual_mode().is_line() {
             (*oap).start.col = 0;
             (*oap).start.coladd = 0;
         }
@@ -367,7 +368,7 @@ unsafe fn start_visual_region(cap: *mut cmdarg_T, oap: *mut oparg_T, gui_yank: b
 unsafe fn order_region(oap: *mut oparg_T) {
     unsafe {
         if lt((*oap).start, (*curwin.get()).w_cursor) {
-            if !VIsual_active.get() {
+            if !visual_active() {
                 if has_folding(
                     curwin.get(),
                     (*oap).start.lnum,
@@ -395,7 +396,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
             // recomputed automatically when the cursor goes back.
             (*curwin.get()).w_valid.clear(WinValid::VIRTCOL);
         } else {
-            if !VIsual_active.get() && (*oap).motion_type == kMTLineWise {
+            if !visual_active() && (*oap).motion_type == kMTLineWise {
                 if has_folding(
                     curwin.get(),
                     (*curwin.get()).w_cursor.lnum,
@@ -433,11 +434,11 @@ unsafe fn prepare_visual_redo(
 ) {
     unsafe {
         if !redo_VIsual_busy.get() && !gui_yank {
-            resel_VIsual_mode.set(VIsual_mode.get());
+            resel_VIsual_mode.set(visual_mode());
             if (*curwin.get()).w_curswant == MAXCOL {
                 resel_VIsual_vcol.set(MAXCOL);
             } else {
-                if VIsual_mode.get() != Ctrl_V {
+                if !visual_mode().is_block() {
                     getvvcol(
                         curwin.get(),
                         &raw mut (*oap).end,
@@ -446,9 +447,9 @@ unsafe fn prepare_visual_redo(
                         &raw mut (*oap).end_vcol,
                     );
                 }
-                if VIsual_mode.get() == Ctrl_V || (*oap).line_count <= 1 {
+                if visual_mode().is_block() || (*oap).line_count <= 1 {
                     // A block, or a one-line region: the size is a width.
-                    if VIsual_mode.get() != Ctrl_V {
+                    if !visual_mode().is_block() {
                         getvvcol(
                             curwin.get(),
                             &raw mut (*oap).start,
@@ -543,7 +544,7 @@ unsafe fn prepare_visual_redo(
 
         if !redo_VIsual_busy.get() {
             REDO_VISUAL.set(redo_VIsual_T {
-                rv_mode: resel_VIsual_mode.get(),
+                rv_mode: resel_VIsual_mode.get().raw(),
                 rv_vcol: resel_VIsual_vcol.get(),
                 rv_line_count: resel_VIsual_line_count.get(),
                 rv_count: (*cap).count0,
@@ -573,9 +574,9 @@ unsafe fn finish_visual_region(
         if (*oap).motion_force == NUL || (*oap).motion_type == kMTLineWise {
             (*oap).inclusive = true;
         }
-        if VIsual_mode.get() == 'V' as c_int {
+        if visual_mode().is_line() {
             (*oap).motion_type = kMTLineWise;
-        } else if VIsual_mode.get() == 'v' as c_int {
+        } else if visual_mode().is_char() {
             (*oap).motion_type = kMTCharWise;
             if *ml_get_pos(&raw mut (*oap).end) as c_int == NUL
                 && (include_line_break || !op_virtual())
@@ -598,7 +599,7 @@ unsafe fn finish_visual_region(
         redo_VIsual_busy.set(false);
 
         if !gui_yank {
-            VIsual_active.set(false);
+            set_visual_active(false);
             setmouse();
             mouse_dragging.set(0);
             may_clear_cmdline();
@@ -840,14 +841,14 @@ unsafe fn run_operator(
                     // `op_addsub` reads `VIsual_active` to decide whether the
                     // region or the cursor line is meant, and this dispatcher
                     // has already switched it off.
-                    VIsual_active.set(true);
+                    set_visual_active(true);
                     restore_lbr(lbr_saved != 0);
                     op_addsub(
                         oap,
                         (*cap).count1 as linenr_T,
                         REDO_VISUAL.get().rv_arg != 0,
                     );
-                    VIsual_active.set(false);
+                    set_visual_active(false);
                 }
                 check_cursor_col(curwin.get());
             }

@@ -14,10 +14,13 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::{dec_cursor, get_cursor_line_ptr, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_sel, redraw_cmdline};
+use crate::main::{curbuf, curwin, p_sel, redraw_cmdline};
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::dec;
-use crate::normal::with_visual_anchor;
+use crate::normal::{
+    VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
+    with_visual_anchor,
+};
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
 use crate::types::{NUL, colnr_T, oparg_T};
@@ -226,6 +229,16 @@ unsafe fn quoted_span(
     }
 }
 
+/// Swap the cursor and the Visual anchor, so the anchor is the earlier end.
+///
+/// # Safety
+/// The current window must be live.
+unsafe fn swap_cursor_and_anchor() {
+    // SAFETY: the caller's promise; `visual_anchor` reads no window state.
+    let cursor = unsafe { core::mem::replace(&mut (*curwin.get()).w_cursor, visual_anchor()) };
+    set_visual_anchor(cursor);
+}
+
 /// `i"` / `a'` / ... : the text inside the quoted string under the cursor,
 /// cursor left at the end. Answers whether one was found.
 ///
@@ -251,13 +264,13 @@ pub unsafe fn current_quote(
         // With 'selection' "exclusive", move the cursor to where it would be
         // with "inclusive" so that the rest of this is written once; it is
         // moved forward again after the area has been adjusted.
-        if VIsual_active.get() {
+        if visual_active() {
             // This only works within one line.
-            if VIsual.get().lnum != (*curwin.get()).w_cursor.lnum {
+            if visual_anchor().lnum != (*curwin.get()).w_cursor.lnum {
                 return false;
             }
-            vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
-            vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
+            vis_bef_curs = lt(visual_anchor(), (*curwin.get()).w_cursor);
+            vis_empty = equalpos(visual_anchor(), (*curwin.get()).w_cursor);
             if *p_sel.get() as c_int == 'e' as c_int {
                 if vis_bef_curs {
                     dec_cursor();
@@ -266,12 +279,10 @@ pub unsafe fn current_quote(
                     with_visual_anchor(|anchor| dec(anchor));
                     did_exclusive_adj = true;
                 }
-                vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
+                vis_empty = equalpos(visual_anchor(), (*curwin.get()).w_cursor);
                 if !vis_bef_curs && !vis_empty {
                     // `VIsual` has to be the start of the selection.
-                    let t = (*curwin.get()).w_cursor;
-                    (*curwin.get()).w_cursor = VIsual.get();
-                    VIsual.set(t);
+                    swap_cursor_and_anchor();
                     vis_bef_curs = true;
                     restore_vis_bef = true;
                 }
@@ -284,21 +295,21 @@ pub unsafe fn current_quote(
             let mut i;
             let sel_end;
             if vis_bef_curs {
-                inside_quotes = VIsual.get().col > 0
-                    && *line.offset(VIsual.get().col as isize - 1) as u8 as c_int == quotechar
+                inside_quotes = visual_anchor().col > 0
+                    && *line.offset(visual_anchor().col as isize - 1) as u8 as c_int == quotechar
                     && *line.offset((*curwin.get()).w_cursor.col as isize) as c_int != NUL
                     && *line.offset((*curwin.get()).w_cursor.col as isize + 1) as u8 as c_int
                         == quotechar;
-                i = VIsual.get().col as c_int;
+                i = visual_anchor().col as c_int;
                 sel_end = (*curwin.get()).w_cursor.col as c_int;
             } else {
                 inside_quotes = (*curwin.get()).w_cursor.col > 0
                     && *line.offset((*curwin.get()).w_cursor.col as isize - 1) as u8 as c_int
                         == quotechar
-                    && *line.offset(VIsual.get().col as isize) as c_int != NUL
-                    && *line.offset(VIsual.get().col as isize + 1) as u8 as c_int == quotechar;
+                    && *line.offset(visual_anchor().col as isize) as c_int != NUL
+                    && *line.offset(visual_anchor().col as isize + 1) as u8 as c_int == quotechar;
                 i = (*curwin.get()).w_cursor.col as c_int;
-                sel_end = VIsual.get().col as c_int;
+                sel_end = visual_anchor().col as c_int;
             }
             // Is there a quote in the selection at all?
             while i <= sel_end {
@@ -320,14 +331,12 @@ pub unsafe fn current_quote(
             quoted_span(line, col_start, quotechar, vis_empty, vis_bef_curs)
         else {
             // `abort_search`: undo the 'selection' adjustment made above.
-            if VIsual_active.get() && *p_sel.get() as c_int == 'e' as c_int {
+            if visual_active() && *p_sel.get() as c_int == 'e' as c_int {
                 if did_exclusive_adj {
                     inc_cursor();
                 }
                 if restore_vis_bef {
-                    let t = (*curwin.get()).w_cursor;
-                    (*curwin.get()).w_cursor = VIsual.get();
-                    VIsual.set(t);
+                    swap_cursor_and_anchor();
                 }
             }
             return false;
@@ -355,20 +364,21 @@ pub unsafe fn current_quote(
             col_start += 1;
         }
         (*curwin.get()).w_cursor.col = col_start as colnr_T;
-        if VIsual_active.get() {
+        if visual_active() {
             // Set the start of the Visual area when it was empty, when we
             // were just inside quotes, or when it neither started at a quote
             // nor contained one.
+            let anchor_col = visual_anchor().col;
             if vis_empty
                 || (vis_bef_curs
                     && !selected_quote
                     && (inside_quotes
-                        || (*line.offset(VIsual.get().col as isize) as u8 as c_int != quotechar
-                            && (VIsual.get().col == 0
-                                || *line.offset(VIsual.get().col as isize - 1) as u8 as c_int
+                        || (*line.offset(anchor_col as isize) as u8 as c_int != quotechar
+                            && (anchor_col == 0
+                                || *line.offset(anchor_col as isize - 1) as u8 as c_int
                                     != quotechar))))
             {
-                VIsual.set((*curwin.get()).w_cursor);
+                set_visual_anchor((*curwin.get()).w_cursor);
                 redraw_curbuf_later(UPD_INVERTED);
             }
         } else {
@@ -381,7 +391,7 @@ pub unsafe fn current_quote(
         if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
             inclusive = true;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             if vis_empty || vis_bef_curs {
                 // Step the cursor back when 'selection' is not exclusive.
                 if *p_sel.get() as c_int != 'e' as c_int {
@@ -393,18 +403,18 @@ pub unsafe fn current_quote(
                 // a quote.
                 if inside_quotes
                     || (!selected_quote
-                        && *line.offset(VIsual.get().col as isize) as u8 as c_int != quotechar
-                        && (*line.offset(VIsual.get().col as isize) as c_int == NUL
-                            || *line.offset(VIsual.get().col as isize + 1) as u8 as c_int
+                        && *line.offset(visual_anchor().col as isize) as u8 as c_int != quotechar
+                        && (*line.offset(visual_anchor().col as isize) as c_int == NUL
+                            || *line.offset(visual_anchor().col as isize + 1) as u8 as c_int
                                 != quotechar))
                 {
                     dec_cursor();
-                    VIsual.set((*curwin.get()).w_cursor);
+                    set_visual_anchor((*curwin.get()).w_cursor);
                 }
                 (*curwin.get()).w_cursor.col = col_start as colnr_T;
             }
-            if VIsual_mode.get() == 'V' as c_int {
-                VIsual_mode.set('v' as c_int);
+            if visual_mode().is_line() {
+                set_visual_mode(VisualMode::CHAR);
                 redraw_cmdline.set(true); // show the mode later
             }
         } else {

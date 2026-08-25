@@ -22,7 +22,7 @@ use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, n
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{has_folding, has_folding_win, line_folded};
 use crate::indent::{get_breakindent_win, tabstop_padding};
-use crate::main::{State, VIsual, VIsual_active, curwin, p_sel};
+use crate::main::{State, curwin, p_sel};
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;

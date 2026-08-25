@@ -26,6 +26,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::r#move::WinValid;
+use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, NUL};
 
@@ -49,7 +50,7 @@ pub(crate) unsafe fn ins_reg() {
     unsafe {
         let mut need_redraw = false;
         let mut literally = 0;
-        let vis_active = VIsual_active.get();
+        let vis_active = visual_active();
 
         // A character is about to be waited for: show a `"`.
         pc_status.set(PutChar::Unset);
@@ -167,7 +168,7 @@ pub(crate) unsafe fn ins_reg() {
         clear_showcmd();
 
         // Starting Visual mode here would leave a weird mode.
-        if !vis_active && VIsual_active.get() {
+        if !vis_active && visual_active() {
             end_visual_mode();
         }
     }
@@ -320,7 +321,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
         // CTRL-O, unless it is past the end of the line.
         if !nomove
             && ((*curwin.get()).w_cursor.col != 0 || (*curwin.get()).w_cursor.coladd > 0)
-            && (restart_edit.get() == NUL || (gchar_cursor() == NUL && !VIsual_active.get()))
+            && (restart_edit.get() == NUL || (gchar_cursor() == NUL && !visual_active()))
             && !revins_on.get()
         {
             if (*curwin.get()).w_cursor.coladd > 0

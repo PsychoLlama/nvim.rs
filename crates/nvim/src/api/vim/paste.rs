@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
+use crate::normal::{set_visual_active, visual_active};
 use crate::types::{NUL, PUT_CURSEND};
 
 pub unsafe fn nvim_paste(
@@ -182,7 +183,7 @@ pub unsafe fn nvim_put(
             did_emsg: 0,
         };
         try_enter(&raw mut tstate);
-        let mut VIsual_was_active: bool = VIsual_active.get();
+        let mut VIsual_was_active: bool = visual_active();
         let silenced = Suppress::messages();
         do_put(
             0 as ::core::ffi::c_int,
@@ -200,7 +201,7 @@ pub unsafe fn nvim_put(
             },
         );
         drop(silenced);
-        VIsual_active.set(VIsual_was_active);
+        set_visual_active(VIsual_was_active);
         try_leave(&raw mut tstate, err);
     }
     ().reported(error)

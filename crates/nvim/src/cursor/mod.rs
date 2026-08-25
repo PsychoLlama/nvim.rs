@@ -34,11 +34,12 @@ use self::arith::{
 };
 use crate::change::inserted_bytes;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{State, VIsual, VIsual_active, curwin, p_sel, restart_edit};
+use crate::main::{State, curwin, p_sel, restart_edit};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::memory::xmallocz;
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
+use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
@@ -294,7 +295,7 @@ unsafe fn coladvance2(
     let one_more = State.get() & MODE_INSERT != 0
         || State.get() & MODE_TERMINAL != 0
         || restart_edit.get() != NUL
-        || (VIsual_active.get() && !selection_is_old())
+        || (visual_active() && !selection_is_old())
         || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < MAXCOL);
     let buf = win.buffer();
     let line = unsafe { buf.line(pos.lnum()) };
@@ -308,7 +309,7 @@ unsafe fn coladvance2(
     if wcol == MAXCOL {
         idx = linelen - 1 + one_more as c_int;
         col = wcol;
-        if (addspaces || finetune) && !VIsual_active.get() {
+        if (addspaces || finetune) && !visual_active() {
             let want = win.linetabsize(pos.lnum()) + one_more as c_int;
             win.set_curswant(if want > 0 { want - 1 } else { want });
         }
@@ -519,7 +520,7 @@ pub unsafe fn check_cursor_col(win: *mut win_T) {
         State.get() & MODE_INSERT != 0
             || restart_edit.get() != 0
             || State.get() & MODE_TERMINAL != 0
-            || (VIsual_active.get() && !selection_is_old())
+            || (visual_active() && !selection_is_old())
             || cur_ve_flags & kOptVeFlagOnemore != 0
             || win.virtual_active()
     });
@@ -564,10 +565,10 @@ pub unsafe fn check_cursor(wp: *mut win_T) {
 /// # Safety
 /// The current window and buffer must be valid.
 pub unsafe fn check_visual_pos() {
-    let visual = VIsual.get();
+    let visual = visual_anchor();
     let last = unsafe { Buf::current() }.line_count();
     if visual.lnum > last {
-        VIsual.set(pos_T {
+        set_visual_anchor(pos_T {
             lnum: last,
             col: 0,
             coladd: 0,
@@ -575,7 +576,7 @@ pub unsafe fn check_visual_pos() {
     } else {
         let len = unsafe { ml_get_len(visual.lnum) };
         if visual.col > len {
-            VIsual.set(pos_T {
+            set_visual_anchor(pos_T {
                 col: len,
                 coladd: 0,
                 ..visual
@@ -592,7 +593,7 @@ pub unsafe fn check_visual_pos() {
 pub unsafe fn adjust_cursor_col() {
     let cursor = unsafe { Win::current() }.cursor();
     if cursor.col() > 0
-        && (!VIsual_active.get() || selection_is_old())
+        && (!visual_active() || selection_is_old())
         && unsafe { gchar_cursor() } == NUL
     {
         cursor.set_col(cursor.col() - 1);

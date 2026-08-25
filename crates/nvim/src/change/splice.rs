@@ -28,6 +28,7 @@ use core::ffi::{c_int, c_void};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
 
@@ -378,7 +379,7 @@ unsafe fn changed_common(
             record_change_mark(buf, lnum, col);
         }
 
-        if (*curwin.get()).w_buffer == buf && VIsual_active.get() {
+        if (*curwin.get()).w_buffer == buf && visual_active() {
             check_visual_pos();
         }
 

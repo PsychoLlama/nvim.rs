@@ -18,15 +18,15 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
-    Rows, VIsual, VIsual_active, VIsual_mode, curwin, ex_normal_busy, hl_attr_active, msg_grid_adj,
-    msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc, redraw_tabline, sc_col, showcmd_buf,
+    Rows, curwin, ex_normal_busy, hl_attr_active, msg_grid_adj, msg_silent, p_ch, p_sbr, p_sc,
+    p_sel, p_sloc, redraw_tabline, sc_col, showcmd_buf,
 };
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
 use crate::message::msg_grid_validate;
 use crate::normal::{
     ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
-    showcmd_visual,
+    showcmd_visual, visual_active, visual_anchor, visual_mode,
 };
 use crate::optionstr::empty_option;
 use crate::os::cshim::{memmove, snprintf};
@@ -43,10 +43,10 @@ use core::ffi::{c_char, c_int, c_void};
 
 use crate::highlight_group::HLF_MSG;
 use crate::keycodes::{
-    Ctrl_V, KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEDRAG,
-    KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT,
-    KE_MOUSEUP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE,
-    KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE,
+    KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEDRAG, KE_MIDDLEMOUSE,
+    KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP,
+    KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG,
+    KE_X2MOUSE, KE_X2RELEASE,
 };
 use crate::types::object_data;
 use crate::types::ui::kUIMessages;
@@ -112,9 +112,9 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
     // `VIsual_active`, which the one caller has already tested.
     unsafe {
         let (mut top, mut bot) = if cursor_bot {
-            (VIsual.get().lnum, (*curwin.get()).w_cursor.lnum)
+            (visual_anchor().lnum, (*curwin.get()).w_cursor.lnum)
         } else {
-            ((*curwin.get()).w_cursor.lnum, VIsual.get().lnum)
+            ((*curwin.get()).w_cursor.lnum, visual_anchor().lnum)
         };
         has_folding(curwin.get(), top, &raw mut top, ptr::null_mut());
         has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
@@ -127,7 +127,7 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
 fn blockwise_width() -> c_int {
     let (mut leftcol, mut rightcol): (colnr_T, colnr_T) = (0, 0);
     // A copy of the anchor: `getvcols` only reads it.
-    let mut anchor = VIsual.get();
+    let mut anchor = visual_anchor();
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
     unsafe {
@@ -156,7 +156,7 @@ fn blockwise_width() -> c_int {
 /// which is what stops an invalid byte looping.
 fn charwise_extent(cursor_bot: bool) -> (c_int, c_int) {
     let (mut bytes, mut chars) = (0, 0);
-    let anchor = VIsual.get();
+    let anchor = visual_anchor();
     // SAFETY: both pointers are into the current line, and the walk stops at
     // or before `e`.
     unsafe {
@@ -184,7 +184,7 @@ fn charwise_extent(cursor_bot: bool) -> (c_int, c_int) {
 /// Describe the Visual selection into the 'showcmd' buffer.
 fn show_visual_size() {
     // SAFETY: `VIsual_active` is set, so `VIsual` holds a real position.
-    let cursor_bot = unsafe { lt(VIsual.get(), (*curwin.get()).w_cursor) };
+    let cursor_bot = unsafe { lt(visual_anchor(), (*curwin.get()).w_cursor) };
     let (top, bot) = visual_line_range(cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
@@ -194,7 +194,7 @@ fn show_visual_size() {
     // buffer, which is that long. snprintf's truncation is the behaviour
     // upstream relies on for a very wide block.
     unsafe {
-        if VIsual_mode.get() == Ctrl_V {
+        if visual_mode().is_block() {
             snprintf(
                 buf,
                 cap,
@@ -202,9 +202,7 @@ fn show_visual_size() {
                 lines as int64_t,
                 blockwise_width() as int64_t,
             );
-        } else if VIsual_mode.get() == 'V' as c_int
-            || VIsual.get().lnum != (*curwin.get()).w_cursor.lnum
-        {
+        } else if visual_mode().is_line() || visual_anchor().lnum != (*curwin.get()).w_cursor.lnum {
             snprintf(buf, cap, c"%ld".as_ptr(), lines as int64_t);
         } else {
             let (chars, bytes) = charwise_extent(cursor_bot);
@@ -226,7 +224,7 @@ pub(crate) fn clear_showcmd() {
         return;
     }
     // SAFETY: reads a flag and the typeahead state.
-    if VIsual_active.get() && unsafe { !char_avail() } {
+    if visual_active() && unsafe { !char_avail() } {
         show_visual_size();
     } else {
         showcmd_truncate(0);

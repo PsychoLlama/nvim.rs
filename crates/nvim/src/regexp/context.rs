@@ -25,14 +25,12 @@ use super::{
     reg_tofree, reg_tofreelen, rsm,
 };
 use crate::charset::vim_iswordc_buf;
-use crate::keycodes::Ctrl_V;
-use crate::main::{
-    VIsual, VIsual_active, VIsual_mode, curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg,
-};
+use crate::main::{curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg};
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
+use crate::normal::{VisualMode, visual_ever_started, visual_selection};
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::plines::{getvvcol, win_linetabsize};
@@ -206,20 +204,20 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     };
     // `\%V` is a buffer-position test, so it only applies to a multi-line
     // match in the current buffer.
-    if rex.reg_buf() != curbuf.get() || VIsual.get().lnum == 0 || !rex.multi() {
+    if rex.reg_buf() != curbuf.get() || !visual_ever_started() || !rex.multi() {
         return false;
     }
 
     // SAFETY: `wp` is a live window and `curbuf` the current buffer, whose
     // `b_visual` records the area the last Visual mode left behind.
     let (top, bot, mode, curswant) = unsafe {
-        if VIsual_active.get() {
-            let (top, bot) = if lt(VIsual.get(), (*wp).w_cursor) {
-                (VIsual.get(), (*wp).w_cursor)
+        if let Some(sel) = visual_selection() {
+            let (top, bot) = if lt(sel.anchor, (*wp).w_cursor) {
+                (sel.anchor, (*wp).w_cursor)
             } else {
-                ((*wp).w_cursor, VIsual.get())
+                ((*wp).w_cursor, sel.anchor)
             };
-            (top, bot, VIsual_mode.get(), (*wp).w_curswant)
+            (top, bot, sel.mode, (*wp).w_curswant)
         } else {
             let buf = curbuf.get();
             let (start, end) = ((*buf).b_visual.vi_start, (*buf).b_visual.vi_end);
@@ -232,7 +230,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
             (
                 top,
                 bot,
-                (*buf).b_visual.vi_mode,
+                VisualMode::from_raw((*buf).b_visual.vi_mode),
                 (*buf).b_visual.vi_curswant,
             )
         }
@@ -243,12 +241,12 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         return false;
     }
     let col = rex.col();
-    if mode == 'v' as c_int {
+    if mode.is_char() {
         // 'selection' decides whether the last character is included.
         // SAFETY: `p_sel` is the option's own string.
         let inclusive = unsafe { *p_sel.get() as u8 != b'e' } as colnr_T;
         !((lnum == top.lnum && col < top.col) || (lnum == bot.lnum && col >= bot.col + inclusive))
-    } else if mode == Ctrl_V {
+    } else if mode.is_block() {
         let (mut start, mut end, mut start2, mut end2) = (0, 0, 0, 0);
         let (mut top, mut bot) = (top, bot);
         // SAFETY: `wp` is a live window and the two positions are in its

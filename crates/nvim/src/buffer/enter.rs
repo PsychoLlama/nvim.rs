@@ -34,13 +34,14 @@ use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
 use crate::indent::inindent;
 use crate::main::{
-    State, VIsual_active, VIsual_reselect, curbuf, curwin, e_job_still_running,
+    State, VIsual_reselect, curbuf, curwin, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, msg_silent,
     need_fileinfo, p_acd, starting,
 };
 use crate::r#move::{WinValid, scroll_cursor_halfway};
+use crate::normal::visual_active;
 use crate::option::buf_copy_options;
 use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
@@ -342,7 +343,7 @@ fn leave_prevbuf(
 /// may be pointing at freed memory, so nothing here reads it.
 pub(crate) fn enter_buffer(mut buf: Buf) {
     // when closing the current buffer stop Visual mode
-    if VIsual_active.get() {
+    if visual_active() {
         end_visual();
     }
 

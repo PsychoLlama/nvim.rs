@@ -64,9 +64,7 @@ use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
-use crate::main::{
-    VIsual_active, cmdwin_buf, curbuf, curwin, did_emsg, swap_exists_action, u_sync_once,
-};
+use crate::main::{cmdwin_buf, curbuf, curwin, did_emsg, swap_exists_action, u_sync_once};
 use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::r#move::update_topline;
@@ -77,6 +75,7 @@ use crate::types::*;
 use ::libc::{strcmp, strlen};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
+use crate::normal::{set_visual_active, visual_active};
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
 /// The editor state [`SavedBufferState::prepare`] saves so that
@@ -106,8 +105,8 @@ impl SavedBufferState {
     /// # Safety
     /// `curwin`/`curbuf` must be set, which they are from startup to exit.
     unsafe fn prepare(&mut self, buf: Buf) {
-        self.save_visual_active = VIsual_active.get();
-        VIsual_active.set(false);
+        self.save_visual_active = visual_active();
+        set_visual_active(false);
         self.curwin_save = curwin.get();
         curbuf.set(buf.raw());
         // SAFETY: `curbuf` was just set to the caller's live buffer.
@@ -138,7 +137,7 @@ impl SavedBufferState {
             // SAFETY: the saved window is live and so is its buffer.
             curbuf.set(unsafe { Win::current() }.w_buffer);
         }
-        VIsual_active.set(self.save_visual_active);
+        set_visual_active(self.save_visual_active);
     }
 }
 

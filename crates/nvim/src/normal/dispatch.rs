@@ -31,11 +31,10 @@ use crate::keycodes::{
     KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_key,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, clear_cmdline,
-    curbuf, curwin, did_cursorhold, fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask,
-    mode_displayed, motion_force, msg_col, msg_didout, msg_nowait, no_u_sync, no_zero_mapping,
-    opcount, p_langmap, p_lrm, p_tm, p_ttm, restart_VIsual_select, restart_edit, vgetc_busy,
-    vgetc_char, vgetc_mod_mask,
+    KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curbuf, curwin, did_cursorhold,
+    fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,
+    msg_col, msg_didout, msg_nowait, no_u_sync, no_zero_mapping, opcount, p_langmap, p_lrm, p_tm,
+    p_ttm, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
@@ -49,7 +48,7 @@ use crate::normal::{
     check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
     normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
-    nv_max_linear, set_vcount_ca, start_selection,
+    nv_max_linear, set_vcount_ca, set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{do_pending_operator, get_op_type};
 use crate::register::get_default_register_name;
@@ -418,7 +417,7 @@ pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
 /// `CTRL-W` takes a count of its own after it.
 pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
     // Select mode swallows printable keys as replacement text, digits too.
-    if VIsual_active.get() && VIsual_select.get() {
+    if visual_active() && visual_select() {
         return false;
     }
     // SAFETY: `s` is the caller's live state.
@@ -494,7 +493,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             }
             if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_MOUSEMOVE {
                 did_visual_op =
-                    VIsual_active.get() && (*s).oa.op_type != OP_NOP && (*s).oa.op_type != OP_COLON;
+                    visual_active() && (*s).oa.op_type != OP_NOP && (*s).oa.op_type != OP_COLON;
                 do_pending_operator(&raw mut (*s).ca, (*s).old_col, false);
             }
             if normal_need_redraw_mode_message(s) {
@@ -537,8 +536,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 
         // A command may have asked for insert mode or for Select mode to be
         // resumed; neither happens until the command is completely done.
-        let want_insert =
-            restart_edit.get() != 0 && !VIsual_active.get() && (*s).old_mapped_len == 0;
+        let want_insert = restart_edit.get() != 0 && !visual_active() && (*s).old_mapped_len == 0;
         if (*s).oa.op_type == OP_NOP
             && (want_insert || restart_VIsual_select.get() == 1)
             && (*s).ca.retval & CA_COMMAND_BUSY as c_int == 0
@@ -546,7 +544,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             && (*s).oa.regname == 0
         {
             if restart_VIsual_select.get() == 1 {
-                VIsual_select.set(true);
+                set_visual_select(true);
                 VIsual_select_reg.set(0);
                 may_trigger_modechanged();
                 showmode();
@@ -585,7 +583,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if restart_edit.get() == 0 {
             (*s).old_mapped_len = 0;
         } else if (*s).old_mapped_len != 0
-            || (VIsual_active.get() && (*s).mapped_len == 0 && typeahead().maplen() > 0)
+            || (visual_active() && (*s).mapped_len == 0 && typeahead().maplen() > 0)
         {
             (*s).old_mapped_len = typeahead().maplen();
         }
@@ -596,8 +594,8 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 
         // In Select mode a printable key replaces the selection: the key is
         // put back for insert mode to read and the command becomes a change.
-        if VIsual_active.get()
-            && VIsual_select.get()
+        if visual_active()
+            && visual_select()
             && (vim_isprintc((*s).c) || (*s).c == NL || (*s).c == CAR || (*s).c == K_KENTER)
         {
             let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
@@ -660,7 +658,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             (*s).command_finished = true;
         } else if (nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
             && check_text_or_curbuf_locked(&raw mut (*s).oa))
-            || (VIsual_active.get() && normal_handle_special_visual_command(s))
+            || (visual_active() && normal_handle_special_visual_command(s))
         {
             (*s).command_finished = true;
         } else {
@@ -694,7 +692,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 
                 // 'keymodel' startsel: a shifted special key starts a
                 // selection and then acts as its unshifted self.
-                if !VIsual_active.get() && km_startsel.get() {
+                if !visual_active() && km_startsel.get() {
                     let flags = nv_cmds[(*s).idx as usize].cmd_flags as c_int;
                     if flags & NV_SS != 0 {
                         start_selection();
@@ -811,7 +809,7 @@ pub(crate) unsafe fn checkclearop(oap: *mut oparg_T) -> bool {
 pub(crate) unsafe fn checkclearopq(oap: *mut oparg_T) -> bool {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
-        if (*oap).op_type == OP_NOP && !VIsual_active.get() {
+        if (*oap).op_type == OP_NOP && !visual_active() {
             return false;
         }
         clearopbeep(oap);

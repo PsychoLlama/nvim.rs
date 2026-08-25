@@ -14,9 +14,10 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::gchar_cursor;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_sel, redraw_cmdline};
+use crate::main::{curbuf, curwin, p_sel, redraw_cmdline};
 use crate::mark::setpcmark;
 use crate::memline::{decl, gchar_pos, inc, incl, ml_get};
+use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
@@ -240,7 +241,7 @@ unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
 /// There must be a current line and Visual mode must be active.
 unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mut pos: pos_T) {
     unsafe {
-        if lt(start_pos, VIsual.get()) {
+        if lt(start_pos, visual_anchor()) {
             // The cursor is at the start of the Visual area. Work out where
             // that is: in the white space before a sentence, inside one or
             // just after it, or exactly at the start of one.
@@ -326,7 +327,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
         findsent(FORWARD, 1); // the start of the next sentence
 
         // A Visual area bigger than one character is extended, not replaced.
-        if VIsual_active.get() && !equalpos(start_pos, VIsual.get()) {
+        if visual_active() && !equalpos(start_pos, visual_anchor()) {
             extend_sentences(count, include, start_pos, pos);
             return OK;
         }
@@ -371,7 +372,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
             }
         }
 
-        if VIsual_active.get() {
+        if visual_active() {
             // Don't get stuck with `is` on a single space before a sentence.
             if equalpos(start_pos, (*curwin.get()).w_cursor) {
                 extend_sentences(count, include, start_pos, pos);
@@ -380,8 +381,8 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
             if *p_sel.get() as c_int == 'e' as c_int {
                 (*curwin.get()).w_cursor.col += 1;
             }
-            VIsual.set(start_pos);
-            VIsual_mode.set('v' as c_int);
+            set_visual_anchor(start_pos);
+            set_visual_mode(VisualMode::CHAR);
             redraw_cmdline.set(true); // show the mode later
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {

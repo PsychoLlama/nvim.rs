@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
+use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -415,8 +416,8 @@ unsafe fn apply_mapping(mp: *mut mapblock_T, keylen: c_int, mapdepth: *mut c_int
 
         // In Select mode with a Visual-mode mapping: switch to Visual mode
         // for the duration, and append K_SELECT to switch back.
-        if VIsual_active.get() && VIsual_select.get() && (*mp).m_mode & MODE_VISUAL != 0 {
-            VIsual_select.set(false);
+        if visual_active() && visual_select() && (*mp).m_mode & MODE_VISUAL != 0 {
+            set_visual_select(false);
             ins_typebuf(
                 K_SELECT_STRING.as_ptr().cast_mut(),
                 REMAP_NONE,

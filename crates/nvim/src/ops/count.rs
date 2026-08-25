@@ -21,6 +21,7 @@ use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::normal::{VisualMode, visual_active, visual_anchor, visual_mode};
 use crate::optionstr::empty_option;
 use crate::types::{IOSIZE, NUL};
 
@@ -107,7 +108,7 @@ struct Selection {
     /// Lines the selection covers.
     line_count: c_int,
     /// `v`, `V` or CTRL-V, captured before the walk starts.
-    mode: c_int,
+    mode: VisualMode,
 }
 
 /// `g CTRL-G`, and `wordcount()` when `dict` is not null.
@@ -116,8 +117,8 @@ struct Selection {
 /// `dict`, when not null, must point to a live dictionary.
 pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
     unsafe {
-        let visual_active = VIsual_active.get();
-        let visual_mode = VIsual_mode.get();
+        let visual_active = visual_active();
+        let visual_mode = visual_mode();
         let mut counts = PosCounts::default();
         let mut bom_count: varnumber_T = 0;
 
@@ -177,19 +178,19 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
 ///
 /// # Safety
 /// A Visual selection must be active in the current window.
-unsafe fn measure_selection(visual_mode: c_int) -> Selection {
+unsafe fn measure_selection(visual_mode: VisualMode) -> Selection {
     unsafe {
-        let (mut min, mut max) = if lt(VIsual.get(), (*curwin.get()).w_cursor) {
-            (VIsual.get(), (*curwin.get()).w_cursor)
+        let (mut min, mut max) = if lt(visual_anchor(), (*curwin.get()).w_cursor) {
+            (visual_anchor(), (*curwin.get()).w_cursor)
         } else {
-            ((*curwin.get()).w_cursor, VIsual.get())
+            ((*curwin.get()).w_cursor, visual_anchor())
         };
         if *p_sel.get() as c_int == 'e' as c_int && max.col > 0 {
             max.col -= 1;
         }
 
         let mut oparg = oparg_T::ZERO;
-        if visual_mode == Ctrl_V {
+        if visual_mode.is_block() {
             // 'showbreak' would move the columns `getvcols` answers.
             let saved_sbr = p_sbr.get();
             let saved_w_sbr = (*curwin.get()).w_onebuf_opt.wo_sbr;
@@ -307,16 +308,16 @@ unsafe fn count_selected_line(
     unsafe {
         let mut s: *mut c_char = ::core::ptr::null_mut();
         let mut len = 0;
-        if sel.mode == Ctrl_V {
+        if sel.mode.is_block() {
             virtual_op.set(Some(virtual_active(curwin.get())));
             block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false);
             virtual_op.set(None);
             s = bd.textstart;
             len = bd.textlen;
-        } else if sel.mode == 'V' as c_int {
+        } else if sel.mode.is_line() {
             s = ml_get(lnum);
             len = MAXCOL;
-        } else if sel.mode == 'v' as c_int {
+        } else if sel.mode.is_char() {
             let start_col = if lnum == sel.min.lnum { sel.min.col } else { 0 };
             let end_col = if lnum == sel.max.lnum {
                 sel.max.col - start_col + 1
@@ -356,7 +357,11 @@ unsafe fn count_selected_line(
 ///
 /// # Safety
 /// `selection`, when given, must describe the current selection.
-unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>, visual_mode: c_int) {
+unsafe fn report_counts(
+    counts: &PosCounts,
+    selection: Option<&Selection>,
+    visual_mode: VisualMode,
+) {
     unsafe {
         let same_as_bytes =
             counts.chars_cursor == counts.bytes_cursor && counts.chars == counts.bytes;
@@ -415,7 +420,7 @@ unsafe fn report_counts(counts: &PosCounts, selection: Option<&Selection>, visua
         };
 
         // A blockwise selection with a right edge also reports its width.
-        if visual_mode == Ctrl_V && (*curwin.get()).w_curswant < MAXCOL {
+        if visual_mode.is_block() && (*curwin.get()).w_curswant < MAXCOL {
             let mut min = sel.min;
             let mut max = sel.max;
             getvcols(

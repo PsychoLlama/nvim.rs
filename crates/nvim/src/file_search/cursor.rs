@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::normal::visual_active;
 use crate::semsg_c;
 use crate::types::{FAIL, OptionSetFlags, Vv};
 use core::ffi::{c_char, c_int, c_long};
@@ -23,7 +24,7 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *
     unsafe {
         let options =
             FileNameOpts::MESS | FileNameOpts::EXP | FileNameOpts::REL | FileNameOpts::UNESC;
-        if !VIsual_active.get() {
+        if !visual_active() {
             return file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum);
         }
 

@@ -39,6 +39,7 @@ mod usage;
 pub use self::exit::*;
 use crate::eval::typval::kCallbackNone;
 use crate::highlight_group::HLF_NONE;
+use crate::normal::VisualMode;
 use crate::pos::MAXLNUM;
 use crate::state::MODE_NORMAL;
 
@@ -843,20 +844,12 @@ pub static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static VIsual: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-    lnum: 0,
-    col: 0,
-    coladd: 0,
-});
-pub static VIsual_active: GlobalCell<bool> = GlobalCell::new(false);
-pub static VIsual_select: GlobalCell<bool> = GlobalCell::new(false);
 pub static VIsual_select_reg: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static VIsual_select_exclu_adj: GlobalCell<bool> = GlobalCell::new(false);
 pub static restart_VIsual_select: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static VIsual_reselect: GlobalCell<c_int> = GlobalCell::new(0);
-pub static VIsual_mode: GlobalCell<c_int> = GlobalCell::new('v' as c_int);
 pub static redo_VIsual_busy: GlobalCell<bool> = GlobalCell::new(false);
-pub static resel_VIsual_mode: GlobalCell<c_int> = GlobalCell::new('\0' as c_int);
+pub(crate) static resel_VIsual_mode: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
 pub static resel_VIsual_line_count: GlobalCell<linenr_T> = GlobalCell::new(0);
 pub static resel_VIsual_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
 pub static where_paste_started: GlobalCell<pos_T> = GlobalCell::new(pos_T {

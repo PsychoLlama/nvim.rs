@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::decoration::kMTMetaInline;
-use crate::keycodes::Ctrl_V;
+use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;
@@ -63,7 +63,7 @@ pub(crate) unsafe fn prepare_line(
             };
             wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
 
-            if VIsual_active.get() && (*wp).w_buffer == (*curwin.get()).w_buffer {
+            if visual_active() && (*wp).w_buffer == (*curwin.get()).w_buffer {
                 s.visual_area(wlv, wp);
             } else if highlight_match.get()
                 && wp == curwin.get()
@@ -290,7 +290,7 @@ impl LineSetup {
         let lnum = wlv.lnum;
         // A copy: nothing here writes through either end, and taking the
         // anchor by value keeps the global out of the draw pass.
-        let mut anchor = VIsual.get();
+        let mut anchor = visual_anchor();
         let anchor = &raw mut anchor;
         // SAFETY: the caller's window.
         unsafe {
@@ -302,7 +302,7 @@ impl LineSetup {
             };
             self.lnum_in_visual_area = lnum >= (*top).lnum && lnum <= (*bot).lnum;
 
-            if VIsual_mode.get() == Ctrl_V {
+            if visual_mode().is_block() {
                 // Blockwise: the columns were worked out for the whole
                 // selection when it last moved.
                 if self.lnum_in_visual_area {
@@ -313,7 +313,7 @@ impl LineSetup {
                 if lnum > (*top).lnum && lnum <= (*bot).lnum {
                     wlv.fromcol = 0;
                 } else if lnum == (*top).lnum {
-                    if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
+                    if visual_mode().is_line() {
                         wlv.fromcol = 0;
                     } else {
                         getvvcol(
@@ -329,7 +329,7 @@ impl LineSetup {
                         }
                     }
                 }
-                if VIsual_mode.get() != 'V' as ::core::ffi::c_int && lnum == (*bot).lnum {
+                if !visual_mode().is_line() && lnum == (*bot).lnum {
                     if *p_sel.get() == b'e' as ::core::ffi::c_char
                         && (*bot).col == 0
                         && (*bot).coladd == 0
@@ -501,7 +501,7 @@ impl LineSetup {
                 || wlv.lnum != (*wp).w_cursorline
                 // Not while Visual mode is active: it would stop being clear
                 // what is selected.
-                || (wp == curwin.get() && VIsual_active.get())
+                || (wp == curwin.get() && visual_active())
             {
                 return;
             }
@@ -752,7 +752,7 @@ impl LineSetup {
                 && ((*wp).w_onebuf_opt.wo_cuc != 0
                     || !wlv.color_cols.is_null()
                     || virtual_active(wp)
-                    || (VIsual_active.get() && (*wp).w_buffer == (*curwin.get()).w_buffer)
+                    || (visual_active() && (*wp).w_buffer == (*curwin.get()).w_buffer)
                     || self.has_fold)
             {
                 wlv.vcol = start_vcol;

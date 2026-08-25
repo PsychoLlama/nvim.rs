@@ -30,7 +30,8 @@ use crate::charset::getdigits_int;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2attr};
-use crate::main::{State, VIsual_active, finish_op, p_guicursor, p_sel};
+use crate::main::{State, finish_op, p_guicursor, p_sel};
+use crate::normal::visual_active;
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
@@ -551,7 +552,7 @@ pub(crate) unsafe fn cursor_get_mode_idx() -> ShapeIdx {
         }
     } else if finish_op.get() {
         SHAPE_IDX_O
-    } else if VIsual_active.get() {
+    } else if visual_active() {
         // SAFETY: an option value is a NUL-terminated string.
         if unsafe { *p_sel.get() } == b'e' as c_char {
             SHAPE_IDX_VE

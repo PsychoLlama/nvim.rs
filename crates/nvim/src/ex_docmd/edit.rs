@@ -32,11 +32,11 @@ use crate::getchar::{
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
 use crate::main::{
-    State, VIsual_active, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2,
-    e_invrange, e_secure, e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint,
-    ex_normal_busy, exec_from_reg, finish_op, firstwin, force_restart_edit, got_int,
-    magic_overruled, main_loop, msg_didout, msg_scroll, opcount, p_mmd, pending_end_reg_executing,
-    reg_executing, restart_edit, stop_insert_mode, virtual_op,
+    State, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2, e_invrange, e_secure,
+    e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint, ex_normal_busy,
+    exec_from_reg, finish_op, firstwin, force_restart_edit, got_int, magic_overruled, main_loop,
+    msg_didout, msg_scroll, opcount, p_mmd, pending_end_reg_executing, reg_executing, restart_edit,
+    stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -48,7 +48,9 @@ use crate::r#move::{
     check_cursor_moved, cursor_correct, cursor_valid, scrolldown, scrollup, update_curswant,
     update_topline, validate_cursor,
 };
-use crate::normal::{end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line};
+use crate::normal::{
+    end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line, visual_active,
+};
 use crate::ops::{clear_oparg, do_join, op_delete, op_shift};
 use crate::option::{cpo_has, get_scrolloff_value};
 use crate::os::cshim::gettext;
@@ -238,7 +240,7 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
             (*curwin.get()).w_cursor.lnum = (*eap).line1;
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
-        if VIsual_active.get() {
+        if visual_active() {
             end_visual_mode();
         }
 
@@ -811,7 +813,7 @@ pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
             }
             (*curwin.get()).w_curswant = 0 as colnr_T;
         }
-        if VIsual_active.get() {
+        if visual_active() {
             showmode();
         }
     }

@@ -17,13 +17,13 @@ use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::main::{
-    VIsual_active, VIsual_select, VIsual_select_reg, arrow_used, cmdwin_type, curbuf, curwin,
-    got_int, reg_executing, reg_recorded, restart_edit,
+    VIsual_select_reg, arrow_used, cmdwin_type, curbuf, curwin, got_int, reg_executing,
+    reg_recorded, restart_edit,
 };
 use crate::message::emsg;
 use crate::normal::{
     checkclearop, checkclearopq, clearopbeep, e_cmdline_window_already_open, kMTLineWise,
-    langmap_adjust,
+    langmap_adjust, visual_active, visual_select,
 };
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
@@ -93,7 +93,7 @@ pub(crate) unsafe fn nv_at(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_undo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_LOWER || VIsual_active.get() {
+        if (*(*cap).oap).op_type == OP_LOWER || visual_active() {
             as_g_operator(cap, b'u');
         } else {
             nv_kundo(cap);
@@ -117,7 +117,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_undo_line(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_UPPER || VIsual_active.get() {
+        if (*(*cap).oap).op_type == OP_UPPER || visual_active() {
             as_g_operator(cap, b'U');
             return;
         }
@@ -170,7 +170,7 @@ pub(crate) unsafe fn nv_dot(cap: *mut cmdarg_T) {
 /// `CTRL-R`: redo -- or, in Select mode, the register the replacement text
 /// should go to.
 pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
-    if VIsual_select.get() && VIsual_active.get() {
+    if visual_select() && visual_active() {
         // SAFETY: reads one key with mappings suppressed.
         unsafe {
             let unmapped = Keys::unmapped();

@@ -15,13 +15,14 @@ use crate::fold::{
     foldmethod_is_marker, has_folding, new_fold_level, open_fold, open_fold_recurse,
 };
 use crate::guard::Suppress;
-use crate::main::{VIsual_active, curbuf, curwin, finish_op, firstwin};
+use crate::main::{curbuf, curwin, finish_op, firstwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
 use crate::normal::{
     CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop, clearopbeep,
     find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char,
+    visual_active,
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
@@ -129,7 +130,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
         // misspelling the cursor is inside, and the identifier under it.
         let mut word: *mut c_char = ptr::null_mut();
         let mut len: size_t = 0;
-        if VIsual_active.get() && !get_visual_text(cap, &raw mut word, &raw mut len) {
+        if visual_active() && !get_visual_text(cap, &raw mut word, &raw mut len) {
             return FAIL;
         }
         if word.is_null() {
@@ -279,7 +280,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             // `zd`/`zD`: delete a fold, recursively for `zD`.
             Ok(b'd' | b'D') => {
                 if fold_manual_allowed(false) != 0 {
-                    if VIsual_active.get() {
+                    if visual_active() {
                         nv_operator(cap);
                     } else {
                         delete_fold(
@@ -328,14 +329,14 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             }
             // `zo`/`zO`: open. With a selection they are the operator form.
             Ok(b'o') => {
-                if VIsual_active.get() {
+                if visual_active() {
                     nv_operator(cap);
                 } else {
                     open_fold((*win).w_cursor, (*cap).count1);
                 }
             }
             Ok(b'O') => {
-                if VIsual_active.get() {
+                if visual_active() {
                     nv_operator(cap);
                 } else {
                     open_fold_recurse((*win).w_cursor);
@@ -344,7 +345,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             // `zc`/`zC`: close. Closing always turns 'foldenable' back on --
             // there would be nothing to see otherwise.
             Ok(b'c') => {
-                if VIsual_active.get() {
+                if visual_active() {
                     nv_operator(cap);
                 } else {
                     close_fold((*win).w_cursor, (*cap).count1);
@@ -352,7 +353,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 (*win).w_onebuf_opt.wo_fen = 1;
             }
             Ok(b'C') => {
-                if VIsual_active.get() {
+                if visual_active() {
                     nv_operator(cap);
                 } else {
                     close_fold_recurse((*win).w_cursor);
@@ -433,7 +434,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
         // a pending operator themselves; the rest refuse one.
         if (*cap).nchar != 'f' as c_int
             && (*cap).nchar != 'F' as c_int
-            && !(VIsual_active.get() && !vim_strchr(c"dcCoO".as_ptr(), (*cap).nchar).is_null())
+            && !(visual_active() && !vim_strchr(c"dcCoO".as_ptr(), (*cap).nchar).is_null())
             && (*cap).nchar != 'j' as c_int
             && (*cap).nchar != 'k' as c_int
             && checkclearop((*cap).oap)

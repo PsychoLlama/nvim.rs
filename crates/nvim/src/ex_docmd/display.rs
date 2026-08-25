@@ -20,13 +20,13 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    State, VIsual_active, cmdpreview, curwin, e_invarg2, msg_col, msg_didout, need_maketitle,
-    need_wait_return, no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname,
-    redraw_cmdline,
+    State, cmdpreview, curwin, e_invarg2, msg_col, msg_didout, need_maketitle, need_wait_return,
+    no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{msg, msg_ext_set_kind};
 use crate::r#move::{update_topline, validate_cursor};
+use crate::normal::visual_active;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
@@ -160,7 +160,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
         if (*eap).forceit != 0 {
             redraw_all_later(UPD_NOT_VALID);
             redraw_cmdline.set(true);
-        } else if VIsual_active.get() {
+        } else if visual_active() {
             redraw_curbuf_later(UPD_INVERTED);
         }
         update_screen();
@@ -192,7 +192,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
         if State.get() & MODE_CMDLINE != 0 {
             redraw_statuslines();
         } else {
-            if VIsual_active.get() {
+            if visual_active() {
                 redraw_curbuf_later(UPD_INVERTED);
             }
             update_screen();

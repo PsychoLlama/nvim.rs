@@ -25,6 +25,7 @@ mod time;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::memline::MlFlags;
+use crate::normal::{visual_active, with_visual_anchor};
 use crate::option::cpo_has;
 use crate::smsg_keep_c;
 use crate::winlayer::{Buf, windows};
@@ -282,10 +283,10 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
             wp.redraw_later(UPD_NOT_VALID);
         }
     }
-    if VIsual_active.get() {
+    if visual_active() {
         // SAFETY: a live current buffer, and the cell lends the position for
         // the length of the call.
-        VIsual.with_mut(|visual| unsafe { check_pos(buf.raw(), visual) });
+        with_visual_anchor(|visual| unsafe { check_pos(buf.raw(), visual) });
     }
 
     // SAFETY: a format string and the arguments it names, and `when` is

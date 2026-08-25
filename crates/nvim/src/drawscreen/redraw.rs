@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::normal::{visual_active, visual_anchor, visual_mode};
 
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
@@ -45,9 +46,9 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 
         validate_virtcol(wp);
 
-        let visual_moved = VIsual_active.get()
-            && (VIsual_mode.get() != (*wp).w_stl_visual_mode
-                || VIsual.get() != (*wp).w_stl_visual_pos);
+        let visual_moved = visual_active()
+            && (visual_mode().raw() != (*wp).w_stl_visual_mode
+                || visual_anchor() != (*wp).w_stl_visual_pos);
         if force
             || (*wp).w_cursor != (*wp).w_stl_cursor
             || (*wp).w_virtcol != (*wp).w_stl_virtcol
@@ -83,9 +84,9 @@ pub unsafe fn show_cursor_info_later(force: bool) {
         // Upstream leaves the remembered Visual position alone when Visual mode
         // is not active, so that leaving and re-entering it on the same
         // selection does not count as a change. Reproduced.
-        if VIsual_active.get() {
-            (*wp).w_stl_visual_mode = VIsual_mode.get();
-            (*wp).w_stl_visual_pos = VIsual.get();
+        if visual_active() {
+            (*wp).w_stl_visual_mode = visual_mode().raw();
+            (*wp).w_stl_visual_pos = visual_anchor();
         }
     }
 }

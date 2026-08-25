@@ -46,6 +46,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::normal::{set_visual_active, visual_active};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -63,8 +64,8 @@ use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_v
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
 use crate::main::{
-    KeyTyped, State, VIsual_active, curbuf, curwin, did_emsg, msg_loclist, msg_qflist, p_sc,
-    p_sloc, redraw_not_allowed, showcmd_buf, updating_screen,
+    KeyTyped, State, curbuf, curwin, did_emsg, msg_loclist, msg_qflist, p_sc, p_sloc,
+    redraw_not_allowed, showcmd_buf, updating_screen,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
@@ -151,19 +152,19 @@ impl Env {
         set_str_var(c"g:actual_curwin", real_win.handle);
 
         let (save_curbuf, save_curwin) = (curbuf.get(), curwin.get());
-        let save_visual = VIsual_active.get();
+        let save_visual = visual_active();
         curwin.set(self.win.raw());
         curbuf.set(self.buf.raw());
         if curwin.get() != save_curwin {
             // Visual mode is only valid in the current window.
-            VIsual_active.set(false);
+            set_visual_active(false);
         }
         // SAFETY: `expr` is NUL-terminated, and the result is a string this
         // frame owns.
         let str = unsafe { eval_to_string_safe(expr.as_ptr().cast_mut(), self.sandbox, false) };
         curwin.set(save_curwin);
         curbuf.set(save_curbuf);
-        VIsual_active.set(save_visual);
+        set_visual_active(save_visual);
 
         unlet(c"g:actual_curbuf");
         unlet(c"g:actual_curwin");

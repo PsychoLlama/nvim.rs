@@ -13,7 +13,7 @@ use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, one
 use crate::ex_cmds::do_ascii;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
-use crate::main::{VIsual_active, VIsual_reselect, curbuf, curwin, mod_mask};
+use crate::main::{VIsual_reselect, curbuf, curwin, mod_mask};
 use crate::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
 use crate::memline::goto_byte;
 use crate::message::show_sb_text;
@@ -22,7 +22,7 @@ use crate::normal::{
     MOD_MASK_CTRL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq, clearopbeep,
     invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
     nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
-    nv_screengo, nv_visual, nv_vreplace,
+    nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::{getvvcol, linetabsize};
@@ -311,7 +311,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // by a growing multiple of the count. Only meaningful in Visual
             // mode.
             Ok(CTRL_A | CTRL_X) => {
-                if VIsual_active.get() {
+                if visual_active() {
                     (*cap).arg = 1;
                     (*cap).cmdchar = nchar;
                     (*cap).nchar = NUL;

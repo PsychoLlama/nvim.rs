@@ -12,10 +12,13 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::fold::has_folding;
-use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_para, p_sections};
+use crate::main::{curbuf, curwin, p_para, p_sections};
 use crate::mark::setpcmark;
 use crate::mbyte::utf_head_off;
 use crate::memline::{ml_get, ml_get_len};
+use crate::normal::{
+    VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
+};
 use crate::search::{BACKWARD, FORWARD, linewhite};
 use crate::types::{FAIL, NUL, OK, linenr_T, oparg_T};
 
@@ -174,7 +177,7 @@ pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
 unsafe fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: bool) -> c_int {
     unsafe {
         let mut retval = OK;
-        let dir = if start_lnum < VIsual.get().lnum {
+        let dir = if start_lnum < visual_anchor().lnum {
             BACKWARD as c_int
         } else {
             FORWARD as c_int
@@ -247,7 +250,7 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
         let mut start_lnum = (*curwin.get()).w_cursor.lnum;
 
         // A Visual area of more than one line is extended, not replaced.
-        if VIsual_active.get() && start_lnum != VIsual.get().lnum {
+        if visual_active() && start_lnum != visual_anchor().lnum {
             return extend_paragraphs(start_lnum, count, include);
         }
 
@@ -319,16 +322,16 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
             }
         }
 
-        if VIsual_active.get() {
+        if visual_active() {
             // `Vipipip` on a single white line would otherwise get stuck
             // here, so hand it to the extending path instead.
-            if VIsual_mode.get() == 'V' as c_int && start_lnum == (*curwin.get()).w_cursor.lnum {
+            if visual_mode().is_line() && start_lnum == (*curwin.get()).w_cursor.lnum {
                 return extend_paragraphs(start_lnum, count, include);
             }
-            if VIsual.get().lnum != start_lnum {
-                VIsual.set(VIsual.get().with_lnum(start_lnum).with_col(0));
+            if visual_anchor().lnum != start_lnum {
+                set_visual_anchor(visual_anchor().with_lnum(start_lnum).with_col(0));
             }
-            VIsual_mode.set('V' as c_int);
+            set_visual_mode(VisualMode::LINE);
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
             showmode();
         } else {

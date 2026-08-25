@@ -18,6 +18,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::normal::visual_active;
 use crate::types::{FAIL, NUL, OK};
 
 /// Put the allocated string `p` in register `regname` as a single charwise
@@ -378,7 +379,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
             );
             // A Visual-mode `@:` re-applies to the *current* selection, so
             // drop the `'<,'>` the command line was recorded with.
-            let retval = if VIsual_active.get() && strncmp(p, c"'<,'>".as_ptr(), 5) == 0 {
+            let retval = if visual_active() && strncmp(p, c"'<,'>".as_ptr(), 5) == 0 {
                 put_in_typebuf(p.add(5), true, true, silent)
             } else {
                 put_in_typebuf(p, true, true, silent)

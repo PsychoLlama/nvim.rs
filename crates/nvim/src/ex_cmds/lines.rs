@@ -16,13 +16,12 @@ use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
 use crate::fold::fold_move_range;
-use crate::main::{
-    VIsual, VIsual_active, curbuf, curwin, disable_fold_update, global_busy, p_report,
-};
+use crate::main::{curbuf, curwin, disable_fold_update, global_busy, p_report};
 use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
 use crate::memory::xfree;
 use crate::message::{emsg, msgmore};
+use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
 use crate::smsg_c;
 use crate::strings::xstrnsave;
@@ -347,9 +346,9 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
 
     // SAFETY: `count` lines were appended after `n`.
     unsafe { appended_lines_mark(n, count) };
-    if VIsual_active.get() {
+    if visual_active() {
         // SAFETY: `curbuf` is live and `VIsual` is a global position.
-        VIsual.with_mut(|anchor| unsafe { check_pos(curbuf.get(), anchor) });
+        with_visual_anchor(|anchor| unsafe { check_pos(curbuf.get(), anchor) });
     }
     // SAFETY: message state, main thread.
     unsafe { msgmore(count) };

@@ -25,11 +25,13 @@ use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    VIsual, VIsual_active, VIsual_reselect, cmdwin_type, cmdwin_win, mouse_col, mouse_dragging,
-    mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd, redraw_cmdline,
+    VIsual_reselect, cmdwin_type, cmdwin_win, mouse_col, mouse_dragging, mouse_past_bottom,
+    mouse_past_eol, mouse_row, msg_silent, p_smd, redraw_cmdline,
 };
 use crate::r#move::WinValid;
-use crate::normal::{end_visual_mode, may_start_select};
+use crate::normal::{
+    end_visual_mode, may_start_select, set_visual_active, set_visual_anchor, visual_active,
+};
 use crate::types::pos_T;
 
 // What the last event that could move focus landed on.  A drag or a release
@@ -281,7 +283,7 @@ fn enter_window(
     } else {
         pos.col >= fdc + (win.raw() == cmdwin_win.get()) as c_int
     };
-    if VIsual_active.get()
+    if visual_active()
         && (win.buffer() != old_curwin.buffer()
             || (status_line_offset.get() == 0
                 && sep_line_offset.get() == 0
@@ -495,9 +497,9 @@ fn move_cursor_there(
     }
 
     // Start Visual mode before coladvance(), for when 'sel' != "old"
-    if flags & MOUSE_MAY_VIS != 0 && !VIsual_active.get() {
-        VIsual.set(old_cursor);
-        VIsual_active.set(true);
+    if flags & MOUSE_MAY_VIS != 0 && !visual_active() {
+        set_visual_anchor(old_cursor);
+        set_visual_active(true);
         VIsual_reselect.set(1);
         // If 'selectmode' contains "mouse", start Select mode.
         may_start_select('o' as c_int);

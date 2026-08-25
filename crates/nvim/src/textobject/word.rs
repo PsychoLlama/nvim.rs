@@ -15,14 +15,14 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    VIsual, VIsual_active, VIsual_mode, VIsual_select_exclu_adj, curbuf, curwin, p_sel,
-    redraw_cmdline,
-};
+use crate::main::{VIsual_select_exclu_adj, curbuf, curwin, p_sel, redraw_cmdline};
 use crate::mbyte::utf_class;
 use crate::memline::{decl, incl, ml_get};
 use crate::r#move::adjust_skipcol;
-use crate::normal::unadjust_for_sel;
+use crate::normal::{
+    VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
+    visual_mode,
+};
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{FAIL, NUL, OK, linenr_T, oparg_T, pos_T};
@@ -232,8 +232,8 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
 
         // Undo a cursor position adjusted for exclusive 'selection'.
         if *p_sel.get() as c_int == 'e' as c_int
-            && VIsual_active.get()
-            && VIsual_mode.get() == 'v' as c_int
+            && visual_active()
+            && visual_mode().is_char()
             && VIsual_select_exclu_adj.get()
         {
             unadjust_for_sel();
@@ -368,16 +368,16 @@ pub unsafe fn current_word(
         clearpos(&mut start_pos);
 
         // Correct the cursor when 'selection' is exclusive.
-        if VIsual_active.get()
+        if visual_active()
             && *p_sel.get() as c_int == 'e' as c_int
-            && lt(VIsual.get(), (*curwin.get()).w_cursor)
+            && lt(visual_anchor(), (*curwin.get()).w_cursor)
         {
             dec_cursor();
         }
 
         // Outside Visual mode, or with a one-character Visual area, select
         // the word and/or white space under the cursor.
-        if !VIsual_active.get() || equalpos((*curwin.get()).w_cursor, VIsual.get()) {
+        if !visual_active() || equalpos((*curwin.get()).w_cursor, visual_anchor()) {
             back_in_line();
             start_pos = (*curwin.get()).w_cursor;
 
@@ -404,9 +404,9 @@ pub unsafe fn current_word(
                 }
             }
 
-            if VIsual_active.get() {
+            if visual_active() {
                 // Should do something when `inclusive` is false.
-                VIsual.set(start_pos);
+                set_visual_anchor(start_pos);
                 redraw_curbuf_later(UPD_INVERTED); // update the inversion
             } else {
                 (*oap).start = start_pos;
@@ -418,7 +418,7 @@ pub unsafe fn current_word(
         // Any count still left extends by that many more objects.
         while count > 0 {
             inclusive = true;
-            if VIsual_active.get() && lt((*curwin.get()).w_cursor, VIsual.get()) {
+            if visual_active() && lt((*curwin.get()).w_cursor, visual_anchor()) {
                 // In Visual mode with the cursor at the start: move it back.
                 if decl(&mut (*curwin.get()).w_cursor) == -1 {
                     return FAIL;
@@ -467,8 +467,8 @@ pub unsafe fn current_word(
             if oneleft() == OK {
                 back_in_line();
                 if cls() == 0 && (*curwin.get()).w_cursor.col > 0 {
-                    if VIsual_active.get() {
-                        VIsual.set((*curwin.get()).w_cursor);
+                    if visual_active() {
+                        set_visual_anchor((*curwin.get()).w_cursor);
                     } else {
                         (*oap).start = (*curwin.get()).w_cursor;
                     }
@@ -477,15 +477,15 @@ pub unsafe fn current_word(
             (*curwin.get()).w_cursor = pos; // put the cursor back at the end
         }
 
-        if VIsual_active.get() {
+        if visual_active() {
             if *p_sel.get() as c_int == 'e' as c_int
                 && inclusive
-                && ltoreq(VIsual.get(), (*curwin.get()).w_cursor)
+                && ltoreq(visual_anchor(), (*curwin.get()).w_cursor)
             {
                 inc_cursor();
             }
-            if VIsual_mode.get() == 'V' as c_int {
-                VIsual_mode.set('v' as c_int);
+            if visual_mode().is_line() {
+                set_visual_mode(VisualMode::CHAR);
                 redraw_cmdline.set(true); // show the mode later
             }
         } else {

@@ -26,6 +26,7 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
+use crate::normal::visual_select;
 use crate::option::cpo_has;
 use crate::register::is_append_register;
 use crate::types::{CpoFlag, NUL};
@@ -74,7 +75,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
             emsg(gettext(&raw const e_modifiable as *const c_char));
             return Err(NotDeleted::NotModifiable);
         }
-        if VIsual_select.get() && (*oap).is_VIsual {
+        if visual_select() && (*oap).is_VIsual {
             // The register given with CTRL-R, zero by default.
             (*oap).regname = VIsual_select_reg.get();
         }

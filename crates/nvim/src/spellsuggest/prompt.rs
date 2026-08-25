@@ -38,8 +38,8 @@ use crate::getchar::{
 };
 use crate::input::prompt_for_input;
 use crate::main::{
-    IObuff, Rows, VIsual, VIsual_active, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left,
-    mouse_row, msg_col, msg_row, msg_scroll, p_verbose,
+    IObuff, Rows, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left, mouse_row, msg_col,
+    msg_row, msg_scroll, p_verbose,
 };
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
@@ -47,7 +47,7 @@ use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
 use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
 };
-use crate::normal::end_visual_mode;
+use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::options::kOptBoFlagSpell;
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::search::FORWARD;
@@ -193,18 +193,18 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
     // SAFETY: the caller guarantees the window; the scan below stays
     // between the start of the cursor line and its terminator.
     unsafe {
-        if VIsual_active.get() {
+        if visual_active() {
             // The Visual selection is the bad word, but only within a
             // single line.
-            if (*curwin.get()).w_cursor.lnum != VIsual.get().lnum {
+            if (*curwin.get()).w_cursor.lnum != visual_anchor().lnum {
                 vim_beep(kOptBoFlagSpell as core::ffi::c_uint);
                 return None;
             }
-            let mut badlen = (*curwin.get()).w_cursor.col - VIsual.get().col;
+            let mut badlen = (*curwin.get()).w_cursor.col - visual_anchor().col;
             if badlen < 0 {
                 badlen = -badlen;
             } else {
-                (*curwin.get()).w_cursor.col = VIsual.get().col;
+                (*curwin.get()).w_cursor.col = visual_anchor().col;
             }
             badlen += 1;
             end_visual_mode();
