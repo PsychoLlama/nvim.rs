@@ -23,7 +23,7 @@ use crate::lua::ffi::{
     lua_setfield, lua_settop, lua_toboolean, lua_tocfunction, lua_tolstring, luaL_checkstring,
     luaL_loadbuffer,
 };
-use crate::main::{IObuff, main_loop, time_fd};
+use crate::main::{main_loop, time_fd};
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};
@@ -174,6 +174,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
 /// # Safety
 /// `lstate` must be a live Lua state holding this function's arguments.
 pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c_int {
+    let mut what = [0 as c_char; IOSIZE as usize];
     unsafe {
         let name = luaL_checkstring(lstate, 1);
         lua_settop(lstate, 1);
@@ -207,12 +208,12 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
         let status = lua_pcall(lstate, 1, 1, 0);
         if status == 0 {
             vim_snprintf(
-                IObuff.ptr().cast(),
+                what.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"require('%s')".as_ptr(),
                 name,
             );
-            time_msg(IObuff.ptr().cast(), &raw mut start_time);
+            time_msg(what.as_ptr(), &raw mut start_time);
         }
         time_pop(rel_time);
         if status == 0 { 1 } else { lua_error(lstate) }
@@ -224,6 +225,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
 /// # Safety
 /// `lstate` must be a live Lua state.
 pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_int {
+    let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         let input_args: [typval_T; 2] = [
             typval_T {
@@ -242,12 +244,12 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
 
             if ui_has(kUICmdline) {
                 snprintf(
-                    IObuff.ptr().cast(),
+                    line.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"lua_debug> %s".as_ptr(),
                     input.vval.v_string,
                 );
-                ui_ext_cmdline_block_append(0, IObuff.ptr().cast());
+                ui_ext_cmdline_block_append(0, line.as_ptr());
             } else {
                 msg_putchar(b'\n' as c_int);
             }

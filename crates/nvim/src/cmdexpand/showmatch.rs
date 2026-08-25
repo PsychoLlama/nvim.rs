@@ -27,6 +27,9 @@ pub(crate) unsafe fn showmatches_oneline(
     maxlen: c_int,
     showtail: bool,
 ) {
+    // `msg_outtrans` runs the message machinery, which is why the shortened
+    // name it is handed is this frame's and not the shared `NameBuff`.
+    let mut shown = [0 as c_char; MAXPATHL as usize];
     unsafe {
         // C's SHOW_MATCH().
         let show_match = |i: c_int| {
@@ -86,11 +89,11 @@ pub(crate) unsafe fn showmatches_oneline(
                     home_replace(
                         ptr::null(),
                         *matches.offset(j as isize),
-                        NameBuff.ptr() as *mut c_char,
+                        shown.as_mut_ptr(),
                         MAXPATHL as size_t,
                         true,
                     );
-                    p = NameBuff.ptr() as *mut c_char;
+                    p = shown.as_mut_ptr();
                 }
             } else {
                 isdir = false;
@@ -117,6 +120,7 @@ pub unsafe fn showmatches(
     display_list: bool,
     noselect: bool,
 ) -> Expanded {
+    let mut shown = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let mut ccline = Cc::current();
         let mut numMatches = 0;
@@ -199,11 +203,11 @@ pub unsafe fn showmatches(
                     home_replace(
                         ptr::null(),
                         *matches.offset(i as isize),
-                        NameBuff.ptr() as *mut c_char,
+                        shown.as_mut_ptr(),
                         MAXPATHL as size_t,
                         true,
                     );
-                    vim_strsize(NameBuff.ptr() as *mut c_char)
+                    vim_strsize(shown.as_ptr())
                 } else {
                     vim_strsize(show_match(i))
                 };

@@ -39,6 +39,7 @@ unsafe fn load_language_from_object(
     mut lang_name: *const ::core::ffi::c_char,
     mut symbol: *const ::core::ffi::c_char,
 ) -> *const TSLanguage {
+    let mut dlerror = [0 as ::core::ffi::c_char; 1025];
     unsafe {
         let mut lib: uv_lib_t = uv_lib_t {
             handle: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -46,16 +47,16 @@ unsafe fn load_language_from_object(
         };
         if uv_dlopen(path, &raw mut lib) != 0 {
             xstrlcpy(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
+                dlerror.as_mut_ptr(),
                 uv_dlerror(&raw mut lib),
-                ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
+                dlerror.len(),
             );
             uv_dlclose(&raw mut lib);
             luaL_error(
                 L,
                 c"Failed to load parser for language '%s': uv_dlopen: %s".as_ptr(),
                 lang_name,
-                IObuff.ptr() as *mut ::core::ffi::c_char,
+                dlerror.as_ptr(),
             );
         }
         let mut symbol_buf: [::core::ffi::c_char; 128] = [0; 128];
@@ -73,15 +74,15 @@ unsafe fn load_language_from_object(
         ) != 0
         {
             xstrlcpy(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
+                dlerror.as_mut_ptr(),
                 uv_dlerror(&raw mut lib),
-                ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
+                dlerror.len(),
             );
             uv_dlclose(&raw mut lib);
             luaL_error(
                 L,
                 c"Failed to load parser: uv_dlsym: %s".as_ptr(),
-                IObuff.ptr() as *mut ::core::ffi::c_char,
+                dlerror.as_ptr(),
             );
         }
         let mut lang: *mut TSLanguage = lang_parser.expect("non-null function pointer")();

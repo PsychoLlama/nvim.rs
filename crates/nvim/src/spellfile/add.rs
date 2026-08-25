@@ -34,7 +34,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
-use crate::main::{NameBuff, curbuf, curwin, e_bufloaded, e_notopen, e_notset};
+use crate::main::{curbuf, curwin, e_bufloaded, e_notopen, e_notset};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
 use crate::option::{copy_option_part, set_option_value_give_err};
@@ -72,6 +72,8 @@ pub unsafe fn spell_add_word(
     idx: c_int,
     undo: bool,
 ) {
+    // `smsg_c!` runs autocommands, so the path it reports is this frame's.
+    let mut shown = [0 as c_char; MAXPATHL as usize];
     unsafe {
         if !valid_spell_word(word, word.offset(len as isize)) {
             emsg(gettext(e_illegal_character_in_word.get()));
@@ -190,7 +192,7 @@ pub unsafe fn spell_add_word(
                 home_replace(
                     core::ptr::null(),
                     fname,
-                    NameBuff.ptr() as *mut c_char,
+                    shown.as_mut_ptr(),
                     MAXPATHL as size_t,
                     true,
                 );
@@ -199,7 +201,7 @@ pub unsafe fn spell_add_word(
                     gettext(c"Word '%.*s' added to %s".as_ptr()),
                     len,
                     word,
-                    NameBuff.ptr() as *mut c_char,
+                    shown.as_ptr(),
                 );
             }
         }
@@ -229,6 +231,7 @@ pub unsafe fn spell_add_word(
 /// the file and reopens it for update; the scan then resumes from the
 /// position it had reached.
 unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, undo: bool) -> bool {
+    let mut shown = [0 as c_char; MAXPATHL as usize];
     unsafe {
         let mut line = [0 as c_char; MAXWLEN * 2];
         let mut fd: *mut FILE = os_fopen(fname, c"r".as_ptr());
@@ -266,7 +269,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
                     home_replace(
                         core::ptr::null(),
                         fname,
-                        NameBuff.ptr() as *mut c_char,
+                        shown.as_mut_ptr(),
                         MAXPATHL as size_t,
                         true,
                     );
@@ -275,7 +278,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
                         gettext(c"Word '%.*s' removed from %s".as_ptr()),
                         len,
                         word,
-                        NameBuff.ptr() as *mut c_char,
+                        shown.as_ptr(),
                     );
                 }
             }

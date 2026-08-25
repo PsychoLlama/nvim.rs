@@ -22,7 +22,7 @@
 
 use crate::buffer::buflist_findnr;
 use crate::ex_docmd::cmdmod_has;
-use crate::main::{IObuff, global_busy, got_int, jop_flags, listcmd_busy};
+use crate::main::{global_busy, got_int, jop_flags, listcmd_busy};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,
@@ -368,6 +368,7 @@ pub unsafe fn free_jumplist(wp: *mut win_T) {
 /// # Safety
 /// The editor's globals must be live.
 pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
+    let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let win = unsafe { Win::current() };
     // SAFETY: as above.
@@ -402,7 +403,7 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
                     // SAFETY: `curbuf` is live.
                     let here = Buf::current().handle;
                     snprintf(
-                        IObuff.ptr().cast::<c_char>(),
+                        row.as_mut_ptr(),
                         IOSIZE as size_t,
                         c"%c %2d %5d %4d ".as_ptr(),
                         if i == win.w_jumplistidx {
@@ -414,7 +415,7 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
                         jump.fmark().lnum(),
                         jump.fmark().col(),
                     );
-                    msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
+                    msg_outtrans(row.as_ptr(), 0, false);
                     let attr = if jump.fmark().fnum() == here {
                         HLF_D
                     } else {
@@ -452,6 +453,7 @@ pub unsafe fn ex_clearjumps(_eap: *mut exarg_T) {
 /// # Safety
 /// The editor's globals must be live.
 pub unsafe fn ex_changes(_eap: *mut exarg_T) {
+    let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let (buf, win) = unsafe { (Buf::current(), Win::current()) };
     // SAFETY: as above.
@@ -468,11 +470,11 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
             if got_int.get() {
                 break;
             }
-            // SAFETY: `IObuff` is `IOSIZE` bytes of live storage and the
+            // SAFETY: `row` is `IOSIZE` bytes of live storage and the
             // format string matches the four arguments.
             unsafe {
                 snprintf(
-                    IObuff.ptr().cast::<c_char>(),
+                    row.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"%c %3d %5d %4d ".as_ptr(),
                     if i == win.w_changelistidx {
@@ -484,7 +486,7 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
                     change.lnum(),
                     change.col(),
                 );
-                msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
+                msg_outtrans(row.as_ptr(), 0, false);
                 let name = mark_line(change.pos(), 17);
                 msg_outtrans(name, HLF_D, false);
                 xfree(name.cast());
