@@ -46,21 +46,21 @@ use crate::keycodes::{
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
     Columns, IObuff, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
-    cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, curbuf, curwin, default_grid, did_emsg,
-    did_wait_return, do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode,
+    cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, curbuf, curwin, default_grid, default_gridview,
+    did_emsg, did_wait_return, do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode,
     emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
     emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting,
     exmode_active, full_screen, global_busy, got_int, headless_mode, hl_attr_active,
     in_assert_fails, info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, mode_displayed,
     msg_buf, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite,
-    msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid, msg_grid_adj, msg_grid_pos,
-    msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row, msg_scroll,
-    msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, need_check_timestamps,
-    need_clr_eos, need_fileinfo, need_highlight_changed, need_wait_return, no_wait_return,
-    nvim_testing, on_print, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose,
-    quit_more, rdb_flags, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
-    redrawing_cmdline, reg_recording, resize_events, sc_col, scriptout, silent_mode, skip_redraw,
-    vgetc_busy, vgetc_char, vgetc_mod_mask,
+    msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid, msg_grid_pos, msg_grid_scroll_discount,
+    msg_hist_off, msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled,
+    msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, need_check_timestamps, need_clr_eos,
+    need_fileinfo, need_highlight_changed, need_wait_return, no_wait_return, nvim_testing,
+    on_print, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose, quit_more, rdb_flags,
+    redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline, redrawing_cmdline, reg_recording,
+    resize_events, sc_col, scriptout, silent_mode, skip_redraw, vgetc_busy, vgetc_char,
+    vgetc_mod_mask,
 };
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,
@@ -88,10 +88,11 @@ use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, M
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, Dict, Event, FILE, HlMessage, HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts,
-    MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T, estack_arg_T, exarg_T,
-    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object, object_data,
-    ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
+    KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T,
+    estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil,
+    object, object_data, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union,
+    uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,

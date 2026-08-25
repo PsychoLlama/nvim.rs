@@ -378,7 +378,7 @@ pub(crate) unsafe fn redraw_wildmenu(
             // at empty scrolled space in the message output.
             grid_line_start(
                 if wild_menu_showing.get() == WM_SCROLLED {
-                    msg_grid_adj.get()
+                    msg_grid_view()
                 } else {
                     default_gridview.get()
                 },

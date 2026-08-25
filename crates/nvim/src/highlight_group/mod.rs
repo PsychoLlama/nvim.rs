@@ -6,9 +6,10 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::decoration_provider::decor_provider_invalidate_hl;
 use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::main::{
-    clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
+    clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user,
     need_highlight_changed,
 };
+use crate::message::msg_grid_ref;
 use crate::types::{Integer, OptValType, size_t};
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
@@ -173,6 +174,8 @@ unsafe fn combine_stl_hlt(
 /// # Safety
 /// Adds groups, resolves attributes and emits UI events; main thread only.
 pub(crate) unsafe fn highlight_changed() {
+    // `HLF_MSG`'s blend flag lives on the message grid; acquired once.
+    let mut msg_grid = msg_grid_ref();
     // SAFETY (whole body): the editor's own tables and UI, on the main
     // thread; `hlf_names` is static and NUL-terminated.
     unsafe {
@@ -204,7 +207,7 @@ pub(crate) unsafe fn highlight_changed() {
             }
             if hlf == HLF_MSG {
                 clear_cmdline.set(true);
-                (*msg_grid.ptr()).blending = syn_attr2entry(attr).hl_blend > -1;
+                msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
             }
             ui_call_hl_group_set(cstr_as_string(name), Integer::from(attr));
             highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);

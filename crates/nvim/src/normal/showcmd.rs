@@ -18,12 +18,12 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
-    Rows, curwin, ex_normal_busy, hl_attr_active, msg_grid_adj, msg_silent, p_ch, p_sbr, p_sc,
-    p_sel, p_sloc, redraw_tabline, sc_col, showcmd_buf,
+    Rows, curwin, ex_normal_busy, hl_attr_active, msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc,
+    redraw_tabline, sc_col, showcmd_buf,
 };
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
-use crate::message::msg_grid_validate;
+use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
     ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, old_showcmd_buf,
     showcmd_is_clear, showcmd_visual, visual_selection,
@@ -446,12 +446,12 @@ fn integer_object(n: Integer) -> Object {
 /// The built-in form: write the text into the reserved columns of the last
 /// screen line, then blank the rest of them.
 fn draw_on_last_line(clear: bool) {
-    // SAFETY: `msg_grid_adj` is the message grid and `showcmd_row` is its
+    // SAFETY: the message view is the message grid and `showcmd_row` is its
     // last row; `grid_line_puts` bounds itself to the line it was started on.
     unsafe {
         msg_grid_validate();
         let showcmd_row = Rows.get() - 1;
-        grid_line_start(msg_grid_adj.get(), showcmd_row);
+        grid_line_start(msg_grid_view(), showcmd_row);
         let attr = *(*hl_attr_active.ptr()).offset(HLF_MSG as isize);
         let mut len = 0;
         if !clear {

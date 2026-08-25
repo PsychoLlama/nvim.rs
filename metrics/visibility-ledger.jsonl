@@ -183,7 +183,6 @@
 {"path":"neovim::main::cmdmod","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::main::curbuf","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/indent.rs","crates/nvim/tests/unit/statusline.rs","crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::main::curwin","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/search.rs","crates/nvim/tests/unit/statusline.rs","crates/nvim/tests/unit/typval_value.rs"]}
-{"path":"neovim::main::default_grid","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::main::early_init","kind":"fn","file":"crates/nvim/src/main/entry.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::main::emsg_silent","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/eval_decode.rs"]}
 {"path":"neovim::main::emsg_skip","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/typval_dict.rs"]}
@@ -192,7 +191,6 @@
 {"path":"neovim::main::grid_line_buf_char","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
 {"path":"neovim::main::grid_line_buf_size","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
 {"path":"neovim::main::kTVCstring","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
-{"path":"neovim::main::msg_grid_adj","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::main::p_arshape","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::main::p_fic","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::main::p_sh","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/shell.rs"]}

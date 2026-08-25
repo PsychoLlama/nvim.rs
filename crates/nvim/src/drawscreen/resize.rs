@@ -112,9 +112,9 @@ pub unsafe fn screenclear() {
 
         if *(*hl_attr_active.ptr()).add(HLF_MSG as usize) > 0
             && msg_use_grid()
-            && (*msg_grid.ptr()).is_allocated()
+            && msg_grid_ref().is_allocated()
         {
-            (*msg_grid.ptr()).invalidate();
+            msg_grid_ref().invalidate();
             msg_grid_validate();
             msg_grid_invalid.set(false);
             clear_cmdline.set(true);
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             // `win_new_screensize` recomputes float positions; tell the
             // compositor not to draw them yet.
             ui_comp_set_screen_valid(false);
-            if (*msg_grid.ptr()).is_allocated() {
+            if msg_grid_ref().is_allocated() {
                 msg_grid_invalid.set(true);
             }
 
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 if State.get() & MODE_CMDLINE != 0 {
                     update_screen();
                 }
-                if (*msg_grid.ptr()).is_allocated() {
+                if msg_grid_ref().is_allocated() {
                     msg_grid_validate();
                 }
                 ui_comp_set_screen_valid(true);

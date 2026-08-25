@@ -32,11 +32,12 @@ use core::{ptr, slice};
 
 use crate::drawscreen::windows_in_curtab;
 use crate::global_cell::GlobalCell;
-use crate::grid::{schar_from_ascii, schar_from_buf};
+use crate::grid::{GridRef, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
 use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::log::{LOGLVL_DBG, logmsg_c};
-use crate::main::{Columns, Rows, curwin, default_grid, hl_attr_active, msg_grid, p_wd, rdb_flags};
+use crate::main::{Columns, Rows, curwin, default_grid, hl_attr_active, p_wd, rdb_flags};
+use crate::message::msg_grid_ref;
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
@@ -60,29 +61,30 @@ use scratch::{Bufs, blend, clear_invalid_attrs};
 /// and they outlive any `Layer` made here, which is what makes the accessors
 /// below — and with them the composing — safe.
 #[derive(Copy, Clone)]
-struct Layer(*mut ScreenGrid);
+struct Layer(GridRef);
 
 impl Layer {
     /// No grid: C's `NULL`, which `curgrid` holds until [`ui_comp_init`].
-    const NONE: Layer = Layer(ptr::null_mut());
+    const NONE: Layer = Layer(GridRef::NONE);
 
     /// # Safety
     /// `grid` must satisfy the invariant above.
     const unsafe fn new(grid: *mut ScreenGrid) -> Self {
-        Layer(grid)
+        // SAFETY: the caller's promise.
+        Layer(unsafe { GridRef::new(grid) })
     }
 
     fn raw(self) -> *mut ScreenGrid {
-        self.0
+        self.0.raw()
     }
 
     fn is_none(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     /// Whether both name the same grid.
     fn same(self, other: Layer) -> bool {
-        ptr::eq(self.0, other.0)
+        self.0.same(other.0)
     }
 
     /// Where `row` of this grid starts in its cell buffers.
@@ -125,15 +127,13 @@ impl Deref for Layer {
     type Target = ScreenGrid;
 
     fn deref(&self) -> &ScreenGrid {
-        // SAFETY: the invariant; the reference never spans a free.
-        unsafe { &*self.0 }
+        &self.0
     }
 }
 
 impl DerefMut for Layer {
     fn deref_mut(&mut self) -> &mut ScreenGrid {
-        // SAFETY: as [`Layer::deref`]; each write finishes in its statement.
-        unsafe { &mut *self.0 }
+        &mut self.0
     }
 }
 
@@ -145,8 +145,7 @@ fn default_layer() -> Layer {
 
 /// The message grid, which the `'msgsep'` row is also attributed to.
 fn msg_layer() -> Layer {
-    // SAFETY: as [`default_layer`].
-    unsafe { Layer::new(msg_grid.ptr()) }
+    Layer(msg_grid_ref())
 }
 
 /// The window's own grid.

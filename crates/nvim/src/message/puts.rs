@@ -316,7 +316,7 @@ pub(crate) unsafe fn msg_puts_display(
                 if open_row >= 0 {
                     msg_line_flush();
                 }
-                grid_line_start(msg_grid_adj.get(), msg_row.get());
+                grid_line_start(msg_grid_view(), msg_row.get());
                 open_row = msg_row.get();
             }
 

@@ -36,13 +36,13 @@ use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, 
 use crate::kvec::Kvec;
 use crate::main::{
     Columns, Rows, State, default_grid, edit_submode, highlight_stlnc, highlight_user, msg_col,
-    msg_grid_adj, msg_row, p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr, ru_col, tab_page_click_defs,
+    msg_row, p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr, ru_col, tab_page_click_defs,
     tab_page_click_defs_size,
 };
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::xmemdupz;
-use crate::message::msg_clr_eos;
+use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
@@ -195,7 +195,7 @@ impl Target {
             if !in_status_line {
                 row = Rows.get() - 1;
                 // SAFETY: the message grid's view is live.
-                canvas = unsafe { Canvas::adjust(msg_grid_adj.get(), &mut row, &mut col) };
+                canvas = unsafe { Canvas::adjust(msg_grid_view(), &mut row, &mut col) };
                 maxwidth -= 1; // Writing in the last column may scroll.
                 fillchar = schar_from_ascii(b' ');
                 group = HLF_MSG;
@@ -702,7 +702,7 @@ pub unsafe fn redraw_ruler() {
     truncate_at_width(&mut buffer, this_ru_col, width);
 
     // SAFETY: the message grid's view is live; the batch is flushed below.
-    unsafe { view_line_start(msg_grid_adj.get(), Rows.get() - 1) };
+    unsafe { view_line_start(msg_grid_view(), Rows.get() - 1) };
     DID_RULER_COL.set(off + this_ru_col);
     let w = paint_cstr(DID_RULER_COL.get(), cstr::in_chars(&buffer), attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);

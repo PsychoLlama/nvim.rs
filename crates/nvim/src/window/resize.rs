@@ -25,12 +25,12 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::grid_clear;
 use crate::main::{
-    Columns, Rows, cmdline_row, curbuf, default_gridview, e_noroom, exiting, full_screen,
-    msg_grid_adj, msg_row, msg_scrolled, p_ch, p_ls, p_spk, p_stal, p_wbr, redraw_cmdline,
-    skip_update_topline, skip_win_fix_cursor,
+    Columns, Rows, cmdline_row, curbuf, default_gridview, e_noroom, exiting, full_screen, msg_row,
+    msg_scrolled, p_ch, p_ls, p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline,
+    skip_win_fix_cursor,
 };
 use crate::mark::setmark;
-use crate::message::msg_grid_validate;
+use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::r#move::{
     WinValid, changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,
     validate_botline_win, win_col_off, win_col_off2,
@@ -522,7 +522,7 @@ pub unsafe fn command_height() {
         if !ui_has(kUIMessages) {
             // SAFETY: makes sure the message grid exists before it is cleared.
             unsafe { msg_grid_validate() };
-            grid = msg_grid_adj.get();
+            grid = msg_grid_view();
         }
         // SAFETY: a live grid, and a row range inside the screen.
         unsafe { grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0) };

@@ -612,11 +612,6 @@ pub static msg_ext_overwrite: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_ext_skip_verbose: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static msg_grid_pos: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static msg_grid_adj: GlobalCell<GridView> = GlobalCell::new(GridView {
-    target: ::core::ptr::null_mut::<ScreenGrid>(),
-    row_offset: 0,
-    col_offset: 0,
-});
 pub static msg_scrolled_at_flush: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static msg_grid_scroll_discount: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static msg_listdo_overwrite: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

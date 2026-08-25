@@ -52,10 +52,9 @@ use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, default_grid,
-    emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, msg_grid_adj,
-    normal_bg, normal_fg, normal_sp, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
-    resize_events, starting, textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight,
-    updating_screen,
+    emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, normal_bg,
+    normal_fg, normal_sp, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags, resize_events,
+    starting, textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
@@ -163,7 +162,6 @@ fn reaches(ui: *mut RemoteUI, reach: Reach) -> bool {
 pub unsafe fn ui_init() {
     unsafe {
         (*default_grid.ptr()).handle = DEFAULT_GRID_HANDLE;
-        (*msg_grid_adj.ptr()).target = default_grid.ptr();
         ui_comp_init();
     }
 }

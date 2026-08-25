@@ -466,7 +466,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                         // Display a line at the top, scrolling the rest down.
                         grid_ins_lines(msg_grid_ref(), 0, 1, Rows.get(), 0, Columns.get());
                         grid_clear(
-                            msg_grid_adj.get(),
+                            msg_grid_view(),
                             0,
                             1,
                             0,
@@ -477,7 +477,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                     } else {
                         // Redisplay the whole screen.
                         grid_clear(
-                            msg_grid_adj.get(),
+                            msg_grid_view(),
                             0,
                             Rows.get(),
                             0,
@@ -510,7 +510,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                     msg_scroll_up(true, false);
                     inc_msg_scrolled();
                     grid_clear(
-                        msg_grid_adj.get(),
+                        msg_grid_view(),
                         Rows.get() - 2,
                         Rows.get() - 1,
                         0,
@@ -528,7 +528,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                 break;
             }
             grid_clear(
-                msg_grid_adj.get(),
+                msg_grid_view(),
                 Rows.get() - 1,
                 Rows.get(),
                 0,
@@ -540,7 +540,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
 
         // Clear the --More-- message.
         grid_clear(
-            msg_grid_adj.get(),
+            msg_grid_view(),
             Rows.get() - 1,
             Rows.get(),
             0,
@@ -570,7 +570,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
 pub(crate) unsafe fn msg_moremsg(full: bool) {
     unsafe {
         let attr = hl_combine_attr(hl_attr(HLF_MSG as c_int), hl_attr(HLF_M as c_int));
-        grid_line_start(msg_grid_adj.get(), Rows.get() - 1);
+        grid_line_start(msg_grid_view(), Rows.get() - 1);
         let mut len = grid_line_puts(0, gettext(c"-- More --".as_ptr()), -1, attr);
         if full {
             len += grid_line_puts(

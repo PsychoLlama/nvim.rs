@@ -41,7 +41,7 @@ use crate::main::{
     do_redraw, dollar_vcol, dy_flags, edit_submode, edit_submode_extra, edit_submode_highl,
     edit_submode_pre, exiting, exmode_active, first_tabpage, firstwin, global_busy, got_int,
     hl_attr_active, lines_left, mode_displayed, msg_col, msg_did_scroll, msg_didany, msg_didout,
-    msg_grid, msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush,
+    msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush,
     msg_silent, must_redraw, must_redraw_pum, need_diff_redraw, need_highlight_changed,
     need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast, p_ch, p_columns, p_hls, p_icon,
     p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
@@ -55,8 +55,8 @@ use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::message::{
     msg_check_for_delay, msg_clr_cmdline, msg_clr_eos, msg_ext_flush_showmode, msg_ext_ui_flush,
-    msg_grid_set_pos, msg_grid_validate, msg_puts_hl, msg_reset_scroll, msg_scrollsize,
-    msg_use_grid, repeat_message,
+    msg_grid_ref, msg_grid_set_pos, msg_grid_validate, msg_puts_hl, msg_reset_scroll,
+    msg_scrollsize, msg_use_grid, repeat_message,
 };
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, curs_columns,
@@ -245,7 +245,7 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         let valid = (Rows.get() - scrollsize).max(0);
 
         // The part of the message grid that is not displayed is invalid.
-        let mg = &mut *msg_grid.ptr();
+        let mut mg = msg_grid_ref();
         if mg.is_allocated() {
             for i in 0..scrollsize.min(mg.rows) {
                 let (off, cols) = (mg.row_start(i), mg.cols);

@@ -84,10 +84,8 @@ pub(crate) fn editor_lock() -> Editor {
 /// `early_init` alone is not enough for a case that provokes an error
 /// message, and the failure is a long way from the cause: `emsg` resolves
 /// the message's highlight group, formats it, and clears to the end of the
-/// screen, and that last step walks `msg_grid_adj`, whose target is NULL
-/// until the compositor sets it. So the grid is allocated and pointed at
-/// `default_grid` here, which is what `msg_grid_validate` does for an editor
-/// that is not using a separate message grid.
+/// screen, and that last step draws on the default grid. So it is allocated
+/// here.
 ///
 /// Messages still reach stdout (nothing is attached to consume them), which
 /// is exactly what the Lua lane did too.
@@ -100,9 +98,6 @@ fn init_editor() {
         neovim::main::event_init();
         neovim::main::early_init(std::ptr::null_mut());
         neovim::drawscreen::default_grid_alloc();
-        neovim::main::msg_grid_adj.with_mut(|view| {
-            view.target = neovim::main::default_grid.ptr();
-        });
     });
 }
 
