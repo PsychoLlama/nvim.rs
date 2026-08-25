@@ -20,7 +20,7 @@ use crate::types::{FAIL, NUL, OK};
 /// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.
 pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
     unsafe {
-        if prev_ht_changed != (*func_hashtab.ptr()).ht_changed {
+        if prev_ht_changed != func_table().changed() {
             emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED.as_ptr()));
             return 1;
         }
@@ -35,7 +35,7 @@ pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
 /// `fp` is a live function.
 pub(crate) unsafe fn list_func_head(fp: *mut ufunc_T, indent: bool, force: bool) -> c_int {
     unsafe {
-        let prev_ht_changed = (*func_hashtab.ptr()).ht_changed;
+        let prev_ht_changed = func_table().changed();
 
         msg_start();
 
@@ -483,9 +483,9 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
 
                             // Insert the new function in the function list.
                             if overwrite {
-                                let hi = hash_find(func_hashtab.ptr(), name);
+                                let hi = func_table().find(name);
                                 (*hi).hi_key = uf_name_ptr(fp);
-                            } else if hash_add(func_hashtab.ptr(), uf_name_ptr(fp)) == FAIL {
+                            } else if func_table().add(uf_name_ptr(fp)) == FAIL {
                                 free_fp = true;
                                 break 'erret;
                             }

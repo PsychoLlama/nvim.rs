@@ -179,6 +179,7 @@ static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
         hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     }; 16],
 });
+
 /// The arguments of the calls currently in progress, innermost last.
 ///
 /// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks

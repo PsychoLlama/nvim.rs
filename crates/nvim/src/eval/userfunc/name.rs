@@ -174,7 +174,7 @@ pub(crate) unsafe fn fname_trans_sid(
 /// `name` is NUL-terminated.
 pub unsafe fn find_func(name: *const c_char) -> *mut ufunc_T {
     unsafe {
-        let hi = hash_find(func_hashtab.ptr(), name);
+        let hi = func_table().find(name);
         if (*hi).is_kept() {
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.

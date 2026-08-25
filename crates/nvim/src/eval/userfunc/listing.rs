@@ -22,9 +22,9 @@ use crate::types::{ExpandContext, FAIL, IOSIZE, NUL, OK};
 /// `regmatch` is null or a compiled pattern.
 pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
     unsafe {
-        let prev_ht_changed = (*func_hashtab.ptr()).ht_changed;
-        let mut todo = (*func_hashtab.ptr()).ht_used;
-        let mut hi: *const hashitem_T = (*func_hashtab.ptr()).ht_array;
+        let prev_ht_changed = func_table().changed();
+        let mut todo = func_table().used();
+        let mut hi: *const hashitem_T = func_table().array();
 
         msg_ext_set_kind(c"list_cmd".as_ptr());
         while todo > 0 && !got_int.get() {
@@ -114,7 +114,7 @@ pub(crate) unsafe fn list_one_function(
 
         // Check no function was added or removed from a callback, and
         // therefore that `fp` is still the function this started on.
-        let prev_ht_changed = (*func_hashtab.ptr()).ht_changed;
+        let prev_ht_changed = func_table().changed();
         msg_ext_set_kind(c"list_cmd".as_ptr());
         if list_func_head(fp, (*eap).forceit == 0, (*eap).forceit != 0) != OK {
             return fp;
@@ -220,13 +220,11 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 
         if idx == 0 {
             done.set(0);
-            hi.set((*func_hashtab.ptr()).ht_array);
-            changed.set((*func_hashtab.ptr()).ht_changed);
+            hi.set(func_table().array());
+            changed.set(func_table().changed());
         }
         debug_assert!(!hi.get().is_null());
-        if changed.get() != (*func_hashtab.ptr()).ht_changed
-            || done.get() >= (*func_hashtab.ptr()).ht_used
-        {
+        if changed.get() != func_table().changed() || done.get() >= func_table().used() {
             return ptr::null_mut();
         }
 

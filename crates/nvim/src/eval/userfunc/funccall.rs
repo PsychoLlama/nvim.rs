@@ -18,16 +18,88 @@ use core::ptr;
 use super::*;
 use crate::types::NUL;
 
-/// Build the function table, once, at startup.
-pub unsafe fn func_init() {
-    unsafe {
-        hash_init(func_hashtab.ptr());
+/// A handle on the global user-function table.
+///
+/// It *names* the table rather than borrowing it, so it stays valid across
+/// the callbacks — autocommands, `:function` listings, closures — that add to
+/// and remove from the table while a walk over it is in progress. That is
+/// what `ht_changed` is for, and a `&mut` could not survive it.
+#[derive(Clone, Copy)]
+pub(crate) struct FuncTable(*mut hashtab_T);
+
+/// The one place the function table's address is taken.
+pub(crate) fn func_table() -> FuncTable {
+    FuncTable(func_hashtab.ptr())
+}
+
+impl FuncTable {
+    /// The address, for the callers outside this family that still take one.
+    pub(crate) fn raw(self) -> *mut hashtab_T {
+        self.0
+    }
+
+    /// Build the table, once, at startup.
+    pub(crate) fn init(self) {
+        // SAFETY: the only constructor names a `static`, and this runs before
+        // anything reads the table.
+        unsafe { hash_init(self.0) };
+    }
+
+    /// How many live entries the table holds.
+    pub(crate) fn used(self) -> size_t {
+        // SAFETY: the only constructor names a `static`.
+        unsafe { (*self.0).ht_used }
+    }
+
+    /// The bucket array, which every walk starts at.
+    pub(crate) fn array(self) -> *mut hashitem_T {
+        // SAFETY: as `used`.
+        unsafe { (*self.0).ht_array }
+    }
+
+    /// The generation counter: every add and remove bumps it, so a walk can
+    /// tell that a callback rearranged the table under it.
+    pub(crate) fn changed(self) -> c_int {
+        // SAFETY: as `used`.
+        unsafe { (*self.0).ht_changed }
+    }
+
+    /// The item for `name`, or the empty slot it would go in.
+    ///
+    /// # Safety
+    /// `name` must be a NUL-terminated string.
+    pub(crate) unsafe fn find(self, name: *const c_char) -> *mut hashitem_T {
+        // SAFETY: the caller's key; the table is this crate's `static`.
+        unsafe { hash_find(self.0, name) }
+    }
+
+    /// Add `key` — a `ufunc_T`'s own `uf_name` — to the table.
+    ///
+    /// # Safety
+    /// `key` must be a NUL-terminated string that outlives the entry.
+    pub(crate) unsafe fn add(self, key: *mut c_char) -> c_int {
+        // SAFETY: the caller's key; the table is this crate's `static`.
+        unsafe { hash_add(self.0, key) }
+    }
+
+    /// Drop the entry `hi`, which must be one this table answered.
+    ///
+    /// # Safety
+    /// `hi` must be a live item of this table.
+    pub(crate) unsafe fn remove(self, hi: *mut hashitem_T) {
+        // SAFETY: the caller's item; the table is this crate's `static`.
+        unsafe { hash_remove(self.0, hi) };
     }
 }
 
+/// Build the function table, once, at startup.
+pub fn func_init() {
+    func_table().init();
+}
+
 /// The function table itself, for the callers outside this family.
-pub unsafe fn func_tbl_get() -> *mut hashtab_T {
-    func_hashtab.ptr()
+pub fn func_tbl_get() -> *mut hashtab_T {
+    func_table().raw()
 }
 
 /// The functions a funccall registered as closures over it.
@@ -90,9 +162,9 @@ unsafe fn free_funccal_contents(fc: *mut funccall_T) {
 /// # Safety
 /// `fc` is the funccall that has just finished, and is `current_funccal`.
 pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
+    let mut free_fc = true;
     unsafe {
         let may_free_fc = (*fc).fc_refcount <= 0;
-        let mut free_fc = true;
         current_funccal.set((*fc).fc_caller);
 
         // Free all l: variables if not referred to.
@@ -170,16 +242,8 @@ pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force:
         } else {
             !fc_referenced(fc)
         };
-        if unused {
-            let mut pfc = previous_funccal.ptr();
-            while !(*pfc).is_null() {
-                if fc == *pfc {
-                    *pfc = (*fc).fc_caller;
-                    free_funccal_contents(fc);
-                    return;
-                }
-                pfc = &raw mut (**pfc).fc_caller;
-            }
+        if unused && unlink_parked_funccals(|parked| parked == fc) {
+            return;
         }
         for slot in (*fc_ufuncs(fc)).iter_mut() {
             if *slot == fp {
@@ -196,11 +260,11 @@ pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force:
 /// `fp` is a live function.
 pub(crate) unsafe fn func_remove(fp: *mut ufunc_T) -> bool {
     unsafe {
-        let hi = hash_find(func_hashtab.ptr(), uf_name_ptr(fp));
+        let hi = func_table().find(uf_name_ptr(fp));
         if !(*hi).is_kept() {
             return false;
         }
-        hash_remove(func_hashtab.ptr(), hi);
+        func_table().remove(hi);
         true
     }
 }
@@ -437,25 +501,50 @@ unsafe fn can_free_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
 /// # Safety
 /// Called from the collector, with `copyID` the mark just used.
 pub unsafe fn free_unref_funccal(copyID: c_int, testing: c_int) -> bool {
-    unsafe {
-        let mut did_free = false;
-        let mut pfc = previous_funccal.ptr();
-        while !(*pfc).is_null() {
-            if can_free_funccal(*pfc, copyID) {
-                let fc = *pfc;
-                *pfc = (*fc).fc_caller;
-                free_funccal_contents(fc);
-                did_free = true;
-            } else {
-                pfc = &raw mut (**pfc).fc_caller;
-            }
-        }
-        if did_free {
-            // Freeing a funccal may have made more items collectable.
-            garbage_collect(testing != 0);
-        }
-        did_free
+    // SAFETY: the collector's own mark, and the parked list is this module's.
+    let did_free = unsafe { unlink_parked_funccals(|fc| can_free_funccal(fc, copyID)) };
+    if did_free {
+        // Freeing a funccal may have made more items collectable.
+        // SAFETY: called from the collector, which is between marks.
+        unsafe { garbage_collect(testing != 0) };
     }
+    did_free
+}
+
+/// Unlink and free every parked funccall `doomed` accepts; answers whether
+/// any went.
+///
+/// The C threads a `funccall_T **` through the list so that the head and an
+/// interior link are written the same way. The head here is a cell, so the
+/// walk carries the *previous* node instead and writes through whichever of
+/// the two is right.
+///
+/// # Safety
+/// Every node of the parked list must be live, which is the list's own
+/// invariant; `doomed` must not touch the list.
+unsafe fn unlink_parked_funccals(mut doomed: impl FnMut(*mut funccall_T) -> bool) -> bool {
+    let mut freed = false;
+    let mut prev = ptr::null_mut::<funccall_T>();
+    let mut fc = previous_funccal.get();
+    while !fc.is_null() {
+        // SAFETY: a live node of the list.
+        let next = unsafe { (*fc).fc_caller };
+        if doomed(fc) {
+            if prev.is_null() {
+                previous_funccal.set(next);
+            } else {
+                // SAFETY: `prev` is the live node before `fc`.
+                unsafe { (*prev).fc_caller = next };
+            }
+            // SAFETY: unlinked above, so nothing reaches it any more.
+            unsafe { free_funccal_contents(fc) };
+            freed = true;
+        } else {
+            prev = fc;
+        }
+        fc = next;
+    }
+    freed
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
@@ -760,8 +849,8 @@ pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
 /// Mark everything reachable from a function that is still available by name.
 pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
     unsafe {
-        let mut todo = (*func_hashtab.ptr()).ht_used as c_int;
-        let mut hi = (*func_hashtab.ptr()).ht_array;
+        let mut todo = func_table().used() as c_int;
+        let mut hi = func_table().array();
         while todo > 0 && !got_int.get() {
             if (*hi).is_kept() {
                 todo -= 1;
