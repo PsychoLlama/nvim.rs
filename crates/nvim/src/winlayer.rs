@@ -375,6 +375,14 @@ impl Win {
         last
     }
 
+    /// Last line of the fold containing `lnum`, `None` when it is in none --
+    /// [`Win::fold_first`]'s partner at the other end.
+    #[inline(always)]
+    pub fn fold_end(self, lnum: linenr_T) -> Option<linenr_T> {
+        let (folded, _, last) = self.fold_span(lnum);
+        folded.then_some(last)
+    }
+
     /// The whole fold containing `lnum`: whether there is one, and its first
     /// and last line (both `lnum` when there is not).
     #[inline(always)]
@@ -407,6 +415,12 @@ impl Win {
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvcol(self.0, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
         (start, cursor, end)
+    }
+
+    /// The first virtual column of the character at `pos`.
+    #[inline(always)]
+    pub fn vcol(self, pos: Pos) -> colnr_T {
+        self.vcol_span(pos).0
     }
 
     /// [`Win::vcol_span`] with 'virtualedit' taken into account.

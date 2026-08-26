@@ -29,14 +29,20 @@ where the unchecked-line count actually falls (see the notes at the bottom).
 
 What it refuses to touch, and why:
 
-  &raw mut (*curwin.get()).w_cursor     an address taken *through* the value
+  &raw mut (*curwin.get()).w_cursor     a borrow taken *through* the value
   &raw const (*curbuf.get()).b_chartab
+  &mut (*curwin.get()).w_cursor.lnum
 
     `&raw mut cur_win().w_cursor` derives its provenance from the transient
     `&mut win_T` that `DerefMut` hands out, and the next read of `curwin`
     would invalidate it under Miri's aliasing model. Use the projection that
     already exists (`Win::cursor()` covers 42 of the 85 such sites) or leave
     the line alone.
+
+    An ordinary `&mut (*curwin.get()).f` is refused for the same reason in a
+    shorter window: `DerefMut` reborrows the *whole* `win_T`, so passing one
+    field to a callee that reads any other part of `curwin` aliases. Convert
+    it only after reading the callee, and say so in the SAFETY note.
 
   anything inside a string, a `//` comment or a `#[doc]`
   a file that does not compile before the run
@@ -63,9 +69,11 @@ ROOTS = {
 
 # `(*curwin.get()).` with nothing but whitespace variation allowed.
 DEREF = re.compile(r"\(\s*\*\s*(curwin|curbuf)\s*\.\s*get\(\)\s*\)\s*\.")
-# The same, preceded by a raw-address operator: refused.
+# The same, preceded by a borrow of any kind: refused. `(?<![&\w])&(?!&)`
+# keeps the second `&` of a `&&` chain from reading as a borrow.
 ADDR_OF = re.compile(
-    r"&\s*raw\s+(?:mut|const)\s+\(\s*\*\s*(curwin|curbuf)\s*\.\s*get\(\)\s*\)\s*\."
+    r"(?<![&\w])&(?!&)\s*(?:raw\s+(?:mut|const)\s+|mut\s+)?"
+    r"\(\s*\*\s*(curwin|curbuf)\s*\.\s*get\(\)\s*\)\s*\."
 )
 # A `use crate::main::{...}` item list, so a root that is no longer named
 # can be dropped from it.
