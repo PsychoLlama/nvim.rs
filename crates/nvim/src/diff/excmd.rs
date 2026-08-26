@@ -18,7 +18,31 @@ use super::*;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
-use core::ffi::{c_char, c_int};
+use crate::winlayer::{Buf, Live, TabPage, Win, windows};
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+
+/// Release one of this module's owned strings; a null is fine, as `xfree`'s
+/// own contract says.
+fn free_str(p: *mut c_char) {
+    // SAFETY: this module's own allocation, or null.
+    unsafe { xfree(p.cast::<c_void>()) };
+}
+
+/// Delete the file `path` names, if there is one, and release the name.
+fn remove_and_free(path: *mut c_char) {
+    if !path.is_null() {
+        // SAFETY: one of this module's own temp file names.
+        unsafe { os_remove(path) };
+    }
+    free_str(path);
+}
+
+/// `emsg(gettext(msg))`, the pair every error here is reported through.
+fn emsg_gettext(msg: *const c_char) {
+    // SAFETY: a static message string, and the editor exists.
+    unsafe { emsg(gettext(msg)) };
+}
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and
 /// open the result beside it.
@@ -27,130 +51,122 @@ use core::ffi::{c_char, c_int};
 /// `.orig` and `.rej` files next to its output and the user's directory is
 /// not the place for them; the original directory is restored afterwards.
 /// `'patchexpr'` replaces the shell-out entirely.
+///
+/// # Safety
+/// `eap` must be a live command.
 pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
-    unsafe {
-        let mut buflen: size_t = 0;
+    // SAFETY: the caller's command.
+    let mut eap = unsafe { Live::<exarg_T>::new(eap) };
+    let old_curwin: *mut win_T = curwin.get();
+    let mut newname: *mut c_char = ptr::null_mut();
+    let mut esc_name: *mut c_char = ptr::null_mut();
+    let mut fullname: *mut c_char = ptr::null_mut();
+    let mut buf: *mut c_char = ptr::null_mut();
+    // SAFETY: the editor exists, for both names.
+    let (tmp_orig, tmp_new) = unsafe { (vim_tempname(), vim_tempname()) };
+
+    if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig) != FAIL {
+        // SAFETY: `eap.arg` is the command's own argument string.
+        fullname = unsafe { full_name_save(eap.arg, false) };
+        let name = if fullname.is_null() {
+            eap.arg
+        } else {
+            fullname
+        };
+        // SAFETY: a NUL-terminated file name.
+        esc_name = unsafe { vim_strsave_shellescape(name, true, true) };
+        // SAFETY: three NUL-terminated strings.
+        let buflen = unsafe { strlen(tmp_orig) + strlen(esc_name) + strlen(tmp_new) + 16 };
+        // SAFETY: `xmalloc` aborts rather than answer null.
+        buf = unsafe { xmalloc(buflen) }.cast::<c_char>();
+
+        // Run the patch from the temp directory, so its `.orig`/`.rej`
+        // droppings do not land in the user's.
         let mut dirbuf: [c_char; 4096] = [0; 4096];
-        let mut file_info: FileInfo = FileInfo::default();
-        let mut info_ok: bool = false;
-        let mut filesize: uint64_t = 0;
-        let mut buf: *mut c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut old_curwin: *mut win_T = curwin.get();
-        let mut newname: *mut c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut esc_name: *mut c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut fullname: *mut c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut tmp_orig: *mut c_char = vim_tempname();
-        let mut tmp_new: *mut c_char = vim_tempname();
-        if !(tmp_orig.is_null() || tmp_new.is_null())
-            && buf_write(
-                curbuf.get(),
-                tmp_orig,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                1 as linenr_T,
-                (*curbuf.get()).b_ml.ml_line_count,
-                ::core::ptr::null_mut(),
-                WriteRequest::filter(),
-            ) != FAIL
-        {
-            fullname = full_name_save((*eap).arg, false);
-            esc_name = vim_strsave_shellescape(
-                if !fullname.is_null() {
-                    fullname
-                } else {
-                    (*eap).arg
-                },
-                true,
-                true,
-            );
-            buflen = strlen(tmp_orig)
-                .wrapping_add(strlen(esc_name))
-                .wrapping_add(strlen(tmp_new))
-                .wrapping_add(16 as size_t);
-            buf = xmalloc(buflen) as *mut c_char;
-            dirbuf = [0; 4096];
-            if os_dirname(&raw mut dirbuf as *mut c_char, MAXPATHL as size_t) != OK
-                || os_chdir(&raw mut dirbuf as *mut c_char) != 0
-            {
-                dirbuf[0] = NUL as c_char;
+        let saved_dir = save_cwd(&mut dirbuf);
+        if saved_dir {
+            // SAFETY: the editor's own temp directory, else the fallback.
+            let tempdir = unsafe { vim_gettempdir() };
+            let tempdir = if tempdir.is_null() {
+                c"/tmp".as_ptr() as *mut c_char
             } else {
-                let mut tempdir: *mut c_char = vim_gettempdir();
-                if tempdir.is_null() {
-                    tempdir = c"/tmp".as_ptr() as *mut c_char;
-                }
+                tempdir
+            };
+            // SAFETY: a NUL-terminated directory name; the editor exists.
+            unsafe {
                 os_chdir(tempdir);
                 shorten_fnames(1);
             }
-            if *p_pex.get() as c_int != NUL {
-                eval_patch(
-                    tmp_orig,
-                    if !fullname.is_null() {
-                        fullname
-                    } else {
-                        (*eap).arg
-                    },
-                    tmp_new,
-                );
-            } else {
-                vim_snprintf(
-                    buf,
-                    buflen,
-                    c"patch -o %s %s < %s".as_ptr(),
-                    tmp_new,
-                    tmp_orig,
-                    esc_name,
-                );
+        }
+
+        // SAFETY: `p_pex` is the `'patchexpr'` option string.
+        if unsafe { *p_pex.get() } as c_int != NUL {
+            // SAFETY: three NUL-terminated file names.
+            unsafe { eval_patch(tmp_orig, name, tmp_new) };
+        } else {
+            let fmt = c"patch -o %s %s < %s".as_ptr();
+            // SAFETY: `buf` holds `buflen` bytes, and the three `%s` are
+            // matched by the three NUL-terminated names.
+            unsafe { vim_snprintf(buf, buflen, fmt, tmp_new, tmp_orig, esc_name) };
+            // SAFETY: the editor exists, in all three calls.
+            unsafe {
                 block_autocmds();
-                call_shell(
-                    buf,
-                    ShellOpts::FILTER,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                );
+                call_shell(buf, ShellOpts::FILTER, ptr::null_mut::<c_char>());
                 unblock_autocmds();
             }
-            if dirbuf[0] as c_int != NUL {
-                if os_chdir(&raw mut dirbuf as *mut c_char) != 0 {
-                    emsg(gettext(&raw const e_prev_dir as *const c_char));
-                }
-                shorten_fnames(1);
+        }
+
+        if saved_dir {
+            // SAFETY: the directory name `save_cwd` filled in.
+            if unsafe { os_chdir(dirbuf.as_mut_ptr()) } != 0 {
+                emsg_gettext(&raw const e_prev_dir as *const c_char);
             }
-            strcpy(buf, tmp_new);
-            strcat(buf, c".orig".as_ptr());
-            os_remove(buf);
-            strcpy(buf, tmp_new);
-            strcat(buf, c".rej".as_ptr());
-            os_remove(buf);
-            file_info = FileInfo::default();
-            info_ok = os_fileinfo(tmp_new, &raw mut file_info);
-            filesize = os_fileinfo_size(&raw mut file_info);
-            if !info_ok || filesize == 0 as uint64_t {
-                emsg(gettext(c"E816: Cannot read patch output".as_ptr()));
-            } else {
-                if !(*curbuf.get()).b_fname.is_null() {
-                    newname = xstrnsave(
-                        (*curbuf.get()).b_fname,
-                        strlen((*curbuf.get()).b_fname).wrapping_add(4 as size_t),
-                    );
+            // SAFETY: the editor exists.
+            unsafe { shorten_fnames(1) };
+        }
+        remove_suffixed(buf, tmp_new, c".orig".as_ptr());
+        remove_suffixed(buf, tmp_new, c".rej".as_ptr());
+
+        let mut file_info = FileInfo::default();
+        // SAFETY: a NUL-terminated file name and a live `FileInfo`.
+        let info_ok = unsafe { os_fileinfo(tmp_new, &raw mut file_info) };
+        // SAFETY: as above.
+        let filesize = unsafe { os_fileinfo_size(&raw mut file_info) };
+        if !info_ok || filesize == 0 {
+            emsg_gettext(c"E816: Cannot read patch output".as_ptr());
+        } else {
+            if !cur_buf().b_fname.is_null() {
+                let fname = cur_buf().b_fname;
+                // SAFETY: the buffer's own file name, NUL-terminated; the
+                // four extra bytes are for the `.new` appended next.
+                unsafe {
+                    newname = xstrnsave(fname, strlen(fname) + 4);
                     strcat(newname, c".new".as_ptr());
                 }
-                cmdmod_set_tab(0);
-                if win_split(
-                    0,
-                    if diff_flags.get() & DIFF_VERTICAL != 0 {
-                        WSP_VERT as c_int
-                    } else {
-                        0
-                    },
-                ) != FAIL
-                {
-                    (*eap).cmdidx = CMD_split;
-                    (*eap).arg = tmp_new;
-                    do_exedit(eap, old_curwin);
-                    if curwin.get() != old_curwin && win_valid(old_curwin) {
+            }
+            cmdmod_set_tab(0);
+            let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
+            let flags = if vertical { WSP_VERT as c_int } else { 0 };
+            if win_split(0, flags) != FAIL {
+                eap.cmdidx = CMD_split;
+                eap.arg = tmp_new;
+                // SAFETY: the caller's command, and a window that was live
+                // when it was read.
+                unsafe { do_exedit(eap.raw(), old_curwin) };
+                // SAFETY: `win_valid` takes any pointer and compares it
+                // against the live window list.
+                if curwin.get() != old_curwin && unsafe { win_valid(old_curwin) } {
+                    // SAFETY: both windows are live, as just checked.
+                    unsafe {
                         diff_win_options(curwin.get(), true);
                         diff_win_options(old_curwin, true);
-                        if !newname.is_null() {
-                            (*eap).arg = newname;
-                            ex_file(eap);
+                    }
+                    if !newname.is_null() {
+                        eap.arg = newname;
+                        // SAFETY: the caller's command; the group name and
+                        // the command line are static strings.
+                        unsafe {
+                            ex_file(eap.raw());
                             if augroup_exists(c"filetypedetect".as_ptr()) {
                                 do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
                             }
@@ -159,65 +175,110 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 }
             }
         }
-        if !tmp_orig.is_null() {
-            os_remove(tmp_orig);
-        }
-        xfree(tmp_orig as *mut ::core::ffi::c_void);
-        if !tmp_new.is_null() {
-            os_remove(tmp_new);
-        }
-        xfree(tmp_new as *mut ::core::ffi::c_void);
-        xfree(newname as *mut ::core::ffi::c_void);
-        xfree(buf as *mut ::core::ffi::c_void);
-        xfree(fullname as *mut ::core::ffi::c_void);
-        xfree(esc_name as *mut ::core::ffi::c_void);
+    }
+    remove_and_free(tmp_orig);
+    remove_and_free(tmp_new);
+    free_str(newname);
+    free_str(buf);
+    free_str(fullname);
+    free_str(esc_name);
+}
+
+/// Write the current buffer out to `tmp_orig`, the patch's input.
+fn write_orig(tmp_orig: *mut c_char) -> c_int {
+    let cb = curbuf.get();
+    let end = cur_buf().b_ml.ml_line_count;
+    let req = WriteRequest::filter();
+    // SAFETY: the current buffer is live and the name is our own temp file;
+    // no shortname and no `exarg_T` are wanted.
+    unsafe { buf_write(cb, tmp_orig, ptr::null_mut(), 1, end, ptr::null_mut(), req) }
+}
+
+/// Record the working directory into `dirbuf`, answering whether it can be
+/// changed back later.
+///
+/// A directory that cannot be named, or cannot be re-entered right now, is
+/// recorded as the empty string and the caller leaves the cwd alone.
+fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
+    let at = dirbuf.as_mut_ptr();
+    // SAFETY: `dirbuf` holds `MAXPATHL` bytes, which is what `os_dirname` is
+    // told, and `os_chdir` gets the NUL-terminated name it wrote there.
+    let ok = unsafe { os_dirname(at, MAXPATHL as size_t) == OK && os_chdir(at) == 0 };
+    if !ok {
+        dirbuf[0] = NUL as c_char;
+    }
+    ok
+}
+
+/// Delete `name` with `suffix` glued on, using `buf` as the scratch space --
+/// `patch(1)`'s `.orig` and `.rej` leftovers.
+fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
+    // SAFETY: `buf` was sized for `name` plus the longest suffix, and both
+    // inputs are NUL-terminated.
+    unsafe {
+        strcpy(buf, name);
+        strcat(buf, suffix);
+        os_remove(buf);
     }
 }
 
 /// `:diffsplit {file}`: open `file` in a new window and diff it against the
 /// current buffer.
+///
+/// # Safety
+/// `eap` must be a live command.
 pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
+    // SAFETY: the caller's command.
+    let mut eap = unsafe { Live::<exarg_T>::new(eap) };
+    let old_curwin: *mut win_T = curwin.get();
+    let mut old_curbuf = bufref_T::default();
+    // SAFETY: the current buffer is live, and `old_curbuf` is a local.
+    unsafe { set_bufref(&raw mut old_curbuf, curbuf.get()) };
+    // SAFETY: the current window is live, in both calls.
     unsafe {
-        let mut old_curwin: *mut win_T = curwin.get();
-        let mut old_curbuf: bufref_T = bufref_T::default();
-        set_bufref(&raw mut old_curbuf, curbuf.get());
-        validate_cursor(curwin.get());
-        set_fraction(curwin.get());
-        cmdmod_set_tab(0);
-        if win_split(
-            0,
-            if diff_flags.get() & DIFF_VERTICAL != 0 {
-                WSP_VERT as c_int
-            } else {
-                0
-            },
-        ) == FAIL
-        {
-            return;
-        }
-        (*eap).cmdidx = CMD_split;
-        (*curwin.get()).w_onebuf_opt.wo_diff = 1;
-        do_exedit(eap, old_curwin);
-        if curwin.get() == old_curwin {
-            return;
-        }
-        diff_win_options(curwin.get(), true);
-        if win_valid(old_curwin) {
-            diff_win_options(old_curwin, true);
-            if bufref_valid(&raw mut old_curbuf) {
-                (*curwin.get()).w_cursor.lnum =
-                    diff_get_corresponding_line(old_curbuf.br_buf, (*old_curwin).w_cursor.lnum);
-            }
-        }
-        scroll_to_fraction(curwin.get(), (*curwin.get()).w_height);
+        validate_cursor(old_curwin);
+        set_fraction(old_curwin);
     }
+    cmdmod_set_tab(0);
+    let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
+    let flags = if vertical { WSP_VERT as c_int } else { 0 };
+    if win_split(0, flags) == FAIL {
+        return;
+    }
+    eap.cmdidx = CMD_split;
+    cur_win().w_onebuf_opt.wo_diff = 1;
+    // SAFETY: the caller's command, and a window that was live when read.
+    unsafe { do_exedit(eap.raw(), old_curwin) };
+    if curwin.get() == old_curwin {
+        return;
+    }
+    // SAFETY: the current window is live.
+    unsafe { diff_win_options(curwin.get(), true) };
+    // SAFETY: `win_valid` compares against the live window list.
+    if unsafe { win_valid(old_curwin) } {
+        // SAFETY: the window is live, as just checked.
+        unsafe { diff_win_options(old_curwin, true) };
+        // SAFETY: `old_curbuf` is a local `bufref_T`.
+        if unsafe { bufref_valid(&raw mut old_curbuf) } {
+            // SAFETY: the old window is live and its buffer reference valid.
+            let lnum = unsafe {
+                diff_get_corresponding_line(old_curbuf.br_buf, (*old_curwin).w_cursor.lnum)
+            };
+            cur_win().w_cursor.lnum = lnum;
+        }
+    }
+    let height = cur_win().w_height;
+    // SAFETY: the current window is live.
+    unsafe { scroll_to_fraction(curwin.get(), height) };
 }
 
 /// `:diffthis`: put the current window in diff mode.
+///
+/// # Safety
+/// The editor must be running.
 pub unsafe fn ex_diffthis(_eap: *mut exarg_T) {
-    unsafe {
-        diff_win_options(curwin.get(), true);
-    }
+    // SAFETY: the current window is live.
+    unsafe { diff_win_options(curwin.get(), true) };
 }
 
 /// Set `'diff'` in `wp` without letting the option's side effects run.
@@ -225,17 +286,18 @@ pub unsafe fn ex_diffthis(_eap: *mut exarg_T) {
 /// `curwin` is moved to `wp` for the call because the option code reads it,
 /// and `diff_buf_adjust` is suppressed so that the caller stays in charge of
 /// the buffer registry.
-unsafe fn set_diff_option(wp: *mut win_T, value: bool) {
-    unsafe {
-        let mut old_curwin: *mut win_T = curwin.get();
-        curwin.set(wp);
-        curbuf.set((*curwin.get()).w_buffer);
-        (*curbuf.get()).b_ro_locked += 1;
-        set_option_value_give_err(kOptDiff, boolean_optval(Some(value)), OptionSetFlags::LOCAL);
-        (*curbuf.get()).b_ro_locked -= 1;
-        curwin.set(old_curwin);
-        curbuf.set((*curwin.get()).w_buffer);
-    }
+fn set_diff_option(wp: Win, value: bool) {
+    let old_curwin = curwin.get();
+    curwin.set(wp.raw());
+    curbuf.set(cur_win().w_buffer);
+    cur_buf().b_ro_locked += 1;
+    // `curwin`/`curbuf` name `wp` and its buffer, which is what the option
+    // code reads; the buffer is locked against a `:set` side effect.
+    let val = boolean_optval(Some(value));
+    set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
+    cur_buf().b_ro_locked -= 1;
+    curwin.set(old_curwin);
+    curbuf.set(cur_win().w_buffer);
 }
 
 /// Put `wp` into diff mode: the option set, and optionally its buffer.
@@ -244,82 +306,108 @@ unsafe fn set_diff_option(wp: *mut win_T, value: bool) {
 /// first, but **only on the first call** -- `wo_diff_saved` is what stops a
 /// second `:diffthis` from saving the diff-mode values as the ones to
 /// restore.
+///
+/// # Safety
+/// `wp` must be a live window.
 pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
+    // SAFETY: the caller's window.
+    let mut wp = unsafe { Win::new(wp) };
+    let old_curwin = curwin.get();
+    curwin.set(wp.raw());
+    // SAFETY: `curwin` is `wp`, which is live.
+    unsafe { new_fold_level() };
+    curwin.set(old_curwin);
+
+    // Each option is saved only while the window is not already in diff
+    // mode, so a second `:diffthis` cannot overwrite the saved values.
+    let first_time = wp.w_onebuf_opt.wo_diff == 0;
+    if first_time {
+        wp.w_onebuf_opt.wo_scb_save = wp.w_onebuf_opt.wo_scb;
+    }
+    wp.w_onebuf_opt.wo_scb = 1;
+    if first_time {
+        wp.w_onebuf_opt.wo_crb_save = wp.w_onebuf_opt.wo_crb;
+    }
+    wp.w_onebuf_opt.wo_crb = 1;
+    if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
+        if first_time {
+            wp.w_onebuf_opt.wo_wrap_save = wp.w_onebuf_opt.wo_wrap;
+        }
+        wp.w_onebuf_opt.wo_wrap = 0;
+        wp.w_skipcol = 0 as colnr_T;
+    }
+    if first_time {
+        if wp.w_onebuf_opt.wo_diff_saved != 0 {
+            free_string_option_of(wp.w_onebuf_opt.wo_fdm_save);
+        }
+        wp.w_onebuf_opt.wo_fdm_save = strdup_of(wp.w_onebuf_opt.wo_fdm);
+    }
+    let foldmethod = OptVal {
+        type_0: kOptValTypeString,
+        data: OptValData {
+            string: String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4),
+        },
+    };
+    let scope = OptionSetFlags::LOCAL;
+    // SAFETY: a live window as the option's scope, and a static string as
+    // its value.
     unsafe {
-        let mut old_curwin: *mut win_T = curwin.get();
-        curwin.set(wp);
-        new_fold_level();
-        curwin.set(old_curwin);
-        if (*wp).w_onebuf_opt.wo_diff == 0 {
-            (*wp).w_onebuf_opt.wo_scb_save = (*wp).w_onebuf_opt.wo_scb;
-        }
-        (*wp).w_onebuf_opt.wo_scb = 1;
-        if (*wp).w_onebuf_opt.wo_diff == 0 {
-            (*wp).w_onebuf_opt.wo_crb_save = (*wp).w_onebuf_opt.wo_crb;
-        }
-        (*wp).w_onebuf_opt.wo_crb = 1;
-        if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
-            if (*wp).w_onebuf_opt.wo_diff == 0 {
-                (*wp).w_onebuf_opt.wo_wrap_save = (*wp).w_onebuf_opt.wo_wrap;
-            }
-            (*wp).w_onebuf_opt.wo_wrap = 0;
-            (*wp).w_skipcol = 0 as colnr_T;
-        }
-        if (*wp).w_onebuf_opt.wo_diff == 0 {
-            if (*wp).w_onebuf_opt.wo_diff_saved != 0 {
-                free_string_option((*wp).w_onebuf_opt.wo_fdm_save);
-            }
-            (*wp).w_onebuf_opt.wo_fdm_save = xstrdup((*wp).w_onebuf_opt.wo_fdm);
-        }
         set_option_direct_for(
             kOptFoldmethod,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: String_0::from_raw_parts(
-                        c"diff".as_ptr() as *mut c_char,
-                        ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-                    ),
-                },
-            },
-            OptionSetFlags::LOCAL,
+            foldmethod,
+            scope,
             0 as scid_T,
             kOptScopeWin,
-            wp as *mut ::core::ffi::c_void,
+            wp.raw().cast::<c_void>(),
         );
-        if (*wp).w_onebuf_opt.wo_diff == 0 {
-            (*wp).w_onebuf_opt.wo_fen_save = (*wp).w_onebuf_opt.wo_fen;
-            (*wp).w_onebuf_opt.wo_fdl_save = (*wp).w_onebuf_opt.wo_fdl;
-            if (*wp).w_onebuf_opt.wo_diff_saved != 0 {
-                free_string_option((*wp).w_onebuf_opt.wo_fdc_save);
-            }
-            (*wp).w_onebuf_opt.wo_fdc_save = xstrdup((*wp).w_onebuf_opt.wo_fdc);
+    }
+    if first_time {
+        wp.w_onebuf_opt.wo_fen_save = wp.w_onebuf_opt.wo_fen;
+        wp.w_onebuf_opt.wo_fdl_save = wp.w_onebuf_opt.wo_fdl;
+        if wp.w_onebuf_opt.wo_diff_saved != 0 {
+            free_string_option_of(wp.w_onebuf_opt.wo_fdc_save);
         }
-        free_string_option((*wp).w_onebuf_opt.wo_fdc);
-        (*wp).w_onebuf_opt.wo_fdc = xstrdup(c"2".as_ptr());
-        // A single digit, because the option's buffer is one byte plus the
-        // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
-        debug_assert!((0..=9).contains(&diff_foldcolumn.get()));
-        snprintf(
-            (*wp).w_onebuf_opt.wo_fdc,
-            strlen((*wp).w_onebuf_opt.wo_fdc).wrapping_add(1 as size_t),
-            c"%d".as_ptr(),
-            diff_foldcolumn.get(),
-        );
-        (*wp).w_onebuf_opt.wo_fen = 1;
-        (*wp).w_onebuf_opt.wo_fdl = 0 as OptInt;
-        fold_update_all(wp);
-        changed_window_setting(wp);
+        wp.w_onebuf_opt.wo_fdc_save = strdup_of(wp.w_onebuf_opt.wo_fdc);
+    }
+    free_string_option_of(wp.w_onebuf_opt.wo_fdc);
+    wp.w_onebuf_opt.wo_fdc = strdup_of(c"2".as_ptr());
+    // A single digit, because the option's buffer is one byte plus the
+    // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
+    debug_assert!((0..=9).contains(&diff_foldcolumn.get()));
+    let fdc = wp.w_onebuf_opt.wo_fdc;
+    let width = diff_foldcolumn.get();
+    // SAFETY: `fdc` is the one-digit string just allocated, and `strlen + 1`
+    // is exactly the room it has.
+    unsafe { snprintf(fdc, strlen(fdc) + 1, c"%d".as_ptr(), width) };
+    wp.w_onebuf_opt.wo_fen = 1;
+    wp.w_onebuf_opt.wo_fdl = 0 as OptInt;
+    // SAFETY: a live window, in all three calls.
+    unsafe {
+        fold_update_all(wp.raw());
+        changed_window_setting(wp.raw());
         if vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
             do_cmdline_cmd(c"set sbo+=hor".as_ptr());
         }
-        (*wp).w_onebuf_opt.wo_diff_saved = 1;
-        set_diff_option(wp, true);
-        if addbuf {
-            diff_buf_add((*wp).w_buffer);
-        }
-        redraw_later(wp, UPD_NOT_VALID);
     }
+    wp.w_onebuf_opt.wo_diff_saved = 1;
+    set_diff_option(wp, true);
+    if addbuf {
+        // SAFETY: a live window's buffer is live.
+        unsafe { diff_buf_add(wp.w_buffer) };
+    }
+    wp.redraw_later(UPD_NOT_VALID);
+}
+
+/// `free_string_option`, for one of the window's own option strings.
+fn free_string_option_of(p: *mut c_char) {
+    // SAFETY: an option string the option code itself allocated, or null.
+    unsafe { free_string_option(p) };
+}
+
+/// `xstrdup`, for a NUL-terminated option string.
+fn strdup_of(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string; `xstrdup` aborts rather than fail.
+    unsafe { xstrdup(p) }
 }
 
 /// `:diffoff[!]`: leave diff mode in this window, or with `!` in every
@@ -328,80 +416,112 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
 /// Each option goes back to its `w_p_*_save` value, but only where the
 /// window still holds the value diff mode gave it: a value the user changed
 /// in the meantime is left alone.
+///
+/// # Safety
+/// `eap` must be a live command.
 pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
-    unsafe {
-        let mut diffwin: bool = false;
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
+    // SAFETY: the caller's command.
+    let eap = unsafe { Live::<exarg_T>::new(eap) };
+    let mut diffwin = false;
+    // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
+    for mut wp in windows() {
+        let wanted = if eap.forceit != 0 {
+            wp.w_onebuf_opt.wo_diff != 0
         } else {
-            (*curtab.get()).tp_firstwin
+            wp.is_current()
         };
-        while !wp.is_null() {
-            if if (*eap).forceit != 0 {
-                (*wp).w_onebuf_opt.wo_diff
-            } else {
-                (wp == curwin.get()) as c_int
-            } != 0
-            {
-                set_diff_option(wp, false);
-                if (*wp).w_onebuf_opt.wo_diff_saved != 0 {
-                    if (*wp).w_onebuf_opt.wo_scb != 0 {
-                        (*wp).w_onebuf_opt.wo_scb = (*wp).w_onebuf_opt.wo_scb_save;
-                    }
-                    if (*wp).w_onebuf_opt.wo_crb != 0 {
-                        (*wp).w_onebuf_opt.wo_crb = (*wp).w_onebuf_opt.wo_crb_save;
-                    }
-                    if diff_flags.get() & DIFF_FOLLOWWRAP == 0
-                        && (*wp).w_onebuf_opt.wo_wrap == 0
-                        && (*wp).w_onebuf_opt.wo_wrap_save != 0
-                    {
-                        (*wp).w_onebuf_opt.wo_wrap = 1;
-                        (*wp).w_leftcol = 0 as colnr_T;
-                    }
-                    free_string_option((*wp).w_onebuf_opt.wo_fdm);
-                    (*wp).w_onebuf_opt.wo_fdm =
-                        xstrdup(if *(*wp).w_onebuf_opt.wo_fdm_save as c_int != 0 {
-                            (*wp).w_onebuf_opt.wo_fdm_save as *const c_char
-                        } else {
-                            c"manual".as_ptr()
-                        });
-                    free_string_option((*wp).w_onebuf_opt.wo_fdc);
-                    (*wp).w_onebuf_opt.wo_fdc =
-                        xstrdup(if *(*wp).w_onebuf_opt.wo_fdc_save as c_int != 0 {
-                            (*wp).w_onebuf_opt.wo_fdc_save as *const c_char
-                        } else {
-                            c"0".as_ptr()
-                        });
-                    if (*wp).w_onebuf_opt.wo_fdl == 0 as OptInt {
-                        (*wp).w_onebuf_opt.wo_fdl = (*wp).w_onebuf_opt.wo_fdl_save;
-                    }
-                    if (*wp).w_onebuf_opt.wo_fen != 0 {
-                        (*wp).w_onebuf_opt.wo_fen = if foldmethod_is_manual(wp) as c_int != 0 {
-                            0
-                        } else {
-                            (*wp).w_onebuf_opt.wo_fen_save
-                        };
-                    }
-                    fold_update_all(wp);
+        if wanted {
+            set_diff_option(wp, false);
+            if wp.w_onebuf_opt.wo_diff_saved != 0 {
+                if wp.w_onebuf_opt.wo_scb != 0 {
+                    wp.w_onebuf_opt.wo_scb = wp.w_onebuf_opt.wo_scb_save;
                 }
-                (*wp).w_topfill = 0;
-                changed_window_setting(wp);
-                diff_buf_adjust(wp);
+                if wp.w_onebuf_opt.wo_crb != 0 {
+                    wp.w_onebuf_opt.wo_crb = wp.w_onebuf_opt.wo_crb_save;
+                }
+                if diff_flags.get() & DIFF_FOLLOWWRAP == 0
+                    && wp.w_onebuf_opt.wo_wrap == 0
+                    && wp.w_onebuf_opt.wo_wrap_save != 0
+                {
+                    wp.w_onebuf_opt.wo_wrap = 1;
+                    wp.w_leftcol = 0 as colnr_T;
+                }
+                free_string_option_of(wp.w_onebuf_opt.wo_fdm);
+                wp.w_onebuf_opt.wo_fdm =
+                    strdup_of(saved_or(wp.w_onebuf_opt.wo_fdm_save, c"manual".as_ptr()));
+                free_string_option_of(wp.w_onebuf_opt.wo_fdc);
+                wp.w_onebuf_opt.wo_fdc =
+                    strdup_of(saved_or(wp.w_onebuf_opt.wo_fdc_save, c"0".as_ptr()));
+                if wp.w_onebuf_opt.wo_fdl == 0 as OptInt {
+                    wp.w_onebuf_opt.wo_fdl = wp.w_onebuf_opt.wo_fdl_save;
+                }
+                if wp.w_onebuf_opt.wo_fen != 0 {
+                    // SAFETY: a live window.
+                    let manual = unsafe { foldmethod_is_manual(wp.raw()) };
+                    wp.w_onebuf_opt.wo_fen = if manual {
+                        0
+                    } else {
+                        wp.w_onebuf_opt.wo_fen_save
+                    };
+                }
+                // SAFETY: a live window.
+                unsafe { fold_update_all(wp.raw()) };
             }
-            diffwin = diffwin as c_int | (*wp).w_onebuf_opt.wo_diff != 0;
-            wp = (*wp).w_next;
+            wp.w_topfill = 0;
+            // SAFETY: a live window, in both calls.
+            unsafe {
+                changed_window_setting(wp.raw());
+                diff_buf_adjust(wp.raw());
+            }
         }
-        if (*eap).forceit != 0 {
-            diff_buf_clear();
-        }
-        if !diffwin {
-            diff_need_update.set(false);
-            (*curtab.get()).tp_diff_invalid = 0;
-            (*curtab.get()).tp_diff_update = 0;
-            diff_clear(curtab.get());
-        }
-        if !diffwin && !vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
-            do_cmdline_cmd(c"set sbo-=hor".as_ptr());
-        }
+        diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
     }
+    if eap.forceit != 0 {
+        // SAFETY: the editor exists.
+        unsafe { diff_buf_clear() };
+    }
+    let mut tp = cur_tab();
+    if !diffwin {
+        diff_need_update.set(false);
+        tp.tp_diff_invalid = 0;
+        tp.tp_diff_update = 0;
+        // SAFETY: the current tab page is live.
+        unsafe { diff_clear(tp.raw()) };
+    }
+    // SAFETY: `p_sbo` is the `'scrollopt'` option string.
+    if !diffwin && !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
+        // SAFETY: a static command line.
+        unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
+    }
+}
+
+/// The saved option string, or `fallback` when nothing was saved.
+///
+/// Upstream tests the saved value's *first byte*: an empty saved string means
+/// the option was never really recorded.
+fn saved_or(saved: *mut c_char, fallback: *const c_char) -> *const c_char {
+    // SAFETY: a NUL-terminated option string the option code allocated.
+    if unsafe { *saved } as c_int != 0 {
+        saved.cast_const()
+    } else {
+        fallback
+    }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The tab page the editor is working in.
+fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
 }

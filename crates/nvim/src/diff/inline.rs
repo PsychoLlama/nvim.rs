@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::FAIL;
+use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::c_int;
 use std::ffi::CStr;
 
@@ -20,22 +20,18 @@ use std::ffi::CStr;
 /// Only the `inline:char`/`inline:word` modes cache anything; the simple rule
 /// is recomputed per line.
 pub unsafe fn diff_update_line(lnum: linenr_T) {
-    unsafe {
-        if diff_flags.get() & ALL_INLINE_DIFF == 0 {
-            return;
-        }
-        let idx = diff_buf_idx(curbuf.get(), curtab.get());
-        if idx == DB_COUNT {
-            return;
-        }
-        let mut dp = (*curtab.get()).tp_first_diff;
-        while !dp.is_null() && lnum > (*dp).df_lnum[idx as usize] + (*dp).df_count[idx as usize] {
-            dp = (*dp).df_next;
-        }
-        if !dp.is_null() {
-            (*dp).has_changes = false;
-            (*dp).df_changes.ga_len = 0;
-        }
+    if diff_flags.get() & ALL_INLINE_DIFF == 0 {
+        return;
+    }
+    let tp = cur_tab();
+    let idx = diff_slot(curbuf.get(), tp);
+    if idx == DB_COUNT {
+        return;
+    }
+    let idx = idx as usize;
+    if let Some(mut dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) {
+        dp.has_changes = false;
+        dp.df_changes.ga_len = 0;
     }
 }
 
@@ -62,29 +58,37 @@ pub unsafe fn diff_change_parse(
     change_start: *mut c_int,
     change_end: *mut c_int,
 ) -> bool {
+    // SAFETY: the caller's line description, and one of the changes it names.
+    let dl = unsafe { Live::<diffline_T>::new(diffline) };
+    // SAFETY: as above.
+    let ch = unsafe { Live::<diffline_change_T>::new(change) };
+    let buf = dl.bufidx as usize;
+    let lineoff = dl.lineoff;
+    // A range that starts above this line begins at column 0, and one that
+    // ends below it runs past the end.
+    let start = if ch.dc_start_lnum_off[buf] < lineoff {
+        0
+    } else {
+        ch.dc_start[buf] as c_int
+    };
+    let end = if ch.dc_end_lnum_off[buf] > lineoff {
+        c_int::MAX
+    } else {
+        ch.dc_end[buf] as c_int
+    };
+    // SAFETY: the caller's out-parameters.
     unsafe {
-        let buf = (*diffline).bufidx as usize;
-        let lineoff = (*diffline).lineoff;
-        *change_start = if (*change).dc_start_lnum_off[buf] < lineoff {
-            0
-        } else {
-            (*change).dc_start[buf] as c_int
-        };
-        *change_end = if (*change).dc_end_lnum_off[buf] > lineoff {
-            c_int::MAX
-        } else {
-            (*change).dc_end[buf] as c_int
-        };
-        if change == simple_diffline_change.ptr() {
-            return false;
-        }
-        // An addition is a change that is empty in every *other* buffer.
-        (0..DB_COUNT as usize).all(|i| {
-            i == buf
-                || (*change).dc_start[i] == (*change).dc_end[i]
-                    && (*change).dc_end_lnum_off[i] == (*change).dc_start_lnum_off[i]
-        })
+        *change_start = start;
+        *change_end = end;
     }
+    if change == simple_diffline_change.ptr() {
+        return false;
+    }
+    // An addition is a change that is empty in every *other* buffer.
+    (0..DB_COUNT as usize).all(|i| {
+        i == buf
+            || ch.dc_start[i] == ch.dc_end[i] && ch.dc_end_lnum_off[i] == ch.dc_start_lnum_off[i]
+    })
 }
 
 /// How much of `org` and `new` is a common prefix, under the whitespace flags.
@@ -165,42 +169,46 @@ fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
 /// `startp`/`endp` accumulate across the other buffers: `startp` takes the
 /// leftmost start and `endp` the rightmost end, so a line differing from two
 /// partners reports the union.
-unsafe fn diff_find_change_simple(
-    wp: *mut win_T,
+fn diff_find_change_simple(
+    wp: Win,
     lnum: linenr_T,
-    dp: *const diff_T,
+    dp: Df,
     idx: c_int,
-    startp: *mut c_int,
-    endp: *mut c_int,
+    startp: &mut c_int,
+    endp: &mut c_int,
 ) -> bool {
-    unsafe {
-        // A copy: every `ml_get_buf` below invalidates the last one's buffer.
-        let line_org = (diff_flags.get() & DIFF_INLINE_NONE == 0)
-            .then(|| CStr::from_ptr(ml_get_buf((*wp).w_buffer, lnum)).to_owned());
-        let off = lnum - (*dp).df_lnum[idx as usize];
-        let mut added = true;
-        for i in 0..DB_COUNT as usize {
-            let buf = (*curtab.get()).tp_diffbuf[i];
-            // A line past the other buffer's count is a filler line there,
-            // which says nothing about this one.
-            if buf.is_null() || i as c_int == idx || off >= (*dp).df_count[i] {
-                continue;
-            }
-            added = false;
-            let Some(line_org) = line_org.as_deref() else {
-                break; // `inline:none` wants only the answer above.
-            };
-            let org = line_org.to_bytes();
-            let new = CStr::from_ptr(ml_get_buf(buf, (*dp).df_lnum[i] + off)).to_bytes();
-
-            let (si_org, si_new) = common_prefix(org, new);
-            *startp = (*startp).min(si_org as c_int);
-            if byte_at(org, si_org) != 0 || byte_at(new, si_new) != 0 {
-                *endp = (*endp).max(common_suffix(org, new, *startp, si_new as c_int));
-            }
+    // A copy: every `ml_get_buf` below invalidates the last one's buffer.
+    let line_org = (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| {
+        // SAFETY: a live window's buffer, and a line number inside it.
+        unsafe { CStr::from_ptr(ml_get_buf(wp.w_buffer, lnum)) }.to_owned()
+    });
+    let off = lnum - dp.df_lnum[idx as usize];
+    let tp = cur_tab();
+    let mut added = true;
+    for i in 0..DB_COUNT as usize {
+        let buf = tp.tp_diffbuf[i];
+        // A line past the other buffer's count is a filler line there,
+        // which says nothing about this one.
+        if buf.is_null() || i as c_int == idx || off >= dp.df_count[i] {
+            continue;
         }
-        added
+        added = false;
+        let Some(line_org) = line_org.as_deref() else {
+            break; // `inline:none` wants only the answer above.
+        };
+        let org = line_org.to_bytes();
+        let other = dp.df_lnum[i] + off;
+        // SAFETY: a live buffer of the diff, and a line number inside the
+        // block, so inside the buffer.
+        let new = unsafe { CStr::from_ptr(ml_get_buf(buf, other)) }.to_bytes();
+
+        let (si_org, si_new) = common_prefix(org, new);
+        *startp = (*startp).min(si_org as c_int);
+        if byte_at(org, si_org) != 0 || byte_at(new, si_new) != 0 {
+            *endp = (*endp).max(common_suffix(org, new, *startp, si_new as c_int));
+        }
     }
+    added
 }
 
 /// The changed column ranges covering `lnum` in `wp`, as `diffline`.
@@ -210,95 +218,105 @@ unsafe fn diff_find_change_simple(
 /// [`simple_diffline_change`]; under `inline:char`/`inline:word` it is a
 /// window onto the block's cached `df_changes`, computed once by
 /// [`diff_find_change_inline_diff`].
+///
+/// # Safety
+/// `wp` must be a live window and `diffline` a writable `diffline_T`.
 pub unsafe fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut diffline_T) -> bool {
-    unsafe {
-        let idx = diff_buf_idx((*wp).w_buffer, curtab.get());
-        if idx == DB_COUNT {
-            return false;
-        }
-        let mut dp = (*curtab.get()).tp_first_diff;
-        while !dp.is_null() && lnum >= (*dp).df_lnum[idx as usize] + (*dp).df_count[idx as usize] {
-            dp = (*dp).df_next;
-        }
-        if dp.is_null() || diff_check_sanity(curtab.get(), dp) == FAIL {
-            return false;
-        }
-        let off = (lnum - (*dp).df_lnum[idx as usize]) as c_int;
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
+    let tp = cur_tab();
+    let idx = diff_slot(wp.w_buffer, tp);
+    if idx == DB_COUNT {
+        return false;
+    }
+    // The first block this line is not already past.
+    let Some(dp) = diff_blocks(tp).find(|dp| lnum < dp.end(idx as usize)) else {
+        return false;
+    };
+    if !dp.is_sane(tp) {
+        return false;
+    }
+    let off = (lnum - dp.df_lnum[idx as usize]) as c_int;
 
-        if diff_flags.get() & ALL_INLINE_DIFF == 0 {
-            let mut change_start = MAXCOL as c_int;
-            let mut change_end = -1;
-            let added = diff_find_change_simple(
-                wp,
-                lnum,
-                dp,
-                idx,
-                &raw mut change_start,
-                &raw mut change_end,
-            );
-            change_end += 1;
-            let change = simple_diffline_change.ptr();
-            *change = diffline_change_T {
-                dc_start: [0; 8],
-                dc_end: [0; 8],
-                dc_start_lnum_off: [0; 8],
-                dc_end_lnum_off: [0; 8],
-            };
-            (*change).dc_start[idx as usize] = change_start as colnr_T;
-            (*change).dc_end[idx as usize] = change_end as colnr_T;
-            (*change).dc_start_lnum_off[idx as usize] = off;
-            (*change).dc_end_lnum_off[idx as usize] = off;
-            *diffline = diffline_S {
-                changes: change,
-                num_changes: 1,
-                bufidx: idx,
-                lineoff: off,
-            };
-            return added;
-        }
-
-        if !(*dp).has_changes {
-            diff_find_change_inline_diff(dp);
-        }
-        // The changes are stored for the whole block; this line's window into
-        // them is the run whose line-offset span covers `off`.
-        let changes = (*dp).df_changes.ga_data as *mut diffline_change_T;
-        let mut first = ::core::ptr::null_mut::<diffline_change_T>();
-        let mut num_changes = 0;
-        let mut change_idx = 0;
-        while change_idx < (*dp).df_changes.ga_len {
-            let change = changes.offset(change_idx as isize);
-            if (*change).dc_end_lnum_off[idx as usize] >= off {
-                if (*change).dc_start_lnum_off[idx as usize] > off {
-                    break;
-                }
-                if first.is_null() {
-                    first = change;
-                }
-                num_changes += 1;
-            }
-            change_idx += 1;
-        }
-        *diffline = diffline_S {
-            changes: first,
-            num_changes,
+    if diff_flags.get() & ALL_INLINE_DIFF == 0 {
+        let mut change_start = MAXCOL as c_int;
+        let mut change_end = -1;
+        let start = &mut change_start;
+        let end = &mut change_end;
+        let added = diff_find_change_simple(wp, lnum, dp, idx, start, end);
+        let mut only = diffline_change_T {
+            dc_start: [0; 8],
+            dc_end: [0; 8],
+            dc_start_lnum_off: [0; 8],
+            dc_end_lnum_off: [0; 8],
+        };
+        only.dc_start[idx as usize] = change_start as colnr_T;
+        only.dc_end[idx as usize] = (change_end + 1) as colnr_T;
+        only.dc_start_lnum_off[idx as usize] = off;
+        only.dc_end_lnum_off[idx as usize] = off;
+        let change = simple_diffline_change.ptr();
+        let line = diffline_S {
+            changes: change,
+            num_changes: 1,
             bufidx: idx,
             lineoff: off,
         };
-
-        // The line is an addition when the block's *last* change is the only
-        // one covering it and it is empty in every other buffer, which the
-        // inline diff marks with a `dc_start_lnum_off` of `INT_MAX`.
-        if num_changes != 1 || change_idx != (*dp).df_changes.ga_len {
-            return false;
+        // SAFETY: this module's own one-element answer buffer, and the
+        // caller's out-parameter.
+        unsafe {
+            *change = only;
+            *diffline = line;
         }
-        let last = changes.offset(((*dp).df_changes.ga_len - 1) as isize);
-        (0..DB_COUNT as usize).all(|i| {
-            i as c_int == idx
-                || (*curtab.get()).tp_diffbuf[i].is_null()
-                || (*last).dc_start_lnum_off[i] == c_int::MAX
-        })
+        return added;
     }
+
+    if !dp.has_changes {
+        // SAFETY: a live block.
+        unsafe { diff_find_change_inline_diff(dp.raw()) };
+    }
+    // The changes are stored for the whole block; this line's window into
+    // them is the run whose line-offset span covers `off`.
+    let changes = dp.df_changes.ga_data as *mut diffline_change_T;
+    let len = dp.df_changes.ga_len;
+    let mut first = ::core::ptr::null_mut::<diffline_change_T>();
+    let mut num_changes = 0;
+    let mut change_idx = 0;
+    while change_idx < len {
+        // SAFETY: `ga_data` holds `ga_len` entries and `change_idx` is below
+        // it.
+        let change = unsafe { Live::new(changes.add(change_idx as usize)) };
+        if change.dc_end_lnum_off[idx as usize] >= off {
+            if change.dc_start_lnum_off[idx as usize] > off {
+                break;
+            }
+            if first.is_null() {
+                first = change.raw();
+            }
+            num_changes += 1;
+        }
+        change_idx += 1;
+    }
+    let line = diffline_S {
+        changes: first,
+        num_changes,
+        bufidx: idx,
+        lineoff: off,
+    };
+    // SAFETY: the caller's out-parameter.
+    unsafe { *diffline = line };
+
+    // The line is an addition when the block's *last* change is the only
+    // one covering it and it is empty in every other buffer, which the
+    // inline diff marks with a `dc_start_lnum_off` of `INT_MAX`.
+    if num_changes != 1 || change_idx != len {
+        return false;
+    }
+    // SAFETY: `num_changes` is 1, so `ga_len` is at least 1 and the last
+    // entry is in bounds.
+    let last = unsafe { Live::new(changes.add((len - 1) as usize)) };
+    (0..DB_COUNT as usize).all(|i| {
+        i as c_int == idx || tp.tp_diffbuf[i].is_null() || last.dc_start_lnum_off[i] == c_int::MAX
+    })
 }
 
 /// `diff_hlID(lnum, col)`: the highlight group one column of one line takes.
@@ -316,86 +334,113 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     static change_end: GlobalCell<c_int> = GlobalCell::new(0);
     static hlID: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
 
-    unsafe {
-        let mut diffline = diffline_S {
-            changes: ::core::ptr::null_mut::<diffline_change_T>(),
-            num_changes: 0,
-            bufidx: 0,
-            lineoff: 0,
-        };
-        let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
-        let lnum = tv_get_lnum(argvars).max(0);
+    let mut diffline = diffline_S {
+        changes: ::core::ptr::null_mut::<diffline_change_T>(),
+        num_changes: 0,
+        bufidx: 0,
+        lineoff: 0,
+    };
+    let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
+    // SAFETY: the caller's argument list.
+    let lnum = unsafe { tv_get_lnum(argvars) }.max(0);
 
-        if !cache_results
-            || lnum != prev_lnum.get()
-            || changedtick.get() != buf_get_changedtick(curbuf.get())
-            || fnum.get() != (*curbuf.get()).handle
-            || diff_flags.get() != prev_diff_flags.get()
-        {
-            let mut linestatus = 0;
-            diff_check_with_linestatus(curwin.get(), lnum, &raw mut linestatus);
-            hlID.set(match linestatus {
-                LINE_CHANGED => {
-                    change_start.set(MAXCOL as c_int);
-                    change_end.set(-1);
-                    if diff_find_change(curwin.get(), lnum, &raw mut diffline) {
-                        HLF_ADD
-                    } else {
-                        if diffline.num_changes > 0 && cache_results {
-                            change_start.set(
-                                (*diffline.changes).dc_start[diffline.bufidx as usize] as c_int,
-                            );
-                            change_end
-                                .set((*diffline.changes).dc_end[diffline.bufidx as usize] as c_int);
-                        }
-                        HLF_CHD
-                    }
-                }
-                // `LINE_INSERTED`: the line has no counterpart at all.
-                n if n < 0 => HLF_ADD,
-                _ => HLF_NONE,
-            });
-            if cache_results {
-                prev_lnum.set(lnum);
-                changedtick.set(buf_get_changedtick(curbuf.get()));
-                fnum.set((*curbuf.get()).handle);
-                prev_diff_flags.set(diff_flags.get());
-            }
-        }
-
-        if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
-            let col = tv_get_number(argvars.offset(1)) as c_int - 1;
-            if cache_results {
-                hlID.set(if col >= change_start.get() && col < change_end.get() {
-                    HLF_TXD
+    let stale = !cache_results
+        || lnum != prev_lnum.get()
+        // SAFETY: the current buffer is live.
+        || changedtick.get() != unsafe { buf_get_changedtick(curbuf.get()) }
+        || fnum.get() != cur_buf().handle
+        || diff_flags.get() != prev_diff_flags.get();
+    if stale {
+        let mut linestatus = 0;
+        let status = &raw mut linestatus;
+        // SAFETY: the current window is live; `linestatus` is a local.
+        unsafe { diff_check_with_linestatus(cur_win().raw(), lnum, status) };
+        hlID.set(match linestatus {
+            LINE_CHANGED => {
+                change_start.set(MAXCOL as c_int);
+                change_end.set(-1);
+                let out = &raw mut diffline;
+                // SAFETY: the current window is live; `diffline` is a local.
+                let added = unsafe { diff_find_change(cur_win().raw(), lnum, out) };
+                if added {
+                    HLF_ADD
                 } else {
+                    if diffline.num_changes > 0 && cache_results {
+                        // SAFETY: a positive `num_changes` means `changes`
+                        // names at least one live entry.
+                        let ch = unsafe { Live::new(diffline.changes) };
+                        let buf = diffline.bufidx as usize;
+                        change_start.set(ch.dc_start[buf] as c_int);
+                        change_end.set(ch.dc_end[buf] as c_int);
+                    }
                     HLF_CHD
-                });
+                }
+            }
+            // `LINE_INSERTED`: the line has no counterpart at all.
+            n if n < 0 => HLF_ADD,
+            _ => HLF_NONE,
+        });
+        if cache_results {
+            prev_lnum.set(lnum);
+            // SAFETY: the current buffer is live.
+            changedtick.set(unsafe { buf_get_changedtick(curbuf.get()) });
+            fnum.set(cur_buf().handle);
+            prev_diff_flags.set(diff_flags.get());
+        }
+    }
+
+    if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
+        // SAFETY: `diff_hlID()` is declared with two arguments.
+        let col = unsafe { tv_get_number(argvars.offset(1)) } as c_int - 1;
+        if cache_results {
+            hlID.set(if col >= change_start.get() && col < change_end.get() {
+                HLF_TXD
             } else {
-                hlID.set(HLF_CHD);
-                for i in 0..diffline.num_changes {
-                    // Out-parameters of this frame: the cached pair above is
-                    // only ever read on the other side of this `if`.
-                    let mut start = 0;
-                    let mut end = 0;
-                    let added = diff_change_parse(
-                        &raw mut diffline,
-                        diffline.changes.offset(i as isize),
-                        &raw mut start,
-                        &raw mut end,
-                    );
-                    if col >= start && col < end {
-                        hlID.set(if added { HLF_TXA } else { HLF_TXD });
-                        break;
-                    }
-                    // The ranges are in column order, so a column left of
-                    // this one's start is left of all the rest too.
-                    if col < start {
-                        break;
-                    }
+                HLF_CHD
+            });
+        } else {
+            hlID.set(HLF_CHD);
+            for i in 0..diffline.num_changes {
+                // Out-parameters of this frame: the cached pair above is
+                // only ever read on the other side of this `if`.
+                let mut start = 0;
+                let mut end = 0;
+                let dl = &raw mut diffline;
+                let ch = diffline.changes.wrapping_add(i as usize);
+                // SAFETY: `i` is below `num_changes`, so `ch` names one of
+                // the line's own changes; the two ends are locals.
+                let added = unsafe { diff_change_parse(dl, ch, &raw mut start, &raw mut end) };
+                if col >= start && col < end {
+                    hlID.set(if added { HLF_TXA } else { HLF_TXD });
+                    break;
+                }
+                // The ranges are in column order, so a column left of
+                // this one's start is left of all the rest too.
+                if col < start {
+                    break;
                 }
             }
         }
-        (*rettv).vval.v_number = hlID.get() as varnumber_T;
     }
+    let id = hlID.get() as varnumber_T;
+    // SAFETY: the caller's result cell.
+    unsafe { (*rettv).vval.v_number = id };
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The tab page the editor is working in.
+fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -53,8 +53,7 @@ use crate::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
 use crate::extmark::extmark_adjust;
 use crate::fileio::{buf_check_timestamp, shorten_fnames, vim_fgets, vim_gettempdir, vim_tempname};
 use crate::fold::{
-    fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, has_folding,
-    new_fold_level,
+    fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
@@ -75,7 +74,7 @@ use crate::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::r#move::{
-    changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, check_topfill,
+    changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting,
     invalidate_botline_win, validate_cursor,
 };
 use crate::normal::check_scrollbind;
@@ -91,11 +90,11 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
-    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp,
-    FILE, FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
-    bufref_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_T, exarg_T,
-    garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t,
-    varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
+    CMD_diffget, CMD_diffput, CMD_split, CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
+    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
+    bufref_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T, garray_T, hlf_T,
+    linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t, varnumber_T, win_T,
+    xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
