@@ -185,10 +185,11 @@ mod tests {
     /// index agrees with the slots, and every key is findable.
     fn check(table: &SlotTable<u64, u32>, expected: &[u64]) {
         assert_eq!(table.snapshot_keys(), expected, "iteration order");
-        assert_eq!(table.snapshot_values().len(), expected.len());
+        let values = table.snapshot_values();
+        assert_eq!(values.len(), expected.len());
         for (i, &key) in expected.iter().enumerate() {
             assert_eq!(table.get(key), Some(u32::try_from(key).unwrap() * 10));
-            assert_eq!(table.snapshot_values()[i], u32::try_from(key).unwrap() * 10);
+            assert_eq!(values[i], u32::try_from(key).unwrap() * 10);
         }
     }
 
@@ -257,13 +258,14 @@ mod tests {
 
     /// Churn the table the way the editor does — ids handed out in order,
     /// entries removed from the middle — and check the index never drifts
-    /// from the slots.
+    /// from the slots. Kept small: it runs under Miri, where the check is
+    /// quadratic in the number of live keys.
     #[test]
     fn churn_keeps_the_index_and_the_slots_in_step() {
         let mut table: SlotTable<u64, u32> = SlotTable::new();
         let mut live: Vec<u64> = Vec::new();
         let mut rng: u64 = 0x9e37_79b9_7f4a_7c15;
-        for id in 1..200u64 {
+        for id in 1..60u64 {
             table.insert(id, u32::try_from(id).unwrap() * 10);
             live.push(id);
             rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
