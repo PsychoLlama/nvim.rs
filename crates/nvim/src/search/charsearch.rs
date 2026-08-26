@@ -10,6 +10,7 @@ use super::*;
 use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, NUL, OK};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -79,100 +80,107 @@ pub fn set_csearch_until(t_cmd: c_int) {
 /// # Safety
 /// `cap` and `cap->oap` must be valid.
 pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
-    unsafe {
-        let mut c = (*cap).nchar; // char to search for
-        let mut dir = (*cap).arg; // true for searching forward
-        let mut t_cmd = t_cmd;
-        let mut count = (*cap).count1; // repeat count
-        let mut stop = true;
+    let mut c = unsafe { (*cap).nchar }; // char to search for
+    let mut dir = unsafe { (*cap).arg }; // true for searching forward
+    let mut t_cmd = t_cmd;
+    let mut count = unsafe { (*cap).count1 }; // repeat count
+    let mut stop = true;
 
-        if c != NUL {
-            // Normal search: remember the arguments for a later repeat,
-            // but not while redoing (the remembered ones are in play).
-            if KeyStuffed.get() == 0 {
-                lastc.set(c as u8);
-                set_csearch_direction(dir as Direction);
-                set_csearch_until(c_int::from(t_cmd));
-                let mut bytes = lastc_bytes.get();
-                if (*cap).nchar_len != 0 {
-                    lastc_bytelen.set((*cap).nchar_len);
-                    ptr::copy_nonoverlapping(
-                        (&raw const (*cap).nchar_composing).cast::<c_char>(),
-                        bytes.as_mut_ptr(),
-                        (*cap).nchar_len as usize,
-                    );
-                } else {
-                    lastc_bytelen.set(utf_char2bytes(c, bytes.as_mut_ptr()));
-                }
-                lastc_bytes.set(bytes);
-            }
-        } else {
-            // Repeat the previous search.
-            if lastc.get() as c_int == NUL && lastc_bytelen.get() <= 1 {
-                return FAIL;
-            }
-            dir = if dir != 0 {
-                -(lastcdir.get() as c_int) // repeat in the opposite direction
-            } else {
-                lastcdir.get() as c_int
-            };
-            t_cmd = last_t_cmd.get();
-            c = lastc.get() as c_int;
-            // For multi-byte re-use lastc_bytes[] and lastc_bytelen.
-
-            // Force a move of at least one character, so that ";" and ","
-            // move the cursor even when it is right in front of the
-            // character being looked for.
-            if !cpo_has(CpoFlag::SCOLON) && count == 1 && t_cmd {
-                stop = false;
-            }
-        }
-
-        (*(*cap).oap).inclusive = dir != BACKWARD as c_int;
-
-        let line = get_cursor_line_ptr();
-        let len = get_cursor_line_len();
-        let bytelen = lastc_bytelen.get();
-        let bytes = lastc_bytes.get();
-        let mut col = (*curwin.get()).w_cursor.col as c_int;
-
-        while count > 0 {
-            count -= 1;
-            loop {
-                if dir > 0 {
-                    col += utfc_ptr2len(line.offset(col as isize));
-                    if col >= len {
-                        return FAIL;
-                    }
-                } else {
-                    if col == 0 {
-                        return FAIL;
-                    }
-                    col -= utf_head_off(line, line.offset(col as isize - 1)) + 1;
-                }
-                let hit = if bytelen <= 1 {
-                    *line.offset(col as isize) as c_int == c
-                } else {
-                    strncmp(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t) == 0
+    if c != NUL {
+        // Normal search: remember the arguments for a later repeat,
+        // but not while redoing (the remembered ones are in play).
+        if KeyStuffed.get() == 0 {
+            lastc.set(c as u8);
+            set_csearch_direction(dir as Direction);
+            set_csearch_until(c_int::from(t_cmd));
+            let mut bytes = lastc_bytes.get();
+            if unsafe { (*cap).nchar_len } != 0 {
+                lastc_bytelen.set(unsafe { (*cap).nchar_len });
+                // SAFETY: `nchar_composing` holds `nchar_len` bytes, and
+                // `bytes` is a `MB_MAXBYTES`-sized array of this frame.
+                unsafe {
+                    let from = (&raw const (*cap).nchar_composing).cast::<c_char>();
+                    ptr::copy_nonoverlapping(from, bytes.as_mut_ptr(), (*cap).nchar_len as usize)
                 };
-                if hit && stop {
-                    break;
-                }
-                stop = true;
-            }
-        }
-
-        if t_cmd {
-            // Back up to before the character (which may be multi-byte).
-            col -= dir;
-            if dir < 0 {
-                // Landed on the search char, which is bytelen bytes long.
-                col += bytelen - 1;
             } else {
-                col -= utf_head_off(line, line.offset(col as isize));
+                lastc_bytelen.set(unsafe { utf_char2bytes(c, bytes.as_mut_ptr()) });
             }
+            lastc_bytes.set(bytes);
         }
-        (*curwin.get()).w_cursor.col = col as colnr_T;
-        OK
+    } else {
+        // Repeat the previous search.
+        if lastc.get() as c_int == NUL && lastc_bytelen.get() <= 1 {
+            return FAIL;
+        }
+        dir = if dir != 0 {
+            -(lastcdir.get() as c_int) // repeat in the opposite direction
+        } else {
+            lastcdir.get() as c_int
+        };
+        t_cmd = last_t_cmd.get();
+        c = lastc.get() as c_int;
+        // For multi-byte re-use lastc_bytes[] and lastc_bytelen.
+
+        // Force a move of at least one character, so that ";" and ","
+        // move the cursor even when it is right in front of the
+        // character being looked for.
+        if !cpo_has(CpoFlag::SCOLON) && count == 1 && t_cmd {
+            stop = false;
+        }
     }
+
+    unsafe { (*(*cap).oap).inclusive = dir != BACKWARD as c_int };
+
+    let line = unsafe { get_cursor_line_ptr() };
+    let len = unsafe { get_cursor_line_len() };
+    let bytelen = lastc_bytelen.get();
+    let bytes = lastc_bytes.get();
+    let mut col = cur_win().w_cursor.col as c_int;
+
+    while count > 0 {
+        count -= 1;
+        loop {
+            if dir > 0 {
+                col += unsafe { utfc_ptr2len(line.offset(col as isize)) };
+                if col >= len {
+                    return FAIL;
+                }
+            } else {
+                if col == 0 {
+                    return FAIL;
+                }
+                col -= unsafe { utf_head_off(line, line.offset(col as isize - 1)) } + 1;
+            }
+            let hit = if bytelen <= 1 {
+                unsafe { *line.offset(col as isize) as c_int == c }
+            } else {
+                unsafe {
+                    strncmp(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t) == 0
+                }
+            };
+            if hit && stop {
+                break;
+            }
+            stop = true;
+        }
+    }
+
+    if t_cmd {
+        // Back up to before the character (which may be multi-byte).
+        col -= dir;
+        if dir < 0 {
+            // Landed on the search char, which is bytelen bytes long.
+            col += bytelen - 1;
+        } else {
+            col -= unsafe { utf_head_off(line, line.offset(col as isize)) };
+        }
+    }
+    cur_win().w_cursor.col = col as colnr_T;
+    OK
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -17,6 +17,7 @@ use crate::guard::Suppress;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::types::{CmdModFlags, FAIL, NUL, OK, Vv};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -104,10 +105,8 @@ fn put_spat(idx: c_int, pat: SearchPattern) {
 /// `pat` and `additional_data` must be owned allocations or null, and must
 /// not be used afterwards.
 unsafe fn free_spat(spat: &SearchPattern) {
-    unsafe {
-        xfree(spat.pat as *mut c_void);
-        xfree(spat.additional_data as *mut c_void);
-    }
+    unsafe { xfree(spat.pat as *mut c_void) };
+    unsafe { xfree(spat.additional_data as *mut c_void) };
 }
 
 /// A copy of `spats[idx]` owning its own `pat`, for the saved arrays.
@@ -151,75 +150,73 @@ pub unsafe fn search_regcomp(
     options: c_int,
     regmatch: *mut regmmatch_T,
 ) -> c_int {
-    unsafe {
-        rc_did_emsg.set(false);
-        let mut magic = magic_isset();
+    rc_did_emsg.set(false);
+    let mut magic = magic_isset();
 
-        if pat.is_null() || *pat as c_int == NUL {
-            // No pattern given: use a previously defined one.
-            let idx = if pat_use == RE_LAST {
-                last_idx.get()
+    if pat.is_null() || unsafe { *pat } as c_int == NUL {
+        // No pattern given: use a previously defined one.
+        let idx = if pat_use == RE_LAST {
+            last_idx.get()
+        } else {
+            pat_use
+        };
+        let remembered = spat(idx);
+        if remembered.pat.is_null() {
+            // Never defined.
+            let msg = if pat_use == RE_SUBST {
+                e_nopresub.as_ptr()
             } else {
-                pat_use
+                e_noprevre.as_ptr()
             };
-            let remembered = spat(idx);
-            if remembered.pat.is_null() {
-                // Never defined.
-                let msg = if pat_use == RE_SUBST {
-                    e_nopresub.as_ptr()
-                } else {
-                    e_noprevre.as_ptr()
-                };
-                emsg(gettext(msg));
-                rc_did_emsg.set(true);
-                return FAIL;
-            }
-            pat = remembered.pat;
-            patlen = remembered.patlen;
-            magic = remembered.magic;
-            no_smartcase.set(remembered.no_scs);
-        } else if options & SEARCH_HIS as c_int != 0 {
-            add_to_history(
-                HIST_SEARCH as c_int,
-                core::slice::from_raw_parts(pat as *const u8, patlen),
-                true,
-                NUL as u8,
-            );
+            unsafe { emsg(gettext(msg)) };
+            rc_did_emsg.set(true);
+            return FAIL;
         }
+        pat = remembered.pat;
+        patlen = remembered.patlen;
+        magic = remembered.magic;
+        no_smartcase.set(remembered.no_scs);
+    } else if options & SEARCH_HIS as c_int != 0 {
+        add_to_history(
+            HIST_SEARCH as c_int,
+            unsafe { core::slice::from_raw_parts(pat as *const u8, patlen) },
+            true,
+            NUL as u8,
+        );
+    }
 
-        if !used_pat.is_null() {
-            *used_pat = pat;
+    if !used_pat.is_null() {
+        unsafe { *used_pat = pat };
+    }
+
+    unsafe { xfree(compiled_pat.get() as *mut c_void) };
+    let rightleft_reverse = cur_win().w_onebuf_opt.wo_rl != 0
+        && unsafe { *cur_win().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
+    compiled_pat.set(if rightleft_reverse {
+        unsafe { reverse_text(pat) }
+    } else {
+        unsafe { xstrnsave(pat, patlen) }
+    });
+    compiled_patlen.set(patlen);
+
+    // Remember the pattern, unless the caller or `:keeppatterns` asked
+    // us not to.
+    if options & SEARCH_KEEP as c_int == 0 && !cmdmod_has(CmdModFlags::KEEPPATTERNS) {
+        if pat_save == RE_SEARCH || pat_save == RE_BOTH {
+            unsafe { save_re_pat(RE_SEARCH, pat, patlen, magic) };
         }
-
-        xfree(compiled_pat.get() as *mut c_void);
-        let rightleft_reverse = (*curwin.get()).w_onebuf_opt.wo_rl != 0
-            && *(*curwin.get()).w_onebuf_opt.wo_rlc as c_int == 's' as c_int;
-        compiled_pat.set(if rightleft_reverse {
-            reverse_text(pat)
-        } else {
-            xstrnsave(pat, patlen)
-        });
-        compiled_patlen.set(patlen);
-
-        // Remember the pattern, unless the caller or `:keeppatterns` asked
-        // us not to.
-        if options & SEARCH_KEEP as c_int == 0 && !cmdmod_has(CmdModFlags::KEEPPATTERNS) {
-            if pat_save == RE_SEARCH || pat_save == RE_BOTH {
-                save_re_pat(RE_SEARCH, pat, patlen, magic);
-            }
-            if pat_save == RE_SUBST || pat_save == RE_BOTH {
-                save_re_pat(RE_SUBST, pat, patlen, magic);
-            }
+        if pat_save == RE_SUBST || pat_save == RE_BOTH {
+            unsafe { save_re_pat(RE_SUBST, pat, patlen, magic) };
         }
+    }
 
-        (*regmatch).rmm_ic = ignorecase(pat);
-        (*regmatch).rmm_maxcol = 0;
-        (*regmatch).regprog = vim_regcomp(pat, if magic { RE_MAGIC } else { 0 });
-        if (*regmatch).regprog.is_null() {
-            FAIL
-        } else {
-            OK
-        }
+    unsafe { (*regmatch).rmm_ic = ignorecase(pat) };
+    unsafe { (*regmatch).rmm_maxcol = 0 };
+    unsafe { (*regmatch).regprog = vim_regcomp(pat, if magic { RE_MAGIC } else { 0 }) };
+    if unsafe { (*regmatch).regprog.is_null() } {
+        FAIL
+    } else {
+        OK
     }
 }
 
@@ -234,31 +231,29 @@ pub fn get_search_pat() -> *mut c_char {
 /// # Safety
 /// `pat` must be a readable string of at least `patlen` bytes.
 pub unsafe fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: size_t, magic: bool) {
-    unsafe {
-        let old = spat(idx);
-        if old.pat == pat {
-            return;
-        }
-        free_spat(&old);
-        put_spat(
-            idx,
-            SearchPattern {
-                pat: xstrnsave(pat, patlen),
-                patlen,
-                magic,
-                no_scs: no_smartcase.get(),
-                timestamp: os_time(),
-                off: old.off,
-                additional_data: ptr::null_mut(),
-            },
-        );
-        last_idx.set(idx);
-        // With 'hlsearch' a changed pattern means a redraw.
-        if p_hls.get() != 0 {
-            redraw_all_later(UPD_SOME_VALID);
-        }
-        set_no_hlsearch(false);
+    let old = spat(idx);
+    if old.pat == pat {
+        return;
     }
+    unsafe { free_spat(&old) };
+    put_spat(
+        idx,
+        SearchPattern {
+            pat: unsafe { xstrnsave(pat, patlen) },
+            patlen,
+            magic,
+            no_scs: no_smartcase.get(),
+            timestamp: os_time(),
+            off: old.off,
+            additional_data: ptr::null_mut(),
+        },
+    );
+    last_idx.set(idx);
+    // With 'hlsearch' a changed pattern means a redraw.
+    if p_hls.get() != 0 {
+        unsafe { redraw_all_later(UPD_SOME_VALID) };
+    }
+    unsafe { set_no_hlsearch(false) };
 }
 
 /// Save the search patterns so they can be restored later. Used around
@@ -269,18 +264,16 @@ pub fn save_search_patterns() {
     }
     // SAFETY: the clones are fresh allocations; nothing else is borrowing
     // the cells.
-    unsafe {
-        for idx in [RE_SEARCH, RE_SUBST] {
-            let clone = clone_spat(idx);
-            saved_spats.with_mut(|slots| slots[idx as usize] = clone);
-        }
-        if compiled_pat.get().is_null() {
-            saved_compiled_pat.set(ptr::null_mut());
-            saved_compiled_patlen.set(0);
-        } else {
-            saved_compiled_pat.set(xstrnsave(compiled_pat.get(), compiled_patlen.get()));
-            saved_compiled_patlen.set(compiled_patlen.get());
-        }
+    for idx in [RE_SEARCH, RE_SUBST] {
+        let clone = unsafe { clone_spat(idx) };
+        saved_spats.with_mut(|slots| slots[idx as usize] = clone);
+    }
+    if compiled_pat.get().is_null() {
+        saved_compiled_pat.set(ptr::null_mut());
+        saved_compiled_patlen.set(0);
+    } else {
+        saved_compiled_pat.set(unsafe { xstrnsave(compiled_pat.get(), compiled_patlen.get()) });
+        saved_compiled_patlen.set(compiled_patlen.get());
     }
     saved_spats_last_idx.set(last_idx.get());
     saved_spats_no_hlsearch.set(no_hlsearch.get());
@@ -293,18 +286,16 @@ pub fn restore_search_patterns() {
         return;
     }
     // SAFETY: the saved copies hand their allocations back to `spats`.
-    unsafe {
-        for idx in [RE_SEARCH, RE_SUBST] {
-            free_spat(&spat(idx));
-            put_spat(idx, saved_spats.get()[idx as usize]);
-        }
-        set_vv_searchforward();
-        xfree(compiled_pat.get() as *mut c_void);
-        compiled_pat.set(saved_compiled_pat.get());
-        compiled_patlen.set(saved_compiled_patlen.get());
-        last_idx.set(saved_spats_last_idx.get());
-        set_no_hlsearch(saved_spats_no_hlsearch.get());
+    for idx in [RE_SEARCH, RE_SUBST] {
+        unsafe { free_spat(&spat(idx)) };
+        put_spat(idx, saved_spats.get()[idx as usize]);
     }
+    set_vv_searchforward();
+    unsafe { xfree(compiled_pat.get() as *mut c_void) };
+    compiled_pat.set(saved_compiled_pat.get());
+    compiled_patlen.set(saved_compiled_patlen.get());
+    last_idx.set(saved_spats_last_idx.get());
+    unsafe { set_no_hlsearch(saved_spats_no_hlsearch.get()) };
 }
 
 /// Save the search pattern for incremental search.
@@ -331,25 +322,20 @@ pub fn restore_last_search_pattern() {
     }
     if did_save_last_search_spat.get() != 0 {
         // SAFETY: a literal message.
-        unsafe {
-            iemsg(
-                c"restore_last_search_pattern() called more often than save_last_search_pattern()"
-                    .as_ptr(),
-            );
-        }
+        let msg =
+            c"restore_last_search_pattern() called more often than save_last_search_pattern()";
+        unsafe { iemsg(msg.as_ptr()) };
         return;
     }
     // SAFETY: the saved copy hands its allocation back. `additional_data`
     // is deliberately not freed — the saved copy aliases the live slot's,
     // which the assignment below puts back.
-    unsafe {
-        xfree(spat(RE_SEARCH).pat as *mut c_void);
-        let saved = saved_last_search_spat.replace(no_pattern(false, 0));
-        put_spat(RE_SEARCH, saved);
-        set_vv_searchforward();
-        last_idx.set(saved_last_idx.get());
-        set_no_hlsearch(saved_no_hlsearch.get());
-    }
+    unsafe { xfree(spat(RE_SEARCH).pat as *mut c_void) };
+    let saved = saved_last_search_spat.replace(no_pattern(false, 0));
+    put_spat(RE_SEARCH, saved);
+    set_vv_searchforward();
+    last_idx.set(saved_last_idx.get());
+    unsafe { set_no_hlsearch(saved_no_hlsearch.get()) };
 }
 
 /// Save the incremental-search highlighting variables, so that calling
@@ -414,14 +400,12 @@ pub(crate) fn last_used_pattern() -> SearchPattern {
 /// # Safety
 /// `s` must be a NUL-terminated string.
 pub(crate) unsafe fn replace_last_used_pattern(s: *const c_char) {
-    unsafe {
-        let idx = last_idx.get();
-        let mut pat = spat(idx);
-        xfree(pat.pat as *mut c_void);
-        pat.patlen = strlen(s);
-        pat.pat = xstrnsave(s, pat.patlen);
-        put_spat(idx, pat);
-    }
+    let idx = last_idx.get();
+    let mut pat = spat(idx);
+    unsafe { xfree(pat.pat as *mut c_void) };
+    pat.patlen = unsafe { strlen(s) };
+    pat.pat = unsafe { xstrnsave(s, pat.patlen) };
+    put_spat(idx, pat);
 }
 
 /// Whether case should be ignored for pattern `pat`, per `'ignorecase'`
@@ -442,14 +426,12 @@ pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_in
     let mut ic = ic_in;
     // 'infercase' completion does its own case handling.
     // SAFETY: the caller's NUL-terminated pattern.
-    unsafe {
-        if ic != 0
-            && !no_smartcase.get()
-            && scs != 0
-            && !(ctrl_x_mode_not_default() && (*curbuf.get()).b_p_inf != 0)
-        {
-            ic = !pat_has_uppercase(pat) as c_int;
-        }
+    if ic != 0
+        && !no_smartcase.get()
+        && scs != 0
+        && !(ctrl_x_mode_not_default() && cur_buf().b_p_inf != 0)
+    {
+        ic = !unsafe { pat_has_uppercase(pat) } as c_int;
     }
     no_smartcase.set(false);
     ic
@@ -461,47 +443,41 @@ pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_in
 /// # Safety
 /// `pat` must be a NUL-terminated string, and not null.
 pub unsafe fn pat_has_uppercase(pat: *mut c_char) -> bool {
-    unsafe {
-        // Which of `\`, `%` and `_` introduce an escape depends on the
-        // pattern's own magicness, which only a parse can tell us.
-        let mut magic_val: magic_T = MAGIC_ON;
-        skip_regexp_ex(
-            pat,
-            NUL,
-            magic_isset() as c_int,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &raw mut magic_val,
-        );
+    // Which of `\`, `%` and `_` introduce an escape depends on the
+    // pattern's own magicness, which only a parse can tell us.
+    let mut magic_val: magic_T = MAGIC_ON;
+    let is_magic = magic_isset() as c_int;
+    let (no_str, no_int) = (ptr::null_mut(), ptr::null_mut());
+    // SAFETY: `pat` is a live NUL-terminated pattern.
+    unsafe { skip_regexp_ex(pat, NUL, is_magic, no_str, no_int, &raw mut magic_val) };
 
-        let pat = CStr::from_ptr(pat).to_bytes_with_nul();
-        let mut i = 0;
-        while pat[i] != 0 {
-            let at = pat[i..].as_ptr().cast::<c_char>();
-            let len = utfc_ptr2len(at);
-            if len > 1 {
-                if mb_isupper(utf_ptr2char(at)) {
-                    return true;
-                }
-                i += len as usize;
-            } else if pat[i] == b'\\' && magic_val <= MAGIC_ON {
-                // Skip "\_X" and "\%X", else "\X".
-                i += match pat[i + 1] {
-                    0 => 1,
-                    b'_' | b'%' if pat[i + 2] != 0 => 3,
-                    _ => 2,
-                };
-            } else if (pat[i] == b'%' || pat[i] == b'_') && magic_val == MAGIC_ALL {
-                // Skip "%X" and "_X".
-                i += if pat[i + 1] != 0 { 2 } else { 1 };
-            } else if mb_isupper(pat[i] as c_int) {
+    let pat = unsafe { CStr::from_ptr(pat) }.to_bytes_with_nul();
+    let mut i = 0;
+    while pat[i] != 0 {
+        let at = pat[i..].as_ptr().cast::<c_char>();
+        let len = unsafe { utfc_ptr2len(at) };
+        if len > 1 {
+            if mb_isupper(unsafe { utf_ptr2char(at) }) {
                 return true;
-            } else {
-                i += 1;
             }
+            i += len as usize;
+        } else if pat[i] == b'\\' && magic_val <= MAGIC_ON {
+            // Skip "\_X" and "\%X", else "\X".
+            i += match pat[i + 1] {
+                0 => 1,
+                b'_' | b'%' if pat[i + 2] != 0 => 3,
+                _ => 2,
+            };
+        } else if (pat[i] == b'%' || pat[i] == b'_') && magic_val == MAGIC_ALL {
+            // Skip "%X" and "_X".
+            i += if pat[i + 1] != 0 { 2 } else { 1 };
+        } else if mb_isupper(pat[i] as c_int) {
+            return true;
+        } else {
+            i += 1;
         }
-        false
     }
+    false
 }
 
 /// Reset the search direction to forwards. For `gd` and `gD`.
@@ -518,55 +494,57 @@ pub fn reset_search_dir() {
 /// # Safety
 /// `s` must be a NUL-terminated string.
 pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, setlast: bool) {
-    unsafe {
-        free_spat(&spat(idx));
-        // An empty string means that nothing should be matched.
-        let patlen = if *s as c_int == NUL { 0 } else { strlen(s) };
-        put_spat(
-            idx,
-            SearchPattern {
-                pat: if patlen == 0 {
-                    ptr::null_mut()
-                } else {
-                    xstrnsave(s, patlen)
-                },
-                patlen,
-                magic,
-                no_scs: false,
-                timestamp: os_time(),
-                off: SearchOffset {
-                    dir: b'/' as c_char,
-                    ..NO_OFFSET
-                },
-                additional_data: ptr::null_mut(),
-            },
-        );
-        set_vv_searchforward();
-        if setlast {
-            last_idx.set(idx);
-        }
-        if save_level.get() != 0 {
-            free_spat(&saved_spats.get()[idx as usize]);
-            // Upstream takes the flags from slot 0 whichever slot is being
-            // set, then overwrites only the string. Preserved.
-            let mut saved = spat(RE_SEARCH);
-            saved.pat = if spat(idx).pat.is_null() {
+    unsafe { free_spat(&spat(idx)) };
+    // An empty string means that nothing should be matched.
+    let patlen = if unsafe { *s } as c_int == NUL {
+        0
+    } else {
+        unsafe { strlen(s) }
+    };
+    put_spat(
+        idx,
+        SearchPattern {
+            pat: if patlen == 0 {
                 ptr::null_mut()
             } else {
-                xstrnsave(spat(idx).pat, spat(idx).patlen)
-            };
-            saved.patlen = if spat(idx).pat.is_null() {
-                0
-            } else {
-                spat(idx).patlen
-            };
-            saved_spats.with_mut(|slots| slots[idx as usize] = saved);
-            saved_spats_last_idx.set(last_idx.get());
-        }
-        // With 'hlsearch' a changed pattern means a redraw.
-        if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
-            redraw_all_later(UPD_SOME_VALID);
-        }
+                unsafe { xstrnsave(s, patlen) }
+            },
+            patlen,
+            magic,
+            no_scs: false,
+            timestamp: os_time(),
+            off: SearchOffset {
+                dir: b'/' as c_char,
+                ..NO_OFFSET
+            },
+            additional_data: ptr::null_mut(),
+        },
+    );
+    set_vv_searchforward();
+    if setlast {
+        last_idx.set(idx);
+    }
+    if save_level.get() != 0 {
+        unsafe { free_spat(&saved_spats.get()[idx as usize]) };
+        // Upstream takes the flags from slot 0 whichever slot is being
+        // set, then overwrites only the string. Preserved.
+        let mut saved = spat(RE_SEARCH);
+        saved.pat = if spat(idx).pat.is_null() {
+            ptr::null_mut()
+        } else {
+            unsafe { xstrnsave(spat(idx).pat, spat(idx).patlen) }
+        };
+        saved.patlen = if spat(idx).pat.is_null() {
+            0
+        } else {
+            spat(idx).patlen
+        };
+        saved_spats.with_mut(|slots| slots[idx as usize] = saved);
+        saved_spats_last_idx.set(last_idx.get());
+    }
+    // With 'hlsearch' a changed pattern means a redraw.
+    if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
+        unsafe { redraw_all_later(UPD_SOME_VALID) };
     }
 }
 
@@ -576,23 +554,16 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
 /// # Safety
 /// `regmatch` must be writable.
 pub unsafe fn last_pat_prog(regmatch: *mut regmmatch_T) {
-    unsafe {
-        if spat(last_idx.get()).pat.is_null() {
-            (*regmatch).regprog = ptr::null_mut();
-            return;
-        }
-        // So it doesn't beep if the pattern is bad.
-        let _no_emsg = Suppress::emsg();
-        search_regcomp(
-            c"".as_ptr() as *mut c_char,
-            0,
-            ptr::null_mut(),
-            0,
-            last_idx.get(),
-            SEARCH_KEEP as c_int,
-            regmatch,
-        );
+    if spat(last_idx.get()).pat.is_null() {
+        unsafe { (*regmatch).regprog = ptr::null_mut() };
+        return;
     }
+    // So it doesn't beep if the pattern is bad.
+    let _no_emsg = Suppress::emsg();
+    let empty = c"".as_ptr() as *mut c_char;
+    let (used, keep) = (last_idx.get(), SEARCH_KEEP as c_int);
+    // SAFETY: an empty pattern re-compiled into the caller's `regmatch`.
+    unsafe { search_regcomp(empty, 0, ptr::null_mut(), 0, used, keep, regmatch) };
 }
 
 /// Set the direction `n` repeats in, for `:let v:searchforward =`.
@@ -605,12 +576,8 @@ pub fn set_search_direction(cdir: c_int) {
 /// Publish the search direction as `v:searchforward`.
 pub(crate) fn set_vv_searchforward() {
     // SAFETY: setting a `v:` variable to a number.
-    unsafe {
-        set_vim_var_nr(
-            Vv::Searchforward,
-            (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as varnumber_T,
-        );
-    }
+    let forward = (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as varnumber_T;
+    unsafe { set_vim_var_nr(Vv::Searchforward, forward) };
 }
 
 /// Whether `pattern` matches zero-width.
@@ -630,89 +597,85 @@ pub(crate) unsafe fn is_zero_width(
     cur: *mut pos_T,
     direction: Direction,
 ) -> c_int {
-    unsafe {
-        let mut regmatch = regmmatch_T::default();
-        let called_emsg_before = called_emsg.get();
-        if pattern.is_null() {
-            pattern = spat(last_idx.get()).pat;
-            patternlen = spat(last_idx.get()).patlen;
-        }
-        if search_regcomp(
-            pattern,
-            patternlen,
-            ptr::null_mut(),
-            RE_SEARCH,
-            RE_SEARCH,
-            SEARCH_KEEP as c_int,
-            &raw mut regmatch,
-        ) == FAIL
-        {
-            return -1;
-        }
-
-        // Init startcol correctly.
-        regmatch.startpos[0].col = -1;
-        // Searching from the top starts at the zeroed position; searching
-        // from the cursor accepts a match at the cursor itself.
-        let mut pos = if move_to_match {
-            pos_T::default()
-        } else {
-            *cur
-        };
-        let flag = if move_to_match {
-            0
-        } else {
-            SEARCH_START as c_int
-        };
-
-        let mut result = -1;
-        if searchit(
-            curwin.get(),
-            curbuf.get(),
-            &raw mut pos,
-            ptr::null_mut(),
-            direction,
-            pattern,
-            patternlen,
-            1,
-            SEARCH_KEEP as c_int + flag,
-            RE_SEARCH,
-            ptr::null_mut(),
-        ) != FAIL
-        {
-            // A zero-width pattern matches somewhere; find where, then ask
-            // whether its start and end are the same position.
-            let nmatched = loop {
-                regmatch.startpos[0].col += 1;
-                let nmatched = vim_regexec_multi(
-                    &raw mut regmatch,
-                    curwin.get(),
-                    curbuf.get(),
-                    pos.lnum,
-                    regmatch.startpos[0].col,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                );
-                let short_of_the_match = if direction == FORWARD {
-                    regmatch.startpos[0].col < pos.col
-                } else {
-                    regmatch.startpos[0].col > pos.col
-                };
-                if nmatched != 0 || regmatch.regprog.is_null() || !short_of_the_match {
-                    break nmatched;
-                }
-            };
-            if called_emsg.get() == called_emsg_before {
-                result = (nmatched != 0
-                    && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
-                    && regmatch.startpos[0].col == regmatch.endpos[0].col)
-                    as c_int;
-            }
-        }
-
-        vim_regfree(regmatch.regprog);
-        result
+    let mut regmatch = regmmatch_T::default();
+    let called_emsg_before = called_emsg.get();
+    if pattern.is_null() {
+        pattern = spat(last_idx.get()).pat;
+        patternlen = spat(last_idx.get()).patlen;
     }
+    let (rm, keep) = (&raw mut regmatch, SEARCH_KEEP as c_int);
+    // SAFETY: `pattern` is a live pattern of `patternlen` bytes, and
+    // `regmatch` is this frame's.
+    let compiled = unsafe {
+        search_regcomp(
+            pattern,
+            patternlen,
+            ptr::null_mut(),
+            RE_SEARCH,
+            RE_SEARCH,
+            keep,
+            rm,
+        )
+    };
+    if compiled == FAIL {
+        return -1;
+    }
+
+    // Init startcol correctly.
+    regmatch.startpos[0].col = -1;
+    // Searching from the top starts at the zeroed position; searching
+    // from the cursor accepts a match at the cursor itself.
+    let mut pos = if move_to_match {
+        pos_T::default()
+    } else {
+        unsafe { *cur }
+    };
+    let flag = if move_to_match {
+        0
+    } else {
+        SEARCH_START as c_int
+    };
+
+    let mut result = -1;
+    let (w, b) = (curwin.get(), curbuf.get());
+    let (at, end) = (&raw mut pos, ptr::null_mut());
+    let (opts, none) = (SEARCH_KEEP as c_int + flag, ptr::null_mut());
+    // SAFETY: `pos` is this frame's, `pattern` a live pattern of
+    // `patternlen` bytes, and the window and buffer are the current ones.
+    let found = unsafe {
+        searchit(
+            w, b, at, end, direction, pattern, patternlen, 1, opts, RE_SEARCH, none,
+        )
+    };
+    if found != FAIL {
+        // A zero-width pattern matches somewhere; find where, then ask
+        // whether its start and end are the same position.
+        let nmatched = loop {
+            regmatch.startpos[0].col += 1;
+            let (rm, col) = (&raw mut regmatch, regmatch.startpos[0].col);
+            let (no_tm, no_to) = (ptr::null_mut(), ptr::null_mut());
+            // SAFETY: `regmatch` is this frame's compiled program, matched
+            // against a line of the current buffer.
+            let nmatched = unsafe { vim_regexec_multi(rm, w, b, pos.lnum, col, no_tm, no_to) };
+            let short_of_the_match = if direction == FORWARD {
+                regmatch.startpos[0].col < pos.col
+            } else {
+                regmatch.startpos[0].col > pos.col
+            };
+            if nmatched != 0 || regmatch.regprog.is_null() || !short_of_the_match {
+                break nmatched;
+            }
+        };
+        if called_emsg.get() == called_emsg_before {
+            result = (nmatched != 0
+                && regmatch.startpos[0].lnum == regmatch.endpos[0].lnum
+                && regmatch.startpos[0].col == regmatch.endpos[0].col)
+                as c_int;
+        }
+    }
+
+    unsafe { vim_regfree(regmatch.regprog) };
+    result
 }
 
 /// Get the last search pattern, for ShaDa.
@@ -729,10 +692,8 @@ pub unsafe fn get_search_pattern(pat: *mut SearchPattern) {
 /// # Safety
 /// `pat` must be writable. The answer borrows the live slot's string.
 pub unsafe fn get_substitute_pattern(pat: *mut SearchPattern) {
-    unsafe {
-        *pat = spat(RE_SUBST);
-        (*pat).off = NO_OFFSET;
-    }
+    unsafe { *pat = spat(RE_SUBST) };
+    unsafe { (*pat).off = NO_OFFSET };
 }
 
 /// Set the last search pattern, taking `pat`'s allocations over.
@@ -769,4 +730,16 @@ pub fn set_last_used_pattern(is_substitute_pattern: bool) {
 /// one used last.
 pub fn search_was_last_used() -> bool {
     last_idx.get() == RE_SEARCH
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

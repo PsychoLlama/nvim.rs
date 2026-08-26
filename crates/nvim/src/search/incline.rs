@@ -14,6 +14,7 @@
 use super::*;
 use crate::highlight_group::HLF_N;
 use crate::types::{IOSIZE, NUL};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -27,49 +28,48 @@ const LSIZE: usize = super::LSIZE as usize;
 /// # Safety
 /// `line` and `startp` must address the same NUL-terminated line.
 pub(crate) unsafe fn match_is_code(line: *mut c_char, startp: *mut c_char) -> bool {
-    unsafe {
-        let mut matched = true;
-        // A line starting with "# define" is not a comment line.
-        if (*line as c_int != '#' as c_int
-            || strncmp(skipwhite(line.offset(1)), c"define".as_ptr(), 6) != 0)
-            && get_leader_len(line, ptr::null_mut(), false, true) != 0
-        {
-            matched = false;
-        }
-
-        // Also check for a "/*" or "//" before the match, so that a line
-        // like "int backwards;  /* normal index */" is skipped when
-        // looking for "normal". Note: this does not skip a "/*" that is
-        // itself inside a comment.
-        let lead = skipwhite(line);
-        if matched
-            || (*lead as c_int == '/' as c_int && *lead.offset(1) as c_int == '*' as c_int)
-            || *lead as c_int == '*' as c_int
-        {
-            let mut p = line;
-            while *p as c_int != NUL && p < startp {
-                if matched && *p as c_int == '/' as c_int {
-                    let next = *p.offset(1) as c_int;
-                    if next == '*' as c_int || next == '/' as c_int {
-                        matched = false;
-                        if next == '/' as c_int {
-                            break; // after "//" everything is comment
-                        }
-                        p = p.offset(1);
-                    }
-                } else if !matched
-                    && *p as c_int == '*' as c_int
-                    && *p.offset(1) as c_int == '/' as c_int
-                {
-                    // A match can be found after "*/".
-                    matched = true;
-                    p = p.offset(1);
-                }
-                p = p.offset(1);
-            }
-        }
-        matched
+    let mut matched = true;
+    // A line starting with "# define" is not a comment line.
+    if (unsafe { *line } as c_int != '#' as c_int
+        || unsafe { strncmp(skipwhite(line.offset(1)), c"define".as_ptr(), 6) } != 0)
+        && unsafe { get_leader_len(line, ptr::null_mut(), false, true) } != 0
+    {
+        matched = false;
     }
+
+    // Also check for a "/*" or "//" before the match, so that a line
+    // like "int backwards;  /* normal index */" is skipped when
+    // looking for "normal". Note: this does not skip a "/*" that is
+    // itself inside a comment.
+    let lead = unsafe { skipwhite(line) };
+    if matched
+        || (unsafe { *lead } as c_int == '/' as c_int
+            && unsafe { *lead.offset(1) } as c_int == '*' as c_int)
+        || unsafe { *lead } as c_int == '*' as c_int
+    {
+        let mut p = line;
+        while unsafe { *p } as c_int != NUL && p < startp {
+            if matched && unsafe { *p } as c_int == '/' as c_int {
+                let next = unsafe { *p.offset(1) } as c_int;
+                if next == '*' as c_int || next == '/' as c_int {
+                    matched = false;
+                    if next == '/' as c_int {
+                        break; // after "//" everything is comment
+                    }
+                    p = unsafe { p.offset(1) };
+                }
+            } else if !matched
+                && unsafe { *p } as c_int == '*' as c_int
+                && unsafe { *p.offset(1) } as c_int == '/' as c_int
+            {
+                // A match can be found after "*/".
+                matched = true;
+                p = unsafe { p.offset(1) };
+            }
+            p = unsafe { p.offset(1) };
+        }
+    }
+    matched
 }
 
 /// Look for a match on the current line, starting the pattern search at
@@ -89,54 +89,53 @@ pub(crate) unsafe fn match_on_line(
     whole: bool,
     skip_comments: bool,
 ) -> Option<*mut c_char> {
-    unsafe {
-        let mut p = from;
-        let mut define_matched = false;
-        if !pats.def.regprog.is_null() && vim_regexec(&raw mut pats.def, line, 0) {
-            // The pattern has to be the first identifier after 'define',
-            // so skip to it before testing, and don't let the match run
-            // past the end of that identifier.
-            p = pats.def.endp[0];
-            while *p as c_int != NUL && !vim_iswordc(*p as u8 as c_int) {
-                p = p.offset(1);
-            }
-            define_matched = true;
+    let mut p = from;
+    let mut define_matched = false;
+    if !pats.def.regprog.is_null() && unsafe { vim_regexec(&raw mut pats.def, line, 0) } {
+        // The pattern has to be the first identifier after 'define',
+        // so skip to it before testing, and don't let the match run
+        // past the end of that identifier.
+        p = pats.def.endp[0];
+        while unsafe { *p } as c_int != NUL && !unsafe { vim_iswordc(*p as u8 as c_int) } {
+            p = unsafe { p.offset(1) };
         }
-
-        // Don't look for a plain match when a define was asked for and
-        // this line did not match the define pattern.
-        if !(pats.def.regprog.is_null() || define_matched) {
-            return None;
-        }
-
-        if define_matched || compl_status_sol() {
-            // Compare the first "len" characters with "ptr".
-            let startp = skipwhite(p);
-            let matched = if p_ic.get() != 0 {
-                mb_strnicmp(startp, ptr, len) == 0
-            } else {
-                strncmp(startp, ptr, len) == 0
-            };
-            if matched && !(define_matched && whole && vim_iswordc(*startp.add(len) as u8 as c_int))
-            {
-                return Some(startp);
-            }
-            return None;
-        }
-
-        if pats.pat.regprog.is_null()
-            || !vim_regexec(&raw mut pats.pat, line, p.offset_from(line) as colnr_T)
-        {
-            return None;
-        }
-        let startp = pats.pat.startp[0];
-        // Check that the line is not a comment line, unless a define is
-        // what is being looked for.
-        if skip_comments && !match_is_code(line, startp) {
-            return None;
-        }
-        Some(startp)
+        define_matched = true;
     }
+
+    // Don't look for a plain match when a define was asked for and
+    // this line did not match the define pattern.
+    if !(pats.def.regprog.is_null() || define_matched) {
+        return None;
+    }
+
+    if define_matched || compl_status_sol() {
+        // Compare the first "len" characters with "ptr".
+        let startp = unsafe { skipwhite(p) };
+        let matched = if p_ic.get() != 0 {
+            unsafe { mb_strnicmp(startp, ptr, len) == 0 }
+        } else {
+            unsafe { strncmp(startp, ptr, len) == 0 }
+        };
+        if matched
+            && !(define_matched && whole && unsafe { vim_iswordc(*startp.add(len) as u8 as c_int) })
+        {
+            return Some(startp);
+        }
+        return None;
+    }
+
+    if pats.pat.regprog.is_null()
+        || !unsafe { vim_regexec(&raw mut pats.pat, line, p.offset_from(line) as colnr_T) }
+    {
+        return None;
+    }
+    let startp = pats.pat.startp[0];
+    // Check that the line is not a comment line, unless a define is
+    // what is being looked for.
+    if skip_comments && !unsafe { match_is_code(line, startp) } {
+        return None;
+    }
+    Some(startp)
 }
 
 /// Print the line a match was found on, and the lines a definition
@@ -157,62 +156,70 @@ pub(crate) unsafe fn show_pat_in_path(
     // The match-number prefix; upstream shares `IObuff`, which the message
     // machinery below writes again.
     let mut num = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        if did_show {
-            msg_putchar('\n' as c_int); // cursor below the last one
-        } else if msg_silent.get() == 0 {
-            gotocmdline(true); // cursor at the status line
-        }
-        if got_int.get() {
-            return; // 'q' typed at the "--more--" message
-        }
-        let mut line = line;
-        let mut linelen = strlen(line);
-        loop {
-            // `p` ends up on the last character of the line, which is
-            // what decides whether a definition continues.
-            let mut p = line.add(linelen).offset(-1);
-            if !fp.is_null() {
-                // These lines came from fgets(), so strip the newline.
-                if p >= line && *p as c_int == '\n' as c_int {
-                    p = p.offset(-1);
-                }
-                if p >= line && *p as c_int == '\r' as c_int {
-                    p = p.offset(-1);
-                }
-                *p.offset(1) = NUL as c_char;
+    if did_show {
+        unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
+    } else if msg_silent.get() == 0 {
+        unsafe { gotocmdline(true) }; // cursor at the status line
+    }
+    if got_int.get() {
+        return; // 'q' typed at the "--more--" message
+    }
+    let mut line = line;
+    let mut linelen = unsafe { strlen(line) };
+    loop {
+        // `p` ends up on the last character of the line, which is
+        // what decides whether a definition continues.
+        let mut p = unsafe { line.add(linelen).offset(-1) };
+        if !fp.is_null() {
+            // These lines came from fgets(), so strip the newline.
+            if p >= line && unsafe { *p } as c_int == '\n' as c_int {
+                p = unsafe { p.offset(-1) };
             }
-            if action == ACTION_SHOW_ALL {
-                let iobuff = num.as_mut_ptr();
-                snprintf(iobuff, IOSIZE as size_t, c"%3d: ".as_ptr(), count); // match nr
-                msg_puts(iobuff);
-                snprintf(iobuff, IOSIZE as size_t, c"%4ld".as_ptr(), *lnum as int64_t);
-                msg_puts_hl(iobuff, HLF_N, false); // highlight the line number
-                msg_puts(c" ".as_ptr());
+            if p >= line && unsafe { *p } as c_int == '\r' as c_int {
+                p = unsafe { p.offset(-1) };
             }
-            msg_prt_line(line, false);
+            unsafe { *p.offset(1) = NUL as c_char };
+        }
+        if action == ACTION_SHOW_ALL {
+            let iobuff = num.as_mut_ptr();
+            unsafe { snprintf(iobuff, IOSIZE as size_t, c"%3d: ".as_ptr(), count) }; // match nr
+            unsafe { msg_puts(iobuff) };
+            unsafe { snprintf(iobuff, IOSIZE as size_t, c"%4ld".as_ptr(), *lnum as int64_t) };
+            unsafe { msg_puts_hl(iobuff, HLF_N, false) }; // highlight the line number
+            unsafe { msg_puts(c" ".as_ptr()) };
+        }
+        unsafe { msg_prt_line(line, false) };
 
-            // A definition continues until a line that does not end in a
-            // backslash.
-            if got_int.get() || kind != FIND_DEFINE || p < line || *p as c_int != '\\' as c_int {
+        // A definition continues until a line that does not end in a
+        // backslash.
+        if got_int.get()
+            || kind != FIND_DEFINE
+            || p < line
+            || unsafe { *p } as c_int != '\\' as c_int
+        {
+            break;
+        }
+
+        if !fp.is_null() {
+            if unsafe { vim_fgets(line, LSIZE as c_int, fp) } {
+                break; // end of file
+            }
+            linelen = unsafe { strlen(line) };
+            unsafe { *lnum += 1 };
+        } else {
+            unsafe { *lnum += 1 };
+            if unsafe { *lnum } > cur_buf().b_ml.ml_line_count {
                 break;
             }
-
-            if !fp.is_null() {
-                if vim_fgets(line, LSIZE as c_int, fp) {
-                    break; // end of file
-                }
-                linelen = strlen(line);
-                *lnum += 1;
-            } else {
-                *lnum += 1;
-                if *lnum > (*curbuf.get()).b_ml.ml_line_count {
-                    break;
-                }
-                line = ml_get(*lnum);
-                linelen = ml_get_len(*lnum) as size_t;
-            }
-            msg_putchar('\n' as c_int);
+            line = unsafe { ml_get(*lnum) };
+            linelen = unsafe { ml_get_len(*lnum) } as size_t;
         }
+        unsafe { msg_putchar('\n' as c_int) };
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }
