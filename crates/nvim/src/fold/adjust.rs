@@ -14,6 +14,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
 use crate::pos::{MAXLNUM, ltoreq};
+use crate::winlayer::Win;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -42,7 +43,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             break;
         }
         // SAFETY: the caller's promise.
-        let cursor = unsafe { (*curwin.get()).w_cursor.lnum };
+        let cursor = cur_win().w_cursor.lnum;
         let mut lnum_off: linenr_T = 0;
         let mut use_level = false;
         let mut maybe_small = false;
@@ -78,16 +79,9 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             if !last {
                 // SAFETY: the current window is live, and `fold` is one of
                 // its own folds, `lnum_off` lines down the tree.
-                if unsafe {
-                    check_closed(
-                        curwin.get(),
-                        fold,
-                        &mut use_level,
-                        level,
-                        &mut maybe_small,
-                        lnum_off,
-                    )
-                } {
+                let (ul, ms) = (&mut use_level, &mut maybe_small);
+                let closed = unsafe { check_closed(curwin.get(), fold, ul, level, ms, lnum_off) };
+                if closed {
                     last = true;
                 }
                 if last && !updown {
@@ -134,10 +128,8 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             unsafe { setpcmark() };
         }
         // SAFETY: the caller's promise.
-        unsafe {
-            (*curwin.get()).w_cursor.lnum = lnum_found;
-            (*curwin.get()).w_cursor.col = 0;
-        }
+        cur_win().w_cursor.lnum = lnum_found;
+        cur_win().w_cursor.col = 0;
         retval = OK;
     }
     retval
@@ -158,35 +150,29 @@ pub unsafe fn fold_adjust_visual() {
     let stretched = with_visual_anchor(|anchor| {
         let visual = &raw mut *anchor;
         // SAFETY: the caller's promise; both ends name live `pos_T`s.
+        let cursor = cur_win().cursor().raw();
+        let (start, end) = if ltoreq(unsafe { *visual }, unsafe { *cursor }) {
+            (visual, cursor)
+        } else {
+            (cursor, visual)
+        };
+        // SAFETY: both ends name live `pos_T`s of this frame or the window,
+        // and `curwin` is live.
         unsafe {
-            let cursor = &raw mut (*curwin.get()).w_cursor;
-            let (start, end) = if ltoreq(*visual, *cursor) {
-                (visual, cursor)
-            } else {
-                (cursor, visual)
-            };
-            if has_folding(
-                curwin.get(),
-                (*start).lnum,
-                &raw mut (*start).lnum,
-                ptr::null_mut(),
-            ) {
+            let w = curwin.get();
+            let (sl, el) = (&raw mut (*start).lnum, &raw mut (*end).lnum);
+            if has_folding(w, (*start).lnum, sl, ptr::null_mut()) {
                 (*start).col = 0;
             }
-            if !has_folding(
-                curwin.get(),
-                (*end).lnum,
-                ptr::null_mut(),
-                &raw mut (*end).lnum,
-            ) {
+            if !has_folding(w, (*end).lnum, ptr::null_mut(), el) {
                 return false;
             }
             (*end).col = ml_get_len((*end).lnum);
             if (*end).col > 0 && *p_sel.get() as c_int == 'o' as c_int {
                 (*end).col -= 1;
             }
-            true
         }
+        true
     });
     if stretched {
         // SAFETY: the caller's promise.
@@ -199,15 +185,11 @@ pub unsafe fn fold_adjust_visual() {
 /// # Safety
 /// `wp` must be a live window.
 pub unsafe fn fold_adjust_cursor(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe {
-        has_folding(
-            wp,
-            (*wp).w_cursor.lnum,
-            &raw mut (*wp).w_cursor.lnum,
-            ptr::null_mut(),
-        )
-    };
+    // SAFETY: the caller's promise -- a live window.
+    let win = unsafe { Win::new(wp) };
+    let (lnum, at) = (win.w_cursor.lnum, win.cursor().raw());
+    // SAFETY: the cursor's line number lives inside the window.
+    unsafe { has_folding(wp, lnum, &raw mut (*at).lnum, ptr::null_mut()) };
 }
 
 /// Update line numbers of folds for inserted/deleted lines.
@@ -233,8 +215,9 @@ pub unsafe fn fold_mark_adjust(
     if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as linenr_T {
         line1 -= 1;
     }
-    // SAFETY: a live window's fold list.
-    unsafe { fold_mark_adjust_recurse(&raw mut (*wp).w_folds, line1, line2, amount, amount_after) };
+    // SAFETY: `wp` is a live window, so `w_folds` is a live fold list.
+    let folds = unsafe { window_folds(wp) };
+    fold_mark_adjust_recurse(folds, line1, line2, amount, amount_after);
 }
 
 /// Shift and truncate the folds of `gap` for a change to lines
@@ -245,17 +228,15 @@ pub unsafe fn fold_mark_adjust(
 /// the range moves. Every fold falls into one of six situations, marked in
 /// the body.
 ///
-/// # Safety
-/// `gap` must be a live fold list.
-pub unsafe fn fold_mark_adjust_recurse(
-    gap: *mut garray_T,
+/// Safe: [`FoldList`] already carries the promise that the growarray really
+/// is a live list of folds, which was this function's whole precondition.
+pub(super) fn fold_mark_adjust_recurse(
+    folds: FoldList,
     line1: linenr_T,
     line2: linenr_T,
     amount: linenr_T,
     amount_after: linenr_T,
 ) {
-    // SAFETY: the caller's promise.
-    let folds = unsafe { FoldList::new(gap) };
     if folds.is_empty() {
         return;
     }
@@ -287,7 +268,7 @@ pub unsafe fn fold_mark_adjust_recurse(
                 // 2: entirely inside the change.
                 if amount == LINES_DELETED {
                     // SAFETY: `i` names an entry of `folds`.
-                    unsafe { delete_fold_entry(folds, i, true) };
+                    drop_fold(folds, i, true);
                     // The fold that took its place is next; do not advance.
                     // `folds.len()` shrank, so the walk still terminates.
                     continue;
@@ -295,16 +276,13 @@ pub unsafe fn fold_mark_adjust_recurse(
                 fold.set_top(fold.top() + amount);
             } else if fold.top() < top {
                 // 3: starts above the change and reaches into it.
-                // SAFETY: a live fold's nested list is a live fold list.
-                unsafe {
-                    fold_mark_adjust_recurse(
-                        fold.nested().gap(),
-                        line1 - fold.top(),
-                        line2 - fold.top(),
-                        amount,
-                        amount_after,
-                    )
-                };
+                fold_mark_adjust_recurse(
+                    fold.nested(),
+                    line1 - fold.top(),
+                    line2 - fold.top(),
+                    amount,
+                    amount_after,
+                );
                 if last <= line2 {
                     if amount == LINES_DELETED {
                         fold.set_len(line1 - fold.top());
@@ -317,30 +295,24 @@ pub unsafe fn fold_mark_adjust_recurse(
             } else if amount == LINES_DELETED {
                 // 4: starts inside the change and ends below it, and the
                 //    lines it loses are gone for good.
-                // SAFETY: a live fold's nested list is a live fold list.
-                unsafe {
-                    fold_mark_adjust_recurse(
-                        fold.nested().gap(),
-                        0,
-                        line2 - fold.top(),
-                        amount,
-                        amount_after + (fold.top() - top),
-                    )
-                };
+                fold_mark_adjust_recurse(
+                    fold.nested(),
+                    0,
+                    line2 - fold.top(),
+                    amount,
+                    amount_after + (fold.top() - top),
+                );
                 fold.set_len(fold.len() - (line2 - fold.top() + 1));
                 fold.set_top(line1);
             } else {
                 // 5: the same, but the lines only moved.
-                // SAFETY: a live fold's nested list is a live fold list.
-                unsafe {
-                    fold_mark_adjust_recurse(
-                        fold.nested().gap(),
-                        0,
-                        line2 - fold.top(),
-                        amount,
-                        amount_after - amount,
-                    )
-                };
+                fold_mark_adjust_recurse(
+                    fold.nested(),
+                    0,
+                    line2 - fold.top(),
+                    amount,
+                    amount_after - amount,
+                );
                 fold.set_len(fold.len() + amount_after - amount);
                 fold.set_top(fold.top() + amount);
             }
@@ -361,13 +333,8 @@ pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
     if !folds.is_empty() && i < folds.len() {
         // SAFETY: `ga_grow` just made room for one more entry, so the tail
         // has somewhere to slide to.
-        unsafe {
-            ptr::copy(
-                fold.entry(),
-                fold.entry().add(1),
-                (folds.len() - i) as usize,
-            )
-        };
+        let tail = (folds.len() - i) as usize;
+        unsafe { ptr::copy(fold.entry(), fold.entry().add(1), tail) };
     }
     folds.set_len(folds.len() + 1);
     // SAFETY: the entry is the zeroed storage `ga_grow` handed out; this is
@@ -383,13 +350,7 @@ pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
 ///
 /// # Safety
 /// `i` must name an entry of `folds`.
-pub(super) unsafe fn fold_split(
-    _buf: *mut buf_T,
-    folds: FoldList,
-    i: c_int,
-    top: linenr_T,
-    bot: linenr_T,
-) {
+pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: linenr_T, bot: linenr_T) {
     // SAFETY: `i + 1` is in `0..=folds.len()`.
     unsafe { fold_insert(folds, i + 1) };
     let fold = folds.at(i);
@@ -438,9 +399,9 @@ pub(super) unsafe fn fold_split(
 /// 5: made to start below "bot".
 /// 6: not changed
 ///
-/// # Safety
-/// `wp` must be a live window with a live buffer.
-pub(super) unsafe fn fold_remove(wp: *mut win_T, folds: FoldList, top: linenr_T, bot: linenr_T) {
+/// Safe: [`FoldList`] carries the promise about the array, and every index
+/// below is one this function's own search produced.
+pub(super) fn fold_remove(folds: FoldList, top: linenr_T, bot: linenr_T) {
     if bot < top {
         return;
     }
@@ -450,13 +411,12 @@ pub(super) unsafe fn fold_remove(wp: *mut win_T, folds: FoldList, top: linenr_T,
             && folds.at(i).top() < top
         {
             let fold = folds.at(i);
-            // SAFETY: a live window, and the fold's own nested list.
-            unsafe { fold_remove(wp, fold.nested(), top - fold.top(), bot - fold.top()) };
+            fold_remove(fold.nested(), top - fold.top(), bot - fold.top());
             if fold.last() > bot {
                 // 3: split in two, one stopping above "top" and one starting
                 //    below "bot".
-                // SAFETY: a live window's buffer, and `i` names an entry.
-                unsafe { fold_split((*wp).w_buffer, folds, i, top, bot) };
+                // SAFETY: `i` names an entry of `folds`.
+                unsafe { fold_split(folds, i, top, bot) };
             } else {
                 // 2: truncate to stop above "top".
                 fold.set_len(top - fold.top());
@@ -482,23 +442,20 @@ pub(super) unsafe fn fold_remove(wp: *mut win_T, folds: FoldList, top: linenr_T,
         fold_changed.set(true);
         if fold.last() > bot {
             // 5: made to start below "bot".
-            // SAFETY: a live fold's nested list is a live fold list.
-            unsafe {
-                fold_mark_adjust_recurse(
-                    fold.nested().gap(),
-                    0,
-                    bot - fold.top(),
-                    LINES_DELETED,
-                    fold.top() - bot - 1,
-                )
-            };
+            fold_mark_adjust_recurse(
+                fold.nested(),
+                0,
+                bot - fold.top(),
+                LINES_DELETED,
+                fold.top() - bot - 1,
+            );
             fold.set_len(fold.len() - (bot - fold.top() + 1));
             fold.set_top(bot + 1);
             break;
         }
         // 4: deleted.
         // SAFETY: `i` names an entry of `folds`.
-        unsafe { delete_fold_entry(folds, i, true) };
+        drop_fold(folds, i, true);
     }
 }
 
@@ -518,12 +475,9 @@ pub(super) unsafe fn fold_reverse_order(folds: FoldList, start_arg: c_int, end_a
 
 /// Drop everything in `fold` below line `end`, nested folds included.
 ///
-/// # Safety
-/// `wp` must be a live window, and `fold` one of its folds.
-pub(super) unsafe fn truncate_fold(wp: *mut win_T, fold: Fold, end: linenr_T) {
+pub(super) fn truncate_fold(fold: Fold, end: linenr_T) {
     let end = end + 1;
-    // SAFETY: a live window, and the fold's own nested list.
-    unsafe { fold_remove(wp, fold.nested(), end - fold.top(), MAXLNUM as linenr_T) };
+    fold_remove(fold.nested(), end - fold.top(), MAXLNUM as linenr_T);
     fold.set_len(end - fold.top());
 }
 
@@ -575,34 +529,25 @@ pub unsafe fn fold_move_range(
             let fold = folds.at(i);
             if fold.last() > dest {
                 // 4: the whole move happens inside this one fold.
+                let inner = fold.nested().gap();
+                let (a, b, d) = (line1 - fold.top(), line2 - fold.top(), dest - fold.top());
                 // SAFETY: a live window, and the fold's own nested list.
-                unsafe {
-                    fold_move_range(
-                        wp,
-                        fold.nested().gap(),
-                        line1 - fold.top(),
-                        line2 - fold.top(),
-                        dest - fold.top(),
-                    )
-                };
+                unsafe { fold_move_range(wp, inner, a, b, d) };
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.
-                // SAFETY: a live fold's nested list is a live fold list.
-                unsafe {
-                    fold_mark_adjust_recurse(
-                        fold.nested().gap(),
-                        line1 - fold.top(),
-                        line2 - fold.top(),
-                        LINES_DELETED,
-                        -range_len,
-                    )
-                };
+                fold_mark_adjust_recurse(
+                    fold.nested(),
+                    line1 - fold.top(),
+                    line2 - fold.top(),
+                    LINES_DELETED,
+                    -range_len,
+                );
                 fold.set_len(fold.len() - range_len);
             } else {
                 // 2: truncated above line1.
                 // SAFETY: a live window, and one of its folds.
-                unsafe { truncate_fold(wp, fold, line1 - 1) };
+                truncate_fold(fold, line1 - 1);
             }
             i + 1
         }
@@ -623,7 +568,7 @@ pub unsafe fn fold_move_range(
         if i < folds.len() && folds.at(i).top() <= dest {
             let fold = folds.at(i);
             // SAFETY: a live window, and one of its folds.
-            unsafe { truncate_fold(wp, fold, dest) };
+            truncate_fold(fold, dest);
             fold.set_top(fold.top() - range_len);
         }
         return;
@@ -631,16 +576,13 @@ pub unsafe fn fold_move_range(
     if folds.at(i).last() > dest {
         // 7: the fold straddles "dest", so it loses the lines that jumped it.
         let fold = folds.at(i);
-        // SAFETY: a live fold's nested list is a live fold list.
-        unsafe {
-            fold_mark_adjust_recurse(
-                fold.nested().gap(),
-                line2 + 1 - fold.top(),
-                dest - fold.top(),
-                LINES_DELETED,
-                -move_len,
-            )
-        };
+        fold_mark_adjust_recurse(
+            fold.nested(),
+            line2 + 1 - fold.top(),
+            dest - fold.top(),
+            LINES_DELETED,
+            -move_len,
+        );
         fold.set_len(fold.len() - move_len);
         fold.set_top(fold.top() + move_len);
         return;
@@ -654,7 +596,7 @@ pub unsafe fn fold_move_range(
         if fold.top() <= line2 {
             if fold.last() > line2 {
                 // SAFETY: a live window, and one of its folds.
-                unsafe { truncate_fold(wp, fold, line2) };
+                truncate_fold(fold, line2);
             }
             fold.set_top(fold.top() + move_len);
         } else {
@@ -663,7 +605,7 @@ pub unsafe fn fold_move_range(
             }
             if fold.last() > dest {
                 // SAFETY: a live window, and one of its folds.
-                unsafe { truncate_fold(wp, fold, dest) };
+                truncate_fold(fold, dest);
             }
             fold.set_top(fold.top() - range_len);
         }
@@ -678,11 +620,9 @@ pub unsafe fn fold_move_range(
     // then reverse each of the two halves back.
     // SAFETY: all three ranges lie inside `move_start..dest_index`, which the
     // walk above established as entries of `folds`.
-    unsafe {
-        fold_reverse_order(folds, move_start, dest_index - 1);
-        fold_reverse_order(folds, move_start, move_start + dest_index - move_end - 1);
-        fold_reverse_order(folds, move_start + dest_index - move_end, dest_index - 1);
-    }
+    unsafe { fold_reverse_order(folds, move_start, dest_index - 1) };
+    unsafe { fold_reverse_order(folds, move_start, move_start + dest_index - move_end - 1) };
+    unsafe { fold_reverse_order(folds, move_start + dest_index - move_end, dest_index - 1) };
 }
 
 /// Merge two adjacent folds (and the nested ones in them).
@@ -714,6 +654,19 @@ pub(super) unsafe fn fold_merge(fold1: Fold, folds: FoldList, fold2: Fold) {
     }
     fold1.set_len(fold1.len() + fold2.len());
     // SAFETY: `fold2` is an entry of `folds`.
-    unsafe { delete_fold_entry(folds, folds.index_of(fold2), true) };
+    drop_fold(folds, folds.index_of(fold2), true);
     fold_changed.set(true);
+}
+
+/// C's `deleteFoldEntry`, whose only precondition is that `i` names an entry.
+fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
+    debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
+    // SAFETY: the assertion above.
+    unsafe { delete_fold_entry(folds, i, recursive) };
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

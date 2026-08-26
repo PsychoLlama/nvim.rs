@@ -24,6 +24,7 @@ use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::vim_strchr;
 use crate::syntax::syn_get_foldlevel;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::adjust::*;
@@ -56,21 +57,20 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
         // Already updating this window; the recursion would fight itself.
         return;
     }
-    // SAFETY: the caller's promise.
-    unsafe {
-        if (*wp).w_foldinvalid {
-            top = 1;
-            bot = (*(*wp).w_buffer).b_ml.ml_line_count;
-            (*wp).w_foldinvalid = false;
-            forget_small_flags(window_folds(wp));
-        }
-        if foldmethod_is_diff(wp) {
-            // 'diffopt' context lines belong to the same fold as the change.
-            top = (top - diff_context.get()).max(1);
-            bot += diff_context.get();
-        }
-        top = top.min((*(*wp).w_buffer).b_ml.ml_line_count);
+    // SAFETY: the caller's promise -- a live window with a live buffer.
+    let mut win = unsafe { Win::new(wp) };
+    if win.w_foldinvalid {
+        top = 1;
+        bot = win.buffer().b_ml.ml_line_count;
+        win.w_foldinvalid = false;
+        forget_small_flags(folds_of(win));
     }
+    if is_diff(win) {
+        // 'diffopt' context lines belong to the same fold as the change.
+        top = (top - diff_context.get()).max(1);
+        bot += diff_context.get();
+    }
+    top = top.min(win.buffer().b_ml.ml_line_count);
     let mut fline = fline_T {
         wp,
         lnum: 0,
@@ -88,54 +88,53 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
 
     // Pick the level getter and prime `fline` with a level for `top`.
     let getlevel: LevelGetter;
-    // SAFETY: the caller's promise; `fline` is ours.
-    unsafe {
-        if foldmethod_is_marker(wp) {
-            getlevel = Some(foldlevel_marker as unsafe fn(*mut fline_T) -> ());
-            parse_marker(wp);
-            if top > 1 {
-                // The marker method needs the previous line's level, and the
-                // markers on that line, before it can read `top`.
-                let level = fold_level_win(wp, top - 1);
-                fline.lnum = top - 1;
-                fline.lvl = level;
-                foldlevel_marker(&raw mut fline);
-                fline.lvl = if fline.lvl > level {
-                    level - (fline.lvl - fline.lvl_next)
-                } else {
-                    fline.lvl_next
-                };
-            }
-            fline.lnum = top;
-            foldlevel_marker(&raw mut fline);
-        } else {
-            fline.lnum = top;
-            if foldmethod_is_expr(wp) {
-                getlevel = Some(foldlevel_expr as unsafe fn(*mut fline_T) -> ());
-                if top > 1 {
-                    fline.lnum -= 1;
-                }
-            } else if foldmethod_is_syntax(wp) {
-                getlevel = Some(foldlevel_syntax as unsafe fn(*mut fline_T) -> ());
-            } else if foldmethod_is_diff(wp) {
-                getlevel = Some(foldlevel_diff as unsafe fn(*mut fline_T) -> ());
+    // SAFETY: `parse_marker`, `fold_level_win` and the level getters all
+    // want the live window and this frame's `fline`.
+    if is_marker(win) {
+        getlevel = Some(foldlevel_marker as unsafe fn(*mut fline_T) -> ());
+        unsafe { parse_marker(wp) };
+        if top > 1 {
+            // The marker method needs the previous line's level, and the
+            // markers on that line, before it can read `top`.
+            let level = unsafe { fold_level_win(wp, top - 1) };
+            fline.lnum = top - 1;
+            fline.lvl = level;
+            unsafe { foldlevel_marker(&raw mut fline) };
+            fline.lvl = if fline.lvl > level {
+                level - (fline.lvl - fline.lvl_next)
             } else {
-                getlevel = Some(foldlevel_indent as unsafe fn(*mut fline_T) -> ());
-                if top > 1 {
-                    fline.lnum -= 1;
-                }
-            }
-            // Indent and expr can answer "undefined" (-1); walk back until a
-            // line has a level of its own.
-            fline.lvl = -1;
-            while !got_int.get() {
-                fline.lvl_next = -1;
-                getlevel.expect("non-null function pointer")(&raw mut fline);
-                if fline.lvl >= 0 {
-                    break;
-                }
+                fline.lvl_next
+            };
+        }
+        fline.lnum = top;
+        unsafe { foldlevel_marker(&raw mut fline) };
+    } else {
+        fline.lnum = top;
+        if is_expr(win) {
+            getlevel = Some(foldlevel_expr as unsafe fn(*mut fline_T) -> ());
+            if top > 1 {
                 fline.lnum -= 1;
             }
+        } else if is_syntax(win) {
+            getlevel = Some(foldlevel_syntax as unsafe fn(*mut fline_T) -> ());
+        } else if is_diff(win) {
+            getlevel = Some(foldlevel_diff as unsafe fn(*mut fline_T) -> ());
+        } else {
+            getlevel = Some(foldlevel_indent as unsafe fn(*mut fline_T) -> ());
+            if top > 1 {
+                fline.lnum -= 1;
+            }
+        }
+        // Indent and expr can answer "undefined" (-1); walk back until a
+        // line has a level of its own.
+        fline.lvl = -1;
+        while !got_int.get() {
+            fline.lvl_next = -1;
+            get_level(getlevel, &raw mut fline);
+            if fline.lvl >= 0 {
+                break;
+            }
+            fline.lnum -= 1;
         }
     }
 
@@ -143,7 +142,7 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
         // A syntax fold can reach past `bot`, and the whole of it has to be
         // updated or its end is left dangling.
         // SAFETY: the caller's promise.
-        let mut folds = unsafe { window_folds(wp) };
+        let mut folds = folds_of(win);
         let mut innermost = None;
         let mut current_fdl = 0;
         let mut fold_start_lnum: linenr_T = 0;
@@ -168,8 +167,7 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
     let mut end = bot;
     // Re-read rather than kept: 'foldexpr' is user code, and it can change
     // the buffer under this loop.
-    // SAFETY: the caller's promise.
-    let line_count = || unsafe { (*(*wp).w_buffer).b_ml.ml_line_count };
+    let line_count = || win.buffer().b_ml.ml_line_count;
     if start > end && end < line_count() {
         end = start;
     }
@@ -181,8 +179,7 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
             if !getlevel_is_open_ended(getlevel) {
                 break;
             }
-            // SAFETY: the caller's promise.
-            let folds = unsafe { window_folds(wp) };
+            let folds = folds_of(win);
             // A fold that straddles the end of the range drags the range out
             // to cover the whole of it.
             let straddling = if start <= end
@@ -214,16 +211,9 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
             invalid_top.set(fline.lnum);
             invalid_bot.set(end);
             // SAFETY: the caller's promise; `fline` is ours.
+            let (all, flp) = (folds_of(win), &raw mut fline);
             end = unsafe {
-                fold_update_computed_recurse(
-                    window_folds(wp),
-                    1,
-                    start,
-                    &raw mut fline,
-                    getlevel,
-                    end,
-                    FD_LEVEL,
-                )
+                fold_update_computed_recurse(all, 1, start, flp, getlevel, end, FD_LEVEL)
             };
             start = fline.lnum;
         } else {
@@ -233,18 +223,17 @@ pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut
             fline.lnum += 1;
             fline.lvl = fline.lvl_next;
             // SAFETY: the caller's promise; `fline` is ours.
-            unsafe { getlevel.expect("non-null function pointer")(&raw mut fline) };
+            get_level(getlevel, &raw mut fline);
         }
     }
-    // SAFETY: the caller's promise.
-    unsafe {
-        fold_remove(wp, window_folds(wp), start, end);
-        if fold_changed.get() && (*wp).w_onebuf_opt.wo_fen != 0 {
-            changed_window_setting(wp);
-        }
-        if end != bot {
-            redraw_win_range_later(wp, top, end);
-        }
+    fold_remove(folds_of(win), start, end);
+    if fold_changed.get() && win.w_onebuf_opt.wo_fen != 0 {
+        // SAFETY: `win` is live.
+        unsafe { changed_window_setting(wp) };
+    }
+    if end != bot {
+        // SAFETY: `win` is live.
+        unsafe { redraw_win_range_later(wp, top, end) };
     }
     invalid_top.set(0);
 }
@@ -305,7 +294,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
     let mut startlnum2 = startlnum;
     let firstlnum = line.lnum();
     // SAFETY: a live window has a live buffer.
-    let linecount = unsafe { (*(*line.win()).w_buffer).b_ml.ml_line_count } - line.off();
+    let linecount = line_win(line).buffer().b_ml.ml_line_count - line.off();
     let mut finish = false;
     line.set_lnum_save(line.lnum());
     while !got_int.get() {
@@ -424,13 +413,13 @@ pub(super) unsafe fn fold_update_computed_recurse(
                     new.set_len(bot - firstlnum + 1);
                     if topflags == FD_OPEN {
                         // SAFETY: a live window.
-                        unsafe { (*line.win()).w_fold_manual = true };
+                        line_win(line).w_fold_manual = true;
                         new.set_flags(FD_OPEN);
                     } else if at <= 0 {
                         new.set_flags(topflags);
                         if topflags != FD_LEVEL {
                             // SAFETY: a live window.
-                            unsafe { (*line.win()).w_fold_manual = true };
+                            line_win(line).w_fold_manual = true;
                         }
                     } else {
                         new.set_flags(folds.at(at - 1).flags());
@@ -449,19 +438,16 @@ pub(super) unsafe fn fold_update_computed_recurse(
                     if current.top() >= startlnum {
                         // Entirely inside the removed range.
                         // SAFETY: `i` names an entry of `folds`.
-                        unsafe { delete_fold_entry(folds, i, true) };
+                        drop_fold(folds, i, true);
                     } else {
                         current.set_len(startlnum - current.top());
-                        // SAFETY: a live fold's nested list is a live fold list.
-                        unsafe {
-                            fold_mark_adjust_recurse(
-                                current.nested().gap(),
-                                current.len(),
-                                MAXLNUM as linenr_T,
-                                LINES_DELETED,
-                                0,
-                            )
-                        };
+                        fold_mark_adjust_recurse(
+                            current.nested(),
+                            current.len(),
+                            MAXLNUM as linenr_T,
+                            LINES_DELETED,
+                            0,
+                        );
                         fold_changed.set(true);
                     }
                     continue;
@@ -471,24 +457,22 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         // It starts below the new fold: pull its top up,
                         // dragging the nested folds with it.
                         // SAFETY: a live fold's nested list is a live fold list.
-                        unsafe {
-                            if current.top() > firstlnum {
-                                fold_mark_adjust_recurse(
-                                    current.nested().gap(),
-                                    0,
-                                    MAXLNUM as linenr_T,
-                                    current.top() - firstlnum,
-                                    0,
-                                );
-                            } else {
-                                fold_mark_adjust_recurse(
-                                    current.nested().gap(),
-                                    0,
-                                    firstlnum - current.top() - 1,
-                                    LINES_DELETED,
-                                    current.top() - firstlnum,
-                                );
-                            }
+                        if current.top() > firstlnum {
+                            fold_mark_adjust_recurse(
+                                current.nested(),
+                                0,
+                                MAXLNUM as linenr_T,
+                                current.top() - firstlnum,
+                                0,
+                            );
+                        } else {
+                            fold_mark_adjust_recurse(
+                                current.nested(),
+                                0,
+                                firstlnum - current.top() - 1,
+                                LINES_DELETED,
+                                current.top() - firstlnum,
+                            );
                         }
                         current.set_len(current.len() + current.top() - firstlnum);
                         current.set_top(firstlnum);
@@ -502,17 +486,10 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         } else {
                             (line.lnum(), line.lnum())
                         };
-                        // SAFETY: a live window and its buffer; `i` names an
-                        // entry of `folds`.
-                        unsafe {
-                            fold_remove(
-                                line.win(),
-                                current.nested(),
-                                breakstart - current.top(),
-                                breakend - current.top(),
-                            );
-                            fold_split((*line.win()).w_buffer, folds, i, breakstart, breakend - 1);
-                        }
+                        let (bs, be) = (breakstart - current.top(), breakend - current.top());
+                        fold_remove(current.nested(), bs, be);
+                        // SAFETY: `i` names an entry of `folds`.
+                        unsafe { fold_split(folds, i, breakstart, breakend - 1) };
                         current = folds.at(i + 1);
                         if getlevel_is_open_ended(getlevel) {
                             finish = true;
@@ -547,17 +524,11 @@ pub(super) unsafe fn fold_update_computed_recurse(
             line.set_off(line.off() + current.top());
             let i = folds.index_of(current);
             // SAFETY: the fold's own nested list, and the caller's `flp`.
-            bot = unsafe {
-                fold_update_computed_recurse(
-                    current.nested(),
-                    level + 1,
-                    startlnum2 - current.top(),
-                    flp,
-                    getlevel,
-                    bot - current.top(),
-                    current.flags(),
-                )
-            };
+            let (inner, lvl) = (current.nested(), level + 1);
+            let (from, to) = (startlnum2 - current.top(), bot - current.top());
+            let flags = current.flags();
+            bot =
+                unsafe { fold_update_computed_recurse(inner, lvl, from, flp, getlevel, to, flags) };
             // The recursion may have grown the array under us.
             let current = folds.at(i);
             fold = Some(current);
@@ -582,7 +553,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                 }
                 line.set_lvl(line.lvl_next());
                 // SAFETY: the caller's `flp`.
-                unsafe { getlevel.expect("non-null function pointer")(flp) };
+                get_level(getlevel, flp);
                 if line.lvl() >= 0 || line.had_end() <= MAX_LEVEL {
                     break;
                 }
@@ -606,15 +577,8 @@ pub(super) unsafe fn fold_update_computed_recurse(
     } else if fold.top() + fold.len() > linecount {
         fold.set_len(linecount - fold.top() + 1);
     }
-    // SAFETY: a live window, and the fold's own nested list.
-    unsafe {
-        fold_remove(
-            line.win(),
-            fold.nested(),
-            startlnum2 - fold.top(),
-            line.lnum() - 1 - fold.top(),
-        )
-    };
+    let (from, to) = (startlnum2 - fold.top(), line.lnum() - 1 - fold.top());
+    fold_remove(fold.nested(), from, to);
     if lvl < level && fold.len() != line.lnum() - fold.top() {
         // It used to reach further down than the levels now say.
         if fold.top() + fold.len() - 1 > bot {
@@ -624,8 +588,8 @@ pub(super) unsafe fn fold_update_computed_recurse(
                 fold.set_len(line.lnum() - fold.top());
             } else {
                 let i = folds.index_of(fold);
-                // SAFETY: a live window's buffer; `i` names an entry.
-                unsafe { fold_split((*line.win()).w_buffer, folds, i, line.lnum(), bot) };
+                // SAFETY: `i` names an entry of `folds`.
+                unsafe { fold_split(folds, i, line.lnum(), bot) };
                 fold = folds.at(i);
             }
         } else {
@@ -641,16 +605,13 @@ pub(super) unsafe fn fold_update_computed_recurse(
         }
         if next.top() + next.len() > line.lnum() {
             if next.top() < line.lnum() {
-                // SAFETY: a live fold's nested list is a live fold list.
-                unsafe {
-                    fold_mark_adjust_recurse(
-                        next.nested().gap(),
-                        0,
-                        line.lnum() - next.top() - 1,
-                        LINES_DELETED,
-                        next.top() - line.lnum(),
-                    )
-                };
+                fold_mark_adjust_recurse(
+                    next.nested(),
+                    0,
+                    line.lnum() - next.top() - 1,
+                    LINES_DELETED,
+                    next.top() - line.lnum(),
+                );
                 next.set_len(next.len() - (line.lnum() - next.top()));
                 next.set_top(line.lnum());
                 fold_changed.set(true);
@@ -663,7 +624,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
         }
         fold_changed.set(true);
         // SAFETY: `next` is an entry of `folds`.
-        unsafe { delete_fold_entry(folds, folds.index_of(next), true) };
+        drop_fold(folds, folds.index_of(next), true);
     }
     bot.max(line.lnum() - 1)
 }
@@ -681,25 +642,26 @@ pub(super) unsafe fn foldlevel_indent(flp: *mut fline_T) {
     let line = unsafe { FLine::new(flp) };
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window has a live buffer, and `lnum` is inside it.
-    unsafe {
-        let buf = (*line.win()).w_buffer;
-        let s = skipwhite(ml_get_buf(buf, lnum));
-        // A blank line, or one starting with a 'foldignore' character, takes
-        // its level from its neighbours.
-        if *s as c_int == NUL
-            || !vim_strchr((*line.win()).w_onebuf_opt.wo_fdi, *s as uint8_t as c_int).is_null()
-        {
-            line.set_lvl(if lnum == 1 || lnum == (*buf).b_ml.ml_line_count {
+    let buf = line_win(line).w_buffer;
+    let s = unsafe { skipwhite(ml_get_buf(buf, lnum)) };
+    // A blank line, or one starting with a 'foldignore' character, takes
+    // its level from its neighbours.
+    if unsafe { *s } as c_int == NUL
+        || !unsafe { vim_strchr(line_win(line).w_onebuf_opt.wo_fdi, *s as uint8_t as c_int) }
+            .is_null()
+    {
+        line.set_lvl(
+            if lnum == 1 || lnum == unsafe { (*buf).b_ml.ml_line_count } {
                 0
             } else {
                 -1
-            });
-        } else {
-            line.set_lvl(get_indent_buf(buf, lnum) / get_sw_value(buf));
-        }
-        let foldnestmax = (*line.win()).w_onebuf_opt.wo_fdn.max(0) as c_int;
-        line.set_lvl(line.lvl().min(foldnestmax));
+            },
+        );
+    } else {
+        line.set_lvl(unsafe { get_indent_buf(buf, lnum) } / unsafe { get_sw_value(buf) });
     }
+    let foldnestmax = line_win(line).w_onebuf_opt.wo_fdn.max(0) as c_int;
+    line.set_lvl(line.lvl().min(foldnestmax));
 }
 
 /// Low level function to get the foldlevel for the "diff" method.
@@ -730,11 +692,9 @@ pub(super) unsafe fn foldlevel_expr(flp: *mut fline_T) {
     let lnum = line.lnum() + line.off();
     let win = curwin.get();
     // SAFETY: a live window; the current window is restored below.
-    unsafe {
-        curwin.set(line.win());
-        curbuf.set((*line.win()).w_buffer);
-        set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
-    }
+    curwin.set(line.win());
+    curbuf.set(line_win(line).w_buffer);
+    unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
     line.set_start(0);
     line.set_had_end(line.end());
     line.set_end(MAX_LEVEL + 1);
@@ -793,13 +753,13 @@ pub(super) unsafe fn foldlevel_expr(flp: *mut fline_T) {
             line.set_lvl_next(0);
         }
         // SAFETY: a live buffer.
-        if lnum == unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+        if lnum == cur_buf().b_ml.ml_line_count {
             line.set_lvl_next(0);
         }
     }
     curwin.set(win);
     // SAFETY: a live window.
-    unsafe { curbuf.set((*curwin.get()).w_buffer) };
+    curbuf.set(cur_win().w_buffer);
 }
 
 /// Low level function to get the foldlevel for the "syntax" method.
@@ -813,17 +773,77 @@ pub(super) unsafe fn foldlevel_syntax(flp: *mut fline_T) {
     let line = unsafe { FLine::new(flp) };
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window, and a line inside its buffer.
-    unsafe {
-        line.set_lvl(syn_get_foldlevel(line.win(), lnum));
-        line.set_start(0);
-        if lnum < (*(*line.win()).w_buffer).b_ml.ml_line_count {
-            // A fold that starts on the next line starts here as far as the
-            // tree is concerned, so the syntax item's first line is inside.
-            let n = syn_get_foldlevel(line.win(), lnum + 1);
-            if n > line.lvl() {
-                line.set_start(n - line.lvl());
-                line.set_lvl(n);
-            }
+    line.set_lvl(unsafe { syn_get_foldlevel(line.win(), lnum) });
+    line.set_start(0);
+    if lnum < line_win(line).buffer().b_ml.ml_line_count {
+        // A fold that starts on the next line starts here as far as the
+        // tree is concerned, so the syntax item's first line is inside.
+        let n = unsafe { syn_get_foldlevel(line.win(), lnum + 1) };
+        if n > line.lvl() {
+            line.set_start(n - line.lvl());
+            line.set_lvl(n);
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// Ask the chosen 'foldmethod' getter for the level at `flp`.
+fn get_level(getlevel: LevelGetter, flp: *mut fline_T) {
+    // SAFETY: `flp` is a live, writable `fline_T` naming a live window --
+    // the promise [`fold_update_computed_recurse`] is given.
+    unsafe { getlevel.expect("non-null function pointer")(flp) };
+}
+
+/// C's `deleteFoldEntry`, whose only precondition is that `i` names an entry.
+fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
+    debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
+    // SAFETY: the assertion above.
+    unsafe { delete_fold_entry(folds, i, recursive) };
+}
+
+/// The window whose fold levels `line` is being computed for.
+fn line_win(line: FLine) -> Win {
+    // SAFETY: [`FLine::new`]'s caller promised a live window.
+    unsafe { Win::new(line.win()) }
+}
+
+/// Whether `wp` folds by marker.
+fn is_marker(wp: Win) -> bool {
+    // SAFETY: a `Win` is a live window.
+    unsafe { foldmethod_is_marker(wp.raw()) }
+}
+
+/// Whether `wp` folds by 'foldexpr'.
+fn is_expr(wp: Win) -> bool {
+    // SAFETY: a `Win` is a live window.
+    unsafe { foldmethod_is_expr(wp.raw()) }
+}
+
+/// Whether `wp` folds by syntax.
+fn is_syntax(wp: Win) -> bool {
+    // SAFETY: a `Win` is a live window.
+    unsafe { foldmethod_is_syntax(wp.raw()) }
+}
+
+/// `wp`'s toplevel fold list.
+fn folds_of(wp: Win) -> FoldList {
+    // SAFETY: a live window's `w_folds` is a live fold list.
+    unsafe { window_folds(wp.raw()) }
+}
+
+/// Whether `wp` takes its fold levels from the diff.
+fn is_diff(wp: Win) -> bool {
+    // SAFETY: a `Win` is a live window.
+    unsafe { foldmethod_is_diff(wp.raw()) }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -21,7 +21,8 @@ use crate::memory::xfree;
 use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
 use crate::strings::vim_snprintf;
 use crate::types::{Vv, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
-use ::libc::{memset, strlen};
+use crate::winlayer::{Buf, Win};
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
@@ -67,108 +68,111 @@ pub unsafe fn get_foldtext(
     if !got_fdt_error.get() {
         did_emsg.set(0);
     }
-    // SAFETY: the caller's promise; every pointer below is either `wp`'s,
-    // ours, or one the API handed back.
-    unsafe {
-        if *(*wp).w_onebuf_opt.wo_fdt as c_int != NUL {
-            let mut dashes: [c_char; 22] = [0; 22];
+    // SAFETY: the caller's promise -- a live window.
+    let win = unsafe { Win::new(wp) };
+    // SAFETY: 'foldtext' is a NUL-terminated option string.
+    if unsafe { *win.w_onebuf_opt.wo_fdt } as c_int != NUL {
+        let mut dashes: [c_char; 22] = [0; 22];
+        let level = foldinfo.fi_level.min(dashes.len() as c_int - 1);
+        dashes[..level as usize].fill('-' as c_char);
+        dashes[level as usize] = NUL as c_char;
+        // SAFETY: `dashes` is this frame's, and `level` bytes of it are set.
+        let ds = dashes.as_mut_ptr();
+        unsafe {
             set_vim_var_nr(Vv::Foldstart, lnum as varnumber_T);
             set_vim_var_nr(Vv::Foldend, lnume as varnumber_T);
-            let level = foldinfo.fi_level.min(dashes.len() as c_int - 1);
-            memset(
-                &raw mut dashes as *mut c_char as *mut c_void,
-                '-' as c_int,
-                level as size_t,
-            );
-            dashes[level as usize] = NUL as c_char;
-            set_vim_var_string(
-                Vv::Folddashes,
-                &raw mut dashes as *mut c_char,
-                level as ptrdiff_t,
-            );
+            set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t);
             set_vim_var_nr(Vv::Foldlevel, level as varnumber_T);
-            if !got_fdt_error.get() {
-                let save_curwin = curwin.get();
-                let saved_sctx = current_sctx.get();
-                curwin.set(wp);
-                curbuf.set((*wp).w_buffer);
-                current_sctx.set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
-                let no_emsg = Suppress::emsg();
-                let mut obj: Object = eval_foldtext(wp);
-                if obj.type_0 as c_uint == kObjectTypeArray as c_uint {
-                    // A list of `[text, hl]` chunks: the caller draws them,
-                    // and the returned text is empty.
-                    let mut err = Error {
-                        type_0: kErrorTypeNone,
-                        msg: ptr::null_mut(),
-                    };
-                    *vt = parse_virt_text(obj.data.array, &raw mut err, ptr::null_mut());
-                    if err.type_0 as c_int == kErrorTypeNone as c_int {
-                        *buf = NUL as c_char;
-                        text = buf;
-                    }
-                    api_clear_error(&raw mut err);
-                } else if obj.type_0 as c_uint == kObjectTypeString as c_uint {
-                    text = obj.data.string.data();
-                    obj = object {
-                        type_0: kObjectTypeNil,
-                        data: object_data { boolean: false },
-                    };
+        }
+        if !got_fdt_error.get() {
+            let save_curwin = curwin.get();
+            let saved_sctx = current_sctx.get();
+            curwin.set(wp);
+            curbuf.set(win.w_buffer);
+            current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
+            let no_emsg = Suppress::emsg();
+            let mut obj: Object = unsafe { eval_foldtext(wp) };
+            if obj.type_0 as c_uint == kObjectTypeArray as c_uint {
+                // A list of `[text, hl]` chunks: the caller draws them,
+                // and the returned text is empty.
+                let mut err = Error {
+                    type_0: kErrorTypeNone,
+                    msg: ptr::null_mut(),
+                };
+                unsafe { *vt = parse_virt_text(obj.data.array, &raw mut err, ptr::null_mut()) };
+                if err.type_0 as c_int == kErrorTypeNone as c_int {
+                    unsafe { *buf = NUL as c_char };
+                    text = buf;
                 }
-                api_free_object(obj);
-                drop(no_emsg);
-                if text.is_null() || did_emsg.get() != 0 {
-                    got_fdt_error.set(true);
-                }
-                curwin.set(save_curwin);
-                curbuf.set((*curwin.get()).w_buffer);
-                current_sctx.set(saved_sctx);
+                unsafe { api_clear_error(&raw mut err) };
+            } else if obj.type_0 as c_uint == kObjectTypeString as c_uint {
+                text = unsafe { obj.data.string }.data();
+                obj = object {
+                    type_0: kObjectTypeNil,
+                    data: object_data { boolean: false },
+                };
             }
-            last_lnum.set(lnum);
-            last_wp.set(wp);
-            set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t);
-            if did_emsg.get() == 0 && save_did_emsg != 0 {
-                did_emsg.set(save_did_emsg);
+            unsafe { api_free_object(obj) };
+            drop(no_emsg);
+            if text.is_null() || did_emsg.get() != 0 {
+                got_fdt_error.set(true);
             }
-            if !text.is_null() {
-                // Tabs become spaces and anything unprintable or wide sends
-                // the whole string through `transstr`.
-                let mut p = text;
-                while *p as c_int != NUL {
-                    let len = utfc_ptr2len(p);
-                    if len > 1 {
-                        if !vim_isprintc(utf_ptr2char(p)) {
-                            break;
-                        }
-                        p = p.offset((len - 1) as isize);
-                    } else if *p as c_int == TAB {
-                        *p = ' ' as c_char;
-                    } else if ptr2cells(p) > 1 {
+            curwin.set(save_curwin);
+            curbuf.set(cur_win().w_buffer);
+            current_sctx.set(saved_sctx);
+        }
+        last_lnum.set(lnum);
+        last_wp.set(wp);
+        unsafe { set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t) };
+        if did_emsg.get() == 0 && save_did_emsg != 0 {
+            did_emsg.set(save_did_emsg);
+        }
+        if !text.is_null() {
+            // Tabs become spaces and anything unprintable or wide sends
+            // the whole string through `transstr`.
+            // `text` is one NUL-terminated string; the walk reads a byte
+            // per step and stops on the terminator.
+            // SAFETY: `p` is inside it, at or before that terminator.
+            let at = |p: *const c_char| unsafe { *p } as c_int;
+            let mut p = text;
+            while at(p) != NUL {
+                // SAFETY: as `at`.
+                let len = unsafe { utfc_ptr2len(p) };
+                if len > 1 {
+                    // SAFETY: as `at`.
+                    if !unsafe { vim_isprintc(utf_ptr2char(p)) } {
                         break;
                     }
-                    p = p.offset(1);
+                    p = p.wrapping_offset((len - 1) as isize);
+                } else if at(p) == TAB {
+                    // SAFETY: as `at`; the string is the caller's to change.
+                    unsafe { *p = ' ' as c_char };
+                } else if unsafe { ptr2cells(p) } > 1 {
+                    break;
                 }
-                if *p as c_int != NUL {
+                p = p.wrapping_offset(1);
+            }
+            if at(p) != NUL {
+                // SAFETY: `text` is a live NUL-terminated allocation of ours.
+                unsafe {
                     p = transstr(text, true);
                     xfree(text as *mut c_void);
-                    text = p;
                 }
+                text = p;
             }
         }
-        if text.is_null() {
-            let count = lnume - lnum + 1;
-            vim_snprintf(
-                buf,
-                FOLD_TEXT_LEN as size_t,
-                ngettext(
-                    c"+--%3d line folded".as_ptr(),
-                    c"+--%3d lines folded ".as_ptr(),
-                    count as c_ulong,
-                ),
-                count,
-            );
-            text = buf;
-        }
+    }
+    if text.is_null() {
+        let count = lnume - lnum + 1;
+        // SAFETY: the caller's promise -- `buf` holds `FOLD_TEXT_LEN` bytes,
+        // whose size is passed with it.
+        unsafe {
+            let one = c"+--%3d line folded".as_ptr();
+            let many = c"+--%3d lines folded ".as_ptr();
+            let fmt = ngettext(one, many, count as c_ulong);
+            vim_snprintf(buf, FOLD_TEXT_LEN as size_t, fmt, count)
+        };
+        text = buf;
     }
     text
 }
@@ -179,80 +183,99 @@ pub unsafe fn get_foldtext(
 /// `str` must be a writable NUL-terminated string, and the current window
 /// must be live.
 pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
-    // SAFETY: the caller's promise; both 'commentstring' and `str` are
-    // NUL-terminated, so every scan below stops inside its own string.
-    unsafe {
-        // 'commentstring' split around its `%s`, with the padding trimmed.
-        let cms_start = skipwhite((*curbuf.get()).b_p_cms);
-        let mut cms_slen = strlen(cms_start);
-        while cms_slen > 0 && ascii_iswhite(*cms_start.add(cms_slen.wrapping_sub(1)) as c_int) {
-            cms_slen = cms_slen.wrapping_sub(1);
+    // Everything below walks two NUL-terminated strings -- `str`, the
+    // caller's, and 'commentstring' -- and no step passes either terminator.
+    // SAFETY: `p` is inside one of them, at or before its terminator.
+    let at = |p: *const c_char| unsafe { *p } as c_int;
+    // SAFETY: as `at`; `n` never reaches past the shorter of the two.
+    let ncmp = |a: *const c_char, b: *const c_char, n: size_t| unsafe { strncmp(a, b, n) } == 0;
+    // SAFETY: as `at`.
+    let skip_ws = |p: *mut c_char| unsafe { skipwhite(p) };
+    // How far `b` is past `a`, in bytes, without dereferencing either.
+    let gap = |b: *const c_char, a: *const c_char| b.addr().wrapping_sub(a.addr()) as size_t;
+
+    // 'commentstring' split around its `%s`, with the padding trimmed.
+    let cms_start = skip_ws(cur_buf().b_p_cms);
+    // SAFETY: 'commentstring' is a NUL-terminated option string.
+    let mut cms_slen = unsafe { strlen(cms_start) };
+    while cms_slen > 0 && ascii_iswhite(at(cms_start.wrapping_add(cms_slen - 1))) {
+        cms_slen -= 1;
+    }
+    // SAFETY: as `at`; both arguments are NUL-terminated.
+    let mut cms_end = unsafe { strstr(cms_start, c"%s".as_ptr()) };
+    let mut cms_elen: size_t = 0;
+    if !cms_end.is_null() {
+        cms_elen = cms_slen.wrapping_sub(gap(cms_end, cms_start));
+        cms_slen = gap(cms_end, cms_start);
+        while cms_slen > 0 && ascii_iswhite(at(cms_start.wrapping_add(cms_slen - 1))) {
+            cms_slen -= 1;
         }
-        let mut cms_end = strstr(cms_start, c"%s".as_ptr());
-        let mut cms_elen: size_t = 0;
-        if !cms_end.is_null() {
-            cms_elen = cms_slen.wrapping_sub(cms_end.offset_from(cms_start) as size_t);
-            cms_slen = cms_end.offset_from(cms_start) as size_t;
-            while cms_slen > 0 && ascii_iswhite(*cms_start.add(cms_slen.wrapping_sub(1)) as c_int) {
-                cms_slen = cms_slen.wrapping_sub(1);
-            }
-            let s = skipwhite(cms_end.offset(2));
-            cms_elen = cms_elen.wrapping_sub(s.offset_from(cms_end) as size_t);
-            cms_end = s;
+        let s = skip_ws(cms_end.wrapping_offset(2));
+        cms_elen = cms_elen.wrapping_sub(gap(s, cms_end));
+        cms_end = s;
+    }
+    // SAFETY: `curwin` is a live window.
+    unsafe { parse_marker(curwin.get()) };
+
+    // Each half of 'commentstring' is only removed once.
+    let mut did1 = false;
+    let mut did2 = false;
+    let mut s = str;
+    while at(s) != NUL {
+        let mut len: size_t = 0;
+        if ncmp(s, cur_win().w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()) {
+            len = foldstartmarkerlen.get();
+        } else if ncmp(s, foldendmarker.get(), foldendmarkerlen.get()) {
+            len = foldendmarkerlen.get();
         }
-        parse_marker(curwin.get());
-        // Each half of 'commentstring' is only removed once.
-        let mut did1 = false;
-        let mut did2 = false;
-        let mut s = str;
-        while *s as c_int != NUL {
-            let mut len: size_t = 0;
-            if strncmp(
-                s,
-                (*curwin.get()).w_onebuf_opt.wo_fmr,
-                foldstartmarkerlen.get(),
-            ) == 0
-            {
-                len = foldstartmarkerlen.get();
-            } else if strncmp(s, foldendmarker.get(), foldendmarkerlen.get()) == 0 {
-                len = foldendmarkerlen.get();
+        if len > 0 {
+            // A numbered marker, and any comment opener it sits behind.
+            if ascii_isdigit(at(s.wrapping_add(len))) {
+                len += 1;
             }
-            if len > 0 {
-                // A numbered marker, and any comment opener it sits behind.
-                if ascii_isdigit(*s.add(len) as c_int) {
-                    len = len.wrapping_add(1);
-                }
-                let mut p = s;
-                while p > str && ascii_iswhite(*p.offset(-1) as c_int) {
-                    p = p.offset(-1);
-                }
-                if p >= str.add(cms_slen)
-                    && strncmp(p.offset(-(cms_slen as isize)), cms_start, cms_slen) == 0
-                {
-                    len = len.wrapping_add((s.offset_from(p) as size_t).wrapping_add(cms_slen));
-                    s = p.offset(-(cms_slen as isize));
-                }
-            } else if !cms_end.is_null() {
-                if !did1 && cms_slen > 0 && strncmp(s, cms_start, cms_slen) == 0 {
-                    len = cms_slen;
-                    did1 = true;
-                } else if !did2 && cms_elen > 0 && strncmp(s, cms_end, cms_elen) == 0 {
-                    len = cms_elen;
-                    did2 = true;
-                }
+            let mut p = s;
+            while p > str && ascii_iswhite(at(p.wrapping_offset(-1))) {
+                p = p.wrapping_offset(-1);
             }
-            if len != 0 {
-                while ascii_iswhite(*s.add(len) as c_int) {
-                    len = len.wrapping_add(1);
-                }
-                memmove(
-                    s as *mut c_void,
-                    s.add(len) as *const c_void,
-                    strlen(s.add(len)).wrapping_add(1),
-                );
-            } else {
-                s = s.offset(utfc_ptr2len(s) as isize);
+            let opener = p.wrapping_offset(-(cms_slen as isize));
+            if p >= str.wrapping_add(cms_slen) && ncmp(opener, cms_start, cms_slen) {
+                len = len.wrapping_add(gap(s, p).wrapping_add(cms_slen));
+                s = opener;
             }
+        } else if !cms_end.is_null() {
+            if !did1 && cms_slen > 0 && ncmp(s, cms_start, cms_slen) {
+                len = cms_slen;
+                did1 = true;
+            } else if !did2 && cms_elen > 0 && ncmp(s, cms_end, cms_elen) {
+                len = cms_elen;
+                did2 = true;
+            }
+        }
+        if len != 0 {
+            while ascii_iswhite(at(s.wrapping_add(len))) {
+                len += 1;
+            }
+            // SAFETY: `s + len` is inside `str`, so the tail from there --
+            // its terminator included -- fits where `s` is.
+            unsafe {
+                let tail = s.add(len);
+                memmove(s as *mut c_void, tail as *const c_void, strlen(tail) + 1)
+            };
+        } else {
+            // SAFETY: `s` is on a character of `str`.
+            s = s.wrapping_offset(unsafe { utfc_ptr2len(s) } as isize);
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
