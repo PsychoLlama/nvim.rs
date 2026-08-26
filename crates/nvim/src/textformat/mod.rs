@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -63,7 +64,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 pub unsafe fn has_format_option(x: FoFlag) -> bool {
     // The dereference stays behind the `&&`: with no current buffer the
     // left half is what keeps the right one from running.
-    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr((*curbuf.get()).b_p_fo)) }
+    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr(cur_buf().b_p_fo)) }
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the
@@ -78,9 +79,8 @@ pub unsafe fn has_format_option(x: FoFlag) -> bool {
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
-    unsafe {
-        ascii_iswhite(cc) && !utf_iscomposing_first(utf_ptr2char(get_cursor_pos_ptr().add(1)))
-    }
+    ascii_iswhite(cc)
+        && !utf_iscomposing_first(unsafe { utf_ptr2char(get_cursor_pos_ptr().add(1)) })
 }
 
 /// The width to format to: 'textwidth' if set, else the window width less
@@ -90,24 +90,28 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// # Safety
 /// There must be a current window and buffer.
 pub unsafe fn comp_textwidth(ff: bool) -> c_int {
-    unsafe {
-        let win = curwin.get();
-        let mut textwidth = (*curbuf.get()).b_p_tw as c_int;
-        if textwidth == 0 && (*curbuf.get()).b_p_wm != 0 {
-            textwidth = (*win).w_view_width - (*curbuf.get()).b_p_wm as c_int;
-            if curbuf.get() == cmdwin_buf.get() {
-                textwidth -= 1;
-            }
-            textwidth -= win_fdccol_count(win);
-            textwidth -= (*win).w_scwidth;
-            if (*win).w_onebuf_opt.wo_nu != 0 || (*win).w_onebuf_opt.wo_rnu != 0 {
-                textwidth -= 8;
-            }
+    let win = curwin.get();
+    let mut textwidth = cur_buf().b_p_tw as c_int;
+    if textwidth == 0 && cur_buf().b_p_wm != 0 {
+        textwidth = unsafe { (*win).w_view_width } - cur_buf().b_p_wm as c_int;
+        if curbuf.get() == cmdwin_buf.get() {
+            textwidth -= 1;
         }
-        textwidth = textwidth.max(0);
-        if ff && textwidth == 0 {
-            textwidth = ((*win).w_view_width - 1).min(79);
+        textwidth -= unsafe { win_fdccol_count(win) };
+        textwidth -= unsafe { (*win).w_scwidth };
+        if unsafe { (*win).w_onebuf_opt.wo_nu } != 0 || unsafe { (*win).w_onebuf_opt.wo_rnu } != 0 {
+            textwidth -= 8;
         }
-        textwidth
     }
+    textwidth = textwidth.max(0);
+    if ff && textwidth == 0 {
+        textwidth = (unsafe { (*win).w_view_width } - 1).min(79);
+    }
+    textwidth
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

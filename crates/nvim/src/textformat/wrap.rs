@@ -8,21 +8,21 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
 use crate::cursor::{
-    coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
-    get_cursor_pos_len, get_cursor_pos_ptr, inc_cursor, pchar_cursor,
+    dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
+    get_cursor_pos_ptr, inc_cursor, pchar_cursor,
 };
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
 use crate::indent::{change_indent, get_number_indent, set_indent};
 use crate::main::{
-    Insstart, State, can_si, can_si_back, curbuf, curwin, did_ai, did_si, got_int, old_indent,
-    replace_offset,
+    Insstart, State, can_si, can_si_back, did_ai, did_si, got_int, old_indent, replace_offset,
 };
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
 use crate::memory::xfree;
@@ -89,58 +89,56 @@ impl BreakSearch {
     /// # Safety
     /// There must be a current line and the cursor must be on it.
     unsafe fn at_white(&mut self, mut cc: c_int) -> Step {
-        unsafe {
-            // Remember where the blank just before the text is.
-            let end_col = (*curwin.get()).w_cursor.col;
+        // Remember where the blank just before the text is.
+        let end_col = cur_win().w_cursor.col;
 
-            // Walk back to the start of the run of blanks, counting them --
-            // only "more than one" matters, for the `p` flag below.
-            let mut wcc = 0;
-            while (*curwin.get()).w_cursor.col > 0 && whitechar(cc) {
-                dec_cursor();
-                cc = gchar_cursor();
-                if wcc < 2 {
-                    wcc += 1;
-                }
+        // Walk back to the start of the run of blanks, counting them --
+        // only "more than one" matters, for the `p` flag below.
+        let mut wcc = 0;
+        while cur_win().w_cursor.col > 0 && unsafe { whitechar(cc) } {
+            unsafe { dec_cursor() };
+            cc = unsafe { gchar_cursor() };
+            if wcc < 2 {
+                wcc += 1;
             }
-            if (*curwin.get()).w_cursor.col == 0 && whitechar(cc) {
-                return Step::Stop; // only spaces in front of the text
-            }
-            // 'formatoptions' `p`: don't break after a period followed by
-            // fewer than two spaces -- that is an abbreviation, not a
-            // sentence end.
-            if has_format_option(FoFlag::PERIOD_ABBR) && cc == '.' as c_int && wcc < 2 {
-                return Step::Again;
-            }
-            // Don't break inside the comment leader.
-            if (*curwin.get()).w_cursor.col < self.leader_len {
-                return Step::Stop;
-            }
-            if has_format_option(FoFlag::ONE_LETTER) {
-                // Don't break after a one-letter word.
-                if (*curwin.get()).w_cursor.col == 0 {
-                    return Step::Stop; // a one-letter word at the start
-                }
-                // Don't break `#a b` when 'textwidth' is 2.
-                if (*curwin.get()).w_cursor.col <= self.leader_len {
-                    return Step::Stop;
-                }
-                let col = (*curwin.get()).w_cursor.col;
-                dec_cursor();
-                cc = gchar_cursor();
-                if whitechar(cc) {
-                    return Step::Again; // one letter: keep looking
-                }
-                (*curwin.get()).w_cursor.col = col;
-            }
-            inc_cursor();
-            self.end_foundcol = end_col as c_int + 1;
-            self.foundcol = (*curwin.get()).w_cursor.col as c_int;
-            if (*curwin.get()).w_cursor.col <= self.wantcol {
-                return Step::Stop;
-            }
-            Step::Back
         }
+        if cur_win().w_cursor.col == 0 && unsafe { whitechar(cc) } {
+            return Step::Stop; // only spaces in front of the text
+        }
+        // 'formatoptions' `p`: don't break after a period followed by
+        // fewer than two spaces -- that is an abbreviation, not a
+        // sentence end.
+        if unsafe { has_format_option(FoFlag::PERIOD_ABBR) } && cc == '.' as c_int && wcc < 2 {
+            return Step::Again;
+        }
+        // Don't break inside the comment leader.
+        if cur_win().w_cursor.col < self.leader_len {
+            return Step::Stop;
+        }
+        if unsafe { has_format_option(FoFlag::ONE_LETTER) } {
+            // Don't break after a one-letter word.
+            if cur_win().w_cursor.col == 0 {
+                return Step::Stop; // a one-letter word at the start
+            }
+            // Don't break `#a b` when 'textwidth' is 2.
+            if cur_win().w_cursor.col <= self.leader_len {
+                return Step::Stop;
+            }
+            let col = cur_win().w_cursor.col;
+            unsafe { dec_cursor() };
+            cc = unsafe { gchar_cursor() };
+            if unsafe { whitechar(cc) } {
+                return Step::Again; // one letter: keep looking
+            }
+            cur_win().w_cursor.col = col;
+        }
+        unsafe { inc_cursor() };
+        self.end_foundcol = end_col as c_int + 1;
+        self.foundcol = cur_win().w_cursor.col as c_int;
+        if cur_win().w_cursor.col <= self.wantcol {
+            return Step::Stop;
+        }
+        Step::Back
     }
 
     /// Upstream's `fo_multibyte` arm: a break may go straight between two
@@ -149,91 +147,89 @@ impl BreakSearch {
     /// # Safety
     /// There must be a current line and the cursor must be on it.
     unsafe fn at_multibyte(&mut self, mut cc: c_int) -> Step {
-        unsafe {
-            let mut col;
-            // First try breaking *after* this character.
-            if (*curwin.get()).w_cursor.col != self.startcol {
-                // Don't break inside the comment leader.
-                if (*curwin.get()).w_cursor.col < self.leader_len {
-                    return Step::Stop;
-                }
-                col = (*curwin.get()).w_cursor.col;
-                inc_cursor();
-                let ncc = gchar_cursor();
-                let allow_break = utf_allow_break(cc, ncc);
-                if (*curwin.get()).w_cursor.col != self.skip_pos && allow_break {
-                    self.foundcol = (*curwin.get()).w_cursor.col as c_int;
-                    self.end_foundcol = self.foundcol;
-                    if (*curwin.get()).w_cursor.col <= self.wantcol {
-                        return Step::Stop;
-                    }
-                }
-                (*curwin.get()).w_cursor.col = col;
-            }
-            if (*curwin.get()).w_cursor.col == 0 {
-                return Step::Stop;
-            }
-
-            // Then breaking *before* it.
-            let mut ncc = cc;
-            col = (*curwin.get()).w_cursor.col;
-            dec_cursor();
-            cc = gchar_cursor();
-            if whitechar(cc) {
-                return Step::Again; // break with a space instead
-            }
+        let mut col;
+        // First try breaking *after* this character.
+        if cur_win().w_cursor.col != self.startcol {
             // Don't break inside the comment leader.
-            if (*curwin.get()).w_cursor.col < self.leader_len {
+            if cur_win().w_cursor.col < self.leader_len {
                 return Step::Stop;
             }
-            (*curwin.get()).w_cursor.col = col;
-            self.skip_pos = (*curwin.get()).w_cursor.col as c_int;
-
-            let mut allow_break = utf_allow_break(cc, ncc);
-            // Honour the line-break prohibition classes even here.
-            if allow_break {
-                self.foundcol = (*curwin.get()).w_cursor.col as c_int;
+            col = cur_win().w_cursor.col;
+            unsafe { inc_cursor() };
+            let ncc = unsafe { gchar_cursor() };
+            let allow_break = utf_allow_break(cc, ncc);
+            if cur_win().w_cursor.col != self.skip_pos && allow_break {
+                self.foundcol = cur_win().w_cursor.col as c_int;
                 self.end_foundcol = self.foundcol;
-            }
-            if (*curwin.get()).w_cursor.col <= self.wantcol {
-                let ncc_allow_break = utf_allow_break_before(ncc);
-                if allow_break {
+                if cur_win().w_cursor.col <= self.wantcol {
                     return Step::Stop;
                 }
-                if !ncc_allow_break && !self.fo_rigor_tw {
-                    // Let at most one punctuation character hang past
-                    // 'textwidth'.
-                    if (*curwin.get()).w_cursor.col == self.startcol {
-                        // The character being inserted is itself unbreakable:
-                        // put the check off until the next one.
-                        self.foundcol = 0;
-                        self.end_foundcol = 0;
-                        return Step::Stop;
-                    }
-                    // Neither `cc` nor `ncc` is NUL here, so stepping forward
-                    // is safe.
-                    col = (*curwin.get()).w_cursor.col;
-                    inc_cursor();
-                    cc = ncc;
-                    ncc = gchar_cursor();
-                    // At end of line, the character being inserted is next.
-                    ncc = if ncc != NUL { ncc } else { self.c };
-                    allow_break = utf_allow_break(cc, ncc);
-                    if allow_break {
-                        // Break only when this is not the end of the line.
-                        self.foundcol = if ncc == NUL {
-                            0
-                        } else {
-                            (*curwin.get()).w_cursor.col as c_int
-                        };
-                        self.end_foundcol = self.foundcol;
-                        return Step::Stop;
-                    }
-                    (*curwin.get()).w_cursor.col = col;
-                }
             }
-            Step::Back
+            cur_win().w_cursor.col = col;
         }
+        if cur_win().w_cursor.col == 0 {
+            return Step::Stop;
+        }
+
+        // Then breaking *before* it.
+        let mut ncc = cc;
+        col = cur_win().w_cursor.col;
+        unsafe { dec_cursor() };
+        cc = unsafe { gchar_cursor() };
+        if unsafe { whitechar(cc) } {
+            return Step::Again; // break with a space instead
+        }
+        // Don't break inside the comment leader.
+        if cur_win().w_cursor.col < self.leader_len {
+            return Step::Stop;
+        }
+        cur_win().w_cursor.col = col;
+        self.skip_pos = cur_win().w_cursor.col as c_int;
+
+        let mut allow_break = utf_allow_break(cc, ncc);
+        // Honour the line-break prohibition classes even here.
+        if allow_break {
+            self.foundcol = cur_win().w_cursor.col as c_int;
+            self.end_foundcol = self.foundcol;
+        }
+        if cur_win().w_cursor.col <= self.wantcol {
+            let ncc_allow_break = utf_allow_break_before(ncc);
+            if allow_break {
+                return Step::Stop;
+            }
+            if !ncc_allow_break && !self.fo_rigor_tw {
+                // Let at most one punctuation character hang past
+                // 'textwidth'.
+                if cur_win().w_cursor.col == self.startcol {
+                    // The character being inserted is itself unbreakable:
+                    // put the check off until the next one.
+                    self.foundcol = 0;
+                    self.end_foundcol = 0;
+                    return Step::Stop;
+                }
+                // Neither `cc` nor `ncc` is NUL here, so stepping forward
+                // is safe.
+                col = cur_win().w_cursor.col;
+                unsafe { inc_cursor() };
+                cc = ncc;
+                ncc = unsafe { gchar_cursor() };
+                // At end of line, the character being inserted is next.
+                ncc = if ncc != NUL { ncc } else { self.c };
+                allow_break = utf_allow_break(cc, ncc);
+                if allow_break {
+                    // Break only when this is not the end of the line.
+                    self.foundcol = if ncc == NUL {
+                        0
+                    } else {
+                        cur_win().w_cursor.col as c_int
+                    };
+                    self.end_foundcol = self.foundcol;
+                    return Step::Stop;
+                }
+                cur_win().w_cursor.col = col;
+            }
+        }
+        Step::Back
     }
 
     /// Walk back from `startcol` until a break column is found or there is
@@ -246,35 +242,32 @@ impl BreakSearch {
     /// # Safety
     /// There must be a current line and the cursor must be on it.
     unsafe fn run(&mut self, flags: c_int, fo_ins_blank: bool) {
-        unsafe {
-            while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
-                || flags & INSCHAR_FORMAT as c_int != 0
-                || (*curwin.get()).w_cursor.lnum != Insstart.get().lnum
-                || (*curwin.get()).w_cursor.col >= Insstart.get().col
-            {
-                let cc =
-                    if (*curwin.get()).w_cursor.col == self.startcol as colnr_T && self.c != NUL {
-                        self.c
-                    } else {
-                        gchar_cursor()
-                    };
-                let step = if whitechar(cc) {
-                    self.at_white(cc)
-                } else if (cc >= 0x100 || !utf_allow_break_before(cc)) && self.fo_multibyte {
-                    self.at_multibyte(cc)
-                } else {
-                    Step::Back
-                };
-                match step {
-                    Step::Stop => return,
-                    Step::Again => continue,
-                    Step::Back => {}
-                }
-                if (*curwin.get()).w_cursor.col == 0 {
-                    return;
-                }
-                dec_cursor();
+        while (!fo_ins_blank && !unsafe { has_format_option(FoFlag::INS_VI) })
+            || flags & INSCHAR_FORMAT as c_int != 0
+            || cur_win().w_cursor.lnum != Insstart.get().lnum
+            || cur_win().w_cursor.col >= Insstart.get().col
+        {
+            let cc = if cur_win().w_cursor.col == self.startcol as colnr_T && self.c != NUL {
+                self.c
+            } else {
+                unsafe { gchar_cursor() }
+            };
+            let step = if unsafe { whitechar(cc) } {
+                unsafe { self.at_white(cc) }
+            } else if (cc >= 0x100 || !utf_allow_break_before(cc)) && self.fo_multibyte {
+                unsafe { self.at_multibyte(cc) }
+            } else {
+                Step::Back
+            };
+            match step {
+                Step::Stop => return,
+                Step::Again => continue,
+                Step::Back => {}
             }
+            if cur_win().w_cursor.col == 0 {
+                return;
+            }
+            unsafe { dec_cursor() };
         }
     }
 }
@@ -288,26 +281,26 @@ impl BreakSearch {
 /// # Safety
 /// There must be a current line.
 unsafe fn wrap_leader_len() -> colnr_T {
-    unsafe {
-        let line = get_cursor_line_ptr();
-        let mut leader_len =
-            get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true);
-        if leader_len == 0 && (*curbuf.get()).b_p_cin != 0 {
-            let comment_start = check_linecomment(line);
-            if comment_start != MAXCOL {
-                leader_len = get_leader_len(
+    let line = unsafe { get_cursor_line_ptr() };
+    let mut leader_len =
+        unsafe { get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true) };
+    if leader_len == 0 && cur_buf().b_p_cin != 0 {
+        let comment_start = unsafe { check_linecomment(line) };
+        if comment_start != MAXCOL {
+            leader_len = unsafe {
+                get_leader_len(
                     line.offset(comment_start as isize),
                     ::core::ptr::null_mut::<*mut c_char>(),
                     false,
                     true,
-                );
-                if leader_len != 0 {
-                    leader_len += comment_start;
-                }
+                )
+            };
+            if leader_len != 0 {
+                leader_len += comment_start;
             }
         }
-        leader_len
     }
+    leader_len
 }
 
 /// Format the text at the current insert position: break the line at
@@ -330,132 +323,138 @@ pub unsafe fn internal_format(
     format_only: bool,
     c: c_int,
 ) {
-    unsafe {
-        let win = curwin.get();
-        let mut save_char = NUL as c_char;
-        let mut haveto_redraw = false;
-        let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
-        let fo_multibyte = has_format_option(FoFlag::MBYTE_BREAK);
-        let fo_rigor_tw = has_format_option(FoFlag::RIGOROUS_TW);
-        let fo_white_par = has_format_option(FoFlag::WHITE_PAR);
-        let mut first_line = true;
-        let mut no_leader = false;
-        let mut do_comments = flags & INSCHAR_DO_COM as c_int != 0;
-        let has_lbr = (*win).w_onebuf_opt.wo_lbr;
+    let mut win = cur_win();
+    let mut save_char = NUL as c_char;
+    let mut haveto_redraw = false;
+    let fo_ins_blank = unsafe { has_format_option(FoFlag::INS_BLANK) };
+    let fo_multibyte = unsafe { has_format_option(FoFlag::MBYTE_BREAK) };
+    let fo_rigor_tw = unsafe { has_format_option(FoFlag::RIGOROUS_TW) };
+    let fo_white_par = unsafe { has_format_option(FoFlag::WHITE_PAR) };
+    let mut first_line = true;
+    let mut no_leader = false;
+    let mut do_comments = flags & INSCHAR_DO_COM as c_int != 0;
+    let has_lbr = win.w_onebuf_opt.wo_lbr;
 
-        // So that `win_charsize()` counts correctly.
-        (*win).w_onebuf_opt.wo_lbr = 0;
+    // So that `win_charsize()` counts correctly.
+    win.w_onebuf_opt.wo_lbr = 0;
 
-        // With 'autoindent' off, a space under the cursor must not be
-        // deleted; stand an `x` in for it and put it back at the end.
-        if (*curbuf.get()).b_p_ai == 0 && State.get() & VREPLACE_FLAG == 0 {
-            let cc = gchar_cursor();
-            if ascii_iswhite(cc) {
-                save_char = cc as c_char;
-                pchar_cursor('x' as c_char);
-            }
+    // With 'autoindent' off, a space under the cursor must not be
+    // deleted; stand an `x` in for it and put it back at the end.
+    if cur_buf().b_p_ai == 0 && State.get() & VREPLACE_FLAG == 0 {
+        let cc = unsafe { gchar_cursor() };
+        if ascii_iswhite(cc) {
+            save_char = cc as c_char;
+            unsafe { pchar_cursor('x' as c_char) };
+        }
+    }
+
+    // Break lines until the current one is no longer too long.
+    while !got_int.get() {
+        let mut orig_col = 0;
+        let mut did_do_comment = false;
+
+        let virtcol = unsafe { get_nolist_virtcol() }
+            + unsafe { char2cells(if c != NUL { c } else { gchar_cursor() }) };
+        if virtcol <= textwidth {
+            break;
         }
 
-        // Break lines until the current one is no longer too long.
-        while !got_int.get() {
-            let mut orig_col = 0;
-            let mut did_do_comment = false;
+        if no_leader {
+            do_comments = false;
+        } else if flags & INSCHAR_FORMAT as c_int == 0
+            && unsafe { has_format_option(FoFlag::WRAP_COMS) }
+        {
+            do_comments = true;
+        }
+        let leader_len = if do_comments {
+            unsafe { wrap_leader_len() }
+        } else {
+            0
+        };
 
-            let virtcol =
-                get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
-            if virtcol <= textwidth {
-                break;
+        // When this line does not start with a comment leader, don't
+        // start one on a line broken off it either: otherwise a `%word`
+        // moved to the next line makes every following line start `%`.
+        if leader_len == 0 {
+            no_leader = true;
+        }
+        if flags & INSCHAR_FORMAT as c_int == 0
+            && leader_len == 0
+            && !unsafe { has_format_option(FoFlag::WRAP) }
+        {
+            break;
+        }
+        let mut startcol = win.w_cursor.col as c_int;
+        if startcol == 0 {
+            break;
+        }
+
+        // Find the column 'textwidth' falls at.
+        win.coladvance(textwidth);
+        let wantcol = win.w_cursor.col as c_int;
+        win.w_cursor.col = startcol as colnr_T;
+
+        let mut search = BreakSearch {
+            startcol,
+            wantcol,
+            leader_len,
+            c,
+            foundcol: 0,
+            end_foundcol: 0,
+            skip_pos: 0,
+            fo_multibyte,
+            fo_rigor_tw,
+        };
+        unsafe { search.run(flags, fo_ins_blank) };
+        if search.foundcol == 0 {
+            // No break column: the line has to stay long.
+            win.w_cursor.col = startcol as colnr_T;
+            break;
+        }
+        let foundcol = search.foundcol;
+
+        // The line is going to be broken; take any `$` off first.
+        unsafe { undisplay_dollar() };
+
+        // The replace stack needs the offset between the cursor and the
+        // break. MODE_VREPLACE does not use it -- it backspaces over the
+        // text instead.
+        if State.get() & VREPLACE_FLAG != 0 {
+            orig_col = startcol; // where the backspacing will start
+        } else {
+            replace_offset.set(startcol - search.end_foundcol);
+        }
+
+        // Move `startcol` past the spaces that are about to be deleted
+        // and the characters that stay on the top line.
+        win.w_cursor.col = foundcol as colnr_T;
+        while {
+            let cc = unsafe { gchar_cursor() };
+            (unsafe { whitechar(cc) }) && (!fo_white_par || win.w_cursor.col < startcol as colnr_T)
+        } {
+            unsafe { inc_cursor() };
+        }
+        startcol -= win.w_cursor.col as c_int;
+        startcol = startcol.max(0);
+
+        let mut saved_text = ::core::ptr::null_mut::<c_char>();
+        if State.get() & VREPLACE_FLAG != 0 {
+            // MODE_VREPLACE backspaces over the text being wrapped, so
+            // save a copy now to put on the next line.
+            saved_text = unsafe { xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
+            win.w_cursor.col = orig_col as colnr_T;
+            unsafe { *saved_text.offset(startcol as isize) = NUL as c_char };
+            if !fo_white_par {
+                unsafe { backspace_until_column(foundcol) };
             }
+        } else if !fo_white_par {
+            // Put the cursor after the position to break at.
+            win.w_cursor.col = foundcol as colnr_T;
+        }
 
-            if no_leader {
-                do_comments = false;
-            } else if flags & INSCHAR_FORMAT as c_int == 0 && has_format_option(FoFlag::WRAP_COMS) {
-                do_comments = true;
-            }
-            let leader_len = if do_comments { wrap_leader_len() } else { 0 };
-
-            // When this line does not start with a comment leader, don't
-            // start one on a line broken off it either: otherwise a `%word`
-            // moved to the next line makes every following line start `%`.
-            if leader_len == 0 {
-                no_leader = true;
-            }
-            if flags & INSCHAR_FORMAT as c_int == 0
-                && leader_len == 0
-                && !has_format_option(FoFlag::WRAP)
-            {
-                break;
-            }
-            let mut startcol = (*win).w_cursor.col as c_int;
-            if startcol == 0 {
-                break;
-            }
-
-            // Find the column 'textwidth' falls at.
-            coladvance(win, textwidth);
-            let wantcol = (*win).w_cursor.col as c_int;
-            (*win).w_cursor.col = startcol as colnr_T;
-
-            let mut search = BreakSearch {
-                startcol,
-                wantcol,
-                leader_len,
-                c,
-                foundcol: 0,
-                end_foundcol: 0,
-                skip_pos: 0,
-                fo_multibyte,
-                fo_rigor_tw,
-            };
-            search.run(flags, fo_ins_blank);
-            if search.foundcol == 0 {
-                // No break column: the line has to stay long.
-                (*win).w_cursor.col = startcol as colnr_T;
-                break;
-            }
-            let foundcol = search.foundcol;
-
-            // The line is going to be broken; take any `$` off first.
-            undisplay_dollar();
-
-            // The replace stack needs the offset between the cursor and the
-            // break. MODE_VREPLACE does not use it -- it backspaces over the
-            // text instead.
-            if State.get() & VREPLACE_FLAG != 0 {
-                orig_col = startcol; // where the backspacing will start
-            } else {
-                replace_offset.set(startcol - search.end_foundcol);
-            }
-
-            // Move `startcol` past the spaces that are about to be deleted
-            // and the characters that stay on the top line.
-            (*win).w_cursor.col = foundcol as colnr_T;
-            while {
-                let cc = gchar_cursor();
-                whitechar(cc) && (!fo_white_par || (*win).w_cursor.col < startcol as colnr_T)
-            } {
-                inc_cursor();
-            }
-            startcol -= (*win).w_cursor.col as c_int;
-            startcol = startcol.max(0);
-
-            let mut saved_text = ::core::ptr::null_mut::<c_char>();
-            if State.get() & VREPLACE_FLAG != 0 {
-                // MODE_VREPLACE backspaces over the text being wrapped, so
-                // save a copy now to put on the next line.
-                saved_text = xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
-                (*win).w_cursor.col = orig_col as colnr_T;
-                *saved_text.offset(startcol as isize) = NUL as c_char;
-                if !fo_white_par {
-                    backspace_until_column(foundcol);
-                }
-            } else if !fo_white_par {
-                // Put the cursor after the position to break at.
-                (*win).w_cursor.col = foundcol as colnr_T;
-            }
-
-            // Split the line just before the margin. Only insert and delete
-            // lines; don't really redraw the window.
+        // Split the line just before the margin. Only insert and delete
+        // lines; don't really redraw the window.
+        unsafe {
             open_line(
                 FORWARD as c_int,
                 (OPENLINE_DELSPACES
@@ -474,77 +473,89 @@ pub unsafe fn internal_format(
                     old_indent.get()
                 },
                 &raw mut did_do_comment,
-            );
-            if flags & INSCHAR_COM_LIST as c_int == 0 {
-                old_indent.set(0);
-            }
-            // A comment leader was inserted, so a following line may get one
-            // too.
-            if did_do_comment {
-                no_leader = false;
-            }
-            replace_offset.set(0);
+            )
+        };
+        if flags & INSCHAR_COM_LIST as c_int == 0 {
+            old_indent.set(0);
+        }
+        // A comment leader was inserted, so a following line may get one
+        // too.
+        if did_do_comment {
+            no_leader = false;
+        }
+        replace_offset.set(0);
 
-            if first_line {
-                if flags & INSCHAR_COM_LIST as c_int == 0 {
-                    // Auto-wrap of numbered lists. Outside Insert mode --
-                    // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
-                    // set and `open_line` above has already done this.
-                    if second_indent < 0 && has_format_option(FoFlag::Q_NUMBER) {
-                        second_indent = get_number_indent((*win).w_cursor.lnum - 1);
-                    }
-                    if second_indent >= 0 {
-                        if State.get() & VREPLACE_FLAG != 0 {
-                            change_indent(INDENT_SET as c_int, second_indent, 0, true);
-                        } else if leader_len > 0 && second_indent - leader_len > 0 {
-                            // A numbered list item that has a comment:
-                            // `open_line` put the leader in and left the
-                            // cursor after it, so all that is missing is the
-                            // white space the number wants after it.
-                            let padding = second_indent - leader_len;
-                            for _ in 0..padding {
-                                ins_str(c" ".as_ptr() as *mut c_char, 1);
-                            }
-                        } else {
-                            set_indent(second_indent, SIN_CHANGED as c_int);
+        if first_line {
+            if flags & INSCHAR_COM_LIST as c_int == 0 {
+                // Auto-wrap of numbered lists. Outside Insert mode --
+                // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
+                // set and `open_line` above has already done this.
+                if second_indent < 0 && unsafe { has_format_option(FoFlag::Q_NUMBER) } {
+                    second_indent = unsafe { get_number_indent(win.w_cursor.lnum - 1) };
+                }
+                if second_indent >= 0 {
+                    if State.get() & VREPLACE_FLAG != 0 {
+                        unsafe { change_indent(INDENT_SET as c_int, second_indent, 0, true) };
+                    } else if leader_len > 0 && second_indent - leader_len > 0 {
+                        // A numbered list item that has a comment:
+                        // `open_line` put the leader in and left the
+                        // cursor after it, so all that is missing is the
+                        // white space the number wants after it.
+                        let padding = second_indent - leader_len;
+                        for _ in 0..padding {
+                            unsafe { ins_str(c" ".as_ptr() as *mut c_char, 1) };
                         }
+                    } else {
+                        unsafe { set_indent(second_indent, SIN_CHANGED as c_int) };
                     }
                 }
-                first_line = false;
             }
-
-            if State.get() & VREPLACE_FLAG != 0 {
-                // MODE_VREPLACE backspaced over the text being moved; put it
-                // into the new line.
-                ins_bytes(saved_text);
-                xfree(saved_text as *mut ::core::ffi::c_void);
-            } else {
-                // Keep the cursor off the NUL past the end: cindent may have
-                // added or removed indent.
-                (*win).w_cursor.col += startcol as colnr_T;
-                let len = get_cursor_line_len();
-                (*win).w_cursor.col = (*win).w_cursor.col.min(len);
-            }
-
-            haveto_redraw = true;
-            set_can_cindent(true);
-            // The cursor moved: don't autoindent or cindent now.
-            did_ai.set(false);
-            did_si.set(false);
-            can_si.set(false);
-            can_si_back.set(false);
-            line_breakcheck();
+            first_line = false;
         }
 
-        if save_char as c_int != NUL {
-            // Put the space after the cursor back.
-            pchar_cursor(save_char);
+        if State.get() & VREPLACE_FLAG != 0 {
+            // MODE_VREPLACE backspaced over the text being moved; put it
+            // into the new line.
+            unsafe { ins_bytes(saved_text) };
+            unsafe { xfree(saved_text as *mut ::core::ffi::c_void) };
+        } else {
+            // Keep the cursor off the NUL past the end: cindent may have
+            // added or removed indent.
+            win.w_cursor.col += startcol as colnr_T;
+            let len = unsafe { get_cursor_line_len() };
+            win.w_cursor.col = win.w_cursor.col.min(len);
         }
-        (*win).w_onebuf_opt.wo_lbr = has_lbr;
 
-        if !format_only && haveto_redraw {
-            update_topline(win);
-            redraw_curbuf_later(UPD_VALID);
-        }
+        haveto_redraw = true;
+        set_can_cindent(true);
+        // The cursor moved: don't autoindent or cindent now.
+        did_ai.set(false);
+        did_si.set(false);
+        can_si.set(false);
+        can_si_back.set(false);
+        line_breakcheck();
     }
+
+    if save_char as c_int != NUL {
+        // Put the space after the cursor back.
+        unsafe { pchar_cursor(save_char) };
+    }
+    win.w_onebuf_opt.wo_lbr = has_lbr;
+
+    if !format_only && haveto_redraw {
+        unsafe { update_topline(win.raw()) };
+        unsafe { redraw_curbuf_later(UPD_VALID) };
+    }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
