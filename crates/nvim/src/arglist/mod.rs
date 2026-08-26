@@ -60,6 +60,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
+use crate::winlayer::{Buf, Live, Win};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -70,6 +71,20 @@ pub use command::{
     ex_next, ex_previous, ex_rewind, get_arglist_name,
 };
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
+
+/// The Ex command being run, whose caller has promised it outlives the
+/// value.
+///
+/// The promise is discharged by the `do_cmdline` frame that owns the
+/// `exarg_T`: it outlives every command this module runs. Wrapping is the
+/// unsafe step, once per entry point; every `(*eap).field` after it is
+/// ordinary checked code.
+pub(crate) type Ea = Live<exarg_T>;
+
+/// An argument list — the global one, or a window's own copy — the same
+/// promise as [`Ea`]. A list is reference counted and outlives any command
+/// walking it.
+pub(crate) type Al = Live<alist_T>;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
@@ -126,8 +141,10 @@ pub(crate) fn global_arglist() -> *mut alist_T {
 /// `AARGLIST(al)` and `ALIST_COUNT(al)`: an argument list's entries and length.
 /// The transpiler spelled these out at every use; the C had them as macros.
 fn alist_entries(al: *mut alist_T) -> (*mut aentry_T, c_int) {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let al = unsafe { Al::new(al) };
     // SAFETY: every caller holds a valid argument list.
-    let ga = unsafe { &(*al).al_ga };
+    let ga = &(*al).al_ga;
     (ga.ga_data as *mut aentry_T, ga.ga_len)
 }
 
@@ -141,8 +158,10 @@ fn alist_count(al: *mut alist_T) -> c_int {
 
 /// `WARGLIST(wp)[n]` and `WARGCOUNT(wp)`: a window's argument list.
 fn win_alist(wp: *mut win_T) -> *mut alist_T {
+    // SAFETY: the caller's promise -- a live `win_T`.
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: every window always has an argument list.
-    unsafe { (*wp).w_alist }
+    (*wp).w_alist
 }
 
 fn warg(wp: *mut win_T, n: c_int) -> *mut aentry_T {
@@ -173,12 +192,12 @@ fn set_argcount(count: c_int) {
 /// deletion, which is what [`check_arg_idx`] exists to notice.
 fn cur_arg_idx() -> c_int {
     // SAFETY: curwin is always valid.
-    unsafe { (*curwin.get()).w_arg_idx }
+    cur_win().w_arg_idx
 }
 
 fn set_cur_arg_idx(idx: c_int) {
     // SAFETY: curwin is always valid.
-    unsafe { (*curwin.get()).w_arg_idx = idx };
+    cur_win().w_arg_idx = idx;
 }
 
 /// `alist_name(ARGLIST + n)`: the n-th argument's file name.
@@ -223,19 +242,19 @@ fn arglist_is_locked() -> bool {
 ///
 /// `al` must be a valid argument list.
 unsafe fn alist_clear(al: *mut alist_T) {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let mut al = unsafe { Al::new(al) };
     if arglist_is_locked() {
         return;
     }
     // SAFETY: caller contract; each entry owns its `ae_fname`.
-    unsafe {
-        let (entries, len) = alist_entries(al);
-        if !entries.is_null() {
-            for i in 0..len {
-                xfree((*entries.offset(i as isize)).ae_fname as *mut c_void);
-            }
+    let (entries, len) = alist_entries(al.raw());
+    if !entries.is_null() {
+        for i in 0..len {
+            unsafe { xfree((*entries.offset(i as isize)).ae_fname as *mut c_void) };
         }
-        ga_clear(&raw mut (*al).al_ga);
     }
+    unsafe { ga_clear(&raw mut (*al).al_ga) };
 }
 
 /// Initialise an argument list to no entries.
@@ -244,6 +263,8 @@ unsafe fn alist_clear(al: *mut alist_T) {
 ///
 /// `al` must point at storage for an `alist_T`.
 pub unsafe fn alist_init(al: *mut alist_T) {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let mut al = unsafe { Al::new(al) };
     // SAFETY: caller contract.
     unsafe { ga_init(&raw mut (*al).al_ga, size_of::<aentry_T>() as c_int, 5) };
 }
@@ -255,17 +276,17 @@ pub unsafe fn alist_init(al: *mut alist_T) {
 ///
 /// `al` must be a valid argument list.
 pub unsafe fn alist_unlink(al: *mut alist_T) {
-    if al == global_arglist() {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let mut al = unsafe { Al::new(al) };
+    if ptr::eq(al.raw(), global_arglist()) {
         return;
     }
     // SAFETY: caller contract; the list is ours to free once its last
     // reference goes.
-    unsafe {
-        (*al).al_refcount -= 1;
-        if (*al).al_refcount <= 0 {
-            alist_clear(al);
-            xfree(al as *mut c_void);
-        }
+    (*al).al_refcount -= 1;
+    if (*al).al_refcount <= 0 {
+        unsafe { alist_clear(al.raw()) };
+        unsafe { xfree(al.raw().cast()) };
     }
 }
 
@@ -273,13 +294,11 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
 unsafe fn alist_new() {
     max_alist_id.set(max_alist_id.get() + 1);
     // SAFETY: curwin is valid; the new list starts out owned by it alone.
-    unsafe {
-        let al = xmalloc(size_of::<alist_T>()) as *mut alist_T;
-        (*curwin.get()).w_alist = al;
-        (*al).al_refcount = 1;
-        (*al).id = max_alist_id.get();
-        alist_init(al);
-    }
+    let al = unsafe { xmalloc(size_of::<alist_T>()) } as *mut alist_T;
+    cur_win().w_alist = al;
+    unsafe { (*al).al_refcount = 1 };
+    unsafe { (*al).id = max_alist_id.get() };
+    unsafe { alist_init(al) };
 }
 
 /// Replace `al`'s entries with `files`, taking over the array and the names
@@ -299,40 +318,39 @@ unsafe fn alist_set(
     fnum_list: *mut c_int,
     fnum_len: c_int,
 ) {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let mut al = unsafe { Al::new(al) };
     if arglist_is_locked() {
         return;
     }
     // SAFETY: caller contract; `ga_grow` reserves every slot the loop fills,
     // and each name is handed to the entry that takes it over.
-    unsafe {
-        alist_clear(al);
-        ga_grow(&raw mut (*al).al_ga, count);
-        for i in 0..count {
-            if got_int.get() {
-                // Adding many buffers can take a long time, so the user can
-                // interrupt; the names not yet added are dropped.
-                for j in i..count {
-                    xfree(*files.offset(j as isize) as *mut c_void);
-                }
-                break;
+    unsafe { alist_clear(al.raw()) };
+    unsafe { ga_grow(&raw mut (*al).al_ga, count) };
+    for i in 0..count {
+        if got_int.get() {
+            // Adding many buffers can take a long time, so the user can
+            // interrupt; the names not yet added are dropped.
+            for j in i..count {
+                unsafe { xfree(*files.offset(j as isize) as *mut c_void) };
             }
-            if !fnum_list.is_null() && i < fnum_len {
-                // Name a buffer previously used for the argument list, so
-                // that `alist_add` re-uses it.
-                ARGLIST_LOCKED.set(true);
-                buf_set_name(*fnum_list.offset(i as isize), *files.offset(i as isize));
-                ARGLIST_LOCKED.set(false);
-            }
-            alist_add(
-                al,
-                *files.offset(i as isize),
-                if use_curbuf { 2 } else { 1 },
-            );
-            os_breakcheck();
+            break;
         }
-        xfree(files as *mut c_void);
+        if !fnum_list.is_null() && i < fnum_len {
+            // Name a buffer previously used for the argument list, so
+            // that `alist_add` re-uses it.
+            ARGLIST_LOCKED.set(true);
+            unsafe { buf_set_name(*fnum_list.offset(i as isize), *files.offset(i as isize)) };
+            ARGLIST_LOCKED.set(false);
+        }
+        let al2 = al.raw();
+        let fname2 = unsafe { *files.offset(i as isize) };
+        let set_fnum2 = if use_curbuf { 2 } else { 1 };
+        unsafe { alist_add(al2, fname2, set_fnum2) };
+        os_breakcheck();
     }
-    if al == global_arglist() {
+    unsafe { xfree(files as *mut c_void) };
+    if ptr::eq(al.raw(), global_arglist()) {
         arg_had_last.set(false);
     }
 }
@@ -346,6 +364,8 @@ unsafe fn alist_set(
 /// `al` must be a valid argument list with room for one more entry, and
 /// `fname` an owned name or null.
 pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
+    // SAFETY: the caller's promise -- a live `alist_T`.
+    let mut al = unsafe { Al::new(al) };
     if fname.is_null() {
         // Don't add NULL file names.
         return;
@@ -357,17 +377,15 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
     ARGLIST_LOCKED.set(true);
     // SAFETY: caller contract; the slot at `ga_len` is the room the caller
     // grew, and `buflist_add` cannot move the list while it is locked.
-    unsafe {
-        (*wp).w_locked = true;
-        let at = (*al).al_ga.ga_len;
-        (*alist_arg(al, at)).ae_fname = fname;
-        if set_fnum > 0 {
-            let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
-            (*alist_arg(al, at)).ae_fnum = buflist_add(fname, flags);
-        }
-        (*al).al_ga.ga_len += 1;
-        (*wp).w_locked = false;
+    unsafe { (*wp).w_locked = true };
+    let at = (*al).al_ga.ga_len;
+    unsafe { (*alist_arg(al.raw(), at)).ae_fname = fname };
+    if set_fnum > 0 {
+        let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
+        unsafe { (*alist_arg(al.raw(), at)).ae_fnum = buflist_add(fname, flags) };
     }
+    (*al).al_ga.ga_len += 1;
+    unsafe { (*wp).w_locked = false };
     ARGLIST_LOCKED.set(false);
 }
 
@@ -420,20 +438,24 @@ unsafe fn get_arglist(gap: *mut garray_T, str: *mut c_char, escaped: bool) {
     // SAFETY: caller contract. One `strlen` up front rather than one per
     // argument: `split_one_arg` only ever shortens what it is given, so the
     // original length still bounds it.
-    unsafe {
-        ga_init(gap, size_of::<*mut c_char>() as c_int, 20);
-        let total = strlen(str) as usize;
-        let buf = core::slice::from_raw_parts_mut(str.cast::<u8>(), total + 1);
-        let mut at = 0;
-        while at < total && buf[at] != 0 {
-            ga_grow(gap, 1);
-            *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = str.add(at);
-            (*gap).ga_len += 1;
-            if !escaped {
-                return;
-            }
-            at += split_one_arg(&mut buf[at..]);
+    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
+    let total = unsafe { strlen(str) } as usize;
+    let buf = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), total + 1) };
+    let mut at = 0;
+    while at < total && buf[at] != 0 {
+        unsafe { ga_grow(gap, 1) };
+        let slot = unsafe {
+            (*gap)
+                .ga_data
+                .cast::<*mut c_char>()
+                .offset((*gap).ga_len as isize)
+        };
+        unsafe { *slot = str.add(at) };
+        unsafe { (*gap).ga_len += 1 };
+        if !escaped {
+            return;
         }
+        at += split_one_arg(&mut buf[at..]);
     }
 }
 
@@ -463,17 +485,15 @@ pub unsafe fn get_arglist_exp(
     let mut ga = EMPTY_GARRAY;
     // SAFETY: caller contract; `ga` holds pointers into `str`, which outlives
     // the expansion, and the garray is cleared before returning.
-    unsafe {
-        get_arglist(&raw mut ga, str, true);
-        let names = ga.ga_data as *mut *mut c_char;
-        let result = if wig {
-            expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND)
-        } else {
-            gen_expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND)
-        };
-        ga_clear(&raw mut ga);
-        result
-    }
+    unsafe { get_arglist(&raw mut ga, str, true) };
+    let names = ga.ga_data as *mut *mut c_char;
+    let result = if wig {
+        unsafe { expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND) }
+    } else {
+        unsafe { gen_expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND) }
+    };
+    unsafe { ga_clear(&raw mut ga) };
+    result
 }
 
 /// Re-check `w_arg_idx` in every window sharing the current window's list.
@@ -483,20 +503,20 @@ unsafe fn alist_check_arg_idx() {
     while !tp.is_null() {
         // SAFETY: the tab page and window lists are well formed, and
         // `check_arg_idx` does not change them.
-        tp = unsafe {
-            let mut win = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !win.is_null() {
-                if (*win).w_alist == alist {
-                    check_arg_idx(win);
-                }
-                win = (*win).w_next;
-            }
-            (*tp).tp_next as *mut tabpage_T
+        // SAFETY: `tp` is a live tab page, and its window chain is live for
+        // the walk -- `check_arg_idx` only reads and writes `w_arg_idx`.
+        let mut win = if tp == curtab.get() {
+            firstwin.get()
+        } else {
+            unsafe { (*tp).tp_firstwin }
         };
+        while !win.is_null() {
+            if unsafe { (*win).w_alist } == alist {
+                unsafe { check_arg_idx(win) };
+            }
+            win = unsafe { (*win).w_next };
+        }
+        tp = unsafe { (*tp).tp_next };
     }
 }
 
@@ -517,29 +537,26 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
     // SAFETY: `after` is clamped into the list, the `memmove` opens exactly
     // the `count` slots `ga_grow` reserved, and the list cannot move while it
     // is locked.
-    unsafe {
-        ga_grow(&raw mut (*win_alist(wp)).al_ga, count);
-        let after = after.clamp(0, argcount());
-        if after < argcount() {
-            memmove(
-                arg(after + count) as *mut c_void,
-                arg(after) as *const c_void,
-                ((argcount() - after) as size_t).wrapping_mul(size_of::<aentry_T>()),
-            );
-        }
-        ARGLIST_LOCKED.set(true);
-        (*wp).w_locked = true;
-        for i in 0..count {
-            let name = *files.offset(i as isize);
-            (*arg(after + i)).ae_fname = name;
-            (*arg(after + i)).ae_fnum = buflist_add(name, flags);
-        }
-        ARGLIST_LOCKED.set(false);
-        (*wp).w_locked = false;
-        (*win_alist(wp)).al_ga.ga_len += count;
-        if old_argcount > 0 && (*wp).w_arg_idx >= after {
-            (*wp).w_arg_idx += count;
-        }
+    unsafe { ga_grow(&raw mut (*win_alist(wp)).al_ga, count) };
+    let after = after.clamp(0, argcount());
+    if after < argcount() {
+        let al2 = arg(after + count) as *mut c_void;
+        let fname2 = arg(after) as *const c_void;
+        let set_fnum2 = ((argcount() - after) as size_t).wrapping_mul(size_of::<aentry_T>());
+        unsafe { memmove(al2, fname2, set_fnum2) };
+    }
+    ARGLIST_LOCKED.set(true);
+    unsafe { (*wp).w_locked = true };
+    for i in 0..count {
+        let name = unsafe { *files.offset(i as isize) };
+        unsafe { (*arg(after + i)).ae_fname = name };
+        unsafe { (*arg(after + i)).ae_fnum = buflist_add(name, flags) };
+    }
+    ARGLIST_LOCKED.set(false);
+    unsafe { (*wp).w_locked = false };
+    unsafe { (*win_alist(wp)).al_ga.ga_len += count };
+    if old_argcount > 0 && unsafe { (*wp).w_arg_idx } >= after {
+        unsafe { (*wp).w_arg_idx += count };
     }
 }
 
@@ -553,14 +570,11 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
 unsafe fn remove_arg(idx: c_int) {
     // SAFETY: caller contract; the tail being moved down is
     // `argcount() - idx - 1` entries long.
-    unsafe {
-        xfree((*arg(idx)).ae_fname as *mut c_void);
-        memmove(
-            arg(idx) as *mut c_void,
-            arg(idx + 1) as *const c_void,
-            ((argcount() - idx - 1) as size_t).wrapping_mul(size_of::<aentry_T>()),
-        );
-    }
+    unsafe { xfree((*arg(idx)).ae_fname as *mut c_void) };
+    let al2 = arg(idx) as *mut c_void;
+    let fname2 = arg(idx + 1) as *const c_void;
+    let set_fnum2 = ((argcount() - idx - 1) as size_t).wrapping_mul(size_of::<aentry_T>());
+    unsafe { memmove(al2, fname2, set_fnum2) };
     set_argcount(argcount() - 1);
 }
 
@@ -613,13 +627,10 @@ unsafe fn arglist_del_files(alist_ga: *mut garray_T) {
     while i < len && !got_int.get() {
         // SAFETY: `i` is in range; the translated pattern and the compiled
         // program are freed on every path out of the body.
-        let (pattern, regexp) = unsafe {
-            let pattern = *patterns.offset(i as isize);
-            (
-                pattern,
-                file_pat_to_reg_pat(pattern, ptr::null(), ptr::null_mut(), 0),
-            )
-        };
+        // SAFETY: caller contract -- `patterns` holds `count` names, each
+        // NUL-terminated.
+        let pattern = unsafe { *patterns.offset(i as isize) };
+        let regexp = unsafe { file_pat_to_reg_pat(pattern, ptr::null(), ptr::null_mut(), 0) };
         if regexp.is_null() {
             break;
         }
@@ -631,15 +642,14 @@ unsafe fn arglist_del_files(alist_ga: *mut garray_T) {
             break;
         }
         // SAFETY: the program was just compiled and is freed right after.
-        let didone = unsafe {
-            let didone = delete_matching_args(&raw mut regmatch);
-            vim_regfree(regmatch.regprog);
-            xfree(regexp as *mut c_void);
-            didone
-        };
+        // SAFETY: `regmatch` is this frame's and `regexp` is ours to free
+        // once the walk that reads it has finished.
+        let didone = unsafe { delete_matching_args(&raw mut regmatch) };
+        unsafe { vim_regfree(regmatch.regprog) };
+        unsafe { xfree(regexp.cast()) };
         if !didone {
             // SAFETY: the pattern is NUL-terminated and still alive.
-            let pattern = unsafe { CStr::from_ptr(pattern).to_string_lossy() };
+            let pattern = unsafe { CStr::from_ptr(pattern) }.to_string_lossy();
             crate::semsg!("E480: No match: {pattern}");
         }
         i += 1;
@@ -675,15 +685,13 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
     let mut arg_escaped = true;
     // SAFETY: caller contract; curbuf is valid and its name outlives the
     // expansion below.
-    unsafe {
-        // ":argadd" with no argument adds the current file.
-        if op == ArgListOp::Add && *str as c_int == NUL {
-            if (*curbuf.get()).b_ffname.is_null() {
-                return false;
-            }
-            str = (*curbuf.get()).b_fname;
-            arg_escaped = false;
+    // ":argadd" with no argument adds the current file.
+    if op == ArgListOp::Add && unsafe { *str } as c_int == NUL {
+        if cur_buf().b_ffname.is_null() {
+            return false;
         }
+        str = cur_buf().b_fname;
+        arg_escaped = false;
     }
     // Collect all the file name arguments.
     let mut new_ga = EMPTY_GARRAY;
@@ -697,36 +705,24 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
         let mut exp_files: *mut *mut c_char = ptr::null_mut();
         // SAFETY: the expansion reads `new_ga`'s names and hands back an
         // owned array of owned names, which the arms below take over.
-        let expanded = unsafe {
-            let result = expand_wildcards(
-                new_ga.ga_len,
-                new_ga.ga_data as *mut *mut c_char,
-                &raw mut exp_count,
-                &raw mut exp_files,
-                ANY_NAME,
-            );
-            ga_clear(&raw mut new_ga);
-            result != FAIL && exp_count != 0
-        };
+        let names = new_ga.ga_data.cast::<*mut c_char>();
+        let countp = &raw mut exp_count;
+        let filesp = &raw mut exp_files;
+        let result = unsafe { expand_wildcards(new_ga.ga_len, names, countp, filesp, ANY_NAME) };
+        unsafe { ga_clear(&raw mut new_ga) };
+        let expanded = result != FAIL && exp_count != 0;
         if !expanded {
             crate::semsg!("E479: No match");
             return false;
         }
         // SAFETY: `exp_files` holds `exp_count` owned names.
-        unsafe {
-            if op == ArgListOp::Add {
-                alist_add_list(exp_count, exp_files, after, will_edit);
-                xfree(exp_files as *mut c_void);
-            } else {
-                alist_set(
-                    win_alist(curwin.get()),
-                    exp_count,
-                    exp_files,
-                    will_edit,
-                    ptr::null_mut(),
-                    0,
-                );
-            }
+        if op == ArgListOp::Add {
+            unsafe { alist_add_list(exp_count, exp_files, after, will_edit) };
+            unsafe { xfree(exp_files as *mut c_void) };
+        } else {
+            let al2 = win_alist(curwin.get());
+            let fnum_list2 = ptr::null_mut();
+            unsafe { alist_set(al2, exp_count, exp_files, will_edit, fnum_list2, 0) };
         }
     }
     // SAFETY: walks the tab page and window lists.
@@ -753,17 +749,17 @@ pub unsafe fn set_arglist(str: *mut c_char) {
 ///
 /// `win` must be a valid window.
 pub unsafe fn editing_arg_idx(win: *mut win_T) -> bool {
+    // SAFETY: the caller's promise -- a live `win_T`.
+    let win = unsafe { Win::new(win) };
     // SAFETY: caller contract; the window is valid.
-    let idx = unsafe { (*win).w_arg_idx };
-    if idx >= wargcount(win) {
+    let idx = (*win).w_arg_idx;
+    if idx >= wargcount(win.raw()) {
         return false;
     }
-    let entry = warg(win, idx);
+    let entry = warg(win.raw(), idx);
     // SAFETY: `entry` is in range and the window's buffer is valid.
-    unsafe {
-        let buf = (*win).w_buffer;
-        (*buf).handle == (*entry).ae_fnum || same_file(alist_name(entry), (*buf).b_ffname)
-    }
+    let buf = (*win).w_buffer;
+    unsafe { (*buf).handle == (*entry).ae_fnum || same_file(alist_name(entry), (*buf).b_ffname) }
 }
 
 /// Refresh `win`'s "am I on the argument I think I am" state, and remember
@@ -774,13 +770,15 @@ pub unsafe fn editing_arg_idx(win: *mut win_T) -> bool {
 ///
 /// `win` must be a valid window.
 pub unsafe fn check_arg_idx(win: *mut win_T) {
+    // SAFETY: the caller's promise -- a live `win_T`.
+    let mut win = unsafe { Win::new(win) };
     // SAFETY: caller contract; the window's buffer and list are valid.
-    let (editing, idx) = unsafe { (editing_arg_idx(win), (*win).w_arg_idx) };
-    if wargcount(win) <= 1 || editing {
+    let (editing, idx) = unsafe { (editing_arg_idx(win.raw()), (*win).w_arg_idx) };
+    if wargcount(win.raw()) <= 1 || editing {
         // Editing the current entry: `arg_had_last` if it is the last.
         // SAFETY: caller contract.
-        unsafe { (*win).w_arg_idx_invalid = false };
-        if idx == wargcount(win) - 1 && win_alist(win) == global_arglist() {
+        (*win).w_arg_idx_invalid = false;
+        if idx == wargcount(win.raw()) - 1 && win_alist(win.raw()) == global_arglist() {
             arg_had_last.set(true);
         }
         return;
@@ -788,11 +786,11 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     // Not editing the current entry, so `arg_had_last` only if this buffer
     // is the *last* global argument.
     // SAFETY: caller contract.
-    unsafe { (*win).w_arg_idx_invalid = true };
+    (*win).w_arg_idx_invalid = true;
     let gcount = alist_count(global_arglist());
-    if idx == wargcount(win) - 1
+    if idx == wargcount(win.raw()) - 1
         || arg_had_last.get()
-        || win_alist(win) != global_arglist()
+        || win_alist(win.raw()) != global_arglist()
         || gcount <= 0
         || idx >= gcount
     {
@@ -818,12 +816,22 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
 /// `aep` must be a valid argument list entry.
 pub unsafe fn alist_name(aep: *mut aentry_T) -> *mut c_char {
     // SAFETY: caller contract; a found buffer outlives this call.
-    unsafe {
-        let bp = buflist_findnr((*aep).ae_fnum);
-        if bp.is_null() || (*bp).b_fname.is_null() {
-            (*aep).ae_fname
-        } else {
-            (*bp).b_fname
-        }
+    let bp = buflist_findnr(unsafe { (*aep).ae_fnum });
+    if bp.is_null() || unsafe { (*bp).b_fname.is_null() } {
+        unsafe { (*aep).ae_fname }
+    } else {
+        unsafe { (*bp).b_fname }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
