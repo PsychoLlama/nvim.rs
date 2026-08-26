@@ -124,7 +124,7 @@
     "crates/nvim/src/autocmd/walk.rs": {"missing_safety_doc": 3, "pub_items": 1, "unsafe_lines": 150},
     "crates/nvim/src/buffer/all.rs": {"missing_safety_doc": 1, "pub_items": 1, "unsafe_lines": 27},
     "crates/nvim/src/buffer/close.rs": {"missing_safety_doc": 1, "pub_items": 6, "unsafe_lines": 71},
-    "crates/nvim/src/buffer/enter.rs": {"pub_items": 5, "unsafe_lines": 30},
+    "crates/nvim/src/buffer/enter.rs": {"pub_items": 5, "unsafe_lines": 29},
     "crates/nvim/src/buffer/expand.rs": {"missing_safety_doc": 1, "pub_items": 3, "unsafe_lines": 20},
     "crates/nvim/src/buffer/info.rs": {"missing_safety_doc": 7, "pub_items": 7, "unsafe_lines": 65},
     "crates/nvim/src/buffer/list.rs": {"extern_abi": 1, "missing_safety_doc": 9, "pub_items": 7, "unsafe_lines": 66},

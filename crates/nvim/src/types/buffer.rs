@@ -564,7 +564,11 @@ pub struct synblock_T {
     pub b_syn_chartab: [uint8_t; 32],
     pub b_syn_isk: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+/// Deliberately neither `Copy` nor `Clone`: a tab page owns three
+/// allocations (`tp_vars`, `tp_localdir`, `tp_diffbuf`'s memlines) and a
+/// window list, so a bitwise copy would be a second owner of all of them.
+/// Tab pages are reached through `winlayer::TabPage`, which is the `Copy`
+/// handle naming this one.
 pub struct tabpage_S {
     pub handle: handle_T,
     pub tp_next: *mut tabpage_T,

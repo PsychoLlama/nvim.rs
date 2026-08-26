@@ -83,7 +83,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // zeroed `tabpage_T`, live from here on.
     let mut tp = unsafe { TabPage::new(xcalloc(1, size_of::<tabpage_T>()) as *mut tabpage_T) };
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
-    tp.handle = LAST_TP_HANDLE.get() as handle_T;
+    tp.assign_handle(LAST_TP_HANDLE.get() as handle_T);
     register_tabpage(tp);
 
     // Init t: variables.

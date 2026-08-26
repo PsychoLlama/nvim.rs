@@ -217,7 +217,10 @@ fn set_terminal_winopts(mut s: Session) {
         "terminal window options saved twice"
     );
     let mut wp = current_win();
-    s.save_curwin_handle = wp.handle;
+    // The window is named by handle from here on, not by address: the session
+    // outlives calls that can close it, and `win_for_handle` below is the
+    // re-entry rule's other half.
+    s.save_curwin_handle = wp.handle();
     s.save_w_p_cul = wp.w_onebuf_opt.wo_cul != 0;
     s.save_w_p_culopt = ::core::ptr::null_mut();
     s.save_w_p_culopt_flags = wp.w_p_culopt_flags;
@@ -310,7 +313,10 @@ fn saved_winopts(s: Session) -> Option<*mut winopt_T> {
         return None;
     }
 
-    // SAFETY: a window the handle map still answers for.
+    // Not `Win::valid`: `wp` came out of the registry just above, so it is
+    // registered by construction. What is asked here is the *layout*
+    // question — is it still on this tab page's window list — which stays a
+    // list walk. SAFETY: the pointer is only compared.
     if unsafe { win_valid(wp.raw()) } {
         if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
             wp.redraw_later(UPD_SOME_VALID);

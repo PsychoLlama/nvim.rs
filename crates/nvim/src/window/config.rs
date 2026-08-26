@@ -69,7 +69,9 @@ pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
 /// Show `buf` in `win`: switch to the window, switch its buffer with the
 /// autocommands that implies, and switch back.
 fn set_buf(win: Win, buf: Buf, err: &mut Error) {
-    let win_handle = win.handle;
+    // `do_buffer` below fires `BufLeave`/`BufEnter`, which can close this
+    // window; the handle is taken now so the error message can still name it.
+    let win_handle = win.handle();
     // SAFETY: a live window; the answer is its tab page.
     let tab = unsafe { win_find_tabpage(win.raw()) };
     let _redraw_off = Suppress::redraw();
@@ -95,7 +97,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
             p_acd.set(0);
         }
         let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
-        let nr = buf.handle as c_int;
+        let nr = buf.handle();
         do_buffer(goto, first, fwd, nr, 0);
         if !switchwin.sw_same_win {
             p_acd.set(save_acd);
