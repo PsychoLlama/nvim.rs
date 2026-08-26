@@ -163,22 +163,33 @@ def enclosing_unsafe(raw: bytes, at: int) -> int | None:
 
 
 def chain_end(raw: bytes, at: int) -> int:
-    """The end of the `.field` / `[i]` / `(args)` chain starting at `at`."""
+    """The end of the `.field` / `[i]` chain starting at `at`.
+
+    **A method call ends the chain, before its `.`.** A projection is part of
+    the place the deref names, so the region has to cover it; a method call
+    takes the place *by value* and moving the brace past it changes what the
+    `*` binds to -- `unsafe { *var }.clamp(0, 1)` rewritten as
+    `unsafe { *var .clamp(0, 1) }` is `*(var.clamp(0, 1))`, which is a
+    different program and sometimes still compiles. Four of those shipped in
+    one S8 run over the whole crate before this stopped.
+    """
     i = at
-    while i < len(raw) and raw[i : i + 1] in (b".", b"[", b"("):
+    while i < len(raw) and raw[i : i + 1] in (b".", b"["):
         if raw[i : i + 1] == b".":
-            i += 1
-            while i < len(raw) and (raw[i : i + 1].isalnum() or raw[i : i + 1] == b"_"):
-                i += 1
+            j = i + 1
+            while j < len(raw) and (raw[j : j + 1].isalnum() or raw[j : j + 1] == b"_"):
+                j += 1
+            # `.name(` is a method call, and `.0`/`.1` on a tuple is not.
+            if raw[j : j + 1] == b"(" or raw[j : j + 1] == b":":
+                return i
+            i = j
             continue
-        opener = raw[i : i + 1]
-        closer = {b"[": b"]", b"(": b")"}[opener]
         depth = 0
         while i < len(raw):
             c = raw[i : i + 1]
-            if c == opener:
+            if c == b"[":
                 depth += 1
-            elif c == closer:
+            elif c == b"]":
                 depth -= 1
                 if depth == 0:
                     i += 1
@@ -188,6 +199,41 @@ def chain_end(raw: bytes, at: int) -> int:
 
 
 DEREF_WRAP = re.compile(rb"unsafe \{ (\(*\*[^{}]*?) \}(?=[.\[])")
+
+def ends_in_call(inner: bytes) -> bool:
+    """Whether `inner` ends in a *call*, so it answers with a value.
+
+    `(*p)` also ends in `)` and is very much a place; the two are told apart
+    by what sits before the matching `(` -- an identifier means a call,
+    anything else means a grouping paren.
+    """
+    inner = inner.rstrip()
+    if not inner.endswith(b")"):
+        return False
+    depth = 0
+    for i in range(len(inner) - 1, -1, -1):
+        c = inner[i : i + 1]
+        if c == b")":
+            depth += 1
+        elif c == b"(":
+            depth -= 1
+            if depth == 0:
+                before = inner[i - 1 : i]
+                return bool(before) and (before.isalnum() or before in (b"_", b"]"))
+    return False
+
+
+def open_of(raw: bytes, close: int) -> int:
+    """The first byte of the block whose `}` is at `close`."""
+    depth = 0
+    for i in range(close, -1, -1):
+        if raw[i : i + 1] == b"}":
+            depth += 1
+        elif raw[i : i + 1] == b"{":
+            depth -= 1
+            if depth == 0:
+                return i + 2 if raw[i + 1 : i + 2] == b" " else i + 1
+    return close
 
 
 def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
@@ -205,19 +251,56 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
     `b_visual` swap and `unadjust_for_sel_inner`, both `Copy` structs) which
     only the functional suite caught. So every wrapped deref followed by a
     `.field` or `[i]` gets the brace pushed past the chain, whether or not
-    rustc complained.
+    rustc complained -- but only past a *projection*: see `chain_end`, and
+    the `as` guard below.
     """
     edits = set()
     for match in DEREF_WRAP.finditer(raw):
+        if ends_in_call(match.group(1)):
+            # The wrapped expression ends in a *call*, so it is already a
+            # value and the `.field` after it is a read of a temporary --
+            # which is what the source said. Nothing to repair.
+            continue
+        if b" as " in match.group(1):
+            # `unsafe { *p as u8 }.is_ascii_uppercase()` is already right: the
+            # cast made a value, and the method on it is not a place. Pushing
+            # the brace past it is a syntax error at best.
+            continue
         close = match.end() - 1
-        edits.add((close, chain_end(raw, close + 1)))
+        edits.add((close, chain_end(raw, close + 1), match.start(1)))
     for span in spans or []:
         close = enclosing_unsafe(raw, span["byte_start"])
         if close is not None and raw[close + 1 : close + 2] in (b".", b"["):
-            edits.add((close, chain_end(raw, close + 1)))
-    for close, end in sorted(edits, reverse=True):
-        raw = raw[:close] + raw[close + 1 : end] + b" }" + raw[end:]
-    return raw, len(edits)
+            edits.add((close, chain_end(raw, close + 1), open_of(raw, close)))
+    for close, end, start in sorted(edits, reverse=True):
+        if end <= close + 1:
+            continue  # nothing to move the brace past
+        inner = raw[start:close].rstrip()
+        # `unsafe { *p }.f` must become `unsafe { (*p).f }`, never
+        # `unsafe { *p .f }` -- the latter is `*(p.f)`, a different program
+        # that compiles whenever `p.f` is itself a pointer. c2rust writes
+        # `(*p).f` so the parentheses are usually already there, which is
+        # exactly why this hole stayed open.
+        if not balanced_group(inner):
+            raw = raw[:start] + b"(" + inner + b")" + raw[close + 1 : end] + b" }" + raw[end:]
+        else:
+            raw = raw[:close] + raw[close + 1 : end] + b" }" + raw[end:]
+    return raw, sum(1 for close, end, _ in edits if end > close + 1)
+
+
+def balanced_group(text: bytes) -> bool:
+    """Whether `text` is one parenthesised group, so `text.f` binds to it."""
+    if not (text.startswith(b"(") and text.endswith(b")")):
+        return False
+    depth = 0
+    for i in range(len(text)):
+        if text[i : i + 1] == b"(":
+            depth += 1
+        elif text[i : i + 1] == b")":
+            depth -= 1
+            if depth == 0:
+                return i == len(text) - 1
+    return False
 
 
 def reparen(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
