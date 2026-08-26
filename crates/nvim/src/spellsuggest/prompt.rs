@@ -156,11 +156,15 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
         unsafe { msg(gettext(c"No suggestions".as_ptr()), 0) };
     } else if count > 0 {
         if count > sug.su_ga.ga_len {
-            smsg_c!(
-                0,
-                unsafe { gettext(c"Only %ld suggestions".as_ptr()) },
-                sug.su_ga.ga_len as int64_t,
-            );
+            // SAFETY: the message macros expand to a `vim_snprintf` over the
+            // format literal above and the editor's message buffers.
+            unsafe {
+                smsg_c!(
+                    0,
+                    gettext(c"Only %ld suggestions".as_ptr()),
+                    sug.su_ga.ga_len as int64_t,
+                )
+            };
         }
     } else {
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };

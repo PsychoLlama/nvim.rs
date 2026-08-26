@@ -352,10 +352,14 @@ pub unsafe fn autocmd_register(
     if ap.is_null() {
         // A buffer-local pattern needs a buffer that exists.
         if is_buflocal && (buflocal_nr == 0 || buflist_findnr(buflocal_nr).is_null()) {
-            semsg_c!(
-                unsafe { gettext(c"E680: <buffer=%d>: invalid buffer number ".as_ptr()) },
-                buflocal_nr,
-            );
+            // SAFETY: the message macros expand to a `vim_snprintf` over the
+            // format literal above and the editor's message buffers.
+            unsafe {
+                semsg_c!(
+                    gettext(c"E680: <buffer=%d>: invalid buffer number ".as_ptr()),
+                    buflocal_nr,
+                )
+            };
             return FAIL;
         }
 
@@ -569,10 +573,14 @@ pub(crate) unsafe fn arg_event_skip(
         if unsafe { *arg.add(1) } != 0
             && !ascii_iswhite(unsafe { *arg.add(1) } as ::core::ffi::c_int)
         {
-            semsg_c!(
-                unsafe { gettext(c"E215: Illegal character after *: %s".as_ptr()) },
-                arg,
-            );
+            // SAFETY: the message macros expand to a `vim_snprintf` over the
+            // format literal above and the editor's message buffers.
+            unsafe {
+                semsg_c!(
+                    gettext(c"E215: Illegal character after *: %s".as_ptr()),
+                    arg,
+                )
+            };
             return ::core::ptr::null_mut();
         }
         return unsafe { arg.add(1) };
@@ -585,16 +593,18 @@ pub(crate) unsafe fn arg_event_skip(
         && !ascii_iswhite(unsafe { *pat } as ::core::ffi::c_int)
     {
         if unsafe { event_name2nr(pat, &raw mut p) } >= NUM_EVENTS {
-            semsg_c!(
-                unsafe {
+            // SAFETY: the message macros expand to a `vim_snprintf` over the
+            // format literal above and the editor's message buffers.
+            unsafe {
+                semsg_c!(
                     gettext(if have_group {
                         c"E216: No such event: %s".as_ptr()
                     } else {
                         c"E216: No such group or event: %s".as_ptr()
-                    })
-                },
-                pat,
-            );
+                    }),
+                    pat,
+                )
+            };
             return ::core::ptr::null_mut();
         }
         pat = p;
@@ -617,10 +627,14 @@ unsafe fn arg_autocmd_flag_get(
         && ascii_iswhite(unsafe { *(*cmd_ptr).offset(len as isize) } as ::core::ffi::c_int)
     {
         if unsafe { *flag } {
-            semsg_c!(
-                unsafe { gettext((&raw const e_duparg2).cast::<::core::ffi::c_char>()) },
-                pattern.as_ptr(),
-            );
+            // SAFETY: the message macros expand to a `vim_snprintf` over the
+            // format literal above and the editor's message buffers.
+            unsafe {
+                semsg_c!(
+                    gettext((&raw const e_duparg2).cast::<::core::ffi::c_char>()),
+                    pattern.as_ptr(),
+                )
+            };
             return true;
         }
         unsafe { *flag = true };

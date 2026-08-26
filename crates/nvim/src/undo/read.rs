@@ -50,16 +50,22 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
     // Always under 'verbose', even when the user named the file.
     unsafe {
         verbosely(true, || {
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
             smsg_c!(0, gettext(c"Reading undo file: %s".as_ptr()), file_name);
         })
     };
     let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
     if fp.is_null() {
         if !name.is_null() || p_verbose.get() > 0 {
-            semsg_c!(
-                unsafe { gettext(c"E822: Cannot open undo file for reading: %s".as_ptr()) },
-                file_name,
-            );
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
+            unsafe {
+                semsg_c!(
+                    gettext(c"E822: Cannot open undo file for reading: %s".as_ptr()),
+                    file_name,
+                )
+            };
         }
     } else {
         unsafe { read_undo_file(fp, file_name, name.is_null(), hash) };
@@ -91,6 +97,8 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
     }
     unsafe {
         verbosely(true, || {
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
             smsg_c!(
                 0,
                 gettext(c"Not reading undo file, owner differs: %s".as_ptr()),
@@ -125,17 +133,20 @@ unsafe fn read_undo_file(
     if unsafe { fread(magic.as_mut_ptr().cast(), magic.len(), 1, fp) } != 1
         || magic != UF_START_MAGIC
     {
-        semsg_c!(
-            unsafe { gettext(c"E823: Not an undo file: %s".as_ptr()) },
-            file_name
-        );
+        // SAFETY: the message macros expand to a `vim_snprintf` over
+        // the format literal above and the editor's message buffers.
+        unsafe { semsg_c!(gettext(c"E823: Not an undo file: %s".as_ptr()), file_name) };
         return;
     }
     if unsafe { get2c(fp) } != UF_VERSION {
-        semsg_c!(
-            unsafe { gettext(c"E824: Incompatible undo file: %s".as_ptr()) },
-            file_name,
-        );
+        // SAFETY: the message macros expand to a `vim_snprintf` over
+        // the format literal above and the editor's message buffers.
+        unsafe {
+            semsg_c!(
+                gettext(c"E824: Incompatible undo file: %s".as_ptr()),
+                file_name,
+            )
+        };
         return;
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
@@ -174,11 +185,15 @@ unsafe fn read_undo_file(
         return;
     }
     if !automatic {
-        smsg_c!(
-            0,
-            unsafe { gettext(c"Finished reading undo file %s".as_ptr()) },
-            file_name,
-        );
+        // SAFETY: the message macros expand to a `vim_snprintf` over
+        // the format literal above and the editor's message buffers.
+        unsafe {
+            smsg_c!(
+                0,
+                gettext(c"Finished reading undo file %s".as_ptr()),
+                file_name,
+            )
+        };
     }
 }
 

@@ -711,10 +711,9 @@ unsafe fn spell_suggest_file(mut su: Sug, fname: *mut c_char) {
     // inside it before it is used.
     let fd: *mut FILE = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        semsg_c!(
-            unsafe { gettext(&raw const e_notopen as *const c_char) },
-            fname
-        );
+        // SAFETY: the message macros expand to a `vim_snprintf` over the
+        // format literal above and the editor's message buffers.
+        unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), fname) };
         return;
     }
 
