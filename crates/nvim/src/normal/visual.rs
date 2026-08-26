@@ -641,9 +641,9 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
     let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
-    if unsafe { *vi }.vi_start.lnum == 0
-        || unsafe { *vi }.vi_start.lnum > cur_buf().b_ml.ml_line_count
-        || unsafe { *vi }.vi_end.lnum == 0
+    if unsafe { (*vi).vi_start.lnum } == 0
+        || unsafe { (*vi).vi_start.lnum } > cur_buf().b_ml.ml_line_count
+        || unsafe { (*vi).vi_end.lnum } == 0
     {
         unsafe { beep_flush() };
         return;
@@ -652,21 +652,21 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
     let tpos;
     if visual_active() {
         let mode = visual_mode();
-        set_visual_mode(VisualMode::from_raw(unsafe { *vi }.vi_mode));
-        unsafe { *vi }.vi_mode = mode.raw();
+        set_visual_mode(VisualMode::from_raw(unsafe { (*vi).vi_mode }));
+        unsafe { (*vi).vi_mode = mode.raw() };
         cur_buf().b_visual_mode_eval = mode.raw();
         let curswant = cur_win().w_curswant;
-        cur_win().w_curswant = unsafe { *vi }.vi_curswant;
-        unsafe { *vi }.vi_curswant = curswant;
-        tpos = unsafe { *vi }.vi_end;
-        unsafe { *vi }.vi_end = cur_win().w_cursor;
-        cur_win().w_cursor = unsafe { *vi }.vi_start;
-        unsafe { *vi }.vi_start = visual_anchor();
+        cur_win().w_curswant = unsafe { (*vi).vi_curswant };
+        unsafe { (*vi).vi_curswant = curswant };
+        tpos = unsafe { (*vi).vi_end };
+        unsafe { (*vi).vi_end = cur_win().w_cursor };
+        cur_win().w_cursor = unsafe { (*vi).vi_start };
+        unsafe { (*vi).vi_start = visual_anchor() };
     } else {
-        set_visual_mode(VisualMode::from_raw(unsafe { *vi }.vi_mode));
-        cur_win().w_curswant = unsafe { *vi }.vi_curswant;
-        tpos = unsafe { *vi }.vi_end;
-        cur_win().w_cursor = unsafe { *vi }.vi_start;
+        set_visual_mode(VisualMode::from_raw(unsafe { (*vi).vi_mode }));
+        cur_win().w_curswant = unsafe { (*vi).vi_curswant };
+        tpos = unsafe { (*vi).vi_end };
+        cur_win().w_cursor = unsafe { (*vi).vi_start };
     }
 
     set_visual_active(true);
@@ -725,21 +725,21 @@ pub(crate) unsafe fn unadjust_for_sel() -> bool {
 pub(crate) unsafe fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool {
     VIsual_select_exclu_adj.set(false);
     // SAFETY: `pp` is the caller's live position in the current buffer.
-    if unsafe { *pp }.coladd > 0 {
-        unsafe { *pp }.coladd -= 1;
-    } else if unsafe { *pp }.col > 0 {
-        unsafe { *pp }.col -= 1;
+    if unsafe { (*pp).coladd } > 0 {
+        unsafe { (*pp).coladd -= 1 };
+    } else if unsafe { (*pp).col } > 0 {
+        unsafe { (*pp).col -= 1 };
         unsafe { mark_mb_adjustpos(curbuf.get(), pp) };
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
         if unsafe { virtual_active(curwin.get()) } {
             let (mut cs, mut ce): (colnr_T, colnr_T) = (0, 0);
             unsafe { getvcol(curwin.get(), pp, &raw mut cs, ptr::null_mut(), &raw mut ce) };
-            unsafe { *pp }.coladd = ce - cs;
+            unsafe { (*pp).coladd = ce - cs };
         }
-    } else if unsafe { *pp }.lnum > 1 {
-        unsafe { *pp }.lnum -= 1;
-        unsafe { *pp }.col = unsafe { ml_get_len((*pp).lnum) };
+    } else if unsafe { (*pp).lnum } > 1 {
+        unsafe { (*pp).lnum -= 1 };
+        unsafe { (*pp).col = ml_get_len((*pp).lnum) };
         return true;
     }
     false

@@ -197,7 +197,7 @@ unsafe fn global_mark(eap: *mut exarg_T, regmatch: *mut regmmatch_T, kind: u8) -
         // SAFETY: caller's contract.
         let matched = unsafe { matches_line(regmatch, lnum) };
         // SAFETY: as above -- re-compiling the program can have failed.
-        if unsafe { (*regmatch).regprog }.is_null() {
+        if unsafe { (*regmatch).regprog.is_null() } {
             break;
         }
         if selects(kind, matched) {

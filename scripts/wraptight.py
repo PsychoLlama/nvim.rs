@@ -187,14 +187,34 @@ def chain_end(raw: bytes, at: int) -> int:
     return i
 
 
-def rechain(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
-    """E0507: move the `}` past the projection hanging off the block."""
+DEREF_WRAP = re.compile(rb"unsafe \{ (\(*\*[^{}]*?) \}(?=[.\[])")
+
+
+def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
+    """Move the `}` past the projection hanging off a wrapped deref.
+
+    **This pass is structural, not diagnostic-driven, and it must stay that
+    way.** `(*p).f`'s E0133 span is the deref alone, so a naive wrap leaves
+    `unsafe { *p }.f`. When `*p`'s type is not `Copy` that is E0507 and the
+    compiler catches it -- but when it *is* `Copy` the code compiles, reads
+    fine, and **silently writes to a discarded temporary**:
+
+        unsafe { *p }.a = 42;   // compiles, warns nothing, does nothing
+
+    That shape cost this slice two behaviour regressions (`nv_gv_cmd`'s
+    `b_visual` swap and `unadjust_for_sel_inner`, both `Copy` structs) which
+    only the functional suite caught. So every wrapped deref followed by a
+    `.field` or `[i]` gets the brace pushed past the chain, whether or not
+    rustc complained.
+    """
     edits = set()
-    for span in spans:
-        close = enclosing_unsafe(raw, span["byte_start"])
-        if close is None or raw[close + 1 : close + 2] not in (b".", b"["):
-            continue
+    for match in DEREF_WRAP.finditer(raw):
+        close = match.end() - 1
         edits.add((close, chain_end(raw, close + 1)))
+    for span in spans or []:
+        close = enclosing_unsafe(raw, span["byte_start"])
+        if close is not None and raw[close + 1 : close + 2] in (b".", b"["):
+            edits.add((close, chain_end(raw, close + 1)))
     for close, end in sorted(edits, reverse=True):
         raw = raw[:close] + raw[close + 1 : end] + b" }" + raw[end:]
     return raw, len(edits)
@@ -295,6 +315,7 @@ PARSE_TAIL = re.compile(r"expected expression, found `(=|as|[-+*/%|&<>!]?=|\|\||
 
 PASSES = [
     ("wrap", wrap, lambda d: code_of(d) == "E0133"),
+    # Runs on every round, diagnostics or not -- see `rechain`'s docstring.
     ("rechain", rechain, lambda d: code_of(d) == "E0507"),
     (
         "reparen",
@@ -314,6 +335,17 @@ PASSES = [
 ]
 
 
+def all_files(paths: list[str]) -> list[str]:
+    """Every `.rs` file under the paths given."""
+    found: list[str] = []
+    for name in paths:
+        path = pathlib.Path(name)
+        found.extend(
+            str(p) for p in (sorted(path.rglob("*.rs")) if path.is_dir() else [path])
+        )
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+")
@@ -325,6 +357,11 @@ def main() -> int:
         moved = 0
         for name, apply, want in PASSES:
             per_file = primary_spans(diags, args.paths, want)
+            if name == "rechain":
+                # Structural: every file in scope, not only the ones rustc
+                # named. A `Copy` deref leaves no diagnostic behind.
+                for path in sorted(all_files(args.paths)):
+                    per_file.setdefault(path, [])
             if not per_file:
                 continue
             count = 0

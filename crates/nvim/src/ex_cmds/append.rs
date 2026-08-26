@@ -243,7 +243,7 @@ unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_ch
     // Set State to avoid the cursor shape being set to MODE_INSERT state
     // when getline() returns.
     let save_state = State.replace(MODE_CMDLINE);
-    let first = if unsafe { *(*eap).cstack }.cs_looplevel > 0 {
+    let first = if unsafe { (*(*eap).cstack).cs_looplevel } > 0 {
         -1
     } else {
         NUL

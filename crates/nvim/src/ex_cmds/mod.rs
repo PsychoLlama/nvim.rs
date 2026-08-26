@@ -329,7 +329,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
     msg_scroll.set(1);
     let l_: *mut list_T = l;
     if !l_.is_null() {
-        let mut li: *mut listitem_T = unsafe { *l_ }.lv_first;
+        let mut li: *mut listitem_T = unsafe { (*l_).lv_first };
         while !li.is_null() {
             if got_int.get() {
                 break;
@@ -351,7 +351,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
                 unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
                 os_breakcheck();
             }
-            li = unsafe { *li }.li_next;
+            li = unsafe { (*li).li_next };
         }
     }
     got_int.set(false);

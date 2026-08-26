@@ -164,7 +164,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     }
 
     // SAFETY: `buf` is live.
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null() {
+    if unsafe { (*buf).b_ml.ml_mfp.is_null() } {
         // No memfile yet.
         state.oldbuf = false;
     } else {
@@ -191,8 +191,8 @@ pub(super) unsafe fn switch_to_other_buffer(
     {
         // SAFETY: `buf` is live.
         let pos = unsafe { &raw mut (*buflist_findfmark(buf)).mark };
-        state.newlnum = unsafe { *pos }.lnum;
-        state.solcol = unsafe { *pos }.col;
+        state.newlnum = unsafe { (*pos).lnum };
+        state.solcol = unsafe { (*pos).col };
     }
 
     // Make the (new) buffer the one used by the current window.  If the old

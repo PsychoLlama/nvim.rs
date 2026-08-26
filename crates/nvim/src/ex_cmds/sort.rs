@@ -763,7 +763,7 @@ unsafe fn parse_uniq_flags(
                 // SAFETY: `at` indexes the argument's own bytes.
                 let next = unsafe { check_nextcmd(arg.add(at)) };
                 // SAFETY: caller's contract.
-                if !next.is_null() && unsafe { (*eap).nextcmd }.is_null() {
+                if !next.is_null() && unsafe { (*eap).nextcmd.is_null() } {
                     // SAFETY: as above.
                     unsafe { (*eap).nextcmd = next };
                     break;

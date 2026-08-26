@@ -292,7 +292,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
         // Overwriting a file that is loaded in another buffer is not a good
         // idea.
         // SAFETY: `alt_buf` is a live buffer when non-NULL.
-        if !alt_buf.is_null() && !unsafe { (*alt_buf).b_ml.ml_mfp }.is_null() {
+        if !alt_buf.is_null() && !unsafe { (*alt_buf).b_ml.ml_mfp.is_null() } {
             // SAFETY: a live message string.
             unsafe { emsg(gettext(&raw const e_bufloaded as *const c_char)) };
             return FAIL;

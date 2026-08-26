@@ -212,11 +212,11 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             && did_ai.get()
             && (esc != 0
                 || (!cpo_has(CpoFlag::INDENT)
-                    && cur_win().w_cursor.lnum != unsafe { *end_insert_pos }.lnum))
-            && unsafe { *end_insert_pos }.lnum <= cur_buf().b_ml.ml_line_count
+                    && cur_win().w_cursor.lnum != unsafe { (*end_insert_pos).lnum }))
+            && unsafe { (*end_insert_pos).lnum } <= cur_buf().b_ml.ml_line_count
         {
             let mut tpos = cur_win().w_cursor;
-            let prev_col = unsafe { *end_insert_pos }.col;
+            let prev_col = unsafe { (*end_insert_pos).col };
 
             cur_win().w_cursor = unsafe { *end_insert_pos };
             unsafe { check_cursor_col(curwin.get()) }; // make sure it is not past the line

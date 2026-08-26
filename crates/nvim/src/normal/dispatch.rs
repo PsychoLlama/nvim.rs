@@ -365,7 +365,11 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
                     ns.need_flushbuf |= add_to_showcmd(unsafe { *cp });
                 }
             }
-            langmap_adjust(&mut unsafe { *cp }, !lang);
+            // SAFETY: `cp` is the slot this command's extra character was
+            // read into, a field of the live `cmdarg_T`. The borrow must be
+            // of the *place*, not of a copy: `langmap_adjust` writes through
+            // it.
+            unsafe { langmap_adjust(&mut *cp, !lang) };
         }
 
         if slot == Slot::Extra
@@ -380,7 +384,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
             && ns.ca.cmdchar == 'g' as c_int
         {
             // `gn`/`gN` take the operator from the character after them.
-            unsafe { *ns.ca.oap }.op_type = get_op_type(unsafe { *cp }, NUL);
+            unsafe { (*ns.ca.oap).op_type = get_op_type(*cp, NUL) };
         } else if unsafe { *cp } == Ctrl_BSL {
             unsafe { resolve_ctrl_backslash(ns.raw()) };
         }

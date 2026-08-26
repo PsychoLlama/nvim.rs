@@ -269,7 +269,7 @@ pub(crate) fn ins_page(back: bool) {
     if mod_mask.get() & MOD_MASK_CTRL != 0 {
         // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
         // SAFETY: there is always at least one tab page.
-        if !unsafe { (*first_tabpage.get()).tp_next }.is_null() {
+        if !unsafe { (*first_tabpage.get()).tp_next.is_null() } {
             start_arrow_at(&mut cur_win().w_cursor);
             goto_tabpage(if back { -1 } else { 0 });
         }
