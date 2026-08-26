@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -30,53 +31,45 @@ use crate::types::{NUL, OK};
 /// Only the shifted keys do this, plus the un-shifted `<Home>`/`<End>`/page
 /// keys when Shift is in `mod_mask`.  Answers whether a CTRL-O and the key
 /// were stuffed.
-///
-/// # Safety
-/// Must run on the main thread.
-pub(crate) unsafe fn ins_start_select(c: c_int) -> bool {
-    unsafe {
-        if !km_startsel.get() {
-            return false;
-        }
-        let starts = match c {
-            K_KHOME | K_KEND | K_PAGEUP | K_KPAGEUP | K_PAGEDOWN | K_KPAGEDOWN => {
-                mod_mask.get() & MOD_MASK_SHIFT != 0
-            }
-            K_S_LEFT | K_S_RIGHT | K_S_UP | K_S_DOWN | K_S_END | K_S_HOME => true,
-            _ => false,
-        };
-        if !starts {
-            return false;
-        }
-
-        start_selection();
-        stuff_readbuf_char(Ctrl_O);
-        if mod_mask.get() != 0 {
-            // The modifiers have to be stuffed back too, as the three-byte
-            // K_SPECIAL sequence that carries them.
-            let buf: [c_char; 4] = [
-                K_SPECIAL as c_char,
-                KS_MODIFIER as c_char,
-                mod_mask.get() as uint8_t as c_char,
-                NUL as c_char,
-            ];
-            stuff_readbuf_len(buf.as_ptr(), 3);
-        }
-        stuff_readbuf_char(c);
-        true
+pub(crate) fn ins_start_select(c: c_int) -> bool {
+    if !km_startsel.get() {
+        return false;
     }
+    let starts = match c {
+        K_KHOME | K_KEND | K_PAGEUP | K_KPAGEUP | K_PAGEDOWN | K_KPAGEDOWN => {
+            mod_mask.get() & MOD_MASK_SHIFT != 0
+        }
+        K_S_LEFT | K_S_RIGHT | K_S_UP | K_S_DOWN | K_S_END | K_S_HOME => true,
+        _ => false,
+    };
+    if !starts {
+        return false;
+    }
+
+    start_selection();
+    stuff_readbuf_char(Ctrl_O);
+    if mod_mask.get() != 0 {
+        // The modifiers have to be stuffed back too, as the three-byte
+        // K_SPECIAL sequence that carries them.
+        let buf: [c_char; 4] = [
+            K_SPECIAL as c_char,
+            KS_MODIFIER as c_char,
+            mod_mask.get() as uint8_t as c_char,
+            NUL as c_char,
+        ];
+        // SAFETY: `buf` is a live four-byte array and 3 of it is read.
+        unsafe { stuff_readbuf_len(buf.as_ptr(), 3) };
+    }
+    stuff_readbuf_char(c);
+    true
 }
 
 /// Open the fold under the cursor if 'foldopen' contains `hor` and the key
 /// was typed rather than mapped.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-unsafe fn may_open_fold_hor() {
-    unsafe {
-        if fdo_flags.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
-            fold_open_cursor();
-        }
+fn may_open_fold_hor() {
+    if fdo_flags.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
+        // SAFETY: `curwin` is live for the whole session.
+        unsafe { fold_open_cursor() };
     }
 }
 
@@ -89,170 +82,148 @@ fn ends_change() -> bool {
 }
 
 /// `<Left>` in Insert mode.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_left() {
-    unsafe {
-        let end_change = ends_change();
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_left() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    let end_change = ends_change();
+    may_open_fold_hor();
+    hide_dollar();
 
-        let mut tpos = (*curwin.get()).w_cursor;
-        if oneleft() == OK {
-            start_arrow_with_change(&raw mut tpos, end_change);
-            if !end_change {
-                append_to_redobuff_char(K_LEFT);
-            }
-            // Only the characters 'revins' itself put there are legal to go
-            // back over.
-            if revins_scol.get() != -1 && (*curwin.get()).w_cursor.col >= revins_scol.get() {
-                revins_legal.set(revins_legal.get() + 1);
-            }
-            revins_chars.set(revins_chars.get() + 1);
-        } else if !vim_strchr(p_ww.get(), '[' as c_int).is_null()
-            && (*curwin.get()).w_cursor.lnum > 1
-        {
-            // 'whichwrap' allows the motion to leave the line.
-            start_arrow(&raw mut tpos);
-            (*curwin.get()).w_cursor.lnum -= 1;
-            coladvance(curwin.get(), MAXCOL as c_int);
-            (*curwin.get()).w_set_curswant = true;
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
+    let mut tpos = cur_win().w_cursor;
+    if unsafe { oneleft() } == OK {
+        start_arrow_changing(&mut tpos, end_change);
+        if !end_change {
+            append_to_redobuff_char(K_LEFT);
         }
-        dont_sync_undo.set(KeepUndo::No);
+        // Only the characters 'revins' itself put there are legal to go
+        // back over.
+        if revins_scol.get() != -1 && cur_win().w_cursor.col >= revins_scol.get() {
+            revins_legal.set(revins_legal.get() + 1);
+        }
+        revins_chars.set(revins_chars.get() + 1);
+    } else if !unsafe { vim_strchr(p_ww.get(), '[' as c_int) }.is_null()
+        && cur_win().w_cursor.lnum > 1
+    {
+        // 'whichwrap' allows the motion to leave the line.
+        start_arrow_at(&mut tpos);
+        cur_win().w_cursor.lnum -= 1;
+        coladvance_to(MAXCOL as c_int);
+        cur_win().w_set_curswant = true;
+    } else {
+        beep_cursor();
     }
+    dont_sync_undo.set(KeepUndo::No);
 }
 
 /// `<Home>`, and `<C-Home>` -- which goes to the first line first.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_home(c: c_int) {
-    unsafe {
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_home(c: c_int) {
+    may_open_fold_hor();
+    hide_dollar();
 
-        let mut tpos = (*curwin.get()).w_cursor;
-        if c == K_C_HOME {
-            (*curwin.get()).w_cursor.lnum = 1;
-        }
-        (*curwin.get()).w_cursor.col = 0;
-        (*curwin.get()).w_cursor.coladd = 0;
-        (*curwin.get()).w_curswant = 0;
-        start_arrow(&raw mut tpos);
+    let mut tpos = cur_win().w_cursor;
+    if c == K_C_HOME {
+        cur_win().w_cursor.lnum = 1;
     }
+    cur_win().w_cursor.col = 0;
+    cur_win().w_cursor.coladd = 0;
+    cur_win().w_curswant = 0;
+    start_arrow_at(&mut tpos);
 }
 
 /// `<End>`, and `<C-End>` -- which goes to the last line first.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_end(c: c_int) {
-    unsafe {
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_end(c: c_int) {
+    may_open_fold_hor();
+    hide_dollar();
 
-        let mut tpos = (*curwin.get()).w_cursor;
-        if c == K_C_END {
-            (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
-        }
-        coladvance(curwin.get(), MAXCOL as c_int);
-        (*curwin.get()).w_curswant = MAXCOL as colnr_T;
-        start_arrow(&raw mut tpos);
+    let mut tpos = cur_win().w_cursor;
+    if c == K_C_END {
+        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     }
+    coladvance_to(MAXCOL as c_int);
+    cur_win().w_curswant = MAXCOL as colnr_T;
+    start_arrow_at(&mut tpos);
 }
 
 /// `<S-Left>`: one word back.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_s_left() {
-    unsafe {
-        let end_change = ends_change();
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_s_left() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    let end_change = ends_change();
+    may_open_fold_hor();
+    hide_dollar();
 
-        if (*curwin.get()).w_cursor.lnum > 1 || (*curwin.get()).w_cursor.col > 0 {
-            start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
-            if !end_change {
-                append_to_redobuff_char(K_S_LEFT);
-            }
-            bck_word(1, false, false);
-            (*curwin.get()).w_set_curswant = true;
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
+    if cur_win().w_cursor.lnum > 1 || cur_win().w_cursor.col > 0 {
+        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+        if !end_change {
+            append_to_redobuff_char(K_S_LEFT);
         }
-        dont_sync_undo.set(KeepUndo::No);
+        unsafe { bck_word(1, false, false) };
+        cur_win().w_set_curswant = true;
+    } else {
+        beep_cursor();
     }
+    dont_sync_undo.set(KeepUndo::No);
 }
 
 /// `<Right>` in Insert mode.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_right() {
-    unsafe {
-        let end_change = ends_change();
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_right() {
+    let end_change = ends_change();
+    may_open_fold_hor();
+    hide_dollar();
 
-        if gchar_cursor() != NUL || virtual_active(curwin.get()) {
-            start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
-            if !end_change {
-                append_to_redobuff_char(K_RIGHT);
-            }
-            (*curwin.get()).w_set_curswant = true;
-            if virtual_active(curwin.get()) {
-                oneright();
-            } else {
-                (*curwin.get()).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
-            }
-
-            revins_legal.set(revins_legal.get() + 1);
-            if revins_chars.get() != 0 {
-                revins_chars.set(revins_chars.get() - 1);
-            }
-        } else if !vim_strchr(p_ww.get(), ']' as c_int).is_null()
-            && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
-        {
-            // 'whichwrap' allows the motion to leave the line.
-            start_arrow(&raw mut (*curwin.get()).w_cursor);
-            (*curwin.get()).w_set_curswant = true;
-            (*curwin.get()).w_cursor.lnum += 1;
-            (*curwin.get()).w_cursor.col = 0;
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
+    if unsafe { gchar_cursor() } != NUL || unsafe { virtual_active(curwin.get()) } {
+        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+        if !end_change {
+            append_to_redobuff_char(K_RIGHT);
         }
-        dont_sync_undo.set(KeepUndo::No);
+        cur_win().w_set_curswant = true;
+        if unsafe { virtual_active(curwin.get()) } {
+            unsafe { oneright() };
+        } else {
+            // SAFETY: the cursor is on a character of its line, so the
+            // character there has a length.
+            cur_win().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+        }
+
+        revins_legal.set(revins_legal.get() + 1);
+        if revins_chars.get() != 0 {
+            revins_chars.set(revins_chars.get() - 1);
+        }
+    } else if !unsafe { vim_strchr(p_ww.get(), ']' as c_int) }.is_null()
+        && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
+    {
+        // 'whichwrap' allows the motion to leave the line.
+        start_arrow_at(&mut cur_win().w_cursor);
+        cur_win().w_set_curswant = true;
+        cur_win().w_cursor.lnum += 1;
+        cur_win().w_cursor.col = 0;
+    } else {
+        beep_cursor();
     }
+    dont_sync_undo.set(KeepUndo::No);
 }
 
 /// `<S-Right>`: one word forward.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_s_right() {
-    unsafe {
-        let end_change = ends_change();
-        may_open_fold_hor();
-        undisplay_dollar();
+pub(crate) fn ins_s_right() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let end_change = ends_change();
+    may_open_fold_hor();
+    hide_dollar();
 
-        if (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
-            || gchar_cursor() != NUL
-        {
-            start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
-            if !end_change {
-                append_to_redobuff_char(K_S_RIGHT);
-            }
-            fwd_word(1, false, false);
-            (*curwin.get()).w_set_curswant = true;
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
+    if cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count || unsafe { gchar_cursor() } != NUL {
+        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+        if !end_change {
+            append_to_redobuff_char(K_S_RIGHT);
         }
-        dont_sync_undo.set(KeepUndo::No);
+        unsafe { fwd_word(1, false, false) };
+        cur_win().w_set_curswant = true;
+    } else {
+        beep_cursor();
     }
+    dont_sync_undo.set(KeepUndo::No);
 }
 
 /// `<Up>` and `<Down>` in Insert mode.
@@ -261,64 +232,105 @@ pub(crate) unsafe fn ins_s_right() {
 /// rather than the one it is in now -- that is `<C-Up>`/`<C-Down>`.  The
 /// `w_topline`/`w_topfill` check is because the motion may have scrolled the
 /// window even when the cursor stayed in view.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_updown(up: bool, startcol: bool) {
-    unsafe {
-        let old_topline = (*curwin.get()).w_topline;
-        let old_topfill = (*curwin.get()).w_topfill;
-        undisplay_dollar();
+pub(crate) fn ins_updown(up: bool, startcol: bool) {
+    let old_topline = cur_win().w_topline;
+    let old_topfill = cur_win().w_topfill;
+    hide_dollar();
 
-        let mut tpos = (*curwin.get()).w_cursor;
-        let moved = if up {
-            cursor_up(1, true)
-        } else {
-            cursor_down(1, true)
-        };
-        if moved == OK {
-            if startcol {
-                // `getvcol_nolist` only reads: a copy keeps the global out
-                // of the call's reach.
-                coladvance(curwin.get(), getvcol_nolist(&mut Insstart.get()));
-            }
-            if old_topline != (*curwin.get()).w_topline || old_topfill != (*curwin.get()).w_topfill
-            {
-                redraw_later(curwin.get(), UPD_VALID);
-            }
-            start_arrow(&raw mut tpos);
-            can_cindent.set(true);
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
+    let mut tpos = cur_win().w_cursor;
+    // SAFETY: `curwin` is live, which is all a cursor motion asks for.
+    let moved = if up {
+        unsafe { cursor_up(1, true) }
+    } else {
+        unsafe { cursor_down(1, true) }
+    };
+    if moved == OK {
+        if startcol {
+            // `getvcol_nolist` only reads: a copy keeps the global out
+            // of the call's reach.
+            // SAFETY: `Insstart` is a live position in the current buffer.
+            coladvance_to(unsafe { getvcol_nolist(&mut Insstart.get()) });
         }
+        if old_topline != cur_win().w_topline || old_topfill != cur_win().w_topfill {
+            unsafe { redraw_later(curwin.get(), UPD_VALID) };
+        }
+        start_arrow_at(&mut tpos);
+        can_cindent.set(true);
+    } else {
+        beep_cursor();
     }
 }
 
 /// `<PageUp>` and `<PageDown>` in Insert mode -- or, with CTRL, the previous
 /// and next tab page.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_page(back: bool) {
-    unsafe {
-        undisplay_dollar();
+pub(crate) fn ins_page(back: bool) {
+    hide_dollar();
 
-        if mod_mask.get() & MOD_MASK_CTRL != 0 {
-            // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
-            if !(*first_tabpage.get()).tp_next.is_null() {
-                start_arrow(&raw mut (*curwin.get()).w_cursor);
-                goto_tabpage(if back { -1 } else { 0 });
-            }
-            return;
+    if mod_mask.get() & MOD_MASK_CTRL != 0 {
+        // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
+        // SAFETY: there is always at least one tab page.
+        if !unsafe { (*first_tabpage.get()).tp_next }.is_null() {
+            start_arrow_at(&mut cur_win().w_cursor);
+            goto_tabpage(if back { -1 } else { 0 });
         }
-
-        let mut tpos = (*curwin.get()).w_cursor;
-        let dir = if back { BACKWARD } else { FORWARD };
-        if pagescroll(dir, 1, false) == OK {
-            start_arrow(&raw mut tpos);
-            can_cindent.set(true);
-        } else {
-            vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
-        }
+        return;
     }
+
+    let mut tpos = cur_win().w_cursor;
+    let dir = if back { BACKWARD } else { FORWARD };
+    if unsafe { pagescroll(dir, 1, false) } == OK {
+        start_arrow_at(&mut tpos);
+        can_cindent.set(true);
+    } else {
+        beep_cursor();
+    }
+}
+
+/// Beep, or flash, for a motion that could not go anywhere.
+#[inline(always)]
+fn beep_cursor() {
+    // SAFETY: the bell only reads options.
+    unsafe { vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint) }
+}
+
+/// Take the `$` 'cpoptions' puts at the end of a change off the screen.
+#[inline(always)]
+fn hide_dollar() {
+    // SAFETY: `curwin` is live for the whole session.
+    unsafe { undisplay_dollar() }
+}
+
+/// End the undoable insert before an arrow key moves the cursor away from
+/// `pos`, the position the insert ended at.
+#[inline(always)]
+fn start_arrow_at(pos: &mut pos_T) {
+    // SAFETY: `pos` is a live position, and `curbuf` is live.
+    unsafe { start_arrow(pos) }
+}
+
+/// [`start_arrow_at`], with `i_CTRL-G_U`'s answer for whether the change
+/// ends here too.
+#[inline(always)]
+fn start_arrow_changing(pos: &mut pos_T, end_change: bool) {
+    // SAFETY: `pos` is a live position, and `curbuf` is live.
+    unsafe { start_arrow_with_change(pos, end_change) }
+}
+
+/// Move the cursor to virtual column `vcol` of its line.
+#[inline(always)]
+fn coladvance_to(vcol: c_int) {
+    // SAFETY: `curwin` is live for the whole session.
+    unsafe { coladvance(curwin.get(), vcol) };
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

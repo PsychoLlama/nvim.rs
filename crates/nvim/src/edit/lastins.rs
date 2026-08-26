@@ -46,10 +46,8 @@ impl LastInsert {
     /// [`borrow`](Self::borrow) of the old one.
     pub(super) unsafe fn replace(self, text: String_0) {
         // SAFETY: the cell's own allocation, replaced in one step.
-        unsafe {
-            xfree((*self.0).data().cast());
-            *self.0 = text;
-        }
+        unsafe { xfree((*self.0).data().cast()) };
+        unsafe { *self.0 = text };
     }
 }
 
@@ -62,23 +60,26 @@ impl LastInsert {
 /// # Safety
 /// Must run on the main thread; frees and replaces `last_insert`.
 pub(crate) unsafe fn set_last_insert(c: c_int) {
-    unsafe {
-        let start = xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) as *mut ::core::ffi::c_char;
-        let mut s = start;
-        // The CTRL-V is only needed to enter a special character.
-        if c < ' ' as c_int || c == DEL {
-            *s = Ctrl_V as c_char;
-            s = s.offset(1);
-        }
-        s = add_char2buf(c, s);
-        *s = ESC as c_char;
-        s = s.offset(1);
-        *s = NUL as c_char;
-
-        let len = s.offset_from(start) as size_t;
-        last_insert_slot().replace(String_0::from_raw_parts(start, len));
-        last_insert_skip.set(0);
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let start =
+        unsafe { xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) } as *mut ::core::ffi::c_char;
+    let mut s = start;
+    // The CTRL-V is only needed to enter a special character.
+    if c < ' ' as c_int || c == DEL {
+        unsafe { *s = Ctrl_V as c_char };
+        s = unsafe { s.offset(1) };
     }
+    s = unsafe { add_char2buf(c, s) };
+    unsafe { *s = ESC as c_char };
+    s = unsafe { s.offset(1) };
+    unsafe { *s = NUL as c_char };
+
+    let len = unsafe { s.offset_from(start) } as size_t;
+    unsafe { last_insert_slot().replace(String_0::from_raw_parts(start, len)) };
+    last_insert_skip.set(0);
 }
 
 /// `.`, `i_CTRL-A` and `i_CTRL-@`: stuff the last inserted text into the read
@@ -93,64 +94,66 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> c_int {
-    unsafe {
-        let mut insert = get_last_insert(); // text to be inserted
-        if insert.data().is_null() {
-            emsg(gettext(&raw const e_noinstext as *const c_char));
-            return FAIL;
-        }
-
-        // May want to stuff the command character, to start Insert mode.
-        if c != NUL {
-            stuff_readbuf_char(c);
-        }
-
-        // Cut the text at the last ESC: what follows it is not part of the
-        // insert.
-        let mut i = insert.len();
-        while i > 0 {
-            i -= 1;
-            if *insert.data().add(i) as c_int == ESC {
-                insert.set_len(i);
-                break;
-            }
-        }
-
-        // A trailing `0` or `^` has to be quoted, because either would be
-        // read as the start of `0 CTRL-D`/`^ CTRL-D` -- but only when
-        // nothing follows it (no ESC is coming) or when the text is repeated
-        // and starts with CTRL-D.  -- Acevedo
-        let mut last = NUL as c_char;
-        if !insert.is_empty() {
-            let p = insert.data().add(insert.len() - 1);
-            if (*p as c_int == '0' as c_int || *p as c_int == '^' as c_int)
-                && (no_esc != 0 || (*insert.data() as c_int == Ctrl_D && count > 1))
-            {
-                last = *p;
-                insert.set_len(insert.len() - 1);
-            }
-        }
-
-        loop {
-            stuff_readbuf_len(insert.data(), insert.len() as ptrdiff_t);
-            // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
-            if last == b'0' as c_char {
-                stuff_readbuf_len(c"\x16048".as_ptr(), 4);
-            } else if last == b'^' as c_char {
-                stuff_readbuf_len(c"\x16^".as_ptr(), 2);
-            }
-            count -= 1;
-            if count <= 0 {
-                break;
-            }
-        }
-
-        // May want to stuff a trailing ESC, to get out of Insert mode.
-        if no_esc == 0 {
-            stuff_readbuf_char(ESC);
-        }
-        OK
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let mut insert = unsafe { get_last_insert() }; // text to be inserted
+    if insert.data().is_null() {
+        unsafe { emsg(gettext(&raw const e_noinstext as *const c_char)) };
+        return FAIL;
     }
+
+    // May want to stuff the command character, to start Insert mode.
+    if c != NUL {
+        stuff_readbuf_char(c);
+    }
+
+    // Cut the text at the last ESC: what follows it is not part of the
+    // insert.
+    let mut i = insert.len();
+    while i > 0 {
+        i -= 1;
+        if unsafe { *insert.data().add(i) } as c_int == ESC {
+            insert.set_len(i);
+            break;
+        }
+    }
+
+    // A trailing `0` or `^` has to be quoted, because either would be
+    // read as the start of `0 CTRL-D`/`^ CTRL-D` -- but only when
+    // nothing follows it (no ESC is coming) or when the text is repeated
+    // and starts with CTRL-D.  -- Acevedo
+    let mut last = NUL as c_char;
+    if !insert.is_empty() {
+        let p = unsafe { insert.data().add(insert.len() - 1) };
+        if (unsafe { *p } as c_int == '0' as c_int || unsafe { *p } as c_int == '^' as c_int)
+            && (no_esc != 0 || (unsafe { *insert.data() } as c_int == Ctrl_D && count > 1))
+        {
+            last = unsafe { *p };
+            insert.set_len(insert.len() - 1);
+        }
+    }
+
+    loop {
+        unsafe { stuff_readbuf_len(insert.data(), insert.len() as ptrdiff_t) };
+        // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
+        if last == b'0' as c_char {
+            unsafe { stuff_readbuf_len(c"\x16048".as_ptr(), 4) };
+        } else if last == b'^' as c_char {
+            unsafe { stuff_readbuf_len(c"\x16^".as_ptr(), 2) };
+        }
+        count -= 1;
+        if count <= 0 {
+            break;
+        }
+    }
+
+    // May want to stuff a trailing ESC, to get out of Insert mode.
+    if no_esc == 0 {
+        stuff_readbuf_char(ESC);
+    }
+    OK
 }
 
 /// The last inserted text, without the command that started the insert.
@@ -177,17 +180,20 @@ pub(crate) unsafe fn get_last_insert() -> String_0 {
 /// # Safety
 /// Must run on the main thread.
 pub(crate) unsafe fn get_last_insert_save() -> *mut c_char {
-    unsafe {
-        let mut insert = get_last_insert();
-        if insert.data().is_null() {
-            return ::core::ptr::null_mut();
-        }
-
-        let s = xmemdupz(insert.data() as *const ::core::ffi::c_void, insert.len()) as *mut c_char;
-        if !insert.is_empty() && *s.add(insert.len() - 1) as c_int == ESC {
-            insert.set_len(insert.len() - 1);
-            *s.add(insert.len()) = NUL as c_char;
-        }
-        s
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let mut insert = unsafe { get_last_insert() };
+    if insert.data().is_null() {
+        return ::core::ptr::null_mut();
     }
+
+    let s = unsafe { xmemdupz(insert.data() as *const ::core::ffi::c_void, insert.len()) }
+        as *mut c_char;
+    if !insert.is_empty() && unsafe { *s.add(insert.len() - 1) } as c_int == ESC {
+        insert.set_len(insert.len() - 1);
+        unsafe { *s.add(insert.len()) = NUL as c_char };
+    }
+    s
 }

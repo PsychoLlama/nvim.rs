@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
@@ -43,199 +44,181 @@ const CTRL_G_KEEP_UNDO: c_int = b'U' as c_int;
 /// name.  `=` runs the expression register, which may do anything at all --
 /// including `:stopinsert`, which is why the answer is checked rather than
 /// assumed to have inserted something.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_reg() {
-    unsafe {
-        let mut need_redraw = false;
-        let mut literally = 0;
-        let vis_active = visual_active();
+pub(crate) fn ins_reg() {
+    let mut need_redraw = false;
+    let mut literally = 0;
+    let vis_active = visual_active();
 
-        // A character is about to be waited for: show a `"`.
-        pc_status.set(PutChar::Unset);
-        if redrawing() && !char_avail() {
-            // May need to redraw now that no more characters are available.
-            ins_redraw(false);
-            edit_putchar('"' as c_int, true);
-            add_to_showcmd_c(Ctrl_R);
-        }
+    // A character is about to be waited for: show a `"`.
+    pc_status.set(PutChar::Unset);
+    // SAFETY: every `unsafe` call in this function is an editor-wide routine
+    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
+    // with.
+    if unsafe { redrawing() } && !unsafe { char_avail() } {
+        // May need to redraw now that no more characters are available.
+        unsafe { ins_redraw(false) };
+        unsafe { edit_putchar('"' as c_int, true) };
+        add_to_showcmd_c(Ctrl_R);
+    }
 
-        // `LANGMAP_ADJUST(c, true)`: apply 'langmap' to a *typed* key only,
-        // and only when it was not produced by a mapping.
-        let langmap_adjust = |c: c_int| -> c_int {
-            let typed = if vgetc_busy.get() != 0 {
-                typeahead().maplen() == 0
-            } else {
-                KeyTyped.get()
-            };
-            if *p_langmap.get() as c_int != 0
-                && (p_lrm.get() != 0 || typed)
-                && KeyStuffed.get() == 0
-                && c >= 0
-            {
-                if c < 256 {
-                    langmap_mapchar.with(|map| map[c as usize] as c_int)
-                } else {
-                    langmap_adjust_mb(c)
-                }
-            } else {
-                c
-            }
-        };
-
-        // Don't map the register name.  This also keeps the mode message
-        // from being deleted when ESC is hit.
-        let raw_key = Keys::unmapped_with_codes();
-        let mut regname = langmap_adjust(plain_vgetc());
-        if regname == Ctrl_R || regname == Ctrl_O || regname == Ctrl_P {
-            // A third key follows, for a literal register insertion.
-            literally = regname;
-            add_to_showcmd_c(literally);
-            regname = langmap_adjust(plain_vgetc());
-        }
-        drop(raw_key);
-
-        // Don't `u_sync()` while typing the expression, or while giving an
-        // error message for it; only explicitly.
-        no_u_sync.set(no_u_sync.get() + 1);
-        if regname == '=' as c_int {
-            let curpos = (*curwin.get()).w_cursor;
-            // Sync undo if the expression calls setline() or append(), so
-            // that can be undone separately.
-            u_sync_once.set(2);
-            regname = get_expr_register();
-            // The cursor may have been moved back a column.
-            (*curwin.get()).w_cursor = curpos;
-            check_cursor(curwin.get());
-        }
-
-        if regname == NUL || !valid_yank_reg(regname, false) {
-            vim_beep(kOptBoFlagRegister as ::core::ffi::c_uint);
-            need_redraw = true; // remove the `"`
+    // `LANGMAP_ADJUST(c, true)`: apply 'langmap' to a *typed* key only,
+    // and only when it was not produced by a mapping.
+    let langmap_adjust = |c: c_int| -> c_int {
+        let typed = if vgetc_busy.get() != 0 {
+            typeahead().maplen() == 0
         } else {
-            let reg = get_yank_register(regname, YREG_PASTE);
-
-            if literally == Ctrl_O || literally == Ctrl_P {
-                // Append the command to the redo buffer.
-                append_to_redobuff_char(Ctrl_R);
-                append_to_redobuff_char(literally);
-                append_to_redobuff_char(regname);
-                let fix = if literally == Ctrl_P {
-                    PUT_FIXINDENT as c_int
-                } else {
-                    0
-                };
-                do_put(
-                    regname,
-                    ::core::ptr::null_mut(),
-                    BACKWARD,
-                    1,
-                    fix | PUT_CURSEND as c_int,
-                );
-            } else if (*reg).y_size > 1 && is_literal_register(regname) {
-                append_to_redobuff_char(Ctrl_R);
-                append_to_redobuff_char(regname);
-                do_put(
-                    regname,
-                    ::core::ptr::null_mut(),
-                    BACKWARD,
-                    1,
-                    PUT_CURSEND as c_int,
-                );
-            } else if insert_reg(regname, ::core::ptr::null_mut(), literally != 0) == FAIL {
-                vim_beep(kOptBoFlagRegister as ::core::ffi::c_uint);
-                need_redraw = true; // remove the `"`
-            } else if stop_insert_mode.get() {
-                // The `=` register invoked a function that did
-                // `:stopinsert`: `stuff_empty()` answers false but nothing
-                // will be inserted, so the `"` still has to go.
-                need_redraw = true;
+            KeyTyped.get()
+        };
+        // SAFETY: 'langmap' is a live NUL-terminated option string.
+        if unsafe { *p_langmap.get() } as c_int != 0
+            && (p_lrm.get() != 0 || typed)
+            && KeyStuffed.get() == 0
+            && c >= 0
+        {
+            if c < 256 {
+                langmap_mapchar.with(|map| map[c as usize] as c_int)
+            } else {
+                langmap_adjust_mb(c)
             }
+        } else {
+            c
         }
+    };
 
-        no_u_sync.set(no_u_sync.get() - 1);
-        if u_sync_once.get() == 1 {
-            ins_need_undo.set(true);
-        }
-        u_sync_once.set(0);
+    // Don't map the register name.  This also keeps the mode message
+    // from being deleted when ESC is hit.
+    let raw_key = Keys::unmapped_with_codes();
+    let mut regname = langmap_adjust(get_key());
+    if regname == Ctrl_R || regname == Ctrl_O || regname == Ctrl_P {
+        // A third key follows, for a literal register insertion.
+        literally = regname;
+        add_to_showcmd_c(literally);
+        regname = langmap_adjust(get_key());
+    }
+    drop(raw_key);
 
-        // Remove the `"` if the register was empty.  Before `clear_showcmd`,
-        // which emits an event that can also update the screen.
-        if need_redraw || stuff_empty() {
-            edit_unputchar();
-        }
-        clear_showcmd();
+    // Don't `u_sync()` while typing the expression, or while giving an
+    // error message for it; only explicitly.
+    no_u_sync.set(no_u_sync.get() + 1);
+    if regname == '=' as c_int {
+        let curpos = cur_win().w_cursor;
+        // Sync undo if the expression calls setline() or append(), so
+        // that can be undone separately.
+        u_sync_once.set(2);
+        regname = unsafe { get_expr_register() };
+        // The cursor may have been moved back a column.
+        cur_win().w_cursor = curpos;
+        unsafe { check_cursor(curwin.get()) };
+    }
 
-        // Starting Visual mode here would leave a weird mode.
-        if !vis_active && visual_active() {
-            end_visual_mode();
+    if regname == NUL || !unsafe { valid_yank_reg(regname, false) } {
+        beep(kOptBoFlagRegister as ::core::ffi::c_uint);
+        need_redraw = true; // remove the `"`
+    } else {
+        let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
+
+        if literally == Ctrl_O || literally == Ctrl_P {
+            // Append the command to the redo buffer.
+            append_to_redobuff_char(Ctrl_R);
+            append_to_redobuff_char(literally);
+            append_to_redobuff_char(regname);
+            let fix = if literally == Ctrl_P {
+                PUT_FIXINDENT as c_int
+            } else {
+                0
+            };
+            let flags = fix | PUT_CURSEND as c_int;
+            unsafe { do_put(regname, ::core::ptr::null_mut(), BACKWARD, 1, flags) };
+        } else if unsafe { (*reg).y_size } > 1 && is_literal_register(regname) {
+            append_to_redobuff_char(Ctrl_R);
+            append_to_redobuff_char(regname);
+            let flags = PUT_CURSEND as c_int;
+            unsafe { do_put(regname, ::core::ptr::null_mut(), BACKWARD, 1, flags) };
+        } else if unsafe { insert_reg(regname, ::core::ptr::null_mut(), literally != 0) } == FAIL {
+            beep(kOptBoFlagRegister as ::core::ffi::c_uint);
+            need_redraw = true; // remove the `"`
+        } else if stop_insert_mode.get() {
+            // The `=` register invoked a function that did
+            // `:stopinsert`: `stuff_empty()` answers false but nothing
+            // will be inserted, so the `"` still has to go.
+            need_redraw = true;
         }
+    }
+
+    no_u_sync.set(no_u_sync.get() - 1);
+    if u_sync_once.get() == 1 {
+        ins_need_undo.set(true);
+    }
+    u_sync_once.set(0);
+
+    // Remove the `"` if the register was empty.  Before `clear_showcmd`,
+    // which emits an event that can also update the screen.
+    if need_redraw || stuff_empty() {
+        unsafe { edit_unputchar() };
+    }
+    clear_showcmd();
+
+    // Starting Visual mode here would leave a weird mode.
+    if !vis_active && visual_active() {
+        end_visual_mode();
     }
 }
 
 /// The CTRL-G commands in Insert mode.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_ctrl_g() {
-    unsafe {
-        // Right after CTRL-X the cursor will be after the ruler.
-        setcursor();
+pub(crate) fn ins_ctrl_g() {
+    // Right after CTRL-X the cursor will be after the ruler.
+    // SAFETY: `curwin` is live, which is all these editor-wide routines ask
+    // for.
+    unsafe { setcursor() };
 
-        // Don't map the second key.  This also keeps the mode message from
-        // being deleted when ESC is hit.
-        let c = {
-            let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc()
-        };
+    // Don't map the second key.  This also keeps the mode message from
+    // being deleted when ESC is hit.
+    let c = {
+        let _raw_key = Keys::unmapped_with_codes();
+        get_key()
+    };
 
-        match c {
-            // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.
-            K_UP | Ctrl_K | CTRL_G_UP => ins_updown(true, true),
-            // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col.
-            K_DOWN | Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
-            // CTRL-G u: start a new undoable edit.
-            CTRL_G_UNDO => {
-                u_sync(true);
-                ins_need_undo.set(true);
-                // Insstart has to be reset too, because a BS that joins this
-                // line to the previous one must save for undo.
-                update_Insstart_orig.set(false);
-                Insstart.set((*curwin.get()).w_cursor);
-            }
-            // CTRL-G U: allow one left/right cursor movement with the next
-            // key without breaking undo.
-            CTRL_G_KEEP_UNDO => dont_sync_undo.set(KeepUndo::Armed),
-            // Esc after CTRL-G cancels it.
-            ESC => {}
-            // Unknown; reserved for future expansion.
-            _ => vim_beep(kOptBoFlagCtrlg as ::core::ffi::c_uint),
+    match c {
+        // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.
+        K_UP | Ctrl_K | CTRL_G_UP => ins_updown(true, true),
+        // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col.
+        K_DOWN | Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
+        // CTRL-G u: start a new undoable edit.
+        CTRL_G_UNDO => {
+            unsafe { u_sync(true) };
+            ins_need_undo.set(true);
+            // Insstart has to be reset too, because a BS that joins this
+            // line to the previous one must save for undo.
+            update_Insstart_orig.set(false);
+            Insstart.set(cur_win().w_cursor);
         }
+        // CTRL-G U: allow one left/right cursor movement with the next
+        // key without breaking undo.
+        CTRL_G_KEEP_UNDO => dont_sync_undo.set(KeepUndo::Armed),
+        // Esc after CTRL-G cancels it.
+        ESC => {}
+        // Unknown; reserved for future expansion.
+        _ => beep(kOptBoFlagCtrlg as ::core::ffi::c_uint),
     }
 }
 
 /// CTRL-^ in Insert mode: toggle the `:lmap` mappings.
-///
-/// # Safety
-/// Must run with a live `curbuf`.
-pub(crate) unsafe fn ins_ctrl_hat() {
-    unsafe {
-        if map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) {
-            // `:lmap` mappings exist, so the key toggles their use.
-            if State.get() & MODE_LANGMAP != 0 {
-                (*curbuf.get()).b_p_iminsert = B_IMODE_NONE as OptInt;
-                State.set(State.get() & !MODE_LANGMAP);
-            } else {
-                (*curbuf.get()).b_p_iminsert = B_IMODE_LMAP as OptInt;
-                State.set(State.get() | MODE_LANGMAP);
-            }
+pub(crate) fn ins_ctrl_hat() {
+    // SAFETY: a static empty mode string, and `curbuf` is live.
+    if unsafe { map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) } {
+        // `:lmap` mappings exist, so the key toggles their use.
+        if State.get() & MODE_LANGMAP != 0 {
+            cur_buf().b_p_iminsert = B_IMODE_NONE as OptInt;
+            State.set(State.get() & !MODE_LANGMAP);
+        } else {
+            cur_buf().b_p_iminsert = B_IMODE_LMAP as OptInt;
+            State.set(State.get() | MODE_LANGMAP);
         }
-        set_iminsert_global(curbuf.get());
-        showmode();
-        // Show or unshow the value of 'keymap' in status lines.
-        status_redraw_curbuf();
     }
+    unsafe { set_iminsert_global(curbuf.get()) };
+    show_mode();
+    // Show or unshow the value of 'keymap' in status lines.
+    unsafe { status_redraw_curbuf() };
 }
 
 /// Handle `<Esc>` in Insert mode.
@@ -246,196 +229,185 @@ pub(crate) unsafe fn ins_ctrl_hat() {
 /// command that started the insert (`r` and `v` are the single-character
 /// forms, which must not put an ESC in the redo buffer), and `nomove` is
 /// `i_CTRL-\_CTRL-O`.
-///
-/// # Safety
-/// `count` must point to a live `c_int`.
-pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) -> bool {
-    unsafe {
-        static disabled_redraw: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
+    static disabled_redraw: GlobalCell<bool> = GlobalCell::new(false);
 
-        check_spell_redraw();
+    // SAFETY: every `unsafe` call in this function is an editor-wide routine
+    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
+    // with.
+    check_spell_redraw();
 
-        let temp = (*curwin.get()).w_cursor.col;
-        if disabled_redraw.get() {
-            RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-            disabled_redraw.set(false);
-        }
-
-        let single_char_insert = cmdchar == 'r' as c_int || cmdchar == 'v' as c_int;
-        if !arrow_used.get() {
-            // Don't append the ESC for `r<CR>` and `grx`.
-            if !single_char_insert {
-                append_to_redobuff(ESC_STR.as_ptr());
-            }
-
-            // Repeating an insert may take a long time; check for an
-            // interrupt now and then.
-            if *count > 0 {
-                line_breakcheck();
-                if got_int.get() {
-                    *count = 0;
-                }
-            }
-
-            *count -= 1;
-            if *count > 0 {
-                // Repeat what was typed.  Vi repeats the insert without
-                // replacing characters.
-                if cpo_has(CpoFlag::REPLCNT) {
-                    State.set(State.get() & !REPLACE_FLAG);
-                }
-                start_redo_ins();
-                if single_char_insert {
-                    stuff_redo_readbuf(ESC_STR.as_ptr()); // no ESC in the redo buffer
-                }
-                RedrawingDisabled.set(RedrawingDisabled.get() + 1);
-                disabled_redraw.set(true);
-                return false;
-            }
-            stop_insert(&raw mut (*curwin.get()).w_cursor, 1, nomove as c_int);
-            undisplay_dollar();
-        }
-
-        if !single_char_insert {
-            ins_apply_autocmds(EVENT_INSERTLEAVEPRE);
-        }
-
-        // When an auto-indent was removed, curswant stays after the indent.
-        if restart_edit.get() == NUL && temp == (*curwin.get()).w_cursor.col {
-            (*curwin.get()).w_set_curswant = true;
-        }
-
-        // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
-        if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-            let view = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
-            let fm = &raw mut (*curbuf.get()).b_last_insert;
-            free_fmark((*fm).clone());
-            (*fm).mark = (*curwin.get()).w_cursor;
-            (*fm).fnum = (*curbuf.get()).handle;
-            (*fm).timestamp = os_time();
-            (*fm).view = view;
-            (*fm).additional_data = ::core::ptr::null_mut();
-        }
-
-        // The cursor should end up on the last inserted character.  Not for
-        // CTRL-O, unless it is past the end of the line.
-        if !nomove
-            && ((*curwin.get()).w_cursor.col != 0 || (*curwin.get()).w_cursor.coladd > 0)
-            && (restart_edit.get() == NUL || (gchar_cursor() == NUL && !visual_active()))
-            && !revins_on.get()
-        {
-            if (*curwin.get()).w_cursor.coladd > 0
-                || get_ve_flags(curwin.get()) == kOptVeFlagAll as ::core::ffi::c_uint
-            {
-                oneleft();
-                if restart_edit.get() != NUL {
-                    (*curwin.get()).w_cursor.coladd += 1;
-                }
-            } else {
-                (*curwin.get()).w_cursor.col -= 1;
-                (*curwin.get())
-                    .w_valid
-                    .clear(WinValid::WCOL | WinValid::VIRTCOL);
-                // Correct the cursor for a multi-byte character.
-                mb_adjust_cursor();
-            }
-        }
-
-        State.set(MODE_NORMAL);
-        may_trigger_modechanged();
-        // The cursor needs positioning again when it is on a TAB, and when
-        // the line carries inline virtual text.
-        if gchar_cursor() == TAB || buf_meta_total(curbuf.get(), kMTMetaInline) > 0 {
-            (*curwin.get())
-                .w_valid
-                .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
-        }
-
-        setmouse();
-        ui_cursor_shape(); // may show a different cursor shape
-
-        // While recording, and for CTRL-O, the new mode has to be displayed;
-        // otherwise the mode message is removed.
-        if reg_recording.get() != 0 || restart_edit.get() != NUL {
-            showmode();
-        } else if p_smd.get() != 0
-            && (got_int.get() || !skip_showmode())
-            && !(p_ch.get() == 0 && !ui_has(kUIMessages))
-        {
-            unshowmode(false);
-        }
-
-        true // exit Insert mode
+    let temp = cur_win().w_cursor.col;
+    if disabled_redraw.get() {
+        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+        disabled_redraw.set(false);
     }
+
+    let single_char_insert = cmdchar == 'r' as c_int || cmdchar == 'v' as c_int;
+    if !arrow_used.get() {
+        // Don't append the ESC for `r<CR>` and `grx`.
+        if !single_char_insert {
+            unsafe { append_to_redobuff(ESC_STR.as_ptr()) };
+        }
+
+        // Repeating an insert may take a long time; check for an
+        // interrupt now and then.
+        if *count > 0 {
+            line_breakcheck();
+            if got_int.get() {
+                *count = 0;
+            }
+        }
+
+        *count -= 1;
+        if *count > 0 {
+            // Repeat what was typed.  Vi repeats the insert without
+            // replacing characters.
+            if cpo_has(CpoFlag::REPLCNT) {
+                State.set(State.get() & !REPLACE_FLAG);
+            }
+            unsafe { start_redo_ins() };
+            if single_char_insert {
+                unsafe { stuff_redo_readbuf(ESC_STR.as_ptr()) }; // no ESC in the redo buffer
+            }
+            RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+            disabled_redraw.set(true);
+            return false;
+        }
+        unsafe { stop_insert(&mut cur_win().w_cursor, 1, nomove as c_int) };
+        unsafe { undisplay_dollar() };
+    }
+
+    if !single_char_insert {
+        unsafe { ins_apply_autocmds(EVENT_INSERTLEAVEPRE) };
+    }
+
+    // When an auto-indent was removed, curswant stays after the indent.
+    if restart_edit.get() == NUL && temp == cur_win().w_cursor.col {
+        cur_win().w_set_curswant = true;
+    }
+
+    // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
+    if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
+        let view = unsafe { mark_view_make(curwin.get(), cur_win().w_cursor) };
+        let mut buf = cur_buf();
+        let fm = &mut buf.b_last_insert;
+        unsafe { free_fmark(fm.clone()) };
+        fm.mark = cur_win().w_cursor;
+        fm.fnum = cur_buf().handle;
+        fm.timestamp = os_time();
+        fm.view = view;
+        fm.additional_data = ::core::ptr::null_mut();
+    }
+
+    // The cursor should end up on the last inserted character.  Not for
+    // CTRL-O, unless it is past the end of the line.
+    if !nomove
+        && (cur_win().w_cursor.col != 0 || cur_win().w_cursor.coladd > 0)
+        && (restart_edit.get() == NUL || (char_at_cursor() == NUL && !visual_active()))
+        && !revins_on.get()
+    {
+        if cur_win().w_cursor.coladd > 0
+            || unsafe { get_ve_flags(curwin.get()) } == kOptVeFlagAll as ::core::ffi::c_uint
+        {
+            unsafe { oneleft() };
+            if restart_edit.get() != NUL {
+                cur_win().w_cursor.coladd += 1;
+            }
+        } else {
+            cur_win().w_cursor.col -= 1;
+            cur_win().w_valid.clear(WinValid::WCOL | WinValid::VIRTCOL);
+            // Correct the cursor for a multi-byte character.
+            unsafe { mb_adjust_cursor() };
+        }
+    }
+
+    State.set(MODE_NORMAL);
+    unsafe { may_trigger_modechanged() };
+    // The cursor needs positioning again when it is on a TAB, and when
+    // the line carries inline virtual text.
+    if char_at_cursor() == TAB || unsafe { buf_meta_total(curbuf.get(), kMTMetaInline) } > 0 {
+        cur_win()
+            .w_valid
+            .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
+    }
+
+    setmouse();
+    unsafe { ui_cursor_shape() }; // may show a different cursor shape
+
+    // While recording, and for CTRL-O, the new mode has to be displayed;
+    // otherwise the mode message is removed.
+    if reg_recording.get() != 0 || restart_edit.get() != NUL {
+        show_mode();
+    } else if p_smd.get() != 0
+        && (got_int.get() || !unsafe { skip_showmode() })
+        && !(p_ch.get() == 0 && !ui_has(kUIMessages))
+    {
+        unsafe { unshowmode(false) };
+    }
+
+    true // exit Insert mode
 }
 
 /// CTRL-_ : toggle 'revins', and move to the end of the reverse-inserted
 /// text.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_ctrl_() {
-    unsafe {
-        if revins_on.get() && revins_chars.get() != 0 && revins_scol.get() >= 0 {
-            // Upstream's `while (gchar_cursor() != NUL && revins_chars--)`:
-            // the decrement runs on the iteration that ends the loop too, so
-            // exhausting the count leaves `revins_chars` at -1.
-            while gchar_cursor() != NUL {
-                let n = revins_chars.get();
-                revins_chars.set(n - 1);
-                if n == 0 {
-                    break;
-                }
-                (*curwin.get()).w_cursor.col += 1;
+pub(crate) fn ins_ctrl_() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    if revins_on.get() && revins_chars.get() != 0 && revins_scol.get() >= 0 {
+        // Upstream's `while (gchar_cursor() != NUL && revins_chars--)`:
+        // the decrement runs on the iteration that ends the loop too, so
+        // exhausting the count leaves `revins_chars` at -1.
+        while char_at_cursor() != NUL {
+            let n = revins_chars.get();
+            revins_chars.set(n - 1);
+            if n == 0 {
+                break;
             }
+            cur_win().w_cursor.col += 1;
         }
-
-        p_ri.set((p_ri.get() == 0) as c_int);
-        revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
-        if revins_on.get() {
-            revins_scol.set((*curwin.get()).w_cursor.col);
-            revins_legal.set(revins_legal.get() + 1);
-            revins_chars.set(0);
-            undisplay_dollar();
-        } else {
-            revins_scol.set(-1);
-        }
-        showmode();
     }
+
+    p_ri.set((p_ri.get() == 0) as c_int);
+    revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
+    if revins_on.get() {
+        revins_scol.set(cur_win().w_cursor.col);
+        revins_legal.set(revins_legal.get() + 1);
+        revins_chars.set(0);
+        unsafe { undisplay_dollar() };
+    } else {
+        revins_scol.set(-1);
+    }
+    show_mode();
 }
 
 /// `<Insert>` in Insert mode: toggle between Insert and Replace.
 ///
 /// `replace_state` is the Replace mode to go *to* -- `MODE_REPLACE` or
 /// `MODE_VREPLACE`, depending on how the insert was started.
-///
-/// # Safety
-/// Must run with a live `curbuf`.
-pub(crate) unsafe fn ins_insert(replace_state: c_int) {
-    unsafe {
-        set_vim_var_string(
-            Vv::Insertmode,
-            if State.get() & REPLACE_FLAG != 0 {
-                c"i".as_ptr()
-            } else if replace_state == MODE_VREPLACE {
-                c"v".as_ptr()
-            } else {
-                c"r".as_ptr()
-            },
-            1,
-        );
-        ins_apply_autocmds(EVENT_INSERTCHANGE);
+pub(crate) fn ins_insert(replace_state: c_int) {
+    let mode = if State.get() & REPLACE_FLAG != 0 {
+        c"i".as_ptr()
+    } else if replace_state == MODE_VREPLACE {
+        c"v".as_ptr()
+    } else {
+        c"r".as_ptr()
+    };
+    // SAFETY: a static mode name, and `curwin`/`curbuf` are live.
+    unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
+    unsafe { ins_apply_autocmds(EVENT_INSERTCHANGE) };
 
-        if State.get() & REPLACE_FLAG != 0 {
-            State.set(MODE_INSERT | State.get() & MODE_LANGMAP);
-        } else {
-            State.set(replace_state | State.get() & MODE_LANGMAP);
-        }
-        may_trigger_modechanged();
-        append_to_redobuff_char(K_INS);
-        showmode();
-        ui_cursor_shape();
+    if State.get() & REPLACE_FLAG != 0 {
+        State.set(MODE_INSERT | State.get() & MODE_LANGMAP);
+    } else {
+        State.set(replace_state | State.get() & MODE_LANGMAP);
     }
+    unsafe { may_trigger_modechanged() };
+    append_to_redobuff_char(K_INS);
+    show_mode();
+    unsafe { ui_cursor_shape() };
 }
 
 /// CTRL-O: leave Insert mode for exactly one Normal-mode command.
@@ -443,25 +415,22 @@ pub(crate) unsafe fn ins_insert(replace_state: c_int) {
 /// `restart_edit` holds the letter that brings *this* mode back afterwards,
 /// and `ins_at_eol` remembers whether the cursor was past the last character
 /// so it can be put back there.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_ctrl_o() {
-    unsafe {
-        restart_VIsual_select.set(0);
-        restart_edit.set(if State.get() & VREPLACE_FLAG != 0 {
-            'V' as c_int
-        } else if State.get() & REPLACE_FLAG != 0 {
-            'R' as c_int
-        } else {
-            'I' as c_int
-        });
-        ins_at_eol.set(if virtual_active(curwin.get()) {
-            false
-        } else {
-            gchar_cursor() == NUL
-        });
-    }
+pub(crate) fn ins_ctrl_o() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    restart_VIsual_select.set(0);
+    restart_edit.set(if State.get() & VREPLACE_FLAG != 0 {
+        'V' as c_int
+    } else if State.get() & REPLACE_FLAG != 0 {
+        'R' as c_int
+    } else {
+        'I' as c_int
+    });
+    ins_at_eol.set(if unsafe { virtual_active(curwin.get()) } {
+        false
+    } else {
+        char_at_cursor() == NUL
+    });
 }
 
 /// Whether the next character may trigger a 'cindent' re-indent.
@@ -472,4 +441,44 @@ pub(crate) fn get_can_cindent() -> bool {
 /// Say whether the next character may trigger a 'cindent' re-indent.
 pub(crate) fn set_can_cindent(val: bool) {
     can_cindent.set(val);
+}
+
+/// Show the mode message, if 'showmode' asks for one.
+#[inline(always)]
+fn show_mode() -> c_int {
+    // SAFETY: `curwin` is live for the whole session.
+    unsafe { showmode() }
+}
+
+/// The character under the cursor, `NUL` at the end of the line.
+#[inline(always)]
+fn char_at_cursor() -> c_int {
+    // SAFETY: `curwin`/`curbuf` are live for the whole session.
+    unsafe { gchar_cursor() }
+}
+
+/// Read the next key, waiting for it if need be.
+#[inline(always)]
+fn get_key() -> c_int {
+    // SAFETY: the typeahead buffer is live for the whole session.
+    unsafe { plain_vgetc() }
+}
+
+/// Beep, or flash, for the 'belloff' reason `flag`.
+#[inline(always)]
+fn beep(flag: ::core::ffi::c_uint) {
+    // SAFETY: the bell only reads options.
+    unsafe { vim_beep(flag) }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

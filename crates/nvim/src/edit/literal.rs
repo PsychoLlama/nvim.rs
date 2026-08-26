@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -26,34 +27,33 @@ use crate::guard::Keys;
 use crate::types::{FAIL, NUL, OK};
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn ins_ctrl_v() {
-    unsafe {
-        // May need to redraw now that no more characters are available.
-        ins_redraw(false);
+pub(crate) fn ins_ctrl_v() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    // May need to redraw now that no more characters are available.
+    unsafe { ins_redraw(false) };
 
-        let mut did_putchar = false;
-        if redrawing() && !char_avail() {
-            edit_putchar('^' as c_int, true);
-            did_putchar = true;
-        }
-        append_to_redobuff(CTRL_V_STR.as_ptr());
-        add_to_showcmd_c(Ctrl_V);
-
-        // Do not fold the modifiers into the key for CTRL-SHIFT-V.
-        let c = get_literal(mod_mask.get() & MOD_MASK_SHIFT != 0);
-        if did_putchar {
-            // When the line fits in 'columns' the `^` is at the start of the
-            // next line and the redraw will not have removed it.
-            edit_unputchar();
-        }
-        clear_showcmd();
-        insert_special(c, 1, 1);
-        revins_chars.set(revins_chars.get() + 1);
-        revins_legal.set(revins_legal.get() + 1);
+    let mut did_putchar = false;
+    if unsafe { redrawing() } && !unsafe { char_avail() } {
+        unsafe { edit_putchar('^' as c_int, true) };
+        did_putchar = true;
     }
+    unsafe { append_to_redobuff(CTRL_V_STR.as_ptr()) };
+    add_to_showcmd_c(Ctrl_V);
+
+    // Do not fold the modifiers into the key for CTRL-SHIFT-V.
+    let c = unsafe { get_literal(mod_mask.get() & MOD_MASK_SHIFT != 0) };
+    if did_putchar {
+        // When the line fits in 'columns' the `^` is at the start of the
+        // next line and the redraw will not have removed it.
+        unsafe { edit_unputchar() };
+    }
+    clear_showcmd();
+    insert_special(c, 1, 1);
+    revins_chars.set(revins_chars.get() + 1);
+    revins_legal.set(revins_legal.get() + 1);
 }
 
 /// Read the next character literally.
@@ -73,102 +73,104 @@ pub(crate) unsafe fn ins_ctrl_v() {
 /// # Safety
 /// Must run on the main thread; reads from the typeahead.
 pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
-    unsafe {
-        if got_int.get() {
-            return Ctrl_C;
-        }
-
-        let mut hex = false;
-        let mut octal = false;
-        let mut unicode = 0;
-
-        let unmapped = Keys::unmapped(); // don't map the next key hits
-        let mut cc = 0;
-        let mut i = 0;
-        let mut nc;
-        loop {
-            nc = plain_vgetc();
-            if !no_simplify {
-                nc = merge_mod_mask(nc);
-            }
-            if mod_mask.get() & !MOD_MASK_SHIFT != 0 {
-                // A character with a non-Shift modifier cannot be part of
-                // i_CTRL-V_digit.
-                break;
-            }
-            // MB_BYTE2LEN_CHECK
-            let byte_len = if !(0..=255).contains(&nc) {
-                1
-            } else {
-                utf8len_tab[nc as usize] as c_int
-            };
-            if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
-                add_to_showcmd(nc);
-            }
-
-            if nc == 'x' as c_int || nc == 'X' as c_int {
-                hex = true;
-            } else if nc == 'o' as c_int || nc == 'O' as c_int {
-                octal = true;
-            } else if nc == 'u' as c_int || nc == 'U' as c_int {
-                unicode = nc;
-            } else {
-                if hex || unicode != 0 {
-                    if !ascii_isxdigit(nc) {
-                        break;
-                    }
-                    cc = cc * 16 + hex2nr(nc);
-                } else if octal {
-                    if nc < '0' as c_int || nc > '7' as c_int {
-                        break;
-                    }
-                    cc = cc * 8 + nc - '0' as c_int;
-                } else {
-                    if !ascii_isdigit(nc) {
-                        break;
-                    }
-                    cc = cc * 10 + nc - '0' as c_int;
-                }
-                i += 1;
-            }
-
-            if cc > 255 && unicode == 0 {
-                cc = 255; // limit the range to 0-255
-            }
-            nc = 0;
-
-            // How many digits this spelling takes.
-            let enough = if hex {
-                i >= 2
-            } else if unicode != 0 {
-                (unicode == 'u' as c_int && i >= 4) || (unicode == 'U' as c_int && i >= 8)
-            } else {
-                i >= 3
-            };
-            if enough {
-                break;
-            }
-        }
-
-        if i == 0 {
-            // No number was entered: the key itself is the answer.  NUL is
-            // stored as NL.
-            cc = if nc == K_ZERO { '\n' as c_int } else { nc };
-            nc = 0;
-        }
-        if cc == 0 {
-            cc = '\n' as c_int; // NUL is stored as NL
-        }
-
-        drop(unmapped);
-        if nc != 0 {
-            vungetc(nc);
-            // A character typed with i_CTRL-V_digit cannot have modifiers.
-            mod_mask.set(0);
-        }
-        got_int.set(false); // CTRL-C after CTRL-V is not an interrupt
-        cc
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    if got_int.get() {
+        return Ctrl_C;
     }
+
+    let mut hex = false;
+    let mut octal = false;
+    let mut unicode = 0;
+
+    let unmapped = Keys::unmapped(); // don't map the next key hits
+    let mut cc = 0;
+    let mut i = 0;
+    let mut nc;
+    loop {
+        nc = unsafe { plain_vgetc() };
+        if !no_simplify {
+            nc = merge_mod_mask(nc);
+        }
+        if mod_mask.get() & !MOD_MASK_SHIFT != 0 {
+            // A character with a non-Shift modifier cannot be part of
+            // i_CTRL-V_digit.
+            break;
+        }
+        // MB_BYTE2LEN_CHECK
+        let byte_len = if !(0..=255).contains(&nc) {
+            1
+        } else {
+            utf8len_tab[nc as usize] as c_int
+        };
+        if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
+            add_to_showcmd(nc);
+        }
+
+        if nc == 'x' as c_int || nc == 'X' as c_int {
+            hex = true;
+        } else if nc == 'o' as c_int || nc == 'O' as c_int {
+            octal = true;
+        } else if nc == 'u' as c_int || nc == 'U' as c_int {
+            unicode = nc;
+        } else {
+            if hex || unicode != 0 {
+                if !ascii_isxdigit(nc) {
+                    break;
+                }
+                cc = cc * 16 + hex2nr(nc);
+            } else if octal {
+                if nc < '0' as c_int || nc > '7' as c_int {
+                    break;
+                }
+                cc = cc * 8 + nc - '0' as c_int;
+            } else {
+                if !ascii_isdigit(nc) {
+                    break;
+                }
+                cc = cc * 10 + nc - '0' as c_int;
+            }
+            i += 1;
+        }
+
+        if cc > 255 && unicode == 0 {
+            cc = 255; // limit the range to 0-255
+        }
+        nc = 0;
+
+        // How many digits this spelling takes.
+        let enough = if hex {
+            i >= 2
+        } else if unicode != 0 {
+            (unicode == 'u' as c_int && i >= 4) || (unicode == 'U' as c_int && i >= 8)
+        } else {
+            i >= 3
+        };
+        if enough {
+            break;
+        }
+    }
+
+    if i == 0 {
+        // No number was entered: the key itself is the answer.  NUL is
+        // stored as NL.
+        cc = if nc == K_ZERO { '\n' as c_int } else { nc };
+        nc = 0;
+    }
+    if cc == 0 {
+        cc = '\n' as c_int; // NUL is stored as NL
+    }
+
+    drop(unmapped);
+    if nc != 0 {
+        vungetc(nc);
+        // A character typed with i_CTRL-V_digit cannot have modifiers.
+        mod_mask.set(0);
+    }
+    got_int.set(false); // CTRL-C after CTRL-V is not an interrupt
+    cc
 }
 
 /// Insert a character, taking care of special keys and `mod_mask`.
@@ -181,40 +183,33 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
 /// Command key always does.
 ///
 /// `ctrlv` says `c` was typed just after CTRL-V.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
-    unsafe {
-        if mod_mask.get() & MOD_MASK_CMD != 0 {
-            // The Command key never produces a normal key.
-            allow_modmask = 1;
-        }
-        if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
-            let mut name = get_special_key_name(c, mod_mask.get());
-            let (p, len) = (name.as_mut_ptr(), strlen(name.as_ptr()) as c_int);
-            c = *p.offset((len - 1) as isize) as uint8_t as c_int;
-            if len > 2 {
-                if stop_arrow() == FAIL {
-                    return;
-                }
-                *p.offset((len - 1) as isize) = NUL as c_char;
-                ins_str(p, (len - 1) as size_t);
-                append_to_redobuff_literally(p, -1);
-                ctrlv = 0;
+pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
+    if mod_mask.get() & MOD_MASK_CMD != 0 {
+        // The Command key never produces a normal key.
+        allow_modmask = 1;
+    }
+    if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
+        let mut name = get_special_key_name(c, mod_mask.get());
+        let (p, len) = (name.as_mut_ptr(), unsafe { strlen(name.as_ptr()) } as c_int);
+        c = unsafe { *p.offset((len - 1) as isize) } as uint8_t as c_int;
+        if len > 2 {
+            if unsafe { stop_arrow() } == FAIL {
+                return;
             }
+            unsafe { *p.offset((len - 1) as isize) = NUL as c_char };
+            unsafe { ins_str(p, (len - 1) as size_t) };
+            unsafe { append_to_redobuff_literally(p, -1) };
+            ctrlv = 0;
         }
-        if stop_arrow() == OK {
-            insertchar(
-                c,
-                if ctrlv != 0 {
-                    INSCHAR_CTRLV as c_int
-                } else {
-                    0
-                },
-                -1,
-            );
-        }
+    }
+    if unsafe { stop_arrow() } == OK {
+        let flags = if ctrlv != 0 {
+            INSCHAR_CTRLV as c_int
+        } else {
+            0
+        };
+        // SAFETY: `curwin`/`curbuf` are live for the whole session.
+        unsafe { insertchar(c, flags, -1) };
     }
 }
 
@@ -222,18 +217,15 @@ pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut 
 ///
 /// A digit has to go in as three digits, or the redo would read it as the
 /// start of a longer `i_CTRL-V_digit` sequence.
-///
-/// # Safety
-/// Must run on the main thread.
-pub(crate) unsafe fn redo_literal(c: c_int) {
-    unsafe {
-        if ascii_isdigit(c) {
-            let mut buf: [c_char; 10] = [0; 10];
-            vim_snprintf(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c);
-            append_to_redobuff(buf.as_mut_ptr());
-        } else {
-            append_to_redobuff_char(c);
-        }
+pub(crate) fn redo_literal(c: c_int) {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    if ascii_isdigit(c) {
+        let mut buf: [c_char; 10] = [0; 10];
+        unsafe { vim_snprintf(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c) };
+        unsafe { append_to_redobuff(buf.as_mut_ptr()) };
+    } else {
+        append_to_redobuff_char(c);
     }
 }
 
@@ -243,67 +235,66 @@ pub(crate) unsafe fn redo_literal(c: c_int) {
 /// left to do -- which is the case when either key was `<Esc>`, and when the
 /// first key was a special key (which [`insert_special`] has then already
 /// inserted).
-///
-/// # Safety
-/// Must run with a live `curwin`; reads from the typeahead.
-pub(crate) unsafe fn ins_digraph() -> c_int {
-    unsafe {
-        let mut did_putchar = false;
-        pc_status.set(PutChar::Unset);
-        if redrawing() && !char_avail() {
-            ins_redraw(false);
-            edit_putchar('?' as c_int, true);
-            did_putchar = true;
-            add_to_showcmd_c(Ctrl_K);
+pub(crate) fn ins_digraph() -> c_int {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let mut did_putchar = false;
+    pc_status.set(PutChar::Unset);
+    if unsafe { redrawing() } && !unsafe { char_avail() } {
+        unsafe { ins_redraw(false) };
+        unsafe { edit_putchar('?' as c_int, true) };
+        did_putchar = true;
+        add_to_showcmd_c(Ctrl_K);
+    }
+
+    let mut c = {
+        let _raw_key = Keys::unmapped_with_codes();
+        unsafe { plain_vgetc() }
+    };
+    if did_putchar {
+        // If the line fits in 'columns' the `?` is at the start of the
+        // next line and the redraw will not have removed it.
+        unsafe { edit_unputchar() };
+    }
+
+    if c < 0 || mod_mask.get() != 0 {
+        clear_showcmd();
+        insert_special(c, 1, 0);
+        return NUL;
+    }
+
+    if c != ESC {
+        did_putchar = false;
+        if unsafe { redrawing() } && !unsafe { char_avail() } {
+            unsafe { ins_redraw(false) };
+            if unsafe { char2cells(c) } == 1 {
+                unsafe { ins_redraw(false) };
+                unsafe { edit_putchar(c, true) };
+                did_putchar = true;
+            }
+            add_to_showcmd_c(c);
         }
 
-        let mut c = {
+        let cc = {
             let _raw_key = Keys::unmapped_with_codes();
-            plain_vgetc()
+            unsafe { plain_vgetc() }
         };
         if did_putchar {
-            // If the line fits in 'columns' the `?` is at the start of the
-            // next line and the redraw will not have removed it.
-            edit_unputchar();
+            unsafe { edit_unputchar() };
         }
 
-        if c < 0 || mod_mask.get() != 0 {
+        if cc != ESC {
+            unsafe { append_to_redobuff(CTRL_V_STR.as_ptr()) };
+            c = digraph_get(c, cc, true);
             clear_showcmd();
-            insert_special(c, 1, 0);
-            return NUL;
+            return c;
         }
-
-        if c != ESC {
-            did_putchar = false;
-            if redrawing() && !char_avail() {
-                ins_redraw(false);
-                if char2cells(c) == 1 {
-                    ins_redraw(false);
-                    edit_putchar(c, true);
-                    did_putchar = true;
-                }
-                add_to_showcmd_c(c);
-            }
-
-            let cc = {
-                let _raw_key = Keys::unmapped_with_codes();
-                plain_vgetc()
-            };
-            if did_putchar {
-                edit_unputchar();
-            }
-
-            if cc != ESC {
-                append_to_redobuff(CTRL_V_STR.as_ptr());
-                c = digraph_get(c, cc, true);
-                clear_showcmd();
-                return c;
-            }
-        }
-
-        clear_showcmd();
-        NUL
     }
+
+    clear_showcmd();
+    NUL
 }
 
 /// The character in line `lnum` at the cursor's *screen* column.
@@ -316,39 +307,41 @@ pub(crate) unsafe fn ins_digraph() -> c_int {
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
 pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
-    unsafe {
-        if lnum < 1 || lnum > (*curbuf.get()).b_ml.ml_line_count {
-            vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
-            return NUL;
-        }
-
-        // Try to advance to the cursor column.
-        validate_virtcol(curwin.get());
-        let end_vcol = (*curwin.get()).w_virtcol;
-        let line = ml_get(lnum);
-
-        let mut csarg = CharsizeArg::default();
-        let cstype = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
-        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
-        let mut vcol = 0;
-        while vcol < end_vcol && *ci.ptr as c_int != NUL {
-            vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
-            if vcol > end_vcol {
-                break;
-            }
-            ci = utfc_next(ci);
-        }
-
-        let c = if ci.chr.value < 0 {
-            *ci.ptr as uint8_t as c_int
-        } else {
-            ci.chr.value as c_int
-        };
-        if c == NUL {
-            vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
-        }
-        c
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count {
+        unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };
+        return NUL;
     }
+
+    // Try to advance to the cursor column.
+    unsafe { validate_virtcol(curwin.get()) };
+    let end_vcol = cur_win().w_virtcol;
+    let line = unsafe { ml_get(lnum) };
+
+    let mut csarg = CharsizeArg::default();
+    let cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut vcol = 0;
+    while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
+        vcol += unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        if vcol > end_vcol {
+            break;
+        }
+        ci = unsafe { utfc_next(ci) };
+    }
+
+    let c = if ci.chr.value < 0 {
+        unsafe { *ci.ptr as uint8_t as c_int }
+    } else {
+        ci.chr.value as c_int
+    };
+    if c == NUL {
+        unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };
+    }
+    c
 }
 
 /// CTRL-Y or CTRL-E typed in Insert mode.
@@ -359,39 +352,50 @@ pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
 ///
 /// Answers the key to be recorded: the character itself when nothing was
 /// inserted, and CTRL-V when it was.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_ctrl_ey(tc: c_int) -> c_int {
-    unsafe {
-        let mut c = tc;
-        if ctrl_x_mode_scroll() {
-            if c == Ctrl_Y {
-                scrolldown_clamp();
-            } else {
-                scrollup_clamp();
-            }
-            redraw_later(curwin.get(), UPD_VALID);
-            return c;
+pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let mut c = tc;
+    if ctrl_x_mode_scroll() {
+        if c == Ctrl_Y {
+            unsafe { scrolldown_clamp() };
+        } else {
+            unsafe { scrollup_clamp() };
         }
-
-        c = ins_copychar((*curwin.get()).w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 });
-        if c == NUL {
-            return c;
-        }
-
-        // A non-alphanumeric byte has to be recorded literally, or the redo
-        // would read it as a command.
-        if c < 256 && *(*__ctype_b_loc()).offset(c as isize) & _ISalnum == 0 {
-            append_to_redobuff(CTRL_V_STR.as_ptr());
-        }
-        let tw_save = (*curbuf.get()).b_p_tw;
-        (*curbuf.get()).b_p_tw = -1;
-        insert_special(c, 1, 0);
-        (*curbuf.get()).b_p_tw = tw_save;
-        revins_chars.set(revins_chars.get() + 1);
-        revins_legal.set(revins_legal.get() + 1);
-        auto_format(false, true);
-        Ctrl_V
+        unsafe { redraw_later(curwin.get(), UPD_VALID) };
+        return c;
     }
+
+    c = unsafe { ins_copychar(cur_win().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 }) };
+    if c == NUL {
+        return c;
+    }
+
+    // A non-alphanumeric byte has to be recorded literally, or the redo
+    // would read it as a command.
+    if c < 256 && unsafe { *(*__ctype_b_loc()).offset(c as isize) } & _ISalnum == 0 {
+        unsafe { append_to_redobuff(CTRL_V_STR.as_ptr()) };
+    }
+    let tw_save = cur_buf().b_p_tw;
+    cur_buf().b_p_tw = -1;
+    insert_special(c, 1, 0);
+    cur_buf().b_p_tw = tw_save;
+    revins_chars.set(revins_chars.get() + 1);
+    revins_legal.set(revins_legal.get() + 1);
+    unsafe { auto_format(false, true) };
+    Ctrl_V
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

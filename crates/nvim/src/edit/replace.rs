@@ -22,6 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -46,17 +47,17 @@ pub(super) fn replace_stack_ref() -> *mut ReplaceStack {
 /// `line` must point to at least `len` writable bytes plus a byte for the
 /// NUL this writes.
 pub(crate) unsafe fn truncate_spaces(line: *mut c_char, len: size_t) {
-    unsafe {
-        // Walk back over the trailing white space.
-        let mut i = len as c_int - 1;
-        while i >= 0 && ascii_iswhite(*line.offset(i as isize) as c_int) {
-            if State.get() & REPLACE_FLAG != 0 {
-                replace_join(0); // remove a NUL from the replace stack
-            }
-            i -= 1;
+    // SAFETY: the caller promises `line` holds `len` writable bytes plus room
+    // for a NUL, so every index at or below `len` is inside it.
+    // Walk back over the trailing white space.
+    let mut i = len as c_int - 1;
+    while i >= 0 && ascii_iswhite(unsafe { *line.offset(i as isize) } as c_int) {
+        if State.get() & REPLACE_FLAG != 0 {
+            unsafe { replace_join(0) }; // remove a NUL from the replace stack
         }
-        *line.offset((i + 1) as isize) = NUL as c_char;
+        i -= 1;
     }
+    unsafe { *line.offset((i + 1) as isize) = NUL as c_char };
 }
 
 /// Backspace the cursor until column `col`, honouring Replace and Virtual
@@ -70,14 +71,12 @@ pub(crate) unsafe fn truncate_spaces(line: *mut c_char, len: size_t) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn backspace_until_column(col: c_int) {
-    unsafe {
-        while (*curwin.get()).w_cursor.col > col {
-            (*curwin.get()).w_cursor.col -= 1;
-            if State.get() & REPLACE_FLAG != 0 {
-                replace_do_bs(col);
-            } else if !del_char_after_col(col) {
-                break;
-            }
+    while cur_win().w_cursor.col > col {
+        cur_win().w_cursor.col -= 1;
+        if State.get() & REPLACE_FLAG != 0 {
+            replace_do_bs(col);
+        } else if !del_char_after_col(col) {
+            break;
         }
     }
 }
@@ -90,33 +89,32 @@ pub(crate) unsafe fn backspace_until_column(col: c_int) {
 /// negative `limit_col` means "no limit" and is a plain `del_char`.
 ///
 /// Answers whether anything was deleted.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-unsafe fn del_char_after_col(limit_col: c_int) -> bool {
-    unsafe {
-        if limit_col >= 0 {
-            let ecol = (*curwin.get()).w_cursor.col + 1;
+fn del_char_after_col(limit_col: c_int) -> bool {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    if limit_col >= 0 {
+        let ecol = cur_win().w_cursor.col + 1;
 
-            // Put the cursor at the start of a character, then step forward
-            // again if a composing character took it too far back.
-            mb_adjust_cursor();
-            while (*curwin.get()).w_cursor.col < limit_col {
-                let l = utf_ptr2len(get_cursor_pos_ptr());
-                if l == 0 {
-                    break; // end of line
-                }
-                (*curwin.get()).w_cursor.col += l;
+        // Put the cursor at the start of a character, then step forward
+        // again if a composing character took it too far back.
+        unsafe { mb_adjust_cursor() };
+        while cur_win().w_cursor.col < limit_col {
+            let l = unsafe { utf_ptr2len(get_cursor_pos_ptr()) };
+            if l == 0 {
+                break; // end of line
             }
-            if *get_cursor_pos_ptr() as c_int == NUL || (*curwin.get()).w_cursor.col == ecol {
-                return false;
-            }
-            del_bytes(ecol - (*curwin.get()).w_cursor.col, false, true);
-        } else {
-            del_char(false);
+            cur_win().w_cursor.col += l;
         }
-        true
+        if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || cur_win().w_cursor.col == ecol {
+            return false;
+        }
+        unsafe { del_bytes(ecol - cur_win().w_cursor.col, false, true) };
+    } else {
+        unsafe { del_char(false) };
     }
+    true
 }
 
 /// kvec's `kv_roundup32`: the capacity `kv_ensure_space` picks for `n` bytes.
@@ -144,39 +142,31 @@ const fn kv_roundup32(n: size_t) -> size_t {
 /// # Safety
 /// `str` must point to `len` readable bytes.
 pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
-    unsafe {
-        let stack = replace_stack_ref();
-        if (*stack).size < replace_offset.get() as size_t {
-            return; // nothing to do
-        }
-
-        // kv_ensure_space(replace_stack, len)
-        if (*stack).capacity < (*stack).size + len {
-            (*stack).capacity = kv_roundup32((*stack).size + len);
-            (*stack).items = xrealloc(
-                (*stack).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<c_char>() * (*stack).capacity,
-            ) as *mut c_char;
-        }
-
-        let p = (*stack)
-            .items
-            .add((*stack).size)
-            .offset(-(replace_offset.get() as isize));
-        if replace_offset.get() != 0 {
-            memmove(
-                p.add(len) as *mut ::core::ffi::c_void,
-                p as *const ::core::ffi::c_void,
-                replace_offset.get() as size_t,
-            );
-        }
-        memcpy(
-            p as *mut ::core::ffi::c_void,
-            str as *const ::core::ffi::c_void,
-            len,
-        );
-        (*stack).size += len;
+    // SAFETY: the replace stack is a live global.
+    let stack = unsafe { &mut *replace_stack_ref() };
+    if stack.size < replace_offset.get() as size_t {
+        return; // nothing to do
     }
+
+    // kv_ensure_space(replace_stack, len)
+    if stack.capacity < stack.size + len {
+        stack.capacity = kv_roundup32(stack.size + len);
+        let bytes = ::core::mem::size_of::<c_char>() * stack.capacity;
+        // SAFETY: the stack owns `items`, and `bytes` is its new size.
+        stack.items = unsafe { xrealloc(stack.items.cast(), bytes) } as *mut c_char;
+    }
+
+    // SAFETY: `p` sits `replace_offset` bytes below the top of the stack,
+    // which has just been made big enough for `len` more bytes than that.
+    let below = -(replace_offset.get() as isize);
+    let p = unsafe { stack.items.add(stack.size).offset(below) };
+    if replace_offset.get() != 0 {
+        let above = replace_offset.get() as size_t;
+        unsafe { memmove(p.add(len).cast(), p.cast(), above) };
+    }
+    // SAFETY: the caller promises `str` holds `len` readable bytes.
+    unsafe { memcpy(p.cast(), str.cast(), len) };
+    stack.size += len;
 }
 
 /// Push a NUL, the separator between entries.
@@ -185,6 +175,7 @@ pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
 /// Must run with the replace stack initialised (it always is; the empty
 /// stack is a null pointer with zero capacity).
 pub(crate) unsafe fn replace_push_nul() {
+    // SAFETY: a static one-byte string, one byte of which is read.
     unsafe { replace_push(c"".as_ptr().cast_mut(), 1) }
 }
 
@@ -193,22 +184,19 @@ pub(crate) unsafe fn replace_push_nul() {
 /// Answers -1 for an empty stack, and otherwise the last byte -- so a
 /// positive answer means "an entry is open, take a whole character off it
 /// with [`mb_replace_pop_ins`]".
-///
-/// # Safety
-/// Must run with a live replace stack.
-pub(crate) unsafe fn replace_pop_if_nul() -> c_int {
-    unsafe {
-        let stack = replace_stack_ref();
-        let ch = if (*stack).size != 0 {
-            *(*stack).items.add((*stack).size - 1) as uint8_t as c_int
-        } else {
-            -1
-        };
-        if ch == NUL {
-            (*stack).size -= 1;
-        }
-        ch
+pub(crate) fn replace_pop_if_nul() -> c_int {
+    // SAFETY: the replace stack is a live global.
+    let stack = unsafe { &mut *replace_stack_ref() };
+    let ch = if stack.size != 0 {
+        // SAFETY: a non-empty stack has a last byte.
+        unsafe { *stack.items.add(stack.size - 1) as uint8_t as c_int }
+    } else {
+        -1
+    };
+    if ch == NUL {
+        stack.size -= 1;
     }
+    ch
 }
 
 /// Join the top two entries by removing the `off`'th NUL from the top.
@@ -216,27 +204,26 @@ pub(crate) unsafe fn replace_pop_if_nul() -> c_int {
 /// # Safety
 /// Must run with a live replace stack.
 pub(crate) unsafe fn replace_join(mut off: c_int) {
-    unsafe {
-        let stack = replace_stack_ref();
-        let mut i = (*stack).size as ssize_t;
-        while i > 0 {
-            i -= 1;
-            if *(*stack).items.offset(i as isize) as c_int != NUL {
-                continue;
-            }
-            // Only a NUL counts down `off`, and the one that reaches zero is
-            // the one removed.
-            let this_one = off <= 0;
-            off -= 1;
-            if this_one {
-                (*stack).size -= 1;
-                memmove(
-                    (*stack).items.offset(i as isize) as *mut ::core::ffi::c_void,
-                    (*stack).items.offset(i + 1) as *const ::core::ffi::c_void,
-                    (*stack).size - i as size_t,
-                );
-                return;
-            }
+    // SAFETY: the replace stack is a live global, and `i` only ever walks
+    // bytes it already holds.
+    let stack = unsafe { &mut *replace_stack_ref() };
+    let mut i = stack.size as ssize_t;
+    while i > 0 {
+        i -= 1;
+        if unsafe { *stack.items.offset(i as isize) } as c_int != NUL {
+            continue;
+        }
+        // Only a NUL counts down `off`, and the one that reaches zero is
+        // the one removed.
+        let this_one = off <= 0;
+        off -= 1;
+        if this_one {
+            stack.size -= 1;
+            let gap = unsafe { stack.items.offset(i as isize) };
+            let rest = unsafe { stack.items.offset(i + 1) };
+            let rest_len = stack.size - i as size_t;
+            unsafe { memmove(gap.cast(), rest.cast(), rest_len) };
+            return;
         }
     }
 }
@@ -246,19 +233,18 @@ pub(crate) unsafe fn replace_join(mut off: c_int) {
 /// Only usable in `MODE_REPLACE`/`MODE_VREPLACE` -- and it turns the mode
 /// *off* while it works, because the insertions it does must not push onto
 /// the stack it is popping.
-///
-/// # Safety
-/// Must run with a live `curwin` and replace stack.
-pub(crate) unsafe fn replace_pop_ins() {
-    unsafe {
-        let old_state = State.get();
-        State.set(MODE_NORMAL); // don't want MODE_REPLACE here
-        while replace_pop_if_nul() > 0 {
-            mb_replace_pop_ins();
-            dec_cursor();
-        }
-        State.set(old_state);
+pub(crate) fn replace_pop_ins() {
+    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
+    // precondition is the live `curwin`/`curbuf` this mode runs with.
+    // The strings walked below are NUL-terminated lines of that buffer, and
+    // every step stops at the NUL.
+    let old_state = State.get();
+    State.set(MODE_NORMAL); // don't want MODE_REPLACE here
+    while replace_pop_if_nul() > 0 {
+        mb_replace_pop_ins();
+        unsafe { dec_cursor() };
     }
+    State.set(old_state);
 }
 
 /// Insert one whole multi-byte character popped off the stack.
@@ -266,16 +252,14 @@ pub(crate) unsafe fn replace_pop_ins() {
 /// The caller must already have checked that the top of the stack is not a
 /// NUL: the length is measured *backwards* from the last byte, and on an
 /// empty entry `utf_head_off` would be reading the byte before it.
-///
-/// # Safety
-/// The replace stack's top entry must be non-empty.
-pub(crate) unsafe fn mb_replace_pop_ins() {
-    unsafe {
-        let stack = replace_stack_ref();
-        let len = utf_head_off((*stack).items, (*stack).items.add((*stack).size - 1)) + 1;
-        (*stack).size -= len as size_t;
-        ins_bytes_len((*stack).items.add((*stack).size), len as size_t);
-    }
+pub(crate) fn mb_replace_pop_ins() {
+    // SAFETY: the replace stack is a live global whose top entry the caller
+    // promises is not empty, so its last character has a head byte.
+    let stack = unsafe { &mut *replace_stack_ref() };
+    let last = unsafe { stack.items.add(stack.size - 1) };
+    let len = unsafe { utf_head_off(stack.items, last) } + 1;
+    stack.size -= len as size_t;
+    unsafe { ins_bytes_len(stack.items.add(stack.size), len as size_t) };
 }
 
 /// One backspace in Replace mode.
@@ -287,68 +271,73 @@ pub(crate) unsafe fn mb_replace_pop_ins() {
 ///
 /// `limit_col >= 0` means "do not delete before this column", which matters
 /// with composing characters -- see [`del_char_after_col`].
-///
-/// # Safety
-/// Must run with a live `curwin` and replace stack.
-pub(crate) unsafe fn replace_do_bs(limit_col: c_int) {
-    unsafe {
-        let l_state = State.get();
-        let cc = replace_pop_if_nul();
-        if cc > 0 {
-            let mut start_vcol: colnr_T = 0;
-            let mut orig_vcols = 0;
-            if l_state & VREPLACE_FLAG != 0 {
-                // How many screen cells the character about to be deleted
-                // took.
+pub(crate) fn replace_do_bs(limit_col: c_int) {
+    let l_state = State.get();
+    let cc = replace_pop_if_nul();
+    if cc > 0 {
+        let mut start_vcol: colnr_T = 0;
+        let mut orig_vcols = 0;
+        if l_state & VREPLACE_FLAG != 0 {
+            // How many screen cells the character about to be deleted
+            // took.
+            let none = ::core::ptr::null_mut();
+            // SAFETY: a live window and its own cursor.
+            unsafe {
                 getvcol(
                     curwin.get(),
-                    &raw mut (*curwin.get()).w_cursor,
-                    ::core::ptr::null_mut(),
+                    &mut cur_win().w_cursor,
+                    none,
                     &raw mut start_vcol,
-                    ::core::ptr::null_mut(),
-                );
-                orig_vcols = win_chartabsize(curwin.get(), get_cursor_pos_ptr(), start_vcol);
-            }
-            del_char_after_col(limit_col);
-            let orig_len = if l_state & VREPLACE_FLAG != 0 {
-                get_cursor_pos_len()
-            } else {
-                0
+                    none,
+                )
             };
-            replace_pop_ins();
-
-            if l_state & VREPLACE_FLAG != 0 {
-                // How many screen cells the restored characters take.
-                let p = get_cursor_pos_ptr();
-                let ins_len = get_cursor_pos_len() - orig_len;
-                let mut vcol = start_vcol;
-                let mut i = 0;
-                while i < ins_len {
-                    vcol += win_chartabsize(curwin.get(), p.offset(i as isize), vcol);
-                    // O-B15-22: upstream steps by the length of the *first*
-                    // character every time (`utfc_ptr2len(p)`, not
-                    // `p + i`), so a restored run of differently-sized
-                    // characters is measured wrong.  Reproduced as it is.
-                    i += utfc_ptr2len(p);
-                }
-                vcol -= start_vcol;
-
-                // Virtual Replace keeps the following text aligned, so any
-                // spaces it padded with have to come off again.
-                (*curwin.get()).w_cursor.col += ins_len;
-                while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
-                    del_char(false);
-                    orig_vcols += 1;
-                }
-                (*curwin.get()).w_cursor.col -= ins_len;
-            }
-
-            // Mark the buffer changed and prepare for displaying.
-            changed_bytes((*curwin.get()).w_cursor.lnum, (*curwin.get()).w_cursor.col);
-        } else if cc == 0 {
-            del_char_after_col(limit_col);
+            orig_vcols = unsafe { win_chartabsize(curwin.get(), get_cursor_pos_ptr(), start_vcol) };
         }
+        del_char_after_col(limit_col);
+        let orig_len = if l_state & VREPLACE_FLAG != 0 {
+            unsafe { get_cursor_pos_len() }
+        } else {
+            0
+        };
+        replace_pop_ins();
+
+        if l_state & VREPLACE_FLAG != 0 {
+            // How many screen cells the restored characters take.
+            let p = unsafe { get_cursor_pos_ptr() };
+            let ins_len = unsafe { get_cursor_pos_len() } - orig_len;
+            let mut vcol = start_vcol;
+            let mut i = 0;
+            while i < ins_len {
+                vcol += unsafe { win_chartabsize(curwin.get(), p.offset(i as isize), vcol) };
+                // O-B15-22: upstream steps by the length of the *first*
+                // character every time (`utfc_ptr2len(p)`, not
+                // `p + i`), so a restored run of differently-sized
+                // characters is measured wrong.  Reproduced as it is.
+                i += unsafe { utfc_ptr2len(p) };
+            }
+            vcol -= start_vcol;
+
+            // Virtual Replace keeps the following text aligned, so any
+            // spaces it padded with have to come off again.
+            cur_win().w_cursor.col += ins_len;
+            while vcol > orig_vcols && unsafe { gchar_cursor() } == ' ' as c_int {
+                unsafe { del_char(false) };
+                orig_vcols += 1;
+            }
+            cur_win().w_cursor.col -= ins_len;
+        }
+
+        // Mark the buffer changed and prepare for displaying.
+        unsafe { changed_bytes(cur_win().w_cursor.lnum, cur_win().w_cursor.col) };
+    } else if cc == 0 {
+        del_char_after_col(limit_col);
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
 
 #[cfg(test)]

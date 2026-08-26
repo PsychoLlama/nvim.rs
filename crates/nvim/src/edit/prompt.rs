@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -26,12 +27,12 @@ use crate::types::NUL;
 /// # Safety
 /// `buf` must point to a live buffer.
 pub(crate) unsafe fn buf_prompt_text(buf: *const buf_T) -> *mut c_char {
-    unsafe {
-        if (*buf).b_prompt_text.is_null() {
-            return c"% ".as_ptr().cast_mut();
-        }
-        (*buf).b_prompt_text
+    // SAFETY: the caller promises `buf` is a live buffer, and 'b:prompt_text'
+    // is either null or a NUL-terminated string it owns.
+    if unsafe { (*buf).b_prompt_text.is_null() } {
+        return c"% ".as_ptr().cast_mut();
     }
+    unsafe { (*buf).b_prompt_text }
 }
 
 /// The effective prompt for the current buffer.
@@ -39,6 +40,7 @@ pub(crate) unsafe fn buf_prompt_text(buf: *const buf_T) -> *mut c_char {
 /// # Safety
 /// Must run with a live `curbuf`.
 pub(crate) unsafe fn prompt_text() -> *mut c_char {
+    // SAFETY: `curbuf` is live for the whole session.
     unsafe { buf_prompt_text(curbuf.get()) }
 }
 
@@ -48,82 +50,109 @@ pub(crate) unsafe fn prompt_text() -> *mut c_char {
 /// `cmdchar_todo` is the command that started the insert, so that an `A`
 /// still means "at the end of the line" once the cursor has been moved onto
 /// the prompt line.
-///
-/// # Safety
-/// Must run with a live `curbuf`/`curwin`.
-pub(crate) unsafe fn init_prompt(cmdchar_todo: c_int) {
-    unsafe {
-        let buf = curbuf.get();
-        let win = curwin.get();
-        let prompt = prompt_text();
-        let prompt_len = strlen(prompt) as c_int;
+pub(crate) fn init_prompt(cmdchar_todo: c_int) {
+    let mut win = cur_win();
+    // SAFETY: every `unsafe` call in this function is an editor-wide routine
+    // whose only precondition is the live `curwin`/`curbuf` this mode runs
+    // with; `prompt` and `text` are NUL-terminated strings of that buffer.
+    let prompt = unsafe { prompt_text() };
+    let prompt_len = unsafe { strlen(prompt) } as c_int;
 
-        // The mark may name a line that no longer exists.
-        let start = &raw mut (*buf).b_prompt_start.mark;
-        if (*start).lnum < 1 || (*start).lnum > (*buf).b_ml.ml_line_count {
-            (*start).lnum = (*start).lnum.min((*buf).b_ml.ml_line_count).max(1);
-            (*buf).b_prompt_append_new_line = true;
-        }
+    // The mark may name a line that no longer exists.  It is read and
+    // written a field at a time rather than held: the calls below adjust
+    // marks, this one included.
+    if start().lnum < 1 || start().lnum > cur_buf().b_ml.ml_line_count {
+        set_start_lnum(start().lnum.min(cur_buf().b_ml.ml_line_count).max(1));
+        cur_buf().b_prompt_append_new_line = true;
+    }
 
-        (*win).w_cursor.lnum = (*win).w_cursor.lnum.max((*start).lnum);
-        let text = ml_get((*start).lnum);
-        let text_len = ml_get_len((*start).lnum);
+    win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
+    let text = unsafe { ml_get(start().lnum) };
+    let text_len = unsafe { ml_get_len(start().lnum) };
 
-        // Is the prompt actually there, ending at the mark's column?  The
-        // `col` bounds are what keeps the `strnequal` read inside the line.
-        let prompt_missing = || {
-            (*start).col < prompt_len
-                || (*start).col > text_len
-                || !strnequal(
-                    text.offset(((*start).col - prompt_len) as isize),
+    // Is the prompt actually there, ending at the mark's column?  The
+    // `col` bounds are what keeps the `strnequal` read inside the line, so
+    // this stays a closure: it must not run before they have been checked.
+    let start_col = start().col;
+    let prompt_missing = || {
+        start_col < prompt_len
+            || start_col > text_len
+            || !unsafe {
+                strnequal(
+                    text.offset((start_col - prompt_len) as isize),
                     prompt,
                     prompt_len as size_t,
                 )
-        };
-        if (*start).lnum == (*win).w_cursor.lnum && prompt_missing() {
-            if *text as c_int == NUL {
-                // The line is empty: the prompt *is* the line.
-                ml_replace((*start).lnum, prompt, true);
-                inserted_bytes((*start).lnum, 0, 0, prompt_len);
-            } else {
-                // The line holds something else, so the prompt goes on a new
-                // last line.
-                let lnum = (*buf).b_ml.ml_line_count;
-                ml_append(lnum, prompt, 0, false);
-                appended_lines_mark(lnum, 1);
-                (*start).lnum = (*buf).b_ml.ml_line_count;
-                (*buf).b_prompt_append_new_line = true;
-                // Like submitting: the undo history belonged to the old
-                // prompt.
-                u_clearallandblockfree(buf);
             }
-            (*start).col = prompt_len;
-            (*win).w_cursor.lnum = (*buf).b_ml.ml_line_count;
-            coladvance(win, MAXCOL as c_int);
+    };
+    if start().lnum == win.w_cursor.lnum && prompt_missing() {
+        if unsafe { *text } as c_int == NUL {
+            // The line is empty: the prompt *is* the line.
+            unsafe { ml_replace(start().lnum, prompt, true) };
+            unsafe { inserted_bytes(start().lnum, 0, 0, prompt_len) };
+        } else {
+            // The line holds something else, so the prompt goes on a new
+            // last line.
+            let lnum = cur_buf().b_ml.ml_line_count;
+            unsafe { ml_append(lnum, prompt, 0, false) };
+            unsafe { appended_lines_mark(lnum, 1) };
+            set_start_lnum(cur_buf().b_ml.ml_line_count);
+            cur_buf().b_prompt_append_new_line = true;
+            // Like submitting: the undo history belonged to the old
+            // prompt.
+            unsafe { u_clearallandblockfree(curbuf.get()) };
         }
-
-        // The insert always starts after the prompt; text after it stays
-        // editable.
-        if Insstart_orig.get().lnum != (*start).lnum || Insstart_orig.get().col != (*start).col {
-            let mut insstart = Insstart.get();
-            insstart.lnum = (*start).lnum;
-            insstart.col = (*start).col;
-            Insstart.set(insstart);
-            Insstart_orig.set(insstart);
-            Insstart_textlen.set(insstart.col);
-            Insstart_blank_vcol.set(MAXCOL as colnr_T);
-            arrow_used.set(false);
-        }
-
-        if cmdchar_todo == 'A' as c_int {
-            coladvance(win, MAXCOL as c_int);
-        }
-        if (*start).lnum == (*win).w_cursor.lnum {
-            (*win).w_cursor.col = (*win).w_cursor.col.max((*start).col);
-        }
-        // Make sure the cursor is in a valid position.
-        check_cursor(win);
+        set_start_col(prompt_len);
+        win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+        coladvance_win(win, MAXCOL as c_int);
     }
+
+    // The insert always starts after the prompt; text after it stays
+    // editable.
+    if Insstart_orig.get().lnum != start().lnum || Insstart_orig.get().col != start().col {
+        let mut insstart = Insstart.get();
+        insstart.lnum = start().lnum;
+        insstart.col = start().col;
+        Insstart.set(insstart);
+        Insstart_orig.set(insstart);
+        Insstart_textlen.set(insstart.col);
+        Insstart_blank_vcol.set(MAXCOL as colnr_T);
+        arrow_used.set(false);
+    }
+
+    if cmdchar_todo == 'A' as c_int {
+        coladvance_win(win, MAXCOL as c_int);
+    }
+    if start().lnum == win.w_cursor.lnum {
+        win.w_cursor.col = win.w_cursor.col.max(start().col);
+    }
+    // Make sure the cursor is in a valid position.
+    unsafe { check_cursor(win.raw()) };
+}
+
+/// Where the prompt's editable part begins.
+#[inline(always)]
+fn start() -> pos_T {
+    cur_buf().b_prompt_start.mark
+}
+
+/// Move that mark to line `lnum`.
+#[inline(always)]
+fn set_start_lnum(lnum: linenr_T) {
+    cur_buf().b_prompt_start.mark.lnum = lnum;
+}
+
+/// Move that mark to column `col`.
+#[inline(always)]
+fn set_start_col(col: colnr_T) {
+    cur_buf().b_prompt_start.mark.col = col;
+}
+
+/// Move `win`'s cursor to virtual column `vcol` of its line.
+#[inline(always)]
+fn coladvance_win(win: Win, vcol: c_int) {
+    // SAFETY: a live window, whose cursor line exists.
+    unsafe { coladvance(win.raw(), vcol) };
 }
 
 /// Is the cursor in the editable part of the prompt line?
@@ -131,9 +160,19 @@ pub(crate) unsafe fn init_prompt(cmdchar_todo: c_int) {
 /// # Safety
 /// Must run with a live `curbuf`/`curwin`.
 pub(crate) unsafe fn prompt_curpos_editable() -> bool {
-    unsafe {
-        let start = (*curbuf.get()).b_prompt_start.mark;
-        let cursor = (*curwin.get()).w_cursor;
-        cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)
-    }
+    let start = start();
+    let cursor = cur_win().w_cursor;
+    cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
