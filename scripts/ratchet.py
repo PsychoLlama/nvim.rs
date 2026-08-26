@@ -311,7 +311,8 @@ reads a derived number back. The check is name-based and deliberately
 over-approximating in the *safe* direction: a call is accepted if **any** `fn`
 of that name in the tree answers with a place (a `&`/`*` type, or a newtype
 that `impl DerefMut`s, which is how `cur_buf()`/`cur_win()` write through a
-pointer). So a same-named sibling can hide a real one; what it cannot do is
+pointer — a `type` alias of such a newtype, as `ops::Op` is of
+`winlayer::Live`, counts as one too). So a same-named sibling can hide a real one; what it cannot do is
 cry wolf, which is what would get it switched off.
 
 Everything is measured over a *masked* copy of the source, in which comments,
@@ -524,6 +525,12 @@ PLACE_WRITE = re.compile(
 DEREF_MUT = re.compile(
     r"\bimpl(?:<[^>]*>)?\s+(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
+# `type Op = Live<oparg_T>;` — a family's name for a shared generic wrapper.
+# The scan is keyed on names, so an alias of a `DerefMut` type is one too.
+TYPE_ALIAS = re.compile(
+    r"\btype\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=\s*"
+    r"(?:[A-Za-z0-9_]+::)*([A-Za-z_][A-Za-z0-9_]*)"
+)
 FN_NAME = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 
@@ -591,9 +598,17 @@ def place_writes(tree):
     """`accessor().field = …` where the accessor answers by value."""
     returns = {}
     deref_mut = set()
+    aliases = {}
     for masked in tree.values():
         deref_mut.update(DEREF_MUT.findall(masked))
+        aliases.update(TYPE_ALIAS.findall(masked))
         fn_returns(masked, returns)
+    # Chase aliases to a fixed point: `Op` is a place because `Live<T>` is.
+    for _ in range(len(aliases)):
+        grown = {name for name, base in aliases.items() if base in deref_mut}
+        if grown <= deref_mut:
+            break
+        deref_mut |= grown
     found = []
     for file, masked in sorted(tree.items()):
         for match in PLACE_WRITE.finditer(masked):

@@ -95,10 +95,9 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
-use crate::winlayer::Pos;
+use crate::winlayer::{Live, Pos};
 use ::libc::{abort, memset, strcpy, strlen};
 use core::mem::offset_of;
-use core::ops::{Deref, DerefMut};
 
 // The carve of the transpiled module; see each child's docs.
 mod addsub;
@@ -187,65 +186,32 @@ pub struct redo_VIsual_T {
 /// An `oparg_T` the caller has promised is live: the region an operator is
 /// about to work on.
 ///
-/// [`Win`](crate::winlayer::Win)'s shape, for the one struct every operator in
-/// this module is handed. Field access goes through `Deref`, so the borrow
-/// lasts no longer than the access that asked for it -- which matters here,
-/// because an operator may hand control to Insert mode, to 'operatorfunc' or
-/// to an external filter, and the editor reaches the same `oparg_T` again
-/// while it is away. [`Op::raw`] hands the pointer back to the callees that
-/// still take one.
-#[derive(Clone, Copy)]
-pub(crate) struct Op(*mut oparg_T);
+/// [`Live`]'s shape, for the one struct every operator in this module is
+/// handed. Field access goes through `Deref`, so the borrow lasts no longer
+/// than the access that asked for it -- which matters here, because an
+/// operator may hand control to Insert mode, to 'operatorfunc' or to an
+/// external filter, and the editor reaches the same `oparg_T` again while it
+/// is away. [`Live::raw`] hands the pointer back to the callees that still
+/// take one.
+pub(crate) type Op = Live<oparg_T>;
 
 impl Op {
-    /// # Safety
-    /// `oap` must stay a live `oparg_T` for as long as the value is used.
-    #[inline(always)]
-    pub(crate) const unsafe fn new(oap: *mut oparg_T) -> Self {
-        Self(oap)
-    }
-
-    #[inline(always)]
-    pub(crate) fn raw(self) -> *mut oparg_T {
-        self.0
-    }
-
     /// The region's first position, which lives inside the `oparg_T`.
     ///
-    /// [`Win::cursor`](crate::winlayer::Win::cursor)'s trick: a field's
-    /// address is the object's plus a constant, so saying where it is needs
-    /// no dereference.
+    /// [`Live::field_ptr`]'s trick: a field's address is the object's plus a
+    /// constant, so saying where it is needs no dereference.
     #[inline(always)]
     pub(crate) fn start(self) -> Pos {
         // SAFETY: the constructor's promise -- a live `oparg_T`, so the
         // address of its `start` is a live position.
-        unsafe { Pos::new(self.0.wrapping_byte_add(offset_of!(oparg_T, start)).cast()) }
+        unsafe { Pos::new(self.field_ptr(offset_of!(oparg_T, start))) }
     }
 
     /// The region's last position. [`Op::start`].
     #[inline(always)]
     pub(crate) fn end(self) -> Pos {
         // SAFETY: as [`Op::start`].
-        unsafe { Pos::new(self.0.wrapping_byte_add(offset_of!(oparg_T, end)).cast()) }
-    }
-}
-
-impl Deref for Op {
-    type Target = oparg_T;
-
-    #[inline(always)]
-    fn deref(&self) -> &oparg_T {
-        // SAFETY: the constructor's promise -- a live `oparg_T`.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Op {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut oparg_T {
-        // SAFETY: the constructor's promise -- a live `oparg_T`. The borrow
-        // lasts only as long as the field access that asked for it.
-        unsafe { &mut *self.0 }
+        unsafe { Pos::new(self.field_ptr(offset_of!(oparg_T, end))) }
     }
 }
 

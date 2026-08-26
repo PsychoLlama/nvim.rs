@@ -4,7 +4,7 @@
   "cell_ptr_keepers": 26,
   "cell_ptr_accessors": 60,
   "cell_copy_owner": 44,
-  "files_without_forbid_unsafe": 1061,
+  "files_without_forbid_unsafe": 1062,
   "files_without_deny_unsafe_op": 0,
   "files_without_deny_casts": 1058,
   "files": {
@@ -745,7 +745,7 @@
     "crates/nvim/src/ops/external.rs": {"cell_ptr": 1, "pub_items": 2, "unsafe_lines": 22},
     "crates/nvim/src/ops/insert.rs": {"pub_items": 1, "unsafe_lines": 87},
     "crates/nvim/src/ops/join.rs": {"pub_items": 2, "unsafe_lines": 89},
-    "crates/nvim/src/ops/mod.rs": {"pub_items": 34, "unsafe_lines": 4},
+    "crates/nvim/src/ops/mod.rs": {"pub_items": 34, "unsafe_lines": 2},
     "crates/nvim/src/ops/optype.rs": {"pub_items": 5, "unsafe_lines": 1},
     "crates/nvim/src/ops/pending.rs": {"pub_items": 2, "unsafe_lines": 77},
     "crates/nvim/src/ops/replace.rs": {"unsafe_lines": 88},
@@ -1234,6 +1234,7 @@
     "crates/nvim/src/window/winclose.rs": {"missing_safety_doc": 2, "pub_items": 3, "unsafe_lines": 12},
     "crates/nvim/src/winfloat.rs": {"extern_abi": 1, "missing_safety_doc": 9, "unsafe_lines": 50},
     "crates/nvim/src/winlayer.rs": {"pub_items": 13, "unsafe_lines": 28},
+    "crates/nvim/src/winlayer/live.rs": {"unsafe_lines": 2},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_lines": 40}
   }
 }

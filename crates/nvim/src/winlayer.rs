@@ -98,6 +98,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod handles;
+mod live;
+
+pub(crate) use live::Live;
 
 pub(crate) use handles::{
     buffer, defer_free_buffer, defer_free_window, forget_buffer, forget_tabpage, forget_window,
