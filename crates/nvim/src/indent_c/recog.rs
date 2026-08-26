@@ -10,12 +10,14 @@
 //! one.
 //!
 //! Everything here walks a NUL-terminated line, because the walk interleaves
-//! with [`cin_skipcomment`] and [`skip_string`]: the unit of work is a C
-//! string, so one `unsafe` block per entry point is the honest shape.
+//! with [`cin_skipcomment`] and [`skip_string`]: where the walk is the whole
+//! job the `unsafe` block is the whole walk, and where a line can be read as
+//! a slice first it is.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 /// Whether `line` starts with a word from 'cinwords' -- `if`, `else`,
@@ -28,41 +30,41 @@ use core::ffi::{CStr, c_char, c_int};
 /// # Safety
 /// `line` must point at a NUL-terminated string.
 pub unsafe fn cin_is_cinword(line: *const c_char) -> bool {
-    unsafe {
-        let all = CStr::from_ptr(line).to_bytes();
-        let start = all
-            .iter()
-            .position(|&b| !ascii_iswhite(c_int::from(b)))
-            .unwrap_or(all.len());
+    // SAFETY: the caller's promise -- `line` is a NUL-terminated string.
+    let all = unsafe { CStr::from_ptr(line) }.to_bytes();
+    let start = all
+        .iter()
+        .position(|&b| !ascii_iswhite(c_int::from(b)))
+        .unwrap_or(all.len());
 
-        let mut cinw = (*curbuf.get()).b_p_cinw;
-        let mut part = vec![0u8; strlen(cinw) + 1];
-        while *cinw != 0 {
-            let len = copy_option_part(
-                &raw mut cinw,
-                part.as_mut_ptr().cast::<c_char>(),
-                part.len(),
-                c",".as_ptr().cast_mut(),
-            );
-            if !all[start..].starts_with(&part[..len]) {
-                continue;
-            }
-            // Upstream reads `line[len - 1]`, which for an *empty* 'cinwords'
-            // item on a line with no leading white space is the byte before
-            // the buffer.  Refused: answering NUL gives the same verdict the
-            // white-space case does, and no gate reaches it.
-            let after = byte_at(all, start + len);
-            let before = if start + len == 0 {
-                0
-            } else {
-                byte_at(all, start + len - 1)
-            };
-            if !vim_iswordc(c_int::from(after)) || !vim_iswordc(c_int::from(before)) {
-                return true;
-            }
+    let mut cinw = cur_buf().b_p_cinw;
+    // SAFETY: 'cinwords' is a NUL-terminated option string.
+    let mut part = vec![0u8; unsafe { strlen(cinw) } + 1];
+    let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
+    // SAFETY: `cinw` walks that same option string, which `copy_option_part`
+    // advances while writing at most `part_len` bytes into `part`.
+    while unsafe { *cinw } != 0 {
+        let len =
+            unsafe { copy_option_part(&raw mut cinw, part.as_mut_ptr().cast(), part_len, comma) };
+        if !all[start..].starts_with(&part[..len]) {
+            continue;
         }
-        false
+        // Upstream reads `line[len - 1]`, which for an *empty* 'cinwords'
+        // item on a line with no leading white space is the byte before
+        // the buffer.  Refused: answering NUL gives the same verdict the
+        // white-space case does, and no gate reaches it.
+        let after = byte_at(all, start + len);
+        let before = if start + len == 0 {
+            0
+        } else {
+            byte_at(all, start + len - 1)
+        };
+        // SAFETY: `vim_iswordc` reads the current buffer's 'iskeyword' table.
+        if unsafe { !vim_iswordc(c_int::from(after)) || !vim_iswordc(c_int::from(before)) } {
+            return true;
+        }
     }
+    false
 }
 
 /// Whether `text` starts with `key:` -- the Javascript object-literal shape
@@ -74,23 +76,35 @@ pub unsafe fn cin_is_cinword(line: *const c_char) -> bool {
 /// # Safety
 /// `text` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_has_js_key(text: *const c_char) -> bool {
+    // SAFETY: the caller's promise, so `skipwhite` stops at the NUL at the
+    // latest and its answer points into the same string.
+    let s = unsafe { skipwhite(text) }.cast_const();
+    // SAFETY: `s` points into that NUL-terminated string.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+
+    let quote = match byte_at(bytes, 0) {
+        q @ (b'\'' | b'"') => q,
+        _ => 0,
+    };
+    let mut i = usize::from(quote != 0);
+    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
+    // long before any buffer is indented.
+    if !unsafe { vim_is_ident_char(c_int::from(byte_at(bytes, i))) } {
+        return false; // need at least one ID character
+    }
+    // SAFETY: the same; `byte_at` answers the terminator past the end, which
+    // is not an ID character, so `i` stops at `bytes.len()`.
+    while unsafe { vim_is_ident_char(c_int::from(byte_at(bytes, i))) } {
+        i += 1;
+    }
+    if byte_at(bytes, i) != 0 && byte_at(bytes, i) == quote {
+        i += 1;
+    }
+    // SAFETY: `i` is at most `bytes.len()`, so `s.add(i)` is at worst the
+    // string's NUL; `cin_skipcomment` answers a pointer into the same string
+    // and the `:` test is kept in front of the `add(1)` behind it.
     unsafe {
-        let mut s = skipwhite(text).cast_const();
-        let mut quote = 0u8;
-        if *s as u8 == b'\'' || *s as u8 == b'"' {
-            quote = *s as u8;
-            s = s.add(1);
-        }
-        if !vim_is_ident_char(c_int::from(*s as u8)) {
-            return false; // need at least one ID character
-        }
-        while vim_is_ident_char(c_int::from(*s as u8)) {
-            s = s.add(1);
-        }
-        if *s != 0 && *s as u8 == quote {
-            s = s.add(1);
-        }
-        s = cin_skipcomment(s);
+        let s = cin_skipcomment(s.add(i));
         *s as u8 == b':' && *s.add(1) as u8 != b':'
     }
 }
@@ -103,12 +117,22 @@ pub(crate) unsafe fn cin_has_js_key(text: *const c_char) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_iscase(s: *const c_char, strict: bool) -> bool {
+    // SAFETY: the caller's promise; `cin_skipcomment` answers a pointer into
+    // the same string.
+    let start = unsafe { cin_skipcomment(s) };
+    // SAFETY: `start` points into that NUL-terminated string.
+    if !unsafe { cin_starts_with(start, b"case") } {
+        // SAFETY: the same.
+        return unsafe { cin_isdefault(start) };
+    }
+
+    // SAFETY: `start` begins with "case", so four bytes in is still inside
+    // the string, and from there the walk stops at the NUL.  Every `add`
+    // steps over bytes the test in front of it has just seen, so `s` never
+    // leaves the string; the `&&` chains are left whole so they keep doing
+    // that.
     unsafe {
-        let mut s = cin_skipcomment(s);
-        if !cin_starts_with(s, b"case") {
-            return cin_isdefault(s);
-        }
-        s = s.add(4);
+        let mut s = start.add(4);
         while *s != 0 {
             s = cin_skipcomment(s);
             if *s == 0 {
@@ -141,13 +165,19 @@ pub(crate) unsafe fn cin_iscase(s: *const c_char, strict: bool) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isdefault(s: *const c_char) -> bool {
-    unsafe {
-        if !CStr::from_ptr(s).to_bytes().starts_with(b"default") {
-            return false;
-        }
-        let s = cin_skipcomment(s.add(7));
-        *s as u8 == b':' && *s.add(1) as u8 != b':'
+    // SAFETY: the caller's promise -- `s` is a NUL-terminated string.
+    if !unsafe { CStr::from_ptr(s) }
+        .to_bytes()
+        .starts_with(b"default")
+    {
+        return false;
     }
+    // SAFETY: the string starts with "default", so seven bytes in is still
+    // inside it, and `cin_skipcomment` answers a pointer into the same one.
+    let after = unsafe { cin_skipcomment(s.add(7)) };
+    // SAFETY: `after` points into that string, and the `:` test in front of
+    // the `add(1)` is what says the byte behind it is there too.
+    unsafe { *after as u8 == b':' && *after.add(1) as u8 != b':' }
 }
 
 /// Whether `p` is a scope declaration label named by 'cinscopedecls' --
@@ -156,28 +186,36 @@ pub(crate) unsafe fn cin_isdefault(s: *const c_char) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isscopedecl(p: *const c_char) -> bool {
-    unsafe {
-        let s = cin_skipcomment(p);
-        let bytes = CStr::from_ptr(s).to_bytes();
+    // SAFETY: the caller's promise; `cin_skipcomment` answers a pointer into
+    // the same string.
+    let s = unsafe { cin_skipcomment(p) };
+    // SAFETY: `s` points into that NUL-terminated string.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
 
-        let mut cinsd = (*curbuf.get()).b_p_cinsd;
-        let mut part = vec![0u8; strlen(cinsd) + 1];
-        while *cinsd != 0 {
-            let len = copy_option_part(
-                &raw mut cinsd,
-                part.as_mut_ptr().cast::<c_char>(),
-                part.len(),
-                c",".as_ptr().cast_mut(),
-            );
-            if bytes.starts_with(&part[..len]) {
-                let skip = cin_skipcomment(s.add(len));
-                if *skip as u8 == b':' && *skip.add(1) as u8 != b':' {
-                    return true;
-                }
-            }
+    let mut cinsd = cur_buf().b_p_cinsd;
+    // SAFETY: 'cinscopedecls' is a NUL-terminated option string.
+    let mut part = vec![0u8; unsafe { strlen(cinsd) } + 1];
+    let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
+    // SAFETY: `cinsd` walks that same option string, which `copy_option_part`
+    // advances while writing at most `part_len` bytes into `part`.
+    while unsafe { *cinsd } != 0 {
+        let len =
+            unsafe { copy_option_part(&raw mut cinsd, part.as_mut_ptr().cast(), part_len, comma) };
+        if !bytes.starts_with(&part[..len]) {
+            continue;
         }
-        false
+        // SAFETY: `len` is the length of a prefix of `bytes`, so `s.add(len)`
+        // is inside the string; `skip` points into it too, and the `:` test
+        // in front of the `add(1)` says the byte behind it is there.
+        let labelled = unsafe {
+            let skip = cin_skipcomment(s.add(len));
+            *skip as u8 == b':' && *skip.add(1) as u8 != b':'
+        };
+        if labelled {
+            return true;
+        }
     }
+    false
 }
 
 /// Whether `s` starts with `word` followed by a non-identifier character.
@@ -185,9 +223,29 @@ pub(crate) unsafe fn cin_isscopedecl(p: *const c_char) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_starts_with(s: *const c_char, word: &[u8]) -> bool {
-    unsafe {
-        let bytes = CStr::from_ptr(s).to_bytes();
-        bytes.starts_with(word) && !vim_is_ident_char(c_int::from(byte_at(bytes, word.len())))
+    // SAFETY: the caller's promise -- `s` is a NUL-terminated string.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+    let after = byte_at(bytes, word.len());
+    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
+    // long before any buffer is indented.
+    bytes.starts_with(word) && !unsafe { vim_is_ident_char(c_int::from(after)) }
+}
+
+/// `s` with a leading `}` -- and any comment behind it -- stepped over: the
+/// `} else` / `} while (cond);` shape three of the predicates here accept.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+unsafe fn cin_skip_close_brace(s: *const c_char) -> *const c_char {
+    // SAFETY: the caller's promise -- `s` is NUL-terminated, so reading its
+    // first byte is in bounds.
+    let brace = unsafe { *s } as u8 == b'}';
+    if brace {
+        // SAFETY: that byte is a `}`, so the one behind it is inside the
+        // string too, and `cin_skipcomment` answers a pointer into it.
+        unsafe { cin_skipcomment(s.add(1)) }
+    } else {
+        s
     }
 }
 
@@ -196,6 +254,7 @@ pub(crate) unsafe fn cin_starts_with(s: *const c_char, word: &[u8]) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isif(p: *const c_char) -> bool {
+    // SAFETY: the caller's promise, passed straight on.
     unsafe { cin_starts_with(p, b"if") }
 }
 
@@ -204,14 +263,9 @@ pub(crate) unsafe fn cin_isif(p: *const c_char) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_iselse(p: *const c_char) -> bool {
-    unsafe {
-        let p = if *p as u8 == b'}' {
-            cin_skipcomment(p.add(1))
-        } else {
-            p
-        };
-        cin_starts_with(p, b"else")
-    }
+    // SAFETY: the caller's promise, passed straight on; both callees answer
+    // a pointer into the same string.
+    unsafe { cin_starts_with(cin_skip_close_brace(p), b"else") }
 }
 
 /// Whether `p` is a `do`.
@@ -219,6 +273,7 @@ pub(crate) unsafe fn cin_iselse(p: *const c_char) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isdo(p: *const c_char) -> bool {
+    // SAFETY: the caller's promise, passed straight on.
     unsafe { cin_starts_with(p, b"do") }
 }
 
@@ -227,6 +282,7 @@ pub(crate) unsafe fn cin_isdo(p: *const c_char) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isbreak(p: *const c_char) -> bool {
+    // SAFETY: the caller's promise, passed straight on.
     unsafe { cin_starts_with(p, b"break") }
 }
 
@@ -241,34 +297,32 @@ pub(crate) unsafe fn cin_isbreak(p: *const c_char) -> bool {
 /// `p` must point at a NUL-terminated string; moves the cursor and restores
 /// it, and may unlock the current line.
 pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: linenr_T) -> bool {
-    unsafe {
-        let mut p = cin_skipcomment(p);
-        if *p as u8 == b'}' {
-            p = cin_skipcomment(p.add(1)); // accept "} while (cond);"
-        }
-        if !cin_starts_with(p, b"while") {
-            return false;
-        }
-        let cursor_save = (*curwin.get()).w_cursor;
-        (*curwin.get()).w_cursor.lnum = lnum;
-        (*curwin.get()).w_cursor.col = 0;
-        let mut p = get_cursor_line_ptr().cast_const();
-        // Step over any '}' until the 'w' of the "while".
-        while *p != 0 && *p as u8 != b'w' {
-            p = p.add(1);
-            (*curwin.get()).w_cursor.col += 1;
-        }
-        let trypos = findmatchlimit(
-            ::core::ptr::null_mut::<oparg_T>(),
-            0,
-            0,
-            int64_t::from((*curbuf.get()).b_ind_maxparen),
-        );
-        let retval = trypos
-            .is_some_and(|pos| *cin_skipcomment(ml_get_pos(&raw const pos).add(1)) as u8 == b';');
-        (*curwin.get()).w_cursor = cursor_save;
-        retval
+    // SAFETY: the caller's promise; each callee answers a pointer into the
+    // same string.  "} while (cond);" counts as a while.
+    let is_while = unsafe { cin_starts_with(cin_skip_close_brace(cin_skipcomment(p)), b"while") };
+    if !is_while {
+        return false;
     }
+
+    let cursor_save = cur_win().w_cursor;
+    cur_win().w_cursor.lnum = lnum;
+    // SAFETY: on the main thread with a current buffer, and the cursor is on
+    // a line of it; `get_cursor_line_ptr` hands back that line, NUL-terminated.
+    let line = unsafe { CStr::from_ptr(get_cursor_line_ptr()) }.to_bytes();
+    // Step over any '}' until the 'w' of the "while".
+    let w = line.iter().position(|&b| b == b'w').unwrap_or(line.len());
+    cur_win().w_cursor.col = w as colnr_T;
+
+    let maxparen = int64_t::from(cur_buf().b_ind_maxparen);
+    // SAFETY: the cursor is on a line of the current buffer; `ml_get_pos`
+    // hands back a NUL-terminated line at the position `findmatchlimit`
+    // found in it, so `add(1)` is at worst that line's NUL.
+    let retval = unsafe {
+        findmatchlimit(::core::ptr::null_mut::<oparg_T>(), 0, 0, maxparen)
+            .is_some_and(|pos| *cin_skipcomment(ml_get_pos(&raw const pos).add(1)) as u8 == b';')
+    };
+    cur_win().w_cursor = cursor_save;
+    retval
 }
 
 /// Whether an `if`, `for` or `while` sits just before `*poffset` in `line`,
@@ -281,48 +335,50 @@ pub(crate) unsafe fn cin_is_if_for_while_before_offset(
     line: *const c_char,
     poffset: &mut c_int,
 ) -> bool {
-    unsafe {
-        let bytes = CStr::from_ptr(line).to_bytes();
-        let mut offset = *poffset;
-        if offset < 2 {
+    // SAFETY: the caller's promise -- `line` is a NUL-terminated string.
+    let bytes = unsafe { CStr::from_ptr(line) }.to_bytes();
+    let mut offset = *poffset;
+    if offset < 2 {
+        return false;
+    }
+    offset -= 1;
+    while offset > 2 && ascii_iswhite(c_int::from(byte_at(bytes, offset as usize))) {
+        offset -= 1;
+    }
+
+    // Each keyword is tested at the offset its *last* character would sit at,
+    // walking further left as the words get longer.
+    let starts_at = |off: c_int, word: &[u8]| {
+        bytes
+            .get(off as usize..)
+            .is_some_and(|tail| tail.starts_with(word))
+    };
+    offset -= 1;
+    if !starts_at(offset, b"if") {
+        if offset < 1 {
             return false;
         }
         offset -= 1;
-        while offset > 2 && ascii_iswhite(c_int::from(byte_at(bytes, offset as usize))) {
-            offset -= 1;
-        }
-
-        // Each keyword is tested at the offset its *last* character would sit at,
-        // walking further left as the words get longer.
-        let starts_at = |off: c_int, word: &[u8]| {
-            bytes
-                .get(off as usize..)
-                .is_some_and(|tail| tail.starts_with(word))
-        };
-        offset -= 1;
-        if !starts_at(offset, b"if") {
-            if offset < 1 {
+        if !starts_at(offset, b"for") {
+            if offset < 2 {
                 return false;
             }
-            offset -= 1;
-            if !starts_at(offset, b"for") {
-                if offset < 2 {
-                    return false;
-                }
-                offset -= 2;
-                if !starts_at(offset, b"while") {
-                    return false;
-                }
+            offset -= 2;
+            if !starts_at(offset, b"while") {
+                return false;
             }
         }
-
-        // It is only the keyword if nothing identifier-ish precedes it.
-        if offset != 0 && vim_is_ident_char(c_int::from(byte_at(bytes, (offset - 1) as usize))) {
-            return false;
-        }
-        *poffset = offset;
-        true
     }
+
+    // It is only the keyword if nothing identifier-ish precedes it.
+    let before = byte_at(bytes, (offset - 1) as usize);
+    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
+    // long before any buffer is indented.
+    if offset != 0 && unsafe { vim_is_ident_char(c_int::from(before)) } {
+        return false;
+    }
+    *poffset = offset;
+    true
 }
 
 /// Whether the cursor's line is the end of a `do ... while (...);`, and if so
@@ -338,42 +394,72 @@ pub(crate) unsafe fn cin_is_if_for_while_before_offset(
 /// # Safety
 /// Reads and moves the cursor; may unlock the current line.
 pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
-    unsafe {
-        if terminated != b';' {
-            return false; // there must be a ';' at the end
-        }
-        let mut line = get_cursor_line_ptr().cast_const();
-        let mut p = line;
-        while *p != 0 {
-            p = cin_skipcomment(p);
-            if *p as u8 == b')' {
+    if terminated != b';' {
+        return false; // there must be a ';' at the end
+    }
+    // SAFETY: on the main thread with a current buffer; `get_cursor_line_ptr`
+    // hands back the cursor's line, NUL-terminated.
+    let mut line = unsafe { get_cursor_line_ptr() }.cast_const();
+    let mut p = line;
+    // SAFETY: `p` walks that line and never passes its NUL.
+    while unsafe { *p } != 0 {
+        // SAFETY: `cin_skipcomment` answers a pointer into the same line.
+        p = unsafe { cin_skipcomment(p) };
+        // SAFETY: `p` is inside the line, so `add(1)` is at worst its NUL,
+        // and so is `s.add(1)` behind the `;`.  The `&&` chain is left whole
+        // so that each test stays in front of the step that needs it.
+        let closed = unsafe {
+            *p as u8 == b')' && {
                 let s = skipwhite(p.add(1));
-                if *s as u8 == b';' && cin_nocode(s.add(1)) {
-                    // Found ");" at end of the line; now check there is a
-                    // "while" before the matching '('.
-                    let i = p.offset_from(line);
-                    (*curwin.get()).w_cursor.col = i as colnr_T;
-                    if let Some(trypos) = find_match_paren((*curbuf.get()).b_ind_maxparen) {
-                        let mut s = cin_skipcomment(ml_get(trypos.lnum));
-                        if *s as u8 == b'}' {
-                            s = cin_skipcomment(s.add(1)); // accept "} while (cond);"
-                        }
-                        if cin_starts_with(s, b"while") {
-                            (*curwin.get()).w_cursor.lnum = trypos.lnum;
-                            return true;
-                        }
-                    }
-                    // The search may have unlocked "line"; get it again.
-                    line = get_cursor_line_ptr();
-                    p = line.offset(i);
+                *s as u8 == b';' && cin_nocode(s.add(1))
+            }
+        };
+        if closed {
+            // Found ");" at end of the line; now check there is a "while"
+            // before the matching '('.
+            // SAFETY: `p` points into `line`, so the distance is in range.
+            let i = unsafe { p.offset_from(line) };
+            cur_win().w_cursor.col = i as colnr_T;
+            // SAFETY: searches the current buffer from the cursor, and puts
+            // the cursor back where it found it.
+            if let Some(trypos) = unsafe { find_match_paren(cur_buf().b_ind_maxparen) } {
+                // SAFETY: `trypos` is a position in the current buffer, so
+                // `ml_get` hands back its line, NUL-terminated; the two
+                // skips answer pointers into that same line.
+                let opener = unsafe { cin_skip_close_brace(cin_skipcomment(ml_get(trypos.lnum))) };
+                // SAFETY: `opener` points into that line.
+                if unsafe { cin_starts_with(opener, b"while") } {
+                    cur_win().w_cursor.lnum = trypos.lnum;
+                    return true;
                 }
             }
-            if *p != 0 {
-                p = p.add(1);
-            }
+            // The search may have unlocked "line"; get it again.  It left
+            // the cursor where it found it, so the line is the same one and
+            // `i` is still an offset into it.
+            // SAFETY: the cursor is on a line of the current buffer.
+            line = unsafe { get_cursor_line_ptr() };
+            // SAFETY: `i` is an offset inside that line.
+            p = unsafe { line.offset(i) };
         }
-        false
+        // SAFETY: `p` is inside the line.
+        if unsafe { *p } != 0 {
+            // SAFETY: the byte at `p` is not the NUL, so `add(1)` stays in.
+            p = unsafe { p.add(1) };
+        }
     }
+    false
+}
+
+/// Whether `s` ends in a backslash: the line is continued on the next one.
+///
+/// Unlike [`cin_ends_in`] this is the *last byte* of the line, comments and
+/// all -- a backslash only continues a line when nothing follows it.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_ends_in_backslash(s: *const c_char) -> bool {
+    // SAFETY: the caller's promise; `strlen` is at least 1 past the test.
+    unsafe { *s != 0 && *s.add(strlen(s) - 1) as u8 == b'\\' }
 }
 
 /// Whether `s` ends with `find`, allowing white space and comments after it.
@@ -382,8 +468,12 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_ends_in(s: *const c_char, find: &[u8]) -> bool {
+    let mut p = s;
+    // SAFETY: the caller's promise -- `p` walks the NUL-terminated `s`, and
+    // `cin_skipcomment`/`skipwhite` answer pointers into it.  `add(find.len())`
+    // is inside because the `starts_with` in front of it matched that many
+    // bytes, and `add(1)` runs only on a byte that is not the NUL.
     unsafe {
-        let mut p = s;
         while *p != 0 {
             p = cin_skipcomment(p);
             if CStr::from_ptr(p).to_bytes().starts_with(find)
@@ -395,8 +485,8 @@ pub(crate) unsafe fn cin_ends_in(s: *const c_char, find: &[u8]) -> bool {
                 p = p.add(1);
             }
         }
-        false
     }
+    false
 }
 
 /// The character a statement on `s` ended with -- `;`, `}`, `,` or `{` -- or
@@ -414,17 +504,28 @@ pub(crate) unsafe fn cin_ends_in(s: *const c_char, find: &[u8]) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_isterminated(s: *const c_char, incl_open: bool, incl_comma: bool) -> u8 {
+    // SAFETY: the caller's promise; `cin_skipcomment` answers a pointer into
+    // the same string.
+    let mut s = unsafe { cin_skipcomment(s) };
+    let mut n_open = 0u32;
+
+    // SAFETY: `s` points into that NUL-terminated string, and `cin_iselse`
+    // only reads it.  The `}` test is kept in front of `cin_iselse`, as
+    // upstream has it, so it is asked no more often than it was.
+    let first = unsafe { *s } as u8;
+    let found_start = if first == b'{' || (first == b'}' && !unsafe { cin_iselse(s) }) {
+        first
+    } else {
+        0
+    };
+    // SAFETY: the same.
+    let is_else = found_start == 0 && unsafe { cin_iselse(s) };
+
+    // SAFETY: `s` walks the same NUL-terminated string; `cin_skipcomment` and
+    // `skip_string` answer pointers into it, `add(1)` is at worst its NUL --
+    // which `cin_nocode` only reads -- and the final `add(1)` runs only on a
+    // byte that is not the NUL.
     unsafe {
-        let mut s = cin_skipcomment(s);
-        let mut n_open = 0u32;
-
-        let found_start = if *s as u8 == b'{' || (*s as u8 == b'}' && !cin_iselse(s)) {
-            *s as u8
-        } else {
-            0
-        };
-        let is_else = found_start == 0 && cin_iselse(s);
-
         while *s != 0 {
             // Skip over comments, "" strings and 'c'haracters.
             s = skip_string(cin_skipcomment(s));
@@ -446,6 +547,18 @@ pub(crate) unsafe fn cin_isterminated(s: *const c_char, incl_open: bool, incl_co
                 s = s.add(1);
             }
         }
-        found_start
     }
+    found_start
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::types::NUL;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
@@ -24,7 +25,7 @@ use core::ffi::{CStr, c_char, c_int};
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
 pub(crate) unsafe fn ind_find_start_comment() -> Option<pos_T> {
-    unsafe { find_start_comment((*curbuf.get()).b_ind_maxcomment) }
+    unsafe { find_start_comment(cur_buf().b_ind_maxcomment) }
 }
 
 /// Search backwards from the cursor for the `/*` that opens the comment it is
@@ -37,22 +38,25 @@ pub(crate) unsafe fn ind_find_start_comment() -> Option<pos_T> {
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
 pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<pos_T> {
-    unsafe {
-        let mut cur_maxcomment = int64_t::from(ind_maxcomment);
-        loop {
-            let pos = findmatchlimit(
+    let mut cur_maxcomment = int64_t::from(ind_maxcomment);
+    loop {
+        // SAFETY: on the main thread, with a current window and buffer.
+        let pos = unsafe {
+            findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 c_int::from(b'*'),
                 FM_BACKWARD,
                 cur_maxcomment,
-            )?;
-            if !is_pos_in_string(ml_get(pos.lnum), pos.col) {
-                return Some(pos);
-            }
-            cur_maxcomment = int64_t::from((*curwin.get()).w_cursor.lnum - pos.lnum - 1);
-            if cur_maxcomment <= 0 {
-                return None;
-            }
+            )
+        }?;
+        // SAFETY: `findmatchlimit` found `pos` in the current buffer, so
+        // `ml_get` answers with the line it sits on.
+        if !unsafe { is_pos_in_string(ml_get(pos.lnum), pos.col) } {
+            return Some(pos);
+        }
+        cur_maxcomment = int64_t::from(cur_win().w_cursor.lnum - pos.lnum - 1);
+        if cur_maxcomment <= 0 {
+            return None;
         }
     }
 }
@@ -62,22 +66,25 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<pos_T> {
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
 pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T> {
-    unsafe {
-        let mut cur_maxcomment = ind_maxcomment;
-        loop {
-            let pos = findmatchlimit(
+    let mut cur_maxcomment = ind_maxcomment;
+    loop {
+        // SAFETY: on the main thread, with a current window and buffer.
+        let pos = unsafe {
+            findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 c_int::from(b'R'),
                 FM_BACKWARD,
                 int64_t::from(cur_maxcomment),
-            )?;
-            if !is_pos_in_string(ml_get(pos.lnum), pos.col) {
-                return Some(pos);
-            }
-            cur_maxcomment = ((*curwin.get()).w_cursor.lnum - pos.lnum - 1) as c_int;
-            if cur_maxcomment <= 0 {
-                return None;
-            }
+            )
+        }?;
+        // SAFETY: `findmatchlimit` found `pos` in the current buffer, so
+        // `ml_get` answers with the line it sits on.
+        if !unsafe { is_pos_in_string(ml_get(pos.lnum), pos.col) } {
+            return Some(pos);
+        }
+        cur_maxcomment = (cur_win().w_cursor.lnum - pos.lnum - 1) as c_int;
+        if cur_maxcomment <= 0 {
+            return None;
         }
     }
 }
@@ -94,25 +101,25 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T
 pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
     is_raw: Option<&mut linenr_T>,
 ) -> Option<pos_T> {
-    unsafe {
-        let comment_pos = find_start_comment((*curbuf.get()).b_ind_maxcomment);
-        let rs_pos = find_start_rawstring((*curbuf.get()).b_ind_maxcomment);
+    // SAFETY: on the main thread, with a current window and buffer.
+    let comment_pos = unsafe { find_start_comment(cur_buf().b_ind_maxcomment) };
+    // SAFETY: the same.
+    let rs_pos = unsafe { find_start_rawstring(cur_buf().b_ind_maxcomment) };
 
-        let raw_wins = match (comment_pos, rs_pos) {
-            (None, _) => true,
-            (Some(comment), Some(raw)) => lt(raw, comment),
-            (Some(_), None) => false,
-        };
-        if raw_wins {
-            if let Some(is_raw) = is_raw
-                && let Some(raw) = rs_pos
-            {
-                *is_raw = raw.lnum;
-            }
-            return rs_pos;
+    let raw_wins = match (comment_pos, rs_pos) {
+        (None, _) => true,
+        (Some(comment), Some(raw)) => lt(raw, comment),
+        (Some(_), None) => false,
+    };
+    if raw_wins {
+        if let Some(is_raw) = is_raw
+            && let Some(raw) = rs_pos
+        {
+            *is_raw = raw.lnum;
         }
-        comment_pos
+        return rs_pos;
     }
+    comment_pos
 }
 
 /// Step over the run of `"string"`s and `'c'` constants starting at `s[0]`,
@@ -230,10 +237,10 @@ pub unsafe fn is_pos_in_string(line: *const c_char, col: colnr_T) -> bool {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_skipcomment(s: *const c_char) -> *const c_char {
-    unsafe {
-        let hash_comment = (*curbuf.get()).b_ind_hash_comment != 0;
-        s.add(skip_comment(CStr::from_ptr(s).to_bytes(), hash_comment))
-    }
+    let hash_comment = cur_buf().b_ind_hash_comment != 0;
+    // SAFETY: the caller's promise -- `s` is NUL-terminated, and
+    // `skip_comment` answers an index no further than that NUL.
+    unsafe { s.add(skip_comment(CStr::from_ptr(s).to_bytes(), hash_comment)) }
 }
 
 /// [`cin_skipcomment`] over a slice: the index of the first byte of code.
@@ -284,21 +291,28 @@ pub(crate) unsafe fn cin_nocode(s: *const c_char) -> bool {
 /// # Safety
 /// Reads the current buffer and window.
 pub(crate) unsafe fn find_line_comment() -> Option<pos_T> {
-    unsafe {
-        let mut pos = (*curwin.get()).w_cursor;
-        loop {
-            pos.lnum -= 1;
-            if pos.lnum <= 0 {
-                return None;
-            }
+    let mut pos = cur_win().w_cursor;
+    loop {
+        pos.lnum -= 1;
+        if pos.lnum <= 0 {
+            return None;
+        }
+        // SAFETY: on the main thread with a current buffer; `ml_get` hands
+        // back a NUL-terminated line, which is all the rest ask for.
+        let (is_comment, col, at_end) = unsafe {
             let line = ml_get(pos.lnum);
             let p = skipwhite(line);
-            if cin_islinecomment(p) {
-                return Some(pos.with_col(p.offset_from(line) as colnr_T));
-            }
-            if *p as c_int != NUL {
-                return None;
-            }
+            (
+                cin_islinecomment(p),
+                p.offset_from(line) as colnr_T,
+                *p as c_int == NUL,
+            )
+        };
+        if is_comment {
+            return Some(pos.with_col(col));
+        }
+        if !at_end {
+            return None;
         }
     }
 }
@@ -311,17 +325,17 @@ pub(crate) unsafe fn find_line_comment() -> Option<pos_T> {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_skip_comment_and_string(s: *const c_char) -> *const c_char {
-    unsafe {
-        let mut p = s;
-        loop {
-            let r = p;
-            p = cin_skipcomment(p);
-            if *p != 0 {
-                p = skip_string(p);
-            }
-            if p == r {
-                return p;
-            }
+    let mut p = s;
+    loop {
+        let r = p;
+        // SAFETY: `s` is NUL-terminated and neither skipper walks past its
+        // NUL, so every `p` the loop sees is NUL-terminated too.
+        p = unsafe {
+            let p = cin_skipcomment(p);
+            if *p != 0 { skip_string(p) } else { p }
+        };
+        if p == r {
+            return p;
         }
     }
 }
@@ -340,6 +354,18 @@ pub(crate) unsafe fn cin_iscomment(p: *const c_char) -> bool {
 /// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_islinecomment(p: *const c_char) -> bool {
     unsafe { *p == b'/' as c_char && *p.add(1) == b'/' as c_char }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
 
 #[cfg(test)]
