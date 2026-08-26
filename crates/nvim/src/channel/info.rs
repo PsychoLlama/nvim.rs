@@ -20,22 +20,22 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
 use crate::log::{LOGLVL_INF, logmsg_c};
-use crate::main::curbuf;
-use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
+use crate::main::{channels, curbuf};
+use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
 use crate::os::pty_proc_unix::pty_proc_tty_name;
+use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
     Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN,
-    VAR_UNLOCKED, event_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
-    object_data, save_v_event_T, typval_T, typval_vval_union, uint64_t,
+    VAR_UNLOCKED, event_T, hashtab_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data,
+    save_v_event_T, typval_T, typval_vval_union, uint64_t,
 };
-use ::libc::qsort;
 
 use super::known::*;
 use super::{
-    channel_decref, channel_incref, channel_map, channel_proc, channel_pty, empty_dict,
-    find_channel, main_loop_events,
+    channel_decref, channel_incref, channel_proc, channel_pty, empty_dict, find_channel,
+    main_loop_events,
 };
 
 // ---------------------------------------------------------------------------
@@ -251,8 +251,7 @@ pub unsafe fn channel_job_running(id: uint64_t) -> bool {
 /// # Safety
 /// Called from the main thread; `arena` owns the answer's storage.
 pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict {
-    // SAFETY: the caller's promise; the answer's live entry.
-    let chan = unsafe { find_channel(id) };
+    let chan = find_channel(id);
     if chan.is_null() {
         return empty_dict();
     }
@@ -349,31 +348,19 @@ unsafe fn argv_array(args: *mut *mut c_char, arena: *mut Arena) -> Array {
 /// # Safety
 /// Called from the main thread; `arena` owns the answer's storage.
 pub unsafe fn channel_all_info(arena: *mut Arena) -> Array {
-    let map = channel_map();
-    // SAFETY: the registry's key array is `n_keys` long, both arena
-    // allocations are sized for exactly that many entries, and the arena is a
-    // bump allocator, so building the dicts leaves the id array where it is.
+    // The registry iterates in registration order; the API contract is
+    // ascending id.
+    let mut ids = channels.with(SlotTable::snapshot_keys);
+    ids.sort_unstable();
+    // SAFETY: the arena array is sized for exactly as many entries as there
+    // are ids, and the arena is a bump allocator, so building the dicts
+    // leaves the array where it is.
     unsafe {
-        let n = (*map).set.h.n_keys as usize;
-        let ids = arena_alloc(arena, size_of::<int64_t>() * n, true).cast::<int64_t>();
-        for i in 0..n {
-            *ids.add(i) = *(*map).set.keys.add(i) as int64_t;
+        let mut ret = arena_array(arena, ids.len());
+        for (i, id) in ids.iter().enumerate() {
+            *ret.items.add(i) = dict_obj(channel_info(*id, arena));
         }
-        // The map iterates in hash order; the API contract is ascending id.
-        qsort(ids.cast(), n, size_of::<int64_t>(), Some(int64_t_cmp));
-
-        let mut ret = arena_array(arena, n);
-        for i in 0..n {
-            *ret.items.add(i) = dict_obj(channel_info(*ids.add(i) as uint64_t, arena));
-        }
-        ret.size = n;
+        ret.size = ids.len();
         ret
     }
-}
-
-unsafe extern "C" fn int64_t_cmp(pa: *const c_void, pb: *const c_void) -> c_int {
-    // SAFETY: `qsort` hands back pointers into the `int64_t` array it was
-    // given, aligned and readable.
-    let (a, b) = unsafe { (*pa.cast::<int64_t>(), *pb.cast::<int64_t>()) };
-    a.cmp(&b) as c_int
 }

@@ -415,9 +415,7 @@ CELL_PTR_ALLOW_RE = re.compile(
 # `cell_ptr_deferred`, shrink-only, and each entry names what retires it.
 CELL_PTR_DEFERRED = {
     "window_handles": "khash of window handles; retires with phase 23's registry ownership",
-    "timers": "khash of timer_T; retires with phase 23's registry ownership",
     "buffer_handles": "khash of buffer handles; retires with phase 23's registry ownership",
-    "channels": "khash of Channel; retires with phase 23's registry ownership",
     "ql_info_actual": "the quickfix stack behind `qf_info`; F-P22-37, phase 23",
     "tabpage_handles": "khash of tabpage handles; retires with phase 23's registry ownership",
 }
@@ -1331,7 +1329,7 @@ SELF_TEST_CELL_PTR_SITE = [
 SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
-            "a.rs": "fn f() {\n    main_loop.ptr();\n    timers.ptr();\n}\n",
+            "a.rs": "fn f() {\n    main_loop.ptr();\n    window_handles.ptr();\n}\n",
             "b.rs": "fn g() {\n    POSTFIX.ptr();\n    POSTFIX.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
@@ -1354,7 +1352,10 @@ SELF_TEST_CELL_PTR_CHECK = [
     ),
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
-    ({"a.rs": "fn f() {\n    timers.ptr();\n    timers.ptr();\n}\n"}, False),
+    (
+        {"a.rs": "fn f() {\n    window_handles.ptr();\n    window_handles.ptr();\n}\n"},
+        False,
+    ),
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [

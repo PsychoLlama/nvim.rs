@@ -41,18 +41,18 @@ use crate::event::wstream::{wstream_new_buffer, wstream_write};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::api_free_luaref;
 use crate::main::{channels, e_invchan, e_invstream, e_invstreamrpc, exiting, main_loop};
-use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::memory::{xfree, xmemdup};
 use crate::msgpack_rpc::channel::call_stack::CallStack;
 use crate::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init};
 use crate::os::cshim::{gettext, stderr};
 use crate::os::fs::os_write;
 use crate::os::pty_proc_unix::pty_proc_close_master;
+use crate::registry::SlotTable;
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
-    Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, Map_uint64_t_ptr_t,
-    MultiQueue, Proc, PtyProc, RStream, RpcState, Stream, ptr_t, size_t, uint64_t,
+    Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, MultiQueue, Proc,
+    PtyProc, RStream, RpcState, Stream, size_t, uint64_t,
 };
 use ::libc::freopen;
 
@@ -111,15 +111,6 @@ static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new((CHAN_STDERR + 1) as
 // ---------------------------------------------------------------------------
 // Globals, as this module reaches them
 // ---------------------------------------------------------------------------
-
-/// The channel registry: id → `*mut Channel`.
-///
-/// The one raw escape from `channels`. A `with_mut` borrow cannot be used
-/// here: the map is walked while closing channels, and closing one queues an
-/// event whose handler deletes from the same map.
-fn channel_map() -> *mut Map_uint64_t_ptr_t {
-    channels.ptr()
-}
 
 /// The event loop, as libuv and the stream layer take it.
 pub(super) fn main_loop_ptr() -> *mut Loop {
@@ -243,19 +234,12 @@ pub unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
 
 /// The channel registered under `id`, or null.
 ///
-/// # Safety
-/// The answer is only live until the next event-loop turn frees it.
-pub unsafe fn find_channel(id: uint64_t) -> *mut Channel {
-    let map = channel_map();
-    // SAFETY: the registry is a live map for the process's lifetime.
-    let slot = unsafe { mh_get_uint64_t(&raw mut (*map).set, id) };
-    // The hash's "absent" slot index.
-    if slot == u32::MAX {
-        return ptr::null_mut();
-    }
-    // SAFETY: an occupied slot index is in range of the value array, and every
-    // value in it was registered by `channel_alloc`.
-    unsafe { *(*map).values.add(slot as usize) as *mut Channel }
+/// The answer is only live until the next event-loop turn frees it, so a
+/// caller that runs the editor in between must look it up again.
+pub fn find_channel(id: uint64_t) -> *mut Channel {
+    channels
+        .with(|chans| chans.get(id))
+        .unwrap_or(ptr::null_mut())
 }
 
 /// Opens the stderr channel and the RPC event queue.
@@ -331,12 +315,7 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
     // queue this channel owns until `channel_destroy` frees it.
     let events = unsafe { multiqueue_new_child(main_loop_events()) };
     let chan = Box::into_raw(Box::new(blank_channel(id, type_0, events)));
-    // SAFETY: the registry is live, and `id` is fresh, so the slot the map
-    // hands back is this channel's alone.
-    unsafe {
-        *map_put_ref_uint64_t_ptr_t(channel_map(), id, ptr::null_mut(), ptr::null_mut()) =
-            chan as ptr_t
-    };
+    channels.with_mut(|chans| chans.insert(id, chan));
     chan
 }
 
@@ -345,16 +324,9 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
 /// # Safety
 /// Called from the main thread with the registry live.
 pub unsafe fn channel_teardown() {
-    let map = channel_map();
-    // SAFETY: the registry's key and value arrays are `n_keys` long, and every
-    // value is a live channel. The ids are snapshotted rather than walked live
-    // because closing a channel queues a free event against the same map.
-    let ids: Vec<uint64_t> = unsafe {
-        (0..(*map).set.h.n_keys as usize)
-            .map(|i| (*(*(*map).values.add(i)).cast::<Channel>()).id)
-            .collect()
-    };
-    for id in ids {
+    // The ids are snapshotted rather than walked live because closing a
+    // channel queues a free event against the same table.
+    for id in channels.with(SlotTable::snapshot_keys) {
         // SAFETY: each id named a live channel a moment ago, and
         // `channel_close` tolerates one that has since gone.
         unsafe { channel_close(id, kChannelPartAll, ptr::null_mut()) };
@@ -397,7 +369,7 @@ unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
     // `channel_decref` dropped to zero.
     unsafe {
         let chan = (*argv).cast::<Channel>();
-        map_del_uint64_t_ptr_t(channel_map(), (*chan).id, ptr::null_mut());
+        let _ = channels.with_mut(|chans| chans.remove((*chan).id));
         channel_destroy(chan);
     }
 }
@@ -440,7 +412,7 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
             (*chan).id == next_chan_id.get(),
             "channel id was not the last"
         );
-        map_del_uint64_t_ptr_t(channel_map(), (*chan).id, ptr::null_mut());
+        let _ = channels.with_mut(|chans| chans.remove((*chan).id));
         (*chan).id = 0;
         (*chan).refcount -= 1;
         assert!((*chan).refcount == 0, "channel was already referenced");
@@ -529,8 +501,8 @@ impl CloseError {
 /// # Safety
 /// Called from the main thread with the registry live.
 unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
-    // SAFETY: the caller's promise; the answer is used before the next turn.
-    let chan = unsafe { find_channel(id) };
+    // The answer is used before the next event-loop turn.
+    let chan = find_channel(id);
     if chan.is_null() {
         // An id below the watermark named a channel that has already gone,
         // which is not an error: closing twice is allowed.

@@ -25,10 +25,11 @@ use crate::global_cell::GlobalCell;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `main`.
 pub(crate) use crate::main::e_invalblob;
+use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet,
-    MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T,
-    list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
+    Array, ChannelStreamType, GRegFlags, LuaRetMode, MarkGet, MotionType, Object, OptValType,
+    blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, partial_T, size_t,
+    timer_T, typval_T, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -115,24 +116,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_uint64_t = Set_uint64_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<uint64_t>(),
-};
-pub const MAP_INIT: Map_uint64_t_ptr_t = Map_uint64_t_ptr_t {
-    set: SET_INIT,
-    values: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MH_TOMBSTONE: c_uint = UINT32_MAX;
 pub const VARNUMBER_MAX: c_long = INT64_MAX;
 pub const VARNUMBER_MIN: c_long = INT64_MIN;
 pub const BS: c_int = '\u{8}' as c_int;
@@ -174,7 +157,11 @@ pub static eval_lavars_used: GlobalCell<*mut bool> =
     GlobalCell::new(::core::ptr::null_mut::<bool>());
 static echo_hl_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
-static timers: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(MAP_INIT);
+/// Every live timer, by `timer_id`. See [`crate::registry`] for the order
+/// this keeps and the reentrancy rule it answers: a timer's callback runs
+/// Vimscript, which can start and stop timers, so nothing holds a borrow of
+/// this across one.
+static timers: GlobalCell<SlotTable<uint64_t, *mut timer_T>> = GlobalCell::new(SlotTable::new());
 static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {

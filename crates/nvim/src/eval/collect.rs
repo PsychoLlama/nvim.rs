@@ -65,15 +65,15 @@ use crate::ops::set_ref_in_opfunc;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
 use crate::register::op_global_reg_iter;
+use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, CONV_NONE, Channel, DictWatcher, FAIL, NUL, OK, OptInt, QUEUE, String_0,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, dictitem_T, fmark_T,
-    fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T,
-    pos_T, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T,
-    xfmark_T, yankreg_T,
+    AdditionalData, CONV_NONE, DictWatcher, FAIL, NUL, OK, OptInt, QUEUE, String_0, VAR_BLOB,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, dictitem_T, fmark_T, fmarkv_T,
+    hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t,
+    tabpage_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T, yankreg_T,
 };
 
 /// A freshly declared typval.
@@ -229,18 +229,14 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         // Channels. Deliberately not `abort`ed on: upstream discards these
         // answers, and doing otherwise would change when a collection is
         // abandoned.
-        let chans = channels.ptr();
-        for i in 0..(*chans).set.h.n_keys {
-            let data = *(*chans).values.offset(i as isize) as *mut Channel;
+        for data in channels.with(SlotTable::snapshot_values) {
             set_ref_in_callback_reader(&raw mut (*data).on_data, copy_id, null_mut(), null_mut());
             set_ref_in_callback_reader(&raw mut (*data).on_stderr, copy_id, null_mut(), null_mut());
             set_ref_in_callback(&raw mut (*data).on_exit, copy_id, null_mut(), null_mut());
         }
 
         // Timers, likewise.
-        let tmrs = timers.ptr();
-        for i in 0..(*tmrs).set.h.n_keys {
-            let timer = *(*tmrs).values.offset(i as isize) as *mut timer_T;
+        for timer in timers.with(SlotTable::snapshot_values) {
             set_ref_in_callback(&raw mut (*timer).callback, copy_id, null_mut(), null_mut());
         }
 

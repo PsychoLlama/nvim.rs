@@ -45,6 +45,7 @@ use crate::main::{
 };
 use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
+use crate::registry::SlotTable;
 use crate::types::{
     Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
     Dict, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
@@ -317,9 +318,8 @@ pub unsafe fn rpc_free(channel: *mut Channel) {
 /// # Safety
 /// The channel table is initialised.
 unsafe fn find_rpc_channel(id: uint64_t) -> Option<Chan> {
-    // SAFETY: the caller's guarantee, and `find_channel` answers null rather
-    // than a dangling pointer.
-    let chan = unsafe { find_channel(id) };
+    // `find_channel` answers null rather than a dangling pointer.
+    let chan = find_channel(id);
     if chan.is_null() {
         return None;
     }
@@ -556,17 +556,12 @@ pub unsafe fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool {
 /// # Safety
 /// [`rpc_send_event`]'s contract.
 unsafe fn broadcast_event(name: *const c_char, args: Array) {
-    let mut chans: Vec<*mut Channel> = Vec::new();
     // SAFETY: the channel table's values are live channels.
-    unsafe {
-        let map = channels.ptr();
-        for i in 0..(*map).set.h.n_keys {
-            let channel = (*(*map).values.add(i as usize)).cast::<Channel>();
-            if (*channel).is_rpc {
-                chans.push(channel);
-            }
-        }
-    }
+    let mut chans: Vec<*mut Channel> = channels
+        .with(SlotTable::snapshot_values)
+        .into_iter()
+        .filter(|&channel| unsafe { (*channel).is_rpc })
+        .collect();
     if !chans.is_empty() {
         // SAFETY: the caller's name and arguments, and the channels just
         // collected, which nothing between here and the send can free.

@@ -114,6 +114,7 @@ pub mod profile;
 pub mod quickfix;
 pub mod regexp;
 pub mod register;
+pub(crate) mod registry;
 pub mod runtime;
 pub mod search;
 pub mod sha256;

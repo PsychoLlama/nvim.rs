@@ -10,20 +10,21 @@ use crate::options::{
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
 use crate::profile::time_msg;
+use crate::registry::SlotTable;
 use crate::types::{
-    AdditionalData, Array, BreakAt, Callback, Callback_data, CmdModFlags, DecorState, FILE, Loop,
-    LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
+    AdditionalData, Array, BreakAt, Callback, Callback_data, Channel, CmdModFlags, DecorState,
+    FILE, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
-    ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
-    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
-    bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T,
-    except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t,
-    int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s,
-    optmagic_T, pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
-    sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
-    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
-    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
-    uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
+    ScreenGrid, Set_String, Set_int, Set_uint32_t, StlClickDefinition, String_0, UV_MUTEX_INIT,
+    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
+    caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T, except_T,
+    file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t,
+    int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T,
+    pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t,
+    tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
+    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
+    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
+    uv_timer_t, vimmenu_T, win_T, xfmark_T,
 };
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
@@ -277,21 +278,12 @@ pub static msg_loclist: GlobalCell<*mut c_char> =
     GlobalCell::new(c"[Location List]".as_ptr() as *mut c_char);
 pub static msg_qflist: GlobalCell<*mut c_char> =
     GlobalCell::new(c"[Quickfix List]".as_ptr() as *mut c_char);
-pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64_t_ptr_t {
-    set: Set_uint64_t {
-        h: MapHash {
-            n_buckets: 0 as uint32_t,
-            size: 0 as uint32_t,
-            n_occupied: 0 as uint32_t,
-            upper_bound: 0 as uint32_t,
-            n_keys: 0 as uint32_t,
-            keys_capacity: 0 as uint32_t,
-            hash: ::core::ptr::null_mut::<uint32_t>(),
-        },
-        keys: ::core::ptr::null_mut::<uint64_t>(),
-    },
-    values: ::core::ptr::null_mut::<ptr_t>(),
-});
+/// Every open channel, by id. See [`crate::registry`] for the order this
+/// keeps and the reentrancy rule it answers: a channel's callback runs Lua
+/// and Vimscript, which can open and close channels, so nothing holds a
+/// borrow of this across one.
+pub(crate) static channels: GlobalCell<SlotTable<uint64_t, *mut Channel>> =
+    GlobalCell::new(SlotTable::new());
 pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<c_char>(),

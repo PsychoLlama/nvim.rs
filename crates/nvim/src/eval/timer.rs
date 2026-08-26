@@ -4,6 +4,10 @@
 //! it has to survive its own callback: `timer_due_cb` takes a reference for
 //! the duration of the call, and `timer_stop` may run inside that call and
 //! hand the map's reference to `timer_close_cb`.
+//!
+//! The registry itself is a [`SlotTable`]: every walk below goes over a
+//! snapshot, because a timer callback runs Vimscript and Vimscript can start
+//! and stop timers. Nothing holds a borrow of the table across one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -15,7 +19,7 @@ use crate::eval::typval::{
     callback_free, callback_put, tv_clear, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
     tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
 };
-use crate::eval::{MH_TOMBSTONE, callback_call, last_timer_id, timers};
+use crate::eval::{callback_call, last_timer_id, timers};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new_child};
 use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
@@ -23,12 +27,12 @@ use crate::event::time::{
 use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
 use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
-use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::memory::{xfree, xmalloc};
+use crate::registry::SlotTable;
 use crate::types::{
-    Callback, FAIL, Map_uint64_t_ptr_t, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
-    dictitem_T, int64_t, list_T, ptr_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union,
-    uint32_t, uint64_t, varnumber_T,
+    Callback, FAIL, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T,
+    int64_t, list_T, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t,
+    varnumber_T,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -42,41 +46,19 @@ const UNSET_TV: typval_T = typval_T {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// The timer map's lookup. A miss answers null: the "default value" global
-/// every `map_get` expansion carries is a `static` nothing ever writes.
+/// Every live timer, in registration order.
 ///
-/// # Safety
-/// `map` must be valid.
-#[inline]
-unsafe fn timers_get(map: *mut Map_uint64_t_ptr_t, key: uint64_t) -> ptr_t {
-    unsafe {
-        let k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE {
-            null_mut()
-        } else {
-            *(*map).values.offset(k as isize)
-        }
-    }
-}
-
-/// The timer map's insert.
-///
-/// # Safety
-/// `map` must be valid.
-#[inline]
-unsafe fn timers_put(map: *mut Map_uint64_t_ptr_t, key: uint64_t, value: ptr_t) {
-    unsafe {
-        let slot = map_put_ref_uint64_t_ptr_t(map, key, null_mut(), null_mut());
-        *slot = value;
-    }
+/// A snapshot rather than a borrow: each caller below runs the editor
+/// between one timer and the next, and that can register or drop timers.
+fn timer_snapshot() -> Vec<*mut timer_T> {
+    timers.with(SlotTable::snapshot_values)
 }
 
 /// The timer with this id, or null.
-///
-/// # Safety
-/// Called with the timer map initialised, which it always is.
-pub unsafe fn find_timer_by_nr(id: varnumber_T) -> *mut timer_T {
-    unsafe { timers_get(timers.ptr(), id as uint64_t) as *mut timer_T }
+pub fn find_timer_by_nr(id: varnumber_T) -> *mut timer_T {
+    timers
+        .with(|map| map.get(id as uint64_t))
+        .unwrap_or(null_mut())
 }
 
 /// Append one timer's description to the List in `rettv`.
@@ -113,11 +95,10 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
 /// # Safety
 /// `rettv` must be valid.
 pub unsafe fn add_timer_info_all(rettv: *mut typval_T) {
+    let live = timer_snapshot();
     unsafe {
-        let map = timers.ptr();
-        tv_list_alloc_ret(rettv, (*map).set.h.size as ptrdiff_t);
-        for i in 0..(*map).set.h.n_keys {
-            let timer = *(*map).values.offset(i as isize) as *mut timer_T;
+        tv_list_alloc_ret(rettv, live.len() as ptrdiff_t);
+        for timer in live {
             // A stopped timer is still listed while something else holds a
             // reference to it — its own callback, for instance.
             if !(*timer).stopped || (*timer).refcount > 1 {
@@ -215,8 +196,9 @@ pub unsafe fn timer_start(
             timeout as uint64_t,
         );
 
-        timers_put(timers.ptr(), (*timer).timer_id as uint64_t, timer as ptr_t);
-        (*timer).timer_id as uint64_t
+        let id = (*timer).timer_id as uint64_t;
+        timers.with_mut(|map| map.insert(id, timer));
+        id
     }
 }
 
@@ -245,7 +227,8 @@ pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
         let timer = data as *mut timer_T;
         multiqueue_free((*timer).tw.events);
         callback_free(&raw mut (*timer).callback);
-        map_del_uint64_t_ptr_t(timers.ptr(), (*timer).timer_id as uint64_t, null_mut());
+        let id = (*timer).timer_id as uint64_t;
+        let _ = timers.with_mut(|map| map.remove(id));
         timer_decref(timer);
     }
 }
@@ -266,20 +249,19 @@ pub(crate) unsafe fn timer_decref(timer: *mut timer_T) {
 /// Stop every timer.
 ///
 /// # Safety
-/// Called with the timer map initialised.
+/// Called from the main thread, with every registered timer live.
 pub unsafe fn timer_stop_all() {
-    unsafe {
-        let map = timers.ptr();
-        for i in 0..(*map).set.h.n_keys {
-            timer_stop(*(*map).values.offset(i as isize) as *mut timer_T);
-        }
+    for timer in timer_snapshot() {
+        // SAFETY: the caller's promise; the snapshot is taken while the
+        // table is untouched, and `timer_stop` only queues the removal.
+        unsafe { timer_stop(timer) };
     }
 }
 
 /// Shut the timers down at exit.
 ///
 /// # Safety
-/// As `timer_stop_all`.
+/// As [`timer_stop_all`].
 pub unsafe fn timer_teardown() {
     unsafe { timer_stop_all() }
 }
