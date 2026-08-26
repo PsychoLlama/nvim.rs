@@ -13,7 +13,8 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::file_search::Name;
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
-use crate::types::{ExpandContext, MAXPATHL};
+use crate::types::{DoInRuntimepathCBFn, ExpandContext, MAXPATHL};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -76,16 +77,14 @@ impl TagFiles {
     pub(crate) fn new() -> Self {
         // SAFETY: `curbuf` is live, and the buffer-local and global
         // `'tags'` are NUL-terminated option strings.
-        unsafe {
-            let help = (*curbuf.get()).b_help;
-            let local = (*curbuf.get()).b_p_tags;
-            TagFiles {
-                help: help.then(HelpTags::collect),
-                tags: (!help)
-                    .then(|| Name::from_ptr(if *local != 0 { local } else { p_tags.get() })),
-                at: 0,
-                search: Search::default(),
-            }
+        let help = cur_buf().b_help;
+        let local = cur_buf().b_p_tags;
+        TagFiles {
+            help: help.then(HelpTags::collect),
+            tags: (!help)
+                .then(|| unsafe { Name::from_ptr(if *local != 0 { local } else { p_tags.get() }) }),
+            at: 0,
+            search: Search::default(),
         }
     }
 
@@ -105,21 +104,19 @@ impl TagFiles {
         // SAFETY: the context came from `vim_findfile_init`, and what
         // `vim_findfile` answers is an allocated NUL-terminated name that
         // becomes ours.
-        unsafe {
-            loop {
-                if !self.search.open {
-                    self.open_next_entry()?;
-                    continue;
-                }
-                let found = vim_findfile(self.search.ctx);
-                if found.is_null() {
-                    self.search.open = false;
-                    continue;
-                }
-                let name = Name::from_ptr(found);
-                xfree(found.cast());
-                return Some(name);
+        loop {
+            if !self.search.open {
+                self.open_next_entry()?;
+                continue;
             }
+            let found = unsafe { vim_findfile(self.search.ctx) };
+            if found.is_null() {
+                self.search.open = false;
+                continue;
+            }
+            let name = unsafe { Name::from_ptr(found) };
+            unsafe { xfree(found.cast()) };
+            return Some(name);
         }
     }
 
@@ -156,7 +153,7 @@ impl TagFiles {
                 FINDFILE_FILE as c_int,
                 self.search.ctx,
                 true,
-                (*curbuf.get()).b_ffname,
+                cur_buf().b_ffname,
             )
         };
         self.search.open = !self.search.ctx.is_null();
@@ -183,27 +180,23 @@ impl Entry {
         let mut buf = vec![0 as c_char; MAXPATHL as usize];
         // SAFETY: `at` indexes into `tags`, which is NUL-terminated, and
         // `buf` is `MAXPATHL` writable bytes that both calls terminate.
-        unsafe {
-            let mut read = tags.as_ptr().add(*at).cast_mut();
-            copy_option_part(
-                &raw mut read,
-                buf.as_mut_ptr(),
-                MAXPATHL as usize - 1,
-                c" ,".as_ptr().cast_mut(),
-            );
-            *at = read.offset_from(tags.as_ptr()) as usize;
-            let stop = vim_findfile_stopdir(buf.as_mut_ptr());
-            let stop = (!stop.is_null()).then(|| Name::from_ptr(stop));
+        let mut read = unsafe { tags.as_ptr().add(*at) }.cast_mut();
+        let option2 = &raw mut read;
+        let maxlen = MAXPATHL as usize - 1;
+        let sep_chars = c" ,".as_ptr().cast_mut();
+        unsafe { copy_option_part(option2, buf.as_mut_ptr(), maxlen, sep_chars) };
+        *at = unsafe { read.offset_from(tags.as_ptr()) } as usize;
+        let stop = unsafe { vim_findfile_stopdir(buf.as_mut_ptr()) };
+        let stop = (!stop.is_null()).then(|| unsafe { Name::from_ptr(stop) });
 
-            // What is left in the buffer is the directory to search and,
-            // as its last component, the name to look for.
-            let entry = CStr::from_ptr(buf.as_ptr()).to_bytes();
-            let tail = tail_index(entry);
-            Entry {
-                dir: Name::from_bytes(&entry[..tail]),
-                file: Name::from_bytes(&entry[tail..]),
-                stop,
-            }
+        // What is left in the buffer is the directory to search and,
+        // as its last component, the name to look for.
+        let entry = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
+        let tail = tail_index(entry);
+        Entry {
+            dir: Name::from_bytes(&entry[..tail]),
+            file: Name::from_bytes(&entry[tail..]),
+            stop,
         }
     }
 }
@@ -214,14 +207,11 @@ impl HelpTags {
         let mut found: Vec<Name> = Vec::new();
         // SAFETY: the callback is handed `found` as its cookie and does
         // not outlive this call.
-        unsafe {
-            do_in_runtimepath(
-                c"doc/tags doc/tags-??".as_ptr().cast_mut(),
-                RuntimeOpts::ALL,
-                Some(found_tagfile_cb),
-                (&raw mut found).cast(),
-            );
-        }
+        let name2 = c"doc/tags doc/tags-??".as_ptr().cast_mut();
+        let flags = RuntimeOpts::ALL;
+        let callback2 = Some(found_tagfile_cb as DoInRuntimepathCBFn);
+        let cookie2 = (&raw mut found).cast();
+        unsafe { do_in_runtimepath(name2, flags, callback2, cookie2) };
         HelpTags { found, at: 0 }
     }
 
@@ -262,18 +252,16 @@ unsafe fn found_tagfile_cb(
     all: bool,
     cookie: *mut c_void,
 ) -> bool {
-    unsafe {
-        let found = &mut *cookie.cast::<Vec<Name>>();
-        for i in 0..num_fnames as usize {
-            let mut name = Name::from_ptr(*fnames.add(i));
-            simplify(&mut name);
-            found.push(name);
-            if !all {
-                break;
-            }
+    let found = unsafe { &mut *cookie.cast::<Vec<Name>>() };
+    for i in 0..num_fnames as usize {
+        let mut name = unsafe { Name::from_ptr(*fnames.add(i)) };
+        simplify(&mut name);
+        found.push(name);
+        if !all {
+            break;
         }
-        num_fnames > 0
     }
+    num_fnames > 0
 }
 
 /// [`simplify_filename`] over an owned name.
@@ -303,49 +291,54 @@ pub(crate) unsafe fn expand_tag_fname(
     tag_fname: *mut c_char,
     expand: bool,
 ) -> *mut c_char {
-    unsafe {
-        // Expand the file name (for environment variables) when needed.
-        // Backticks are disallowed: they could run arbitrary shell
-        // commands. This is not needed for tags file names themselves.
-        let mut expanded = ptr::null_mut::<c_char>();
-        if expand && path_has_wildcard(fname) && vim_strchr(fname, '`' as c_int).is_null() {
-            let mut xpc: expand_T = core::mem::zeroed();
-            expand_init(&raw mut xpc);
-            xpc.xp_context = ExpandContext::Files;
-            expanded = expand_one(
-                &raw mut xpc,
-                fname,
-                ptr::null_mut(),
-                WildOpts::LIST_NOTFOUND | WildOpts::SILENT,
-                WildMode::ExpandFree,
-            );
-        }
-        let fname = if expanded.is_null() { fname } else { expanded };
-
-        // The tags file's own directory, empty when it has none.
-        let dir = CStr::from_ptr(tag_fname).to_bytes();
-        let dir = &dir[..tail_index(dir)];
-
-        let retval = if (p_tr.get() != 0 || (*curbuf.get()).b_help)
-            && !vim_is_abs_name(fname)
-            && !dir.is_empty()
-        {
-            let name = CStr::from_ptr(fname).to_bytes();
-            let mut joined = Name::from_bytes(
-                &[
-                    dir,
-                    &name[..name.len().min(MAXPATHL as usize - dir.len() - 1)],
-                ]
-                .concat(),
-            );
-            // Translate names like "src/a/../b/file.c" into "src/b/file.c".
-            simplify(&mut joined);
-            xstrdup(joined.as_ptr())
-        } else {
-            xstrdup(fname)
-        };
-
-        xfree(expanded.cast());
-        retval
+    // Expand the file name (for environment variables) when needed.
+    // Backticks are disallowed: they could run arbitrary shell
+    // commands. This is not needed for tags file names themselves.
+    let mut expanded = ptr::null_mut::<c_char>();
+    if expand
+        && unsafe { path_has_wildcard(fname) }
+        && unsafe { vim_strchr(fname, '`' as c_int) }.is_null()
+    {
+        let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+        unsafe { expand_init(&raw mut xpc) };
+        xpc.xp_context = ExpandContext::Files;
+        let option2 = &raw mut xpc;
+        let maxlen = ptr::null_mut();
+        let sep_chars = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
+        let mode = WildMode::ExpandFree;
+        expanded = unsafe { expand_one(option2, fname, maxlen, sep_chars, mode) };
     }
+    let fname = if expanded.is_null() { fname } else { expanded };
+
+    // The tags file's own directory, empty when it has none.
+    let dir = unsafe { CStr::from_ptr(tag_fname) }.to_bytes();
+    let dir = &dir[..tail_index(dir)];
+
+    let retval = if (p_tr.get() != 0 || cur_buf().b_help)
+        && !unsafe { vim_is_abs_name(fname) }
+        && !dir.is_empty()
+    {
+        let name = unsafe { CStr::from_ptr(fname) }.to_bytes();
+        let mut joined = Name::from_bytes(
+            &[
+                dir,
+                &name[..name.len().min(MAXPATHL as usize - dir.len() - 1)],
+            ]
+            .concat(),
+        );
+        // Translate names like "src/a/../b/file.c" into "src/b/file.c".
+        simplify(&mut joined);
+        unsafe { xstrdup(joined.as_ptr()) }
+    } else {
+        unsafe { xstrdup(fname) }
+    };
+
+    unsafe { xfree(expanded.cast()) };
+    retval
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }
