@@ -10,6 +10,13 @@
 //! that actually reads.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -38,7 +45,7 @@ pub(crate) unsafe fn report_and_place(
     // With errors, writing the file requires ":w!".
     let bad_bytes = out.illegal_byte > 0 && bad_char != BAD_KEEP;
     if how.newfile && (out.error || out.conv_error != 0 || bad_bytes) {
-        cur_buf().b_p_ro = true as c_int;
+        cur_buf().b_p_ro = c_int::from(true);
     }
 
     // SAFETY: the current buffer and window are live.
@@ -93,7 +100,7 @@ pub(crate) unsafe fn run_read_autocmds(
 
     // The output from the autocommands should neither overwrite anything nor
     // be overwritten: set msg_scroll, and restore it if no output was done.
-    msg_scroll.set(true as c_int);
+    msg_scroll.set(c_int::from(true));
     // A `BufReadPost` also owes a `FileType` when the buffer already has one
     // and nothing triggered it.
     let buf_read = !how.filtering && (how.newfile || (how.buffer && !sfname.is_null()));
