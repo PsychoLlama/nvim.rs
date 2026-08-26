@@ -530,9 +530,11 @@ impl Jump {
     fn run_command(&mut self, tagp: &TagParts) -> c_int {
         // SAFETY: the caller's promise; the globals are live.
         // Tag commands always run with 'nomagic'.
+        let save_magic = magic_overruled.get();
         magic_overruled.set(OPTION_MAGIC_OFF);
         // Jumping to a tag is not a real search, so 'hlsearch' must
         // not light up because of it.
+        let save_no_hlsearch = no_hlsearch.get();
         // With 't' in 'cpoptions' the tag's pattern becomes the one
         // "n" repeats; without it, the pattern is not stored.
         let search_options = if !cpo_has(CpoFlag::TAGPAT) {
@@ -548,9 +550,9 @@ impl Jump {
             OK
         };
 
-        magic_overruled.set(magic_overruled.get());
+        magic_overruled.set(save_magic);
         if search_options != 0 {
-            unsafe { set_no_hlsearch(no_hlsearch.get()) };
+            unsafe { set_no_hlsearch(save_no_hlsearch) };
         }
         retval
     }
@@ -560,6 +562,7 @@ impl Jump {
         // SAFETY: the caller's promise; the globals are live.
         let save_p_ws = p_ws.get() != 0;
         let save_p_ic = p_ic.get();
+        let save_p_scs = p_scs.get();
         // 'wrapscan' is needed for a backward search, and the pattern
         // was not typed by the user, so case must not be folded.
         p_ws.set(1);
@@ -609,7 +612,7 @@ impl Jump {
 
         p_ws.set(c_int::from(save_p_ws));
         p_ic.set(save_p_ic);
-        p_scs.set(p_scs.get());
+        p_scs.set(save_p_scs);
         // A search command may have put the cursor beyond the end of
         // the line; correct that here.
         unsafe { check_cursor(curwin.get()) };
@@ -753,7 +756,11 @@ impl Pattern {
     /// Run the command as an ex command, in the sandbox: it came out of a
     /// tags file, which is not to be trusted.
     fn execute(&mut self) {
-        // SAFETY: the caller's promise; the buffer is NUL-terminated.
+        // The command came out of a tags file, so it runs with `secure` set
+        // and inside the sandbox -- and `secure` is *restored*, not cleared:
+        // the editor may already have been in secure mode when the tag was
+        // followed, and clearing it would hand the tags file a way out.
+        let save_secure = secure.get();
         secure.set(1);
         let _sandboxed = Lock::sandbox();
 
@@ -770,7 +777,7 @@ impl Pattern {
         if secure.get() == 2 {
             unsafe { wait_return(1) };
         }
-        secure.set(secure.get());
+        secure.set(save_secure);
     }
 }
 

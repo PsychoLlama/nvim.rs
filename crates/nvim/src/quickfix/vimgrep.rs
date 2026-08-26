@@ -216,9 +216,10 @@ unsafe fn load_quietly(
 ) -> *mut buf_T {
     // SAFETY: forwarded from the caller.
     let save_ei = unsafe { au_event_disable(c",Filetype".as_ptr().cast_mut()) };
+    let save_mls = p_mls.get();
     p_mls.set(0);
     let buf = unsafe { load_dummy_buffer(fname, dirname_start, dirname_now) };
-    p_mls.set(p_mls.get());
+    p_mls.set(save_mls);
     unsafe { au_event_restore(save_ei) };
     buf
 }

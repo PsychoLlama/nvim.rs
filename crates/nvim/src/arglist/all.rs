@@ -489,6 +489,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
         new_curwin: ptr::null_mut(),
         new_curtab: ptr::null_mut(),
     };
+    let prev_arglist_locked = ARGLIST_LOCKED.get();
     ARGLIST_LOCKED.set(true);
     let new_lu_tp = curtab.get();
     // Stop Visual mode: the cursor and "VIsual" may well be invalid after
@@ -513,7 +514,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     unsafe { arg_all_open_windows(&mut aall, count) };
     // Remove the "lock" on the argument list.
     unsafe { alist_unlink(aall.alist) };
-    ARGLIST_LOCKED.set(ARGLIST_LOCKED.get());
+    ARGLIST_LOCKED.set(prev_arglist_locked);
     autocmd_no_enter.set(autocmd_no_enter.get() - 1);
     // SAFETY: every window and tab page recorded above is checked for still
     // being live before it is entered.

@@ -379,6 +379,7 @@ impl DoTag {
         // SAFETY: the caller's promise; the index is checked against the
         // stack before any entry is read.
         // Opening the file resets it.
+        let old_key_typed = KeyTyped.get();
 
         self.idx -= self.count;
         if self.idx < 0 {
@@ -428,7 +429,7 @@ impl DoTag {
             unsafe { mark_view_restore(&raw mut self.saved_fmark) };
         }
         unsafe { check_cursor(curwin.get()) };
-        if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && KeyTyped.get() {
+        if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
             unsafe { fold_open_cursor() };
         }
 

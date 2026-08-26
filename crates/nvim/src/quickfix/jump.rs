@@ -315,6 +315,7 @@ unsafe fn qf_jump_print_msg(
 
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
+    let old_msg_scroll = msg_scroll.get();
     if curbuf.get() == old_curbuf && cur_win().w_cursor.lnum == old_lnum {
         msg_scroll.set(true as c_int);
     } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
@@ -324,7 +325,7 @@ unsafe fn qf_jump_print_msg(
     }
     unsafe { msg_ext_set_kind(c"quickfix".as_ptr()) };
     unsafe { msg_keep(text.as_ptr().cast(), 0, true, false) };
-    msg_scroll.set(msg_scroll.get());
+    msg_scroll.set(old_msg_scroll);
     release_scratch();
 }
 
@@ -456,7 +457,9 @@ pub(crate) unsafe fn qf_jump_newwin(
         return;
     }
     let old_swb = p_swb.get();
+    let old_swb_flags = swb_flags.get();
     // Getting the file may reset it.
+    let old_key_typed = KeyTyped.get();
 
     incr_quickfix_busy();
     let mut qfl = qf_current_list(qi);
@@ -497,7 +500,7 @@ pub(crate) unsafe fn qf_jump_newwin(
                         forceit,
                         prev_winid,
                         count,
-                        KeyTyped.get(),
+                        old_key_typed,
                         print_message,
                     )
                 };
@@ -526,7 +529,7 @@ pub(crate) unsafe fn qf_jump_newwin(
     // it meanwhile.
     if p_swb.get() != old_swb && is_empty_option(p_swb.get()) {
         p_swb.set(old_swb);
-        swb_flags.set(swb_flags.get());
+        swb_flags.set(old_swb_flags);
     }
     qf_busy_end();
 }

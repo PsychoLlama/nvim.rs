@@ -728,6 +728,7 @@ pub unsafe fn find_tags(
     let has_re = flags & TAG_REGEXP as c_int != 0;
     let noic = flags & TAG_NOIC as c_int != 0;
 
+    let save_p_ic = p_ic.get();
     // 'tagcase' decides how case is treated for this search.
     let tagcase = match cur_buf().b_tc_flags {
         0 => tc_flags.get(),
@@ -835,7 +836,7 @@ pub unsafe fn find_tags(
     unsafe { *num_matches = st.into_matches(matchesp) };
 
     cur_buf().b_help = help_save;
-    p_ic.set(p_ic.get());
+    p_ic.set(save_p_ic);
     drop(saved_pat);
     retval
 }

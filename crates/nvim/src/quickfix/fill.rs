@@ -416,6 +416,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     let buf = unsafe { Buf::new(buf) };
     let mut numbuf = NumBuf::new();
     // SAFETY: forwarded from the caller.
+    let old_key_typed = KeyTyped.get();
     let rewriting = old_last.is_null();
     if rewriting {
         if buf.raw() != curbuf.get() {
@@ -494,5 +495,5 @@ pub(crate) unsafe fn qf_fill_buffer(
     }
 
     // Restore KeyTyped, setting 'filetype' may reset it.
-    KeyTyped.set(KeyTyped.get());
+    KeyTyped.set(old_key_typed);
 }
