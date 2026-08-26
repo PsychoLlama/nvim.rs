@@ -30,13 +30,12 @@ use crate::cursor::{
 use crate::decoration::{kMTMetaInline, kMTMetaLines};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
 use crate::drawscreen::{
-    UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_later, redraw_win_line,
-    set_must_redraw, showmode,
+    UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_win_line, set_must_redraw, showmode,
 };
 use crate::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
-use crate::fold::{find_wl_entry, fold_update, has_any_folding, has_folding_win};
+use crate::fold::{find_wl_entry, fold_update, has_folding_win};
 use crate::highlight_group::HLF_W;
 use crate::indent::{
     copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, indent_size_ts, may_do_si,
@@ -46,12 +45,11 @@ use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
 use crate::main::{
     Insstart, Rows, State, ai_col, autocmd_busy, can_si, can_si_back, curbuf,
-    curbuf_splice_pending, curtab, curwin, did_ai, did_si, emsg_silent, end_comment_pending,
-    first_tabpage, firstwin, highlight_match, in_assert_fails, inhibit_delete_count,
-    last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll, msg_silent,
-    need_maketitle, need_wait_return, orig_line_count, p_deco, p_paste, p_ri, p_sm, p_sr,
-    redraw_cmdline, redraw_not_allowed, redraw_tabline, restart_edit, search_hl_has_cursor_lnum,
-    silent_mode, vr_lines_changed,
+    curbuf_splice_pending, curwin, did_ai, did_si, emsg_silent, end_comment_pending,
+    highlight_match, in_assert_fails, inhibit_delete_count, last_cursormoved, last_cursormoved_win,
+    msg_col, msg_row, msg_scroll, msg_silent, need_maketitle, need_wait_return, orig_line_count,
+    p_deco, p_paste, p_ri, p_sm, p_sr, redraw_cmdline, redraw_not_allowed, redraw_tabline,
+    restart_edit, search_hl_has_cursor_lnum, silent_mode, vr_lines_changed,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
@@ -84,8 +82,8 @@ use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, GraphemeState, MarkTree, Vv, bcount_t, buf_T, colnr_T, fmark_T,
-    fmarkv_T, int64_t, linenr_T, pos_T, size_t, ssize_t, tabpage_T, win_T,
+    CmdModFlags, ExtmarkOp, GraphemeState, Vv, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T,
+    int64_t, linenr_T, pos_T, size_t, ssize_t,
 };
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
