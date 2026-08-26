@@ -64,6 +64,7 @@ use crate::spell::spell_check_window;
 use crate::state::virtual_active;
 use crate::strings::vim_snprintf;
 use crate::types::*;
+use crate::winlayer::Win;
 use ::libc::{
     close, fclose, fdopen, fflush, fread, fwrite, getuid, strcmp, strftime, strlen, time,
 };
@@ -185,7 +186,7 @@ pub fn saved(status: c_int) -> Result<(), UndoFailed> {
 /// A live current buffer and window.
 pub unsafe fn u_save_cursor() -> c_int {
     // SAFETY: a live current window, by the contract above.
-    let cur: linenr_T = unsafe { (*curwin.get()).w_cursor.lnum };
+    let cur: linenr_T = cur_win().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
     unsafe { u_save((cur - 1).max(0), cur + 1) }
 }
@@ -213,13 +214,11 @@ pub unsafe fn u_save_buf(buf: *mut buf_T, top: linenr_T, bot: linenr_T) -> c_int
         return FAIL;
     }
     // SAFETY: a live buffer and window, by the contract above.
-    unsafe {
-        if top + 2 == bot {
-            // A single line: `U` can put it back.
-            u_saveline(buf, top + 1);
-        }
-        u_savecommon(buf, top, bot, 0, false)
+    if top + 2 == bot {
+        // A single line: `U` can put it back.
+        unsafe { u_saveline(buf, top + 1) };
     }
+    unsafe { u_savecommon(buf, top, bot, 0, false) }
 }
 
 /// Saves the line a `:substitute` is about to replace.
@@ -249,8 +248,8 @@ pub unsafe fn u_inssub(lnum: linenr_T) -> c_int {
 /// A live current buffer and window.
 pub unsafe fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
     // SAFETY: a live current buffer and window, by the contract above.
+    let whole_buffer = nlines == cur_buf().b_ml.ml_line_count;
     unsafe {
-        let whole_buffer = nlines == (*curbuf.get()).b_ml.ml_line_count;
         u_savecommon(
             curbuf.get(),
             lnum - 1,
@@ -269,21 +268,19 @@ pub unsafe fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
 pub unsafe fn undo_allowed(buf: *mut buf_T) -> bool {
     // SAFETY: a live buffer, by the contract above, and three NUL-terminated
     // message literals.
-    unsafe {
-        if (*buf).b_p_ma == 0 {
-            emsg(gettext(&raw const e_modifiable as *const c_char));
-            return false;
-        }
-        if sandbox.get() != 0 {
-            emsg(gettext(&raw const e_sandbox as *const c_char));
-            return false;
-        }
-        if textlock.get() != 0 || expr_map_locked() {
-            emsg(gettext(&raw const e_textlock as *const c_char));
-            return false;
-        }
-        true
+    if unsafe { (*buf).b_p_ma } == 0 {
+        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        return false;
     }
+    if sandbox.get() != 0 {
+        unsafe { emsg(gettext(&raw const e_sandbox as *const c_char)) };
+        return false;
+    }
+    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        unsafe { emsg(gettext(&raw const e_textlock as *const c_char)) };
+        return false;
+    }
+    true
 }
 
 /// `'undolevels'` for `buf`: its own, or the global one when it has none.
@@ -340,17 +337,15 @@ pub unsafe fn u_savecommon(
     let b = unsafe { Buf::new(buf) };
     if !reload {
         // SAFETY: a live buffer and window, by the contract above.
-        unsafe {
-            if !undo_allowed(buf) {
-                return FAIL;
-            }
-            if ptr::eq(buf, curbuf.get()) {
-                change_warning(buf, 0);
-            }
-            if bot > b.line_count() + 1 {
-                emsg(gettext(c"E881: Line count changed unexpectedly".as_ptr()));
-                return FAIL;
-            }
+        if !unsafe { undo_allowed(buf) } {
+            return FAIL;
+        }
+        if ptr::eq(buf, curbuf.get()) {
+            unsafe { change_warning(buf, 0) };
+        }
+        if bot > b.line_count() + 1 {
+            unsafe { emsg(gettext(c"E881: Line count changed unexpectedly".as_ptr())) };
+            return FAIL;
         }
     }
     let size: linenr_T = bot - top - 1;
@@ -366,12 +361,10 @@ pub unsafe fn u_savecommon(
             return OK;
         }
         // SAFETY: a live buffer.
-        unsafe {
-            if size == 1 && extend_last_entry(b, top, bot, newbot) {
-                return OK;
-            }
-            u_getbot(buf);
+        if size == 1 && unsafe { extend_last_entry(b, top, bot, newbot) } {
+            return OK;
         }
+        unsafe { u_getbot(buf) };
     }
     // SAFETY: a live buffer and window, and a newest header to record
     // against — either the one just started or the one being extended.
@@ -403,15 +396,15 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
         b.b_u_seq_last = b.b_u_seq_last.max(0) + 1;
         // SAFETY: a fresh allocation, written before anything reads it, and
         // handed straight to the store that owns it from here on.
+        let uhp: *mut u_header_T = unsafe { xmalloc(size_of::<u_header_T>()) }.cast();
         unsafe {
-            let uhp: *mut u_header_T = xmalloc(size_of::<u_header_T>()).cast();
             uhp.write(u_header_T {
                 uh_seq: b.b_u_seq_last,
                 ..Default::default()
-            });
-            let link = header_adopt(buf, uhp);
-            Header::new(uhp).map(|uh| (uh, link))
-        }
+            })
+        };
+        let link = unsafe { header_adopt(buf, uhp) };
+        unsafe { Header::new(uhp) }.map(|uh| (uh, link))
     } else {
         None
     };
@@ -424,20 +417,18 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     }
     // SAFETY: a live buffer, and every header freed here is one the tree
     // still holds; `old_curhead` is cleared for us if it goes.
-    unsafe {
-        while OptInt::from(b.b_u_numhead) > get_undolevel(buf) {
-            let Some(oldest) = b.header(b.b_u_oldhead) else {
-                break;
-            };
-            if b.b_u_oldhead == old_curhead {
-                u_freebranch(buf, oldest.raw(), &raw mut old_curhead);
-            } else if oldest.uh_alt_next.is_none() {
-                u_freeheader(buf, oldest.raw(), &raw mut old_curhead);
-            } else {
-                // The far end of the oldest header's alternate chain.
-                let far = header_chain(buf, b.b_u_oldhead, |uh| uh.uh_alt_next).last();
-                u_freebranch(buf, far.unwrap_or(oldest).raw(), &raw mut old_curhead);
-            }
+    while OptInt::from(b.b_u_numhead) > unsafe { get_undolevel(buf) } {
+        let Some(oldest) = b.header(b.b_u_oldhead) else {
+            break;
+        };
+        if b.b_u_oldhead == old_curhead {
+            unsafe { u_freebranch(buf, oldest.raw(), &raw mut old_curhead) };
+        } else if oldest.uh_alt_next.is_none() {
+            unsafe { u_freeheader(buf, oldest.raw(), &raw mut old_curhead) };
+        } else {
+            // The far end of the oldest header's alternate chain.
+            let far = unsafe { header_chain(buf, b.b_u_oldhead, |uh| uh.uh_alt_next) }.last();
+            unsafe { u_freebranch(buf, far.unwrap_or(oldest).raw(), &raw mut old_curhead) };
         }
     }
 
@@ -471,16 +462,14 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     }
     b.b_u_seq_cur = uhp.uh_seq;
     // SAFETY: the C clock, and a live current window.
-    unsafe {
-        uhp.uh_time = time(ptr::null_mut());
-        uhp.uh_cursor = (*curwin.get()).w_cursor;
-        uhp.uh_cursor_vcol = if virtual_active(curwin.get()) && (*curwin.get()).w_cursor.coladd > 0
-        {
-            getviscol()
-        } else {
-            -1
-        };
-    }
+    uhp.uh_time = unsafe { time(ptr::null_mut()) };
+    uhp.uh_cursor = cur_win().w_cursor;
+    uhp.uh_cursor_vcol = if unsafe { virtual_active(curwin.get()) } && cur_win().w_cursor.coladd > 0
+    {
+        unsafe { getviscol() }
+    } else {
+        -1
+    };
     b.b_u_time_cur = uhp.uh_time + 1;
     uhp.uh_flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }
         | if b.b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -518,45 +507,43 @@ unsafe fn extend_last_entry(mut b: Buf, top: linenr_T, bot: linenr_T, newbot: li
     let mut prev_uep: *mut u_entry_T = ptr::null_mut();
     // SAFETY: every entry here belongs to the newest header's list, which
     // this walks one node at a time and does not free.
-    unsafe {
-        for i in 0..10 {
-            if uep.is_null() {
-                return false;
-            }
-            // The entry has to still describe the buffer as it stands.
-            let stale = if newhead.uh_getbot_entry == uep {
-                (*uep).ue_lcount != b.line_count()
-            } else {
-                let below = if (*uep).ue_bot == 0 {
-                    b.line_count() + 1
-                } else {
-                    (*uep).ue_bot
-                };
-                (*uep).ue_top + (*uep).ue_size + 1 != below
-            };
-            // ... and the line must not already be inside a multi-line entry.
-            let covered = (*uep).ue_size > 1
-                && top >= (*uep).ue_top
-                && top + 2 <= (*uep).ue_top + (*uep).ue_size + 1;
-            if stale || covered {
-                return false;
-            }
-            if (*uep).ue_size == 1 && (*uep).ue_top == top {
-                if i > 0 {
-                    // Move it to the front of the list, so the next change to
-                    // the same line finds it first.
-                    u_getbot(b.raw());
-                    b.b_u_synced = false;
-                    (*prev_uep).ue_next = (*uep).ue_next;
-                    (*uep).ue_next = newhead.uh_entry;
-                    newhead.uh_entry = uep;
-                }
-                set_entry_bottom(b, &mut newhead, uep, bot, newbot);
-                return true;
-            }
-            prev_uep = uep;
-            uep = (*uep).ue_next;
+    for i in 0..10 {
+        if uep.is_null() {
+            return false;
         }
+        // The entry has to still describe the buffer as it stands.
+        let stale = if newhead.uh_getbot_entry == uep {
+            unsafe { (*uep).ue_lcount != b.line_count() }
+        } else {
+            let below = if unsafe { (*uep).ue_bot } == 0 {
+                b.line_count() + 1
+            } else {
+                unsafe { (*uep).ue_bot }
+            };
+            (unsafe { (*uep).ue_top }) + unsafe { (*uep).ue_size } + 1 != below
+        };
+        // ... and the line must not already be inside a multi-line entry.
+        let covered = unsafe { (*uep).ue_size } > 1
+            && top >= unsafe { (*uep).ue_top }
+            && top + 2 <= unsafe { (*uep).ue_top } + unsafe { (*uep).ue_size } + 1;
+        if stale || covered {
+            return false;
+        }
+        if unsafe { (*uep).ue_size } == 1 && unsafe { (*uep).ue_top } == top {
+            if i > 0 {
+                // Move it to the front of the list, so the next change to
+                // the same line finds it first.
+                unsafe { u_getbot(b.raw()) };
+                b.b_u_synced = false;
+                unsafe { (*prev_uep).ue_next = (*uep).ue_next };
+                unsafe { (*uep).ue_next = newhead.uh_entry };
+                newhead.uh_entry = uep;
+            }
+            unsafe { set_entry_bottom(b, &mut newhead, uep, bot, newbot) };
+            return true;
+        }
+        prev_uep = uep;
+        uep = unsafe { (*uep).ue_next };
     }
     false
 }
@@ -576,17 +563,15 @@ unsafe fn set_entry_bottom(
     newbot: linenr_T,
 ) {
     // SAFETY: a live entry, by the contract above.
-    unsafe {
-        if newbot != 0 {
-            (*uep).ue_bot = newbot;
-        } else if bot > b.line_count() {
-            // The change reaches the end of the buffer, and `ue_bot` is the
-            // sentinel for that rather than a line number.
-            (*uep).ue_bot = 0;
-        } else {
-            (*uep).ue_lcount = b.line_count();
-            newhead.uh_getbot_entry = uep;
-        }
+    if newbot != 0 {
+        unsafe { (*uep).ue_bot = newbot };
+    } else if bot > b.line_count() {
+        // The change reaches the end of the buffer, and `ue_bot` is the
+        // sentinel for that rather than a line number.
+        unsafe { (*uep).ue_bot = 0 };
+    } else {
+        unsafe { (*uep).ue_lcount = b.line_count() };
+        newhead.uh_getbot_entry = uep;
     }
 }
 
@@ -619,23 +604,22 @@ unsafe fn record_entry(
         uep
     };
     // SAFETY: the entry just built, and its own array.
-    unsafe {
-        set_entry_bottom(b, &mut newhead, uep, bot, newbot);
-        if size > 0 {
-            let array: *mut *mut c_char = xmalloc(size_of::<*mut c_char>() * size as size_t).cast();
-            (*uep).ue_array = array;
-            for i in 0..size {
-                fast_breakcheck();
-                if got_int.get() {
-                    // Only the lines already copied are there to free.
-                    u_freeentry(uep, i);
-                    return FAIL;
-                }
-                *array.add(i as size_t) = u_save_line_buf(b.raw(), top + 1 + i);
+    unsafe { set_entry_bottom(b, &mut newhead, uep, bot, newbot) };
+    if size > 0 {
+        let array: *mut *mut c_char =
+            unsafe { xmalloc(size_of::<*mut c_char>() * size as size_t) }.cast();
+        unsafe { (*uep).ue_array = array };
+        for i in 0..size {
+            fast_breakcheck();
+            if got_int.get() {
+                // Only the lines already copied are there to free.
+                unsafe { u_freeentry(uep, i) };
+                return FAIL;
             }
+            unsafe { *array.add(i as size_t) = u_save_line_buf(b.raw(), top + 1 + i) };
         }
-        (*uep).ue_next = newhead.uh_entry;
     }
+    unsafe { (*uep).ue_next = newhead.uh_entry };
     newhead.uh_entry = uep;
     if reload {
         newhead.uh_flags |= UH_RELOAD;
@@ -654,10 +638,10 @@ unsafe fn record_entry(
 pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
     // SAFETY: `buflen` writable bytes and NUL-terminated format literals, by
     // the contract above.
-    unsafe {
-        let age = time(ptr::null_mut()) - tt;
-        if age < 100 {
-            let seconds = int64_t::from(age);
+    let age = unsafe { time(ptr::null_mut()) } - tt;
+    if age < 100 {
+        let seconds = int64_t::from(age);
+        unsafe {
             vim_snprintf(
                 buf,
                 buflen,
@@ -667,19 +651,19 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
                     c_ulong::from(seconds as uint32_t),
                 ),
                 seconds,
-            );
-            return;
-        }
-        let mut when: tm = tm_zeroed();
-        os_localtime_r(tt, &mut when);
-        let format = if age < 60 * 60 * 12 {
-            c"%H:%M:%S".as_ptr()
-        } else {
-            c"%Y/%m/%d %H:%M:%S".as_ptr()
+            )
         };
-        if strftime(buf, buflen, format, &raw mut when) == 0 {
-            *buf = NUL as c_char;
-        }
+        return;
+    }
+    let mut when: tm = tm_zeroed();
+    os_localtime_r(tt, &mut when);
+    let format = if age < 60 * 60 * 12 {
+        c"%H:%M:%S".as_ptr()
+    } else {
+        c"%Y/%m/%d %H:%M:%S".as_ptr()
+    };
+    if unsafe { strftime(buf, buflen, format, &raw mut when) } == 0 {
+        unsafe { *buf = NUL as c_char };
     }
 }
 
@@ -723,8 +707,8 @@ pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
         unsafe {
             emsg(gettext(
                 c"E790: undojoin is not allowed after undo".as_ptr(),
-            ));
-        }
+            ))
+        };
         return;
     }
     // SAFETY: a live current buffer.
@@ -742,11 +726,9 @@ pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
 /// `buf` points at a live buffer.
 pub unsafe fn u_unchanged(buf: *mut buf_T) {
     // SAFETY: a live buffer, by the contract above.
-    unsafe {
-        let mut b = Buf::new(buf);
-        u_unch_branch(buf, b.b_u_oldhead);
-        b.b_did_warn = false;
-    }
+    let mut b = unsafe { Buf::new(buf) };
+    unsafe { u_unch_branch(buf, b.b_u_oldhead) };
+    b.b_did_warn = false;
 }
 
 /// Moves the newest header's cursor to the first line that actually differs
@@ -763,28 +745,28 @@ pub unsafe fn u_find_first_changed() {
     };
     let uep: *mut u_entry_T = uhp.uh_entry;
     // SAFETY: the newest header's own entry list, and its saved lines.
-    unsafe {
-        if (*uep).ue_top != 0 || (*uep).ue_bot != 0 {
-            // Not a whole-buffer entry: there is nothing to line up against.
-            return;
-        }
-        let mut lnum: linenr_T = 1;
-        while lnum < b.line_count() && lnum <= (*uep).ue_size {
-            if strcmp(
+    if unsafe { (*uep).ue_top } != 0 || unsafe { (*uep).ue_bot } != 0 {
+        // Not a whole-buffer entry: there is nothing to line up against.
+        return;
+    }
+    let mut lnum: linenr_T = 1;
+    while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
+        if unsafe {
+            strcmp(
                 ml_get_buf(b.raw(), lnum),
                 *(*uep).ue_array.offset((lnum - 1) as isize),
-            ) != 0
-            {
-                clearpos(&mut uhp.uh_cursor);
-                uhp.uh_cursor.lnum = lnum;
-                return;
-            }
-            lnum += 1;
-        }
-        if b.line_count() != (*uep).ue_size {
+            )
+        } != 0
+        {
             clearpos(&mut uhp.uh_cursor);
             uhp.uh_cursor.lnum = lnum;
+            return;
         }
+        lnum += 1;
+    }
+    if b.line_count() != unsafe { (*uep).ue_size } {
+        clearpos(&mut uhp.uh_cursor);
+        uhp.uh_cursor.lnum = lnum;
     }
 }
 
@@ -815,12 +797,11 @@ pub unsafe fn u_update_save_nr(buf: *mut buf_T) {
 /// `buf` points at a live buffer.
 pub unsafe fn buf_is_changed(buf: *mut buf_T) -> bool {
     // SAFETY: a live buffer, by the contract above.
-    unsafe {
-        if bt_prompt(buf) {
-            return (*buf).b_modified_was_set;
-        }
-        !bt_dontwrite(buf) && ((*buf).b_changed != 0 || file_ff_differs(buf, true))
+    if unsafe { bt_prompt(buf) } {
+        return unsafe { (*buf).b_modified_was_set };
     }
+    !unsafe { bt_dontwrite(buf) }
+        && (unsafe { (*buf).b_changed } != 0 || unsafe { file_ff_differs(buf, true) })
 }
 
 /// Whether any buffer at all holds unsaved changes.
@@ -830,14 +811,12 @@ pub unsafe fn buf_is_changed(buf: *mut buf_T) -> bool {
 /// A live buffer list.
 pub unsafe fn any_buf_is_changed() -> bool {
     // SAFETY: the buffer list, walked to its NULL end.
-    unsafe {
-        let mut buf: *mut buf_T = firstbuf.get();
-        while !buf.is_null() {
-            if buf_is_changed(buf) {
-                return true;
-            }
-            buf = (*buf).b_next;
+    let mut buf: *mut buf_T = firstbuf.get();
+    while !buf.is_null() {
+        if unsafe { buf_is_changed(buf) } {
+            return true;
         }
+        buf = unsafe { (*buf).b_next };
     }
     false
 }
@@ -850,4 +829,16 @@ pub unsafe fn any_buf_is_changed() -> bool {
 pub unsafe fn curbuf_is_changed() -> bool {
     // SAFETY: a live current buffer, by the contract above.
     unsafe { buf_is_changed(curbuf.get()) }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
