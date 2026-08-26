@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
@@ -176,17 +177,15 @@ const IGNORED: [c_int; 22] = [
 /// The two lines the Visual selection spans, with any fold at either end
 /// opened out to its whole range.
 fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (linenr_T, linenr_T) {
-    // SAFETY: `curwin` is the current window.
-    unsafe {
-        let (mut top, mut bot) = if cursor_bot {
-            (sel.anchor.lnum, (*curwin.get()).w_cursor.lnum)
-        } else {
-            ((*curwin.get()).w_cursor.lnum, sel.anchor.lnum)
-        };
-        has_folding(curwin.get(), top, &raw mut top, ptr::null_mut());
-        has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
-        (top, bot)
-    }
+    // SAFETY (throughout): `curwin` is the current window.
+    let (mut top, mut bot) = if cursor_bot {
+        (sel.anchor.lnum, cur_win().w_cursor.lnum)
+    } else {
+        (cur_win().w_cursor.lnum, sel.anchor.lnum)
+    };
+    unsafe { has_folding(curwin.get(), top, &raw mut top, ptr::null_mut()) };
+    unsafe { has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot) };
+    (top, bot)
 }
 
 /// The width of a blockwise selection, measured with 'showbreak' suppressed
@@ -197,21 +196,16 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     let mut anchor = sel.anchor;
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
-    unsafe {
-        let saved_sbr = p_sbr.get();
-        let saved_w_sbr = (*curwin.get()).w_onebuf_opt.wo_sbr;
-        p_sbr.set(empty_option());
-        (*curwin.get()).w_onebuf_opt.wo_sbr = empty_option();
-        getvcols(
-            curwin.get(),
-            &raw mut (*curwin.get()).w_cursor,
-            &raw mut anchor,
-            &raw mut leftcol,
-            &raw mut rightcol,
-        );
-        p_sbr.set(saved_sbr);
-        (*curwin.get()).w_onebuf_opt.wo_sbr = saved_w_sbr;
-    }
+    let saved_sbr = p_sbr.get();
+    let saved_w_sbr = cur_win().w_onebuf_opt.wo_sbr;
+    p_sbr.set(empty_option());
+    cur_win().w_onebuf_opt.wo_sbr = empty_option();
+    let win = cur_win();
+    let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
+    let (l, r) = (&raw mut leftcol, &raw mut rightcol);
+    unsafe { getvcols(win.raw(), cursor, other, l, r) };
+    p_sbr.set(saved_sbr);
+    cur_win().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
 }
 
@@ -226,24 +220,26 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
     let anchor = sel.anchor;
     // SAFETY: both pointers are into the current line, and the walk stops at
     // or before `e`.
-    unsafe {
-        let (mut s, e) = if cursor_bot {
-            (ml_get_pos(&raw const anchor), get_cursor_pos_ptr())
-        } else {
-            (get_cursor_pos_ptr(), ml_get_pos(&raw const anchor))
-        };
-        let exclusive = *p_sel.get() as c_int == 'e' as c_int;
-        while if exclusive { s < e } else { s <= e } {
-            let l = utfc_ptr2len(s);
-            if l == 0 {
-                bytes += 1;
-                chars += 1;
-                break;
-            }
-            bytes += l;
+    let (mut s, e) = if cursor_bot {
+        (unsafe { ml_get_pos(&raw const anchor) }, unsafe {
+            get_cursor_pos_ptr()
+        })
+    } else {
+        (unsafe { get_cursor_pos_ptr() }, unsafe {
+            ml_get_pos(&raw const anchor)
+        })
+    };
+    let exclusive = unsafe { *p_sel.get() } as c_int == 'e' as c_int;
+    while if exclusive { s < e } else { s <= e } {
+        let l = unsafe { utfc_ptr2len(s) };
+        if l == 0 {
+            bytes += 1;
             chars += 1;
-            s = s.offset(l as isize);
+            break;
         }
+        bytes += l;
+        chars += 1;
+        s = unsafe { s.offset(l as isize) };
     }
     (chars, bytes)
 }
@@ -251,12 +247,12 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
 /// Describe the Visual selection into the 'showcmd' buffer.
 fn show_visual_size(sel: VisualSelection) {
     // SAFETY: `curwin` is the current window.
-    let cursor_bot = unsafe { lt(sel.anchor, (*curwin.get()).w_cursor) };
+    let cursor_bot = lt(sel.anchor, cur_win().w_cursor);
     let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
     // SAFETY: `curwin` is the current window.
-    let same_line = unsafe { sel.anchor.lnum == (*curwin.get()).w_cursor.lnum };
+    let same_line = sel.anchor.lnum == cur_win().w_cursor.lnum;
     let text = if sel.mode.is_block() {
         format!("{lines}x{}", blockwise_width(sel))
     } else if sel.mode.is_line() || !same_line {
@@ -284,7 +280,7 @@ pub(crate) fn clear_showcmd() {
         return;
     }
     // SAFETY: reads the typeahead state.
-    if let Some(sel) = visual_selection().filter(|_| unsafe { !char_avail() }) {
+    if let Some(sel) = visual_selection().filter(|_| !unsafe { char_avail() }) {
         show_visual_size(sel);
     } else {
         showcmd_buf.set(ShowCmd::new());
@@ -318,20 +314,19 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     // SAFETY: `transchar` answers a NUL-terminated rendering; the multibyte
     // branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`, and both
     // outlive the borrow.
-    let extra = unsafe {
-        if c <= 0x7f || !vim_isprintc(c) {
-            display = transchar(c);
-            // A space is shown as its byte value, so it is not lost in the
-            // padding the area is drawn with.
-            if display[0] as c_int == ' ' as c_int {
-                strcpy(display.as_mut_ptr(), c"<20>".as_ptr().cast_mut());
-            }
-            CStr::from_ptr(display.as_ptr())
-        } else {
-            let n = utf_char2bytes(c, mbyte_buf.as_mut_ptr());
-            mbyte_buf[n as usize] = NUL as c_char;
-            CStr::from_ptr(mbyte_buf.as_ptr())
+    // SAFETY: `c` is a plain character value.
+    let extra = if c <= 0x7f || !unsafe { vim_isprintc(c) } {
+        display = unsafe { transchar(c) };
+        // A space is shown as its byte value, so it is not lost in the
+        // padding the area is drawn with.
+        if display[0] as c_int == ' ' as c_int {
+            unsafe { strcpy(display.as_mut_ptr(), c"<20>".as_ptr().cast_mut()) };
         }
+        unsafe { CStr::from_ptr(display.as_ptr()) }
+    } else {
+        let n = unsafe { utf_char2bytes(c, mbyte_buf.as_mut_ptr()) };
+        mbyte_buf[n as usize] = NUL as c_char;
+        unsafe { CStr::from_ptr(mbyte_buf.as_ptr()) }
     };
 
     let mut sc = showcmd_buf.get();
@@ -362,7 +357,7 @@ pub(crate) fn del_from_showcmd(len: c_int) {
     sc.truncate(sc.len.saturating_sub(len as usize));
     showcmd_buf.set(sc);
     // SAFETY: reads the typeahead state.
-    if unsafe { !char_avail() } {
+    if !unsafe { char_avail() } {
         display_showcmd();
     }
 }
@@ -393,13 +388,11 @@ pub(crate) fn display_showcmd() {
     let loc = unsafe { *p_sloc.get() as c_int };
     if loc == 's' as c_int {
         // SAFETY: `curwin` is the current window.
-        unsafe {
-            if clear {
-                (*curwin.get()).w_redr_status = true;
-            } else {
-                win_redr_status(curwin.get());
-                setcursor();
-            }
+        if clear {
+            cur_win().w_redr_status = true;
+        } else {
+            unsafe { win_redr_status(curwin.get()) };
+            unsafe { setcursor() };
         }
         return;
     }
@@ -408,10 +401,8 @@ pub(crate) fn display_showcmd() {
             redraw_tabline.set(true);
         } else {
             // SAFETY: redraws the tab line and puts the cursor back.
-            unsafe {
-                draw_tabline();
-                setcursor();
-            }
+            unsafe { draw_tabline() };
+            unsafe { setcursor() };
         }
         return;
     }
@@ -448,22 +439,22 @@ fn show_through_ui(clear: bool) {
     if !clear {
         // SAFETY: `chunk` has capacity 3 and `content` capacity 1, and the
         // three writes below are the only ones.
-        unsafe {
-            *chunk.items.add(0) = integer_object(0);
-            *chunk.items.add(1) = object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: cstr_as_string(text.as_ptr()),
-                },
-            };
-            *chunk.items.add(2) = integer_object(0);
-            chunk.size = 3;
-            *content.items.add(0) = object {
-                type_0: kObjectTypeArray,
-                data: object_data { array: chunk },
-            };
-            content.size = 1;
-        }
+        // SAFETY: `text` is NUL-terminated.
+        let string = unsafe { cstr_as_string(text.as_ptr()) };
+        let shown = object {
+            type_0: kObjectTypeString,
+            data: object_data { string },
+        };
+        unsafe { *chunk.items.add(0) = integer_object(0) };
+        unsafe { *chunk.items.add(1) = shown };
+        unsafe { *chunk.items.add(2) = integer_object(0) };
+        chunk.size = 3;
+        let line = object {
+            type_0: kObjectTypeArray,
+            data: object_data { array: chunk },
+        };
+        unsafe { *content.items.add(0) = line };
+        content.size = 1;
     }
     ui_call_msg_showcmd(content);
 }
@@ -487,23 +478,25 @@ fn draw_on_last_line(clear: bool) {
     let sc = showcmd_buf.get();
     // SAFETY: the message view is the message grid and `showcmd_row` is its
     // last row; `grid_line_puts` bounds itself to the line it was started on.
-    unsafe {
-        msg_grid_validate();
-        let showcmd_row = Rows.get() - 1;
-        grid_line_start(msg_grid_view(), showcmd_row);
-        let attr = *hl_attr_active.get().offset(HLF_MSG as isize);
-        let mut len = 0;
-        if !clear {
-            len = grid_line_puts(sc_col.get(), sc.as_cstr().as_ptr(), -1, attr);
-        }
-        // The padding is the same ten spaces every time; only the tail past
-        // what was written is drawn.
-        grid_line_puts(
-            sc_col.get() + len,
-            c"          ".as_ptr().cast_mut().offset(len as isize),
-            -1,
-            attr,
-        );
-        grid_line_flush();
+    unsafe { msg_grid_validate() };
+    let showcmd_row = Rows.get() - 1;
+    unsafe { grid_line_start(msg_grid_view(), showcmd_row) };
+    let attr = unsafe { *hl_attr_active.get().offset(HLF_MSG as isize) };
+    let mut len = 0;
+    if !clear {
+        len = unsafe { grid_line_puts(sc_col.get(), sc.as_cstr().as_ptr(), -1, attr) };
     }
+    // The padding is the same ten spaces every time; only the tail past
+    // what was written is drawn.
+    let pad = c"          ".as_ptr().cast_mut();
+    // SAFETY: `pad` is ten spaces and a terminator, and `len` is at most ten.
+    let tail = unsafe { pad.offset(len as isize) };
+    unsafe { grid_line_puts(sc_col.get() + len, tail, -1, attr) };
+    unsafe { grid_line_flush() };
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -21,16 +21,16 @@ use crate::change::{
 };
 use crate::charset::{getwhitecols, getwhitecols_curline, skipwhite, vim_str2nr};
 use crate::cursor::{
-    check_cursor, check_cursor_col, check_pos, coladvance, coladvance_force, dec_cursor,
-    gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr, getviscol,
-    getviscol2, getvpos, inc_cursor,
+    check_cursor, check_cursor_col, check_pos, coladvance_force, dec_cursor, gchar_cursor,
+    get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr, getviscol, getviscol2, getvpos,
+    inc_cursor,
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::{kCallbackNone, tv_clear, tv_dict_add_nr};
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
-use crate::fold::{delete_fold, fold_create, fold_open_cursor, has_folding, op_fold_range};
+use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_keys, append_to_redobuff_literally,
     append_to_redobuff_number, beep_flush, cancel_redo, reset_redobuff, stuff_readbuf,
@@ -52,15 +52,15 @@ use crate::main::{
     repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
     virtual_op,
 };
-use crate::mark::{mark_col_adjust, mark_mb_adjustpos};
+use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
     utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info,
     utfc_next, utfc_ptr2len,
 };
 use crate::memline::{
-    dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_len, ml_get_buf_mut, ml_get_len,
-    ml_get_pos, ml_get_pos_len, ml_replace, ml_replace_len,
+    dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_mut, ml_get_len, ml_get_pos,
+    ml_get_pos_len, ml_replace, ml_replace_len,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
 use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};
@@ -74,9 +74,7 @@ use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callb
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{__ctype_b_loc, gettext, memmove, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::plines::{
-    getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_str, win_charsize,
-};
+use crate::plines::{getvcols, init_charsize_arg, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
@@ -97,7 +95,10 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
+use crate::winlayer::Pos;
 use ::libc::{abort, memset, strcpy, strlen};
+use core::mem::offset_of;
+use core::ops::{Deref, DerefMut};
 
 // The carve of the transpiled module; see each child's docs.
 mod addsub;
@@ -181,6 +182,71 @@ pub struct redo_VIsual_T {
     pub rv_count: ::core::ffi::c_int,
     /// Extra argument; `g CTRL-A` is the only user.
     pub rv_arg: ::core::ffi::c_int,
+}
+
+/// An `oparg_T` the caller has promised is live: the region an operator is
+/// about to work on.
+///
+/// [`Win`](crate::winlayer::Win)'s shape, for the one struct every operator in
+/// this module is handed. Field access goes through `Deref`, so the borrow
+/// lasts no longer than the access that asked for it -- which matters here,
+/// because an operator may hand control to Insert mode, to 'operatorfunc' or
+/// to an external filter, and the editor reaches the same `oparg_T` again
+/// while it is away. [`Op::raw`] hands the pointer back to the callees that
+/// still take one.
+#[derive(Clone, Copy)]
+pub(crate) struct Op(*mut oparg_T);
+
+impl Op {
+    /// # Safety
+    /// `oap` must stay a live `oparg_T` for as long as the value is used.
+    #[inline(always)]
+    pub(crate) const unsafe fn new(oap: *mut oparg_T) -> Self {
+        Self(oap)
+    }
+
+    #[inline(always)]
+    pub(crate) fn raw(self) -> *mut oparg_T {
+        self.0
+    }
+
+    /// The region's first position, which lives inside the `oparg_T`.
+    ///
+    /// [`Win::cursor`](crate::winlayer::Win::cursor)'s trick: a field's
+    /// address is the object's plus a constant, so saying where it is needs
+    /// no dereference.
+    #[inline(always)]
+    pub(crate) fn start(self) -> Pos {
+        // SAFETY: the constructor's promise -- a live `oparg_T`, so the
+        // address of its `start` is a live position.
+        unsafe { Pos::new(self.0.wrapping_byte_add(offset_of!(oparg_T, start)).cast()) }
+    }
+
+    /// The region's last position. [`Op::start`].
+    #[inline(always)]
+    pub(crate) fn end(self) -> Pos {
+        // SAFETY: as [`Op::start`].
+        unsafe { Pos::new(self.0.wrapping_byte_add(offset_of!(oparg_T, end)).cast()) }
+    }
+}
+
+impl Deref for Op {
+    type Target = oparg_T;
+
+    #[inline(always)]
+    fn deref(&self) -> &oparg_T {
+        // SAFETY: the constructor's promise -- a live `oparg_T`.
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for Op {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut oparg_T {
+        // SAFETY: the constructor's promise -- a live `oparg_T`. The borrow
+        // lasts only as long as the field access that asked for it.
+        unsafe { &mut *self.0 }
+    }
 }
 
 /// Whether the operator in progress may work past the end of a line.

@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ops::Op;
+use crate::winlayer::{Buf, Win};
 use core::ptr;
 
 use crate::cursor::{
@@ -30,8 +32,8 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};
 use crate::mouse::setmouse;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, TAB, VIsual_mode_orig, clearopbeep, may_clear_cmdline, nv_down, nv_g_cmd,
-    nv_operator, nv_right,
+    CA_NO_ADJ_OP_END, CmdArg, TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down,
+    nv_g_cmd, nv_operator, nv_right,
 };
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
@@ -52,7 +54,7 @@ use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 /// Whether 'selection' is "exclusive": the character under the far end of the
 /// selection is not part of it.
 #[inline(always)]
-fn selection_exclusive() -> bool {
+pub(crate) fn sel_exclusive() -> bool {
     // SAFETY: 'selection' is a non-empty C string option.
     unsafe { *p_sel.get() as c_int == 'e' as c_int }
 }
@@ -249,21 +251,19 @@ pub(crate) fn end_visual_mode() {
     VIsual_select_exclu_adj.set(false);
     set_visual_active(false);
     // SAFETY: all of this is the current buffer's and window's own state.
-    unsafe {
-        setmouse();
-        mouse_dragging.set(0);
-        (*curbuf.get()).b_visual.vi_mode = visual_mode().raw();
-        (*curbuf.get()).b_visual.vi_start = visual_anchor();
-        (*curbuf.get()).b_visual.vi_end = (*curwin.get()).w_cursor;
-        (*curbuf.get()).b_visual.vi_curswant = (*curwin.get()).w_curswant;
-        (*curbuf.get()).b_visual_mode_eval = visual_mode().raw();
-        if !virtual_active(curwin.get()) {
-            (*curwin.get()).w_cursor.coladd = 0;
-        }
-        may_clear_cmdline();
-        adjust_cursor_eol();
-        may_trigger_modechanged();
+    setmouse();
+    mouse_dragging.set(0);
+    cur_buf().b_visual.vi_mode = visual_mode().raw();
+    cur_buf().b_visual.vi_start = visual_anchor();
+    cur_buf().b_visual.vi_end = cur_win().w_cursor;
+    cur_buf().b_visual.vi_curswant = cur_win().w_curswant;
+    cur_buf().b_visual_mode_eval = visual_mode().raw();
+    if !unsafe { virtual_active(curwin.get()) } {
+        cur_win().w_cursor.coladd = 0;
     }
+    may_clear_cmdline();
+    unsafe { adjust_cursor_eol() };
+    unsafe { may_trigger_modechanged() };
 }
 
 /// Leave Visual mode and forget the selection, so `gv` will not bring it back.
@@ -291,7 +291,7 @@ pub(crate) fn reset_VIsual() {
 pub(crate) fn restore_visual_mode() {
     if VIsual_mode_orig.get() != VisualMode::NONE {
         // SAFETY: `curbuf` is the current buffer.
-        unsafe { (*curbuf.get()).b_visual.vi_mode = VIsual_mode_orig.get().raw() };
+        cur_buf().b_visual.vi_mode = VIsual_mode_orig.get().raw();
         VIsual_mode_orig.set(VisualMode::NONE);
     }
 }
@@ -307,6 +307,8 @@ pub(crate) unsafe fn get_visual_text(
     pp: *mut *mut c_char,
     lenp: *mut size_t,
 ) -> bool {
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
     if !visual_mode().is_line() {
         // SAFETY: adjusts the current window's cursor or `VIsual`.
         unsafe { unadjust_for_sel() };
@@ -314,39 +316,37 @@ pub(crate) unsafe fn get_visual_text(
     let anchor = visual_anchor();
     // SAFETY: `cap` is null or the caller's live command argument, and `pp`
     // and `lenp` are its out-parameters.
-    unsafe {
-        if anchor.lnum != (*curwin.get()).w_cursor.lnum {
-            if !cap.is_null() {
-                clearopbeep((*cap).oap);
-            }
-            return false;
+    if anchor.lnum != cur_win().w_cursor.lnum {
+        if !cap.is_null() {
+            clear_op_beep(ca.op());
         }
-        if visual_mode().is_line() {
-            *pp = get_cursor_line_ptr();
-            *lenp = get_cursor_line_len() as size_t;
+        return false;
+    }
+    if visual_mode().is_line() {
+        unsafe { *pp = get_cursor_line_ptr() };
+        unsafe { *lenp = get_cursor_line_len() as size_t };
+    } else {
+        // The earlier of the two ends is the start; the length is the
+        // column difference, inclusive.
+        if lt(cur_win().w_cursor, anchor) {
+            unsafe { *pp = ml_get_pos(&raw mut (*curwin.get()).w_cursor) };
+            unsafe { *lenp = (anchor.col - cur_win().w_cursor.col + 1) as size_t };
         } else {
-            // The earlier of the two ends is the start; the length is the
-            // column difference, inclusive.
-            if lt((*curwin.get()).w_cursor, anchor) {
-                *pp = ml_get_pos(&raw mut (*curwin.get()).w_cursor);
-                *lenp = (anchor.col - (*curwin.get()).w_cursor.col + 1) as size_t;
-            } else {
-                *pp = ml_get_pos(&raw const anchor);
-                *lenp = ((*curwin.get()).w_cursor.col - anchor.col + 1) as size_t;
-            }
-            if **pp as c_int == NUL {
-                *lenp = 0;
-            }
-            // The last character may be multibyte; take the rest of it.
-            //
-            // `utfc_ptr2len` answers 0 for a NUL, and upstream adds `0 - 1`
-            // as a `size_t` -- which wraps and so takes one *off* the length.
-            // Reachable: a blockwise selection whose last line is short ends
-            // on the terminator. Kept wrapping, deliberately.
-            if *lenp > 0 {
-                let tail = utfc_ptr2len((*pp).add(*lenp - 1));
-                *lenp = (*lenp).wrapping_add((tail - 1) as size_t);
-            }
+            unsafe { *pp = ml_get_pos(&raw const anchor) };
+            unsafe { *lenp = (cur_win().w_cursor.col - anchor.col + 1) as size_t };
+        }
+        if unsafe { **pp } as c_int == NUL {
+            unsafe { *lenp = 0 };
+        }
+        // The last character may be multibyte; take the rest of it.
+        //
+        // `utfc_ptr2len` answers 0 for a NUL, and upstream adds `0 - 1`
+        // as a `size_t` -- which wraps and so takes one *off* the length.
+        // Reachable: a blockwise selection whose last line is short ends
+        // on the terminator. Kept wrapping, deliberately.
+        if unsafe { *lenp } > 0 {
+            let tail = unsafe { utfc_ptr2len((*pp).add(*lenp - 1)) };
+            unsafe { *lenp = (*lenp).wrapping_add((tail - 1) as size_t) };
         }
     }
     reset_VIsual_and_resel();
@@ -364,51 +364,46 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     // first, having set the anchor itself.
     let mut anchor = visual_anchor();
     // SAFETY: `curwin` is the current window and `VIsual` a live position.
-    unsafe {
-        if cmdchar != 'O' as c_int || !visual_mode().is_block() {
-            let old_cursor = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = visual_anchor();
-            set_visual_anchor(old_cursor);
-            (*curwin.get()).w_set_curswant = true;
-            return;
-        }
+    if cmdchar != 'O' as c_int || !visual_mode().is_block() {
+        let old_cursor = cur_win().w_cursor;
+        cur_win().w_cursor = visual_anchor();
+        set_visual_anchor(old_cursor);
+        cur_win().w_set_curswant = true;
+        return;
+    }
 
-        let (mut left, mut right): (colnr_T, colnr_T) = (0, 0);
-        let mut old_cursor = (*curwin.get()).w_cursor;
-        getvcols(
-            curwin.get(),
-            &raw mut old_cursor,
-            &raw mut anchor,
-            &raw mut left,
-            &raw mut right,
-        );
-        (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
-        coladvance(curwin.get(), left);
-        set_visual_anchor((*curwin.get()).w_cursor);
-        (*curwin.get()).w_cursor.lnum = old_cursor.lnum;
-        (*curwin.get()).w_curswant = right;
-        // An exclusive selection ends one past the last column it covers.
-        if old_cursor.lnum >= visual_anchor().lnum && selection_exclusive() {
-            (*curwin.get()).w_curswant += 1;
-        }
-        coladvance(curwin.get(), (*curwin.get()).w_curswant);
+    let (mut left, mut right): (colnr_T, colnr_T) = (0, 0);
+    let mut old_cursor = cur_win().w_cursor;
+    let win = cur_win();
+    let (from, to) = (&raw mut old_cursor, &raw mut anchor);
+    let (l, r) = (&raw mut left, &raw mut right);
+    unsafe { getvcols(win.raw(), from, to, l, r) };
+    cur_win().w_cursor.lnum = visual_anchor().lnum;
+    unsafe { coladvance(curwin.get(), left) };
+    set_visual_anchor(cur_win().w_cursor);
+    cur_win().w_cursor.lnum = old_cursor.lnum;
+    cur_win().w_curswant = right;
+    // An exclusive selection ends one past the last column it covers.
+    if old_cursor.lnum >= visual_anchor().lnum && sel_exclusive() {
+        cur_win().w_curswant += 1;
+    }
+    unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
 
-        // Nothing moved: the block's two columns are the same width, so swap
-        // them the other way round instead.
-        if (*curwin.get()).w_cursor.col == old_cursor.col
-            && (!virtual_active(curwin.get())
-                || (*curwin.get()).w_cursor.coladd == old_cursor.coladd)
-        {
-            (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
-            if old_cursor.lnum <= visual_anchor().lnum && selection_exclusive() {
-                right += 1;
-            }
-            coladvance(curwin.get(), right);
-            set_visual_anchor((*curwin.get()).w_cursor);
-            (*curwin.get()).w_cursor.lnum = old_cursor.lnum;
-            coladvance(curwin.get(), left);
-            (*curwin.get()).w_curswant = left;
+    // Nothing moved: the block's two columns are the same width, so swap
+    // them the other way round instead.
+    if cur_win().w_cursor.col == old_cursor.col
+        && (!unsafe { virtual_active(curwin.get()) }
+            || cur_win().w_cursor.coladd == old_cursor.coladd)
+    {
+        cur_win().w_cursor.lnum = visual_anchor().lnum;
+        if old_cursor.lnum <= visual_anchor().lnum && sel_exclusive() {
+            right += 1;
         }
+        unsafe { coladvance(curwin.get(), right) };
+        set_visual_anchor(cur_win().w_cursor);
+        cur_win().w_cursor.lnum = old_cursor.lnum;
+        unsafe { coladvance(curwin.get(), left) };
+        cur_win().w_curswant = left;
     }
 }
 
@@ -433,24 +428,23 @@ const VISUAL_OPS: [(u8, u8); 8] = [
 /// An uppercase one forces the selection linewise -- except in blockwise
 /// mode, where `C` and `D` instead extend every line to its end.
 pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        if (*cap).cmdchar >= 'A' as c_int && (*cap).cmdchar <= 'Z' as c_int {
-            if !visual_mode().is_block() {
-                VIsual_mode_orig.set(visual_mode());
-                set_visual_mode(VisualMode::LINE);
-            } else if (*cap).cmdchar == 'C' as c_int || (*cap).cmdchar == 'D' as c_int {
-                (*curwin.get()).w_curswant = MAXCOL as colnr_T;
-            }
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    if ca.cmdchar >= 'A' as c_int && ca.cmdchar <= 'Z' as c_int {
+        if !visual_mode().is_block() {
+            VIsual_mode_orig.set(visual_mode());
+            set_visual_mode(VisualMode::LINE);
+        } else if ca.cmdchar == 'C' as c_int || ca.cmdchar == 'D' as c_int {
+            cur_win().w_curswant = MAXCOL as colnr_T;
         }
-        let typed = (*cap).cmdchar as u8;
-        (*cap).cmdchar = VISUAL_OPS
-            .iter()
-            .find(|(from, _)| *from == typed)
-            .expect("v_visop is only reached for a character in VISUAL_OPS")
-            .1 as c_int;
-        nv_operator(cap);
     }
+    let typed = ca.cmdchar as u8;
+    ca.cmdchar = VISUAL_OPS
+        .iter()
+        .find(|(from, _)| *from == typed)
+        .expect("v_visop is only reached for a character in VISUAL_OPS")
+        .1 as c_int;
+    unsafe { nv_operator(cap) };
 }
 
 /// Reselect the previous selection, `count` times as large.
@@ -459,75 +453,74 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
 /// last". The line count and the column count multiply separately, which is
 /// why the charwise and blockwise cases are spelled out.
 unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        set_visual_anchor((*curwin.get()).w_cursor);
-        set_visual_active(true);
-        VIsual_reselect.set(1);
-        if (*cap).arg == 0 {
-            may_start_select('c' as c_int);
-        }
-        setmouse();
-        if p_smd.get() != 0 && msg_silent.get() == 0 {
-            redraw_cmdline.set(true);
-        }
-        // The count multiplies the size of the remembered selection, and it
-        // is user input: `999999999v` after a three-column selection
-        // overflows. Upstream does this arithmetic in C, where it wraps, and
-        // `check_cursor`/`coladvance` clamp whatever comes out -- so wrapping
-        // is both what the C produces and safe. The transpile used Rust's
-        // checked operators here and aborted the debug build instead.
-        if !resel_VIsual_mode.get().is_char() || resel_VIsual_line_count.get() > 1 {
-            (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum.wrapping_add(
-                resel_VIsual_line_count
-                    .get()
-                    .wrapping_mul((*cap).count0 as linenr_T)
-                    .wrapping_sub(1),
-            );
-            check_cursor(curwin.get());
-        }
-        set_visual_mode(resel_VIsual_mode.get());
-
-        if visual_mode().is_char() {
-            if resel_VIsual_line_count.get() <= 1 {
-                update_curswant_force();
-                (*curwin.get()).w_curswant = (*curwin.get())
-                    .w_curswant
-                    .wrapping_add(resel_VIsual_vcol.get().wrapping_mul((*cap).count0) as colnr_T);
-                if !selection_exclusive() {
-                    (*curwin.get()).w_curswant -= 1;
-                }
-            } else {
-                (*curwin.get()).w_curswant = resel_VIsual_vcol.get();
-            }
-            coladvance(curwin.get(), (*curwin.get()).w_curswant);
-        }
-
-        if resel_VIsual_vcol.get() == MAXCOL as c_int {
-            (*curwin.get()).w_curswant = MAXCOL as colnr_T;
-            coladvance(curwin.get(), MAXCOL as c_int);
-        } else if visual_mode().is_block() {
-            // The width is measured from the *start* line, so the cursor goes
-            // there while 'curswant' is recomputed and comes back after.
-            let lnum = (*curwin.get()).w_cursor.lnum;
-            (*curwin.get()).w_cursor.lnum = visual_anchor().lnum;
-            update_curswant_force();
-            (*curwin.get()).w_curswant = (*curwin.get()).w_curswant.wrapping_add(
-                resel_VIsual_vcol
-                    .get()
-                    .wrapping_mul((*cap).count0)
-                    .wrapping_sub(1) as colnr_T,
-            );
-            (*curwin.get()).w_cursor.lnum = lnum;
-            if selection_exclusive() {
-                (*curwin.get()).w_curswant += 1;
-            }
-            coladvance(curwin.get(), (*curwin.get()).w_curswant);
-        } else {
-            (*curwin.get()).w_set_curswant = true;
-        }
-        redraw_curbuf_later(UPD_INVERTED);
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    set_visual_anchor(cur_win().w_cursor);
+    set_visual_active(true);
+    VIsual_reselect.set(1);
+    if ca.arg == 0 {
+        may_start_select('c' as c_int);
     }
+    setmouse();
+    if p_smd.get() != 0 && msg_silent.get() == 0 {
+        redraw_cmdline.set(true);
+    }
+    // The count multiplies the size of the remembered selection, and it
+    // is user input: `999999999v` after a three-column selection
+    // overflows. Upstream does this arithmetic in C, where it wraps, and
+    // `check_cursor`/`coladvance` clamp whatever comes out -- so wrapping
+    // is both what the C produces and safe. The transpile used Rust's
+    // checked operators here and aborted the debug build instead.
+    if !resel_VIsual_mode.get().is_char() || resel_VIsual_line_count.get() > 1 {
+        cur_win().w_cursor.lnum = cur_win().w_cursor.lnum.wrapping_add(
+            resel_VIsual_line_count
+                .get()
+                .wrapping_mul(ca.count0 as linenr_T)
+                .wrapping_sub(1),
+        );
+        unsafe { check_cursor(curwin.get()) };
+    }
+    set_visual_mode(resel_VIsual_mode.get());
+
+    if visual_mode().is_char() {
+        if resel_VIsual_line_count.get() <= 1 {
+            unsafe { update_curswant_force() };
+            let count0 = ca.count0;
+            let extra = resel_VIsual_vcol.get().wrapping_mul(count0) as colnr_T;
+            cur_win().w_curswant = cur_win().w_curswant.wrapping_add(extra);
+            if !sel_exclusive() {
+                cur_win().w_curswant -= 1;
+            }
+        } else {
+            cur_win().w_curswant = resel_VIsual_vcol.get();
+        }
+        unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
+    }
+
+    if resel_VIsual_vcol.get() == MAXCOL as c_int {
+        cur_win().w_curswant = MAXCOL as colnr_T;
+        unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
+    } else if visual_mode().is_block() {
+        // The width is measured from the *start* line, so the cursor goes
+        // there while 'curswant' is recomputed and comes back after.
+        let lnum = cur_win().w_cursor.lnum;
+        cur_win().w_cursor.lnum = visual_anchor().lnum;
+        unsafe { update_curswant_force() };
+        cur_win().w_curswant = cur_win().w_curswant.wrapping_add(
+            resel_VIsual_vcol
+                .get()
+                .wrapping_mul(ca.count0)
+                .wrapping_sub(1) as colnr_T,
+        );
+        cur_win().w_cursor.lnum = lnum;
+        if sel_exclusive() {
+            cur_win().w_curswant += 1;
+        }
+        unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
+    } else {
+        cur_win().w_set_curswant = true;
+    }
+    unsafe { redraw_curbuf_later(UPD_INVERTED) };
 }
 
 /// `v`, `V`, `CTRL-V` and their Select-mode twins.
@@ -535,56 +528,55 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
 /// Keeps the raw signature: this is an `nv_cmds` row's handler, so `nv_func_T`
 /// fixes it.
 pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        if (*cap).cmdchar == Ctrl_Q {
-            (*cap).cmdchar = Ctrl_V;
-        }
-        // After an operator these are not commands but a forced motion kind:
-        // `dv`, `dV`, `d CTRL-V`.
-        if (*(*cap).oap).op_type != OP_NOP {
-            (*(*cap).oap).motion_force = (*cap).cmdchar;
-            motion_force.set((*(*cap).oap).motion_force);
-            finish_op.set(false);
-            return;
-        }
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    if ca.cmdchar == Ctrl_Q {
+        ca.cmdchar = Ctrl_V;
+    }
+    // After an operator these are not commands but a forced motion kind:
+    // `dv`, `dV`, `d CTRL-V`.
+    if ca.op().op_type != OP_NOP {
+        ca.op().motion_force = ca.cmdchar;
+        motion_force.set(ca.op().motion_force);
+        finish_op.set(false);
+        return;
+    }
 
-        set_visual_select((*cap).arg != 0);
-        if visual_active() {
-            // The same key again leaves Visual mode; a different one switches
-            // to that kind of selection.
-            if visual_mode() == VisualMode::from_raw((*cap).cmdchar) {
-                end_visual_mode();
-            } else {
-                set_visual_mode(VisualMode::from_raw((*cap).cmdchar));
-                showmode();
-                may_trigger_modechanged();
-            }
-            redraw_curbuf_later(UPD_INVERTED);
-        } else if (*cap).count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
-            reselect_scaled(cap);
+    set_visual_select(ca.arg != 0);
+    if visual_active() {
+        // The same key again leaves Visual mode; a different one switches
+        // to that kind of selection.
+        if visual_mode() == VisualMode::from_raw(ca.cmdchar) {
+            end_visual_mode();
         } else {
-            if (*cap).arg == 0 {
-                may_start_select('c' as c_int);
-            }
-            n_start_visual_mode((*cap).cmdchar);
-            // An exclusive selection needs one more character to cover the
-            // same text, so the count is raised before it is spent.
-            if !visual_mode().is_line() && selection_exclusive() {
-                (*cap).count1 += 1;
-            } else {
-                VIsual_select_exclu_adj.set(false);
-            }
-            // A count means "select this many characters or lines".
-            if (*cap).count0 > 0 && {
-                (*cap).count1 -= 1;
-                (*cap).count1 > 0
-            } {
-                if visual_mode().is_char() || visual_mode().is_block() {
-                    nv_right(cap);
-                } else if visual_mode().is_line() {
-                    nv_down(cap);
-                }
+            set_visual_mode(VisualMode::from_raw(ca.cmdchar));
+            unsafe { showmode() };
+            unsafe { may_trigger_modechanged() };
+        }
+        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    } else if ca.count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
+        unsafe { reselect_scaled(cap) };
+    } else {
+        if ca.arg == 0 {
+            may_start_select('c' as c_int);
+        }
+        unsafe { n_start_visual_mode(ca.cmdchar) };
+        // An exclusive selection needs one more character to cover the
+        // same text, so the count is raised before it is spent.
+        if !visual_mode().is_line() && sel_exclusive() {
+            ca.count1 += 1;
+        } else {
+            VIsual_select_exclu_adj.set(false);
+        }
+        // A count means "select this many characters or lines".
+        if ca.count0 > 0 && {
+            ca.count1 -= 1;
+            ca.count1 > 0
+        } {
+            if visual_mode().is_char() || visual_mode().is_block() {
+                unsafe { nv_right(cap) };
+            } else if visual_mode().is_line() {
+                unsafe { nv_down(cap) };
             }
         }
     }
@@ -604,7 +596,7 @@ pub(crate) fn start_selection() {
 /// only counts as typed when nothing is being replayed.
 pub(crate) fn may_start_select(c: c_int) {
     // SAFETY: 'selectmode' is a C string option.
-    let by_selectmode = unsafe { !vim_strchr(p_slm.get(), c).is_null() };
+    let by_selectmode = !unsafe { vim_strchr(p_slm.get(), c) }.is_null();
     let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
 }
@@ -615,32 +607,30 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
     set_visual_active(true);
     VIsual_reselect.set(1);
     // SAFETY: `curwin` is the current window.
-    unsafe {
-        // A block selection starting inside a TAB starts at the column the
-        // cursor is displayed at, not at the TAB's first column.
-        if c == Ctrl_V
-            && get_ve_flags(curwin.get()) & kOptVeFlagBlock as c_int as c_uint != 0
-            && gchar_cursor() == TAB
-        {
-            validate_virtcol(curwin.get());
-            coladvance(curwin.get(), (*curwin.get()).w_virtcol);
-        }
-        set_visual_anchor((*curwin.get()).w_cursor);
-        fold_adjust_visual();
-        may_trigger_modechanged();
-        setmouse();
-        conceal_check_cursor_line();
-        if p_smd.get() != 0 && msg_silent.get() == 0 {
-            redraw_cmdline.set(true);
-        }
-        // Seed the "what was highlighted last time" pair so the first redraw
-        // has something to compare against.
-        if (*curwin.get()).w_redr_type < UPD_INVERTED {
-            (*curwin.get()).w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum;
-            (*curwin.get()).w_old_visual_lnum = (*curwin.get()).w_cursor.lnum;
-        }
-        redraw_curbuf_later(UPD_VALID);
+    // A block selection starting inside a TAB starts at the column the
+    // cursor is displayed at, not at the TAB's first column.
+    if c == Ctrl_V
+        && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagBlock as c_int as c_uint != 0
+        && unsafe { gchar_cursor() } == TAB
+    {
+        unsafe { validate_virtcol(curwin.get()) };
+        unsafe { coladvance(curwin.get(), cur_win().w_virtcol) };
     }
+    set_visual_anchor(cur_win().w_cursor);
+    unsafe { fold_adjust_visual() };
+    unsafe { may_trigger_modechanged() };
+    setmouse();
+    unsafe { conceal_check_cursor_line() };
+    if p_smd.get() != 0 && msg_silent.get() == 0 {
+        redraw_cmdline.set(true);
+    }
+    // Seed the "what was highlighted last time" pair so the first redraw
+    // has something to compare against.
+    if cur_win().w_redr_type < UPD_INVERTED {
+        cur_win().w_old_cursor_lnum = cur_win().w_cursor.lnum;
+        cur_win().w_old_visual_lnum = cur_win().w_cursor.lnum;
+    }
+    unsafe { redraw_curbuf_later(UPD_VALID) };
 }
 
 /// `gv`: select what was selected last.
@@ -648,72 +638,70 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 /// Doing it while a selection is up *swaps* the two, so `gv` twice comes back
 /// where it started.
 pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        let vi = &raw mut (*curbuf.get()).b_visual;
-        if (*vi).vi_start.lnum == 0
-            || (*vi).vi_start.lnum > (*curbuf.get()).b_ml.ml_line_count
-            || (*vi).vi_end.lnum == 0
-        {
-            beep_flush();
-            return;
-        }
-
-        let tpos;
-        if visual_active() {
-            let mode = visual_mode();
-            set_visual_mode(VisualMode::from_raw((*vi).vi_mode));
-            (*vi).vi_mode = mode.raw();
-            (*curbuf.get()).b_visual_mode_eval = mode.raw();
-            let curswant = (*curwin.get()).w_curswant;
-            (*curwin.get()).w_curswant = (*vi).vi_curswant;
-            (*vi).vi_curswant = curswant;
-            tpos = (*vi).vi_end;
-            (*vi).vi_end = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = (*vi).vi_start;
-            (*vi).vi_start = visual_anchor();
-        } else {
-            set_visual_mode(VisualMode::from_raw((*vi).vi_mode));
-            (*curwin.get()).w_curswant = (*vi).vi_curswant;
-            tpos = (*vi).vi_end;
-            (*curwin.get()).w_cursor = (*vi).vi_start;
-        }
-
-        set_visual_active(true);
-        VIsual_reselect.set(1);
-        // Both ends are checked against the buffer: it may have shrunk since.
-        check_cursor(curwin.get());
-        set_visual_anchor((*curwin.get()).w_cursor);
-        (*curwin.get()).w_cursor = tpos;
-        check_cursor(curwin.get());
-        update_topline(curwin.get());
-        if (*cap).arg != 0 {
-            set_visual_select(true);
-            VIsual_select_reg.set(0);
-        } else {
-            may_start_select('c' as c_int);
-        }
-        setmouse();
-        redraw_curbuf_later(UPD_INVERTED);
-        showmode();
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
+    if unsafe { *vi }.vi_start.lnum == 0
+        || unsafe { *vi }.vi_start.lnum > cur_buf().b_ml.ml_line_count
+        || unsafe { *vi }.vi_end.lnum == 0
+    {
+        unsafe { beep_flush() };
+        return;
     }
+
+    let tpos;
+    if visual_active() {
+        let mode = visual_mode();
+        set_visual_mode(VisualMode::from_raw(unsafe { *vi }.vi_mode));
+        unsafe { *vi }.vi_mode = mode.raw();
+        cur_buf().b_visual_mode_eval = mode.raw();
+        let curswant = cur_win().w_curswant;
+        cur_win().w_curswant = unsafe { *vi }.vi_curswant;
+        unsafe { *vi }.vi_curswant = curswant;
+        tpos = unsafe { *vi }.vi_end;
+        unsafe { *vi }.vi_end = cur_win().w_cursor;
+        cur_win().w_cursor = unsafe { *vi }.vi_start;
+        unsafe { *vi }.vi_start = visual_anchor();
+    } else {
+        set_visual_mode(VisualMode::from_raw(unsafe { *vi }.vi_mode));
+        cur_win().w_curswant = unsafe { *vi }.vi_curswant;
+        tpos = unsafe { *vi }.vi_end;
+        cur_win().w_cursor = unsafe { *vi }.vi_start;
+    }
+
+    set_visual_active(true);
+    VIsual_reselect.set(1);
+    // Both ends are checked against the buffer: it may have shrunk since.
+    unsafe { check_cursor(curwin.get()) };
+    set_visual_anchor(cur_win().w_cursor);
+    cur_win().w_cursor = tpos;
+    unsafe { check_cursor(curwin.get()) };
+    unsafe { update_topline(curwin.get()) };
+    if ca.arg != 0 {
+        set_visual_select(true);
+        VIsual_select_reg.set(0);
+    } else {
+        may_start_select('c' as c_int);
+    }
+    setmouse();
+    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    unsafe { showmode() };
 }
 
 /// Make an exclusive selection cover the character the cursor is on, so the
 /// operator about to run sees what the highlight showed.
 pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        if visual_active()
-            && (*(*cap).oap).inclusive
-            && selection_exclusive()
-            && gchar_cursor() != NUL
-            && lt(visual_anchor(), (*curwin.get()).w_cursor)
-        {
-            inc_cursor();
-            (*(*cap).oap).inclusive = false;
-            VIsual_select_exclu_adj.set(true);
-        }
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    if visual_active()
+        && ca.op().inclusive
+        && sel_exclusive()
+        && unsafe { gchar_cursor() } != NUL
+        && lt(visual_anchor(), cur_win().w_cursor)
+    {
+        unsafe { inc_cursor() };
+        ca.op().inclusive = false;
+        VIsual_select_exclu_adj.set(true);
     }
 }
 
@@ -721,16 +709,14 @@ pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
 ///
 /// Answers whether the position moved to the previous line.
 pub(crate) unsafe fn unadjust_for_sel() -> bool {
-    // SAFETY: `curwin` is the current window and `VIsual` a live position.
-    unsafe {
-        if selection_exclusive() && !equalpos(visual_anchor(), (*curwin.get()).w_cursor) {
-            if lt(visual_anchor(), (*curwin.get()).w_cursor) {
-                return unadjust_for_sel_inner(&raw mut (*curwin.get()).w_cursor);
-            }
-            return with_visual_anchor(|anchor| unadjust_for_sel_inner(anchor));
+    // SAFETY (throughout): `curwin` is the current window and `VIsual` a live position.
+    if sel_exclusive() && !equalpos(visual_anchor(), cur_win().w_cursor) {
+        if lt(visual_anchor(), cur_win().w_cursor) {
+            return unsafe { unadjust_for_sel_inner(&raw mut (*curwin.get()).w_cursor) };
         }
-        false
+        return with_visual_anchor(|anchor| unsafe { unadjust_for_sel_inner(anchor) });
     }
+    false
 }
 
 /// Move one position back, across a line break if there is nothing else left.
@@ -739,41 +725,39 @@ pub(crate) unsafe fn unadjust_for_sel() -> bool {
 pub(crate) unsafe fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool {
     VIsual_select_exclu_adj.set(false);
     // SAFETY: `pp` is the caller's live position in the current buffer.
-    unsafe {
-        if (*pp).coladd > 0 {
-            (*pp).coladd -= 1;
-        } else if (*pp).col > 0 {
-            (*pp).col -= 1;
-            mark_mb_adjustpos(curbuf.get(), pp);
-            // Inside a TAB, stepping back a byte means stepping to the last
-            // screen column the TAB covers.
-            if virtual_active(curwin.get()) {
-                let (mut cs, mut ce): (colnr_T, colnr_T) = (0, 0);
-                getvcol(curwin.get(), pp, &raw mut cs, ptr::null_mut(), &raw mut ce);
-                (*pp).coladd = ce - cs;
-            }
-        } else if (*pp).lnum > 1 {
-            (*pp).lnum -= 1;
-            (*pp).col = ml_get_len((*pp).lnum);
-            return true;
+    if unsafe { *pp }.coladd > 0 {
+        unsafe { *pp }.coladd -= 1;
+    } else if unsafe { *pp }.col > 0 {
+        unsafe { *pp }.col -= 1;
+        unsafe { mark_mb_adjustpos(curbuf.get(), pp) };
+        // Inside a TAB, stepping back a byte means stepping to the last
+        // screen column the TAB covers.
+        if unsafe { virtual_active(curwin.get()) } {
+            let (mut cs, mut ce): (colnr_T, colnr_T) = (0, 0);
+            unsafe { getvcol(curwin.get(), pp, &raw mut cs, ptr::null_mut(), &raw mut ce) };
+            unsafe { *pp }.coladd = ce - cs;
         }
-        false
+    } else if unsafe { *pp }.lnum > 1 {
+        unsafe { *pp }.lnum -= 1;
+        unsafe { *pp }.col = unsafe { ml_get_len((*pp).lnum) };
+        return true;
     }
+    false
 }
 
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
 pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
     if visual_active() {
         set_visual_select(true);
         VIsual_select_reg.set(0);
     } else if VIsual_reselect.get() != 0 {
         // Re-enter through `gv`, which is where the reselection lives.
         // SAFETY: `cap` is the caller's live command argument.
-        unsafe {
-            (*cap).nchar = 'v' as c_int;
-            (*cap).arg = 1;
-            nv_g_cmd(cap);
-        }
+        ca.nchar = 'v' as c_int;
+        ca.arg = 1;
+        unsafe { nv_g_cmd(cap) };
     }
 }
 
@@ -782,38 +766,56 @@ pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
 /// 'matchpairs' is forced to the four bracket pairs for the duration, because
 /// a text object's idea of a block is fixed and must not follow the option.
 pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        let include = (*cap).cmdchar != 'i' as c_int;
-        let mps_save = (*curbuf.get()).b_p_mps;
-        (*curbuf.get()).b_p_mps = c"(:),{:},[:],<:>".as_ptr().cast_mut();
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    let include = ca.cmdchar != 'i' as c_int;
+    let mps_save = cur_buf().b_p_mps;
+    cur_buf().b_p_mps = c"(:),{:},[:],<:>".as_ptr().cast_mut();
 
-        let oap = (*cap).oap;
-        let n = (*cap).count1;
-        let found = match u8::try_from((*cap).nchar).unwrap_or(0) {
-            b'w' => current_word(oap, n, include, false) != 0,
-            b'W' => current_word(oap, n, include, true) != 0,
-            b'b' | b'(' | b')' => current_block(oap, n, include, '(' as c_int, ')' as c_int) != 0,
-            b'B' | b'{' | b'}' => current_block(oap, n, include, '{' as c_int, '}' as c_int) != 0,
-            b'[' | b']' => current_block(oap, n, include, '[' as c_int, ']' as c_int) != 0,
-            b'<' | b'>' => current_block(oap, n, include, '<' as c_int, '>' as c_int) != 0,
-            b't' => {
-                // A tag block's end is already where it should be; the
-                // operator must not push it back over the closing tag.
-                (*cap).retval |= CA_NO_ADJ_OP_END as c_int;
-                current_tagblock(oap, n, include) != 0
-            }
-            b'p' => current_par(oap, n, include, 'p' as c_int) != 0,
-            b's' => current_sent(oap, n, include) != 0,
-            b'"' | b'\'' | b'`' => current_quote(oap, n, include, (*cap).nchar),
-            _ => false,
-        };
-
-        (*curbuf.get()).b_p_mps = mps_save;
-        if !found {
-            clearopbeep(oap);
+    let mut op = ca.op();
+    let n = ca.count1;
+    let found = match u8::try_from(ca.nchar).unwrap_or(0) {
+        b'w' => unsafe { current_word(op.raw(), n, include, false) != 0 },
+        b'W' => unsafe { current_word(op.raw(), n, include, true) != 0 },
+        b'b' | b'(' | b')' => block(op, n, include, '(', ')'),
+        b'B' | b'{' | b'}' => block(op, n, include, '{', '}'),
+        b'[' | b']' => block(op, n, include, '[', ']'),
+        b'<' | b'>' => block(op, n, include, '<', '>'),
+        b't' => {
+            // A tag block's end is already where it should be; the
+            // operator must not push it back over the closing tag.
+            ca.retval |= CA_NO_ADJ_OP_END as c_int;
+            unsafe { current_tagblock(op.raw(), n, include) != 0 }
         }
-        adjust_cursor_col();
-        (*curwin.get()).w_set_curswant = true;
+        b'p' => unsafe { current_par(op.raw(), n, include, 'p' as c_int) != 0 },
+        b's' => unsafe { current_sent(op.raw(), n, include) != 0 },
+        b'"' | b'\'' | b'`' => unsafe { current_quote(op.raw(), n, include, ca.nchar) },
+        _ => false,
+    };
+
+    cur_buf().b_p_mps = mps_save;
+    if !found {
+        clear_op_beep(op);
     }
+    unsafe { adjust_cursor_col() };
+    cur_win().w_set_curswant = true;
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The `i(`/`a{`-family text object: the block `open`..`close` around the
+/// cursor, `n` levels out.
+fn block(op: Op, n: c_int, include: bool, open: char, close: char) -> bool {
+    // SAFETY: `op` is a live operator and the cursor is in its own buffer.
+    unsafe { current_block(op.raw(), n, include, open as c_int, close as c_int) != 0 }
 }

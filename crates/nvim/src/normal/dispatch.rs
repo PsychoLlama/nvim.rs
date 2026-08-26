@@ -31,7 +31,7 @@ use crate::keycodes::{
     KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_mod_mask,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curbuf, curwin, did_cursorhold,
+    KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
     fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,
     msg_col, msg_didout, msg_nowait, no_u_sync, no_zero_mapping, opcount, p_langmap, p_lrm, p_tm,
     p_ttm, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
@@ -43,14 +43,14 @@ use crate::mbyte::{
 };
 use crate::memory::xfree;
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL, NV_CMDS,
-    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
-    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
-    normal_handle_special_visual_command, normal_need_additional_char,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArg, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
+    NV_CMDS, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState,
+    NormalStateRef, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
     set_visual_select, start_selection, visual_active, visual_select,
 };
-use crate::ops::{do_pending_operator, get_op_type};
+use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::register::get_default_register_name;
 use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
@@ -61,6 +61,7 @@ use crate::types::{
     oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::getchar::{
@@ -176,18 +177,14 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
 /// without changing anything.
 #[inline(always)]
 fn langmap_wanted(condition: bool) -> bool {
-    // SAFETY: 'langmap' is a non-empty-or-empty C string option.
-    unsafe {
-        *p_langmap.get() as c_int != 0
-            && condition
-            && (p_lrm.get() != 0
-                || if vgetc_busy.get() != 0 {
-                    typeahead().maplen() == 0
-                } else {
-                    KeyTyped.get()
-                })
-            && KeyStuffed.get() == 0
-    }
+    // SAFETY: 'langmap' is a NUL-terminated option string.
+    let have_langmap = unsafe { *p_langmap.get() } as c_int != 0;
+    let from_a_map = if vgetc_busy.get() != 0 {
+        typeahead().maplen() == 0
+    } else {
+        KeyTyped.get()
+    };
+    have_langmap && condition && (p_lrm.get() != 0 || from_a_map) && KeyStuffed.get() == 0
 }
 
 /// Translate one key through 'langmap', if this key and this moment call for
@@ -225,23 +222,20 @@ enum Slot {
 /// 'langmap'; `replace` puts the editor in Replace mode while waiting, so the
 /// cursor shape says what is about to happen.
 unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
-    // SAFETY: `s` is the caller's live state.
-    unsafe {
-        if (*s).ca.cmdchar != 'g' as c_int {
-            return (Slot::NChar, false, (*s).ca.cmdchar == 'r' as c_int);
-        }
-        // `g` reads its own second character first, and only some of them
-        // take a third.
-        (*s).ca.nchar = plain_vgetc();
-        langmap_adjust(&mut (*s).ca.nchar, true);
-        (*s).need_flushbuf |= add_to_showcmd((*s).ca.nchar);
-        match (*s).ca.nchar {
-            c if c == 'r' as c_int => (Slot::Extra, false, true),
-            c if c == '\'' as c_int || c == '`' as c_int || c == Ctrl_BSL => {
-                (Slot::Extra, true, false)
-            }
-            _ => (Slot::None, false, false),
-        }
+    // SAFETY (throughout): `s` is the caller's live state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    if ns.ca.cmdchar != 'g' as c_int {
+        return (Slot::NChar, false, ns.ca.cmdchar == 'r' as c_int);
+    }
+    // `g` reads its own second character first, and only some of them
+    // take a third.
+    ns.ca.nchar = unsafe { plain_vgetc() };
+    langmap_adjust(&mut ns.ca.nchar, true);
+    ns.need_flushbuf |= add_to_showcmd(ns.ca.nchar);
+    match ns.ca.nchar {
+        c if c == 'r' as c_int => (Slot::Extra, false, true),
+        c if c == '\'' as c_int || c == '`' as c_int || c == Ctrl_BSL => (Slot::Extra, true, false),
+        _ => (Slot::None, false, false),
     }
 }
 
@@ -250,31 +244,30 @@ unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
 /// `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` are commands of their own; anything
 /// else is put back for the next command to read.
 unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
-    // SAFETY: `s` is the caller's live state.
-    unsafe {
-        let mut towait = if p_ttm.get() >= 0 {
-            p_ttm.get() as c_int
-        } else {
-            p_tm.get() as c_int
-        };
-        loop {
-            (*s).c = vpeekc();
-            if !((*s).c <= 0 && towait > 0) {
-                break;
-            }
-            do_sleep(towait.min(50) as int64_t, false);
-            towait -= 50;
+    // SAFETY (throughout): `s` is the caller's live state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    let mut towait = if p_ttm.get() >= 0 {
+        p_ttm.get() as c_int
+    } else {
+        p_tm.get() as c_int
+    };
+    loop {
+        ns.c = unsafe { vpeekc() };
+        if !(ns.c <= 0 && towait > 0) {
+            break;
         }
-        if (*s).c > 0 {
-            (*s).c = plain_vgetc();
-            if (*s).c != Ctrl_N && (*s).c != Ctrl_G {
-                vungetc((*s).c);
-            } else {
-                (*s).ca.cmdchar = Ctrl_BSL;
-                (*s).ca.nchar = (*s).c;
-                (*s).idx = find_command((*s).ca.cmdchar);
-                debug_assert!((*s).idx >= 0);
-            }
+        unsafe { do_sleep(towait.min(50) as int64_t, false) };
+        towait -= 50;
+    }
+    if ns.c > 0 {
+        ns.c = unsafe { plain_vgetc() };
+        if ns.c != Ctrl_N && ns.c != Ctrl_G {
+            vungetc(ns.c);
+        } else {
+            ns.ca.cmdchar = Ctrl_BSL;
+            ns.ca.nchar = ns.c;
+            ns.idx = find_command(ns.ca.cmdchar);
+            debug_assert!(ns.idx >= 0);
         }
     }
 }
@@ -284,144 +277,140 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
 /// Only for a command flagged `NV_LANG` -- `f`, `t`, `r` and friends, where
 /// the argument is a real character rather than a command key.
 unsafe fn read_composing_tail(s: *mut NormalState) {
-    // SAFETY: `s` is the caller's live state; every write to
+    // SAFETY (throughout): `s` is the caller's live state; every write to
     // `nchar_composing` is bounded by its own length below.
-    unsafe {
-        let mapped = Allow::mapping();
-        let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-        let mut prev_code = (*s).ca.nchar;
-        loop {
-            (*s).c = vpeekc();
-            if !((*s).c > 0 && ((*s).c >= 0x100 || utf8len_tab[vpeekc() as usize] as c_int > 1)) {
-                break;
-            }
-            (*s).c = plain_vgetc();
-            if !utf_iscomposing(prev_code, (*s).c, &raw mut state) {
-                vungetc((*s).c);
-                break;
-            }
-            // The base character is only encoded once a tail turns up.
-            if (*s).ca.nchar_len == 0 {
-                (*s).ca.nchar_len =
-                    utf_char2bytes((*s).ca.nchar, (*s).ca.nchar_composing.as_mut_ptr());
-            }
-            if (*s).ca.nchar_len + utf_char2len((*s).c) < size_of::<[c_char; 32]>() as c_int {
-                (*s).ca.nchar_len += utf_char2bytes(
-                    (*s).c,
-                    (*s).ca
-                        .nchar_composing
-                        .as_mut_ptr()
-                        .offset((*s).ca.nchar_len as isize),
-                );
-            }
-            prev_code = (*s).c;
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    let mapped = Allow::mapping();
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    let mut prev_code = ns.ca.nchar;
+    loop {
+        ns.c = unsafe { vpeekc() };
+        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[unsafe { vpeekc() } as usize] as c_int > 1))
+        {
+            break;
         }
-        (*s).ca.nchar_composing[(*s).ca.nchar_len as usize] = NUL as c_char;
-        drop(mapped);
-        // The keys are recorded for a redo, not fed through undo syncing.
-        no_u_sync.set(no_u_sync.get() + 1);
-        gotchars_ignore();
-        no_u_sync.set(no_u_sync.get() - 1);
+        ns.c = unsafe { plain_vgetc() };
+        if !unsafe { utf_iscomposing(prev_code, ns.c, &raw mut state) } {
+            vungetc(ns.c);
+            break;
+        }
+        // The base character is only encoded once a tail turns up.
+        if ns.ca.nchar_len == 0 {
+            ns.ca.nchar_len =
+                unsafe { utf_char2bytes(ns.ca.nchar, ns.ca.nchar_composing.as_mut_ptr()) };
+        }
+        if ns.ca.nchar_len + utf_char2len(ns.c) < size_of::<[c_char; 32]>() as c_int {
+            let at = ns.ca.nchar_len as isize;
+            let tail = unsafe { ns.ca.nchar_composing.as_mut_ptr().offset(at) };
+            ns.ca.nchar_len += unsafe { utf_char2bytes(ns.c, tail) };
+        }
+        prev_code = ns.c;
     }
+    let at = ns.ca.nchar_len as usize;
+    ns.ca.nchar_composing[at] = NUL as c_char;
+    drop(mapped);
+    // The keys are recorded for a redo, not fed through undo syncing.
+    no_u_sync.set(no_u_sync.get() + 1);
+    unsafe { gotchars_ignore() };
+    no_u_sync.set(no_u_sync.get() - 1);
 }
 
 /// Read the second (and sometimes third) character of a command.
 pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
-    // SAFETY: `s` is the caller's live state and `s.idx` is a valid row.
-    unsafe {
-        // Nothing read here is a mapping or a command; it is an argument.
-        let _raw_key = Keys::unmapped_with_codes();
-        did_cursorhold.set(true);
+    // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
+    // Nothing read here is a mapping or a command; it is an argument.
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    let _raw_key = Keys::unmapped_with_codes();
+    did_cursorhold.set(true);
 
-        let (slot, lit, repl) = additional_char_slot(s);
-        let lang = repl || nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0;
+    let (slot, lit, repl) = unsafe { additional_char_slot(ns.raw()) };
+    let lang = repl || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_LANG != 0;
 
-        if slot != Slot::None {
-            let cp: *mut c_int = match slot {
-                Slot::NChar => &raw mut (*s).ca.nchar,
-                Slot::Extra => &raw mut (*s).ca.extra_char,
-                Slot::None => unreachable!(),
-            };
-            if repl {
-                State.set(MODE_REPLACE);
-                ui_cursor_shape_no_check_conceal();
-            }
-            // A language-mapped argument is read *with* mappings on, which is
-            // the whole point of 'iminsert' being lmap.
-            let langmap_active = lang && (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt;
-            let mapped = langmap_active.then(Allow::mapping_with_codes);
-            if langmap_active {
-                State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
-            }
-            *cp = plain_vgetc();
-            drop(mapped);
-            State.set(MODE_NORMAL_BUSY);
-            (*s).need_flushbuf |= add_to_showcmd(*cp);
+    if slot != Slot::None {
+        // SAFETY: `s` is the caller's live state.
+        let cp: *mut c_int = match slot {
+            Slot::NChar => &raw mut ns.ca.nchar,
+            Slot::Extra => &raw mut ns.ca.extra_char,
+            Slot::None => unreachable!(),
+        };
+        if repl {
+            State.set(MODE_REPLACE);
+            unsafe { ui_cursor_shape_no_check_conceal() };
+        }
+        // A language-mapped argument is read *with* mappings on, which is
+        // the whole point of 'iminsert' being lmap.
+        let langmap_active = lang && cur_buf().b_p_iminsert == B_IMODE_LMAP as OptInt;
+        let mapped = langmap_active.then(Allow::mapping_with_codes);
+        if langmap_active {
+            State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
+        }
+        unsafe { *cp = plain_vgetc() };
+        drop(mapped);
+        State.set(MODE_NORMAL_BUSY);
+        ns.need_flushbuf |= add_to_showcmd(unsafe { *cp });
 
-            if !lit {
-                // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
-                if *cp == Ctrl_K
-                    && (nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0
-                        || slot == Slot::Extra)
-                    && !cpo_has(CpoFlag::DIGRAPH)
-                {
-                    (*s).c = get_digraph(false);
-                    if (*s).c > 0 {
-                        *cp = (*s).c;
-                        // Take the CTRL-K and its two characters back out of
-                        // the echoed command before showing the result.
-                        del_from_showcmd(3);
-                        (*s).need_flushbuf |= add_to_showcmd(*cp);
-                    }
+        if !lit {
+            // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
+            if unsafe { *cp } == Ctrl_K
+                && (nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_LANG != 0
+                    || slot == Slot::Extra)
+                && !cpo_has(CpoFlag::DIGRAPH)
+            {
+                ns.c = get_digraph(false);
+                if ns.c > 0 {
+                    unsafe { *cp = ns.c };
+                    // Take the CTRL-K and its two characters back out of
+                    // the echoed command before showing the result.
+                    del_from_showcmd(3);
+                    ns.need_flushbuf |= add_to_showcmd(unsafe { *cp });
                 }
-                langmap_adjust(&mut *cp, !lang);
             }
+            langmap_adjust(&mut unsafe { *cp }, !lang);
+        }
 
-            if slot == Slot::Extra
-                && (*s).ca.nchar == Ctrl_BSL
-                && ((*s).ca.extra_char == Ctrl_N || (*s).ca.extra_char == Ctrl_G)
-            {
-                // `g CTRL-\ CTRL-N` is really `CTRL-\ CTRL-N`.
-                (*s).ca.cmdchar = Ctrl_BSL;
-                (*s).ca.nchar = (*s).ca.extra_char;
-                (*s).idx = find_command((*s).ca.cmdchar);
-            } else if ((*s).ca.nchar == 'n' as c_int || (*s).ca.nchar == 'N' as c_int)
-                && (*s).ca.cmdchar == 'g' as c_int
-            {
-                // `gn`/`gN` take the operator from the character after them.
-                (*(*s).ca.oap).op_type = get_op_type(*cp, NUL);
-            } else if *cp == Ctrl_BSL {
-                resolve_ctrl_backslash(s);
-            }
+        if slot == Slot::Extra
+            && ns.ca.nchar == Ctrl_BSL
+            && (ns.ca.extra_char == Ctrl_N || ns.ca.extra_char == Ctrl_G)
+        {
+            // `g CTRL-\ CTRL-N` is really `CTRL-\ CTRL-N`.
+            ns.ca.cmdchar = Ctrl_BSL;
+            ns.ca.nchar = ns.ca.extra_char;
+            ns.idx = find_command(ns.ca.cmdchar);
+        } else if (ns.ca.nchar == 'n' as c_int || ns.ca.nchar == 'N' as c_int)
+            && ns.ca.cmdchar == 'g' as c_int
+        {
+            // `gn`/`gN` take the operator from the character after them.
+            unsafe { *ns.ca.oap }.op_type = get_op_type(unsafe { *cp }, NUL);
+        } else if unsafe { *cp } == Ctrl_BSL {
+            unsafe { resolve_ctrl_backslash(ns.raw()) };
+        }
 
-            if lang {
-                read_composing_tail(s);
-            }
+        if lang {
+            unsafe { read_composing_tail(ns.raw()) };
         }
     }
 }
 
 /// Mirror a horizontal command for a right-to-left window.
 pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
-    // SAFETY: `s` is the caller's live state.
-    unsafe {
-        const K_C_LEFT: c_int = -(253 + ((KE_C_LEFT as c_int) << 8));
-        const K_C_RIGHT: c_int = -(253 + ((KE_C_RIGHT as c_int) << 8));
-        (*s).ca.cmdchar = match (*s).ca.cmdchar {
-            c if c == 'l' as c_int => 'h' as c_int,
-            K_RIGHT => K_LEFT,
-            K_S_RIGHT => K_S_LEFT,
-            K_C_RIGHT => K_C_LEFT,
-            c if c == 'h' as c_int => 'l' as c_int,
-            K_LEFT => K_RIGHT,
-            K_S_LEFT => K_S_RIGHT,
-            K_C_LEFT => K_C_RIGHT,
-            c if c == '>' as c_int => '<' as c_int,
-            c if c == '<' as c_int => '>' as c_int,
-            other => other,
-        };
-        (*s).idx = find_command((*s).ca.cmdchar);
-    }
+    // SAFETY (throughout): `s` is the caller's live state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    const K_C_LEFT: c_int = -(253 + ((KE_C_LEFT as c_int) << 8));
+    const K_C_RIGHT: c_int = -(253 + ((KE_C_RIGHT as c_int) << 8));
+    ns.ca.cmdchar = match ns.ca.cmdchar {
+        c if c == 'l' as c_int => 'h' as c_int,
+        K_RIGHT => K_LEFT,
+        K_S_RIGHT => K_S_LEFT,
+        K_C_RIGHT => K_C_LEFT,
+        c if c == 'h' as c_int => 'l' as c_int,
+        K_LEFT => K_RIGHT,
+        K_S_LEFT => K_S_RIGHT,
+        K_C_LEFT => K_C_RIGHT,
+        c if c == '>' as c_int => '<' as c_int,
+        c if c == '<' as c_int => '>' as c_int,
+        other => other,
+    };
+    ns.idx = find_command(ns.ca.cmdchar);
 }
 
 /// Read the digits, and possibly the CTRL-W, in front of a command.
@@ -429,150 +418,148 @@ pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
 /// Answers whether a CTRL-W was consumed, in which case the caller loops:
 /// `CTRL-W` takes a count of its own after it.
 pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
+    // SAFETY: `s` is the caller's live normal-mode state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
     // Select mode swallows printable keys as replacement text, digits too.
     if visual_active() && visual_select() {
         return false;
     }
     // SAFETY: `s` is the caller's live state.
-    unsafe {
-        const K_KDEL: c_int = -(253 + ((KE_KDEL as c_int) << 8));
-        while ((*s).c >= '1' as c_int && (*s).c <= '9' as c_int)
-            || ((*s).ca.count0 != 0
-                && ((*s).c == K_DEL || (*s).c == K_KDEL || (*s).c == '0' as c_int))
-        {
-            if (*s).c == K_DEL || (*s).c == K_KDEL {
-                (*s).ca.count0 /= 10;
-                // Four columns: <Del> is echoed as its key name.
-                del_from_showcmd(4);
-            } else if (*s).ca.count0 > 99999999 {
-                // Saturate rather than overflow; nine digits is the most a
-                // count is ever allowed to be.
-                (*s).ca.count0 = 999999999;
-            } else {
-                (*s).ca.count0 = (*s).ca.count0 * 10 + ((*s).c - '0' as c_int);
-            }
-            if (*s).toplevel && readbuf1_empty() {
-                set_vcount_ca(&raw mut (*s).ca, &mut (*s).set_prevcount);
-            }
-            let raw_key = (*s).ctrl_w.then(Keys::unmapped_with_codes);
-            // A '0' here is a count digit, not the "go to column 0" command,
-            // so it must not be mapped.
-            no_zero_mapping.set(no_zero_mapping.get() + 1);
-            (*s).c = plain_vgetc();
-            langmap_adjust(&mut (*s).c, true);
-            no_zero_mapping.set(no_zero_mapping.get() - 1);
-            drop(raw_key);
-            (*s).need_flushbuf |= add_to_showcmd((*s).c);
+    const K_KDEL: c_int = -(253 + ((KE_KDEL as c_int) << 8));
+    while (ns.c >= '1' as c_int && ns.c <= '9' as c_int)
+        || (ns.ca.count0 != 0 && (ns.c == K_DEL || ns.c == K_KDEL || ns.c == '0' as c_int))
+    {
+        if ns.c == K_DEL || ns.c == K_KDEL {
+            ns.ca.count0 /= 10;
+            // Four columns: <Del> is echoed as its key name.
+            del_from_showcmd(4);
+        } else if ns.ca.count0 > 99999999 {
+            // Saturate rather than overflow; nine digits is the most a
+            // count is ever allowed to be.
+            ns.ca.count0 = 999999999;
+        } else {
+            ns.ca.count0 = ns.ca.count0 * 10 + (ns.c - '0' as c_int);
         }
-
-        // CTRL-W takes the count read so far as its own, then a second count
-        // for the window command after it.
-        if (*s).c == Ctrl_W && !(*s).ctrl_w && (*s).oa.op_type == OP_NOP {
-            (*s).ctrl_w = true;
-            (*s).ca.opcount = (*s).ca.count0;
-            (*s).ca.count0 = 0;
-            let raw_key = Keys::unmapped_with_codes();
-            (*s).c = plain_vgetc();
-            langmap_adjust(&mut (*s).c, true);
-            drop(raw_key);
-            (*s).need_flushbuf |= add_to_showcmd((*s).c);
-            return true;
+        if ns.toplevel && readbuf1_empty() {
+            unsafe { set_vcount_ca(&raw mut ns.ca, &mut ns.set_prevcount) };
         }
-        false
+        let raw_key = ns.ctrl_w.then(Keys::unmapped_with_codes);
+        // A '0' here is a count digit, not the "go to column 0" command,
+        // so it must not be mapped.
+        no_zero_mapping.set(no_zero_mapping.get() + 1);
+        ns.c = unsafe { plain_vgetc() };
+        langmap_adjust(&mut ns.c, true);
+        no_zero_mapping.set(no_zero_mapping.get() - 1);
+        drop(raw_key);
+        ns.need_flushbuf |= add_to_showcmd(ns.c);
     }
+
+    // CTRL-W takes the count read so far as its own, then a second count
+    // for the window command after it.
+    if ns.c == Ctrl_W && !ns.ctrl_w && ns.oa.op_type == OP_NOP {
+        ns.ctrl_w = true;
+        ns.ca.opcount = ns.ca.count0;
+        ns.ca.count0 = 0;
+        let raw_key = Keys::unmapped_with_codes();
+        ns.c = unsafe { plain_vgetc() };
+        langmap_adjust(&mut ns.c, true);
+        drop(raw_key);
+        ns.need_flushbuf |= add_to_showcmd(ns.c);
+        return true;
+    }
+    false
 }
 
 /// Everything that happens after the handler has run.
 pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
+    // SAFETY: `s` is the caller's live normal-mode state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
     const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
     const K_MOUSEMOVE: c_int = -(253 + ((KE_MOUSEMOVE as c_int) << 8));
     const K_EVENT: c_int = -(253 + ((KE_EVENT as c_int) << 8));
 
     // SAFETY: `s` is the caller's live state.
-    unsafe {
-        let mut did_visual_op = false;
-        if !(*s).command_finished {
-            // A command that is not itself an operator, and does not claim
-            // NV_KEEPREG, releases the register it was given.
-            if !finish_op.get()
-                && (*s).oa.op_type == 0
-                && ((*s).idx < 0 || nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
-            {
-                clearop(&raw mut (*s).oa);
-                set_reg_var(get_default_register_name());
-            }
-            if (*s).old_mapped_len > 0 {
-                (*s).old_mapped_len = typeahead().maplen();
-            }
-            if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_MOUSEMOVE {
-                did_visual_op =
-                    visual_active() && (*s).oa.op_type != OP_NOP && (*s).oa.op_type != OP_COLON;
-                do_pending_operator(&raw mut (*s).ca, (*s).old_col, false);
-            }
-            if normal_need_redraw_mode_message(s) {
-                normal_redraw_mode_message();
-            }
-        }
-        msg_nowait.set(false);
-
-        if finish_op.get() || did_visual_op {
-            set_reg_var(get_default_register_name());
-        }
-        let prev_finish_op = finish_op.get();
-        if (*s).oa.op_type == OP_NOP {
-            finish_op.set(false);
-            may_trigger_modechanged();
-        }
-        // The cursor shape says whether an operator is pending, and `r`/`gr`
-        // change it while they wait.
-        if prev_finish_op
-            || (*s).ca.cmdchar == 'r' as c_int
-            || ((*s).ca.cmdchar == 'g' as c_int && (*s).ca.nchar == 'r' as c_int)
+    let mut did_visual_op = false;
+    if !ns.command_finished {
+        // A command that is not itself an operator, and does not claim
+        // NV_KEEPREG, releases the register it was given.
+        if !finish_op.get()
+            && ns.oa.op_type == 0
+            && (ns.idx < 0 || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
         {
-            ui_cursor_shape();
+            unsafe { clearop(&raw mut ns.oa) };
+            unsafe { set_reg_var(get_default_register_name()) };
         }
-        if (*s).oa.op_type == OP_NOP && (*s).oa.regname == 0 && (*s).ca.cmdchar != K_EVENT {
-            clear_showcmd();
+        if ns.old_mapped_len > 0 {
+            ns.old_mapped_len = typeahead().maplen();
         }
-        checkpcmark();
-        xfree((*s).ca.searchbuf.cast::<c_void>());
-        mb_check_adjust_col(curwin.get().cast::<c_void>());
-
-        if (*curwin.get()).w_onebuf_opt.wo_scb != 0 && (*s).toplevel {
-            validate_cursor(curwin.get());
-            do_check_scrollbind(true);
+        if ns.ca.cmdchar != K_IGNORE && ns.ca.cmdchar != K_MOUSEMOVE {
+            did_visual_op = visual_active() && ns.oa.op_type != OP_NOP && ns.oa.op_type != OP_COLON;
+            unsafe { do_pending_operator(&raw mut ns.ca, ns.old_col, false) };
         }
-        if (*curwin.get()).w_onebuf_opt.wo_crb != 0 && (*s).toplevel {
-            validate_cursor(curwin.get());
-            do_check_cursorbind();
+        if unsafe { normal_need_redraw_mode_message(ns.raw()) } {
+            normal_redraw_mode_message();
         }
-
-        // A command may have asked for insert mode or for Select mode to be
-        // resumed; neither happens until the command is completely done.
-        let want_insert = restart_edit.get() != 0 && !visual_active() && (*s).old_mapped_len == 0;
-        if (*s).oa.op_type == OP_NOP
-            && (want_insert || restart_VIsual_select.get() == 1)
-            && (*s).ca.retval & CA_COMMAND_BUSY as c_int == 0
-            && stuff_empty()
-            && (*s).oa.regname == 0
-        {
-            if restart_VIsual_select.get() == 1 {
-                set_visual_select(true);
-                VIsual_select_reg.set(0);
-                may_trigger_modechanged();
-                showmode();
-                restart_VIsual_select.set(0);
-            }
-            if want_insert {
-                edit(restart_edit.get(), false, 1);
-            }
-        }
-        // 2 means "next command", 1 means "this one"; the countdown is here.
-        if restart_VIsual_select.get() == 2 {
-            restart_VIsual_select.set(1);
-        }
-        opcount.set((*s).ca.opcount);
     }
+    msg_nowait.set(false);
+
+    if finish_op.get() || did_visual_op {
+        unsafe { set_reg_var(get_default_register_name()) };
+    }
+    let prev_finish_op = finish_op.get();
+    if ns.oa.op_type == OP_NOP {
+        finish_op.set(false);
+        unsafe { may_trigger_modechanged() };
+    }
+    // The cursor shape says whether an operator is pending, and `r`/`gr`
+    // change it while they wait.
+    if prev_finish_op
+        || ns.ca.cmdchar == 'r' as c_int
+        || (ns.ca.cmdchar == 'g' as c_int && ns.ca.nchar == 'r' as c_int)
+    {
+        unsafe { ui_cursor_shape() };
+    }
+    if ns.oa.op_type == OP_NOP && ns.oa.regname == 0 && ns.ca.cmdchar != K_EVENT {
+        clear_showcmd();
+    }
+    unsafe { checkpcmark() };
+    unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
+    unsafe { mb_check_adjust_col(curwin.get().cast::<c_void>()) };
+
+    if cur_win().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
+        unsafe { validate_cursor(curwin.get()) };
+        unsafe { do_check_scrollbind(true) };
+    }
+    if cur_win().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
+        unsafe { validate_cursor(curwin.get()) };
+        unsafe { do_check_cursorbind() };
+    }
+
+    // A command may have asked for insert mode or for Select mode to be
+    // resumed; neither happens until the command is completely done.
+    let want_insert = restart_edit.get() != 0 && !visual_active() && ns.old_mapped_len == 0;
+    if ns.oa.op_type == OP_NOP
+        && (want_insert || restart_VIsual_select.get() == 1)
+        && ns.ca.retval & CA_COMMAND_BUSY as c_int == 0
+        && stuff_empty()
+        && ns.oa.regname == 0
+    {
+        if restart_VIsual_select.get() == 1 {
+            set_visual_select(true);
+            VIsual_select_reg.set(0);
+            unsafe { may_trigger_modechanged() };
+            unsafe { showmode() };
+            restart_VIsual_select.set(0);
+        }
+        if want_insert {
+            unsafe { edit(restart_edit.get(), false, 1) };
+        }
+    }
+    // 2 means "next command", 1 means "this one"; the countdown is here.
+    if restart_VIsual_select.get() == 2 {
+        restart_VIsual_select.set(1);
+    }
+    opcount.set(ns.ca.opcount);
 }
 
 /// One normal-mode command, from its first key to the end of its effects.
@@ -585,169 +572,154 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 
     // SAFETY: `state` is the `VimState` at the head of the `NormalState` the
     // caller handed to `state_enter`.
-    unsafe {
-        let s = state as *mut NormalState;
-        (*s).command_finished = false;
-        (*s).ctrl_w = false;
-        (*s).old_col = (*curwin.get()).w_curswant as c_int;
-        (*s).c = key;
-        langmap_adjust(&mut (*s).c, get_real_state() != MODE_SELECT);
+    let s = state as *mut NormalState;
+    // SAFETY: `state` is the caller's live normal-mode state.
+    let mut ns = unsafe { NormalStateRef::new(s) };
+    ns.command_finished = false;
+    ns.ctrl_w = false;
+    ns.old_col = cur_win().w_curswant as c_int;
+    ns.c = key;
+    langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 
-        if restart_edit.get() == 0 {
-            (*s).old_mapped_len = 0;
-        } else if (*s).old_mapped_len != 0
-            || (visual_active() && (*s).mapped_len == 0 && typeahead().maplen() > 0)
-        {
-            (*s).old_mapped_len = typeahead().maplen();
-        }
-
-        if (*s).c == NUL {
-            (*s).c = K_ZERO;
-        }
-
-        // In Select mode a printable key replaces the selection: the key is
-        // put back for insert mode to read and the command becomes a change.
-        if visual_active()
-            && visual_select()
-            && (vim_isprintc((*s).c) || (*s).c == NL || (*s).c == CAR || (*s).c == K_KENTER)
-        {
-            let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
-            if KeyTyped.get() {
-                ungetchars(len);
-            }
-            (*s).c = if restart_edit.get() != 0 {
-                'd' as c_int
-            } else {
-                'c' as c_int
-            };
-            msg_nowait.set(true);
-            (*s).old_mapped_len = 0;
-        }
-
-        (*s).need_flushbuf = add_to_showcmd((*s).c);
-        while normal_get_command_count(s) {}
-
-        if (*s).c == K_EVENT {
-            // An event is not a command: the count it interrupted is stashed
-            // for the real command that follows.
-            (*s).oa.prev_opcount = (*s).ca.opcount;
-            (*s).oa.prev_count0 = (*s).ca.count0;
-        } else if (*s).ca.opcount != 0 {
-            // An operator count and a motion count multiply, saturating.
-            if (*s).ca.count0 != 0 {
-                if (*s).ca.opcount >= 999999999 / (*s).ca.count0 {
-                    (*s).ca.count0 = 999999999;
-                } else {
-                    (*s).ca.count0 *= (*s).ca.opcount;
-                }
-            } else {
-                (*s).ca.count0 = (*s).ca.opcount;
-            }
-        }
-        (*s).ca.opcount = (*s).ca.count0;
-        (*s).ca.count1 = if (*s).ca.count0 == 0 {
-            1
-        } else {
-            (*s).ca.count0
-        };
-        if (*s).toplevel && readbuf1_empty() {
-            set_vcount(
-                (*s).ca.count0 as int64_t,
-                (*s).ca.count1 as int64_t,
-                (*s).set_prevcount,
-            );
-        }
-
-        if (*s).ctrl_w {
-            (*s).ca.nchar = (*s).c;
-            (*s).ca.cmdchar = Ctrl_W;
-        } else {
-            (*s).ca.cmdchar = (*s).c;
-        }
-        (*s).idx = find_command((*s).ca.cmdchar);
-
-        if (*s).idx < 0 {
-            clearopbeep(&raw mut (*s).oa);
-            (*s).command_finished = true;
-        } else if (nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
-            && check_text_or_curbuf_locked(&raw mut (*s).oa))
-            || (visual_active() && normal_handle_special_visual_command(s))
-        {
-            (*s).command_finished = true;
-        } else {
-            if (*curwin.get()).w_onebuf_opt.wo_rl != 0
-                && KeyTyped.get()
-                && KeyStuffed.get() == 0
-                && nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_RL != 0
-            {
-                normal_invert_horizontal(s);
-            }
-            if normal_need_additional_char(s) {
-                normal_get_additional_char(s);
-            }
-            if (*s).need_flushbuf {
-                ui_flush();
-            }
-            if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_EVENT {
-                did_cursorhold.set(false);
-            }
-            State.set(MODE_NORMAL);
-
-            if (*s).ca.nchar == ESC || (*s).ca.extra_char == ESC {
-                clearop(&raw mut (*s).oa);
-                (*s).command_finished = true;
-            } else {
-                if (*s).ca.cmdchar != K_IGNORE {
-                    msg_didout.set(false);
-                    msg_col.set(0);
-                }
-                (*s).old_pos = (*curwin.get()).w_cursor;
-
-                // 'keymodel' startsel: a shifted special key starts a
-                // selection and then acts as its unshifted self.
-                if !visual_active() && km_startsel.get() {
-                    let flags = nv_cmds[(*s).idx as usize].cmd_flags as c_int;
-                    if flags & NV_SS != 0 {
-                        start_selection();
-                        unshift_special(&raw mut (*s).ca);
-                        (*s).idx = find_command((*s).ca.cmdchar);
-                        debug_assert!((*s).idx >= 0);
-                    } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
-                        start_selection();
-                        mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
-                    }
-                }
-
-                (*s).ca.arg = nv_cmds[(*s).idx as usize].cmd_arg as c_int;
-                (nv_cmds[(*s).idx as usize].cmd_func).expect("every nv_cmds row has a handler")(
-                    &raw mut (*s).ca,
-                );
-            }
-        }
-        normal_finish_command(s);
-        1
+    if restart_edit.get() == 0 {
+        ns.old_mapped_len = 0;
+    } else if ns.old_mapped_len != 0
+        || (visual_active() && ns.mapped_len == 0 && typeahead().maplen() > 0)
+    {
+        ns.old_mapped_len = typeahead().maplen();
     }
+
+    if ns.c == NUL {
+        ns.c = K_ZERO;
+    }
+
+    // In Select mode a printable key replaces the selection: the key is
+    // put back for insert mode to read and the command becomes a change.
+    if visual_active()
+        && visual_select()
+        && (unsafe { vim_isprintc(ns.c) } || ns.c == NL || ns.c == CAR || ns.c == K_KENTER)
+    {
+        let len = unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };
+        if KeyTyped.get() {
+            ungetchars(len);
+        }
+        ns.c = if restart_edit.get() != 0 {
+            'd' as c_int
+        } else {
+            'c' as c_int
+        };
+        msg_nowait.set(true);
+        ns.old_mapped_len = 0;
+    }
+
+    ns.need_flushbuf = add_to_showcmd(ns.c);
+    while unsafe { normal_get_command_count(ns.raw()) } {}
+
+    if ns.c == K_EVENT {
+        // An event is not a command: the count it interrupted is stashed
+        // for the real command that follows.
+        ns.oa.prev_opcount = ns.ca.opcount;
+        ns.oa.prev_count0 = ns.ca.count0;
+    } else if ns.ca.opcount != 0 {
+        // An operator count and a motion count multiply, saturating.
+        if ns.ca.count0 != 0 {
+            if ns.ca.opcount >= 999999999 / ns.ca.count0 {
+                ns.ca.count0 = 999999999;
+            } else {
+                ns.ca.count0 *= ns.ca.opcount;
+            }
+        } else {
+            ns.ca.count0 = ns.ca.opcount;
+        }
+    }
+    ns.ca.opcount = ns.ca.count0;
+    ns.ca.count1 = if ns.ca.count0 == 0 { 1 } else { ns.ca.count0 };
+    if ns.toplevel && readbuf1_empty() {
+        let (n0, n1) = (ns.ca.count0 as int64_t, ns.ca.count1 as int64_t);
+        unsafe { set_vcount(n0, n1, ns.set_prevcount) };
+    }
+
+    if ns.ctrl_w {
+        ns.ca.nchar = ns.c;
+        ns.ca.cmdchar = Ctrl_W;
+    } else {
+        ns.ca.cmdchar = ns.c;
+    }
+    ns.idx = find_command(ns.ca.cmdchar);
+
+    if ns.idx < 0 {
+        unsafe { clearopbeep(&raw mut ns.oa) };
+        ns.command_finished = true;
+    } else if (nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_NCW != 0
+        && unsafe { check_text_or_curbuf_locked(&raw mut ns.oa) })
+        || (visual_active() && unsafe { normal_handle_special_visual_command(ns.raw()) })
+    {
+        ns.command_finished = true;
+    } else {
+        if cur_win().w_onebuf_opt.wo_rl != 0
+            && KeyTyped.get()
+            && KeyStuffed.get() == 0
+            && nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_RL != 0
+        {
+            unsafe { normal_invert_horizontal(ns.raw()) };
+        }
+        if unsafe { normal_need_additional_char(ns.raw()) } {
+            unsafe { normal_get_additional_char(ns.raw()) };
+        }
+        if ns.need_flushbuf {
+            unsafe { ui_flush() };
+        }
+        if ns.ca.cmdchar != K_IGNORE && ns.ca.cmdchar != K_EVENT {
+            did_cursorhold.set(false);
+        }
+        State.set(MODE_NORMAL);
+
+        if ns.ca.nchar == ESC || ns.ca.extra_char == ESC {
+            unsafe { clearop(&raw mut ns.oa) };
+            ns.command_finished = true;
+        } else {
+            if ns.ca.cmdchar != K_IGNORE {
+                msg_didout.set(false);
+                msg_col.set(0);
+            }
+            ns.old_pos = cur_win().w_cursor;
+
+            // 'keymodel' startsel: a shifted special key starts a
+            // selection and then acts as its unshifted self.
+            if !visual_active() && km_startsel.get() {
+                let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
+                if flags & NV_SS != 0 {
+                    start_selection();
+                    unsafe { unshift_special(&raw mut ns.ca) };
+                    ns.idx = find_command(ns.ca.cmdchar);
+                    debug_assert!(ns.idx >= 0);
+                } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
+                    start_selection();
+                    mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
+                }
+            }
+
+            ns.ca.arg = nv_cmds[ns.idx as usize].cmd_arg as c_int;
+            let run = nv_cmds[ns.idx as usize]
+                .cmd_func
+                .expect("every nv_cmds row has a handler");
+            unsafe { run(&raw mut ns.ca) };
+        }
+    }
+    unsafe { normal_finish_command(ns.raw()) };
+    1
 }
 
 /// Record a command for `.`, taking its second character from `cap`.
 pub(crate) unsafe fn prep_redo_cmd(cap: *mut cmdarg_T) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        prep_redo(
-            (*(*cap).oap).regname,
-            (*cap).count0,
-            NUL,
-            (*cap).cmdchar,
-            NUL,
-            NUL,
-            NUL,
-        );
-        // A character with a combining tail is replayed as its whole encoding.
-        if (*cap).nchar_len > 0 {
-            append_to_redobuff((*cap).nchar_composing.as_mut_ptr());
-        } else {
-            append_to_redobuff_char((*cap).nchar);
-        }
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    prep_redo(ca.op().regname, ca.count0, NUL, ca.cmdchar, NUL, NUL, NUL);
+    // A character with a combining tail is replayed as its whole encoding.
+    if ca.nchar_len > 0 {
+        unsafe { append_to_redobuff(ca.nchar_composing.as_mut_ptr()) };
+    } else {
+        append_to_redobuff_char(ca.nchar);
     }
 }
 
@@ -780,77 +752,88 @@ pub(crate) fn prep_redo_num2(
     cmd5: c_int,
 ) {
     // SAFETY: all of these append to the redo buffer, which grows itself.
-    unsafe {
-        reset_redobuff();
-        if regname != 0 {
-            append_to_redobuff_char('"' as c_int);
-            append_to_redobuff_char(regname);
+    unsafe { reset_redobuff() };
+    if regname != 0 {
+        append_to_redobuff_char('"' as c_int);
+        append_to_redobuff_char(regname);
+    }
+    if num1 != 0 {
+        append_to_redobuff_number(num1);
+    }
+    for cmd in [cmd1, cmd2] {
+        if cmd != NUL {
+            append_to_redobuff_char(cmd);
         }
-        if num1 != 0 {
-            append_to_redobuff_number(num1);
-        }
-        for cmd in [cmd1, cmd2] {
-            if cmd != NUL {
-                append_to_redobuff_char(cmd);
-            }
-        }
-        if num2 != 0 {
-            append_to_redobuff_number(num2);
-        }
-        for cmd in [cmd3, cmd4, cmd5] {
-            if cmd != NUL {
-                append_to_redobuff_char(cmd);
-            }
+    }
+    if num2 != 0 {
+        append_to_redobuff_number(num2);
+    }
+    for cmd in [cmd3, cmd4, cmd5] {
+        if cmd != NUL {
+            append_to_redobuff_char(cmd);
         }
     }
 }
+
+// A live operator is all the `clear*` entry points need, and [`Op`] already
+// carries that promise, so they are safe functions. `clearop` and
+// `clearopbeep` keep a raw-pointer shim beside them for the callers outside
+// `normal/` that still hold one.
 
 /// Beep and clear the operator if one is pending. Answers whether it was.
-pub(crate) unsafe fn checkclearop(oap: *mut oparg_T) -> bool {
-    // SAFETY: `oap` is the caller's live operator.
-    unsafe {
-        if (*oap).op_type == OP_NOP {
-            return false;
-        }
-        clearopbeep(oap);
-        true
+pub(crate) fn check_clear_op(op: Op) -> bool {
+    if op.op_type == OP_NOP {
+        return false;
     }
+    clear_op_beep(op);
+    true
 }
 
-/// As [`checkclearop`], and also refuse while a Visual selection is up --
+/// As [`check_clear_op`], and also refuse while a Visual selection is up --
 /// for commands that make no sense applied to one.
-pub(crate) unsafe fn checkclearopq(oap: *mut oparg_T) -> bool {
-    // SAFETY: `oap` is the caller's live operator.
-    unsafe {
-        if (*oap).op_type == OP_NOP && !visual_active() {
-            return false;
-        }
-        clearopbeep(oap);
-        true
+pub(crate) fn check_clear_op_quit(op: Op) -> bool {
+    if op.op_type == OP_NOP && !visual_active() {
+        return false;
     }
+    clear_op_beep(op);
+    true
 }
 
 /// Forget the pending operator, its register and its forced motion kind.
-pub(crate) unsafe fn clearop(oap: *mut oparg_T) {
-    // SAFETY: `oap` is the caller's live operator.
-    unsafe {
-        (*oap).op_type = OP_NOP;
-        (*oap).regname = 0;
-        (*oap).motion_force = NUL;
-        (*oap).use_reg_one = false;
-    }
+pub(crate) fn clear_op(mut op: Op) {
+    op.op_type = OP_NOP;
+    op.regname = 0;
+    op.motion_force = NUL;
+    op.use_reg_one = false;
     motion_force.set(NUL);
 }
 
-/// [`clearop`], and say so.
+/// [`clear_op`] through a raw pointer.
+///
+/// # Safety
+/// `oap` must be a live operator.
+pub(crate) unsafe fn clearop(oap: *mut oparg_T) {
+    // SAFETY: the caller promises a live operator.
+    clear_op(unsafe { Op::new(oap) });
+}
+
+/// [`clear_op`], and say so.
 ///
 /// The beep also flushes the typeahead, which is what makes a failed command
 /// abandon the rest of a mapping or a `:normal` argument.
-pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
-    // SAFETY: `oap` is the caller's live operator.
-    unsafe { clearop(oap) };
+pub(crate) fn clear_op_beep(op: Op) {
+    clear_op(op);
     // SAFETY: touches only message and typeahead state.
     unsafe { beep_flush() };
+}
+
+/// [`clear_op_beep`] through a raw pointer.
+///
+/// # Safety
+/// `oap` must be a live operator.
+pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
+    // SAFETY: the caller promises a live operator.
+    clear_op_beep(unsafe { Op::new(oap) });
 }
 
 /// Read one more key for a command that takes several, with mappings and
@@ -870,31 +853,30 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
 pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && (*(*cap).oap).op_type == OP_NOP {
-            fold_open_cursor();
-        }
+    // SAFETY (throughout): `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
+    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OP_NOP {
+        unsafe { fold_open_cursor() };
     }
 }
 
 /// Turn a shifted special key into its unshifted self.
 pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    let mut ca = unsafe { CmdArg::new(cap) };
     const K_S_UP: c_int = -1277;
     const K_S_DOWN: c_int = -1533;
     // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        (*cap).cmdchar = match (*cap).cmdchar {
-            K_S_RIGHT => K_RIGHT,
-            K_S_LEFT => K_LEFT,
-            K_S_UP => K_UP,
-            K_S_DOWN => K_DOWN,
-            K_S_HOME => K_HOME,
-            K_S_END => K_END,
-            other => other,
-        };
-        (*cap).cmdchar = simplify_mod_mask((*cap).cmdchar);
-    }
+    ca.cmdchar = match ca.cmdchar {
+        K_S_RIGHT => K_RIGHT,
+        K_S_LEFT => K_LEFT,
+        K_S_UP => K_UP,
+        K_S_DOWN => K_DOWN,
+        K_S_HOME => K_HOME,
+        K_S_END => K_END,
+        other => other,
+    };
+    ca.cmdchar = simplify_mod_mask(ca.cmdchar);
 }
 
 /// Make room on the command line for whatever is about to be shown there.
@@ -905,4 +887,16 @@ pub(crate) fn may_clear_cmdline() {
     } else {
         clear_showcmd();
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

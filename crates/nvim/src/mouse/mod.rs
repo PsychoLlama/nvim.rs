@@ -34,9 +34,10 @@ use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
 use crate::main::{
-    curbuf, curtab, curwin, first_tabpage, mouse_col, mouse_row, p_sel, tab_page_click_defs,
+    curbuf, curtab, curwin, first_tabpage, mouse_col, mouse_row, tab_page_click_defs,
 };
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
+use crate::normal::sel_exclusive;
 use crate::plines::{getvcols, win_chartabsize};
 use crate::search::BACKWARD;
 use crate::state::virtual_active;
@@ -362,13 +363,6 @@ fn head_off(line: &[u8], idx: usize) -> c_int {
     unsafe { utf_head_off(line.as_ptr().cast(), line[idx..].as_ptr().cast()) }
 }
 
-/// Whether `'selection'` is "exclusive", so that a selection ends just after
-/// the last selected character.
-fn selection_exclusive() -> bool {
-    // SAFETY: an option string is NUL-terminated, never null.
-    unsafe { *p_sel.get() == 'e' as c_char }
-}
-
 /// Move `pos` back to the start of the word it is in.
 ///
 /// # Safety
@@ -400,7 +394,7 @@ unsafe fn find_end_of_word(pos: Pos) {
 }
 
 fn end_of_word(mut pos: Pos, line: &[u8]) {
-    let exclusive = selection_exclusive();
+    let exclusive = sel_exclusive();
     if exclusive && pos.col > 0 {
         pos.col = pos.col - 1 - head_off(line, pos.col as usize - 1);
     }

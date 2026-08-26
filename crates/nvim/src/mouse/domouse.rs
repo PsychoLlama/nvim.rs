@@ -870,7 +870,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
                     let p = get_cursor_pos_ptr();
                     (*p != NUL as c_char).then(|| utfc_ptr2len(p))
                 };
-                if let Some(bytes) = under.filter(|_| selection_exclusive()) {
+                if let Some(bytes) = under.filter(|_| sel_exclusive()) {
                     win.w_cursor.col += bytes;
                 }
                 // SAFETY: the cursor is a live position in the current buffer.
@@ -919,7 +919,7 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
     win.w_cursor = pos;
     if oap.motion_type == kMTLineWise {
         set_visual_mode(VisualMode::LINE);
-    } else if selection_exclusive() {
+    } else if sel_exclusive() {
         if lt(win.w_cursor, visual_anchor()) {
             with_visual_anchor(|visual| visual.col += 1);
         } else {
