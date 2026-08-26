@@ -1,10 +1,13 @@
 //! [`SlotTable`]: the shape an editor registry takes once it is owned Rust.
 //!
-//! The editor keeps its long-lived objects — timers, channels, and (from
-//! phase 23's later slices) buffers, windows and tab pages — in a table
-//! keyed by the monotone id the user sees. Upstream spells that as a khash
-//! `Map_*` reached through a raw pointer; this is the same table with the
-//! raw pointer gone.
+//! The editor keeps its long-lived objects — timers, channels, buffers,
+//! windows and tab pages — in a table keyed by the monotone id the user
+//! sees. Upstream spells that as a khash `Map_*` reached through a raw
+//! pointer; this is the same table with the raw pointer gone.
+//!
+//! [`SlotTable`] is the table itself. [`HandleRegistry`] is the three
+//! graph registries' shared shape on top of it — see its own docs for the
+//! liveness invariant that makes a lookup a *safe* call.
 //!
 //! # The order is part of the contract
 //!
@@ -53,6 +56,8 @@
 
 use core::hash::{BuildHasherDefault, Hash, Hasher};
 use std::collections::HashMap;
+
+use crate::types::handle_T;
 
 /// A registry: values found by id, iterated in khash's order.
 ///
@@ -126,6 +131,62 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
     }
 }
 
+/// The live objects of one kind, found by the handle the user sees: the
+/// shape `buffer_handles`, `window_handles` and `tabpage_handles` share.
+///
+/// # The liveness invariant
+///
+/// **Everything in here is live.** There are exactly two ways to change the
+/// table — [`register`](Self::register), called by the allocator once the
+/// object exists, and [`forget`](Self::forget), called by the free path
+/// before the memory goes back — and the free paths call `forget` *first*,
+/// so no window between the two is observable. That is what lets
+/// [`crate::winlayer`] answer a lookup with a plain `Win`/`Buf`/`TabPage`
+/// from a **safe** function: the promise those wrappers' constructors ask
+/// for is discharged here, once, rather than at every call site.
+///
+/// An object that is freed *lazily* is a different matter and is not this
+/// type's business: `au_pending_free_win`/`_buf` defer the free itself, and
+/// the handle stays registered until it runs — which is exactly what the
+/// khash map did, so a lookup answers the same thing it always did.
+///
+/// The values are raw pointers rather than owned allocations. Ownership of
+/// the `win_T`/`buf_T`/`tabpage_T` moves in a later slice; what moved here
+/// is the *table*.
+pub(crate) struct HandleRegistry<T> {
+    /// Handle to the object it names. `V: Copy` — see the module docs on
+    /// reentrancy; an autocommand fires between two of these calls all the
+    /// time, so no borrow may outlive one.
+    live: SlotTable<handle_T, *mut T>,
+}
+
+impl<T> HandleRegistry<T> {
+    /// An empty registry. `const`, so it can be a `static`.
+    pub(crate) const fn new() -> Self {
+        HandleRegistry {
+            live: SlotTable::new(),
+        }
+    }
+
+    /// The object `handle` names, or `None` when nothing is registered
+    /// under it — which is what the khash miss answered with a null.
+    pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
+        self.live.get(handle)
+    }
+
+    /// Record `object` as the live object named by `handle`.
+    pub(crate) fn register(&mut self, handle: handle_T, object: *mut T) {
+        self.live.insert(handle, object);
+    }
+
+    /// Drop `handle`, whether or not it was registered — `map_del` on an
+    /// absent key is a no-op upstream too, and the reused autocommand
+    /// window relies on that.
+    pub(crate) fn forget(&mut self, handle: handle_T) {
+        self.live.remove(handle);
+    }
+}
+
 /// Mixes an id so the top bits — which the hash table probes first — depend
 /// on all of it. Registry ids are small and consecutive, which the identity
 /// hash spreads badly and SipHash costs too much for. As
@@ -179,7 +240,7 @@ impl Hasher for IdHasher {
 
 #[cfg(test)]
 mod tests {
-    use super::SlotTable;
+    use super::{HandleRegistry, SlotTable};
 
     /// The table's own view of itself, checked after every mutation: the
     /// index agrees with the slots, and every key is findable.
@@ -285,5 +346,88 @@ mod tests {
             table.remove(key);
         }
         assert!(table.snapshot_keys().is_empty());
+    }
+
+    // -- HandleRegistry ----------------------------------------------------
+    //
+    // Small on purpose: these run under Miri, where every allocation is
+    // interpreted. What they check is the wrapper's contract, not the slot
+    // table's -- that is covered above.
+
+    /// A stand-in for `win_T`: the registry stores an address and never
+    /// reads through it, so an empty type will do.
+    struct Object;
+
+    #[test]
+    fn an_empty_registry_finds_nothing() {
+        let reg: HandleRegistry<Object> = HandleRegistry::new();
+        assert_eq!(reg.get(1), None);
+    }
+
+    #[test]
+    fn a_registered_handle_answers_its_object() {
+        let (mut a, mut b) = (Object, Object);
+        let (pa, pb) = (&raw mut a, &raw mut b);
+        let mut reg: HandleRegistry<Object> = HandleRegistry::new();
+        reg.register(7, pa);
+        reg.register(9, pb);
+        assert_eq!(reg.get(7), Some(pa));
+        assert_eq!(reg.get(9), Some(pb));
+        assert_eq!(reg.get(8), None);
+    }
+
+    /// The free path calls `forget` and the object stops being findable —
+    /// which is the whole of the liveness invariant.
+    #[test]
+    fn a_forgotten_handle_is_gone() {
+        let mut a = Object;
+        let mut reg: HandleRegistry<Object> = HandleRegistry::new();
+        reg.register(7, &raw mut a);
+        reg.forget(7);
+        assert_eq!(reg.get(7), None);
+    }
+
+    /// `map_del` on an absent key is a no-op upstream, and the autocommand
+    /// window — unregistered while idle, re-registered when borrowed —
+    /// depends on it.
+    #[test]
+    fn forgetting_an_unregistered_handle_is_a_no_op() {
+        let mut a = Object;
+        let mut reg: HandleRegistry<Object> = HandleRegistry::new();
+        reg.register(7, &raw mut a);
+        reg.forget(8);
+        reg.forget(8);
+        assert_eq!(reg.get(7), Some(&raw mut a));
+    }
+
+    /// The autocommand window's cycle: registered at allocation, taken out
+    /// when it is given back, put in again when it is borrowed. The handle
+    /// never changes and the address never changes.
+    #[test]
+    fn a_handle_can_be_registered_again_after_being_forgotten() {
+        let mut a = Object;
+        let pa = &raw mut a;
+        let mut reg: HandleRegistry<Object> = HandleRegistry::new();
+        for _ in 0..3 {
+            reg.register(7, pa);
+            assert_eq!(reg.get(7), Some(pa));
+            reg.forget(7);
+            assert_eq!(reg.get(7), None);
+        }
+    }
+
+    /// Handles are handed out by a monotone counter and never reused, but a
+    /// reused *address* must not confuse the table: what is keyed is the
+    /// handle.
+    #[test]
+    fn a_new_handle_may_name_a_recycled_address() {
+        let mut a = Object;
+        let pa = &raw mut a;
+        let mut reg: HandleRegistry<Object> = HandleRegistry::new();
+        reg.register(7, pa);
+        reg.forget(7);
+        reg.register(8, pa);
+        assert_eq!(reg.get(7), None);
+        assert_eq!(reg.get(8), Some(pa));
     }
 }

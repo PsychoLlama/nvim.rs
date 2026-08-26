@@ -32,8 +32,8 @@ use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
 use crate::main::{
-    buffer_handles, curbuf, e_buffer_nr_not_found, e_noalt, emsg_silent, firstbuf, in_assert_fails,
-    jop_flags, lastbuf, p_sol, swb_flags,
+    curbuf, e_buffer_nr_not_found, e_noalt, emsg_silent, firstbuf, in_assert_fails, jop_flags,
+    lastbuf, p_sol, swb_flags,
 };
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xcalloc, xfree, xstrdup};
@@ -49,12 +49,12 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg_c;
 use crate::types::{
     AdditionalData, Callback, FAIL, FileID, OK, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
-    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T,
-    size_t, uint64_t,
+    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, regprog_T, size_t,
+    uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
-use crate::winlayer::{Buf, Win, windows};
+use crate::winlayer::{Buf, Win, register_buffer, windows};
 use ::libc::strlen;
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};
@@ -389,9 +389,9 @@ fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
 
 /// A zeroed `buf_T` with its `b:` dictionary and `b:changedtick` in place.
 fn new_buffer() -> Buf {
-    // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
-    // `buf_T` is what upstream starts one from.
-    let mut buf = unsafe { Buf::new(xcalloc(1, size_of::<buf_T>()).cast::<buf_T>()) };
+    // A zeroed `buf_T` is what upstream starts one from; `append_to_list`
+    // gives it its number and puts it in the registry.
+    let mut buf = alloc_unregistered_buffer();
     // Init the b: variables.
     // SAFETY: a fresh dictionary for the buffer's own `b:` scope.
     buf.b_vars = unsafe { tv_dict_alloc() };
@@ -400,6 +400,30 @@ fn new_buffer() -> Buf {
     unsafe { init_var_dict(vars, scope_var, VAR_SCOPE) };
     buf_init_changedtick(buf);
     buf
+}
+
+/// A `buf_T` that lives **outside** the handle registry and off the buffer
+/// list: scratch storage whose only real content is a memline.
+///
+/// Two exist, and both are the editor's own business rather than the user's:
+/// `ml_recover`'s, which holds the memline of the swap file being read, and
+/// `open_spellbuf`'s, which backs a `.sug` word list with a swap file so it
+/// need not stay in memory. Neither is given a handle, neither is registered
+/// (so `buflist_findnr`, `nvim_list_bufs` and every `FOR_ALL_BUFFERS` walk
+/// are blind to them, which is the point), and neither goes through
+/// `close_buffer`/`free_buffer` — each is freed by the code that made it.
+///
+/// The constructor is named so that "the registry owns every buffer" has a
+/// stated exception rather than a silent one; see [`new_buffer`] for the
+/// ordinary path.
+///
+/// Most fields stay zero and are *not* valid buffer state: string options
+/// are null, there are no `b:` variables and no undo information. Only what
+/// the caller fills in afterwards may be read.
+pub(crate) fn alloc_unregistered_buffer() -> Buf {
+    // SAFETY: `xcalloc` aborts rather than answering null, so this is a
+    // fresh zeroed `buf_T`, live until its owner frees it.
+    unsafe { Buf::new(xcalloc(1, size_of::<buf_T>()).cast::<buf_T>()) }
 }
 
 /// Put a new buffer at the end of the buffer list and give it its number.
@@ -421,10 +445,7 @@ fn append_to_list(mut buf: Buf) {
 
     buf.handle = top_file_num.get() as handle_T;
     top_file_num.set(top_file_num.get() + 1);
-    let (handle, raw) = (buf.handle as c_int, buf.raw().cast::<c_void>() as ptr_t);
-    // The borrow of the handle map lasts only for the insertion, which does
-    // not re-enter.
-    buffer_handles.with_mut(|map| map_put_int_ptr_t(map, handle, raw));
+    register_buffer(buf);
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));

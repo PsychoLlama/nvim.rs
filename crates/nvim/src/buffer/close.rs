@@ -35,10 +35,9 @@ use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_init, hash_remove};
 use crate::main::{
-    au_pending_free_buf, autocmd_busy, buffer_handles, curbuf, curtab, curwin, e_auabort, exiting,
-    firstbuf, lastbuf, updating_screen,
+    au_pending_free_buf, autocmd_busy, curbuf, curtab, curwin, e_auabort, exiting, firstbuf,
+    lastbuf, updating_screen,
 };
-use crate::map::map_del_int_ptr_t;
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
@@ -49,13 +48,13 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, Timestamp, WinInfo, colnr_T, dictitem_T, fmark_T, fmarkv_T, garray_T, hashtab_T,
-    linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, Timestamp, WinInfo, colnr_T, dictitem_T, fmark_T, fmarkv_T, garray_T, handle_T,
+    hashtab_T, linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::uc_clear;
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
-use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
+use crate::winlayer::{Buf, TabPage, Win, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
@@ -264,11 +263,11 @@ fn forget_autocmds(mut buf: Buf) {
     unsafe { aubuflocal_remove(buf.raw()) };
 }
 
-/// Drop the buffer's handle from the global handle map.
-fn forget_handle(fnum: c_int) {
-    // SAFETY: the map is the editor's own; a null out-parameter means "do
-    // not report the removed value".
-    buffer_handles.with_mut(|map| unsafe { map_del_int_ptr_t(map, fnum, ptr::null_mut()) });
+/// Drop the buffer's number from the registry, so that nothing can look it
+/// up again. The first thing [`free_buffer`] does, which is what lets the
+/// registry promise that everything in it is live.
+fn forget_handle(fnum: handle_T) {
+    forget_buffer(fnum);
 }
 
 // ---------------------------------------------------------------------------
@@ -805,7 +804,7 @@ fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
 /// Free the buffer structure and everything belonging to the *buffer* rather
 /// than to the file, which must have been freed already.
 fn free_buffer(mut buf: Buf) {
-    forget_handle(buf.handle as c_int);
+    forget_handle(buf.handle());
     note_buffer_freed();
     // b:changedtick uses an item in buf_T.
     free_buffer_stuff(buf, kBffClearWinInfo as c_int);

@@ -32,10 +32,8 @@ use crate::hashtab::hash_init;
 use crate::main::{
     Columns, Rows, cmdmod, cmdwin_type, curbuf, curtab, curwin, diff_need_scrollbind, e_cmdwin,
     first_tabpage, firstwin, lastused_tabpage, lastwin, p_ch, p_tpm, postponed_split_tab, prevwin,
-    redraw_tabline, skip_win_fix_scroll, starting, tabpage_handles, tabpage_move_disallowed,
-    topframe,
+    redraw_tabline, skip_win_fix_scroll, starting, tabpage_move_disallowed, topframe,
 };
-use crate::map::map_del_int_ptr_t;
 use crate::memory::{xcalloc, xstrdup};
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
@@ -44,10 +42,10 @@ use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
     CMD_tabnew, FAIL, OK, OptInt, OptVal, OptValData, OptionSetFlags, VAR_SCOPE, buf_T, handle_T,
-    int64_t, ptr_t, switchwin_T, tabpage_T,
+    int64_t, switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
-use crate::winlayer::tabs;
+use crate::winlayer::{forget_tabpage, register_tabpage, tabs};
 
 pub unsafe fn unuse_tabpage(tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
@@ -86,8 +84,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     let mut tp = unsafe { TabPage::new(xcalloc(1, size_of::<tabpage_T>()) as *mut tabpage_T) };
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
     tp.handle = LAST_TP_HANDLE.get() as handle_T;
-    let (key, val) = (tp.handle as c_int, tp.raw() as ptr_t);
-    tabpage_handles.with_mut(|map| map_put_int_ptr_t(map, key, val));
+    register_tabpage(tp);
 
     // Init t: variables.
     // SAFETY: a fresh dictionary, which becomes the tab page's own.
@@ -108,10 +105,7 @@ pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
 /// Free `tp` and everything hanging off it.
 pub(crate) fn free_tab(tp: TabPage) {
     let mut tp = tp;
-    let key = tp.handle as c_int;
-    // SAFETY: the handle map is the editor's own; a null slot means "do not
-    // report the old value".
-    tabpage_handles.with_mut(|map| unsafe { map_del_int_ptr_t(map, key, ptr::null_mut()) });
+    forget_tabpage(tp.handle());
     // SAFETY: a live tab page's diff state.
     unsafe { diff_clear(tp.raw()) };
     for idx in 0..SNAP_COUNT {

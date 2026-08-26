@@ -37,20 +37,18 @@ use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repea
 use crate::guard::Allow;
 use crate::main::{
     State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline,
-    redraw_mode, restart_edit, stop_insert_mode, window_handles,
+    redraw_mode, restart_edit, stop_insert_mode,
 };
 use crate::memory::{strequal, xstrdup};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
-use crate::types::{
-    OptInt, VimState, colnr_T, handle_T, linenr_T, pos_T, uint8_t, win_T, winopt_T,
-};
+use crate::types::{OptInt, VimState, colnr_T, handle_T, linenr_T, pos_T, uint8_t, winopt_T};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{self, Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
@@ -58,7 +56,7 @@ use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
 use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
-use super::{Term, map_get_int_ptr_t, row_to_linenr, terminal_check_size, terminal_set_state};
+use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
 use crate::keycodes::{
     Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, K_COMMAND, K_EVENT, K_IGNORE, K_LUA, K_NOP, K_PASTE_START,
 };
@@ -191,10 +189,7 @@ fn current_buf() -> Buf {
 
 /// The window a handle names, `None` once it has been closed.
 fn win_for_handle(handle: handle_T) -> Option<Win> {
-    // SAFETY: the handle map is the editor's own, live from startup to
-    // exit, and the null it answers for a closed window is what
-    // `Win::from_raw` reads as `None`.
-    unsafe { Win::from_raw(map_get_int_ptr_t(window_handles.ptr(), handle) as *mut win_T) }
+    winlayer::window(handle)
 }
 
 /// Tell the child whether it has focus, so it can show its own cursor

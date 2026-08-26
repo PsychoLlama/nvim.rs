@@ -20,6 +20,12 @@
 //! inherent impl may live in any module of the defining crate), so this module
 //! stays the shared minimum rather than growing a method per caller.
 //!
+//! The three **handle registries** live here too — see "Finding one by
+//! handle" below. They are the one place a `Win`/`Buf`/`TabPage` is built
+//! from a handle rather than from a pointer a caller already had, and
+//! because the registry's own invariant is that everything in it is live,
+//! [`window`], [`buffer`] and [`tabpage`] are **safe** functions.
+//!
 //! The walks at the bottom — [`windows`], [`windows_in_tab`], [`tab_windows`],
 //! [`buffers`] and [`frames`], plus [`tabs`] and [`frames_back`] under them —
 //! are the C's `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`,
@@ -35,12 +41,16 @@ use core::{iter, ptr};
 
 use crate::drawscreen::redraw_later;
 use crate::fold::{has_any_folding, has_folding};
+use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::{StrCharInfo, buf_T, colnr_T, frame_T, linenr_T, pos_T, tabpage_T, win_T};
+use crate::registry::HandleRegistry;
+use crate::types::{
+    StrCharInfo, buf_T, colnr_T, frame_T, handle_T, linenr_T, pos_T, tabpage_T, win_T,
+};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -194,6 +204,13 @@ impl Win {
     #[inline(always)]
     pub fn raw(self) -> *mut win_T {
         self.0
+    }
+
+    /// This window's id: the handle the API, `win_getid()` and the registry
+    /// all name it by. Identity that survives the address being reused.
+    #[inline(always)]
+    pub fn handle(self) -> handle_T {
+        self.handle
     }
 
     /// Whether this is the window the editor is working in.
@@ -378,6 +395,13 @@ impl Buf {
         self.0
     }
 
+    /// This buffer's number: the handle the API and `:ls` show, and what the
+    /// registry finds it by. [`Win::handle`] for a buffer.
+    #[inline(always)]
+    pub fn handle(self) -> handle_T {
+        self.handle
+    }
+
     #[inline(always)]
     pub fn line_count(self) -> linenr_T {
         self.b_ml.ml_line_count
@@ -530,6 +554,12 @@ impl TabPage {
         self.0
     }
 
+    /// This tab page's id. [`Win::handle`] for a tab page.
+    #[inline(always)]
+    pub fn handle(self) -> handle_T {
+        self.handle
+    }
+
     /// Whether this is the tab page the editor is working in.
     ///
     /// Safe where [`TabPage::current`] is not: comparing the two pointers
@@ -634,6 +664,93 @@ impl Line {
     pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
         ci.ptr.addr().wrapping_sub(self.0.addr()) as ::core::ffi::c_int
     }
+}
+
+// ---------------------------------------------------------------------------
+// Finding one by handle
+//
+// The editor hands every window, buffer and tab page a monotone id — a
+// `handle_T` — and keeps a table from that id to the object, so that an API
+// call, an RPC message or a Lua callback can name one without holding a
+// pointer across the call that might free it. Upstream spells the three
+// tables as khash `Map_int_ptr_t`s reached through a raw pointer
+// (`window_handles`, `buffer_handles`, `tabpage_handles`); here they are
+// owned Rust, one [`HandleRegistry`] each.
+//
+// They live in this module and their statics are private, so that the two
+// halves of the invariant [`HandleRegistry`] documents — everything in the
+// table is live — are enforced by visibility rather than by review: the
+// only way in is `register_*`, which the allocator calls, and the only way
+// out is `forget_*`, which the free path calls first. That is what makes
+// the three lookups safe functions.
+//
+// A registry does *not* answer "is this window on screen": a hidden window
+// (`win_alloc(_, hidden)`) is registered and on no list, and the autocommand
+// window is unregistered while it is idle. `win_valid` and friends stay list
+// walks — see `window::win_valid`.
+
+/// Every live window, by handle.
+static WINDOWS: GlobalCell<HandleRegistry<win_T>> = GlobalCell::new(HandleRegistry::new());
+
+/// Every live buffer, by number.
+static BUFFERS: GlobalCell<HandleRegistry<buf_T>> = GlobalCell::new(HandleRegistry::new());
+
+/// Every live tab page, by handle.
+static TABPAGES: GlobalCell<HandleRegistry<tabpage_T>> = GlobalCell::new(HandleRegistry::new());
+
+/// The window `handle` names, `None` once it has been closed.
+pub(crate) fn window(handle: handle_T) -> Option<Win> {
+    // The borrow ends with the lookup, which cannot re-enter.
+    WINDOWS.with(|reg| reg.get(handle)).map(Win)
+}
+
+/// The buffer numbered `handle`, `None` once it has been wiped.
+pub(crate) fn buffer(handle: handle_T) -> Option<Buf> {
+    // As [`window`].
+    BUFFERS.with(|reg| reg.get(handle)).map(Buf)
+}
+
+/// The tab page `handle` names, `None` once it has been closed.
+pub(crate) fn tabpage(handle: handle_T) -> Option<TabPage> {
+    // As [`window`].
+    TABPAGES.with(|reg| reg.get(handle)).map(TabPage)
+}
+
+/// Record `win` as the live window its handle names.
+///
+/// Called by the window allocator, and again by `aucmd_prepbuf` when it puts
+/// the reused autocommand window back on a list.
+pub(crate) fn register_window(win: Win) {
+    let (handle, raw) = (win.handle(), win.raw());
+    WINDOWS.with_mut(|reg| reg.register(handle, raw));
+}
+
+/// Forget the window `handle` names, before its memory goes back — or, for
+/// the autocommand window, while it is idle and must not be findable.
+pub(crate) fn forget_window(handle: handle_T) {
+    WINDOWS.with_mut(|reg| reg.forget(handle));
+}
+
+/// [`register_window`] for a buffer, called once its number is assigned.
+pub(crate) fn register_buffer(buf: Buf) {
+    let (handle, raw) = (buf.handle(), buf.raw());
+    BUFFERS.with_mut(|reg| reg.register(handle, raw));
+}
+
+/// [`forget_window`] for a buffer.
+pub(crate) fn forget_buffer(handle: handle_T) {
+    BUFFERS.with_mut(|reg| reg.forget(handle));
+}
+
+/// [`register_window`] for a tab page.
+pub(crate) fn register_tabpage(tp: TabPage) {
+    let (handle, raw) = (tp.handle(), tp.raw());
+    TABPAGES.with_mut(|reg| reg.register(handle, raw));
+}
+
+/// [`forget_window`] for a tab page.
+pub(crate) fn forget_tabpage(handle: handle_T) {
+    TABPAGES.with_mut(|reg| reg.forget(handle));
 }
 
 // ---------------------------------------------------------------------------

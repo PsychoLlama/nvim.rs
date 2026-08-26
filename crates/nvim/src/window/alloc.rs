@@ -30,9 +30,8 @@ use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::main::{
     Columns, Rows, au_pending_free_win, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin,
-    p_ch, prevwin, topframe, window_handles,
+    p_ch, prevwin, topframe,
 };
-use crate::map::map_del_int_ptr_t;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
@@ -42,11 +41,11 @@ use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Error, FAIL, Integer, OK, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T, handle_T,
-    kErrorTypeNone, linenr_T, ptr_t, tabpage_T, win_T, winopt_T,
+    kErrorTypeNone, linenr_T, tabpage_T, win_T, winopt_T,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::{Buf, Frame, TabPage, Win, buffers, tabs};
+use crate::winlayer::{Buf, Frame, TabPage, Win, buffers, forget_window, register_window, tabs};
 use ::libc::abort;
 
 // ---------------------------------------------------------------------------
@@ -209,8 +208,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     let mut new_wp = unsafe { Win::new(zeroed_window()) };
     last_win_id.set(last_win_id.get() + 1);
     new_wp.handle = last_win_id.get() as handle_T;
-    let (key, val) = (new_wp.handle as c_int, new_wp.raw());
-    window_handles.with_mut(|map| map_put_int_ptr_t(map, key, val as ptr_t));
+    register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
     // SAFETY: a fresh dictionary, which becomes the window's own.
@@ -277,9 +275,7 @@ pub unsafe fn win_free(wp: *mut win_T, tp: *mut tabpage_T) {
 /// Take `wp` off the window list and free everything hanging off it.
 fn free_win(wp: Win, tp: Option<TabPage>) {
     let mut wp = wp;
-    let (map, key) = (window_handles.ptr(), wp.handle as c_int);
-    // SAFETY: the handle map is the editor's own.
-    unsafe { map_del_int_ptr_t(map, key, ptr::null_mut()) };
+    forget_window(wp.handle());
     // SAFETY: a live window; reduces the reference count to its argument list.
     unsafe { clear_folding(wp.raw()) };
     // SAFETY: the window's own argument list.
@@ -322,7 +318,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     free_click_defs(wp.w_statuscol_click_defs, wp.w_statuscol_click_defs_size);
 
     for buf in buffers() {
-        forget_window(buf, wp);
+        forget_wininfo(buf, wp);
     }
 
     // Free the border text.
@@ -355,7 +351,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
 /// Drop `wp` from `buf`'s remembered positions, and with it the older of the
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
-fn forget_window(buf: Buf, wp: Win) {
+fn forget_wininfo(buf: Buf, wp: Win) {
     let mut buf = buf;
     let mut infos = WinInfos::of(&mut buf);
     let len = infos.entries_mut().len();

@@ -11,17 +11,17 @@ use crate::lua::ffi::{
     luaL_checkinteger, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
     luaL_newmetatable, luaL_ref, luaL_register, luaL_unref,
 };
-use crate::main::{buffer_handles, tslua_query_parse_count};
-use crate::map::{map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_cstr_t, mh_get_int};
+use crate::main::tslua_query_parse_count;
+use crate::map::{map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_cstr_t};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::os::cshim::{__ctype_b_loc, snprintf, strchr};
 use crate::os::time::os_hrtime;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, Set_cstr_t, buf_T, cstr_t, handle_T, int32_t,
-    linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t,
-    uint32_t, uint64_t, uv_lib_t,
+    LuaRef, Map_cstr_t_ptr_t, MapHash, Set_cstr_t, buf_T, cstr_t, handle_T, int32_t, linenr_T,
+    lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t, uint32_t,
+    uint64_t, uv_lib_t,
 };
 use ::libc::{abort, memcmp, memcpy, strlen};
 
@@ -392,17 +392,6 @@ pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
     unsafe { mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t }
-}
-#[inline]
-unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
-    unsafe {
-        let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE as uint32_t {
-            value_init_ptr_t.get()
-        } else {
-            *(*map).values.offset(k as isize)
-        }
-    }
 }
 #[inline]
 unsafe fn map_put_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t, mut value: ptr_t) {

@@ -19,12 +19,12 @@ use super::*;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
-use crate::main::{buffer_handles, curbuf, p_fic, p_wic};
+use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{FAIL, OK, buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
-use crate::winlayer::{Buf, Win, buffers};
+use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
 /// A `regmatch_T` holding no compiled program.
@@ -351,23 +351,18 @@ fn fname_match(rmp: &mut regmatch_T, name: *mut c_char, ignore_case: bool) -> *m
 
 /// The buffer numbered `nr`, or the alternate file for 0.
 pub fn buflist_findnr(nr: c_int) -> *mut buf_T {
+    find_buf(nr).map_or(ptr::null_mut(), Buf::raw)
+}
+
+/// [`buflist_findnr`] with its answer wrapped -- the registry lookup both
+/// rest on, "0 means the alternate file" included.
+pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
     let nr = if nr == 0 {
         current_win().w_alt_fnum
     } else {
         nr
     };
-    // The borrow of the handle map lasts only for the lookup, which does not
-    // re-enter; the answer is a live buffer or null.
-    buffer_handles
-        .with_mut(|map| map_get_int_ptr_t(map, nr))
-        .cast::<buf_T>()
-}
-
-/// [`buflist_findnr`] with its answer wrapped.
-pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
-    // SAFETY: a plain buffer number in; the handle map answers a live buffer
-    // or null, and only the non-null case reaches `Buf`.
-    unsafe { buflist_findnr(nr).as_mut().map(|buf| Buf::new(buf)) }
+    winlayer::buffer(nr)
 }
 
 /// The name of buffer `n`, shortened with `home_replace`, freshly allocated;

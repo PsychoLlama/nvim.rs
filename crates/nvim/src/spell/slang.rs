@@ -21,6 +21,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 
+use crate::buffer::alloc_unregistered_buffer;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::hashtab::{
     hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_removed,
@@ -327,7 +328,9 @@ pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -
 /// undo information.
 pub unsafe fn open_spellbuf() -> *mut buf_T {
     unsafe {
-        let buf = xcalloc(1, size_of::<buf_T>()) as *mut buf_T;
+        // Never registered and never on the buffer list -- see
+        // `alloc_unregistered_buffer`.
+        let buf = alloc_unregistered_buffer().raw();
 
         (*buf).b_spell = true;
         (*buf).b_p_swf = 1;

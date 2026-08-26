@@ -168,7 +168,9 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
             block_autocmds();
             if need_append {
                 win_append(lastwin.get(), auc_win, ::core::ptr::null_mut());
-                map_put_int_ptr_t(window_handles.ptr(), (*auc_win).handle, auc_win as ptr_t);
+                // The window is findable by handle again for as long as it
+                // is on a list; `aucmd_restbuf` takes it back out.
+                register_window(Win::new(auc_win));
                 win_config_float(auc_win, (*auc_win).w_config.clone());
             }
             // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
@@ -231,11 +233,9 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
 
             (*curbuf.get()).b_nwindows -= 1;
             win_remove(curwin.get(), ::core::ptr::null_mut());
-            map_del_int_ptr_t(
-                window_handles.ptr(),
-                (*curwin.get()).handle,
-                ::core::ptr::null_mut(),
-            );
+            // The window is given back, not freed, so it goes out of the
+            // registry rather than being forgotten by a free path.
+            forget_window((*curwin.get()).handle);
             if (*curwin.get()).w_grid_alloc.is_allocated() {
                 ui_comp_remove_grid(&raw mut (*curwin.get()).w_grid_alloc);
                 ui_call_win_hide((*curwin.get()).w_grid_alloc.handle as Integer);

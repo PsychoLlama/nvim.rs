@@ -162,23 +162,30 @@ plus these whole-tree metrics, which are not per-file:
                         handed to `tcsetattr`. They cannot become owned Rust
                         state without rewriting the C library underneath
                         them, so they are exempt outright.
-                      deferred   — CELL_PTR_DEFERRED, counted as
-                        `cell_ptr_deferred`.
                       keepers    — CELL_PTR_KEEPERS, counted as
                         `cell_ptr_keepers`.
                       accessors  — everything else, counted as
                         `cell_ptr_accessors`, and capped at **one site per
                         receiver** (see `check_cell_ptr`).
 
-                    All three lists are keyed by *name*, not by file,
+                    Both lists are keyed by *name*, not by file,
                     deliberately: `main_loop` alone is read from 29 files
                     that also hold unrelated `.ptr()` sites, so a file-keyed
                     list would exempt those too. A rename cannot silently
-                    widen CELL_PTR_ALLOW or CELL_PTR_DEFERRED — `check_names`
-                    fails the run if a listed name no longer declares a
-                    GlobalCell/SharedCell static — and it cannot widen
-                    CELL_PTR_KEEPERS either, because a renamed keeper's sites
-                    land in the accessor class and trip the one-site cap.
+                    widen CELL_PTR_ALLOW — `check_names` fails the run if a
+                    listed name no longer declares a GlobalCell/SharedCell
+                    static — and it cannot widen CELL_PTR_KEEPERS either,
+                    because a renamed keeper's sites land in the accessor
+                    class and trip the one-site cap.
+
+                    (A third register, CELL_PTR_DEFERRED, held the handle
+                    registries while phase 23 took ownership of them. It
+                    reached 0 in that phase's S4 — `buffer_handles`,
+                    `window_handles` and `tabpage_handles` are owned
+                    `SlotTable`s now, and there is no address left to hand
+                    out — and it was deleted with its metric, as its own
+                    rule requires: an empty register is a floor with nothing
+                    under it.)
 
                     (This replaces `cell_ptr_unlisted`, which was
                     `cell_ptr` minus the boundary and was retired at the
@@ -188,14 +195,6 @@ plus these whole-tree metrics, which are not per-file:
                     `GlobalCell` offers no way *but* `ptr()` to answer a
                     family that works from an address, and the accessor class
                     is where those live.)
-
-  cell_ptr_deferred  `cell_ptr` sites on a global whose ownership is phase
-                    23's business rather than phase 22's — the handle
-                    registries and the two khash maps behind them. Six names,
-                    each carrying its reason in CELL_PTR_DEFERRED. Shrink-only
-                    like everything else; it reaches 0 when phase 23 lands,
-                    and a name whose sites are all gone is stale and fails the
-                    run rather than propping the floor up.
 
   cell_ptr_keepers  `cell_ptr` sites on a global a slice *ruled* may keep
                     more than one, with the ruling named in CELL_PTR_KEEPERS.
@@ -410,14 +409,6 @@ CELL_PTR_ALLOW = {
 CELL_PTR_ALLOW_RE = re.compile(
     r"\b(?:" + "|".join(map(re.escape, CELL_PTR_ALLOW)) + r")\.(?:ptr|as_raw)\(\)"
 )
-# Globals whose ownership belongs to phase 23 (the handle registries and the
-# khash maps behind them), not to phase 22's editor state. Counted as
-# `cell_ptr_deferred`, shrink-only, and each entry names what retires it.
-CELL_PTR_DEFERRED = {
-    "window_handles": "khash of window handles; retires with phase 23's registry ownership",
-    "buffer_handles": "khash of buffer handles; retires with phase 23's registry ownership",
-    "tabpage_handles": "khash of tabpage handles; retires with phase 23's registry ownership",
-}
 # Globals a slice ruled may hold more than one site, and the ruling. Counted
 # as `cell_ptr_keepers`. Without this list each would trip the accessor cap;
 # see "the cell_ptr partition" in the doc block for why the cap is kept.
@@ -928,20 +919,18 @@ def cell_ptr_receivers(tree):
 
 
 def cell_ptr_partition(stats, tree):
-    """The three ratcheted `cell_ptr` classes. See the doc block.
+    """The two ratcheted `cell_ptr` classes. See the doc block.
 
-    The boundary is subtracted rather than counted, so the three returned
+    The boundary is subtracted rather than counted, so the two returned
     numbers plus the boundary's own sites are exactly the `cell_ptr` total.
     """
     seen = cell_ptr_receivers(tree)
     total = sum(counts["cell_ptr"] for counts in stats.values())
     boundary = sum(seen[name] for name in CELL_PTR_ALLOW)
-    deferred = sum(seen[name] for name in CELL_PTR_DEFERRED)
     keepers = sum(seen[name] for name in CELL_PTR_KEEPERS)
     return {
-        "cell_ptr_deferred": deferred,
         "cell_ptr_keepers": keepers,
-        "cell_ptr_accessors": total - boundary - deferred - keepers,
+        "cell_ptr_accessors": total - boundary - keepers,
     }
 
 
@@ -956,7 +945,7 @@ def whole_tree(stats, tree):
 
 
 def check_cell_ptr(tree):
-    """The accessor cap, and the two registers' freshness.
+    """The accessor cap, and the keeper register's freshness.
 
     One `.ptr()` per receiver is the acquire-once shape phase 22 converged
     on; a second one means a family has started working from the address
@@ -970,7 +959,7 @@ def check_cell_ptr(tree):
     progress that has to say so by moving the entry out of the register.
     """
     seen = cell_ptr_receivers(tree)
-    listed = {*CELL_PTR_ALLOW, *CELL_PTR_DEFERRED, *CELL_PTR_KEEPERS}
+    listed = {*CELL_PTR_ALLOW, *CELL_PTR_KEEPERS}
     if over := sorted(
         (name, n) for name, n in seen.items() if n > 1 and name not in listed
     ):
@@ -982,9 +971,7 @@ def check_cell_ptr(tree):
             "ruled the address is what the family works from -- add the name "
             "to CELL_PTR_KEEPERS with the ruling."
         )
-    if stale := sorted(
-        name for name in (*CELL_PTR_DEFERRED, *CELL_PTR_KEEPERS) if not seen[name]
-    ):
+    if stale := sorted(name for name in CELL_PTR_KEEPERS if not seen[name]):
         sys.exit(
             "ratchet: these names are in a cell_ptr register but have no "
             "sites left:\n  "
@@ -1008,7 +995,7 @@ def check_names(tree):
     """
     missing = [
         name
-        for name in (*CELL_PTR_ALLOW, *CELL_PTR_DEFERRED, *CELL_COPY_OWNER)
+        for name in (*CELL_PTR_ALLOW, *CELL_COPY_OWNER)
         if not any(re.search(CELL_DECL.format(name), m) for m in tree.values())
     ]
     if missing:
@@ -1016,8 +1003,8 @@ def check_names(tree):
             "ratchet: these names are on a cell allowlist but no longer "
             "declare a GlobalCell/SharedCell static:\n  "
             + "\n  ".join(missing)
-            + "\nRename them in CELL_PTR_ALLOW/CELL_PTR_DEFERRED/"
-            "CELL_COPY_OWNER, or drop the entry (and lower the baseline) if "
+            + "\nRename them in CELL_PTR_ALLOW/CELL_COPY_OWNER, or drop "
+            "the entry (and lower the baseline) if "
             "the global is gone."
         )
 
@@ -1042,7 +1029,6 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
         "{\n"
         f'  "internal_exports": {ledger_counts["internal_exports"]},\n'
         f'  "test_reached_pub": {ledger_counts["test_reached_pub"]},\n'
-        f'  "cell_ptr_deferred": {ledger_counts["cell_ptr_deferred"]},\n'
         f'  "cell_ptr_keepers": {ledger_counts["cell_ptr_keepers"]},\n'
         f'  "cell_ptr_accessors": {ledger_counts["cell_ptr_accessors"]},\n'
         f'  "cell_copy_owner": {ledger_counts["cell_copy_owner"]},\n'
@@ -1058,7 +1044,6 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
 WHOLE_TREE_LABEL = {
     "internal_exports": "abi-ledger internal exports",
     "test_reached_pub": "test-reached pub items",
-    "cell_ptr_deferred": "cell_ptr sites on a global phase 23 owns",
     "cell_ptr_keepers": "cell_ptr sites on a ruled multi-site keeper",
     "cell_ptr_accessors": "one-per-cell acquire-once cell_ptr sites",
     "cell_copy_owner": "get() copies of a Copy global owning a pointer",
@@ -1109,7 +1094,6 @@ def summary(stats, counts, without_forbid, without_deny, without_casts):
         f"{over} files over {LINE_CAP} lines",
         f"{counts['internal_exports']} internal exports",
         f"{counts['test_reached_pub']} test-reached pub items",
-        f"{counts['cell_ptr_deferred']} deferred cell_ptr sites",
         f"{counts['cell_ptr_keepers']} keeper cell_ptr sites",
         f"{counts['cell_ptr_accessors']} acquire-once cell_ptr sites",
         f"{counts['cell_copy_owner']} Copy-owner get()s",
@@ -1322,22 +1306,22 @@ SELF_TEST_CELL_PTR_SITE = [
     # Prose about one costs nothing.
     ("// POSTFIX.ptr()\nfn f() {}\n", {}),
 ]
-# (tree, expected partition). The boundary is subtracted, the two registers
-# are counted, and everything left is the accessor class -- including the
-# site with no bare-identifier receiver.
+# (tree, expected partition). The boundary is subtracted, the keeper register
+# is counted, and everything left is the accessor class -- including the site
+# with no bare-identifier receiver.
 SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
-            "a.rs": "fn f() {\n    main_loop.ptr();\n    window_handles.ptr();\n}\n",
+            "a.rs": "fn f() {\n    main_loop.ptr();\n    curwin.ptr();\n}\n",
             "b.rs": "fn g() {\n    POSTFIX.ptr();\n    POSTFIX.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
-        {"cell_ptr_deferred": 1, "cell_ptr_keepers": 2, "cell_ptr_accessors": 2},
+        {"cell_ptr_keepers": 2, "cell_ptr_accessors": 3},
     ),
 ]
 # (tree, whether check_cell_ptr should reject it)
 SELF_TEST_CELL_PTR_CHECK = [
-    # One site per unlisted receiver is the shape; the registers are intact.
+    # One site per unlisted receiver is the shape; the register is intact.
     ({"a.rs": "fn f() {\n    curbuf.ptr();\n    curwin.ptr();\n}\n"}, False),
     # A second site on an unlisted receiver is the regression.
     ({"a.rs": "fn f() {\n    curbuf.ptr();\n    curbuf.ptr();\n}\n"}, True),
@@ -1351,10 +1335,7 @@ SELF_TEST_CELL_PTR_CHECK = [
     ),
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
-    (
-        {"a.rs": "fn f() {\n    window_handles.ptr();\n    window_handles.ptr();\n}\n"},
-        False,
-    ),
+    ({"a.rs": "fn f() {\n    POSTFIX.ptr();\n    POSTFIX.ptr();\n}\n"}, False),
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
@@ -1426,10 +1407,7 @@ def self_test():
         # Every register name is present, so only the cap can fire.
         tree["registers.rs"] = mask(
             "fn keep() {\n"
-            + "".join(
-                f"    {name}.ptr();\n"
-                for name in (*CELL_PTR_DEFERRED, *CELL_PTR_KEEPERS)
-            )
+            + "".join(f"    {name}.ptr();\n" for name in CELL_PTR_KEEPERS)
             + "}\n"
         )
         try:

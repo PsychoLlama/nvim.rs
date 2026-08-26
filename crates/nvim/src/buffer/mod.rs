@@ -53,7 +53,6 @@ use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::main::{c_bytes, curbuf, curwin, firstbuf, lastbuf};
-use crate::map::{map_put_ref_int_ptr_t, mh_get_int};
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::xfree;
@@ -63,10 +62,10 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, CdCause, ExtmarkOp, Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex,
-    OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
+    AlignTextPos, CdCause, ExtmarkOp, MarkAdjustMode, MarkTree, MetaIndex, OptValType,
+    UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
     dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values, linenr_T,
-    ptr_t, uint32_t, varnumber_T,
+    uint32_t, varnumber_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -205,31 +204,7 @@ crate::flag_set! {
 pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-
-/// `pmap_get(int)`: the value stored for `key`, or the map's init value.
-#[inline]
-fn map_get_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int) -> ptr_t {
-    // SAFETY: the set is the map's own, and its key type is `int`.
-    let k: uint32_t = unsafe { mh_get_int(&raw mut map.set, key) };
-    if k == MH_TOMBSTONE as uint32_t {
-        return value_init_ptr_t.get();
-    }
-    // SAFETY: a slot the set answered for is a slot of the value array.
-    unsafe { *map.values.add(k as usize) }
-}
-
-/// `pmap_put(int)`: store `value` under `key`.
-#[inline]
-fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int, value: ptr_t) {
-    // SAFETY: the map is live; a null `oldkey`/`new` means "do not report".
-    let val: *mut ptr_t = unsafe {
-        map_put_ref_int_ptr_t(map, key, ::core::ptr::null_mut(), ::core::ptr::null_mut())
-    };
-    // SAFETY: `map_put_ref` answers a live slot of the value array.
-    unsafe { *val = value };
-}
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
 pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {

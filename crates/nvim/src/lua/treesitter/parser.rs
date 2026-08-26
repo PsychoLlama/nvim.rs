@@ -12,6 +12,7 @@ use super::*;
 use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 use crate::types::NUL;
+use crate::winlayer::{self, Buf};
 
 pub(crate) static parser_meta: ConstTable<[luaL_Reg; 9]> = luaL_reg_table![
     c"__gc" => parser_gc,
@@ -177,8 +178,8 @@ unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::
             }
             LUA_TNUMBER => {
                 bufnr = lua_tointeger(L, 3 as ::core::ffi::c_int) as handle_T;
-                buf = map_get_int_ptr_t(buffer_handles.ptr(), bufnr as ::core::ffi::c_int)
-                    as *mut buf_T;
+                buf = winlayer::buffer(bufnr as ::core::ffi::c_int)
+                    .map_or(::core::ptr::null_mut(), Buf::raw);
                 if buf.is_null() {
                     let mut ebuf: [::core::ffi::c_char; 256] = [0; 256];
                     vim_snprintf(

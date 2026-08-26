@@ -26,22 +26,21 @@ use crate::api::private::validate::api_err_invalid;
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
 use crate::highlight_group::syn_id2name;
 use crate::main::{
-    buffer_handles, curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw,
-    force_abort, got_int, msg_list, need_rethrow, tabpage_handles, trylevel, window_handles,
+    curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw, force_abort,
+    got_int, msg_list, need_rethrow, trylevel,
 };
-use crate::map::mh_get_int;
 use crate::mark::setmark_pos;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::vsnprintf;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, NUL, Object, String_0,
-    Tabpage, TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data,
-    pos_T, ptr_t, scid_T, sctx_T, size_t, tabpage_T, uint32_t, uint64_t, win_T,
+    Buffer, Dict, Error, ErrorType, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState,
+    Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
+    kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T,
+    sctx_T, size_t, tabpage_T, uint64_t, win_T,
 };
-use crate::winlayer::{Buf, TabPage, Win};
+use crate::winlayer::{self, Buf, TabPage, Win};
 
 mod keydict;
 mod text;
@@ -63,9 +62,6 @@ const ET_ERROR: except_type_T = 1;
 const DI_FLAGS_RO: c_int = 1;
 const DI_FLAGS_FIX: c_int = 4;
 const DI_FLAGS_LOCK: c_int = 8;
-
-/// The hash slot `mh_get_int` reports for a key it did not find.
-const MH_TOMBSTONE: uint32_t = u32::MAX;
 
 const NL: c_char = b'\n' as c_char;
 const CAR: c_char = b'\r' as c_char;
@@ -100,34 +96,16 @@ const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
 };
 // -- Handles ---------------------------------------------------------------
 
-/// `map_get(int, ptr_t)`: what `key` maps to, or null when it maps to
-/// nothing. The C macro reads a per-value-type "default" global that nothing
-/// ever writes, so a miss is always null.
-unsafe fn map_get_ptr(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
-    // SAFETY: the caller passes one of the three handle maps, which are
-    // initialised before any API call can run.
-    unsafe {
-        let slot = mh_get_int(&raw mut (*map).set, key);
-        if slot == MH_TOMBSTONE {
-            ptr::null_mut()
-        } else {
-            *(*map).values.add(slot as usize)
-        }
-    }
-}
-
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
 /// no "0 means current" rule and reports nothing: it is upstream's
-/// `handle_get_buffer()`, the raw map lookup.
-pub(crate) unsafe fn handle_get_buffer(handle: handle_T) -> *mut buf_T {
-    // SAFETY: the handle map is initialised before any Lua state exists.
-    unsafe { map_get_ptr(buffer_handles.ptr(), handle).cast::<buf_T>() }
+/// `handle_get_buffer()`, the registry lookup.
+pub(crate) fn handle_get_buffer(handle: handle_T) -> *mut buf_T {
+    winlayer::buffer(handle).map_or(ptr::null_mut(), Buf::raw)
 }
 
 /// [`handle_get_buffer`] for a window.
-pub(crate) unsafe fn handle_get_window(handle: handle_T) -> *mut win_T {
-    // SAFETY: the handle map is initialised before any Lua state exists.
-    unsafe { map_get_ptr(window_handles.ptr(), handle).cast::<win_T>() }
+pub(crate) fn handle_get_window(handle: handle_T) -> *mut win_T {
+    winlayer::window(handle).map_or(ptr::null_mut(), Win::raw)
 }
 
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
@@ -138,7 +116,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *
         if buffer == 0 {
             return curbuf.get();
         }
-        let rv = map_get_ptr(buffer_handles.ptr(), buffer) as *mut buf_T;
+        let rv = handle_get_buffer(buffer);
         if rv.is_null() {
             api_err_invalid(
                 err,
@@ -159,7 +137,7 @@ pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win
         if window == 0 {
             return curwin.get();
         }
-        let rv = map_get_ptr(window_handles.ptr(), window) as *mut win_T;
+        let rv = handle_get_window(window);
         if rv.is_null() {
             api_err_invalid(
                 err,
@@ -180,7 +158,7 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *m
         if tabpage == 0 {
             return curtab.get();
         }
-        let rv = map_get_ptr(tabpage_handles.ptr(), tabpage) as *mut tabpage_T;
+        let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
         if rv.is_null() {
             api_err_invalid(
                 err,

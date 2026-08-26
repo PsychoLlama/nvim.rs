@@ -51,17 +51,16 @@ use crate::main::{
     e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, swb_flags,
     topframe,
 };
-use crate::map::map_put_ref_int_ptr_t;
 use crate::memory::xfree;
 use crate::message::{emsg, msg};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CMD_tabnew, CdCause, Direction, Error, Map_int_ptr_t, MapHash, MotionType,
-    OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, bln_values, buf_T, cmdidx_T,
-    dobuf_action_values, dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException,
-    kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
+    AlignTextPos, CMD_tabnew, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType,
+    Set_uint32_t, WinSplit, WinStyle, bln_values, buf_T, cmdidx_T, dobuf_action_values,
+    dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException, kErrorTypeNone,
+    size_t, tabpage_T, uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -196,15 +195,6 @@ pub const SET_INIT: Set_uint32_t = Set_uint32_t {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<uint32_t>(),
 };
-/// `pmap_put(int)`: store `value` under `key`.
-#[inline]
-fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: ::core::ffi::c_int, value: ptr_t) {
-    let (nokey, nonew) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: the map is live; a null `oldkey`/`new` means "do not report".
-    let slot: *mut ptr_t = unsafe { map_put_ref_int_ptr_t(map, key, nokey, nonew) };
-    // SAFETY: `map_put_ref` answers a live slot of the value array.
-    unsafe { *slot = value };
-}
 pub const TAB: ::core::ffi::c_int = 9;
 pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
@@ -334,6 +324,24 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // whole answer is whether it is still on a list. Handing them a `Win` would
 // mean promising exactly what the caller is asking about. `valid_win` below is
 // the bridge back for a caller that wants to go on and use the window.
+//
+// They stay list walks, and the handle registry (`winlayer::window`) does not
+// replace them. Two reasons, both of them about *semantics* rather than cost:
+//
+//   * The question is asked about an **address**, not a handle, and reading
+//     `wp->handle` to look one up would be the very dereference these avoid.
+//     A caller that has the handle already can use the registry; a caller
+//     holding a pointer an autocommand may have freed cannot.
+//   * `win_valid` is **tab-scoped** — a window on another tab page is not
+//     "valid" — while the registry knows nothing about tab pages, and holds
+//     windows that are on no list at all (a hidden `win_alloc`). The three
+//     answers are genuinely different: `win_valid` (this tab page),
+//     `win_valid_any_tab` (any tab page's list) and "registered" (allocated
+//     and not yet freed).
+//
+// A window list is a handful of entries, so the walk is not the cost the O(n)
+// makes it look; the registry's job here is to make *identity* answerable by
+// handle, which `Win::handle` and `winlayer::window` now do.
 
 pub unsafe fn win_valid(win: *const win_T) -> bool {
     // SAFETY: `win` is only compared, never read; `curtab` is always set.

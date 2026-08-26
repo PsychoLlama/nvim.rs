@@ -54,8 +54,7 @@ use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
-use crate::main::{State, buffer_handles, exiting};
-use crate::map::mh_get_int;
+use crate::main::{State, exiting};
 use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
 use crate::r#move::win_col_off;
@@ -64,11 +63,11 @@ use crate::options::kOptBuftype;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
-    OptValData, OptValType, OptionSetFlags, RgbValue, Terminal, TerminalOptions, VTermColor,
-    VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
-    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil,
-    kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, MarkAdjustMode, Object, OptVal, OptValData,
+    OptValType, OptionSetFlags, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
+    dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil, kObjectTypeString,
+    linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -87,7 +86,7 @@ use crate::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_UNDERLINE, vterm_free, vterm_get_size, vterm_new,
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
-use crate::winlayer::{Buf, Win, tab_windows, windows};
+use crate::winlayer::{self, Buf, Win, tab_windows, windows};
 use ::libc::{abort, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
@@ -232,29 +231,9 @@ impl Term {
     }
 }
 
-/// One entry of an `int -> ptr` map, or null.
-///
-/// The generated `map.h` accessor, of which this is the only instantiation
-/// the terminal needs.
-unsafe fn map_get_int_ptr_t(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
-    // SAFETY: the caller hands over a live map of this instantiation, whose
-    // key set is its own.
-    let slot = unsafe { mh_get_int(&raw mut (*map).set, key) };
-    // A miss is reported as the tombstone index, and nothing is stored under
-    // a missing key.
-    if slot == u32::MAX {
-        return ::core::ptr::null_mut();
-    }
-    // SAFETY: a hit answers an index into the map's own value array.
-    unsafe { *(*map).values.add(slot as usize) }
-}
-
 /// The buffer a handle names, `None` once it has been wiped.
 fn buf_for_handle(handle: handle_T) -> Option<Buf> {
-    // SAFETY: the handle map is the editor's own, live from startup to
-    // exit, and the null it answers for a wiped buffer is what
-    // `Buf::from_raw` reads as `None`.
-    unsafe { Buf::from_raw(map_get_int_ptr_t(buffer_handles.ptr(), handle) as *mut buf_T) }
+    winlayer::buffer(handle)
 }
 
 /// vterm's "here are bytes for the child" callback.

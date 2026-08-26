@@ -63,11 +63,6 @@ pub struct Map_int_String {
     pub values: *mut String_0,
 }
 #[derive(Clone)]
-pub struct Map_int_ptr_t {
-    pub set: Set_int,
-    pub values: *mut ptr_t,
-}
-#[derive(Clone)]
 pub struct Map_ptr_t_ptr_t {
     pub set: Set_ptr_t,
     pub values: *mut ptr_t,

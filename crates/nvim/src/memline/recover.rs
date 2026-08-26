@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::buffer::BufFlags;
+use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::guard::Suppress;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_uint};
@@ -68,8 +68,9 @@ pub unsafe fn ml_recover(checkext: bool) {
             }
 
             // A buffer structure for the swap file being recovered. Only the
-            // memline in it is really used.
-            buf = xmalloc(size_of::<buf_T>()) as *mut buf_T;
+            // memline in it is really used, and it is never registered or
+            // put on the buffer list -- see `alloc_unregistered_buffer`.
+            buf = alloc_unregistered_buffer().raw();
             (*buf).b_ml.ml_stack_size = 0; // no stack yet
             (*buf).b_ml.ml_stack = core::ptr::null_mut();
             (*buf).b_ml.ml_stack_top = 0; // nothing in the stack
