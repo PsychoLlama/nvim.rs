@@ -9,68 +9,35 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- The editor's state is owned rather than shared. Every family of mutable
-  global the editor kept — the command line, the three screen grids, the
-  completion session, the Visual selection, the option table and its values,
-  both regexp engines' matcher state, the typeahead and the recorded
-  buffers beside it, the command modifiers, the decoration pass, the const
-  tables and the handle registries' access — now belongs to the code that
-  uses it and is passed on, rather than being read and written through a raw
-  address from anywhere in the program. Normal editing is unaffected; what
-  changes is what happens when something re-enters the editor in the middle
-  of an operation — an autocommand, a Lua callback, an expression mapping, a
-  provider, a `:substitute` with a function in its replacement — where the
-  old shape let the inner call quietly overwrite state the outer one was
-  still using. Most of the crashes and wrong answers listed under Fixed here
-  and in the last few releases were that shape, and the ones that remain now
-  need a named exception rather than passing unnoticed: what is still
-  reached by raw address is an enumerated list of addresses libuv and libc
-  own, plus a register of the handle registries left for the next pass.
-- Retired `IObuff` and `NameBuff`, the editor's two shared scratch buffers,
-  and the two dozen private static buffers that worked the same way. Every
-  message, report, path and rendering that was assembled in one is now
-  assembled in a buffer belonging to the code that fills it, which removes a
-  class of bug the editor carried throughout: anything that ran an
-  autocommand, showed a message or drew the screen between the fill and the
-  read overwrote what the reader was about to use. An Ex command's error
-  message and an option's rejection message are owned values now, so a
-  second error raised while the first was still on its way to the user
-  cannot replace it.
-- Retired the last of the shared return buffers: `tv_get_string()` and the
-  two functions beside it used to answer out of one process-wide buffer per
-  function, so a caller holding two coerced values at once silently got the
-  second one twice. Every caller lends its own buffer now.
-- Renamed the library crate from `c2rust_neovim` to `neovim` and retired the
-  transpiler's generated names throughout — the anonymous `C2Rust_Unnamed_*`
-  types, the `c2rust_padding` filler fields and the leftover scaffolding it
-  emitted. The editor behaves exactly as before; only names moved.
+- Reworked the editor's shared state so that re-entering the editor in the
+  middle of an operation (an autocommand, a Lua callback, an expression
+  mapping, a provider, a `:substitute` with a function in its replacement)
+  no longer disturbs the operation it interrupted. This covers the command
+  line, the screen and message grids, insert-mode completion, the Visual
+  selection, `:set` and every option's value, `/` and `:substitute`
+  matching, mappings and recorded keys, command modifiers, decoration
+  providers, and every message, error and path the editor renders before
+  showing it. Normal editing is unaffected.
+- Renamed the library crate from `c2rust_neovim` to `neovim`. The editor
+  behaves exactly as before.
 
 ### Fixed
 
 - `sign_define()` and `complete()` no longer confuse the values of two
-  dictionary keys given as numbers. Both read several keys in a row and hold
-  all the answers at once, and a number has no string of its own, so each was
-  rendered into the same shared buffer. Defining a sign with a numeric `icon`
+  dictionary keys given as numbers. Defining a sign with a numeric `icon`
   and a numeric `text` gave it the same icon as its text.
 - Sourcing a script whose first line is a `#!` shebang no longer cancels the
   command modifiers of the `:source` that reached it. `:silent source` on
-  such a file used to print everything the script said from the second line
-  on, and `:filter /pat/ source` on one could crash the editor.
+  such a file printed everything the script said from the second line on,
+  and `:filter /pat/ source` on one could crash the editor.
 - A message printed after `:messages` no longer takes its "kind" from freed
-  memory. `:messages` replays each history entry under the kind it was
-  written with, and that kind is the entry's own copy; once the entry aged
-  out of `'messagesopt'`'s `history:` the next message read it back — into
-  the history, and into the `msg_show` event a UI sees.
-- `setcmdline()` called while the command line is suspended — from a `<C-r>=`
-  expression, or from inside `input()` — no longer writes past the end of the
-  command line it is setting. It used to enlarge the command line the editor
-  was _not_ on and then write the new text into the one it was, so any text
-  longer than that line's current buffer corrupted the heap.
-- Command-line completion over Lua names no longer leaks its matches. The
-  list `vim._expand_pat` produced was thrown away with the array that held
-  it and not the strings inside it, so every `:lua vim.<Tab>` that was typed
-  and then abandoned leaked one allocation per match, and so did any
-  completion that hit a bad entry partway down the list.
+  memory, so a UI no longer sees the wrong kind on the next `msg_show`.
+- `setcmdline()` called while the command line is suspended, from a `<C-r>=`
+  expression or from inside `input()`, no longer corrupts the heap when the
+  new text is longer than that command line's buffer.
+- Command-line completion over Lua names no longer leaks its matches. Every
+  `:lua vim.<Tab>` that was typed and then abandoned leaked one allocation
+  per match.
 
 ## [2026.08.23-529b135d5d]
 
