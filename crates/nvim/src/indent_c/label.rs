@@ -101,7 +101,7 @@ pub(crate) unsafe fn skip_label(lnum: linenr_T, pp: &mut *const c_char) -> c_int
     };
     if text.is_null() {
         // SAFETY: the cursor is still on line `lnum`.
-        text = unsafe { get_cursor_line_ptr() }; // just in case
+        text = get_cursor_line_ptr(); // just in case
     }
     *pp = text;
 

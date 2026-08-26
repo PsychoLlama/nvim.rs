@@ -280,7 +280,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
     // "stopsel": an unshifted movement ends the selection.
     if km_stopsel.get() && flags & NV_STS != 0 && mod_mask.get() & MOD_MASK_SHIFT == 0 {
         end_visual_mode();
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if km_startsel.get() {
         if flags & NV_SS != 0 {
@@ -438,7 +438,7 @@ fn normal_check_window_scrolled() {
 fn normal_check_cursor_moved() {
     // SAFETY (throughout): reads the current window and fires an autocommand.
     if !finish_op.get()
-        && unsafe { has_event(EVENT_CURSORMOVED) }
+        && has_event(EVENT_CURSORMOVED)
         && (last_cursormoved_win.get() != curwin.get()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
     {
@@ -451,7 +451,7 @@ fn normal_check_cursor_moved() {
 fn normal_check_text_changed() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
-        && unsafe { has_event(EVENT_TEXTCHANGED) }
+        && has_event(EVENT_TEXTCHANGED)
         && cur_buf().b_last_changedtick != unsafe { buf_get_changedtick(curbuf.get()) }
     {
         fire_on_curbuf(EVENT_TEXTCHANGED);
@@ -462,7 +462,7 @@ fn normal_check_text_changed() {
 fn normal_check_buffer_modified() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
-        && unsafe { has_event(EVENT_BUFMODIFIEDSET) }
+        && has_event(EVENT_BUFMODIFIEDSET)
         && cur_buf().b_changed_invalid as c_int == 1
     {
         fire_on_curbuf(EVENT_BUFMODIFIEDSET);

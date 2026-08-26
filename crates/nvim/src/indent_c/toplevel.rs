@@ -111,7 +111,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             return unsafe { get_baseclass_amount(cache.lpos.col) };
         }
         // SAFETY: the cursor is on a line of the current buffer.
-        let mut l = unsafe { get_cursor_line_ptr() }.cast_const();
+        let mut l = get_cursor_line_ptr().cast_const();
 
         // Skip preprocessor directives and blank lines.
         //
@@ -159,7 +159,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             //          here;
             while !ends_in_backslash && cur_win().w_cursor.lnum > 1 {
                 // SAFETY: on the main thread, with a current buffer.
-                let above = unsafe { ml_get(cur_win().w_cursor.lnum - 1) };
+                let above = ml_get(cur_win().w_cursor.lnum - 1);
                 // SAFETY: `ml_get` hands back a NUL-terminated line.
                 if !unsafe { cin_ends_in_backslash(above) } {
                     break;
@@ -169,7 +169,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             }
 
             // SAFETY: reads the cursor's line of the current buffer.
-            amount = unsafe { get_indent() };
+            amount = get_indent();
             if amount == 0 {
                 // SAFETY: the same.
                 amount = unsafe { cin_first_id_amount() };
@@ -186,7 +186,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             return amount;
         }
         // SAFETY: the cursor is on a line of the current buffer.
-        l = unsafe { get_cursor_line_ptr() };
+        l = get_cursor_line_ptr();
 
         // The closing '}' of a previous function, for 'cinoptions' `fs`;
         // or a line ending in '};' (maybe followed by comments) --
@@ -205,7 +205,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         // SAFETY: `l` is a NUL-terminated line.
         if unsafe { cin_ends_in(l, b"[") } {
             // SAFETY: reads the cursor's line of the current buffer.
-            return unsafe { get_indent() } + cur_buf().b_ind_continuation;
+            return get_indent() + cur_buf().b_ind_continuation;
         }
 
         // A line holding only a semicolon that belongs to a previous line
@@ -253,13 +253,13 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         if unsafe { cin_ends_in(l, b";") } {
             // SAFETY: on the main thread with a current buffer; `ml_get`
             // reports a line number of its own that is out of range.
-            let above = unsafe { ml_get(cur_win().w_cursor.lnum - 1) };
+            let above = ml_get(cur_win().w_cursor.lnum - 1);
             // SAFETY: `above` is NUL-terminated.
             if unsafe { cin_ends_in(above, b",") || cin_ends_in_backslash(above) } {
                 return amount;
             }
             // SAFETY: the cursor is on a line of the current buffer.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
         }
 
         // Nothing interesting: use this line's indent.  Position on the
@@ -275,7 +275,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             cur_win().w_cursor = trypos;
         }
         // SAFETY: reads the cursor's line of the current buffer.
-        return unsafe { get_indent() };
+        return get_indent();
     }
     amount
 }

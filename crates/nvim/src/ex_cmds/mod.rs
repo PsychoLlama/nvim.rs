@@ -199,9 +199,9 @@ pub(super) unsafe fn buf_autocmd(event: event_T, buf: *mut buf_T) -> bool {
 ///
 /// Returns true and gives a message when the command must not run.
 ///
-/// # Safety
-/// Main thread, message state.
-pub unsafe fn check_secure() -> bool {
+/// Safe: the only promise is that the editor exists; the two messages are
+/// static strings.
+pub fn check_secure() -> bool {
     if secure.get() != 0 {
         secure.set(2);
         // SAFETY: a live message string.

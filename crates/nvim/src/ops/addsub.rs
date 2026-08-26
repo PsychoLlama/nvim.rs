@@ -107,7 +107,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
 
     if !visual_active() {
         let mut pos = cur_win().w_cursor;
-        if unsafe { u_save_cursor() } == FAIL {
+        if u_save_cursor() == FAIL {
             disable_fold_update.set(disable_fold_update.get() - 1);
             return;
         }
@@ -120,7 +120,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     }
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if unsafe { u_save(above, below) } == FAIL {
+    if u_save(above, below) == FAIL {
         disable_fold_update.set(disable_fold_update.get() - 1);
         return;
     }
@@ -156,7 +156,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
     } else if oap.is_VIsual {
         // Nothing changed, so the selection has to come off the screen.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         cur_buf().b_op_start = startpos;
@@ -191,21 +191,21 @@ fn addsub_line_span(mut oap: Op, bd: &mut block_def, pos: &mut pos_T) -> c_int {
     if oap.motion_type == kMTLineWise {
         cur_win().w_cursor.col = 0;
         pos.col = 0;
-        return unsafe { ml_get_len(pos.lnum) };
+        return ml_get_len(pos.lnum);
     }
 
     // Charwise: the first and last lines are clipped to the region.
     if pos.lnum == oap.start.lnum && !oap.inclusive {
         unsafe { dec(&mut oap.end) };
     }
-    let mut length = unsafe { ml_get_len(pos.lnum) };
+    let mut length = ml_get_len(pos.lnum);
     pos.col = 0;
     if pos.lnum == oap.start.lnum {
         pos.col += oap.start.col;
         length -= oap.start.col;
     }
     if pos.lnum == oap.end.lnum {
-        length = unsafe { ml_get_len(oap.end.lnum) };
+        length = ml_get_len(oap.end.lnum);
         oap.end.col = oap.end.col.min(length - 1);
         length = oap.end.col - pos.col + 1;
     }
@@ -239,8 +239,8 @@ pub unsafe fn do_addsub(
     }
 
     cur_win().w_cursor = *pos;
-    let ptr = unsafe { ml_get(pos.lnum) };
-    let linelen = unsafe { ml_get_len(pos.lnum) };
+    let ptr = ml_get(pos.lnum);
+    let linelen = ml_get_len(pos.lnum);
     let mut col = pos.col;
 
     let mut did_change = false;
@@ -273,7 +273,7 @@ pub unsafe fn do_addsub(
         let firstdigit = unsafe { *ptr.offset(col as isize) } as u8 as c_int;
         let is_alpha = fmt.alpha && ascii_isalpha(firstdigit);
         if !ascii_isdigit(firstdigit) && !is_alpha {
-            unsafe { beep_flush() };
+            beep_flush();
         } else {
             let (startpos, endpos) = if is_alpha {
                 unsafe { bump_alpha_char(firstdigit, op_type, prenum1, col) }
@@ -594,7 +594,7 @@ unsafe fn replace_number(
     cur_win().w_cursor.col = col;
     let startpos = cur_win().w_cursor;
     let mut todel = *length;
-    let mut c = unsafe { gchar_cursor() };
+    let mut c = gchar_cursor();
     // The `-` is not part of the length: only the part after it keeps its
     // width.
     if c == '-' as c_int {
@@ -613,7 +613,7 @@ unsafe fn replace_number(
             HEX_UPPER.set(class & _ISupper as ::core::ffi::c_ushort as c_int != 0);
         }
         unsafe { del_char(false) };
-        c = unsafe { gchar_cursor() };
+        c = gchar_cursor();
     }
 
     let len = *length;

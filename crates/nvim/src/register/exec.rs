@@ -623,7 +623,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
             if State.get() & REPLACE_FLAG != 0 {
                 // SAFETY: main thread with a current buffer; saves the
                 // cursor line for undo.
-                if unsafe { u_save_cursor() } == FAIL {
+                if u_save_cursor() == FAIL {
                     return FAIL;
                 }
                 // SAFETY: a non-null `y_array` starts with a NUL-terminated

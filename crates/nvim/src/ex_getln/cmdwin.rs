@@ -118,7 +118,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // Can't do this when text or buffer is locked, can't do it
     // recursively, and can't do it when typing a password.
     if unsafe { text_or_buf_locked() } || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
-        unsafe { beep_flush() };
+        beep_flush();
         return K_IGNORE;
     }
 
@@ -141,7 +141,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         WSP_BOT as ::core::ffi::c_int,
     ) == FAIL
     {
-        unsafe { beep_flush() };
+        beep_flush();
         unsafe { ga_clear(&raw mut winsizes) };
         return K_IGNORE;
     }
@@ -152,7 +152,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         || !unsafe { bufref_valid(&raw mut old_curbuf) }
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
     {
-        unsafe { beep_flush() };
+        beep_flush();
         unsafe { ga_clear(&raw mut winsizes) };
         return Ctrl_C;
     }
@@ -197,7 +197,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         cmdwin_level.set(0);
         cmdwin_win.set(::core::ptr::null_mut::<win_T>());
         cmdwin_old_curwin.set(::core::ptr::null_mut::<win_T>());
-        unsafe { beep_flush() };
+        beep_flush();
         unsafe { ga_clear(&raw mut winsizes) };
         return Ctrl_C;
     }
@@ -354,7 +354,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             // modify the cmdline window.
             Cc::current().close();
         } else {
-            let n = unsafe { get_cursor_line_len() } as ::core::ffi::c_int;
+            let n = get_cursor_line_len() as ::core::ffi::c_int;
             Cc::current().set_text(unsafe {
                 ::core::slice::from_raw_parts(get_cursor_line_ptr(), n.max(0) as usize)
             });

@@ -242,7 +242,7 @@ pub(crate) fn replace_pop_ins() {
     State.set(MODE_NORMAL); // don't want MODE_REPLACE here
     while replace_pop_if_nul() > 0 {
         mb_replace_pop_ins();
-        unsafe { dec_cursor() };
+        dec_cursor();
     }
     State.set(old_state);
 }
@@ -295,7 +295,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
         }
         del_char_after_col(limit_col);
         let orig_len = if l_state & VREPLACE_FLAG != 0 {
-            unsafe { get_cursor_pos_len() }
+            get_cursor_pos_len()
         } else {
             0
         };
@@ -303,8 +303,8 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
         if l_state & VREPLACE_FLAG != 0 {
             // How many screen cells the restored characters take.
-            let p = unsafe { get_cursor_pos_ptr() };
-            let ins_len = unsafe { get_cursor_pos_len() } - orig_len;
+            let p = get_cursor_pos_ptr();
+            let ins_len = get_cursor_pos_len() - orig_len;
             let mut vcol = start_vcol;
             let mut i = 0;
             while i < ins_len {
@@ -320,7 +320,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // Virtual Replace keeps the following text aligned, so any
             // spaces it padded with have to come off again.
             cur_win().w_cursor.col += ins_len;
-            while vcol > orig_vcols && unsafe { gchar_cursor() } == ' ' as c_int {
+            while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
                 unsafe { del_char(false) };
                 orig_vcols += 1;
             }

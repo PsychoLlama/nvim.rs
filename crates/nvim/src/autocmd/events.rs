@@ -194,20 +194,20 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
 }
 
 /// Whether any autocommand is defined for `event`.
-pub unsafe fn has_event(event: event_T) -> bool {
+///
+/// Safe: the table is the editor's own, live from startup to exit.
+pub fn has_event(event: event_T) -> bool {
     // SAFETY: the table's own row for `event`.
     unsafe { (*au_event_vec(event)).size != 0 }
 }
 
 /// Whether a `CursorHold` autocommand exists for the mode we are in.
 unsafe fn has_cursorhold() -> bool {
-    unsafe {
-        has_event(if get_real_state() == MODE_NORMAL_BUSY {
-            EVENT_CURSORHOLD
-        } else {
-            EVENT_CURSORHOLDI
-        })
-    }
+    has_event(if get_real_state() == MODE_NORMAL_BUSY {
+        EVENT_CURSORHOLD
+    } else {
+        EVENT_CURSORHOLDI
+    })
 }
 
 /// Whether `CursorHold` should fire now: one is defined, nothing else is

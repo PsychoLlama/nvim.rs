@@ -37,7 +37,7 @@ fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
 fn cursor_line() -> (*mut c_char, colnr_T) {
     let lnum = cur_win().w_cursor.lnum;
     // SAFETY: the cursor is on a valid line of the current buffer.
-    unsafe { (ml_get(lnum), ml_get_len(lnum)) }
+    (ml_get(lnum), ml_get_len(lnum))
 }
 
 /// Insert the NUL-terminated string `p` at the cursor.
@@ -278,7 +278,7 @@ pub unsafe fn del_char(fixpos: bool) -> c_int {
 /// The caller must have prepared for undo.
 pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> c_int {
     let mut bytes = 0;
-    let mut p = unsafe { get_cursor_pos_ptr() };
+    let mut p = get_cursor_pos_ptr();
     let mut i = 0;
     while i < count && c_int::from(unsafe { *p }) != NUL {
         let l = unsafe { utfc_ptr2len(p) };

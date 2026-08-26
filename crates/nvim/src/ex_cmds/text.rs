@@ -45,7 +45,7 @@ use core::ffi::{CStr, c_char, c_int};
 /// The cursor must be on a valid position of the current buffer.
 pub unsafe fn do_ascii(_eap: *mut exarg_T) {
     // SAFETY: caller's contract; the cursor is on a live line.
-    let data = unsafe { get_cursor_pos_ptr() };
+    let data = get_cursor_pos_ptr();
     // SAFETY: `data` points into a NUL-terminated buffer line.
     let len = unsafe { utfc_ptr2len(data) } as usize;
     if len == 0 {
@@ -287,7 +287,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     // SAFETY: `curwin` is live; `u_save` takes the range's guard lines.
     let save_curpos = cur_win().w_cursor;
     // SAFETY: as above.
-    if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+    if u_save(line1 - 1, line2 + 1) == FAIL {
         return;
     }
 
@@ -306,7 +306,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     // SAFETY: the range is still the one that was just rewritten.
     unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, 0, true) };
     cur_win().w_cursor = save_curpos;
-    unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }
 
 /// The indent the cursor's line should get, or `None` for a blank line
@@ -321,7 +321,7 @@ unsafe fn aligned_indent(cmdidx: cmdidx_T, indent: c_int, width: c_int) -> Optio
     // SAFETY: caller's contract.
     let (linewidth, has_tab) = unsafe { linelen() };
     // SAFETY: as above.
-    let len = linewidth - unsafe { get_indent() };
+    let len = linewidth - get_indent();
     if len <= 0 {
         // Skip blank lines.
         return None;
@@ -378,7 +378,7 @@ unsafe fn linelen() -> (c_int, bool) {
     // Get the line.  If it's empty bail out early (could be the empty string
     // for an unloaded buffer).
     // SAFETY: caller's contract.
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     // SAFETY: buffer lines are NUL-terminated.
     let text = unsafe { CStr::from_ptr(line) }.to_bytes();
     if text.is_empty() {

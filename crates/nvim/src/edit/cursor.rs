@@ -36,9 +36,9 @@ crate::flag_set! {
 
 /// Move the cursor to the start of the current line.
 ///
-/// # Safety
-/// Must run with a live `curwin` whose cursor line exists.
-pub(crate) unsafe fn beginline(flags: BeginlineOpts) {
+/// Safe: the only promise is that the editor exists, which `cur_win()`
+/// carries.
+pub(crate) fn beginline(flags: BeginlineOpts) {
     let mut win = cur_win();
     if flags.has(BeginlineOpts::SOL) && p_sol.get() == 0 {
         // SAFETY: `curwin` is live for the whole session.
@@ -49,7 +49,7 @@ pub(crate) unsafe fn beginline(flags: BeginlineOpts) {
         win.w_cursor.coladd = 0;
 
         if flags.has(BeginlineOpts::WHITE | BeginlineOpts::SOL) {
-            let mut ptr = unsafe { get_cursor_line_ptr() };
+            let mut ptr = get_cursor_line_ptr();
             // `ptr[1] == NUL` under `FIX` is what keeps an all-white
             // line from ending with the cursor on the NUL.
             while ascii_iswhite(unsafe { *ptr } as c_int)
@@ -325,7 +325,7 @@ fn coladvance_win(win: Win, vcol: colnr_T) {
 #[inline(always)]
 fn cursor_pos_ptr() -> *mut c_char {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { get_cursor_pos_ptr() }
+    get_cursor_pos_ptr()
 }
 
 /// The cursor's virtual column.

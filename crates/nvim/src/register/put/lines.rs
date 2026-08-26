@@ -76,7 +76,7 @@ impl Put {
                 // walk stops at the end of the Visual selection, so it is a
                 // line of the buffer; `ml_get` hands back its NUL-terminated
                 // text and `ml_get_len` its length.
-                let (oldp, oldlen) = unsafe { (ml_get(lnum), ml_get_len(lnum)) };
+                let (oldp, oldlen) = (ml_get(lnum), ml_get_len(lnum));
                 if lnum > start_lnum {
                     let mut pos = pos_T {
                         lnum,
@@ -238,11 +238,11 @@ impl Put {
         let indent = if (first == '#' as c_int && unsafe { preprocs_left() }) || first == NUL {
             0
         } else if state.first {
-            state.diff = state.orig_indent - unsafe { get_indent() };
+            state.diff = state.orig_indent - get_indent();
             state.first = false;
             state.orig_indent
         } else {
-            (unsafe { get_indent() } + state.diff).max(0)
+            (get_indent() + state.diff).max(0)
         };
         unsafe { set_indent(indent, SIN_NOMARK) };
         cur_win().w_cursor = old_pos;
@@ -313,7 +313,7 @@ impl Put {
             // `:put`: the cursor goes on the last inserted line.
             cur_win().w_cursor.lnum = lnum;
             // SAFETY: the cursor is on a line of the current buffer.
-            unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND as c_int != 0 {
             // The cursor goes after the inserted text.
             if self.y_type == kMTLineWise {
@@ -338,7 +338,7 @@ impl Put {
                 cur_win().w_cursor.lnum += 1;
             }
             // SAFETY: the cursor is on a line of the current buffer.
-            unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else {
             // The cursor goes on the first character put.
             cur_win().w_cursor = new_cursor;
@@ -355,7 +355,7 @@ impl Put {
         let mut indent_state = FixIndent {
             orig_indent: if self.flags & PUT_FIXINDENT as c_int != 0 {
                 // SAFETY: the cursor is on a line of the current buffer.
-                unsafe { get_indent() }
+                get_indent()
             } else {
                 0
             },
@@ -398,11 +398,11 @@ impl Put {
                         let measured = cnt == self.count && i == self.y_size.wrapping_sub(1);
                         // SAFETY (all three): `lnum` is the line just added.
                         if measured {
-                            lendiff = unsafe { ml_get_len(lnum) };
+                            lendiff = ml_get_len(lnum);
                         }
                         unsafe { self.fix_indent(lnum, &mut indent_state) };
                         if measured {
-                            lendiff -= unsafe { ml_get_len(lnum) };
+                            lendiff -= ml_get_len(lnum);
                         }
                     }
                     i = i.wrapping_add(1);

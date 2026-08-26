@@ -380,7 +380,7 @@ pub(crate) unsafe fn find_decl(
     let in_block =
         locally && unsafe { findpar(&raw mut incll, BACKWARD as c_int, 1, '{' as c_int, false) };
     if !in_block {
-        unsafe { setpcmark() };
+        setpcmark();
         cur_win().w_cursor.lnum = 1;
         par_pos = cur_win().w_cursor;
     } else {
@@ -824,7 +824,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
             // These become a search, so the cursor moves to the start of
             // the word first.
             // SAFETY: `word` points into the cursor's own line.
-            unsafe { setpcmark() };
+            setpcmark();
             let col = unsafe { word.offset_from(get_cursor_line_ptr()) } as colnr_T;
             cur_win().w_cursor.col = col;
             if !g_cmd && unsafe { vim_iswordp(word) } {
@@ -964,7 +964,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     if must_write {
         unsafe { autowrite(curbuf.get(), false) };
     }
-    unsafe { setpcmark() };
+    setpcmark();
     let hidden = unsafe { buf_hide(curbuf.get()) };
     let hide = if hidden { ECMD_HIDE as c_int } else { 0 };
     let last = ECMD_LAST as linenr_T;
@@ -974,7 +974,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     if opened == OK && unsafe { (*cap).nchar } == 'F' as c_int && lnum >= 0 {
         cur_win().w_cursor.lnum = lnum;
         unsafe { check_cursor_lnum(curwin.get()) };
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // SAFETY: `name` came from `grab_file_name`.
     unsafe { xfree(name as *mut c_void) };

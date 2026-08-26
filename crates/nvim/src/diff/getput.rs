@@ -320,8 +320,8 @@ fn diffgetput(
         let mut lnum = dp.df_lnum[idx_to];
         let mut count = dp.df_count[idx_to];
         // SAFETY: the editor exists; the short circuit is upstream's.
-        let undoable = dp.end(idx_cur) > line1 + off
-            && unsafe { u_save(lnum - 1 as linenr_T, lnum + count) } != FAIL;
+        let undoable =
+            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as linenr_T, lnum + count) != FAIL;
         if undoable {
             // With a range, the first and last block of it are only partly
             // copied; `start_skip`/`end_skip` are the parts left out.

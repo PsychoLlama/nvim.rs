@@ -77,13 +77,13 @@ impl Ln {
 /// The indent of the line the cursor is on.
 fn indent_here() -> c_int {
     // SAFETY: the cursor is on a valid line of the current buffer.
-    unsafe { get_indent() }
+    get_indent()
 }
 
 /// Line `lnum` of the current buffer.
 fn line_at(lnum: linenr_T) -> *mut c_char {
     // SAFETY: every caller has just clamped `lnum` into the buffer.
-    unsafe { ml_get(lnum) }
+    ml_get(lnum)
 }
 
 /// `findmatch` from the cursor, for `initc`.
@@ -239,7 +239,7 @@ unsafe fn smart_indent_forward(
             cur_win().w_cursor.lnum = pos.lnum;
             newindent = indent_here();
             // SAFETY: the cursor is on a valid line of the current buffer.
-            ptr = unsafe { get_cursor_line_ptr() };
+            ptr = get_cursor_line_ptr();
         }
     }
 

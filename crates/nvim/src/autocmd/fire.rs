@@ -561,10 +561,7 @@ pub unsafe extern "C" fn block_autocmds() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
-    if !is_autocmd_blocked()
-        && termresponse_changed.get()
-        && unsafe { has_event(EVENT_TERMRESPONSE) }
-    {
+    if !is_autocmd_blocked() && termresponse_changed.get() && has_event(EVENT_TERMRESPONSE) {
         let sequence = unsafe { cstr_to_string(get_vim_var_str(Vv::Termresponse)) };
         unsafe { do_termresponse_autocmd(sequence) };
         unsafe { api_free_string(sequence) };

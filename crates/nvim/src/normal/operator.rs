@@ -248,9 +248,9 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     {
         // A delete or a shift leaves the cursor at the start of the line,
         // on the first non-blank only if 'startofline' says so.
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if op.op_type != OP_YANK {
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
 

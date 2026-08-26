@@ -143,7 +143,7 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
             || cmdline_star.get() > 0
         // or when typing a password
         {
-            unsafe { beep_flush() };
+            beep_flush();
             s.c = ESC;
         } else {
             s.c = unsafe { get_expr_register() };

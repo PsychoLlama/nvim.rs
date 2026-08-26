@@ -517,7 +517,7 @@ unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
     // At the first match, remember the current cursor position.
     if !st.got_match {
         // SAFETY: main thread, live window.
-        unsafe { setpcmark() };
+        setpcmark();
         st.got_match = true;
     }
 
@@ -625,7 +625,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 if args.endcolumn {
                     unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
                 } else {
-                    unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+                    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
             }
             // The report is only given for a real substitute, never for a
@@ -829,7 +829,7 @@ pub(crate) unsafe fn do_sub(
 pub(super) unsafe fn save_undo_once(st: &mut Sub) {
     if !st.did_save {
         // SAFETY: caller's contract.
-        unsafe { u_save_cursor() };
+        u_save_cursor();
         st.did_save = true;
     }
 }

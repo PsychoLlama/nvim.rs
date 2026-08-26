@@ -307,7 +307,7 @@ fn write_string(out: &mut Out, data: *const c_char) -> bool {
 /// Whether the sandbox forbids writing, having reported it.
 fn secure() -> bool {
     // SAFETY: reads the sandbox depth and may report; no arguments.
-    unsafe { check_secure() }
+    check_secure()
 }
 
 /// Whether a deferred call can be registered, having reported if not.

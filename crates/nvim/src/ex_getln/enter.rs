@@ -317,7 +317,7 @@ pub(crate) unsafe fn command_line_enter(
         };
         firstcbuf[0] = s.cmdline_type as ::core::ffi::c_char;
 
-        if unsafe { has_event(EVENT_CMDLINEENTER) } {
+        if has_event(EVENT_CMDLINEENTER) {
             let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
 
@@ -394,7 +394,7 @@ pub(crate) unsafe fn command_line_enter(
             trigger_cmd_autocmd(s.cmdline_type, EVENT_CMDLINELEAVEPRE);
         }
 
-        if unsafe { has_event(EVENT_CMDLINELEAVE) } {
+        if has_event(EVENT_CMDLINELEAVE) {
             let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
             // Not readonly, unlike the keys above:

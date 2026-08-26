@@ -113,7 +113,7 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: as `at`.
     let skip_ws = |p: *mut c_char| unsafe { skipwhite(p) };
     // SAFETY: `lnum` is inside the buffer.
-    let line = |n: linenr_T| unsafe { ml_get(n) };
+    let line = |n: linenr_T| ml_get(n);
 
     let mut s = skip_ws(line(lnum));
     // A comment opener is skipped, and an empty one takes the next line.

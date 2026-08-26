@@ -191,7 +191,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
             && !revins_on.get()
         {
             let save_col = cur_win().w_cursor.col;
-            unsafe { beginline(BeginlineOpts::WHITE) };
+            beginline(BeginlineOpts::WHITE);
             if cur_win().w_cursor.col < save_col {
                 mincol = cur_win().w_cursor.col;
                 // The indent should now be fixed to match the previous
@@ -276,11 +276,11 @@ fn bs_join_line() -> bool {
         // SAFETY: every `unsafe` call in this function is an editor-wide
         // routine whose only precondition is the live `curwin`/`curbuf`
         // Insert mode runs with.
-        if unsafe { u_save(cur_win().w_cursor.lnum - 2, cur_win().w_cursor.lnum + 1) } == FAIL {
+        if u_save(cur_win().w_cursor.lnum - 2, cur_win().w_cursor.lnum + 1) == FAIL {
             return false;
         }
         let lnum = Insstart.get().lnum - 1;
-        let len = unsafe { ml_get_len(lnum) };
+        let len = ml_get_len(lnum);
         Insstart.set(Insstart.get().with_lnum(lnum).with_col(len));
     }
 
@@ -304,11 +304,9 @@ fn bs_join_line() -> bool {
 
         // With `aw` in 'formatoptions' the space at the end of the line
         // has to go too, or auto-formatting would break the line again.
-        if unsafe { has_format_option(FoFlag::AUTO) }
-            && unsafe { has_format_option(FoFlag::WHITE_PAR) }
-        {
+        if has_format_option(FoFlag::AUTO) && has_format_option(FoFlag::WHITE_PAR) {
             let ptr = unsafe { ml_get_buf(curbuf.get(), cur_win().w_cursor.lnum) };
-            let len = unsafe { get_cursor_line_len() };
+            let len = get_cursor_line_len();
             // SAFETY: `ptr` is that line and `len` its length, so its last
             // byte is in bounds, and `xmemdupz` copies that many bytes.
             if len > 0 && unsafe { *ptr.offset((len - 1) as isize) } as c_int == ' ' as c_int {
@@ -362,7 +360,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
     let use_ts = cur_win().w_onebuf_opt.wo_list == 0 || cur_win().w_p_lcs_chars.tab1 != 0;
     // SAFETY: the cursor's column is a byte of the cursor's line, so `line`
     // and `cursor_ptr` address that line and the walk below stays inside it.
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     let cursor_ptr = unsafe { line.offset(cur_win().w_cursor.col as isize) };
 
     // The cursor's virtual column, and the last white space before it
@@ -485,7 +483,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
             if p_deco.get() != 0 {
                 // SAFETY: the cursor is on a character of its line, so the
                 // character after it is at most the line's NUL.
-                let p0 = unsafe { get_cursor_pos_ptr() };
+                let p0 = get_cursor_pos_ptr();
                 let next = unsafe { p0.offset(utf_ptr2len(p0) as isize) };
                 has_composing = unsafe { utf_composinglike(p0, next, ::core::ptr::null_mut()) };
             }
@@ -532,14 +530,14 @@ fn beep_backspace() {
 #[inline(always)]
 fn cursor_forward() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { inc_cursor() }
+    inc_cursor()
 }
 
 /// Step the cursor one character back, over a line break if need be.
 #[inline(always)]
 fn cursor_back() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { dec_cursor() }
+    dec_cursor()
 }
 
 /// Delete the character under the cursor, leaving the cursor where it is.
@@ -553,7 +551,7 @@ fn delete_one_char() -> c_int {
 #[inline(always)]
 fn char_at_cursor() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { gchar_cursor() }
+    gchar_cursor()
 }
 
 /// The multi-byte class of the character under the cursor, which is what

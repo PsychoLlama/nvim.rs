@@ -265,13 +265,13 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
                 chars_cursor: cc,
                 ..
             } = counts;
-            let line = unsafe { ml_get(lnum) };
+            let line = ml_get(lnum);
             let taken = unsafe { line_count_info(line, wc, cc, upto, eol_size) };
             counts.bytes_cursor = counts.bytes + taken;
         }
 
         let PosCounts { words, chars, .. } = counts;
-        let line = unsafe { ml_get(lnum) };
+        let line = ml_get(lnum);
         let all = varnumber_T::from(MAXCOL);
         counts.bytes += unsafe { line_count_info(line, words, chars, all, eol_size) };
     }
@@ -304,7 +304,7 @@ fn count_selected_line(
         s = bd.textstart;
         len = bd.textlen;
     } else if sel.mode.is_line() {
-        s = unsafe { ml_get(lnum) };
+        s = ml_get(lnum);
         len = MAXCOL;
     } else if sel.mode.is_char() {
         let start_col = if lnum == sel.min.lnum { sel.min.col } else { 0 };

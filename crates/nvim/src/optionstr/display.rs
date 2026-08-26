@@ -370,7 +370,7 @@ pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
     // changed.
     if visual_active() {
         // SAFETY: marks the current buffer's windows.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     ptr::null()
 }

@@ -74,7 +74,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     // First we copy the old text to its new location -- webb
     // Also copy the flag that ":global" command uses.
     // SAFETY: `dest` is a line of the current buffer, or zero.
-    if unsafe { u_save(dest, dest + 1) } == FAIL {
+    if u_save(dest, dest + 1) == FAIL {
         return FAIL;
     }
 
@@ -170,7 +170,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
-    if unsafe { u_save(line1 + extra - 1, line2 + extra + 1) } == FAIL {
+    if u_save(line1 + extra - 1, line2 + extra + 1) == FAIL {
         return FAIL;
     }
     for _ in line1..=line2 {
@@ -302,7 +302,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     // line1 = start of source (while copying)
     // line2 = end of source (while copying)
     // SAFETY: `n` is a line of the current buffer, or zero.
-    if unsafe { u_save(n, n + 1) } == FAIL {
+    if u_save(n, n + 1) == FAIL {
         return;
     }
 

@@ -14,9 +14,11 @@ use crate::types::{FAIL, NUL, OK};
 
 /// A read-only pointer to line `lnum` of the current buffer. Never NULL.
 ///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char {
+/// Safe: the only promise is that the editor exists, which `curbuf` carries
+/// from startup to exit, and `ml_get_buf_impl` clamps `lnum` into the
+/// buffer itself. The answer is a raw pointer, so *reading* through it is
+/// still the caller's business.
+pub fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char {
     unsafe { ml_get_buf_impl(curbuf.get(), lnum, false) }
 }
 
@@ -49,9 +51,9 @@ pub unsafe fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char {
 
 /// Length of line `lnum` of the current buffer, excluding the NUL.
 ///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_get_len(lnum: linenr_T) -> colnr_T {
+/// Safe: as [`ml_get`] -- the editor exists, and the line number is
+/// clamped.
+pub fn ml_get_len(lnum: linenr_T) -> colnr_T {
     unsafe { ml_get_buf_len(curbuf.get(), lnum) }
 }
 

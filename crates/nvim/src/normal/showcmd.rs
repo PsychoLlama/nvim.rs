@@ -221,11 +221,12 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
     // SAFETY: both pointers are into the current line, and the walk stops at
     // or before `e`.
     let (mut s, e) = if cursor_bot {
-        (unsafe { ml_get_pos(&raw const anchor) }, unsafe {
-            get_cursor_pos_ptr()
-        })
+        (
+            unsafe { ml_get_pos(&raw const anchor) },
+            get_cursor_pos_ptr(),
+        )
     } else {
-        (unsafe { get_cursor_pos_ptr() }, unsafe {
+        (get_cursor_pos_ptr(), unsafe {
             ml_get_pos(&raw const anchor)
         })
     };

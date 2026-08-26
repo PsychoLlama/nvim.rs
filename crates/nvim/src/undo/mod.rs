@@ -181,22 +181,19 @@ pub fn saved(status: c_int) -> Result<(), UndoFailed> {
 /// Saves the lines a change about to be made to the cursor's line would
 /// destroy.
 ///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_save_cursor() -> c_int {
+/// Safe: as [`u_save`], over the cursor's line.
+pub fn u_save_cursor() -> c_int {
     // SAFETY: a live current window, by the contract above.
     let cur: linenr_T = cur_win().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
-    unsafe { u_save((cur - 1).max(0), cur + 1) }
+    u_save((cur - 1).max(0), cur + 1)
 }
 
 /// [`u_save_buf`] for the current buffer.
 ///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_save(top: linenr_T, bot: linenr_T) -> c_int {
+/// Safe: the only promise is that the editor exists; `u_save_buf` validates
+/// the line range itself and answers `FAIL` when it is out of range.
+pub fn u_save(top: linenr_T, bot: linenr_T) -> c_int {
     // SAFETY: a live current buffer, by the contract above.
     unsafe { u_save_buf(curbuf.get(), top, bot) }
 }

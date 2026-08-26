@@ -176,7 +176,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
                 // Nothing to undo: park `b_u_curhead` at the end.
                 buf.b_u_curhead = buf.b_u_oldhead;
                 // SAFETY: nothing here holds a borrow of editor state.
-                unsafe { beep_flush() };
+                beep_flush();
                 if first {
                     // SAFETY: a NUL-terminated literal.
                     unsafe { msg(gettext(c"Already at oldest change".as_ptr()), 0) };
@@ -191,7 +191,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
             // SAFETY: a live buffer.
             if buf.b_u_curhead.is_none() || unsafe { get_undolevel(buf.raw()) } <= 0 {
                 // SAFETY: nothing here holds a borrow of editor state.
-                unsafe { beep_flush() };
+                beep_flush();
                 if first {
                     // SAFETY: a NUL-terminated literal.
                     unsafe { msg(gettext(c"Already at newest change".as_ptr()), 0) };

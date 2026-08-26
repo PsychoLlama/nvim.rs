@@ -78,21 +78,21 @@ pub unsafe fn current_block(
     if !visual_active() || equalpos(visual_anchor(), cur_win().w_cursor) {
         // SAFETY: on the main thread with a current window and buffer, which
         // is all `setpcmark` reads.
-        unsafe { setpcmark() };
+        setpcmark();
         if what == '{' as c_int {
             // Ignore the indent.
             // SAFETY: there is a current line; `inindent` only measures its
             // leading white space and `inc_cursor` only advances within it,
             // reporting the end of the line itself.
             while unsafe { inindent(1) } {
-                if unsafe { inc_cursor() } != 0 {
+                if inc_cursor() != 0 {
                     break;
                 }
             }
         }
         // SAFETY: there is a current line with the cursor on it, which is
         // the character `gchar_cursor` reads.
-        if unsafe { gchar_cursor() } == what {
+        if gchar_cursor() == what {
             // On the opening bracket: move just past it.
             cur_win().w_cursor.col += 1;
         }
@@ -218,14 +218,14 @@ pub unsafe fn current_block(
             unsafe { inc(&mut cur_win().cursor()) };
         }
         // SAFETY: there is a current line with the cursor on it.
-        if sol && unsafe { gchar_cursor() } != NUL {
+        if sol && gchar_cursor() != NUL {
             unsafe { inc(&mut cur_win().cursor()) }; // include the line break
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
         // SAFETY: on the main thread with a current window; both only mark
         // the screen dirty and reprint the mode message.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+        redraw_curbuf_later(UPD_INVERTED); // update the inversion
         unsafe { showmode() };
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing
@@ -257,7 +257,7 @@ pub unsafe fn current_block(
 unsafe fn in_html_tag(end_tag: bool) -> bool {
     // SAFETY: on the main thread with a current buffer, so this hands back
     // the NUL-terminated cursor line; the cursor's column indexes into it.
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     let mut lc = NUL;
 
     // Back to the `<` under or before the cursor, giving up at a `>`.
@@ -368,12 +368,12 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
     // Starting on a `<aaa>` selects that block.
     if !visual_active() || equalpos(visual_anchor(), cur_win().w_cursor) {
         // SAFETY: on the main thread with a current window and buffer.
-        unsafe { setpcmark() };
+        setpcmark();
         // Ignore the indent.
         // SAFETY: there is a current line; `inindent` only measures its
         // leading white space and `inc_cursor` only advances within it.
         while unsafe { inindent(1) } {
-            if unsafe { inc_cursor() } != 0 {
+            if inc_cursor() != 0 {
                 break;
             }
         }
@@ -384,18 +384,18 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
         if unsafe { in_html_tag(false) } {
             // On a start tag: move to its `>`.
             while unsafe { *get_cursor_pos_ptr() } as c_int != '>' as c_int {
-                if unsafe { inc_cursor() } < 0 {
+                if inc_cursor() < 0 {
                     break;
                 }
             }
         } else if unsafe { in_html_tag(true) } {
             // On an end tag: move to just before it.
             while unsafe { *get_cursor_pos_ptr() } as c_int != '<' as c_int {
-                if unsafe { dec_cursor() } < 0 {
+                if dec_cursor() < 0 {
                     break;
                 }
             }
-            unsafe { dec_cursor() };
+            dec_cursor();
             old_end = cur_win().w_cursor;
         }
     } else if lt(visual_anchor(), cur_win().w_cursor) {
@@ -429,8 +429,8 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
         // Isolate the `aaa` so the matching `</aaa>` can be searched for.
         // SAFETY: there is a current line with the cursor on it, so
         // `get_cursor_pos_ptr` hands back a pointer into it.
-        unsafe { inc_cursor() };
-        let p = unsafe { get_cursor_pos_ptr() };
+        inc_cursor();
+        let p = get_cursor_pos_ptr();
         let mut cp = p;
         // SAFETY: `cp` walks the same NUL-terminated line from `p`; the NUL
         // test leads the chain, so the later reads are of a character that
@@ -478,13 +478,13 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
             // `get_cursor_pos_ptr` hands back a pointer into it, and
             // `inc_cursor` reports the end of the line itself.
             while unsafe { *get_cursor_pos_ptr() } as c_int != '>' as c_int {
-                if unsafe { inc_cursor() } < 0 {
+                if inc_cursor() < 0 {
                     break;
                 }
             }
         } else {
             // SAFETY: as above.
-            let c = unsafe { get_cursor_pos_ptr() };
+            let c = get_cursor_pos_ptr();
             // Exclude the `<` of the end tag. With the closing tag on a
             // new line, leave the cursor where it is and make the
             // operation exclusive instead, so the line feed is selected.
@@ -496,7 +496,7 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
                 is_inclusive = false;
             } else if unsafe { *c } as c_int == '<' as c_int {
                 // SAFETY: the cursor is on a line of the current buffer.
-                unsafe { dec_cursor() };
+                dec_cursor();
             }
         }
         end_pos = cur_win().w_cursor;
@@ -508,10 +508,10 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
             // SAFETY: `inc_cursor` reports running off the buffer itself, so
             // the cursor is on a character of a line of the current buffer
             // whenever the body runs, and `get_cursor_pos_ptr` points at it.
-            while unsafe { inc_cursor() } >= 0 {
+            while inc_cursor() >= 0 {
                 let q = unsafe { *get_cursor_pos_ptr() } as c_int;
                 if q == '>' as c_int && !in_quotes {
-                    unsafe { inc_cursor() };
+                    inc_cursor();
                     start_pos = cur_win().w_cursor;
                     break;
                 } else if q == '"' as c_int || q == '\'' as c_int {
@@ -540,13 +540,13 @@ pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: boo
         // SAFETY: `p_sel` holds the NUL-terminated 'selection' value.
         } else if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             // SAFETY: the cursor is on a line of the current buffer.
-            unsafe { inc_cursor() };
+            inc_cursor();
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
         // SAFETY: on the main thread with a current window; both only mark
         // the screen dirty and reprint the mode message.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+        redraw_curbuf_later(UPD_INVERTED); // update the inversion
         unsafe { showmode() };
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing

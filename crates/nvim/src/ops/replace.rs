@@ -62,7 +62,7 @@ unsafe fn replace_character(c: c_int) {
     unsafe { ins_char(c) };
     State.set(saved);
     // Back up onto the character just replaced.
-    unsafe { dec_cursor() };
+    dec_cursor();
 }
 
 /// `r` over the operator's region.
@@ -94,7 +94,7 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
     unsafe { mb_adjust_opend(oap.raw()) };
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if unsafe { u_save(above, below) } == FAIL {
+    if u_save(above, below) == FAIL {
         return FAIL;
     }
 
@@ -178,8 +178,8 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     let mut num_chars = numc;
     numc *= utf_char2len(c);
 
-    let mut oldp = unsafe { get_cursor_line_ptr() };
-    let oldlen = unsafe { get_cursor_line_len() };
+    let mut oldp = get_cursor_line_ptr();
+    let oldlen = get_cursor_line_len();
 
     let mut newp_size = bd.textcol as size_t + bd.startspaces as size_t;
     if !splits_line {
@@ -278,7 +278,7 @@ fn replace_chars(mut oap: Op, c: c_int) {
     if oap.motion_type == kMTLineWise {
         oap.start.col = 0;
         cur_win().w_cursor.col = 0;
-        oap.end.col = unsafe { ml_get_len(oap.end.lnum) };
+        oap.end.col = ml_get_len(oap.end.lnum);
         if oap.end.col != 0 {
             oap.end.col -= 1;
         }
@@ -289,7 +289,7 @@ fn replace_chars(mut oap: Op, c: c_int) {
     while ltoreq(cur_win().w_cursor, oap.end) {
         let mut done = false;
 
-        let under_cursor = unsafe { gchar_cursor() };
+        let under_cursor = gchar_cursor();
         if under_cursor != NUL {
             let new_byte_len = utf_char2len(c);
             let old_byte_len = unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
@@ -316,7 +316,7 @@ fn replace_chars(mut oap: Op, c: c_int) {
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
-                if unsafe { gchar_cursor() } != NUL {
+                if gchar_cursor() != NUL {
                     unsafe { pbyte(cur_win().w_cursor, c) };
                     done = true;
                 }
@@ -328,7 +328,7 @@ fn replace_chars(mut oap: Op, c: c_int) {
         }
 
         // On to the next character; stop at the end of the file.
-        if unsafe { inc_cursor() } == -1 {
+        if inc_cursor() == -1 {
             break;
         }
     }

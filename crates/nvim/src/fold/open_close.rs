@@ -89,7 +89,7 @@ pub unsafe fn op_fold_range(
     }
     if had_visual {
         // SAFETY: the caller's promise.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
 }
 

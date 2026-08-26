@@ -471,9 +471,9 @@ pub(crate) unsafe fn readfile(
                         } else {
                             let mut tlen: ptrdiff_t = 0;
                             loop {
-                                let line = unsafe { ml_get(read_buf_lnum) };
+                                let line = ml_get(read_buf_lnum);
                                 let p = unsafe { line.add(read_buf_col as usize) }.cast::<u8>();
-                                let whole = unsafe { ml_get_len(read_buf_lnum) } - read_buf_col;
+                                let whole = ml_get_len(read_buf_lnum) - read_buf_col;
                                 // Filled up to "size"? Then only a part of
                                 // the line fits.
                                 let partial = tlen + whole as ptrdiff_t + 1 > w.size;
@@ -820,7 +820,7 @@ pub(crate) unsafe fn readfile(
                 linecnt = 0;
             }
             if how.newfile || how.buffer {
-                unsafe { redraw_curbuf_later(UPD_NOT_VALID as c_int) };
+                redraw_curbuf_later(UPD_NOT_VALID as c_int);
                 // The diff info needs updating now that the text is in.
                 unsafe { diff_invalidate(curbuf.get()) };
                 // All folds in the window are invalid now. Mark them for

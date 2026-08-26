@@ -169,7 +169,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
         // insertion, but appending a line that ends in a space needs it.
         // Only when something was actually inserted, or undo breaks.
         let mut cc = 0;
-        if !ins_need_undo.get() && unsafe { has_format_option(FoFlag::AUTO) } {
+        if !ins_need_undo.get() && has_format_option(FoFlag::AUTO) {
             let tpos = cur_win().w_cursor;
 
             // At the end of a line after a space, formatting would move
@@ -177,7 +177,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             // first so it does not.
             cc = 'x' as c_int;
             if cur_win().w_cursor.col > 0 && char_at_cursor() == NUL {
-                unsafe { dec_cursor() };
+                dec_cursor();
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) {
                     cur_win().w_cursor = tpos;
@@ -188,7 +188,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
 
             if ascii_iswhite(cc) {
                 if char_at_cursor() != NUL {
-                    unsafe { inc_cursor() };
+                    inc_cursor();
                 }
                 // Still on the same character: keep its `coladd` too.
                 if char_at_cursor() == NUL
@@ -278,7 +278,7 @@ pub(crate) unsafe fn ins_apply_autocmds(event: event_T) -> c_int {
     let r = unsafe { apply_autocmds(event, none, none, false, curbuf.get()) } as c_int;
 
     if event != EVENT_INSERTLEAVE && tick != unsafe { buf_get_changedtick(curbuf.get()) } {
-        unsafe { u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1) };
+        u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
     }
     r
 }
@@ -287,14 +287,14 @@ pub(crate) unsafe fn ins_apply_autocmds(event: event_T) -> c_int {
 #[inline(always)]
 fn char_at_cursor() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { gchar_cursor() }
+    gchar_cursor()
 }
 
 /// Save the cursor's line for undo, answering `OK` when it was saved.
 #[inline(always)]
 fn save_cursor_line() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { u_save_cursor() }
+    u_save_cursor()
 }
 
 /// The buffer the editor is working in.

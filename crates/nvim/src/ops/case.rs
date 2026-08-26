@@ -36,7 +36,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
     let mut did_change = false;
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if unsafe { u_save(above, below) } == FAIL {
+    if u_save(above, below) == FAIL {
         return;
     }
 
@@ -57,7 +57,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
         if oap.motion_type == kMTLineWise {
             oap.start.col = 0;
             pos.col = 0;
-            oap.end.col = unsafe { ml_get_len(oap.end.lnum) };
+            oap.end.col = ml_get_len(oap.end.lnum);
             if oap.end.col != 0 {
                 oap.end.col -= 1;
             }
@@ -91,7 +91,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
 
     if !did_change && oap.is_VIsual {
         // No change: the Visual selection still has to come off the screen.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {

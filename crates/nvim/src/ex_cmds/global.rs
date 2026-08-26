@@ -324,7 +324,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // global_busy is set, setpcmark() will not do anything.  If there is an
     // error, global_busy will be incremented.
     // SAFETY: main thread, live window.
-    unsafe { setpcmark() };
+    setpcmark();
 
     // When the command writes a message, don't overwrite the command.
     msg_didout.set(true);
@@ -351,7 +351,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     global_busy.set(0 as c_int);
     if global_need_beginline.get() {
         // SAFETY: main thread, live window.
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
         // SAFETY: as above -- the cursor may be beyond the end of the line.
         unsafe { check_cursor(curwin.get()) };

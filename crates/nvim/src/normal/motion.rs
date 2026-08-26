@@ -210,7 +210,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     let mut win = cur_win();
     let wp = win.raw();
     op.motion_type = kMTLineWise;
-    unsafe { setpcmark() };
+    setpcmark();
     if cmdchar == 'L' as c_int {
         unsafe { validate_botline_win(wp) };
         win.w_cursor.lnum = win.w_botline - 1;
@@ -287,7 +287,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
         // SAFETY: `wp` is the live window.
         unsafe { cursor_correct(wp) };
     }
-    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 }
 
 /// `l`, `<Space>` and `<Right>`.
@@ -362,7 +362,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                 // out part-way through a count is not.
                 if op.op_type == OP_NOP {
                     if n == count1 {
-                        unsafe { beep_flush() };
+                        beep_flush();
                     }
                     // SAFETY: the cursor line is NUL-terminated.
                 } else if unsafe { *ml_get(win.w_cursor.lnum) } as c_int != NUL {
@@ -432,7 +432,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                 if (ca.op().op_type == OP_DELETE || ca.op().op_type == OP_CHANGE)
                     && unsafe { *ml_get(win.w_cursor.lnum) } as c_int != NUL
                 {
-                    let cp = unsafe { get_cursor_pos_ptr() };
+                    let cp = get_cursor_pos_ptr();
                     if unsafe { *cp } as c_int != NUL {
                         unsafe { win.w_cursor.col += utfc_ptr2len(cp) };
                     }
@@ -440,7 +440,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                 }
             } else {
                 if ca.op().op_type == OP_NOP && n == ca.count1 {
-                    unsafe { beep_flush() };
+                    beep_flush();
                 }
                 break;
             }
@@ -466,7 +466,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
 
@@ -506,7 +506,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
     } else if ca.arg != 0 {
         // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
         // not.
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
 
@@ -533,7 +533,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
     if !unsafe { virtual_active(curwin.get()) }
-        || unsafe { gchar_cursor() } != NUL
+        || gchar_cursor() != NUL
         || ca.op().op_type == OP_NOP
     {
         cur_win().w_curswant = MAXCOL as colnr_T;
@@ -573,7 +573,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     cur_win().w_set_curswant = true;
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
-    if unsafe { gchar_cursor() } == TAB
+    if gchar_cursor() == TAB
         && unsafe { virtual_active(curwin.get()) }
         && ca.arg == FORWARD as c_int
         && (t_cmd || ca.op().op_type != OP_NOP)
@@ -604,7 +604,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             clear_op_beep(op);
         } else {
             op.motion_type = kMTLineWise;
-            unsafe { setpcmark() };
+            setpcmark();
             let count = cur_buf().b_ml.ml_line_count;
             // Divide first for a file long enough that `count * 100`
             // would not fit.
@@ -615,7 +615,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             };
             win.w_cursor.lnum = win.w_cursor.lnum.max(1).min(count);
             // SAFETY: the editor's text state is live.
-            unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
         op.motion_type = kMTCharWise;
@@ -624,7 +624,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
         let pos = unsafe { findmatch(op.raw(), NUL) };
         if let Some(pos) = pos {
             // SAFETY: the jump list is live and `cap` is the caller's.
-            unsafe { setpcmark() };
+            setpcmark();
             win.w_cursor = pos;
             win.w_set_curswant = true;
             win.w_cursor.coladd = 0;
@@ -693,7 +693,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
-    unsafe { beginline(BeginlineOpts::NONE) };
+    beginline(BeginlineOpts::NONE);
     if ca.count0 > 0 {
         unsafe { coladvance(curwin.get(), ca.count0 - 1) };
         cur_win().w_curswant = ca.count0 - 1;
@@ -730,7 +730,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     // one. 'cpoptions' with `_` extends that to trailing white space.
     let mut cw_on_word = false;
     if !word_end && ca.op().op_type == OP_CHANGE {
-        let c = unsafe { gchar_cursor() };
+        let c = gchar_cursor();
         if c != NUL && !ascii_iswhite(c) {
             if cpo_has(CpoFlag::CHANGEW) {
                 ca.op().inclusive = true;
@@ -764,7 +764,7 @@ pub(crate) unsafe fn adjust_cursor(oap: *mut oparg_T) {
     // SAFETY (throughout): `oap` is the caller's live operator.
     let mut op = unsafe { Op::new(oap) };
     if cur_win().w_cursor.col > 0
-        && unsafe { gchar_cursor() } == NUL
+        && gchar_cursor() == NUL
         && (!visual_active() || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
         && !unsafe { virtual_active(curwin.get()) }
         && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagOnemore as c_uint == 0
@@ -782,7 +782,7 @@ pub(crate) unsafe fn nv_beginline(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
-    unsafe { beginline(BeginlineOpts::from_bits(ca.arg)) };
+    beginline(BeginlineOpts::from_bits(ca.arg));
     unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
     ins_at_eol.set(false);
 }
@@ -794,12 +794,12 @@ pub(crate) unsafe fn nv_goto(cap: *mut cmdarg_T) {
     let last = cur_buf().b_ml.ml_line_count;
     let mut lnum = if ca.arg != 0 { last } else { 1 };
     ca.op().motion_type = kMTLineWise;
-    unsafe { setpcmark() };
+    setpcmark();
     if ca.count0 != 0 {
         lnum = ca.count0 as linenr_T;
     }
     cur_win().w_cursor.lnum = lnum.max(1).min(last);
-    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     unsafe { may_fold_open(cap, kOptFdoFlagJump as c_uint) };
 }
 

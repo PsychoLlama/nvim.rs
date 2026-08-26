@@ -43,7 +43,7 @@ pub(crate) unsafe fn find_rawstring_end(
     let mut found = false;
     let mut lnum = unsafe { (*startpos).lnum };
     while lnum <= unsafe { (*endpos).lnum } && !found {
-        let line = unsafe { ml_get(lnum) };
+        let line = ml_get(lnum);
         let from = if lnum == unsafe { (*startpos).lnum } {
             start_col + 1
         } else {

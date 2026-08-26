@@ -882,7 +882,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
 
     if is_click {
         // SAFETY: only schedules a redraw of the current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+        redraw_curbuf_later(UPD_INVERTED); // update the inversion
     }
 }
 

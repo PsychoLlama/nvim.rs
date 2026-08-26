@@ -271,7 +271,7 @@ pub(crate) fn reset_VIsual_and_resel() {
     if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     VIsual_reselect.set(0);
 }
@@ -281,7 +281,7 @@ pub(crate) fn reset_VIsual() {
     if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
         VIsual_reselect.set(0);
     }
 }
@@ -520,7 +520,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     } else {
         cur_win().w_set_curswant = true;
     }
-    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    redraw_curbuf_later(UPD_INVERTED);
 }
 
 /// `v`, `V`, `CTRL-V` and their Select-mode twins.
@@ -553,7 +553,7 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
             unsafe { showmode() };
             unsafe { may_trigger_modechanged() };
         }
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     } else if ca.count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
         unsafe { reselect_scaled(cap) };
     } else {
@@ -611,7 +611,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
     // cursor is displayed at, not at the TAB's first column.
     if c == Ctrl_V
         && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagBlock as c_int as c_uint != 0
-        && unsafe { gchar_cursor() } == TAB
+        && gchar_cursor() == TAB
     {
         unsafe { validate_virtcol(curwin.get()) };
         unsafe { coladvance(curwin.get(), cur_win().w_virtcol) };
@@ -630,7 +630,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
         cur_win().w_old_cursor_lnum = cur_win().w_cursor.lnum;
         cur_win().w_old_visual_lnum = cur_win().w_cursor.lnum;
     }
-    unsafe { redraw_curbuf_later(UPD_VALID) };
+    redraw_curbuf_later(UPD_VALID);
 }
 
 /// `gv`: select what was selected last.
@@ -645,7 +645,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
         || unsafe { (*vi).vi_start.lnum } > cur_buf().b_ml.ml_line_count
         || unsafe { (*vi).vi_end.lnum } == 0
     {
-        unsafe { beep_flush() };
+        beep_flush();
         return;
     }
 
@@ -684,7 +684,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
         may_start_select('c' as c_int);
     }
     setmouse();
-    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    redraw_curbuf_later(UPD_INVERTED);
     unsafe { showmode() };
 }
 
@@ -696,10 +696,10 @@ pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
     if visual_active()
         && ca.op().inclusive
         && sel_exclusive()
-        && unsafe { gchar_cursor() } != NUL
+        && gchar_cursor() != NUL
         && lt(visual_anchor(), cur_win().w_cursor)
     {
-        unsafe { inc_cursor() };
+        inc_cursor();
         ca.op().inclusive = false;
         VIsual_select_exclu_adj.set(true);
     }

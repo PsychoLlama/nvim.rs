@@ -134,9 +134,9 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
         while n > 0 {
             loop {
                 let stepped = if findc == '{' as c_int {
-                    unsafe { dec_cursor() }
+                    dec_cursor()
                 } else {
-                    unsafe { inc_cursor() }
+                    inc_cursor()
                 };
                 if stepped < 0 {
                     // Hit the end of the buffer with nothing found.
@@ -146,7 +146,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
                     n = 0;
                     break;
                 }
-                let c = unsafe { gchar_cursor() };
+                let c = gchar_cursor();
                 if c != '{' as c_int && c != '}' as c_int {
                     continue;
                 }
@@ -178,7 +178,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
     }
 
     if let Some(pos) = pos {
-        unsafe { setpcmark() };
+        setpcmark();
         cur_win().w_cursor = pos;
         cur_win().w_set_curswant = true;
         unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
@@ -274,7 +274,7 @@ unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
 unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    unsafe { setpcmark() };
+    setpcmark();
     let what = match u8::try_from(ca.nchar) {
         Ok(b's') => SMT_ALL as smt_T,
         Ok(b'r') => SMT_RARE as smt_T,
@@ -328,7 +328,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
             clear_op_beep(ca.op());
         } else {
             if ca.op().op_type == OP_NOP {
-                unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
         }

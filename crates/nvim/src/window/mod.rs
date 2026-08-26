@@ -519,7 +519,7 @@ fn fire_named(event: event_T, name: *mut ::core::ffi::c_char, buf: Option<Buf>) 
 /// cannot be made.
 fn beep() {
     // SAFETY: reads no argument of ours.
-    unsafe { beep_flush() };
+    beep_flush();
 }
 
 /// Whether `buf` may be left in a window that is closing (`'hidden'`,

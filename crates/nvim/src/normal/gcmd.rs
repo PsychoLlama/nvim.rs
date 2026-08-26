@@ -102,7 +102,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     }
     unsafe { coladvance(win.raw(), i) };
     if to_first_non_blank {
-        while ascii_iswhite(unsafe { gchar_cursor() }) && unsafe { oneright() } == OK {}
+        while ascii_iswhite(gchar_cursor()) && unsafe { oneright() } == OK {}
         win.w_valid.clear(WinValid::WCOL);
     }
     win.w_set_curswant = true;
@@ -129,7 +129,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
         clear_op_beep(ca.op());
         return;
     }
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     // 'virtualedit' can leave the cursor on the terminator.
     if win.w_cursor.col > 0 && unsafe { *line.offset(win.w_cursor.col as isize) } as c_int == NUL {
         win.w_cursor.col -= 1;
@@ -190,7 +190,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
         unsafe { update_curswant_force() };
     }
     if to_last_non_blank {
-        while ascii_iswhite_or_nul(unsafe { gchar_cursor() }) && unsafe { oneleft() } == OK {}
+        while ascii_iswhite_or_nul(gchar_cursor()) && unsafe { oneleft() } == OK {}
         win.w_valid.clear(WinValid::WCOL);
     }
 }
@@ -204,7 +204,7 @@ pub(crate) unsafe fn nv_gi_cmd(cap: *mut cmdarg_T) {
     if cur_buf().b_last_insert.mark.lnum != 0 {
         win.w_cursor = cur_buf().b_last_insert.mark;
         unsafe { check_cursor_lnum(win.raw()) };
-        let len = unsafe { get_cursor_line_len() };
+        let len = get_cursor_line_len();
         if win.w_cursor.col > len {
             if unsafe { virtual_active(win.raw()) } {
                 // Past the end is a real position under 'virtualedit'.
@@ -364,7 +364,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
         Ok(b'i') => unsafe { nv_gi_cmd(cap) },
         // `gI`: insert in column 1 regardless of indent.
         Ok(b'I') => {
-            unsafe { beginline(BeginlineOpts::NONE) };
+            beginline(BeginlineOpts::NONE);
             if !check_clear_op_quit(op) {
                 unsafe { invoke_edit(cap, 0, 'g' as c_int, 0) };
             }

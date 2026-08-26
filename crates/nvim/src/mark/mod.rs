@@ -186,7 +186,7 @@ pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
 /// `pos` must point at a live position and `buf` at a live buffer.
 unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
-    if !unsafe { has_event(EVENT_MARKSET) } {
+    if !has_event(EVENT_MARKSET) {
         return;
     }
     // SAFETY: the caller promised a live position.
@@ -268,7 +268,7 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
         let mut win = unsafe { Win::current() };
         if ptr::eq(pos, &raw const win.w_cursor) {
             // SAFETY: the editor's globals are live.
-            unsafe { setpcmark() };
+            setpcmark();
             win.w_prev_pcmark = win.w_pcmark;
         } else {
             win.w_pcmark = at;

@@ -438,17 +438,16 @@ pub unsafe fn getvpos(wp: *mut win_T, pos: *mut pos_T, wcol: colnr_T) -> bool {
 
 /// Move the cursor one character forward; see `inc`.
 ///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn inc_cursor() -> c_int {
+/// Safe: the only promise is that the editor exists, which `Win::current()`
+/// carries; `inc` clamps the line it walks.
+pub fn inc_cursor() -> c_int {
     unsafe { inc(&mut *Win::current().cursor().raw()) }
 }
 
 /// Move the cursor one character back; see `dec`.
 ///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn dec_cursor() -> c_int {
+/// Safe: as [`inc_cursor`].
+pub fn dec_cursor() -> c_int {
     unsafe { dec(&mut *Win::current().cursor().raw()) }
 }
 
@@ -574,7 +573,7 @@ pub unsafe fn check_visual_pos() {
             coladd: 0,
         });
     } else {
-        let len = unsafe { ml_get_len(visual.lnum) };
+        let len = ml_get_len(visual.lnum);
         if visual.col > len {
             set_visual_anchor(pos_T {
                 col: len,
@@ -592,10 +591,7 @@ pub unsafe fn check_visual_pos() {
 /// The current window must be valid.
 pub unsafe fn adjust_cursor_col() {
     let cursor = unsafe { Win::current() }.cursor();
-    if cursor.col() > 0
-        && (!visual_active() || selection_is_old())
-        && unsafe { gchar_cursor() } == NUL
-    {
+    if cursor.col() > 0 && (!visual_active() || selection_is_old()) && gchar_cursor() == NUL {
         cursor.set_col(cursor.col() - 1);
     }
 }
@@ -650,9 +646,10 @@ pub unsafe fn set_leftcol(leftcol: colnr_T) -> bool {
 
 /// The character under the cursor.
 ///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn gchar_cursor() -> c_int {
+/// Safe: the only promise is that the editor exists. The cursor sitting
+/// inside its own line is the editor's invariant, not the caller's --
+/// `check_cursor_col` is what restores it.
+pub fn gchar_cursor() -> c_int {
     unsafe { utf_ptr2char(get_cursor_pos_ptr()) }
 }
 
@@ -690,17 +687,17 @@ pub unsafe fn pchar_cursor(c: c_char) {
 
 /// The cursor's line.
 ///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn get_cursor_line_ptr() -> *mut c_char {
+/// Safe: the only promise is that the editor exists, which
+/// `Win::current()`/`Buf::current()` carry. The answer is a raw pointer;
+/// reading through it is still the caller's business.
+pub fn get_cursor_line_ptr() -> *mut c_char {
     unsafe { Buf::current().line(Win::current().cursor().lnum()).raw() }
 }
 
 /// The cursor's line, from the cursor onwards.
 ///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn get_cursor_pos_ptr() -> *mut c_char {
+/// Safe: as [`get_cursor_line_ptr`] -- an address, computed, not read.
+pub fn get_cursor_pos_ptr() -> *mut c_char {
     let cursor = unsafe { Win::current() }.cursor();
     unsafe {
         Buf::current()
@@ -712,17 +709,15 @@ pub unsafe fn get_cursor_pos_ptr() -> *mut c_char {
 
 /// The length of the cursor's line.
 ///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn get_cursor_line_len() -> colnr_T {
+/// Safe: as [`get_cursor_line_ptr`].
+pub fn get_cursor_line_len() -> colnr_T {
     unsafe { Buf::current().line_len(Win::current().cursor().lnum()) }
 }
 
 /// The number of bytes from the cursor to the end of its line.
 ///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn get_cursor_pos_len() -> colnr_T {
+/// Safe: as [`get_cursor_line_ptr`].
+pub fn get_cursor_pos_len() -> colnr_T {
     let cursor = unsafe { Win::current() }.cursor();
     unsafe { Buf::current().line_len(cursor.lnum()) - cursor.col() }
 }

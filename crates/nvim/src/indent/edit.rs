@@ -837,15 +837,13 @@ impl Retab {
         // SAFETY: the caller's line. The three closures below are the only
         // places it is read, `col` never passes its NUL, and `retabulate`
         // moves the scan onto whatever line it leaves behind.
-        let mut scan = unsafe {
-            LineScan {
-                lnum,
-                ptr: ml_get(lnum),
-                old_len: ml_get_len(lnum),
-                col: 0,
-                vcol: 0,
-                did_undo: false,
-            }
+        let mut scan = LineScan {
+            lnum,
+            ptr: ml_get(lnum),
+            old_len: ml_get_len(lnum),
+            col: 0,
+            vcol: 0,
+            did_undo: false,
         };
         // Written inside `unsafe` blocks so that the walk stays checked code.
         let byte = |s: &LineScan| unsafe { *s.ptr.offset(s.col as isize) };

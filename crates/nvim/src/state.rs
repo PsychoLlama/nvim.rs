@@ -449,7 +449,7 @@ fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::
 /// The editor must be initialized.
 pub unsafe fn may_trigger_modechanged() {
     // SAFETY: the editor is initialized.
-    if !unsafe { has_event(EVENT_MODECHANGED) } || got_int.get() {
+    if !has_event(EVENT_MODECHANGED) || got_int.get() {
         return;
     }
     let mut old_mode = last_mode.get();

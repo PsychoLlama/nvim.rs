@@ -351,8 +351,7 @@ impl Subject {
 pub unsafe fn may_trigger_win_scrolled_resized() {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: reads the autocommand tables.
-    let (do_resize, do_scroll) =
-        unsafe { (has_event(EVENT_WINRESIZED), has_event(EVENT_WINSCROLLED)) };
+    let (do_resize, do_scroll) = (has_event(EVENT_WINRESIZED), has_event(EVENT_WINSCROLLED));
     if recursive.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
         return;
     }

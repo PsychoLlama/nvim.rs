@@ -329,7 +329,7 @@ pub unsafe fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // SAFETY: eval-function contract; the result starts out 0.
     unsafe { (*rettv).vval.v_number = 0 };
     // SAFETY: reads the 'secure'/sandbox globals.
-    if unsafe { check_secure() } {
+    if check_secure() {
         return;
     }
     // SAFETY: eval-function contract.

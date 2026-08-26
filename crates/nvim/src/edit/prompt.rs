@@ -67,8 +67,8 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     }
 
     win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
-    let text = unsafe { ml_get(start().lnum) };
-    let text_len = unsafe { ml_get_len(start().lnum) };
+    let text = ml_get(start().lnum);
+    let text_len = ml_get_len(start().lnum);
 
     // Is the prompt actually there, ending at the mark's column?  The
     // `col` bounds are what keeps the `strnequal` read inside the line, so

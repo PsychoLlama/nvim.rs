@@ -506,7 +506,7 @@ pub(crate) unsafe fn may_add_char_to_search(
     if s.did_incsearch {
         cur_win().w_cursor = s.match_end;
         // SAFETY: the cursor was just put on a match of the current buffer.
-        *c = unsafe { gchar_cursor() };
+        *c = gchar_cursor();
         if *c != NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
             // the command line, lowercase the character.
@@ -538,7 +538,7 @@ pub(crate) unsafe fn may_add_char_to_search(
                 while utf_char2len(*c) != cursor_len() {
                     cur_win().w_cursor.col += utf_char2len(*c);
                     // SAFETY: as the `gchar_cursor` above.
-                    *c = unsafe { gchar_cursor() };
+                    *c = gchar_cursor();
                     stuff_readbuf_char(*c);
                 }
                 *c = save_c;
@@ -567,7 +567,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
         if !equalpos(s.save_cursor, s.search_start) {
             // Put the previous-context mark at the original position.
             cur_win().w_cursor = s.save_cursor;
-            unsafe { setpcmark() };
+            setpcmark();
         }
         cur_win().w_cursor = s.search_start;
     }

@@ -65,7 +65,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     {
         return ::core::ptr::null_mut();
     }
-    let prompt_line = unsafe { ml_get(cur_win().w_cursor.lnum) };
+    let prompt_line = ml_get(cur_win().w_cursor.lnum);
     let prompt = unsafe { prompt_text() };
     let prompt_len = unsafe { strlen(prompt) };
     if unsafe { strncmp(prompt_line, prompt, prompt_len) } != 0 {
@@ -108,7 +108,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
     if cur_win().w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
         // NL to a new line, BS back, NL again: don't save the new line
         // for undo twice. Errors are ignored.
-        unsafe { u_save_cursor() };
+        u_save_cursor();
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
     unsafe { ml_replace(cur_win().w_cursor.lnum, p_extra, true) };
@@ -407,7 +407,7 @@ pub unsafe fn open_line(
             && cur_buf().b_p_cin != 0
             && do_cindent
             && dir == FORWARD
-            && (!unsafe { has_format_option(FoFlag::NO_OPEN_COMS) } || flags & OPENLINE_FORMAT != 0)
+            && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
         {
             // A line comment after code: `code(); // why`.
             comment_start = unsafe { check_linecomment(saved_line) };
@@ -566,7 +566,7 @@ pub unsafe fn open_line(
             let cb = curbuf.get();
             let at = cur_win().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
-            let extra = unsafe { ml_get_len(at) } as bcount_t;
+            let extra = ml_get_len(at) as bcount_t;
             // SAFETY: as above.
             unsafe {
                 extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);

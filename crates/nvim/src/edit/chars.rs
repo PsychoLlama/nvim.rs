@@ -81,7 +81,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     // buffer.
     if !is_special(c)
         && utf_char2len(c) == 1
-        && !unsafe { has_event(EVENT_INSERTCHARPRE) }
+        && !has_event(EVENT_INSERTCHARPRE)
         && !test_disable_char_avail.get()
         && unsafe { vpeekc() } != NUL
         && State.get() & REPLACE_FLAG == 0
@@ -171,8 +171,8 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
     let force_format = flags & INSCHAR_FORMAT as c_int;
-    let fo_ins_blank = unsafe { has_format_option(FoFlag::INS_BLANK) };
-    let fo_ins_long = unsafe { has_format_option(FoFlag::INS_LONG) };
+    let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
+    let fo_ins_long = has_format_option(FoFlag::INS_LONG);
 
     if textwidth <= 0 {
         return;
@@ -226,7 +226,7 @@ fn end_pending_comment(c: c_int) {
 
     // Find the comment leader this line starts with.
     let mut p: *mut c_char = ::core::ptr::null_mut();
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     let mut i = unsafe { get_leader_len(line, &raw mut p, false, true) };
     if i <= 0 || unsafe { vim_strchr(p, COM_MIDDLE) }.is_null() {
         return; // just checking
@@ -307,7 +307,7 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if c == Ctrl_RSB || !unsafe { has_event(EVENT_INSERTCHARPRE) } {
+    if c == Ctrl_RSB || !has_event(EVENT_INSERTCHARPRE) {
         return ::core::ptr::null_mut();
     }
 

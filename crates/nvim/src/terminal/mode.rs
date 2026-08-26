@@ -529,7 +529,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     // TextChangedT observers can close the terminal.
     s.term.refcount += 1;
     // SAFETY: reads the editor's own event table.
-    let observed = unsafe { has_event(EVENT_TEXTCHANGEDT) };
+    let observed = has_event(EVENT_TEXTCHANGEDT);
     let mut buf = current_buf();
     // SAFETY: a live buffer's own change counter.
     if observed && buf.b_last_changedtick_i != unsafe { buf_get_changedtick(buf.raw()) } {

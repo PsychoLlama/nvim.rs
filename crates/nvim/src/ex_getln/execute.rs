@@ -103,7 +103,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
             return CtrlBsl::Changed;
         }
     }
-    unsafe { beep_flush() };
+    beep_flush();
     got_int.set(false); // don't abandon the command line
     did_emsg.set(0);
     emsg_on_display.set(false);
@@ -472,7 +472,7 @@ pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int 
 
 /// Trigger the `CmdlineChanged` autocommands.
 pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
-    if !unsafe { has_event(EVENT_CMDLINECHANGED) } {
+    if !has_event(EVENT_CMDLINECHANGED) {
         return;
     }
     let mut err: Error = ERROR_INIT;

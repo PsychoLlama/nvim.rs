@@ -110,9 +110,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if unsafe { gchar_cursor() } == TAB
-        || unsafe { buf_meta_total(curbuf.get(), kMTMetaInline) } > 0
-    {
+    if gchar_cursor() == TAB || unsafe { buf_meta_total(curbuf.get(), kMTMetaInline) } > 0 {
         cur_win()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);

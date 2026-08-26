@@ -118,9 +118,8 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
         let ended = &text[typed..] == b".";
         // SAFETY: `lnum` is a line of the current buffer, or zero.
-        let undo_failed = !ended
-            && !did_undo
-            && unsafe { u_save(lnum, lnum + 1 + linenr_T::from(empty)) } == FAIL;
+        let undo_failed =
+            !ended && !did_undo && u_save(lnum, lnum + 1 + linenr_T::from(empty)) == FAIL;
         if ended || undo_failed {
             // SAFETY: the line is ours.
             unsafe { xfree(theline.cast()) };
@@ -179,7 +178,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     // SAFETY: `curwin` is the live current window.
     cur_win().w_cursor.lnum = lnum;
     unsafe { check_cursor_lnum(curwin.get()) };
-    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
     // Don't use wait_return() now.
     need_wait_return.set(false);
@@ -261,7 +260,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
     let (forceit, line1, line2) = unsafe { ((*eap).forceit, (*eap).line1, (*eap).line2) };
     // SAFETY: the range is inside the current buffer.
-    if line2 >= line1 && unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+    if line2 >= line1 && u_save(line1 - 1, line2 + 1) == FAIL {
         return;
     }
 

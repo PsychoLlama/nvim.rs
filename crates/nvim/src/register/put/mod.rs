@@ -129,7 +129,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
             // byte of that line's NUL-terminated text.  `!one_past_line` is
             // what proves the character step below stays inside it, so the
             // chain is left whole.
-            let cursor_pos = unsafe { get_cursor_pos_ptr() };
+            let cursor_pos = get_cursor_pos_ptr();
             let one_past_line = unsafe { c_int::from(*cursor_pos) } == NUL;
             let eol = !one_past_line
                 && unsafe { c_int::from(*cursor_pos.offset(utfc_ptr2len(cursor_pos) as isize)) }
@@ -151,7 +151,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
     if command_start_char == 'a' as c_int {
         let lnum = cur_win().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
-        unsafe { u_save(lnum, lnum + 1) };
+        u_save(lnum, lnum + 1);
     }
 }
 
@@ -229,14 +229,14 @@ impl Put {
     /// The cursor must be on a valid line.
     unsafe fn split_current_line(&mut self) -> bool {
         // SAFETY: the cursor is on a valid line, which is what undo saves.
-        if unsafe { u_save_cursor() } == FAIL {
+        if u_save_cursor() == FAIL {
             return false;
         }
         // SAFETY (these four): the cursor is on a valid line, so all three
         // answers are that line's NUL-terminated text and a position in it.
-        let curline = unsafe { get_cursor_line_ptr() };
-        let p_orig = unsafe { get_cursor_pos_ptr() };
-        let plen = unsafe { get_cursor_pos_len() } as size_t;
+        let curline = get_cursor_line_ptr();
+        let p_orig = get_cursor_pos_ptr();
+        let plen = get_cursor_pos_len() as size_t;
         let mut p = p_orig;
         // The second half starts after the cursor's character for `p`, at it
         // for `P`.
@@ -265,7 +265,7 @@ impl Put {
         //
         // SAFETY: the line is re-read because `ml_append` may have moved it;
         // `split_pos` is a column of it, and `ml_replace` takes the copy over.
-        let head = unsafe { get_cursor_line_ptr() } as *const c_void;
+        let head = get_cursor_line_ptr() as *const c_void;
         let head = unsafe { xmemdupz(head, self.split_pos as size_t) } as *mut c_char;
         unsafe { ml_replace(cur_win().w_cursor.lnum, head, false) };
         self.nr_lines += 1;
@@ -289,12 +289,12 @@ impl Put {
             lnum = lnum.min(cur_buf().b_ml.ml_line_count + 1);
             // SAFETY: the cursor is on a valid line and `lnum` is capped at
             // one past the last, so the range is the buffer's.
-            return unsafe { u_save(cur_win().w_cursor.lnum - 1, lnum) } != FAIL;
+            return u_save(cur_win().w_cursor.lnum - 1, lnum) != FAIL;
         }
 
         if self.y_type != kMTLineWise {
             // SAFETY: the cursor is on a valid line.
-            return unsafe { u_save_cursor() } != FAIL;
+            return u_save_cursor() != FAIL;
         }
 
         // Correct for a closed fold. The cursor must not move yet:
@@ -313,9 +313,9 @@ impl Put {
         //
         // SAFETY (these three): a live buffer, and `lnum` is a line of it.
         let saved = if unsafe { buf_is_empty(curbuf.get()) } {
-            unsafe { u_save(0, 2) }
+            u_save(0, 2)
         } else {
-            unsafe { u_save(lnum - 1, lnum) }
+            u_save(lnum - 1, lnum)
         };
         if saved == FAIL {
             return false;
@@ -337,7 +337,7 @@ impl Put {
         }
         // SAFETY (all through): the cursor is on a valid line, which is the
         // line every one of these reads, measures or moves within.
-        if unsafe { gchar_cursor() } == TAB {
+        if gchar_cursor() == TAB {
             let viscol = unsafe { getviscol() };
             let ts = cur_buf().b_p_ts;
             // No spaces needed for `p` on the last position of a tab, or
@@ -353,7 +353,7 @@ impl Put {
             } else {
                 cur_win().w_cursor.coladd = 0;
             }
-        } else if cur_win().w_cursor.coladd > 0 || unsafe { gchar_cursor() } == NUL {
+        } else if cur_win().w_cursor.coladd > 0 || gchar_cursor() == NUL {
             let to = unsafe { getviscol() } + c_int::from(self.dir == FORWARD);
             unsafe { coladvance_force(to) };
         }
@@ -415,7 +415,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
         // `y_array`, so it happens before the register is read.
         let lnum = cur_win().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
-        if unsafe { u_save(lnum, lnum + 1) } == FAIL {
+        if u_save(lnum, lnum + 1) == FAIL {
             return;
         }
     }
@@ -529,7 +529,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
                 // SAFETY: the cursor is on a valid line, and the `!= NUL`
                 // test in front is what proves it has a character to step
                 // over.
-                if put.dir == FORWARD && unsafe { gchar_cursor() } != NUL {
+                if put.dir == FORWARD && gchar_cursor() != NUL {
                     let bytelen = unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
                     col += bytelen;
                     // SAFETY: a charwise register holds at least one line.
@@ -560,7 +560,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
 
         // Don't leave the cursor after the NUL.
         // SAFETY: the cursor is on a line of the current buffer.
-        let len = unsafe { get_cursor_line_len() };
+        let len = get_cursor_line_len();
         if cur_win().w_cursor.col > len {
             if ve_flags == kOptVeFlagAll as c_uint {
                 cur_win().w_cursor.coladd = cur_win().w_cursor.col - len;

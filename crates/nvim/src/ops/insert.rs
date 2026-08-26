@@ -63,7 +63,7 @@ pub(crate) unsafe fn op_insert(oap: *mut oparg_T, count1: c_int) {
     // The Visual block is still marked; get rid of it now.
     cur_win().w_cursor.lnum = oap.start.lnum;
     // SAFETY: both only touch the current buffer's windows.
-    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    redraw_curbuf_later(UPD_INVERTED);
     unsafe { update_screen() };
 
     let mut pre = BlockInsertPre {
@@ -119,7 +119,7 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
     // the cursor is on it.
     if cur_win().w_cursor.coladd > 0 {
         let old_ve_flags: c_uint = cur_win().w_onebuf_opt.wo_ve_flags;
-        if unsafe { u_save_cursor() } == FAIL {
+        if u_save_cursor() == FAIL {
             return None;
         }
         cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
@@ -136,13 +136,13 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
     }
 
     unsafe { block_prep(oap.raw(), &raw mut *bd, oap.start.lnum, true) };
-    let mut pre_textlen = unsafe { ml_get_len(oap.start.lnum) } - bd.textcol;
+    let mut pre_textlen = ml_get_len(oap.start.lnum) - bd.textcol;
     if oap.op_type == OP_APPEND {
         pre_textlen -= bd.textlen;
     }
     Some(BlockInsertPre {
         ind_pre_col: unsafe { getwhitecols_curline() } as colnr_T,
-        ind_pre_vcol: unsafe { get_indent() },
+        ind_pre_vcol: get_indent(),
         pre_textlen,
     })
 }
@@ -163,7 +163,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
         }
         if bd.is_short != 0 && bd.is_MAX == 0 {
             // The first line was too short: pad it out and say so in `bd`.
-            if unsafe { u_save_cursor() } == FAIL {
+            if u_save_cursor() == FAIL {
                 return false;
             }
             for _ in 0..bd.endspaces {
@@ -178,7 +178,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
         if unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
             && oap.start_vcol != oap.end_vcol
         {
-            unsafe { inc_cursor() };
+            inc_cursor();
         }
     }
     true
@@ -202,7 +202,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
     let ind_post_col = unsafe { getwhitecols_curline() } as colnr_T;
     if cur_buf().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
-        ind_post_vcol = unsafe { get_indent() };
+        ind_post_vcol = get_indent();
         bd.start_vcol += ind_post_vcol - pre.ind_pre_vcol;
         did_indent = true;
     }
@@ -261,8 +261,8 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
 
     // A later `ml_get` flushes the line data, so the inserted text has to
     // be copied out before anything else touches the buffer.
-    let mut firstline = unsafe { ml_get(oap.start.lnum) };
-    let mut len = unsafe { ml_get_len(oap.start.lnum) };
+    let mut firstline = ml_get(oap.start.lnum);
+    let mut len = ml_get_len(oap.start.lnum);
     let mut add = bd.textcol;
     // How far the cursor was moved during the insert.
     let mut offset: colnr_T = 0;
@@ -293,7 +293,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         let n = ins_len as size_t;
         let ins_text = unsafe { xmemdupz(firstline as *const c_void, n) } as *mut c_char;
         let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
-        if unsafe { u_save(first, last) } == OK {
+        if u_save(first, last) == OK {
             let insert = oap.op_type == OP_INSERT;
             unsafe { block_insert(oap.raw(), ins_text, n, insert, &raw mut *bd) };
         }
@@ -324,7 +324,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
     // Delete the region first. In an empty buffer there is nothing to
     // delete, only undo to prepare.
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if unsafe { u_save_cursor() } == FAIL {
+        if u_save_cursor() == FAIL {
             return 0;
         }
     } else if unsafe { op_delete(oap.raw()) }.is_err() {
@@ -335,7 +335,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
         && unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
         && !op_virtual()
     {
-        unsafe { inc_cursor() };
+        inc_cursor();
     }
 
     let mut bd = block_def::ZERO;
@@ -343,11 +343,11 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
     let mut pre_indent = 0;
     if oap.motion_type == kMTBlockWise {
         // Add the spaces before measuring the line's length.
-        if op_virtual() && (cur_win().w_cursor.coladd > 0 || unsafe { gchar_cursor() } == NUL) {
+        if op_virtual() && (cur_win().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
             unsafe { coladvance_force(getviscol()) };
         }
-        let firstline = unsafe { ml_get(oap.start.lnum) };
-        pre_textlen = unsafe { ml_get_len(oap.start.lnum) };
+        let firstline = ml_get(oap.start.lnum);
+        pre_textlen = ml_get_len(oap.start.lnum);
         pre_indent = unsafe { getwhitecols(firstline) } as c_int;
         bd.textcol = cur_win().w_cursor.col;
     }
@@ -379,7 +379,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
 fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent: c_int) {
     // SAFETY: every line the walk reaches is one of the region's, so it is a
     // line of the current buffer.
-    let firstline = unsafe { ml_get(oap.start.lnum) };
+    let firstline = ml_get(oap.start.lnum);
     // Auto-indenting may have changed the indent. If the cursor was past
     // the indent, that change is not part of the inserted text.
     if bd.textcol > pre_indent {
@@ -388,7 +388,7 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
         bd.textcol += new_indent - pre_indent;
     }
 
-    let ins_len = unsafe { ml_get_len(oap.start.lnum) } - pre_textlen;
+    let ins_len = ml_get_len(oap.start.lnum) - pre_textlen;
     if ins_len <= 0 {
         return;
     }
@@ -466,7 +466,7 @@ pub unsafe fn adjust_cursor_eol() {
     // buffer, which is all any of these reads.
     let cur_ve_flags = unsafe { get_ve_flags(curwin.get()) };
     let adj_cursor = cur_win().w_cursor.col > 0
-        && unsafe { gchar_cursor() } == NUL
+        && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
         && cur_ve_flags & kOptVeFlagAll as c_uint == 0
         && !(restart_edit.get() != 0 || State.get() & MODE_INSERT != 0);
@@ -475,7 +475,7 @@ pub unsafe fn adjust_cursor_eol() {
     }
 
     // Onto the last character in the line.
-    unsafe { dec_cursor() };
+    dec_cursor();
 
     if cur_ve_flags == kOptVeFlagAll as c_uint {
         // `coladd` becomes the width of that last character.

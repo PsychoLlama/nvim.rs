@@ -89,7 +89,7 @@ pub unsafe fn get_expr_indent() -> c_int {
     if indent < 0 {
         // The expression failed; keep the indent the line already has.
         // SAFETY: as above.
-        indent = unsafe { get_indent() };
+        indent = get_indent();
     }
     indent
 }

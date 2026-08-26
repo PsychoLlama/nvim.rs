@@ -237,7 +237,7 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
         return FAIL;
     }
     // SAFETY: the editor exists.
-    unsafe { setpcmark() };
+    setpcmark();
     cur_win().w_cursor.lnum = lnum;
     cur_win().w_cursor.col = 0;
     OK

@@ -171,7 +171,7 @@ pub(crate) fn ins_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if unsafe { gchar_cursor() } != NUL || unsafe { virtual_active(curwin.get()) } {
+    if gchar_cursor() != NUL || unsafe { virtual_active(curwin.get()) } {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(K_RIGHT);
@@ -213,7 +213,7 @@ pub(crate) fn ins_s_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count || unsafe { gchar_cursor() } != NUL {
+    if cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count || gchar_cursor() != NUL {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(K_S_RIGHT);

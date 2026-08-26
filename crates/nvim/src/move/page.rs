@@ -102,10 +102,10 @@ pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     // An error when neither the viewport nor the cursor changed.
     if !did_move {
         // SAFETY: beeping reads editor state, not a pointer of ours.
-        unsafe { beep_flush() };
+        beep_flush();
     } else if win.w_onebuf_opt.wo_sms == 0 {
         // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if p_sol.get() != 0 {
         // SAFETY: the caller's promise; `ca` is a command of this frame.
         unsafe { nv_g_home_m_cmd(&raw mut ca) };

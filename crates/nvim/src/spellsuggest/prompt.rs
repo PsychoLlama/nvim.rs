@@ -170,7 +170,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };
     }
 
-    if selected > 0 && selected <= sug.su_ga.ga_len && unsafe { u_save_cursor() } == OK {
+    if selected > 0 && selected <= sug.su_ga.ga_len && u_save_cursor() == OK {
         let stp = unsafe { suggestions(&raw mut sug.su_ga) }[selected as usize - 1];
         unsafe { apply_suggestion(&sug, &stp, line) };
     } else {
@@ -209,7 +209,7 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
         badlen += 1;
         end_visual_mode();
         // Leave out the NUL at the end of the line.
-        return Some(badlen.min(unsafe { get_cursor_line_len() } - cur_win().w_cursor.col));
+        return Some(badlen.min(get_cursor_line_len() - cur_win().w_cursor.col));
     }
 
     if unsafe {
@@ -229,7 +229,7 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
     // No bad word, or the one found starts after the cursor: take the
     // word under the cursor instead.
     cur_win().w_cursor = prev_cursor;
-    let curline = unsafe { get_cursor_line_ptr() };
+    let curline = get_cursor_line_ptr();
     let mut p = unsafe { curline.offset(cur_win().w_cursor.col as isize) };
     // Back up to before the start of the word...
     while p > curline && unsafe { spell_iswordp_nmw(p, curwin.get()) } {
@@ -240,7 +240,7 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
     if !unsafe { spell_iswordp_nmw(p, curwin.get()) } {
-        unsafe { beep_flush() }; // no word at all
+        beep_flush(); // no word at all
         return None;
     }
     cur_win().w_cursor.col = unsafe { p.offset_from(curline) } as colnr_T;

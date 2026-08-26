@@ -535,7 +535,7 @@ pub(crate) fn reset_syntax(mut win: Win) {
 /// Remember the cursor position in the jump list.
 pub(crate) fn set_pcmark() {
     // SAFETY: reads the current window and buffer, both set.
-    unsafe { setpcmark() };
+    setpcmark();
 }
 
 /// Whether `buf` has unsaved changes.

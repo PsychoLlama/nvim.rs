@@ -685,7 +685,7 @@ unsafe fn enter_new_buffer(
     // first non-blank.
     // SAFETY: `curwin` is live and the cursor is on a line of its buffer.
     if !equalpos(cur_win().w_cursor, orig_pos) {
-        let text = unsafe { get_cursor_line_ptr() };
+        let text = get_cursor_line_ptr();
         if cur_win().w_cursor.lnum != orig_pos.lnum
             || cur_win().w_cursor.col != unsafe { skipwhite(text).offset_from(text) } as c_int
         {
@@ -725,14 +725,14 @@ unsafe fn place_cursor(state: &Ecmd) {
             cur_win().w_cursor.coladd = 0;
             cur_win().w_set_curswant = true;
         } else {
-            unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
         // no line number, go to last line in Ex mode
         if exmode_active.get() {
             cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
         }
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
 
@@ -785,7 +785,7 @@ unsafe fn recenter(so: ScrollOff, topline: linenr_T, command: *mut c_char) {
     so.set(n);
     // redraw this buffer later
     // SAFETY: no argument beyond the redraw type.
-    unsafe { redraw_curbuf_later(UPD_NOT_VALID) };
+    redraw_curbuf_later(UPD_NOT_VALID);
 }
 
 /// The buffer the editor is working in.

@@ -454,7 +454,7 @@ fn show_mode() -> c_int {
 #[inline(always)]
 fn char_at_cursor() -> c_int {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { gchar_cursor() }
+    gchar_cursor()
 }
 
 /// Read the next key, waiting for it if need be.

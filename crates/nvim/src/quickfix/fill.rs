@@ -368,7 +368,7 @@ unsafe fn finish_qf_buffer() {
     cur_buf().b_ro_locked -= 1;
 
     // Make sure it will be redrawn.
-    unsafe { redraw_curbuf_later(UPD_NOT_VALID) };
+    redraw_curbuf_later(UPD_NOT_VALID);
 }
 
 /// What one rewrite of the quickfix buffer moved: where it started, and the

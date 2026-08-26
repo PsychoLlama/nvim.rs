@@ -125,7 +125,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     rettv.vval.v_number = 0;
 
     // SAFETY: `check_secure` only reads the option and reports.
-    if unsafe { check_secure() } {
+    if check_secure() {
         return;
     }
 
@@ -227,7 +227,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
     ret.vval.v_number = 0;
 
     // SAFETY: `check_secure` only reads the option and reports.
-    if unsafe { check_secure() } {
+    if check_secure() {
         return;
     }
 
@@ -286,7 +286,7 @@ pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// As the module doc; arity 1..2.
 pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: `check_secure` only reads the option and reports.
-    if unsafe { check_secure() } {
+    if check_secure() {
         return;
     }
 

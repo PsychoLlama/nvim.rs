@@ -118,7 +118,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         clear_op(op);
     } else if op.op_type != OP_NOP
         && (op.start.lnum > cur_buf().b_ml.ml_line_count
-            || op.start.col > unsafe { ml_get_len(op.start.lnum) }
+            || op.start.col > ml_get_len(op.start.lnum)
             || did_emsg.get() != 0)
     {
         // The command moved or deleted the line the operator started on,
@@ -246,7 +246,7 @@ pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
     }
     if visual_active() {
         end_visual_mode();
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
 }
 
@@ -287,7 +287,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
         end_visual_mode();
         unsafe { check_cursor_col(curwin.get()) };
         cur_win().w_set_curswant = true;
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {
         unsafe { vim_beep(kOptBoFlagEsc as c_uint) };
     }

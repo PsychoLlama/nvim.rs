@@ -690,7 +690,7 @@ pub(crate) unsafe fn indent_after_comment_end(
         None => newindent,
         Some(pos) => {
             cur_win().w_cursor.lnum = pos.lnum;
-            unsafe { get_indent() }
+            get_indent()
         }
     };
     cur_win().w_cursor = old_cursor;

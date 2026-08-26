@@ -125,7 +125,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
         }
         if retval == FAIL {
             // SAFETY: the caller's promise.
-            unsafe { setpcmark() };
+            setpcmark();
         }
         // SAFETY: the caller's promise.
         cur_win().w_cursor.lnum = lnum_found;

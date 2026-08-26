@@ -178,7 +178,7 @@ fn no_move(flags: c_int) -> c_int {
 fn stop_visual() {
     end_visual_mode();
     // SAFETY: only schedules a redraw of the current buffer.
-    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    redraw_curbuf_later(UPD_INVERTED);
 }
 
 /// Record what the click landed on.  Answers whether it was at or below the

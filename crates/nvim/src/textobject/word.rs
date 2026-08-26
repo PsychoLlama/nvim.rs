@@ -41,7 +41,7 @@ static cls_bigword: GlobalCell<bool> = GlobalCell::new(false);
 fn cls() -> c_int {
     // SAFETY: `curwin` and `curbuf` are set from startup to exit, which is all
     // `gchar_cursor` asks for; it answers NUL past the end of the line.
-    let c = unsafe { gchar_cursor() };
+    let c = gchar_cursor();
     if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
         return 0;
     }
@@ -60,12 +60,10 @@ unsafe fn skip_chars(cclass: c_int, dir: c_int) -> bool {
     while cls() == cclass {
         // SAFETY: the caller guarantees a current window with its cursor on a
         // line of the current buffer, which is what both of these ask for.
-        let step = unsafe {
-            if dir == FORWARD as c_int {
-                inc_cursor()
-            } else {
-                dec_cursor()
-            }
+        let step = if dir == FORWARD as c_int {
+            inc_cursor()
+        } else {
+            dec_cursor()
         };
         if step == -1 {
             return true;
@@ -84,9 +82,9 @@ unsafe fn back_in_line() {
     while cur_win().w_cursor.col != 0 {
         // SAFETY, both: the caller guarantees a current window with its cursor
         // on a line of the current buffer.
-        unsafe { dec_cursor() };
+        dec_cursor();
         if cls() != sclass {
-            unsafe { inc_cursor() }; // stop at the start of the word
+            inc_cursor(); // stop at the start of the word
             break;
         }
     }
@@ -122,7 +120,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // SAFETY, for every cursor step below: the caller guarantees a current
         // window with its cursor on a line of the current buffer, and each
         // step leaves it on one.
-        let mut i = unsafe { inc_cursor() };
+        let mut i = inc_cursor();
         if i == -1 || (i >= 1 && last_line) {
             return FAIL; // started on the last character of the file
         }
@@ -133,7 +131,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // One character past the end of the current word, if any.
         if sclass != 0 {
             while cls() == sclass {
-                i = unsafe { inc_cursor() };
+                i = inc_cursor();
                 if i == -1 || (i >= 1 && eol && count == 0) {
                     return OK;
                 }
@@ -147,7 +145,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
             if cur_win().w_cursor.col == 0 && unsafe { *get_cursor_line_ptr() } as c_int == NUL {
                 break;
             }
-            i = unsafe { inc_cursor() };
+            i = inc_cursor();
             if i == -1 || (i >= 1 && eol && count == 0) {
                 return OK;
             }
@@ -181,7 +179,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
         // SAFETY, for every step below: the caller guarantees a current window
         // with its cursor on a line of the current buffer, and each step
         // leaves it on one.
-        if unsafe { dec_cursor() } == -1 {
+        if dec_cursor() == -1 {
             return FAIL; // started at the start of the file
         }
         'finished: {
@@ -196,7 +194,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
                     {
                         break 'finished;
                     }
-                    if unsafe { dec_cursor() } == -1 {
+                    if dec_cursor() == -1 {
                         return OK; // hit the start of the file
                     }
                 }
@@ -205,7 +203,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
                     return OK;
                 }
             }
-            unsafe { inc_cursor() }; // overshot: forward one
+            inc_cursor(); // overshot: forward one
         }
         stop = false;
     }
@@ -256,7 +254,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
         // SAFETY, for every step below: the caller guarantees a current window
         // with its cursor on a line of the current buffer, and each step
         // leaves it on one.
-        if unsafe { inc_cursor() } == -1 {
+        if inc_cursor() == -1 {
             return FAIL;
         }
         'finished: {
@@ -277,7 +275,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
                     {
                         break 'finished;
                     }
-                    if unsafe { inc_cursor() } == -1 {
+                    if inc_cursor() == -1 {
                         return FAIL; // hit the end of the file
                     }
                 }
@@ -285,7 +283,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
                     return FAIL;
                 }
             }
-            unsafe { dec_cursor() }; // overshot: back one
+            dec_cursor(); // overshot: back one
         }
         stop = false; // only the first word moves one less
     }
@@ -311,7 +309,7 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // SAFETY, for every step below: the caller guarantees a current window
         // with its cursor on a line of the current buffer, and each step
         // leaves it on one.
-        let mut i = unsafe { dec_cursor() };
+        let mut i = dec_cursor();
         if i == -1 {
             return FAIL;
         }
@@ -321,7 +319,7 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // Back to before the start of this word.
         if sclass != 0 {
             while cls() == sclass {
-                i = unsafe { dec_cursor() };
+                i = dec_cursor();
                 if i == -1 || (eol && i == 1) {
                     return OK;
                 }
@@ -336,7 +334,7 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
             {
                 break;
             }
-            i = unsafe { dec_cursor() };
+            i = dec_cursor();
             if i == -1 || (eol && i == 1) {
                 return OK;
             }
@@ -380,7 +378,7 @@ pub unsafe fn current_word(
         && lt(visual_anchor(), cur_win().w_cursor)
     {
         // SAFETY: the caller guarantees the cursor is on a line of the buffer.
-        unsafe { dec_cursor() };
+        dec_cursor();
     }
 
     // Outside Visual mode, or with a one-character Visual area, select
@@ -419,7 +417,7 @@ pub unsafe fn current_word(
             // Should do something when `inclusive` is false.
             set_visual_anchor(start_pos);
             // SAFETY: on the main thread with a current buffer.
-            unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+            redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
             // SAFETY: the caller guarantees `oap` is a live operator argument.
             let oap = unsafe { &mut *oap };
@@ -499,7 +497,7 @@ pub unsafe fn current_word(
             && ltoreq(visual_anchor(), cur_win().w_cursor)
         {
             // SAFETY: the cursor is on a line of the current buffer.
-            unsafe { inc_cursor() };
+            inc_cursor();
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);

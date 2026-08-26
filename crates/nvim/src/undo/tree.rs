@@ -289,7 +289,7 @@ pub unsafe fn u_clearline(buf: *mut buf_T) {
 pub unsafe fn u_undoline() {
     // SAFETY: a live current buffer and window.
     if cur_buf().b_u_line_ptr.is_null() || cur_buf().b_u_line_lnum > cur_buf().b_ml.ml_line_count {
-        unsafe { beep_flush() };
+        beep_flush();
         return;
     }
     // Bound first: rustfmt puts a call wider than 60 columns on one line per

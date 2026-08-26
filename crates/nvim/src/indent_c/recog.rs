@@ -399,7 +399,7 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
     }
     // SAFETY: on the main thread with a current buffer; `get_cursor_line_ptr`
     // hands back the cursor's line, NUL-terminated.
-    let mut line = unsafe { get_cursor_line_ptr() }.cast_const();
+    let mut line = get_cursor_line_ptr().cast_const();
     let mut p = line;
     // SAFETY: `p` walks that line and never passes its NUL.
     while unsafe { *p } != 0 {
@@ -437,7 +437,7 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
             // the cursor where it found it, so the line is the same one and
             // `i` is still an offset into it.
             // SAFETY: the cursor is on a line of the current buffer.
-            line = unsafe { get_cursor_line_ptr() };
+            line = get_cursor_line_ptr();
             // SAFETY: `i` is an offset inside that line.
             p = unsafe { line.offset(i) };
         }

@@ -79,7 +79,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
     let ourscope = brace.lnum;
     // SAFETY: on the main thread with a current buffer; `ml_get` hands back a
     // NUL-terminated line and reports a bad line number itself.
-    let start = unsafe { ml_get(ourscope) };
+    let start = ml_get(ourscope);
 
     // How indented is the block in general?  If the brace was at the
     // start of its line, use that; otherwise take the line's own indent
@@ -127,7 +127,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
         let amount =
             if js_or_keep_case && unsafe { cin_iscase(skipwhite(get_cursor_line_ptr()), false) } {
                 // SAFETY: the cursor is still on a line of the current buffer.
-                unsafe { get_indent() }
+                get_indent()
             } else if cur_buf().b_ind_js != 0 {
                 // SAFETY: `lnum` is a line of the current buffer -- either
                 // `ourscope` or the line a paren match reported.
@@ -167,7 +167,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
         // `ourscope` is a line of it too -- where the search stops.
         if unsafe { find_match(lookfor, ourscope) } {
             // SAFETY: a successful match left the cursor on a line of it.
-            return unsafe { get_indent() };
+            return get_indent();
         }
     }
 

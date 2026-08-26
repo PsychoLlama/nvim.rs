@@ -71,8 +71,8 @@ pub(crate) unsafe fn block_insert(
         }
 
         // SAFETY: `lnum` is a line of the current buffer.
-        let mut oldp = unsafe { ml_get(lnum) };
-        let oldlen = unsafe { ml_get_len(lnum) } as size_t;
+        let mut oldp = ml_get(lnum);
+        let oldlen = ml_get_len(lnum) as size_t;
 
         // `spaces` is non-zero when a TAB has to be cut, and `count` the
         // extra spaces that replace it. `ts_val` is the cut character's
@@ -268,7 +268,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
 
     // SAFETY: `lnum` is a line of the current buffer, so the line is a live
     // NUL-terminated string and every walk below stays inside it.
-    let line = unsafe { ml_get(lnum) };
+    let line = ml_get(lnum);
     let mut prev_pstart = line;
 
     // Walk to the block's left edge, remembering the run of white space in
@@ -399,8 +399,8 @@ pub unsafe fn charwise_block_prep(
     // the current buffer, so `p` is a live NUL-terminated line of `plen`
     // bytes and every index taken of it below is a column of that line.
     let bdp = unsafe { &mut *bdp };
-    let p = unsafe { ml_get(lnum) };
-    let plen = unsafe { ml_get_len(lnum) };
+    let p = ml_get(lnum);
+    let plen = ml_get_len(lnum);
 
     bdp.startspaces = 0;
     bdp.endspaces = 0;

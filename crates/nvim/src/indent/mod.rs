@@ -321,9 +321,9 @@ pub unsafe fn get_sts_value() -> c_int {
 
 /// The screen width of the current line's indent.
 ///
-/// # Safety
-/// There must be a current line.
-pub unsafe fn get_indent() -> c_int {
+/// Safe: the only promise is that the editor exists, which `cur_buf()` and
+/// the cursor accessors carry.
+pub fn get_indent() -> c_int {
     unsafe {
         indent_size_ts(
             get_cursor_line_ptr(),

@@ -112,7 +112,7 @@ pub unsafe fn do_bang(
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
     // SAFETY: main thread, message state.
-    if unsafe { check_secure() } {
+    if check_secure() {
         return;
     }
 
@@ -418,13 +418,13 @@ unsafe fn do_filter(
 
             if do_out {
                 // SAFETY: `line2` is a line of the current buffer.
-                if unsafe { u_save(line2, line2 + 1) } == FAIL {
+                if u_save(line2, line2 + 1) == FAIL {
                     // SAFETY: `cmd_buf` is our own allocation.
                     unsafe { xfree(cmd_buf.cast()) };
                     break 'error;
                 }
                 // SAFETY: main thread, redraw state.
-                unsafe { redraw_curbuf_later(UPD_VALID) };
+                redraw_curbuf_later(UPD_VALID);
             }
             // SAFETY: `curbuf` is live.
             let mut read_linecount = cur_buf().b_ml.ml_line_count;
@@ -550,7 +550,7 @@ unsafe fn do_filter(
             }
 
             // SAFETY: cursor on first non-blank.
-            unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             drop(no_prompt.take());
 
             if linecount as OptInt > p_report.get() {
@@ -621,7 +621,7 @@ fn report_filtered(linecount: linenr_T) {
 /// `cmd` must be a live C string, or NULL.
 pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // SAFETY: main thread, message state.
-    if unsafe { check_secure() } {
+    if check_secure() {
         unsafe { msg_end() };
         return;
     }

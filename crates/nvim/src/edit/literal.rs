@@ -319,7 +319,7 @@ pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
     // Try to advance to the cursor column.
     unsafe { validate_virtcol(curwin.get()) };
     let end_vcol = cur_win().w_virtcol;
-    let line = unsafe { ml_get(lnum) };
+    let line = ml_get(lnum);
 
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, line) };

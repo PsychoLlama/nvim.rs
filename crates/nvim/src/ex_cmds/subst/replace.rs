@@ -201,14 +201,12 @@ pub(super) unsafe fn build_replacement(
     // the line), the original text up to the match, the length of the
     // substituted part, and the original text after the match.
     // SAFETY: `sub_firstlnum + nmatch - 1` is a line of the buffer.
-    let p1 = unsafe {
-        if st.nmatch == 1 as c_int {
-            st.sub_firstline
-        } else {
-            let lastlnum = st.sub_firstlnum + st.nmatch as linenr_T - 1 as linenr_T;
-            st.nmatch_tl += st.nmatch as linenr_T - 1 as linenr_T;
-            ml_get(lastlnum)
-        }
+    let p1 = if st.nmatch == 1 as c_int {
+        st.sub_firstline
+    } else {
+        let lastlnum = st.sub_firstlnum + st.nmatch as linenr_T - 1 as linenr_T;
+        st.nmatch_tl += st.nmatch as linenr_T - 1 as linenr_T;
+        ml_get(lastlnum)
     };
     let copy_len = st.regmatch.startpos[0].col - st.copycol;
     // SAFETY: `p1` is a live line and the buffer is ours to grow.

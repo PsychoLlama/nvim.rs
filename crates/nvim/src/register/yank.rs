@@ -429,7 +429,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: main thread, reading the autocommand table.
-    if recursive.get() || !unsafe { has_event(EVENT_TEXTYANKPOST) } {
+    if recursive.get() || !has_event(EVENT_TEXTYANKPOST) {
         return;
     }
     recursive.set(true);
@@ -522,7 +522,7 @@ pub unsafe fn op_yank(oap: *mut oparg_T, message: bool) -> bool {
     // SAFETY: main thread, reading the register store.
     if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
         // SAFETY: as above.
-        unsafe { beep_flush() };
+        beep_flush();
         return false;
     }
     if regname == '_' as c_int {

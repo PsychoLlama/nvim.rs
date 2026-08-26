@@ -402,7 +402,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
         }
     } else if flags as c_uint & kMarkContext as c_uint != 0 {
         // SAFETY: the editor's globals are live.
-        unsafe { setpcmark() };
+        setpcmark();
     }
 
     // SAFETY: `curwin` is live from startup to exit.
@@ -413,7 +413,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     win.w_cursor = pos;
     if flags as c_uint & kMarkBeginLine as c_uint != 0 {
         // SAFETY: the editor's globals are live.
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
     if prev_pos.lnum != pos.lnum {
         res |= kMarkChangedLine | kMarkChangedCursor;

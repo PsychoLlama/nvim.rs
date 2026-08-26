@@ -881,7 +881,7 @@ pub unsafe fn getfile(
     drop(no_prompt.take());
     if setpm {
         // SAFETY: main thread.
-        unsafe { setpcmark() };
+        setpcmark();
     }
 
     if !other {
@@ -890,7 +890,7 @@ pub unsafe fn getfile(
             cur_win().w_cursor.lnum = lnum;
         }
         unsafe { check_cursor_lnum(curwin.get()) };
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         // it's in the same file
         return GETFILE_SAME_FILE;
     }

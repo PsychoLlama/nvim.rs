@@ -252,7 +252,7 @@ unsafe fn resolve_command(
     if !p.is_null()
         && ea.cmdidx as c_int == CMD_SIZE as c_int
         && unsafe { *ea.cmd as u8 }.is_ascii_uppercase()
-        && unsafe { has_event(EVENT_CMDUNDEFINED) }
+        && has_event(EVENT_CMDUNDEFINED)
     {
         // SAFETY: as above.
         unsafe {

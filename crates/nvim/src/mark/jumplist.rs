@@ -43,9 +43,9 @@ use crate::types::CmdModFlags;
 /// Set the previous context mark to the current position and add it to the
 /// jump list.
 ///
-/// # Safety
-/// The editor's globals must be live, which they are from startup to exit.
-pub unsafe fn setpcmark() {
+/// Safe: the only promise is that the editor exists, which
+/// `Win::current()`/`Buf::current()` carry.
+pub fn setpcmark() {
     // `:keepjumps` and the two "the editor is driving itself" flags suppress
     // the push entirely — a `:global` that visits three hundred lines must
     // not fill the jump list with them.
@@ -143,7 +143,7 @@ pub unsafe fn get_jumplist(win: *mut win_T, mut count: c_int) -> *mut fmark_T {
         // user is *now*, so that `<C-i>` can come back to it.
         if win.w_jumplistidx == win.w_jumplistlen {
             // SAFETY: the editor's globals are live.
-            unsafe { setpcmark() };
+            setpcmark();
             win.w_jumplistidx -= 1;
             if win.w_jumplistidx + count < 0 {
                 return ptr::null_mut();

@@ -332,7 +332,7 @@ fn check_cursor_now() {
 
 fn char_at_cursor() -> c_int {
     // SAFETY: reads the current line at the cursor, which is in bounds.
-    unsafe { gchar_cursor() }
+    gchar_cursor()
 }
 
 /// `'selection'`'s first letter: `i`nclusive, `e`xclusive or `o`ld.

@@ -237,7 +237,7 @@ pub unsafe fn current_quote(
 ) -> bool {
     // SAFETY: the caller guarantees a current line; `get_cursor_line_ptr`
     // hands back the cursor's line, NUL-terminated.
-    let line = unsafe { get_cursor_line_ptr() };
+    let line = get_cursor_line_ptr();
     // SAFETY: `line` is NUL-terminated.  Every column read through this is
     // either one of `line`'s own or one just past a byte already found
     // non-NUL, so the reads stay inside it -- the `&&` chains that prove it
@@ -266,7 +266,7 @@ pub unsafe fn current_quote(
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             if vis_bef_curs {
                 // SAFETY: the cursor is on a line of the current buffer.
-                unsafe { dec_cursor() };
+                dec_cursor();
                 did_exclusive_adj = true;
             } else if !vis_empty {
                 // SAFETY: the anchor is a position of the current buffer.
@@ -328,7 +328,7 @@ pub unsafe fn current_quote(
         if visual_active() && unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             if did_exclusive_adj {
                 // SAFETY: the cursor is on a line of the current buffer.
-                unsafe { inc_cursor() };
+                inc_cursor();
             }
             if restore_vis_bef {
                 swap_cursor_and_anchor();
@@ -372,7 +372,7 @@ pub unsafe fn current_quote(
         {
             set_visual_anchor(cur_win().w_cursor);
             // SAFETY: on the main thread with a current buffer.
-            unsafe { redraw_curbuf_later(UPD_INVERTED) };
+            redraw_curbuf_later(UPD_INVERTED);
         }
     } else {
         // SAFETY: the caller guarantees `oap` is a live operator argument.
@@ -385,7 +385,7 @@ pub unsafe fn current_quote(
     cur_win().w_cursor.col = col_end as colnr_T;
     // SAFETY: the cursor is on a line of the current buffer; the `&&` keeps
     // `inc_cursor`'s side effect behind the same test it had.
-    if (include || count > 1 || (!vis_empty && inside_quotes)) && unsafe { inc_cursor() } == 2 {
+    if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
         inclusive = true;
     }
     if visual_active() {
@@ -394,7 +394,7 @@ pub unsafe fn current_quote(
             // SAFETY: 'selection' is a NUL-terminated option string, and the
             // cursor is on a line of the current buffer.
             if unsafe { *p_sel.get() } as c_int != 'e' as c_int {
-                unsafe { dec_cursor() };
+                dec_cursor();
             }
         } else {
             // The cursor is at the start of the Visual area. Set its end
@@ -407,7 +407,7 @@ pub unsafe fn current_quote(
                         || at(visual_anchor().col + 1) as u8 as c_int != quotechar))
             {
                 // SAFETY: the cursor is on a line of the current buffer.
-                unsafe { dec_cursor() };
+                dec_cursor();
                 set_visual_anchor(cur_win().w_cursor);
             }
             cur_win().w_cursor.col = col_start as colnr_T;

@@ -746,7 +746,7 @@ fn revalidate_cursor_lnum(mut wp: Win) {
 /// Put the cursor on the first non-blank of its line.
 fn first_non_blank() {
     // SAFETY: reads the current window's line.
-    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 }
 
 /// The identifier under the cursor: its length, and a pointer into the line,

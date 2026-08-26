@@ -59,9 +59,10 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 /// Whether 'formatoptions' flag `x` is in effect. Always false under 'paste',
 /// which turns formatting off wholesale.
 ///
-/// # Safety
-/// There must be a current buffer.
-pub unsafe fn has_format_option(x: FoFlag) -> bool {
+/// Safe: the only promise is that the editor exists, which `cur_buf()`
+/// carries. The dereference stays behind the `&&`: with 'paste' set the
+/// left half is what keeps the right one from running.
+pub fn has_format_option(x: FoFlag) -> bool {
     // The dereference stays behind the `&&`: with no current buffer the
     // left half is what keeps the right one from running.
     unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr(cur_buf().b_p_fo)) }

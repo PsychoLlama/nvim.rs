@@ -398,17 +398,17 @@ pub unsafe fn autocmd_register(
         // they fired.  The *first* autocommand for one has to seed that
         // state, or it fires immediately on a difference that predates
         // it.
-        if event == EVENT_MODECHANGED && !unsafe { has_event(EVENT_MODECHANGED) } {
+        if event == EVENT_MODECHANGED && !has_event(EVENT_MODECHANGED) {
             last_mode.set(unsafe { get_mode() });
         }
-        if (event == EVENT_CURSORMOVED && !unsafe { has_event(EVENT_CURSORMOVED) })
-            || (event == EVENT_CURSORMOVEDI && !unsafe { has_event(EVENT_CURSORMOVEDI) })
+        if (event == EVENT_CURSORMOVED && !has_event(EVENT_CURSORMOVED))
+            || (event == EVENT_CURSORMOVEDI && !has_event(EVENT_CURSORMOVEDI))
         {
             last_cursormoved_win.set(curwin.get());
             last_cursormoved.set(cur_win().w_cursor);
         }
         if (event == EVENT_WINSCROLLED || event == EVENT_WINRESIZED)
-            && !(unsafe { has_event(EVENT_WINSCROLLED) } || unsafe { has_event(EVENT_WINRESIZED) })
+            && !(has_event(EVENT_WINSCROLLED) || has_event(EVENT_WINRESIZED))
         {
             let save_curtab = curtab.get();
             let mut tp = first_tabpage.get();

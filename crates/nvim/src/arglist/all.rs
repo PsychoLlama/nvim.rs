@@ -476,7 +476,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     }
     // SAFETY: curwin always has an argument list, and the reference taken
     // here keeps it alive across every autocommand below.
-    unsafe { setpcmark() };
+    setpcmark();
     let alist = win_alist(curwin.get());
     unsafe { (*alist).al_refcount += 1 };
     let opened = unsafe { xcalloc(argcount() as size_t, 1) }.cast::<uint8_t>();

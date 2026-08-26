@@ -73,7 +73,7 @@ fn current_tab() -> TabPage {
 
 fn set_pcmark() {
     // SAFETY: pushes the current position on the jump list.
-    unsafe { setpcmark() };
+    setpcmark();
 }
 
 /// Make `tp` the current tab page, with autocommands.

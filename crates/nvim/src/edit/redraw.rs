@@ -49,7 +49,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // CursorMovedI, if the cursor moved.  Not while the popup menu is up:
     // the command might delete it.
     if ready
-        && unsafe { has_event(EVENT_CURSORMOVEDI) }
+        && has_event(EVENT_CURSORMOVEDI)
         && (last_cursormoved_win.get() != curwin.get()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
         && !pum_visible()
@@ -90,18 +90,18 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         if before != unsafe { *tick } {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
-            unsafe { u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1) };
+            u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
         }
     };
 
     let mut buf = cur_buf();
-    if ready && unsafe { has_event(EVENT_TEXTCHANGEDI) } && !pum_visible() {
+    if ready && has_event(EVENT_TEXTCHANGEDI) && !pum_visible() {
         let tick = &mut buf.b_last_changedtick_i;
         if *tick != unsafe { buf_get_changedtick(curbuf.get()) } {
             fire_text_changed(EVENT_TEXTCHANGEDI, tick);
         }
     }
-    if ready && unsafe { has_event(EVENT_TEXTCHANGEDP) } && pum_visible() {
+    if ready && has_event(EVENT_TEXTCHANGEDP) && pum_visible() {
         let tick = &mut buf.b_last_changedtick_pum;
         if *tick != unsafe { buf_get_changedtick(curbuf.get()) } {
             fire_text_changed(EVENT_TEXTCHANGEDP, tick);
@@ -113,11 +113,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     }
 
     // BufModified, if b_changed_invalid is set.
-    if ready
-        && unsafe { has_event(EVENT_BUFMODIFIEDSET) }
-        && cur_buf().b_changed_invalid
-        && !pum_visible()
-    {
+    if ready && has_event(EVENT_BUFMODIFIEDSET) && cur_buf().b_changed_invalid && !pum_visible() {
         let none = ::core::ptr::null_mut();
         unsafe { apply_autocmds(EVENT_BUFMODIFIEDSET, none, none, false, curbuf.get()) };
         cur_buf().b_changed_invalid = false;
@@ -239,7 +235,7 @@ pub(crate) unsafe fn display_dollar(col_arg: colnr_T) {
     // On the last byte of a multi-byte character, move to the first byte.
     // SAFETY: the caller promises the cursor line holds at least `col` bytes,
     // so `p + col` is a byte of that line.
-    let p = unsafe { get_cursor_line_ptr() };
+    let p = get_cursor_line_ptr();
     win.w_cursor.col -= unsafe { utf_head_off(p, p.offset(col as isize)) };
     unsafe { curs_columns(win.raw(), 0) }; // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {

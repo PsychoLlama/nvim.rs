@@ -166,11 +166,11 @@ pub unsafe fn do_join(
     debug_assert!(count >= 1);
     // SAFETY: the caller's promise -- the cursor line plus `count - 1` exist.
     // The two arrays are `count` entries each, which is what the walks index.
-    let remove_comments = use_formatoptions && unsafe { has_format_option(FoFlag::REMOVE_COMS) };
+    let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
     let above = cur_win().w_cursor.lnum - 1;
     let past = cur_win().w_cursor.lnum + count as linenr_T;
-    if save_undo && unsafe { u_save(above, past) } == FAIL {
+    if save_undo && u_save(above, past) == FAIL {
         return FAIL;
     }
 
@@ -222,7 +222,7 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
     // `ml_get` answers a live NUL-terminated line, and `plan.curr` stays
     // inside the line `plan.curr_start` begins.
     for t in 0..count as linenr_T {
-        plan.curr_start = unsafe { ml_get(cur_win().w_cursor.lnum + t) };
+        plan.curr_start = ml_get(cur_win().w_cursor.lnum + t);
         plan.curr = plan.curr_start;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -255,9 +255,9 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
                 // 'formatoptions' M: no space between two multi-byte
                 // characters. B: no space if either side is a character
                 // that eats one.
-                && (!unsafe { has_format_option(FoFlag::MBYTE_JOIN) }
+                && (!has_format_option(FoFlag::MBYTE_JOIN)
                     || (unsafe { utf_ptr2char(plan.curr) } < 0x100 && endcurr1 < 0x100))
-                && (!unsafe { has_format_option(FoFlag::MBYTE_JOIN2) }
+                && (!has_format_option(FoFlag::MBYTE_JOIN2)
                     || (unsafe { utf_ptr2char(plan.curr) } < 0x100
                         && !utf_eat_space(endcurr1))
                     || (endcurr1 < 0x100
@@ -391,7 +391,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
             break;
         }
 
-        plan.curr_start = unsafe { ml_get(cur_win().w_cursor.lnum + t - 1) };
+        plan.curr_start = ml_get(cur_win().w_cursor.lnum + t - 1);
         plan.curr = plan.curr_start;
         if !plan.comments.is_null() {
             let skipped = plan.comment_at(t - 1);

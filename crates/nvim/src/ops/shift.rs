@@ -41,7 +41,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
     // The "N lines >ed M times" report; upstream shares `IObuff` for it.
     let mut report = [0 as c_char; IOSIZE as usize];
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if unsafe { u_save(above, below) } == FAIL {
+    if u_save(above, below) == FAIL {
         return;
     }
 
@@ -73,7 +73,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
     } else if curs_top {
         cur_win().w_cursor.lnum = oap.start.lnum;
         // `shift_line` may have moved the column.
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else {
         cur_win().w_cursor.lnum -= 1;
     }
@@ -120,7 +120,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         cur_buf().b_op_start = oap.start;
         cur_buf().b_op_end.lnum = oap.end.lnum;
-        cur_buf().b_op_end.col = unsafe { ml_get_len(oap.end.lnum) };
+        cur_buf().b_op_end.col = ml_get_len(oap.end.lnum);
         if cur_buf().b_op_end.col > 0 {
             cur_buf().b_op_end.col -= 1;
         }
@@ -272,7 +272,7 @@ pub unsafe fn shift_line(left: bool, round: bool, amount: c_int, call_changed_by
     };
     let vts = (stops != 0)
         .then(|| unsafe { ::core::slice::from_raw_parts(vts_array, stops as usize + 1) });
-    let now = int64_t::from(unsafe { get_indent() });
+    let now = int64_t::from(get_indent());
 
     let amount = int64_t::from(amount);
     let count = match vts {
@@ -373,8 +373,8 @@ fn shift_block(oap: Op, amount: c_int) {
 fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it
     // and every walk below stops at a non-white character or its NUL.
-    let old_p = unsafe { get_cursor_line_ptr() };
-    let old_line_len = unsafe { get_cursor_line_len() };
+    let old_p = get_cursor_line_ptr();
+    let old_line_len = get_cursor_line_len();
     let ts_val = cur_buf().b_p_ts as c_int;
 
     // All the virtual white space up to and including a split TAB.
@@ -468,8 +468,8 @@ fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
 fn shift_block_left(oap: Op, bd: &mut block_def, total: c_int) -> ShiftedLine {
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it
     // and both walks below stop at a character the line really holds.
-    let old_p = unsafe { get_cursor_line_ptr() };
-    let old_line_len = unsafe { get_cursor_line_len() };
+    let old_p = get_cursor_line_ptr();
+    let old_line_len = get_cursor_line_len();
 
     // Find the first non-white character displayed after the block's start
     // column, and the width of the white space in front of it. When

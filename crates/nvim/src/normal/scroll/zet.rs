@@ -417,7 +417,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
         && ca.count0 != 0
         && ca.count0 as linenr_T != win.w_cursor.lnum
     {
-        unsafe { setpcmark() };
+        setpcmark();
         let count0 = ca.count0 as linenr_T;
         win.w_cursor.lnum = count0.min(cur_buf().b_ml.ml_line_count);
         unsafe { check_cursor_col(win.raw()) };
@@ -530,7 +530,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
 
     if let Some((place, to_first_non_blank)) = place {
         if to_first_non_blank {
-            unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
         match place {
             Place::Top => unsafe { scroll_cursor_top(win.raw(), 0, 1) },

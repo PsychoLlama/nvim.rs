@@ -62,14 +62,14 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
 
     // Put the cursor where the command was given, so `u` can put it back.
     cur_win().w_cursor = oap.cursor_start;
-    if unsafe { u_save(oap.start.lnum - 1, oap.end.lnum + 1) } == FAIL {
+    if u_save(oap.start.lnum - 1, oap.end.lnum + 1) == FAIL {
         return;
     }
     cur_win().w_cursor = oap.start;
 
     if oap.is_VIsual {
         // When nothing changes, the Visual selection still has to go.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `'[` mark goes at the start of the formatted area.
@@ -87,7 +87,7 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
     if oap.end_adjusted && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count {
         cur_win().w_cursor.lnum += 1;
     }
-    unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     old_line_count = cur_buf().b_ml.ml_line_count - old_line_count;
     unsafe { msgmore(old_line_count as c_int) };
 
@@ -129,7 +129,7 @@ pub(crate) unsafe fn op_formatexpr(oap: *mut oparg_T) {
     let op = unsafe { Op::new(oap) };
     if op.is_VIsual {
         // When nothing changes, the Visual selection still has to go.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if unsafe { fex_format(op.start.lnum, op.line_count as c_long, NUL) } != 0 {
         unsafe { op_format(oap, false) };
@@ -173,7 +173,7 @@ pub(crate) unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_in
 /// There must be a current line.
 unsafe fn paragraph_indent(first_line: linenr_T) -> c_int {
     if cur_win().w_cursor.lnum == first_line {
-        unsafe { get_indent() }
+        get_indent()
     } else if cur_buf().b_p_lisp != 0 {
         unsafe { get_lisp_indent() }
     } else if unsafe { cindent_on() } {
@@ -183,7 +183,7 @@ unsafe fn paragraph_indent(first_line: linenr_T) -> c_int {
             unsafe { get_c_indent() }
         }
     } else {
-        unsafe { get_indent() }
+        get_indent()
     }
 }
 
@@ -202,7 +202,7 @@ unsafe fn join_next_line(
 ) -> bool {
     cur_win().w_cursor.lnum += 1;
     cur_win().w_cursor.col = 0;
-    if line_count < 0 && unsafe { u_save_cursor() } == FAIL {
+    if line_count < 0 && u_save_cursor() == FAIL {
         return false;
     }
     let strip = if next_leader_len > 0 {
@@ -219,7 +219,7 @@ unsafe fn join_next_line(
     }
     cur_win().w_cursor.lnum -= 1;
     if unsafe { do_join(2 as size_t, true, false, false, false) } == FAIL {
-        unsafe { beep_flush() };
+        beep_flush();
         return false;
     }
     true
@@ -261,12 +261,12 @@ pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
     // paragraph has ended: 3 * 'textwidth'.
     let max_len = unsafe { comp_textwidth(true) } * 3;
 
-    let do_comments = unsafe { has_format_option(FoFlag::Q_COMS) };
+    let do_comments = has_format_option(FoFlag::Q_COMS);
     // Format comments with `n` or `2`.
     let mut do_comments_list = false;
-    let do_second_indent = unsafe { has_format_option(FoFlag::Q_SECOND) };
-    let do_number_indent = unsafe { has_format_option(FoFlag::Q_NUMBER) };
-    let do_trail_white = unsafe { has_format_option(FoFlag::WHITE_PAR) };
+    let do_second_indent = has_format_option(FoFlag::Q_SECOND);
+    let do_number_indent = has_format_option(FoFlag::Q_NUMBER);
+    let do_trail_white = has_format_option(FoFlag::WHITE_PAR);
 
     // The previous and current lines.
     let mut is_not_par = if cur_win().w_cursor.lnum > 1 {
@@ -372,8 +372,8 @@ pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
                 // Put the cursor on the last non-space.
                 State.set(MODE_NORMAL); // don't go past end-of-line
                 unsafe { coladvance(curwin.get(), MAXCOL) };
-                while cur_win().w_cursor.col != 0 && ascii_isspace(unsafe { gchar_cursor() }) {
-                    unsafe { dec_cursor() };
+                while cur_win().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
+                    dec_cursor();
                 }
 
                 // Format, without 'showmode'.
@@ -431,7 +431,7 @@ pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
                 }
                 first_par_line = false;
                 // A line getting long is formatted next time round.
-                force_format = unsafe { get_cursor_line_len() } > max_len;
+                force_format = get_cursor_line_len() > max_len;
             }
         }
         line_breakcheck();

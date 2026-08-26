@@ -136,15 +136,15 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         return;
     }
     if unsafe { virtual_active(curwin.get()) } {
-        if unsafe { u_save_cursor() } == 0 {
+        if u_save_cursor() == 0 {
             return;
         }
-        if unsafe { gchar_cursor() } == NUL {
+        if gchar_cursor() == NUL {
             // Past the end of the line: make room for the whole count and
             // then step back to where the replacing starts.
             unsafe { coladvance_force(getviscol() + ca.count1) };
             cur_win().w_cursor.col -= ca.count1;
-        } else if unsafe { gchar_cursor() } == TAB {
+        } else if gchar_cursor() == TAB {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
             unsafe { coladvance_force(getviscol()) };
@@ -152,7 +152,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
     }
     // There have to be `count1` characters left on the line, counted both
     // ways: the byte length rules out a short line cheaply.
-    if (unsafe { get_cursor_pos_len() } as size_t) < ca.count1 as c_uint as size_t
+    if (get_cursor_pos_len() as size_t) < ca.count1 as c_uint as size_t
         || unsafe { mb_charlen(get_cursor_pos_ptr()) } < ca.count1
     {
         clear_op_beep(ca.op());
@@ -168,7 +168,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         stuff_readbuf_char(ESC);
         return;
     }
-    if unsafe { u_save_cursor() } == 0 {
+    if u_save_cursor() == 0 {
         return;
     }
     if literal != Ctrl_V && (ca.nchar == '\r' as c_int || ca.nchar == '\n' as c_int) {
@@ -307,7 +307,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
         return;
     }
     unsafe { prep_redo_cmd(cap) };
-    if unsafe { u_save_cursor() } == 0 {
+    if u_save_cursor() == 0 {
         return;
     }
     let startpos = cur_win().w_cursor;
@@ -315,8 +315,8 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
     let mut n = ca.count1;
     while n > 0 {
         did_change |= unsafe { swapchar(ca.op().op_type, &raw mut (*curwin.get()).w_cursor) };
-        unsafe { inc_cursor() };
-        if unsafe { gchar_cursor() } == NUL {
+        inc_cursor();
+        if gchar_cursor() == NUL {
             if !(wraps && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count) {
                 break;
             }
@@ -443,13 +443,13 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
         FORWARD as c_int
     };
     // SAFETY: reads the current buffer's 'formatoptions'.
-    let flags = if unsafe { has_format_option(FoFlag::OPEN_COMS) } {
+    let flags = if has_format_option(FoFlag::OPEN_COMS) {
         OPENLINE_DO_COM as c_int
     } else {
         0
     };
-    let opened = unsafe { u_save(undo_first, undo_last) } != 0
-        && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
+    let opened =
+        u_save(undo_first, undo_last) != 0 && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
     if opened {
         if unsafe { win_cursorline_standout(win.raw()) } {
             // The cursor line moved, so its highlight has to be redrawn.
@@ -520,7 +520,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
     }
     match u8::try_from(ca.cmdchar) {
         Ok(b'A') => unsafe { set_cursor_for_append_to_line() },
-        Ok(b'I') => unsafe { beginline(BeginlineOpts::WHITE) },
+        Ok(b'I') => beginline(BeginlineOpts::WHITE),
         Ok(b'a') => {
             // `a` steps one right first. Under 'virtualedit' a position
             // inside a tab or past the end of the line moves by a cell.
@@ -531,7 +531,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
             {
                 cur_win().w_cursor.coladd += 1;
             } else if unsafe { *get_cursor_pos_ptr() } as c_int != NUL {
-                unsafe { inc_cursor() };
+                inc_cursor();
             }
         }
         _ => {}

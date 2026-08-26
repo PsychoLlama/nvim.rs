@@ -57,7 +57,7 @@ use core::ptr;
 /// Whether the sandbox forbids touching the tree, having reported it.
 fn secure() -> bool {
     // SAFETY: reads the sandbox depth and may report; no arguments.
-    unsafe { check_secure() }
+    check_secure()
 }
 
 /// Whether a deferred call can be registered, having reported if not.

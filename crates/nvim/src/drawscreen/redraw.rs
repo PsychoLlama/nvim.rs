@@ -149,7 +149,10 @@ pub unsafe fn screen_invalidate_highlights() {
 }
 
 /// Mark every window showing the current buffer.
-pub unsafe fn redraw_curbuf_later(redr_type: c_int) {
+///
+/// Safe: the only promise is that the editor exists, which `curbuf` carries
+/// from startup to exit.
+pub fn redraw_curbuf_later(redr_type: c_int) {
     // SAFETY: `curbuf` is the editor's current buffer.
     unsafe { redraw_buf_later(curbuf.get(), redr_type) }
 }

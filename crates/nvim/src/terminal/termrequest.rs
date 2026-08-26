@@ -328,5 +328,5 @@ pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_v
 /// Whether any autocommand is waiting for a `TermRequest`.
 fn listening() -> bool {
     // SAFETY: reads the editor's own event table.
-    unsafe { has_event(EVENT_TERMREQUEST) }
+    has_event(EVENT_TERMREQUEST)
 }

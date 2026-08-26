@@ -419,7 +419,7 @@ impl DoTag {
             // is not wanted here.
             cur_win().w_cursor.lnum = mark.mark.lnum;
         } else {
-            unsafe { setpcmark() };
+            setpcmark();
             cur_win().w_cursor.lnum = mark.mark.lnum;
         }
         cur_win().w_cursor.col = mark.mark.col;

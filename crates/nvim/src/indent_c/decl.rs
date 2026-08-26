@@ -259,7 +259,7 @@ pub(crate) unsafe fn cin_ispreproc_cont(
         // SAFETY: `lnum` is at least 1 and no larger than the line it started
         // on, so it is a line of the buffer; `ml_get` hands back a
         // NUL-terminated one.
-        line = unsafe { ml_get(lnum) };
+        line = ml_get(lnum);
         // SAFETY: the line `ml_get` just answered with.
         if !unsafe { cin_ends_in_backslash(line) } {
             break;
@@ -268,7 +268,7 @@ pub(crate) unsafe fn cin_ispreproc_cont(
 
     if lnum != *lnump {
         // SAFETY: `*lnump` is a line of the current buffer.
-        *pp = unsafe { ml_get(*lnump) };
+        *pp = ml_get(*lnump);
     }
     if retval {
         *amount = candidate_amount;
@@ -303,7 +303,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
         // SAFETY: on the main thread with a current buffer; `ml_get` reports
         // a line number of its own that is out of range, and hands back a
         // NUL-terminated line.
-        None => unsafe { ml_get(lnum) },
+        None => ml_get(lnum),
     };
 
     // Position on the rightmost unmatched paren so that matching it
@@ -324,7 +324,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
             return false;
         }
         // SAFETY: `lnum` is the line the match was found on.
-        s = unsafe { ml_get(lnum) };
+        s = ml_get(lnum);
     }
     cur_win().w_cursor.lnum = save_lnum;
 
@@ -400,7 +400,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
                 while lnum < cur_buf().b_ml.ml_line_count {
                     lnum += 1;
                     // SAFETY: `lnum` is a line of the current buffer.
-                    s = unsafe { ml_get(lnum) };
+                    s = ml_get(lnum);
                     // SAFETY: `s` is the NUL-terminated line it answered.
                     if !unsafe { cin_ispreproc(s) } {
                         break;
@@ -441,7 +441,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
     {
         // SAFETY: `first_lnum` is the line the caller named; `ml_get` reports
         // a line number of its own that is out of range.
-        *p = unsafe { ml_get(first_lnum) };
+        *p = ml_get(first_lnum);
     }
     retval
 }

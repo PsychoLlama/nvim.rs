@@ -191,7 +191,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
     if oap.is_VIsual && (oap.empty || cur_buf().b_p_ma == 0 || oap.op_type == OP_FOLD) {
         restore_lbr(lbr_saved != 0);
         // SAFETY: touches only the current buffer's windows.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) };
+        redraw_curbuf_later(UPD_INVERTED);
     }
 
     adjust_region_end(cap, oap);
@@ -365,10 +365,10 @@ fn start_visual_region(mut oap: Op, gui_yank: bool) -> bool {
     if visual_select() && visual_mode().is_line() && oap.op_type != OP_DELETE {
         if lt(visual_anchor(), cur_win().w_cursor) {
             set_visual_anchor(visual_anchor().with_col(0));
-            cur_win().w_cursor.col = unsafe { ml_get_len(cur_win().w_cursor.lnum) };
+            cur_win().w_cursor.col = ml_get_len(cur_win().w_cursor.lnum);
         } else {
             cur_win().w_cursor.col = 0;
-            let end = unsafe { ml_get_len(visual_anchor().lnum) };
+            let end = ml_get_len(visual_anchor().lnum);
             set_visual_anchor(visual_anchor().with_col(end));
         }
         set_visual_mode(VisualMode::CHAR);
@@ -403,7 +403,7 @@ fn order_region(mut oap: Op) {
             if past_start && let Some(last) = win.fold_end(cur_win().w_cursor.lnum) {
                 cur_win().w_cursor.lnum = last;
                 // SAFETY: the cursor line is a line of the buffer.
-                cur_win().w_cursor.col = unsafe { get_cursor_line_len() };
+                cur_win().w_cursor.col = get_cursor_line_len();
             }
         }
         oap.end = cur_win().w_cursor;
@@ -420,7 +420,7 @@ fn order_region(mut oap: Op) {
             if let Some(last) = win.fold_end(oap.start.lnum) {
                 oap.start.lnum = last;
                 // SAFETY: a line of the current buffer.
-                oap.start.col = unsafe { ml_get_len(last) };
+                oap.start.col = ml_get_len(last);
             }
         }
         oap.end = oap.start;
@@ -588,7 +588,7 @@ fn finish_visual_region(mut oap: Op, include_line_break: bool, gui_yank: bool, l
         {
             restore_lbr(lbr_saved != 0);
             // SAFETY: touches only the current buffer's windows.
-            unsafe { redraw_curbuf_later(UPD_INVERTED) };
+            redraw_curbuf_later(UPD_INVERTED);
         }
     }
 }
@@ -619,7 +619,7 @@ fn adjust_region_end(cap: Cmd, mut oap: Op) {
         oap.motion_type = kMTLineWise;
     } else {
         // SAFETY: a line of the current buffer.
-        oap.end.col = unsafe { ml_get_len(oap.end.lnum) };
+        oap.end.col = ml_get_len(oap.end.lnum);
         if oap.end.col != 0 {
             oap.end.col -= 1;
             oap.inclusive = true;
@@ -662,7 +662,7 @@ fn run_operator(
         OP_JOIN_NS | OP_JOIN => {
             oap.line_count = oap.line_count.max(2);
             if cur_win().w_cursor.lnum + oap.line_count - 1 > cur_buf().line_count() {
-                unsafe { beep_flush() };
+                beep_flush();
             } else {
                 let count = oap.line_count as size_t;
                 unsafe { do_join(count, oap.op_type == OP_JOIN, true, true, true) };
@@ -681,8 +681,8 @@ fn run_operator(
                 let _ = unsafe { op_delete(oap.raw()) };
                 // Save the cursor line for undo if that has not happened.
                 if oap.motion_type == kMTLineWise
-                    && unsafe { has_format_option(FoFlag::AUTO) }
-                    && unsafe { u_save_cursor() } == OK
+                    && has_format_option(FoFlag::AUTO)
+                    && u_save_cursor() == OK
                 {
                     unsafe { auto_format(false, true) };
                 }

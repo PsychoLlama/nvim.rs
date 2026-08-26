@@ -98,7 +98,7 @@ unsafe fn search_around(
             // Searching backwards, so start at the last line and col.
             let last = unsafe { (*cur_win().w_buffer).b_ml.ml_line_count };
             pos.lnum = last;
-            pos.col = unsafe { ml_get_len(last) };
+            pos.col = ml_get_len(last);
         }
     }
     Some(Match {
@@ -122,7 +122,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         && unsafe { *p_sel.get() } as c_int == 'e' as c_int
         && lt(visual_anchor(), cur_win().w_cursor)
     {
-        unsafe { dec_cursor() };
+        dec_cursor();
     }
 
     // When searching forward and the cursor is at the start of the
@@ -172,7 +172,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
             cur_win().w_cursor = found.start;
         } else {
             // Put the cursor on the last character of the match.
-            unsafe { dec_cursor() };
+            dec_cursor();
         }
     } else if visual_active() && lt(cur_win().w_cursor, visual_anchor()) && forward {
         cur_win().w_cursor = found.start;
@@ -183,7 +183,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
     if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
         // Correction for exclusive selection depends on the direction.
         if forward && ltoreq(visual_anchor(), cur_win().w_cursor) {
-            unsafe { inc_cursor() };
+            inc_cursor();
         } else if !forward && ltoreq(cur_win().w_cursor, visual_anchor()) {
             with_visual_anchor(|anchor| unsafe { inc(anchor) });
         }
@@ -195,7 +195,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
 
     may_start_select('c' as c_int);
     setmouse();
-    unsafe { redraw_curbuf_later(UPD_INVERTED) };
+    redraw_curbuf_later(UPD_INVERTED);
     unsafe { showmode() };
     OK
 }

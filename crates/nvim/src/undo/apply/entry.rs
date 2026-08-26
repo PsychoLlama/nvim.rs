@@ -109,7 +109,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         })
         | (old_flags & UH_RELOAD);
     // SAFETY: a live current buffer and window.
-    unsafe { setpcmark() };
+    setpcmark();
 
     // The marks and visual area from before the move; they go into the header
     // at the end, swapped with the ones it was carrying.
@@ -406,7 +406,7 @@ unsafe fn place_cursor(buf: Buf, mut win: Win, curhead: Header) {
         }
     } else {
         // SAFETY: a live current window.
-        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // Make sure the cursor is on an existing line and column.
     // SAFETY: a live window.

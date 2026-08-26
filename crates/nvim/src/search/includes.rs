@@ -763,7 +763,7 @@ unsafe fn goto_match(
                     return After::Stop; // failed to jump to the file
                 }
             } else {
-                unsafe { setpcmark() };
+                setpcmark();
             }
             cur_win().w_cursor.lnum = walk.lnum;
             unsafe { check_cursor(curwin.get()) };

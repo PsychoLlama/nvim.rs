@@ -607,9 +607,8 @@ pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
 
 /// Flush the map and typeahead buffers and beep about an error.
 ///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn beep_flush() {
+/// Safe: the only promise is that the editor exists.
+pub fn beep_flush() {
     unsafe {
         if emsg_silent.get() == 0 {
             flush_buffers(FLUSH_MINIMAL);

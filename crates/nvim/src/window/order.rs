@@ -90,7 +90,7 @@ pub(crate) fn exchange(prenum: c_int) {
     // SAFETY: beeps; reads no argument of ours.
     if is_only_window(cur, None) || unsafe { text_or_buf_locked() } {
         // SAFETY: as above.
-        unsafe { beep_flush() };
+        beep_flush();
         return;
     }
 
@@ -178,7 +178,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     }
     if count <= 0 || is_only_window(cur_win(), None) {
         // SAFETY: beeps.
-        unsafe { beep_flush() };
+        beep_flush();
         return;
     }
     let parent = cur_win().frame().parent().expect("not the only window");

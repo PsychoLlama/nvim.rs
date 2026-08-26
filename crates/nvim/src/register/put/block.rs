@@ -123,7 +123,7 @@ impl Put {
     /// The cursor must be on a valid line.
     unsafe fn block_start_col(&self) -> colnr_T {
         // SAFETY: the cursor is on a valid line.
-        let c = unsafe { gchar_cursor() };
+        let c = gchar_cursor();
         let mut col: colnr_T = 0;
         let mut endcol2: colnr_T = 0;
 
@@ -202,8 +202,8 @@ impl Put {
 
         // SAFETY (both): the cursor is now on a line of the buffer, so this
         // is its NUL-terminated text and that text's length.
-        let oldp = unsafe { get_cursor_line_ptr() };
-        let oldlen = unsafe { get_cursor_line_len() };
+        let oldp = get_cursor_line_ptr();
+        let oldlen = get_cursor_line_len();
         // SAFETY: `oldp` is the cursor line, NUL-terminated.
         let land = unsafe { land_block(oldp, col) };
         *textcol = land.textcol;
@@ -337,7 +337,7 @@ impl Put {
             // In Insert mode the cursor may be past the NUL.
             //
             // SAFETY: the cursor is on a line of the buffer.
-            let len = unsafe { get_cursor_line_len() };
+            let len = get_cursor_line_len();
             cur_win().w_cursor.col = cur_win().w_cursor.col.min(len);
         } else {
             cur_win().w_cursor.lnum = lnum;

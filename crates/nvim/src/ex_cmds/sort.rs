@@ -452,7 +452,7 @@ unsafe fn collect_sort_keys(
 
     for lnum in line1..=line2 {
         // SAFETY: `lnum` is a line of the current buffer.
-        let (text, len) = unsafe { (ml_get(lnum), ml_get_len(lnum)) };
+        let (text, len) = (ml_get(lnum), ml_get_len(lnum));
         maxlen = maxlen.max(len);
 
         // SAFETY: as above.
@@ -489,7 +489,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: the range is inside the current buffer.
-    if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+    if u_save(line1 - 1, line2 + 1) == FAIL {
         return;
     }
 
@@ -633,7 +633,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         }
 
         cur_win().w_cursor.lnum = line1;
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 
     // SAFETY: each is either null or ours.
@@ -803,7 +803,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: the range is inside the current buffer.
-    if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+    if u_save(line1 - 1, line2 + 1) == FAIL {
         return;
     }
 
@@ -829,7 +829,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
         let mut maxlen = 0;
         for lnum in line1..=line2 {
             // SAFETY: `lnum` is a line of the current buffer.
-            maxlen = maxlen.max(unsafe { ml_get_len(lnum) });
+            maxlen = maxlen.max(ml_get_len(lnum));
             if got_int.get() {
                 break 'uniqend;
             }
@@ -846,7 +846,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
         while i < count {
             let get_lnum = line1 + i;
             // SAFETY: `get_lnum` is a line of the current buffer.
-            let (text, len) = unsafe { (ml_get(get_lnum), ml_get_len(get_lnum)) };
+            let (text, len) = (ml_get(get_lnum), ml_get_len(get_lnum));
             // SAFETY: as above.
             let (start, end) = unsafe { match_range(&mut regmatch, text, len, use_match) };
 
@@ -910,7 +910,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
             unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true) };
         }
         cur_win().w_cursor.lnum = line1;
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 
     // SAFETY: it is either null or ours.

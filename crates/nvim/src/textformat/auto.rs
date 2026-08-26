@@ -44,12 +44,12 @@ static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
 /// # Safety
 /// There must be a current line, and it must be modifiable.
 pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
-    if !unsafe { has_format_option(FoFlag::AUTO) } {
+    if !has_format_option(FoFlag::AUTO) {
         return;
     }
 
     let pos = cur_win().w_cursor;
-    let old = unsafe { get_cursor_line_ptr() };
+    let old = get_cursor_line_ptr();
 
     // May remove an added space.
     unsafe { check_auto_format(false) };
@@ -59,17 +59,17 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // is in 'formatoptions' and there is a single character before the
     // cursor -- otherwise the line is broken, and typing another
     // non-white character does not join it back together.
-    let wasatend = pos.col == unsafe { get_cursor_line_len() };
+    let wasatend = pos.col == get_cursor_line_len();
     if unsafe { *old } as c_int != NUL && !trailblank && wasatend {
-        unsafe { dec_cursor() };
-        let mut cc = unsafe { gchar_cursor() };
+        dec_cursor();
+        let mut cc = gchar_cursor();
         if !unsafe { whitechar(cc) }
             && cur_win().w_cursor.col > 0
-            && unsafe { has_format_option(FoFlag::ONE_LETTER) }
+            && has_format_option(FoFlag::ONE_LETTER)
         {
-            unsafe { dec_cursor() };
+            dec_cursor();
         }
-        cc = unsafe { gchar_cursor() };
+        cc = gchar_cursor();
         if unsafe { whitechar(cc) } {
             cur_win().w_cursor = pos;
             return;
@@ -88,7 +88,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         && pos.col > 0
         && State.get() & MODE_INSERT != 0
     {
-        let line = unsafe { get_cursor_line_ptr() };
+        let line = get_cursor_line_ptr();
         // Note the argument: `WHITECHAR` tests `ascii_iswhite` on what it
         // is given but the composing check at the *cursor*, which is one
         // byte further along than the byte named here.
@@ -99,8 +99,8 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     }
 
     // With `c` in 'formatoptions' and `t` missing, only comments format.
-    if unsafe { has_format_option(FoFlag::WRAP_COMS) }
-        && !unsafe { has_format_option(FoFlag::WRAP) }
+    if has_format_option(FoFlag::WRAP_COMS)
+        && !has_format_option(FoFlag::WRAP)
         && unsafe { get_leader_len(old, ::core::ptr::null_mut::<*mut c_char>(), false, true) } == 0
     {
         return;
@@ -109,7 +109,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // May start one line earlier, but not at the start of a paragraph.
     if prev_line && !unsafe { paragraph_start(cur_win().w_cursor.lnum) } {
         cur_win().w_cursor.lnum -= 1;
-        if unsafe { u_save_cursor() } == FAIL {
+        if u_save_cursor() == FAIL {
             return;
         }
     }
@@ -133,9 +133,9 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // not before means the line was broken. Because of the trailing-blank
     // rule above, `w` in 'formatoptions' then needs a space added to keep
     // the paragraph formatted.
-    if !wasatend && unsafe { has_format_option(FoFlag::WHITE_PAR) } {
-        let linep = unsafe { get_cursor_line_ptr() };
-        let len = unsafe { get_cursor_line_len() };
+    if !wasatend && has_format_option(FoFlag::WHITE_PAR) {
+        let linep = get_cursor_line_ptr();
+        let len = get_cursor_line_len();
         if cur_win().w_cursor.col == len {
             let plinep = unsafe { xstrnsave(linep, len as size_t + 2) };
             unsafe { *plinep.offset(len as isize) = ' ' as c_char };
@@ -164,7 +164,7 @@ pub unsafe fn check_auto_format(end_insert: bool) {
     if !did_add_space.get() {
         return;
     }
-    let cc = unsafe { gchar_cursor() };
+    let cc = gchar_cursor();
     if !unsafe { whitechar(cc) } {
         // Somehow the space was removed already.
         did_add_space.set(false);
@@ -172,9 +172,9 @@ pub unsafe fn check_auto_format(end_insert: bool) {
     }
     let mut c = ' ' as c_int;
     if !end_insert {
-        unsafe { inc_cursor() };
-        c = unsafe { gchar_cursor() };
-        unsafe { dec_cursor() };
+        inc_cursor();
+        c = gchar_cursor();
+        dec_cursor();
     }
     if c != NUL {
         // The space is no longer at the end of the line: delete it.

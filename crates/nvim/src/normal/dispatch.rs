@@ -828,7 +828,7 @@ pub(crate) unsafe fn clearop(oap: *mut oparg_T) {
 pub(crate) fn clear_op_beep(op: Op) {
     clear_op(op);
     // SAFETY: touches only message and typeahead state.
-    unsafe { beep_flush() };
+    beep_flush();
 }
 
 /// [`clear_op_beep`] through a raw pointer.

@@ -611,7 +611,7 @@ fn is_help(buf: Option<Buf>) -> bool {
 /// Whether any autocommand is listening for `event`.
 fn event_wanted(event: event_T) -> bool {
     // SAFETY: reads the autocommand tables.
-    unsafe { has_event(event) }
+    has_event(event)
 }
 
 /// `vim_snprintf(buf, sizeof(buf), fmt, n)` for the one-number event names.

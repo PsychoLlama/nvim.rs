@@ -287,7 +287,7 @@ unsafe fn do_ft_buf(
         (*ftbuf).b_p_ft = xstrdup(filetype);
     }
     // SAFETY: the autocommand tables are the editor's own.
-    if !unsafe { has_event(EVENT_FILETYPE) } {
+    if !has_event(EVENT_FILETYPE) {
         return ftbuf;
     }
     // SAFETY: `ftbuf` is live; the autocommands may delete it, which the

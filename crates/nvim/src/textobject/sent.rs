@@ -212,7 +212,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
     }
 
     // SAFETY: on the main thread with a current window.
-    unsafe { setpcmark() };
+    setpcmark();
     cur_win().w_cursor = pos;
     OK
 }
@@ -311,7 +311,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
             if at_start_sent {
                 unsafe { find_first_blank(cur_win().cursor().raw()) };
             }
-            let c = unsafe { gchar_cursor() };
+            let c = gchar_cursor();
             if !at_start_sent || (!include && !ascii_iswhite(c)) {
                 unsafe { findsent(BACKWARD, 1) };
             }
@@ -406,7 +406,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
             if ascii_iswhite(unsafe { gchar_pos(cur_win().cursor().raw()) }) {
                 unsafe { decl(&mut cur_win().cursor()) };
             }
-        } else if !ascii_iswhite(unsafe { gchar_cursor() }) {
+        } else if !ascii_iswhite(gchar_cursor()) {
             unsafe { find_first_blank(&raw mut start_pos) };
         }
     }
@@ -425,7 +425,7 @@ pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_
         set_visual_mode(VisualMode::CHAR);
         redraw_cmdline.set(true); // show the mode later
         // SAFETY: on the main thread with a current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+        redraw_curbuf_later(UPD_INVERTED); // update the inversion
     } else {
         // Include the newline after the sentence, if there is one.
         // SAFETY: the cursor is on a line of the current buffer.

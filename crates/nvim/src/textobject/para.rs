@@ -85,7 +85,7 @@ pub unsafe fn findpar(
     }
 
     // SAFETY: on the main thread with a current window.
-    unsafe { setpcmark() };
+    setpcmark();
     // SAFETY: as above -- `ml_get` hands back a NUL-terminated line.
     if both && unsafe { *ml_get(curr) } as c_int == '}' as c_int {
         curr += 1; // include the line holding the `}`
@@ -96,7 +96,7 @@ pub unsafe fn findpar(
         // the motion inclusive.
         // SAFETY: on the main thread with a current buffer; `ml_get` hands
         // back a NUL-terminated line and `ml_get_len` its length.
-        let (line, len) = unsafe { (ml_get(curr), ml_get_len(curr)) };
+        let (line, len) = (ml_get(curr), ml_get_len(curr));
         cur_win().w_cursor.col = len;
         if cur_win().w_cursor.col != 0 {
             cur_win().w_cursor.col -= 1;
@@ -162,7 +162,7 @@ unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
 pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
     // SAFETY: on the main thread with a current buffer; `ml_get` checks the
     // line number itself and hands back a NUL-terminated line.
-    let s = unsafe { ml_get(lnum) };
+    let s = ml_get(lnum);
     // SAFETY: the line has at least its NUL, so its first byte is readable.
     let first = unsafe { *s };
     if first as u8 as c_int == para

@@ -355,7 +355,7 @@ unsafe fn find_hash_match(mut pos: pos_T, hash_dir: c_int, initc: c_int) -> Opti
             break;
         }
         pos.lnum += hash_dir;
-        let linep = unsafe { ml_get(pos.lnum) };
+        let linep = ml_get(pos.lnum);
         line_breakcheck(); // check for CTRL-C typed
         let ptr = unsafe { skipwhite(linep) };
         if unsafe { *ptr } as c_int != '#' as c_int {
@@ -463,8 +463,8 @@ impl Walk {
         if self.maxtravel > 0 && self.traveled as int64_t > self.maxtravel {
             return false;
         }
-        self.linep = unsafe { ml_get(self.pos.lnum) };
-        self.pos.col = unsafe { ml_get_len(self.pos.lnum) }; // pos.col on the trailing NUL
+        self.linep = ml_get(self.pos.lnum);
+        self.pos.col = ml_get_len(self.pos.lnum); // pos.col on the trailing NUL
         self.do_quotes = -1;
         line_breakcheck();
         // Does this line hold a single-line comment?
@@ -503,7 +503,7 @@ impl Walk {
         if self.maxtravel != 0 && before as int64_t > self.maxtravel {
             return false;
         }
-        self.linep = unsafe { ml_get(self.pos.lnum) };
+        self.linep = ml_get(self.pos.lnum);
         self.pos.col = 0;
         self.do_quotes = -1;
         line_breakcheck();
@@ -558,7 +558,7 @@ impl Walk {
                     self.match_pos = self.pos;
                     self.match_pos.col -= 1;
                 }
-                self.linep = unsafe { ml_get(self.pos.lnum) }; // may have been released
+                self.linep = ml_get(self.pos.lnum); // may have been released
             }
             return Step::Next;
         }
@@ -648,7 +648,7 @@ impl Walk {
         if self.pos.lnum <= 1 {
             return;
         }
-        let prev = unsafe { ml_get(self.pos.lnum - 1) };
+        let prev = ml_get(self.pos.lnum - 1);
         if unsafe { *prev } as c_int != NUL
             && unsafe { *prev.offset(ml_get_len(self.pos.lnum - 1) as isize - 1) } as c_int
                 == '\\' as c_int
@@ -664,7 +664,7 @@ impl Walk {
             }
         }
         // ml_get() keeps only one line; get linep back.
-        self.linep = unsafe { ml_get(self.pos.lnum) };
+        self.linep = ml_get(self.pos.lnum);
     }
 
     /// Skip over a single-quoted character constant: `'x'` or `'\x'`.
@@ -801,7 +801,7 @@ unsafe fn find_match(
 ) -> Option<pos_T> {
     let mut pos = cur_win().w_cursor;
     pos.coladd = 0;
-    let linep = unsafe { ml_get(pos.lnum) };
+    let linep = ml_get(pos.lnum);
     let lisp = cur_buf().b_p_lisp != 0; // engage Lisp-specific hacks ;)
 
     // vi compatible matching, and "don't recognise backslashes".

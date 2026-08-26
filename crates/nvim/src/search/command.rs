@@ -682,7 +682,7 @@ pub unsafe fn do_search(
         }
 
         if options & SEARCH_MARK != 0 {
-            unsafe { setpcmark() };
+            setpcmark();
         }
         cur_win().w_cursor = pos;
         cur_win().w_set_curswant = true;

@@ -131,8 +131,8 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
 
     unsafe { (*(*cap).oap).inclusive = dir != BACKWARD as c_int };
 
-    let line = unsafe { get_cursor_line_ptr() };
-    let len = unsafe { get_cursor_line_len() };
+    let line = get_cursor_line_ptr();
+    let len = get_cursor_line_len();
     let bytelen = lastc_bytelen.get();
     let bytes = lastc_bytes.get();
     let mut col = cur_win().w_cursor.col as c_int;

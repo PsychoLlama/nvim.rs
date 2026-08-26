@@ -171,7 +171,7 @@ pub(crate) unsafe fn cin_is_cpp_extern_c(s: *const c_char) -> bool {
 pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) -> bool {
     let mut lnum = cur_win().w_cursor.lnum;
     // SAFETY: the cursor is on a line of the current buffer.
-    let mut line = unsafe { get_cursor_line_ptr() }.cast_const();
+    let mut line = get_cursor_line_ptr().cast_const();
 
     if cached.lpos.lnum <= lnum {
         return cached.found != 0; // use the cached result
@@ -241,7 +241,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
     cached.lpos.lnum = lnum;
     // SAFETY: `lnum` is a line of the current buffer -- the walk above only
     // ever moved it down towards 1.
-    line = unsafe { ml_get(lnum) };
+    line = ml_get(lnum);
     s = line;
     loop {
         // SAFETY: `s` points inside a NUL-terminated line.
@@ -252,7 +252,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
             lnum += 1; // continue into the cursor's line
             // SAFETY: the walk above stopped at or above the cursor's line
             // and this one stops there, so `lnum` is a line of the buffer.
-            line = unsafe { ml_get(lnum) };
+            line = ml_get(lnum);
             s = line;
         }
         if s == line {
@@ -368,7 +368,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
 pub(crate) unsafe fn get_baseclass_amount(col: c_int) -> c_int {
     let mut amount = if col == 0 {
         // SAFETY: reads the cursor's line of the current buffer.
-        let mut amount = unsafe { get_indent() };
+        let mut amount = get_indent();
         // SAFETY: `get_cursor_line_ptr` hands back the cursor's
         // NUL-terminated line; both searches work on the current buffer, and
         // `find_match_paren` runs only when `find_last_paren` found one, as

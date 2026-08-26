@@ -89,7 +89,7 @@ impl BlockScan<'_> {
             }
 
             // SAFETY: the cursor is on a line of the current buffer.
-            let mut l = unsafe { get_cursor_line_ptr() }.cast_const();
+            let mut l = get_cursor_line_ptr().cast_const();
             // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum`
             // borrow is sound -- `cin_ispreproc_cont` never reads `curwin`.
             let is_preproc = unsafe {
@@ -149,7 +149,7 @@ impl BlockScan<'_> {
         }
 
         // SAFETY: the cursor is on a line of the current buffer.
-        let mut l = unsafe { get_cursor_line_ptr() }.cast_const();
+        let mut l = get_cursor_line_ptr().cast_const();
         // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum` borrow
         // is sound -- `cin_ispreproc_cont` never reads `curwin`.  The chain
         // stays whole: it may move `l` on before `cin_nocode` reads it.
@@ -231,7 +231,7 @@ impl BlockScan<'_> {
         }
 
         // SAFETY: the cursor is on a line of the current buffer.
-        let mut l = unsafe { get_cursor_line_ptr() }.cast_const();
+        let mut l = get_cursor_line_ptr().cast_const();
 
         // A switch() label or a C++ scope declaration may be what we line
         // up relative to.
@@ -270,7 +270,7 @@ impl BlockScan<'_> {
         // Ignore #defines, comments and empty lines.  (Get the line
         // again: `cin_islabel` may have unlocked it.)
         // SAFETY: the cursor is on a line of the current buffer.
-        l = unsafe { get_cursor_line_ptr() };
+        l = get_cursor_line_ptr();
         // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum` borrow
         // is sound -- `cin_ispreproc_cont` never reads `curwin`.  The chain
         // stays whole: it may move `l` on before `cin_nocode` reads it.
@@ -289,7 +289,7 @@ impl BlockScan<'_> {
             // SAFETY: on the main thread with a current buffer.
             is_baseclass = unsafe { cin_is_cpp_baseclass(&mut self.cache) };
             // SAFETY: the same; the check above may have unlocked the line.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
         }
         if is_baseclass {
             if self.lookfor == LOOKFOR_UNTERM {
@@ -342,7 +342,7 @@ impl BlockScan<'_> {
         // SAFETY: `l` is a NUL-terminated line.
         if self.lookfor == LOOKFOR_JS_KEY && unsafe { cin_has_js_key(l) } {
             // SAFETY: reads the cursor's line of the current buffer.
-            self.amount = unsafe { get_indent() };
+            self.amount = get_indent();
             return Step::Done;
         }
         if self.lookfor == LOOKFOR_COMMA {
@@ -355,7 +355,7 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
             // SAFETY: reads the cursor's line of the current buffer.
-            self.amount = unsafe { get_indent() };
+            self.amount = get_indent();
             if cur_win().w_cursor.lnum - 1 == self.ourscope {
                 // The line above starts the scope, so this line is the
                 // one that starts the comma-terminated line.
@@ -407,7 +407,7 @@ impl BlockScan<'_> {
             let brace = unsafe { find_start_brace() };
             if brace.is_none_or(|trypos| trypos.lnum == self.ourscope) {
                 // SAFETY: reads the cursor's line of the current buffer.
-                self.amount = unsafe { get_indent() };
+                self.amount = get_indent();
                 return Step::Done;
             }
             return Step::Again;
@@ -460,7 +460,7 @@ impl BlockScan<'_> {
         //   case xx:
         // ->   y = 1;
         // SAFETY: reads the cursor's line of the current buffer.
-        self.scope_amount = unsafe { get_indent() }
+        self.scope_amount = get_indent()
             + if iscase {
                 cur_buf().b_ind_case_code
             } else {
@@ -492,7 +492,7 @@ impl BlockScan<'_> {
         if self.whilelevel == 0 {
             self.lookfor = LOOKFOR_TERM;
             // SAFETY: reads the cursor's line of the current buffer.
-            self.amount = unsafe { get_indent() };
+            self.amount = get_indent();
             // SAFETY: `self.line` keeps its copy of the text alive.
             if unsafe { self.line.starts_with(b'{') } {
                 self.amount += cur_buf().b_ind_open_extra;
@@ -523,7 +523,7 @@ impl BlockScan<'_> {
             self.whilelevel > 0 && unsafe { cin_isdo(cin_skipcomment(get_cursor_line_ptr())) };
         if isdo {
             // SAFETY: reads the cursor's line of the current buffer.
-            self.amount = unsafe { get_indent() };
+            self.amount = get_indent();
             self.whilelevel -= 1;
             return Step::Again;
         }
@@ -571,7 +571,7 @@ impl BlockScan<'_> {
             //              asdfasdf);
             //     here;
             // SAFETY: the cursor is on a line of the current buffer.
-            let mut l = unsafe { get_cursor_line_ptr() }.cast_const();
+            let mut l = get_cursor_line_ptr().cast_const();
             // SAFETY: `l` is that line; both move the cursor inside the buffer,
             // and the match runs only when a paren was found, as upstream has it.
             if unsafe { find_last_paren(l, b'(', b')') } {
@@ -583,7 +583,7 @@ impl BlockScan<'_> {
                     //                          asdf)
                     cur_win().w_cursor = trypos;
                     // SAFETY: the cursor is on a line of the current buffer.
-                    l = unsafe { get_cursor_line_ptr() };
+                    l = get_cursor_line_ptr();
                     // SAFETY: `l` is that line, NUL-terminated.
                     if unsafe { cin_iscase(l, false) || cin_isscopedecl(l) } {
                         // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
@@ -641,7 +641,7 @@ impl BlockScan<'_> {
 
             // At the end of a block: skip to the start of that block.
             // SAFETY: the cursor is on a line of the current buffer.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
             // SAFETY: `l` is that line; both move the cursor inside the
             // buffer, and the hunt runs only when a brace was found.
             if unsafe { find_last_paren(l, b'{', b'}') }
@@ -696,7 +696,7 @@ impl BlockScan<'_> {
             trypos = None;
         }
         // SAFETY: the cursor is on a line of the current buffer.
-        l = unsafe { get_cursor_line_ptr() };
+        l = get_cursor_line_ptr();
 
         // Looking for a ',' means matching braces count too.
         if trypos.is_none() && terminated == b',' {
@@ -706,7 +706,7 @@ impl BlockScan<'_> {
                 trypos = unsafe { find_start_brace() };
             }
             // SAFETY: the cursor is on a line of the current buffer.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
         }
 
         if let Some(trypos) = trypos {
@@ -716,7 +716,7 @@ impl BlockScan<'_> {
             //                        asdf)
             cur_win().w_cursor = trypos;
             // SAFETY: the cursor is on a line of the current buffer.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
             // SAFETY: `l` is that line, NUL-terminated.
             if unsafe { cin_iscase(l, false) || cin_isscopedecl(l) } {
                 // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
@@ -733,7 +733,7 @@ impl BlockScan<'_> {
         if terminated == b',' {
             while cur_win().w_cursor.lnum > 1 {
                 // SAFETY: `lnum - 1` is at least 1, so it is a line of the buffer.
-                let above = unsafe { ml_get(cur_win().w_cursor.lnum - 1) };
+                let above = ml_get(cur_win().w_cursor.lnum - 1);
                 // SAFETY: `ml_get` hands back a NUL-terminated line.
                 if !unsafe { cin_ends_in_backslash(above) } {
                     break;
@@ -742,14 +742,14 @@ impl BlockScan<'_> {
                 cur_win().w_cursor.col = 0;
             }
             // SAFETY: the cursor is on a line of the current buffer.
-            l = unsafe { get_cursor_line_ptr() };
+            l = get_cursor_line_ptr();
         }
 
         // The indent and the text of the current line, ignoring any jump
         // label.
         // SAFETY: the line number is the cursor's own and `l` is that line.
         self.cur_amount = if cur_buf().b_ind_js != 0 {
-            unsafe { get_indent() }
+            get_indent()
         } else {
             unsafe { skip_label(cur_win().w_cursor.lnum, &mut l) }
         };
@@ -903,7 +903,7 @@ impl BlockScan<'_> {
         //          100 +
         // ->       here;
         // SAFETY: the cursor is on a line of the current buffer.
-        let l = unsafe { get_cursor_line_ptr() }.cast_const();
+        let l = get_cursor_line_ptr().cast_const();
         self.amount = self.cur_amount;
 
         // SAFETY: `l` is that line, NUL-terminated.

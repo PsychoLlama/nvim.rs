@@ -253,7 +253,7 @@ unsafe fn colon_reindents() -> bool {
     }
     // `cin_islabel` may have unlocked the line.
     // SAFETY: as above.
-    let mut p = unsafe { get_cursor_line_ptr() };
+    let mut p = get_cursor_line_ptr();
     let col = cur_win().w_cursor.col as isize;
     // SAFETY: `col > 2` -- which the `||` chain keeps in front -- says that
     // `col - 1` and `col - 2` are bytes of the cursor's line.

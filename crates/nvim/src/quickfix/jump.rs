@@ -247,7 +247,7 @@ unsafe fn qf_jump_goto_line(
         cur_win().w_cursor.lnum = qf_lnum.min(cur_buf().b_ml.ml_line_count);
     }
     if qf_col <= 0 {
-        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         return;
     }
     cur_win().w_cursor.coladd = 0;
@@ -405,7 +405,7 @@ unsafe fn qf_jump_to_buffer(
     }
     // Staying in the same buffer still sets the previous-context mark.
     if curbuf.get() == old_curbuf {
-        unsafe { setpcmark() };
+        setpcmark();
     }
     let lnum2 = (*qf_ptr).qf_lnum;
     let col = (*qf_ptr).qf_col;

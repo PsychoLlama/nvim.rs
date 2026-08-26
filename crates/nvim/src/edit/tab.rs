@@ -52,7 +52,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
             replace_pop_ins();
         }
         if lastc == '^' as c_int {
-            old_indent.set(unsafe { get_indent() }); // remember the indent
+            old_indent.set(get_indent()); // remember the indent
         }
         unsafe { change_indent(INDENT_SET, 0, 1, true) };
     } else {
@@ -190,11 +190,11 @@ fn tab_spaces_to_tabs() {
     if vreplace {
         pos = cur_win().w_cursor;
         let col = pos.col as isize;
-        let len = unsafe { get_cursor_line_len() } as size_t;
+        let len = get_cursor_line_len() as size_t;
         saved_line = unsafe { xstrnsave(get_cursor_line_ptr(), len) };
         ptr = unsafe { saved_line.offset(col) };
     } else {
-        ptr = unsafe { get_cursor_pos_ptr() };
+        ptr = get_cursor_pos_ptr();
     }
 
     // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
@@ -374,11 +374,11 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
     // In 'revins' the cursor is at the start of what was typed, and the
     // line is broken at its end.
     if revins_on.get() {
-        cur_win().w_cursor.col += unsafe { get_cursor_pos_len() };
+        cur_win().w_cursor.col += get_cursor_pos_len();
     }
 
     unsafe { append_to_redobuff(NL_STR.as_ptr()) };
-    let comments = if unsafe { has_format_option(FoFlag::RET_COMS) } {
+    let comments = if has_format_option(FoFlag::RET_COMS) {
         OPENLINE_DO_COM
     } else {
         0

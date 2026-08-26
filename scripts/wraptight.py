@@ -200,6 +200,7 @@ def chain_end(raw: bytes, at: int) -> int:
 
 DEREF_WRAP = re.compile(rb"unsafe \{ (\(*\*[^{}]*?) \}(?=[.\[])")
 
+
 def ends_in_call(inner: bytes) -> bool:
     """Whether `inner` ends in a *call*, so it answers with a value.
 
@@ -282,7 +283,15 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
         # `(*p).f` so the parentheses are usually already there, which is
         # exactly why this hole stayed open.
         if not balanced_group(inner):
-            raw = raw[:start] + b"(" + inner + b")" + raw[close + 1 : end] + b" }" + raw[end:]
+            raw = (
+                raw[:start]
+                + b"("
+                + inner
+                + b")"
+                + raw[close + 1 : end]
+                + b" }"
+                + raw[end:]
+            )
         else:
             raw = raw[:close] + raw[close + 1 : end] + b" }" + raw[end:]
     return raw, sum(1 for close, end, _ in edits if end > close + 1)

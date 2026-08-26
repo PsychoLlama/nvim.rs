@@ -155,7 +155,7 @@ unsafe fn align_with_unclosed_paren(
         // SAFETY: `outermost` is a paren position in the current buffer, so
         // its line number is one of that buffer's and its column indexes
         // inside the NUL-terminated line `ml_get` hands back.
-        let text = unsafe { ml_get(outermost.lnum) };
+        let text = ml_get(outermost.lnum);
         // SAFETY: the same, and `outermost.col` is this function's own copy.
         is_if_for_while = unsafe { cin_is_if_for_while_before_offset(text, &mut outermost.col) };
     }
@@ -217,7 +217,7 @@ unsafe fn align_with_unclosed_paren(
             *cur_amount = MAXCOL;
             // SAFETY: `our_paren_pos` is a paren position in this buffer, so
             // `ml_get` hands back the NUL-terminated line holding it.
-            let l = unsafe { ml_get(our_paren_pos.lnum) };
+            let l = ml_get(our_paren_pos.lnum);
             // SAFETY: `l` is that line; the `&&` keeps the scan behind the
             // option test, as upstream does.
             if cur_buf().b_ind_unclosed_wrapped != 0 && unsafe { cin_ends_in(l, b"(") } {
