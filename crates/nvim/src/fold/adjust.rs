@@ -217,7 +217,7 @@ pub unsafe fn fold_mark_adjust(
     }
     // SAFETY: `wp` is a live window, so `w_folds` is a live fold list.
     let folds = unsafe { window_folds(wp) };
-    fold_mark_adjust_recurse(folds, line1, line2, amount, amount_after);
+    adjust_fold_list(folds, line1, line2, amount, amount_after);
 }
 
 /// Shift and truncate the folds of `gap` for a change to lines
@@ -229,8 +229,10 @@ pub unsafe fn fold_mark_adjust(
 /// the body.
 ///
 /// Safe: [`FoldList`] already carries the promise that the growarray really
-/// is a live list of folds, which was this function's whole precondition.
-pub(super) fn fold_mark_adjust_recurse(
+/// is a live list of folds, which was this function's whole precondition --
+/// see [`fold_mark_adjust_recurse`] for the entry point that still takes the
+/// growarray itself.
+pub(super) fn adjust_fold_list(
     folds: FoldList,
     line1: linenr_T,
     line2: linenr_T,
@@ -276,7 +278,7 @@ pub(super) fn fold_mark_adjust_recurse(
                 fold.set_top(fold.top() + amount);
             } else if fold.top() < top {
                 // 3: starts above the change and reaches into it.
-                fold_mark_adjust_recurse(
+                adjust_fold_list(
                     fold.nested(),
                     line1 - fold.top(),
                     line2 - fold.top(),
@@ -295,7 +297,7 @@ pub(super) fn fold_mark_adjust_recurse(
             } else if amount == LINES_DELETED {
                 // 4: starts inside the change and ends below it, and the
                 //    lines it loses are gone for good.
-                fold_mark_adjust_recurse(
+                adjust_fold_list(
                     fold.nested(),
                     0,
                     line2 - fold.top(),
@@ -306,7 +308,7 @@ pub(super) fn fold_mark_adjust_recurse(
                 fold.set_top(line1);
             } else {
                 // 5: the same, but the lines only moved.
-                fold_mark_adjust_recurse(
+                adjust_fold_list(
                     fold.nested(),
                     0,
                     line2 - fold.top(),
@@ -442,7 +444,7 @@ pub(super) fn fold_remove(folds: FoldList, top: linenr_T, bot: linenr_T) {
         fold_changed.set(true);
         if fold.last() > bot {
             // 5: made to start below "bot".
-            fold_mark_adjust_recurse(
+            adjust_fold_list(
                 fold.nested(),
                 0,
                 bot - fold.top(),
@@ -536,7 +538,7 @@ pub unsafe fn fold_move_range(
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.
-                fold_mark_adjust_recurse(
+                adjust_fold_list(
                     fold.nested(),
                     line1 - fold.top(),
                     line2 - fold.top(),
@@ -576,7 +578,7 @@ pub unsafe fn fold_move_range(
     if folds.at(i).last() > dest {
         // 7: the fold straddles "dest", so it loses the lines that jumped it.
         let fold = folds.at(i);
-        fold_mark_adjust_recurse(
+        adjust_fold_list(
             fold.nested(),
             line2 + 1 - fold.top(),
             dest - fold.top(),
@@ -669,4 +671,21 @@ fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// [`adjust_fold_list`] over a bare growarray: upstream's own entry point,
+/// and what the unit lane reaches (`crates/nvim/tests/unit/fold.rs`).
+///
+/// # Safety
+/// `gap` must be a live fold list -- see [`FoldList::new`].
+pub unsafe fn fold_mark_adjust_recurse(
+    gap: *mut garray_T,
+    line1: linenr_T,
+    line2: linenr_T,
+    amount: linenr_T,
+    amount_after: linenr_T,
+) {
+    // SAFETY: the caller's promise, which is `FoldList`'s.
+    let folds = unsafe { FoldList::new(gap) };
+    adjust_fold_list(folds, line1, line2, amount, amount_after);
 }

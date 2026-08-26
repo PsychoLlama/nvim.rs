@@ -796,7 +796,7 @@ mod tests {
         assert_eq!(QfStack::of(stack), QfStack::Local(stack));
         // SAFETY: `qf_alloc_stack` leaked the box a statement ago and the
         // pointer has not left this test, so this is the last reference.
-        let owned = Box::from_raw(stack);
+        let owned = unsafe { Box::from_raw(stack) };
         assert_eq!(owned.qf_refcount, 1);
         assert_eq!(owned.qfl_type, QFLT_LOCATION);
         assert_eq!(owned.qf_bufnr, INVALID_QFBUFNR);

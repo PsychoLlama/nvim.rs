@@ -441,7 +441,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         drop_fold(folds, i, true);
                     } else {
                         current.set_len(startlnum - current.top());
-                        fold_mark_adjust_recurse(
+                        adjust_fold_list(
                             current.nested(),
                             current.len(),
                             MAXLNUM as linenr_T,
@@ -458,7 +458,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         // dragging the nested folds with it.
                         // SAFETY: a live fold's nested list is a live fold list.
                         if current.top() > firstlnum {
-                            fold_mark_adjust_recurse(
+                            adjust_fold_list(
                                 current.nested(),
                                 0,
                                 MAXLNUM as linenr_T,
@@ -466,7 +466,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                                 0,
                             );
                         } else {
-                            fold_mark_adjust_recurse(
+                            adjust_fold_list(
                                 current.nested(),
                                 0,
                                 firstlnum - current.top() - 1,
@@ -605,7 +605,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
         }
         if next.top() + next.len() > line.lnum() {
             if next.top() < line.lnum() {
-                fold_mark_adjust_recurse(
+                adjust_fold_list(
                     next.nested(),
                     0,
                     line.lnum() - next.top() - 1,
