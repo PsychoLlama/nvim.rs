@@ -264,7 +264,9 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
         // Formatted rather than built up: a tag name longer than the
         // buffer is truncated, as upstream truncates it.
         let str_m = IOSIZE as size_t;
-        let fmt = c"%c%2d %2d %-15s %5d ".as_ptr();
+        // Two trailing spaces: the file name that follows is a separate
+        // `msg_outtrans`, and the gap is part of this format.
+        let fmt = c"%c%2d %2d %-15s %5d  ".as_ptr();
         let args = if i as c_int == curidx { '>' } else { ' ' } as c_int;
         let arg5 = i as c_int + 1;
         let arg6 = item.cur_match + 1;
