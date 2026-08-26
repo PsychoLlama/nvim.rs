@@ -48,7 +48,6 @@ use crate::ex_cmds2::check_fname;
 use crate::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
-use crate::fold::has_folding;
 use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_init, ga_set_growsize};
 use crate::getchar::{
     append_to_redobuff_char, beep_flush, get_recorded, ins_typebuf, stuff_readbuf,
