@@ -18,7 +18,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::main::{
-    Columns, Rows, State, curbuf, curwin, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
+    Columns, Rows, State, curwin, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
     need_wait_return, p_window,
 };
 use crate::memline::MlFlags;
@@ -31,6 +31,7 @@ use crate::strings::vim_strchr;
 use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
+use crate::winlayer::{Buf, Win};
 use ::libc::{atol, strlen};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -50,7 +51,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
-    let mut empty = unsafe { (*curbuf.get()).b_ml.ml_flags }.has(MlFlags::EMPTY);
+    let mut empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
     if forceit != 0 {
@@ -60,7 +61,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
     // First autoindent comes from the line we start on.
     // SAFETY: as above.
-    if cmdidx != CMD_change && unsafe { (*curbuf.get()).b_p_ai } != 0 && lnum > 0 {
+    if cmdidx != CMD_change && cur_buf().b_p_ai != 0 && lnum > 0 {
         // SAFETY: `lnum` is a line of the current buffer.
         append_indent.set(unsafe { get_indent_lnum(lnum) });
     }
@@ -76,7 +77,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     // Behave like in Insert mode.
     State.set(MODE_INSERT);
     // SAFETY: `curbuf` is live.
-    if unsafe { (*curbuf.get()).b_p_iminsert } == B_IMODE_LMAP as OptInt {
+    if cur_buf().b_p_iminsert == B_IMODE_LMAP as OptInt {
         State.set(State.get() | MODE_LANGMAP);
     }
 
@@ -84,13 +85,11 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
         msg_scroll.set(1);
         need_wait_return.set(false);
         // SAFETY: `curbuf` is live; `lnum` is a line of it, or zero.
-        unsafe {
-            if (*curbuf.get()).b_p_ai != 0 {
-                if append_indent.get() >= 0 {
-                    indent = append_indent.replace(-1);
-                } else if lnum > 0 {
-                    indent = get_indent_lnum(lnum);
-                }
+        if cur_buf().b_p_ai != 0 {
+            if append_indent.get() >= 0 {
+                indent = append_indent.replace(-1);
+            } else if lnum > 0 {
+                indent = unsafe { get_indent_lnum(lnum) };
             }
         }
 
@@ -136,16 +135,14 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
         did_undo = true;
         // SAFETY: `lnum` is a line of the current buffer, or zero.
-        unsafe {
-            ml_append(lnum, theline, 0, false);
-            if empty {
-                // There are no marks below the inserted lines.
-                appended_lines(lnum, 1);
-            } else {
-                appended_lines_mark(lnum, 1);
-            }
-            xfree(theline.cast());
+        unsafe { ml_append(lnum, theline, 0, false) };
+        if empty {
+            // There are no marks below the inserted lines.
+            unsafe { appended_lines(lnum, 1) };
+        } else {
+            unsafe { appended_lines_mark(lnum, 1) };
         }
+        unsafe { xfree(theline.cast()) };
         lnum += 1;
 
         if empty {
@@ -169,7 +166,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     // "end" is set to lnum when something has been appended, otherwise
     // it is the same as "start"  -- Acevedo
     // SAFETY: `curbuf` is live.
-    let mut start = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+    let mut start = cur_buf().b_ml.ml_line_count;
     if line2 < start {
         start = line2 + 1;
     }
@@ -180,11 +177,9 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     unsafe { set_op_range(start, if line2 < lnum { lnum } else { start }) };
 
     // SAFETY: `curwin` is the live current window.
-    unsafe {
-        (*curwin.get()).w_cursor.lnum = lnum;
-        check_cursor_lnum(curwin.get());
-        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    }
+    cur_win().w_cursor.lnum = lnum;
+    unsafe { check_cursor_lnum(curwin.get()) };
+    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
 
     // Don't use wait_return() now.
     need_wait_return.set(false);
@@ -197,7 +192,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 /// The current buffer must be live.
 unsafe fn toggle_autoindent() {
     // SAFETY: caller's contract.
-    unsafe { (*curbuf.get()).b_p_ai = c_int::from((*curbuf.get()).b_p_ai == 0) };
+    cur_buf().b_p_ai = c_int::from(cur_buf().b_p_ai == 0);
 }
 
 /// The next line for `:append` to insert, freshly allocated.
@@ -212,47 +207,50 @@ unsafe fn toggle_autoindent() {
 /// `eap` must be a live Ex command.
 unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_char> {
     // SAFETY: caller's contract.
-    unsafe {
-        let arg = (*eap).arg;
-        if *arg == '|' as c_char {
-            // Get the text after the trailing bar.
-            let line = xstrdup(arg.add(1));
-            *arg = NUL as c_char;
-            return Some(line);
-        }
+    let arg = unsafe { (*eap).arg };
+    if unsafe { *arg } == '|' as c_char {
+        // Get the text after the trailing bar.
+        let line = unsafe { xstrdup(arg.add(1)) };
+        unsafe { *arg = NUL as c_char };
+        return Some(line);
+    }
 
-        let Some(getline) = (*eap).ea_getline else {
-            // No getline() function: use the lines that follow.  This ends
-            // when there is no more.
-            let next = (*eap).nextcmd;
-            if next.is_null() {
-                return None;
-            }
-            let mut end = vim_strchr(next, NL);
-            if end.is_null() {
-                end = next.add(strlen(next));
-            }
-            let line = xmemdupz(next.cast(), end.offset_from(next) as size_t).cast::<c_char>();
+    // SAFETY: caller's contract -- `eap` is the live command argument.
+    let ea_getline = unsafe { (*eap).ea_getline };
+    let Some(getline) = ea_getline else {
+        // No getline() function: use the lines that follow.  This ends
+        // when there is no more.
+        let next = unsafe { (*eap).nextcmd };
+        if next.is_null() {
+            return None;
+        }
+        let mut end = unsafe { vim_strchr(next, NL) };
+        if end.is_null() {
+            end = unsafe { next.add(strlen(next)) };
+        }
+        let line =
+            unsafe { xmemdupz(next.cast(), end.offset_from(next) as size_t) }.cast::<c_char>();
+        unsafe {
             (*eap).nextcmd = if *end != NUL as c_char {
                 end.add(1)
             } else {
                 ptr::null_mut()
-            };
-            return Some(line);
+            }
         };
+        return Some(line);
+    };
 
-        // Set State to avoid the cursor shape being set to MODE_INSERT state
-        // when getline() returns.
-        let save_state = State.replace(MODE_CMDLINE);
-        let first = if (*(*eap).cstack).cs_looplevel > 0 {
-            -1
-        } else {
-            NUL
-        };
-        let line = getline(first, (*eap).cookie, indent, true);
-        State.set(save_state);
-        Some(line)
-    }
+    // Set State to avoid the cursor shape being set to MODE_INSERT state
+    // when getline() returns.
+    let save_state = State.replace(MODE_CMDLINE);
+    let first = if unsafe { *(*eap).cstack }.cs_looplevel > 0 {
+        -1
+    } else {
+        NUL
+    };
+    let line = unsafe { getline(first, (*eap).cookie, indent, true) };
+    State.set(save_state);
+    Some(line)
 }
 
 /// `:change` -- delete the range, then append in its place.
@@ -269,7 +267,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
 
     // The ! flag toggles autoindent.
     // SAFETY: `curbuf` is live.
-    let autoindent = unsafe { (*curbuf.get()).b_p_ai };
+    let autoindent = cur_buf().b_p_ai;
     if if forceit != 0 {
         autoindent == 0
     } else {
@@ -282,25 +280,21 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
     let mut lnum = line2;
     while lnum >= line1 {
         // SAFETY: `curbuf` is live and `line1` is a line of it.
-        unsafe {
-            if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
-                // Nothing left to delete.
-                break;
-            }
-            ml_delete(line1);
+        if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+            // Nothing left to delete.
+            break;
         }
+        unsafe { ml_delete(line1) };
         lnum -= 1;
     }
 
     // Make sure the cursor is not beyond the end of the file now.
     // SAFETY: `curwin` is the live current window.
-    unsafe {
-        check_cursor_lnum(curwin.get());
-        deleted_lines_mark(line1, line2 - lnum);
-        // ":append" on the line above the deleted lines.
-        (*eap).line2 = line1;
-        ex_append(eap);
-    }
+    unsafe { check_cursor_lnum(curwin.get()) };
+    unsafe { deleted_lines_mark(line1, line2 - lnum) };
+    // ":append" on the line above the deleted lines.
+    unsafe { (*eap).line2 = line1 };
+    unsafe { ex_append(eap) };
 }
 
 /// `:z` -- print a window of lines around the range's last line.
@@ -339,7 +333,7 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
         bigness = unsafe { atol(arg.add(at)) };
         // `bigness` could be < 0 if atol() overflowed.
         // SAFETY: `curbuf` is live.
-        let cap = int64_t::from(unsafe { (*curbuf.get()).b_ml.ml_line_count }) * 2;
+        let cap = int64_t::from(cur_buf().b_ml.ml_line_count) * 2;
         if bigness > cap || bigness < 0 {
             bigness = cap;
         }
@@ -387,7 +381,7 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
     };
 
     // SAFETY: `curbuf` is live.
-    let last = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+    let last = cur_buf().b_ml.ml_line_count;
     start = start.max(1);
     end = end.min(last);
     curs = curs.max(1).min(last);
@@ -413,11 +407,9 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
     }
 
     // SAFETY: `curwin` is the live current window.
-    unsafe {
-        if (*curwin.get()).w_cursor.lnum != curs {
-            (*curwin.get()).w_cursor.lnum = curs;
-            (*curwin.get()).w_cursor.col = 0;
-        }
+    if cur_win().w_cursor.lnum != curs {
+        cur_win().w_cursor.lnum = curs;
+        cur_win().w_cursor.col = 0;
     }
     ex_no_reprint.set(true);
 }
@@ -429,14 +421,12 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
 /// The window layout must be live.
 unsafe fn default_bigness(forceit: c_int) -> int64_t {
     // SAFETY: caller's contract.
-    unsafe {
-        if forceit != 0 {
-            int64_t::from(Rows.get() - 1)
-        } else if firstwin.get() == lastwin.get() {
-            (*curwin.get()).w_onebuf_opt.wo_scr * 2
-        } else {
-            int64_t::from((*curwin.get()).w_view_height - 3)
-        }
+    if forceit != 0 {
+        int64_t::from(Rows.get() - 1)
+    } else if firstwin.get() == lastwin.get() {
+        cur_win().w_onebuf_opt.wo_scr * 2
+    } else {
+        int64_t::from(cur_win().w_view_height - 3)
     }
 }
 
@@ -446,10 +436,20 @@ unsafe fn default_bigness(forceit: c_int) -> int64_t {
 /// Message state must be usable.
 unsafe fn rule_off() {
     // SAFETY: caller's contract.
-    unsafe {
-        msg_putchar(NL);
-        for _ in 1..Columns.get() {
-            msg_putchar('-' as c_int);
-        }
+    unsafe { msg_putchar(NL) };
+    for _ in 1..Columns.get() {
+        unsafe { msg_putchar('-' as c_int) };
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

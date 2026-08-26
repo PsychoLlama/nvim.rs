@@ -20,7 +20,7 @@ use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
-use crate::main::{curbuf, curwin};
+use crate::main::curbuf;
 use crate::mbyte::{
     utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
@@ -31,6 +31,7 @@ use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
 use crate::types::{IOSIZE, NUL, cmdidx_T, exarg_T};
 use crate::undo::u_save;
+use crate::winlayer::{Buf, Win};
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -58,10 +59,8 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
     // `msg_multiline` reads again as it re-enters the message machinery.
     let mut line = [0 as c_char; IOSIZE as usize];
     // SAFETY: message state, main thread.
-    unsafe {
-        msg_sb_eol();
-        msg_start();
-    }
+    unsafe { msg_sb_eol() };
+    unsafe { msg_start() };
 
     // SAFETY: `data` is a live, NUL-terminated line position.
     let mut c = unsafe { utf_ptr2char(data) };
@@ -118,17 +117,17 @@ unsafe fn describe_byte(
     let mut nonprint: [c_char; 20] = [0; 20];
     // SAFETY: `nonprint` is 20 bytes and `transchar_nonprint` writes at most
     // seven into `raw` before the `  <%s>` wrapper takes it.
-    unsafe {
-        if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
-            let mut raw: [c_char; 7] = [0; 7];
-            transchar_nonprint(curbuf.get(), raw.as_mut_ptr(), c);
+    if unsafe { vim_isprintc(c) } && !(' ' as c_int..='~' as c_int).contains(&c) {
+        let mut raw: [c_char; 7] = [0; 7];
+        unsafe { transchar_nonprint(curbuf.get(), raw.as_mut_ptr(), c) };
+        unsafe {
             vim_snprintf(
                 nonprint.as_mut_ptr(),
                 nonprint.len(),
                 c"  <%s>".as_ptr(),
                 raw.as_ptr(),
-            );
-        }
+            )
+        };
     }
 
     // Upstream keeps a second, permanently empty buffer here and prints it
@@ -157,8 +156,8 @@ unsafe fn describe_byte(
             cval,
             cval,
             digraph.as_ptr(),
-        );
-    }
+        )
+    };
     // SAFETY: `line` now holds a NUL-terminated string.
     unsafe { emit_line(line, need_clear) };
 }
@@ -216,8 +215,8 @@ unsafe fn describe_char(
             c,
             c,
             digraph.as_ptr(),
-        );
-    }
+        )
+    };
     // SAFETY: `line` now holds a NUL-terminated string.
     unsafe { emit_line(line, need_clear) };
 }
@@ -236,8 +235,8 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
             true,
             false,
             need_clear,
-        );
-    }
+        )
+    };
 }
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.
@@ -250,7 +249,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
         unsafe { ((*eap).cmdidx, (*eap).arg, (*eap).line1, (*eap).line2) };
 
     // SAFETY: `curwin` is the live current window.
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_rl } != 0 {
+    if cur_win().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
         // itself, and that outlives the call.
         cmdidx = match cmdidx {
@@ -272,25 +271,21 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     } else {
         // If 'textwidth' is set use it, else if 'wrapmargin' is set use it;
         // on an invalid value use 80.
-        // SAFETY: `curbuf`/`curwin` are the live current buffer and window.
-        width = unsafe {
-            let mut width = if arg_width > 0 {
-                arg_width
-            } else {
-                (*curbuf.get()).b_p_tw as c_int
-            };
-            if width == 0 && (*curbuf.get()).b_p_wm > 0 {
-                width = (*curwin.get()).w_view_width - (*curbuf.get()).b_p_wm as c_int;
-            }
-            width
+        width = if arg_width > 0 {
+            arg_width
+        } else {
+            cur_buf().b_p_tw as c_int
         };
+        if width == 0 && cur_buf().b_p_wm > 0 {
+            width = cur_win().w_view_width - cur_buf().b_p_wm as c_int;
+        }
         if width <= 0 {
             width = 80;
         }
     }
 
     // SAFETY: `curwin` is live; `u_save` takes the range's guard lines.
-    let save_curpos = unsafe { (*curwin.get()).w_cursor };
+    let save_curpos = cur_win().w_cursor;
     // SAFETY: as above.
     if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
         return;
@@ -300,7 +295,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     while lnum <= line2 {
         // SAFETY: `lnum` is inside the range `u_save` just guarded, and
         // nothing in the body adds or removes a line.
-        unsafe { (*curwin.get()).w_cursor.lnum = lnum };
+        cur_win().w_cursor.lnum = lnum;
         if let Some(new_indent) = unsafe { aligned_indent(cmdidx, indent, width) } {
             // SAFETY: the cursor is on `lnum`.
             unsafe { set_indent(new_indent.max(0), 0) };
@@ -309,11 +304,9 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     }
 
     // SAFETY: the range is still the one that was just rewritten.
-    unsafe {
-        changed_lines(curbuf.get(), line1, 0, line2 + 1, 0, true);
-        (*curwin.get()).w_cursor = save_curpos;
-        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    }
+    unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, 0, true) };
+    cur_win().w_cursor = save_curpos;
+    unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
 }
 
 /// The indent the cursor's line should get, or `None` for a blank line
@@ -415,4 +408,16 @@ unsafe fn linelen() -> (c_int, bool) {
         len
     };
     (len, has_tab)
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

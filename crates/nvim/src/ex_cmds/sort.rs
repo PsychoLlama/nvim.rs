@@ -29,7 +29,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, got_int, p_ic};
+use crate::main::{curbuf, got_int, p_ic};
 use crate::mark::mark_adjust;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc};
@@ -43,6 +43,7 @@ use crate::types::{
     ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
+use crate::winlayer::Win;
 use ::libc::{memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_void};
@@ -100,14 +101,12 @@ struct SortLine {
 unsafe fn string_compare(s1: *const c_char, s2: *const c_char) -> c_int {
     let order = SORT_ORDER.get();
     // SAFETY: caller's contract.
-    unsafe {
-        if order.locale {
-            strcoll(s1, s2)
-        } else if order.ignore_case {
-            strcasecmp(s1.cast_mut(), s2.cast_mut())
-        } else {
-            strcmp(s1, s2)
-        }
+    if order.locale {
+        unsafe { strcoll(s1, s2) }
+    } else if order.ignore_case {
+        unsafe { strcasecmp(s1.cast_mut(), s2.cast_mut()) }
+    } else {
+        unsafe { strcmp(s1, s2) }
     }
 }
 
@@ -144,14 +143,12 @@ unsafe extern "C" fn sort_compare(s1: *const c_void, s2: *const c_void) -> c_int
         (SortKey::Text { .. }, SortKey::Text { .. }) => {
             // SAFETY: both lines are still in the buffer, and the two
             // buffers hold the longest line of the range.
-            unsafe {
-                copy_key(SORTBUF1.get(), l1);
-                copy_key(SORTBUF2.get(), l2);
-                match string_compare(SORTBUF1.get(), SORTBUF2.get()) {
-                    0 => Ordering::Equal,
-                    n if n < 0 => Ordering::Less,
-                    _ => Ordering::Greater,
-                }
+            unsafe { copy_key(SORTBUF1.get(), l1) };
+            unsafe { copy_key(SORTBUF2.get(), l2) };
+            match unsafe { string_compare(SORTBUF1.get(), SORTBUF2.get()) } {
+                0 => Ordering::Equal,
+                n if n < 0 => Ordering::Less,
+                _ => Ordering::Greater,
             }
         }
         // Unreachable: every key has the same shape.  Falling back on the
@@ -184,9 +181,9 @@ unsafe fn copy_key(buf: *mut c_char, line: SortLine) {
             buf.cast(),
             ml_get(line.lnum).add(start as usize).cast(),
             len as size_t,
-        );
-        *buf.add(len) = NUL as c_char;
-    }
+        )
+    };
+    unsafe { *buf.add(len) = NUL as c_char };
 }
 
 /// A zeroed `regmatch_T`; only `regprog` is meaningful before a match.
@@ -215,30 +212,28 @@ unsafe fn compile_sort_pattern(
     regmatch: &mut regmatch_T,
 ) -> Option<usize> {
     // SAFETY: caller's contract.
-    unsafe {
-        let delim = arg.add(at);
-        let end = skip_regexp_err(delim.add(1), *delim as c_int, 1);
-        if end.is_null() {
-            return None;
-        }
-        *end = NUL as c_char;
-
-        // Use the last search pattern if the sort pattern is empty.
-        regmatch.regprog = if end == delim.add(1) {
-            if last_search_pat().is_null() {
-                emsg(gettext(&raw const e_noprevre as *const c_char));
-                return None;
-            }
-            vim_regcomp(last_search_pat(), RE_MAGIC)
-        } else {
-            vim_regcomp(delim.add(1), RE_MAGIC)
-        };
-        if regmatch.regprog.is_null() {
-            return None;
-        }
-        regmatch.rm_ic = p_ic.get() != 0;
-        Some(end.offset_from(arg) as usize)
+    let delim = unsafe { arg.add(at) };
+    let end = unsafe { skip_regexp_err(delim.add(1), *delim as c_int, 1) };
+    if end.is_null() {
+        return None;
     }
+    unsafe { *end = NUL as c_char };
+
+    // Use the last search pattern if the sort pattern is empty.
+    regmatch.regprog = if end == unsafe { delim.add(1) } {
+        if last_search_pat().is_null() {
+            unsafe { emsg(gettext(&raw const e_noprevre as *const c_char)) };
+            return None;
+        }
+        unsafe { vim_regcomp(last_search_pat(), RE_MAGIC) }
+    } else {
+        unsafe { vim_regcomp(delim.add(1), RE_MAGIC) }
+    };
+    if regmatch.regprog.is_null() {
+        return None;
+    }
+    regmatch.rm_ic = p_ic.get() != 0;
+    Some(unsafe { end.offset_from(arg) } as usize)
 }
 
 /// True for the letters that can only ever be flags, so that anything else is
@@ -367,14 +362,12 @@ unsafe fn match_range(
         return (0, len);
     }
     // SAFETY: caller's contract.
-    unsafe {
-        if !vim_regexec(regmatch, line, 0) {
-            return (0, 0);
-        }
-        let start = regmatch.startp[0].offset_from(line) as colnr_T;
-        let end = regmatch.endp[0].offset_from(line) as colnr_T;
-        if use_match { (start, end) } else { (end, len) }
+    if !unsafe { vim_regexec(regmatch, line, 0) } {
+        return (0, 0);
     }
+    let start = unsafe { regmatch.startp[0].offset_from(line) } as colnr_T;
+    let end = unsafe { regmatch.endp[0].offset_from(line) } as colnr_T;
+    if use_match { (start, end) } else { (end, len) }
 }
 
 /// The number or float in `line[start..end]`.
@@ -386,40 +379,40 @@ unsafe fn match_range(
 /// `line` must be a live buffer line and `start`/`end` byte offsets into it.
 unsafe fn number_key(line: *mut c_char, start: colnr_T, end: colnr_T, spec: &SortSpec) -> SortKey {
     // SAFETY: caller's contract.
-    unsafe {
-        let stop = line.add(end as usize);
-        let saved = *stop;
-        *stop = NUL as c_char;
-        let from = line.add(start as usize);
+    let stop = unsafe { line.add(end as usize) };
+    let saved = unsafe { *stop };
+    unsafe { *stop = NUL as c_char };
+    let from = unsafe { line.add(start as usize) };
 
-        let key = if spec.float {
-            let mut s = skipwhite(from);
-            if *s == '+' as c_char {
-                s = skipwhite(s.add(1));
-            }
-            // An empty line sorts before any number.
-            SortKey::Float(if *s == NUL as c_char {
-                -float_T::MAX
-            } else {
-                strtod(s, ptr::null_mut())
-            })
+    let key = if spec.float {
+        let mut s = unsafe { skipwhite(from) };
+        if unsafe { *s } == '+' as c_char {
+            s = unsafe { skipwhite(s.add(1)) };
+        }
+        // An empty line sorts before any number.
+        SortKey::Float(if unsafe { *s } == NUL as c_char {
+            -float_T::MAX
         } else {
-            let mut s = if spec.radix & STR2NR_HEX as c_int != 0 {
-                skiptohex(from)
-            } else if spec.radix & STR2NR_BIN as c_int != 0 {
-                skiptobin(from).cast_mut()
-            } else {
-                skiptodigit(from)
-            };
-            // Include a preceding negative sign.
-            if s > from && *s.sub(1) == '-' as c_char {
-                s = s.sub(1);
-            }
-            if *s == NUL as c_char {
-                // A line without a number sorts before any number.
-                SortKey::Number(None)
-            } else {
-                let mut value: varnumber_T = 0;
+            unsafe { strtod(s, ptr::null_mut()) }
+        })
+    } else {
+        let mut s = if spec.radix & STR2NR_HEX as c_int != 0 {
+            unsafe { skiptohex(from) }
+        } else if spec.radix & STR2NR_BIN as c_int != 0 {
+            unsafe { skiptobin(from) }.cast_mut()
+        } else {
+            unsafe { skiptodigit(from) }
+        };
+        // Include a preceding negative sign.
+        if s > from && unsafe { *s.sub(1) } == '-' as c_char {
+            s = unsafe { s.sub(1) };
+        }
+        if unsafe { *s } == NUL as c_char {
+            // A line without a number sorts before any number.
+            SortKey::Number(None)
+        } else {
+            let mut value: varnumber_T = 0;
+            unsafe {
                 vim_str2nr(
                     s,
                     ptr::null_mut(),
@@ -430,14 +423,14 @@ unsafe fn number_key(line: *mut c_char, start: colnr_T, end: colnr_T, spec: &Sor
                     0,
                     false,
                     ptr::null_mut(),
-                );
-                SortKey::Number(Some(value))
-            }
-        };
+                )
+            };
+            SortKey::Number(Some(value))
+        }
+    };
 
-        *stop = saved;
-        key
-    }
+    unsafe { *stop = saved };
+    key
 }
 
 /// Build one [`SortLine`] per line of the range, and report the longest line.
@@ -530,16 +523,16 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         // Allocate the two buffers that can hold the longest line, then sort
         // the array of line numbers.  Note: can't be interrupted!
         // SAFETY: both are freed below, on every path.
+        SORTBUF1.set(unsafe { xmalloc(maxlen as size_t + 1) }.cast());
+        SORTBUF2.set(unsafe { xmalloc(maxlen as size_t + 1) }.cast());
         unsafe {
-            SORTBUF1.set(xmalloc(maxlen as size_t + 1).cast());
-            SORTBUF2.set(xmalloc(maxlen as size_t + 1).cast());
             qsort(
                 lines.as_mut_ptr().cast(),
                 count,
                 size_of::<SortLine>(),
                 Some(sort_compare),
-            );
-        }
+            )
+        };
         if SORT_ABORT.get() {
             break 'sortend;
         }
@@ -606,21 +599,23 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         // Adjust marks for deleted (or added) lines and prepare for display.
         let deleted = count as linenr_T - (lnum - line2);
         // SAFETY: the range is the one just rewritten.
-        unsafe {
-            if deleted > 0 {
+        if deleted > 0 {
+            unsafe {
                 mark_adjust(
                     line2 - deleted,
                     line2,
                     MAXLNUM as linenr_T,
                     -deleted,
                     kExtmarkNOOP,
-                );
-                msgmore(-deleted);
-            } else if deleted < 0 {
-                mark_adjust(line2, MAXLNUM as linenr_T, -deleted, 0, kExtmarkNOOP);
-            }
+                )
+            };
+            unsafe { msgmore(-deleted) };
+        } else if deleted < 0 {
+            unsafe { mark_adjust(line2, MAXLNUM as linenr_T, -deleted, 0, kExtmarkNOOP) };
+        }
 
-            if change_occurred || deleted != 0 {
+        if change_occurred || deleted != 0 {
+            unsafe {
                 extmark_splice(
                     curbuf.get(),
                     line1 - 1,
@@ -632,23 +627,21 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
                     0,
                     new_count,
                     kExtmarkUndo,
-                );
-                changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true);
-            }
-
-            (*curwin.get()).w_cursor.lnum = line1;
-            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
+                )
+            };
+            unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true) };
         }
+
+        cur_win().w_cursor.lnum = line1;
+        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
     }
 
     // SAFETY: each is either null or ours.
-    unsafe {
-        xfree(SORTBUF1.get().cast());
-        xfree(SORTBUF2.get().cast());
-        vim_regfree(regmatch.regprog);
-        if got_int.get() {
-            emsg(gettext(&raw const e_interr as *const c_char));
-        }
+    unsafe { xfree(SORTBUF1.get().cast()) };
+    unsafe { xfree(SORTBUF2.get().cast()) };
+    unsafe { vim_regfree(regmatch.regprog) };
+    if got_int.get() {
+        unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
     }
 }
 
@@ -910,22 +903,26 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
                 } else {
                     kExtmarkNOOP
                 } as ExtmarkOp,
-            );
-            msgmore(-deleted);
-            if change_occurred {
-                changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true);
-            }
-            (*curwin.get()).w_cursor.lnum = line1;
-            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
+            )
+        };
+        unsafe { msgmore(-deleted) };
+        if change_occurred {
+            unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true) };
         }
+        cur_win().w_cursor.lnum = line1;
+        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
     }
 
     // SAFETY: it is either null or ours.
-    unsafe {
-        xfree(SORTBUF1.get().cast());
-        vim_regfree(regmatch.regprog);
-        if got_int.get() {
-            emsg(gettext(&raw const e_interr as *const c_char));
-        }
+    unsafe { xfree(SORTBUF1.get().cast()) };
+    unsafe { vim_regfree(regmatch.regprog) };
+    if got_int.get() {
+        unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

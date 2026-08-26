@@ -32,6 +32,7 @@ use crate::regexp::{
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg_c;
 use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -46,10 +47,8 @@ use core::ptr;
 /// C string.  This re-enters `do_cmdline`, so every global may change.
 unsafe fn global_exe_one(cmd: *mut c_char, lnum: linenr_T) {
     // SAFETY: caller's contract -- the current window is live.
-    unsafe {
-        (*curwin.get()).w_cursor.lnum = lnum;
-        (*curwin.get()).w_cursor.col = 0 as colnr_T;
-    }
+    cur_win().w_cursor.lnum = lnum;
+    cur_win().w_cursor.col = 0 as colnr_T;
     // SAFETY: caller's contract -- `cmd` is NUL-terminated.
     let first = unsafe { *cmd } as c_int;
     let cmd = if first == NUL || first == '\n' as c_int {
@@ -168,12 +167,10 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
         )
     };
     // SAFETY: the skip stopped at the delimiter, at the NUL, or in between.
-    unsafe {
-        if *cmd as u8 == delim {
-            // End delimiter found: replace it with a NUL.
-            *cmd = NUL as c_char;
-            cmd = cmd.add(1);
-        }
+    if unsafe { *cmd } as u8 == delim {
+        // End delimiter found: replace it with a NUL.
+        unsafe { *cmd = NUL as c_char };
+        cmd = unsafe { cmd.add(1) };
     }
     Some(GlobalPat {
         pat,
@@ -234,8 +231,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
     // ":g/found/v/notfound/command".
     if global_busy.get() != 0 {
         // SAFETY: caller's contract; `curbuf` is the live buffer.
-        let whole =
-            unsafe { (*eap).line1 == 1 && (*eap).line2 == (*curbuf.get()).b_ml.ml_line_count };
+        let whole = unsafe { (*eap).line1 == 1 && (*eap).line2 == cur_buf().b_ml.ml_line_count };
         if !whole {
             // Will increment global_busy to break out of the loop.
             // SAFETY: a live message string.
@@ -285,11 +281,9 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
     if global_busy.get() != 0 {
         // SAFETY: the program is compiled and the cursor line is in the
         // buffer.
-        unsafe {
-            let lnum = (*curwin.get()).w_cursor.lnum;
-            if selects(kind, matches_line(&raw mut regmatch, lnum)) {
-                global_exe_one(parsed.cmd, lnum);
-            }
+        let lnum = cur_win().w_cursor.lnum;
+        if selects(kind, unsafe { matches_line(&raw mut regmatch, lnum) }) {
+            unsafe { global_exe_one(parsed.cmd, lnum) };
         }
     } else {
         // SAFETY: as above.
@@ -341,7 +335,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     global_need_beginline.set(false);
     global_busy.set(1 as c_int);
     // SAFETY: `curbuf` is the live buffer.
-    let old_lcount = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+    let old_lcount = cur_buf().b_ml.ml_line_count;
 
     while !got_int.get() {
         // SAFETY: main thread, live buffer.
@@ -350,10 +344,8 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
             break;
         }
         // SAFETY: `lnum` is a marked line of the buffer; `cmd` is live.
-        unsafe {
-            global_exe_one(cmd, lnum);
-            os_breakcheck();
-        }
+        unsafe { global_exe_one(cmd, lnum) };
+        os_breakcheck();
     }
 
     global_busy.set(0 as c_int);
@@ -381,9 +373,19 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
     // SAFETY: message state; `curbuf` is live.
-    unsafe {
-        if !do_sub_msg(false) && curbuf.get() == old_buf {
-            msgmore((*curbuf.get()).b_ml.ml_line_count as c_int - old_lcount as c_int);
-        }
+    if !unsafe { do_sub_msg(false) } && curbuf.get() == old_buf {
+        unsafe { msgmore(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int) };
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

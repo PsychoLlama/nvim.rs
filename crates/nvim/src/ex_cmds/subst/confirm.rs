@@ -43,6 +43,7 @@ use crate::types::{
     Callback, Callback_data, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t,
 };
 use crate::ui::ui_has;
+use crate::winlayer::Win;
 use ::libc::{memset, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -101,21 +102,23 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
             &raw mut sc,
             ptr::null_mut(),
             ptr::null_mut(),
-        );
-        (*curwin.get()).w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
+        )
+    };
+    cur_win().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
+    unsafe {
         getvcol(
             curwin.get(),
             &raw mut (*curwin.get()).w_cursor,
             ptr::null_mut(),
             ptr::null_mut(),
             &raw mut ec,
-        );
-        (*curwin.get()).w_cursor.col = st.regmatch.startpos[0].col;
-        if subflags.with(|flags| flags.do_number) || (*curwin.get()).w_onebuf_opt.wo_nu != 0 {
-            let numw = number_width(curwin.get()) + 1 as c_int;
-            sc += numw;
-            ec += numw;
-        }
+        )
+    };
+    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
+    if subflags.with(|flags| flags.do_number) || cur_win().w_onebuf_opt.wo_nu != 0 {
+        let numw = unsafe { number_width(curwin.get()) } + 1 as c_int;
+        sc += numw;
+        ec += numw;
     }
 
     // SAFETY: the prompt is `ec + 1` bytes of spaces and carets inside an
@@ -171,9 +174,9 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz.get();
     // SAFETY: the current window is live.
-    let save_p_fen = unsafe { (*curwin.get()).w_onebuf_opt.wo_fen };
+    let save_p_fen = cur_win().w_onebuf_opt.wo_fen;
     // SAFETY: as above.
-    unsafe { (*curwin.get()).w_onebuf_opt.wo_fen = 0 };
+    cur_win().w_onebuf_opt.wo_fen = 0;
 
     // Invert the matched string; the inversion is removed afterwards.
     let redraw = Allow::redraw();
@@ -185,16 +188,15 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         // we cannot really update the line -- that would change what matches.
         // Replace it temporarily and change it back afterwards.
         // SAFETY: `lnum` is a line of the buffer and the pieces are live.
-        unsafe {
-            orig_line = xstrnsave(ml_get(st.lnum), ml_get_len(st.lnum) as size_t);
-            let new_line = concat_str(st.new_start, st.sub_firstline.add(st.copycol as usize));
-            // Position the cursor relative to the end of the line: the
-            // previous substitute may have inserted or deleted characters
-            // before it.
-            len_change = strlen(new_line) as c_int - strlen(orig_line) as c_int;
-            (*curwin.get()).w_cursor.col += len_change;
-            ml_replace(st.lnum, new_line, false);
-        }
+        orig_line = unsafe { xstrnsave(ml_get(st.lnum), ml_get_len(st.lnum) as size_t) };
+        let new_line =
+            unsafe { concat_str(st.new_start, st.sub_firstline.add(st.copycol as usize)) };
+        // Position the cursor relative to the end of the line: the
+        // previous substitute may have inserted or deleted characters
+        // before it.
+        len_change = unsafe { strlen(new_line) } as c_int - unsafe { strlen(orig_line) } as c_int;
+        cur_win().w_cursor.col += len_change;
+        unsafe { ml_replace(st.lnum, new_line, false) };
     }
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
@@ -206,15 +208,13 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     highlight_match.set(true);
 
     // SAFETY: the current window is live.
-    unsafe {
-        update_topline(curwin.get());
-        validate_cursor(curwin.get());
-        redraw_later(curwin.get(), UPD_SOME_VALID);
-        show_cursor_info_later(true);
-        update_screen();
-        redraw_later(curwin.get(), UPD_SOME_VALID);
-        (*curwin.get()).w_onebuf_opt.wo_fen = save_p_fen;
-    }
+    unsafe { update_topline(curwin.get()) };
+    unsafe { validate_cursor(curwin.get()) };
+    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { show_cursor_info_later(true) };
+    unsafe { update_screen() };
+    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    cur_win().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];
     // SAFETY: `ask` is `IOSIZE` bytes, the format takes one string, and the
@@ -259,11 +259,9 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = 0 as c_int;
     let save_state = State.get();
     // SAFETY: the current window is live.
-    unsafe {
-        (*curwin.get()).w_cursor.col = st.regmatch.startpos[0].col;
-        if (*curwin.get()).w_onebuf_opt.wo_crb != 0 {
-            do_check_cursorbind();
-        }
+    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
+    if cur_win().w_onebuf_opt.wo_crb != 0 {
+        unsafe { do_check_cursorbind() };
     }
     if cpo_no_undo_sync() {
         no_u_sync.set(no_u_sync.get() + 1);
@@ -329,4 +327,10 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
         return Confirm::Quit;
     }
     Confirm::Replace
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

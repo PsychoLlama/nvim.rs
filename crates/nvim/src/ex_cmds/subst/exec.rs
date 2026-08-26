@@ -59,6 +59,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -189,10 +190,8 @@ impl Sub {
         if self.nmatch > 1 as c_int {
             self.sub_firstlnum += self.nmatch as linenr_T - 1 as linenr_T;
             // SAFETY: caller's contract.
-            unsafe {
-                self.clear_firstline();
-                self.load_firstline();
-            }
+            unsafe { self.clear_firstline() };
+            unsafe { self.load_firstline() };
             // When going beyond the last line, stop substituting.
             if self.sub_firstlnum <= self.line2 {
                 self.do_again = true;
@@ -204,10 +203,8 @@ impl Sub {
             // Already hit the end of the buffer: sub_firstlnum is one less
             // than it ought to be.
             // SAFETY: caller's contract.
-            unsafe {
-                self.clear_firstline();
-                self.sub_firstline = xstrdup(c"".as_ptr());
-            }
+            unsafe { self.clear_firstline() };
+            self.sub_firstline = unsafe { xstrdup(c"".as_ptr()) };
             self.copycol = 0 as colnr_T;
         }
     }
@@ -326,13 +323,10 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
         }
     }
 
-    // SAFETY: the current window and buffer are live.
-    let line_count = unsafe {
-        // Move the cursor to the start of the match, so that we can use
-        // "\=col('.')".
-        (*curwin.get()).w_cursor.col = st.regmatch.startpos[0].col;
-        (*curbuf.get()).b_ml.ml_line_count
-    };
+    // Move the cursor to the start of the match, so that we can use
+    // "\=col('.')".
+    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
+    let line_count = cur_buf().b_ml.ml_line_count;
 
     // When the match included the "$" of the last line it may go beyond the
     // last line of the buffer.
@@ -432,7 +426,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         // The match might be after the last line, for "\n\zs" matching at the
         // end of the last line.
         // SAFETY: the current buffer is live.
-        if st.lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+        if st.lnum > cur_buf().b_ml.ml_line_count {
             break;
         }
         if st.sub_firstline.is_null() {
@@ -443,7 +437,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         // Save the line number of the last change for the final cursor
         // position, just like Vi.
         // SAFETY: the current window is live.
-        unsafe { (*curwin.get()).w_cursor.lnum = st.lnum };
+        cur_win().w_cursor.lnum = st.lnum;
         st.do_again = false;
 
         // SAFETY: the state describes a live match.
@@ -535,11 +529,9 @@ unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
     }
     // SAFETY: both are this module's own allocations; `new_start` is only
     // still set when the substitution was cancelled.
-    unsafe {
-        xfree(st.new_start as *mut c_void);
-        st.new_start = ptr::null_mut();
-        st.clear_firstline();
-    }
+    unsafe { xfree(st.new_start as *mut c_void) };
+    st.new_start = ptr::null_mut();
+    unsafe { st.clear_firstline() };
     st.line_matches.clear();
 }
 
@@ -557,7 +549,7 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
         if args.cmdpreview_ns > 0 as c_int
             && st.preview_lines.lines_needed > p_cwh.get() as linenr_T
             // SAFETY: the current window is live.
-            && st.lnum > unsafe { (*curwin.get()).w_botline }
+            && st.lnum > cur_win().w_botline
         {
             break;
         }
@@ -583,15 +575,15 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
 /// Main thread; `st` and `args` must describe the command just run.
 unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the current buffer is live.
-    unsafe { (*curbuf.get()).deleted_bytes2 = 0 as size_t };
+    cur_buf().deleted_bytes2 = 0 as size_t;
 
     if st.first_line != 0 as linenr_T {
         // Subtract the number of added lines from "last_line" to get the line
         // number before the change (the same as adding the number of deleted
         // lines).
         // SAFETY: the current buffer is live and the lines are its own.
+        let added = cur_buf().b_ml.ml_line_count - args.old_line_count;
         unsafe {
-            let added = (*curbuf.get()).b_ml.ml_line_count - args.old_line_count;
             changed_lines(
                 curbuf.get(),
                 st.first_line,
@@ -599,11 +591,11 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 st.last_line - added,
                 added,
                 false,
-            );
-            let num_added = (st.last_line - st.first_line) as int64_t;
-            let num_removed = num_added - added as int64_t;
-            buf_updates_send_changes(curbuf.get(), st.first_line, num_added, num_removed);
-        }
+            )
+        };
+        let num_added = (st.last_line - st.first_line) as int64_t;
+        let num_removed = num_added - added as int64_t;
+        unsafe { buf_updates_send_changes(curbuf.get(), st.first_line, num_added, num_removed) };
     }
 
     // May have to free the allocated copy of the line.
@@ -613,31 +605,27 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // ":s/pat//n" doesn't move the cursor.
     if subflags.with(|flags| flags.do_count) {
         // SAFETY: the current window is live.
-        unsafe { (*curwin.get()).w_cursor = args.old_cursor };
+        cur_win().w_cursor = args.old_cursor;
     }
 
     if sub_nsubs.get() > args.start_nsubs {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             // SAFETY: the current buffer is live.
-            unsafe {
-                (*curbuf.get()).b_op_start.lnum = (*args.eap).line1;
-                (*curbuf.get()).b_op_end.lnum = st.line2;
-                (*curbuf.get()).b_op_end.col = 0 as colnr_T;
-                (*curbuf.get()).b_op_start.col = (*curbuf.get()).b_op_end.col;
-            }
+            cur_buf().b_op_start.lnum = unsafe { (*args.eap).line1 };
+            cur_buf().b_op_end.lnum = st.line2;
+            cur_buf().b_op_end.col = 0 as colnr_T;
+            cur_buf().b_op_start.col = cur_buf().b_op_end.col;
         }
 
         if global_busy.get() == 0 {
             // When interactive, leave the cursor on the match.
             if !subflags.with(|flags| flags.do_ask) {
                 // SAFETY: the current window is live.
-                unsafe {
-                    if args.endcolumn {
-                        coladvance(curwin.get(), MAXCOL as c_int);
-                    } else {
-                        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-                    }
+                if args.endcolumn {
+                    unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
+                } else {
+                    unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
                 }
             }
             // The report is only given for a real substitute, never for a
@@ -659,7 +647,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // SAFETY: the cursor is on a line of the buffer.
             unsafe {
                 print_line(
-                    (*curwin.get()).w_cursor.lnum,
+                    cur_win().w_cursor.lnum,
                     subflags.with(|flags| flags.do_number),
                     subflags.with(|flags| flags.do_list),
                     true,
@@ -698,10 +686,8 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     // SAFETY: the compiled program and the replacement text are ours.
-    unsafe {
-        vim_regfree(st.regmatch.regprog);
-        xfree(st.sub as *mut c_void);
-    }
+    unsafe { vim_regfree(st.regmatch.regprog) };
+    unsafe { xfree(st.sub as *mut c_void) };
 
     // Restore the flag values: they can be used for ":&&".
     subflags.with_mut(|flags| {
@@ -770,8 +756,7 @@ pub(crate) unsafe fn do_sub(
     let start_nsubs = sub_nsubs.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
     // SAFETY: the current window and buffer are live.
-    let (old_cursor, old_line_count) =
-        unsafe { ((*curwin.get()).w_cursor, (*curbuf.get()).b_ml.ml_line_count) };
+    let (old_cursor, old_line_count) = (cur_win().w_cursor, cur_buf().b_ml.ml_line_count);
 
     // SAFETY: caller's contract.
     let Some(setup) = (unsafe { parse_sub(eap, cmdpreview_ns, keeppatterns) }) else {
@@ -832,10 +817,8 @@ pub(crate) unsafe fn do_sub(
     };
 
     // SAFETY: the range and the compiled program are live.
-    unsafe {
-        substitute_range(&mut st, &args);
-        finish(&mut st, &args)
-    }
+    unsafe { substitute_range(&mut st, &args) };
+    unsafe { finish(&mut st, &args) }
 }
 
 /// Required for undo to work for extmarks: save the cursor line once, before
@@ -849,4 +832,16 @@ pub(super) unsafe fn save_undo_once(st: &mut Sub) {
         unsafe { u_save_cursor() };
         st.did_save = true;
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

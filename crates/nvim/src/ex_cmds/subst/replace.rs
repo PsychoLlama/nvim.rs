@@ -24,7 +24,7 @@ use crate::ex_cmds::{
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
-use crate::main::{curbuf, curwin, sub_nsubs};
+use crate::main::{curbuf, sub_nsubs};
 use crate::mark::mark_adjust;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};
@@ -35,6 +35,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
 use crate::types::{NUL, OK, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
+use crate::winlayer::{Buf, Win};
 use ::libc::{strcat, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -84,22 +85,24 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
             if unsafe { u_inssub(st.lnum) } == OK {
                 // SAFETY: the pieces are all live; the appended line is the
                 // text up to the CR, which is then removed from the buffer.
+                unsafe { *p1 = NUL as c_char }; // truncate up to the CR
                 unsafe {
-                    *p1 = NUL as c_char; // truncate up to the CR
                     ml_append(
                         st.lnum - 1 as linenr_T,
                         st.new_start,
                         (p1.offset_from(st.new_start) + 1_isize) as colnr_T,
                         false,
-                    );
+                    )
+                };
+                unsafe {
                     mark_adjust(
                         st.lnum + 1 as linenr_T,
                         MAXLNUM as linenr_T,
                         1 as linenr_T,
                         0 as linenr_T,
                         kExtmarkNOOP,
-                    );
-                }
+                    )
+                };
                 if subflags.with(|flags| flags.do_ask) {
                     // SAFETY: the line was just appended.
                     unsafe { appended_lines(st.lnum - 1 as linenr_T, 1 as linenr_T) };
@@ -115,7 +118,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 st.line2 += 1;
                 // Move the cursor to the new line, like Vi.
                 // SAFETY: the current window is live.
-                unsafe { (*curwin.get()).w_cursor.lnum += 1 };
+                cur_win().w_cursor.lnum += 1;
                 // Copy the rest.
                 // SAFETY: both point into the replacement buffer.
                 unsafe {
@@ -151,12 +154,12 @@ pub(super) unsafe fn build_replacement(
 ) {
     st.lnum_start = st.lnum; // save the start lnum
     // SAFETY: the current buffer is live.
-    let save_ma = unsafe { (*curbuf.get()).b_p_ma };
+    let save_ma = cur_buf().b_p_ma;
     let counting = subflags.with(|flags| flags.do_count);
     if counting {
         // Prevent a function from accidentally changing the buffer.
         // SAFETY: as above.
-        unsafe { (*curbuf.get()).b_p_ma = 0 };
+        cur_buf().b_p_ma = 0;
     }
     // Held to the end of the function: the only path that reaches here with
     // `counting` set is the early return below.
@@ -190,7 +193,7 @@ pub(super) unsafe fn build_replacement(
     // SAFETY: main thread.
     if st.sublen == 0 as c_int || aborting() || subflags.with(|flags| flags.do_count) {
         // SAFETY: the current buffer is live.
-        unsafe { (*curbuf.get()).b_p_ma = save_ma };
+        cur_buf().b_p_ma = save_ma;
         return;
     }
 
@@ -257,7 +260,7 @@ pub(super) unsafe fn build_replacement(
     // Move the cursor to the start of the line, to avoid it being beyond the
     // end of the line after the substitution.
     // SAFETY: the current window is live.
-    unsafe { (*curwin.get()).w_cursor.col = 0 as colnr_T };
+    cur_win().w_cursor.col = 0 as colnr_T;
 
     // Remember the next character to be copied.
     st.copycol = st.regmatch.endpos[0].col;
@@ -438,4 +441,16 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.prev_matchcol = new_len - st.prev_matchcol;
     st.copycol = 0 as colnr_T;
     true
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

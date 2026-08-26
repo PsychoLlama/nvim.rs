@@ -38,6 +38,7 @@ use crate::terminal::terminal_running;
 use crate::types::{CmdModFlags, buf_T, bufref_T, linenr_T, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
+use crate::winlayer::{Buf, Win};
 use ::libc::atol;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -71,17 +72,15 @@ pub(super) unsafe fn switch_to_other_buffer(
         ..
     } = *args;
     // SAFETY: `curwin` is live.
-    let prev_alt_fnum = unsafe { (*curwin.get()).w_alt_fnum };
+    let prev_alt_fnum = cur_win().w_alt_fnum;
 
     if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) == 0 {
         // SAFETY: `curwin`/`curbuf` are live, and `oldwin` was validated.
-        unsafe {
-            if !cmdmod_has(CmdModFlags::KEEPALT) {
-                (*curwin.get()).w_alt_fnum = (*curbuf.get()).handle;
-            }
-            if !oldwin.is_null() {
-                buflist_altfpos(*oldwin);
-            }
+        if !cmdmod_has(CmdModFlags::KEEPALT) {
+            cur_win().w_alt_fnum = cur_buf().handle;
+        }
+        if !oldwin.is_null() {
+            unsafe { buflist_altfpos(*oldwin) };
         }
     }
 
@@ -92,23 +91,23 @@ pub(super) unsafe fn switch_to_other_buffer(
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.
         // SAFETY: `command` and the names are live when non-NULL.
-        unsafe {
-            let mut tlnum = 0;
-            if !command.is_null() {
-                tlnum = atol(command) as linenr_T;
-                if tlnum <= 0 {
-                    tlnum = 1;
-                }
+        let mut tlnum = 0;
+        if !command.is_null() {
+            tlnum = unsafe { atol(command) } as linenr_T;
+            if tlnum <= 0 {
+                tlnum = 1;
             }
-            let newbuf = buflist_new(
+        }
+        let newbuf = unsafe {
+            buflist_new(
                 ffname,
                 sfname,
                 tlnum,
                 BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
-            );
-            if !newbuf.is_null() && flags & ECMD_ALTBUF as c_int != 0 {
-                (*curwin.get()).w_alt_fnum = (*newbuf).handle;
-            }
+            )
+        };
+        if !newbuf.is_null() && flags & ECMD_ALTBUF as c_int != 0 {
+            cur_win().w_alt_fnum = unsafe { (*newbuf).handle };
         }
         return Switch::Abandon;
     } else {
@@ -142,28 +141,26 @@ pub(super) unsafe fn switch_to_other_buffer(
     // SAFETY: `buf` and `curwin` are live.
     if unsafe { (*buf).b_locked_split } != 0 {
         // SAFETY: as above.
+        // The window was split, but is not editing the new buffer; reset
+        // b_nwindows again.
+        if oldwin.is_null()
+            && !cur_win().w_buffer.is_null()
+            && unsafe { (*cur_win().w_buffer).b_nwindows } > 1
+        {
+            unsafe { (*cur_win().w_buffer).b_nwindows -= 1 };
+        }
         unsafe {
-            // The window was split, but is not editing the new buffer; reset
-            // b_nwindows again.
-            if oldwin.is_null()
-                && !(*curwin.get()).w_buffer.is_null()
-                && (*(*curwin.get()).w_buffer).b_nwindows > 1
-            {
-                (*(*curwin.get()).w_buffer).b_nwindows -= 1;
-            }
             emsg(gettext(
                 &raw const e_cannot_switch_to_a_closing_buffer as *const c_char,
-            ));
-        }
+            ))
+        };
         return Switch::Abandon;
     }
 
     // SAFETY: `buf` and `curwin` are live.
-    unsafe {
-        if (*curwin.get()).w_alt_fnum == (*buf).handle && prev_alt_fnum != 0 {
-            // reusing the buffer, keep the old alternate file
-            (*curwin.get()).w_alt_fnum = prev_alt_fnum;
-        }
+    if cur_win().w_alt_fnum == unsafe { (*buf).handle } && prev_alt_fnum != 0 {
+        // reusing the buffer, keep the old alternate file
+        cur_win().w_alt_fnum = prev_alt_fnum;
     }
 
     // SAFETY: `buf` is live.
@@ -175,14 +172,15 @@ pub(super) unsafe fn switch_to_other_buffer(
         state.oldbuf = true;
         let mut bufref = bufref_T::default();
         // SAFETY: as above.
-        unsafe {
-            set_bufref(&raw mut bufref, buf);
-            buf_check_timestamp(buf);
-            // Check if autocommands made the buffer invalid or changed the
-            // current buffer; they may also abort script processing.
-            if !bufref_valid(&raw mut bufref) || curbuf.get() != old_curbuf.br_buf || aborting() {
-                return Switch::Abandon;
-            }
+        unsafe { set_bufref(&raw mut bufref, buf) };
+        unsafe { buf_check_timestamp(buf) };
+        // Check if autocommands made the buffer invalid or changed the
+        // current buffer; they may also abort script processing.
+        if !unsafe { bufref_valid(&raw mut bufref) }
+            || curbuf.get() != old_curbuf.br_buf
+            || aborting()
+        {
+            return Switch::Abandon;
         }
     }
 
@@ -192,11 +190,9 @@ pub(super) unsafe fn switch_to_other_buffer(
         || state.newlnum == ECMD_LAST as linenr_T
     {
         // SAFETY: `buf` is live.
-        unsafe {
-            let pos = &raw mut (*buflist_findfmark(buf)).mark;
-            state.newlnum = (*pos).lnum;
-            state.solcol = (*pos).col;
-        }
+        let pos = unsafe { &raw mut (*buflist_findfmark(buf)).mark };
+        state.newlnum = unsafe { *pos }.lnum;
+        state.solcol = unsafe { *pos }.col;
     }
 
     // Make the (new) buffer the one used by the current window.  If the old
@@ -311,7 +307,7 @@ unsafe fn leave_for_buffer(
             oldwin,
             curbuf.get(),
             if flags & ECMD_HIDE as c_int != 0
-                || !(*curbuf.get()).terminal.is_null() && terminal_running((*curbuf.get()).terminal)
+                || !cur_buf().terminal.is_null() && terminal_running(cur_buf().terminal)
             {
                 0
             } else {
@@ -323,17 +319,15 @@ unsafe fn leave_for_buffer(
     };
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
-    unsafe {
-        // Autocommands may have closed the window.
-        if win_valid(the_curwin) {
-            (*the_curwin).w_locked = false;
-        }
-        (*buf).b_locked -= 1;
+    // Autocommands may have closed the window.
+    if unsafe { win_valid(the_curwin) } {
+        unsafe { (*the_curwin).w_locked = false };
     }
+    unsafe { (*buf).b_locked -= 1 };
 
     // autocmds may abort script processing
     // SAFETY: `curwin` is live.
-    if aborting() && !unsafe { (*curwin.get()).w_buffer }.is_null() {
+    if aborting() && !cur_win().w_buffer.is_null() {
         // SAFETY: `new_name` is ours.
         unsafe { xfree(new_name.cast()) };
         au_new_curbuf.set(save_au_new_curbuf);
@@ -349,46 +343,44 @@ unsafe fn leave_for_buffer(
     }
 
     // SAFETY: the windows and buffers are live; `eap` is the caller's.
-    unsafe {
-        if buf == curbuf.get() {
-            // already in new buffer -- close_buffer() has decremented the
-            // window count, increment it again here and restore w_buffer.
-            if did_decrement && buf_valid(was_curbuf) {
-                (*was_curbuf).b_nwindows += 1;
-            }
-            if win_valid_any_tab(oldwin) && (*oldwin).w_buffer.is_null() {
-                (*oldwin).w_buffer = was_curbuf;
-            }
-            state.auto_buf = true;
-        } else {
-            // <VN> We could instead free the synblock and re-attach to the
-            // buffer, perhaps.
-            if (*curwin.get()).w_buffer.is_null()
-                || (*curwin.get()).w_s == &raw mut (*(*curwin.get()).w_buffer).b_s
-            {
-                (*curwin.get()).w_s = &raw mut (*buf).b_s;
-            }
-
-            (*curwin.get()).w_buffer = buf;
-            curbuf.set(buf);
-            (*curbuf.get()).b_nwindows += 1;
-
-            // Set 'fileformat', 'binary' and 'fenc' when forced.
-            if !state.oldbuf && !eap.is_null() {
-                set_file_options(true, eap);
-                set_forced_fenc(eap);
-            }
+    if buf == curbuf.get() {
+        // already in new buffer -- close_buffer() has decremented the
+        // window count, increment it again here and restore w_buffer.
+        if did_decrement && unsafe { buf_valid(was_curbuf) } {
+            unsafe { (*was_curbuf).b_nwindows += 1 };
+        }
+        if win_valid_any_tab(oldwin) && unsafe { (*oldwin).w_buffer.is_null() } {
+            unsafe { (*oldwin).w_buffer = was_curbuf };
+        }
+        state.auto_buf = true;
+    } else {
+        // <VN> We could instead free the synblock and re-attach to the
+        // buffer, perhaps.
+        if cur_win().w_buffer.is_null()
+            || cur_win().w_s == unsafe { &raw mut (*cur_win().w_buffer).b_s }
+        {
+            cur_win().w_s = unsafe { &raw mut (*buf).b_s };
         }
 
-        // May get the window options from the last time this buffer was in
-        // this window (or another window).  If not used before, reset the
-        // local window options to the global values.  Also restores old
-        // folding stuff.
-        get_winopts(curbuf.get());
-        state.did_get_winopts = true;
+        cur_win().w_buffer = buf;
+        curbuf.set(buf);
+        cur_buf().b_nwindows += 1;
 
-        xfree(new_name.cast());
+        // Set 'fileformat', 'binary' and 'fenc' when forced.
+        if !state.oldbuf && !eap.is_null() {
+            unsafe { set_file_options(true, eap) };
+            unsafe { set_forced_fenc(eap) };
+        }
     }
+
+    // May get the window options from the last time this buffer was in
+    // this window (or another window).  If not used before, reset the
+    // local window options to the global values.  Also restores old
+    // folding stuff.
+    unsafe { get_winopts(curbuf.get()) };
+    state.did_get_winopts = true;
+
+    unsafe { xfree(new_name.cast()) };
     au_new_curbuf.set(save_au_new_curbuf);
     Switch::Ready
 }
@@ -413,11 +405,23 @@ pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
             } else {
                 name as *const c_char
             },
-        );
-        xfree(name.cast());
-    }
+        )
+    };
+    unsafe { xfree(name.cast()) };
     au_new_curbuf.with_mut(|r| {
         r.br_buf = ptr::null_mut();
         r.br_buf_free_count = 0;
     });
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

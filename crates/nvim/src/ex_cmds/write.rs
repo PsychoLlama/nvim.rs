@@ -56,6 +56,7 @@ use crate::types::{
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
+use crate::winlayer::{Buf, Win};
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -89,8 +90,8 @@ unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: caller's contract; `buff` is the `DIALOG_MSG_SIZE` upstream
     // sizes its own prompt buffers to.
+    unsafe { dialog_msg(buff.as_mut_ptr(), fmt, name) };
     unsafe {
-        dialog_msg(buff.as_mut_ptr(), fmt, name);
         vim_dialog_yesno(VIM_QUESTION as c_int, ptr::null_mut(), buff.as_mut_ptr(), 2)
             == VIM_YES as c_int
     }
@@ -104,9 +105,7 @@ unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
 pub unsafe fn rename_buffer(new_fname: *mut c_char) -> c_int {
     let buf = curbuf.get();
     // SAFETY: the autocommand runs with the current buffer.
-    unsafe {
-        buf_autocmd(EVENT_BUFFILEPRE, curbuf.get());
-    }
+    unsafe { buf_autocmd(EVENT_BUFFILEPRE, curbuf.get()) };
     // buffer changed, don't change name now
     if buf != curbuf.get() {
         return FAIL;
@@ -120,37 +119,27 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> c_int {
     // A new (unlisted) buffer entry needs to be made to hold the old file
     // name, which will become the alternate file name.  But don't set the
     // alternate file name if the buffer didn't have a name.
-    // SAFETY: `curbuf` is live and owns the three names.
-    let (fname, sfname, xfname) = unsafe {
-        let names = (
-            (*curbuf.get()).b_ffname,
-            (*curbuf.get()).b_sfname,
-            (*curbuf.get()).b_fname,
-        );
-        (*curbuf.get()).b_ffname = ptr::null_mut();
-        (*curbuf.get()).b_sfname = ptr::null_mut();
-        names
-    };
+    let (fname, sfname, xfname) = (cur_buf().b_ffname, cur_buf().b_sfname, cur_buf().b_fname);
+    cur_buf().b_ffname = ptr::null_mut();
+    cur_buf().b_sfname = ptr::null_mut();
     // SAFETY: caller's contract; the names are handed back on failure.
-    unsafe {
-        if setfname(curbuf.get(), new_fname, ptr::null_mut(), true) == FAIL {
-            (*curbuf.get()).b_ffname = fname;
-            (*curbuf.get()).b_sfname = sfname;
-            return FAIL;
-        }
-        (*curbuf.get()).b_flags |= BufFlags::NOTEDITED;
-        if !xfname.is_null() && *xfname as c_int != NUL {
-            let alt = buflist_new(fname, xfname, (*curwin.get()).w_cursor.lnum, 0);
-            if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
-                (*curwin.get()).w_alt_fnum = (*alt).handle as c_int;
-            }
-        }
-        xfree(fname.cast());
-        xfree(sfname.cast());
-        buf_autocmd(EVENT_BUFFILEPOST, curbuf.get());
-        // Change directories when the 'acd' option is set.
-        do_autochdir();
+    if unsafe { setfname(curbuf.get(), new_fname, ptr::null_mut(), true) } == FAIL {
+        cur_buf().b_ffname = fname;
+        cur_buf().b_sfname = sfname;
+        return FAIL;
     }
+    cur_buf().b_flags |= BufFlags::NOTEDITED;
+    if !xfname.is_null() && unsafe { *xfname } as c_int != NUL {
+        let alt = unsafe { buflist_new(fname, xfname, cur_win().w_cursor.lnum, 0) };
+        if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
+            cur_win().w_alt_fnum = unsafe { (*alt).handle } as c_int;
+        }
+    }
+    unsafe { xfree(fname.cast()) };
+    unsafe { xfree(sfname.cast()) };
+    unsafe { buf_autocmd(EVENT_BUFFILEPOST, curbuf.get()) };
+    // Change directories when the 'acd' option is set.
+    do_autochdir();
     OK
 }
 
@@ -160,27 +149,27 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> c_int {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn ex_file(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    unsafe {
-        // ":0file" removes the file name.  Check for illegal uses ":3file",
-        // "0file name", etc.
-        if (*eap).addr_count > 0
-            && (*(*eap).arg as c_int != NUL || (*eap).line2 > 0 || (*eap).addr_count > 1)
-        {
-            emsg(gettext(&raw const e_invarg as *const c_char));
+    // ":0file" removes the file name.  Check for illegal uses ":3file",
+    // "0file name", etc.
+    if unsafe { (*eap).addr_count } > 0
+        && (unsafe { *(*eap).arg } as c_int != NUL
+            || unsafe { (*eap).line2 } > 0
+            || unsafe { (*eap).addr_count } > 1)
+    {
+        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        return;
+    }
+
+    if unsafe { *(*eap).arg } as c_int != NUL || unsafe { (*eap).addr_count } == 1 {
+        if unsafe { rename_buffer((*eap).arg) } == FAIL {
             return;
         }
+        redraw_tabline.set(true);
+    }
 
-        if *(*eap).arg as c_int != NUL || (*eap).addr_count == 1 {
-            if rename_buffer((*eap).arg) == FAIL {
-                return;
-            }
-            redraw_tabline.set(true);
-        }
-
-        // print file name if no argument or 'F' is not in 'shortmess'
-        if *(*eap).arg as c_int == NUL || !shortmess(ShmFlag::FILEINFO) {
-            fileinfo(0, 0, (*eap).forceit != 0);
-        }
+    // print file name if no argument or 'F' is not in 'shortmess'
+    if unsafe { *(*eap).arg } as c_int == NUL || !shortmess(ShmFlag::FILEINFO) {
+        unsafe { fileinfo(0, 0, (*eap).forceit != 0) };
     }
 }
 
@@ -190,14 +179,12 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn ex_update(eap: *mut exarg_T) {
     // SAFETY: caller's contract; `curbuf` is live.
-    unsafe {
-        if curbuf_is_changed()
-            || (!bt_nofilename(curbuf.get())
-                && !(*curbuf.get()).b_ffname.is_null()
-                && !os_path_exists((*curbuf.get()).b_ffname))
-        {
-            do_write(eap);
-        }
+    if unsafe { curbuf_is_changed() }
+        || (!unsafe { bt_nofilename(curbuf.get()) }
+            && !cur_buf().b_ffname.is_null()
+            && !unsafe { os_path_exists(cur_buf().b_ffname) })
+    {
+        unsafe { do_write(eap) };
     }
 }
 
@@ -207,19 +194,17 @@ pub unsafe fn ex_update(eap: *mut exarg_T) {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn ex_write(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    unsafe {
-        if (*eap).cmdidx == CMD_saveas {
-            // :saveas does not take a range, uses all lines.
-            (*eap).line1 = 1;
-            (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
-        }
+    if unsafe { (*eap).cmdidx } == CMD_saveas {
+        // :saveas does not take a range, uses all lines.
+        unsafe { (*eap).line1 = 1 };
+        unsafe { (*eap).line2 = cur_buf().b_ml.ml_line_count };
+    }
 
-        if (*eap).usefilter != 0 {
-            // input lines to shell command
-            do_bang(1, eap, false, true, false);
-        } else {
-            do_write(eap);
-        }
+    if unsafe { (*eap).usefilter } != 0 {
+        // input lines to shell command
+        unsafe { do_bang(1, eap, false, true, false) };
+    } else {
+        unsafe { do_write(eap) };
     }
 }
 
@@ -230,14 +215,14 @@ pub unsafe fn ex_write(eap: *mut exarg_T) {
 /// `fname` must be live, or NULL.
 unsafe fn check_writable(fname: *const c_char) -> c_int {
     // SAFETY: caller's contract; one `%s` for one string.
-    unsafe {
-        if os_nodetype(fname) == NODE_OTHER {
+    if unsafe { os_nodetype(fname) } == NODE_OTHER {
+        unsafe {
             semsg_c!(
                 gettext(c"E503: \"%s\" is not a file or writable device".as_ptr()),
                 fname,
-            );
-            return FAIL;
-        }
+            )
+        };
+        return FAIL;
     }
     OK
 }
@@ -320,7 +305,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
             return FAIL;
         }
         // SAFETY: `curbuf` is live.
-        (ffname, fname) = unsafe { ((*curbuf.get()).b_ffname, (*curbuf.get()).b_fname) };
+        (ffname, fname) = (cur_buf().b_ffname, cur_buf().b_fname);
         // SAFETY: `eap` is live.
         if !unsafe { confirm_partial_write(eap) } {
             return FAIL;
@@ -346,7 +331,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     }
 
     // SAFETY: `curbuf` is live.
-    let name_was_missing = unsafe { (*curbuf.get()).b_ffname }.is_null();
+    let name_was_missing = cur_buf().b_ffname.is_null();
     // SAFETY: the names and the range are the ones checked above.
     let retval = unsafe {
         buf_write(
@@ -367,16 +352,14 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
 
     // After ":saveas fname" reset 'readonly'.
     // SAFETY: `eap` and `curbuf` are live.
-    unsafe {
-        if (*eap).cmdidx == CMD_saveas && retval == OK {
-            (*curbuf.get()).b_p_ro = 0;
-            redraw_tabline.set(true);
-        }
-        // Change directories when the 'acd' option is set and the file name
-        // got changed or set.
-        if (*eap).cmdidx == CMD_saveas || name_was_missing {
-            do_autochdir();
-        }
+    if unsafe { (*eap).cmdidx } == CMD_saveas && retval == OK {
+        cur_buf().b_p_ro = 0;
+        redraw_tabline.set(true);
+    }
+    // Change directories when the 'acd' option is set and the file name
+    // got changed or set.
+    if unsafe { (*eap).cmdidx } == CMD_saveas || name_was_missing {
+        do_autochdir();
     }
     retval
 }
@@ -388,11 +371,13 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
 /// # Safety
 /// `eap` must be live; `eap->forceit` may be set by the dialog.
 unsafe fn cannot_write_curbuf(eap: *mut exarg_T) -> bool {
-    // SAFETY: caller's contract; `curbuf` is the live current buffer.
+    // SAFETY: caller's contract; `curbuf` is the live current buffer. The
+    // whole chain is one region so the short-circuiting is untouched -- a
+    // block cannot lead a `||` chain in tail position anyway.
     unsafe {
         bt_dontwrite_msg(curbuf.get())
             || check_fname() == FAIL
-            || check_writable((*curbuf.get()).b_ffname) == FAIL
+            || check_writable(cur_buf().b_ffname) == FAIL
             || check_readonly(&raw mut (*eap).forceit, curbuf.get())
     }
 }
@@ -403,30 +388,30 @@ unsafe fn cannot_write_curbuf(eap: *mut exarg_T) -> bool {
 /// `eap` must be live; `eap->forceit` may be set by the dialog.
 unsafe fn confirm_partial_write(eap: *mut exarg_T) -> bool {
     // SAFETY: caller's contract; `curbuf` is live.
-    unsafe {
-        if ((*eap).line1 == 1 && (*eap).line2 == (*curbuf.get()).b_ml.ml_line_count)
-            || (*eap).forceit != 0
-            || (*eap).append != 0
-            || p_wa.get() != 0
-        {
-            return true;
-        }
-        if !confirming() {
-            emsg(gettext(c"E140: Use ! to write partial buffer".as_ptr()));
-            return false;
-        }
-        if vim_dialog_yesno(
+    if (unsafe { (*eap).line1 } == 1 && unsafe { (*eap).line2 } == cur_buf().b_ml.ml_line_count)
+        || unsafe { (*eap).forceit } != 0
+        || unsafe { (*eap).append } != 0
+        || p_wa.get() != 0
+    {
+        return true;
+    }
+    if !confirming() {
+        unsafe { emsg(gettext(c"E140: Use ! to write partial buffer".as_ptr())) };
+        return false;
+    }
+    if unsafe {
+        vim_dialog_yesno(
             VIM_QUESTION as c_int,
             ptr::null_mut(),
             gettext(c"Write partial file?".as_ptr()),
             2,
-        ) != VIM_YES as c_int
-        {
-            return false;
-        }
-        (*eap).forceit = 1;
-        true
+        )
+    } != VIM_YES as c_int
+    {
+        return false;
     }
+    unsafe { (*eap).forceit = 1 };
+    true
 }
 
 /// `:saveas` swaps the current buffer's names with the alternate buffer's, so
@@ -443,10 +428,8 @@ unsafe fn confirm_partial_write(eap: *mut exarg_T) -> bool {
 unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
     let was_curbuf = curbuf.get();
     // SAFETY: both buffers are live.
-    unsafe {
-        buf_autocmd(EVENT_BUFFILEPRE, curbuf.get());
-        buf_autocmd(EVENT_BUFFILEPRE, alt_buf);
-    }
+    unsafe { buf_autocmd(EVENT_BUFFILEPRE, curbuf.get()) };
+    unsafe { buf_autocmd(EVENT_BUFFILEPRE, alt_buf) };
     // buffer changed, don't change name now
     if curbuf.get() != was_curbuf || aborting() {
         return None;
@@ -458,22 +441,26 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
         ptr::swap(
             &raw mut (*alt_buf).b_fname,
             &raw mut (*curbuf.get()).b_fname,
-        );
+        )
+    };
+    unsafe {
         ptr::swap(
             &raw mut (*alt_buf).b_ffname,
             &raw mut (*curbuf.get()).b_ffname,
-        );
+        )
+    };
+    unsafe {
         ptr::swap(
             &raw mut (*alt_buf).b_sfname,
             &raw mut (*curbuf.get()).b_sfname,
-        );
-        buf_name_changed(curbuf.get());
-        buf_autocmd(EVENT_BUFFILEPOST, curbuf.get());
-        buf_autocmd(EVENT_BUFFILEPOST, alt_buf);
-        if (*alt_buf).b_p_bl == 0 {
-            (*alt_buf).b_p_bl = 1;
-            buf_autocmd(EVENT_BUFADD, alt_buf);
-        }
+        )
+    };
+    unsafe { buf_name_changed(curbuf.get()) };
+    unsafe { buf_autocmd(EVENT_BUFFILEPOST, curbuf.get()) };
+    unsafe { buf_autocmd(EVENT_BUFFILEPOST, alt_buf) };
+    if unsafe { (*alt_buf).b_p_bl } == 0 {
+        unsafe { (*alt_buf).b_p_bl = 1 };
+        unsafe { buf_autocmd(EVENT_BUFADD, alt_buf) };
     }
     // buffer changed, don't write the file
     if curbuf.get() != was_curbuf || aborting() {
@@ -481,22 +468,22 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
     }
 
     // SAFETY: `curbuf` is live.
-    unsafe {
-        // If 'filetype' was empty try detecting it now.
-        if *(*curbuf.get()).b_p_ft as c_int == NUL {
-            if augroup_exists(c"filetypedetect".as_ptr()) {
+    // If 'filetype' was empty try detecting it now.
+    if unsafe { *cur_buf().b_p_ft } as c_int == NUL {
+        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
+            unsafe {
                 do_doautocmd(
                     c"filetypedetect BufRead".as_ptr().cast_mut(),
                     true,
                     ptr::null_mut(),
-                );
-            }
-            do_modelines(OptionSetFlags::NONE);
+                )
+            };
         }
-        // Autocommands may have changed buffer names, esp. when 'autochdir'
-        // is set.
-        Some((*curbuf.get()).b_sfname)
+        do_modelines(OptionSetFlags::NONE);
     }
+    // Autocommands may have changed buffer names, esp. when 'autochdir'
+    // is set.
+    Some(cur_buf().b_sfname)
 }
 
 /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
@@ -535,9 +522,7 @@ pub unsafe fn check_overwrite(
     if unsafe { (*eap).forceit } == 0 && unsafe { (*eap).append } == 0 {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
-            unsafe {
-                semsg_c!(gettext(&raw const e_isadir2 as *const c_char), ffname,);
-            }
+            unsafe { semsg_c!(gettext(&raw const e_isadir2 as *const c_char), ffname,) };
             return FAIL;
         }
         if !confirming() {
@@ -578,8 +563,8 @@ pub unsafe fn check_overwrite(
             semsg_c!(
                 gettext(c"E768: Swap file exists: %s (:silent! overrides)".as_ptr()),
                 swapname.0,
-            );
-        }
+            )
+        };
         return FAIL;
     }
     // SAFETY: one `%s` for `swapname`.
@@ -604,17 +589,15 @@ pub unsafe fn check_overwrite(
 unsafe fn swap_dir() -> *mut c_char {
     // SAFETY: 'directory' is a live option string, and both allocations are
     // large enough for what is copied into them.
-    unsafe {
-        if *p_dir.get() as c_int == NUL {
-            let dir = xmalloc(5) as *mut c_char;
-            strcpy(dir, c".".as_ptr());
-            dir
-        } else {
-            let dir = xmalloc(MAXPATHL as usize) as *mut c_char;
-            let mut p = p_dir.get();
-            copy_option_part(&raw mut p, dir, MAXPATHL as usize, c",".as_ptr().cast_mut());
-            dir
-        }
+    if unsafe { *p_dir.get() } as c_int == NUL {
+        let dir = unsafe { xmalloc(5) } as *mut c_char;
+        unsafe { strcpy(dir, c".".as_ptr()) };
+        dir
+    } else {
+        let dir = unsafe { xmalloc(MAXPATHL as usize) } as *mut c_char;
+        let mut p = p_dir.get();
+        unsafe { copy_option_part(&raw mut p, dir, MAXPATHL as usize, c",".as_ptr().cast_mut()) };
+        dir
     }
 }
 
@@ -625,18 +608,16 @@ unsafe fn swap_dir() -> *mut c_char {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn ex_wnext(eap: *mut exarg_T) {
     // SAFETY: caller's contract; `curwin`/`curbuf` are live.
-    unsafe {
-        let step = (*eap).line2 as c_int;
-        let i = if *(*eap).cmd.add(1) as c_int == 'n' as c_int {
-            (*curwin.get()).w_arg_idx + step
-        } else {
-            (*curwin.get()).w_arg_idx - step
-        };
-        (*eap).line1 = 1;
-        (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
-        if do_write(eap) != FAIL {
-            do_argfile(eap, i);
-        }
+    let step = unsafe { (*eap).line2 } as c_int;
+    let i = if unsafe { *(*eap).cmd.add(1) } as c_int == 'n' as c_int {
+        cur_win().w_arg_idx + step
+    } else {
+        cur_win().w_arg_idx - step
+    };
+    unsafe { (*eap).line1 = 1 };
+    unsafe { (*eap).line2 = cur_buf().b_ml.ml_line_count };
+    if unsafe { do_write(eap) } != FAIL {
+        unsafe { do_argfile(eap, i) };
     }
 }
 
@@ -706,58 +687,58 @@ unsafe fn write_one_buffer(
     error: &mut c_int,
 ) -> WriteAll {
     // SAFETY: caller's contract.
-    unsafe {
-        // TODO(zeertzjq): channel_job_running always returns false for
-        // nvim_open_term() terminals.  Use terminal_running() instead?
-        if exiting.get()
-            && (*eap).forceit == 0
-            && !(*buf).terminal.is_null()
-            && channel_job_running((*buf).b_p_channel as u64)
-        {
-            no_write_message_buf(buf);
-            *error += 1;
-        } else if !buf_is_changed(buf) || bt_dontwrite(buf) {
-            return WriteAll::Next;
-        }
+    // TODO(zeertzjq): channel_job_running always returns false for
+    // nvim_open_term() terminals.  Use terminal_running() instead?
+    if exiting.get()
+        && unsafe { (*eap).forceit } == 0
+        && !unsafe { (*buf).terminal.is_null() }
+        && unsafe { channel_job_running((*buf).b_p_channel as u64) }
+    {
+        unsafe { no_write_message_buf(buf) };
+        *error += 1;
+    } else if !unsafe { buf_is_changed(buf) } || unsafe { bt_dontwrite(buf) } {
+        return WriteAll::Next;
+    }
 
-        // Check if there is a reason the buffer cannot be written:
-        // 1. if the 'write' option is set
-        // 2. if there is no file name (even after browsing)
-        // 3. if the 'readonly' is set (even after a dialog)
-        // 4. if overwriting is allowed (even after a dialog)
-        if not_writing() {
-            *error += 1;
-            return WriteAll::Stop;
-        }
-        let mut deleted = false;
-        if (*buf).b_ffname.is_null() {
+    // Check if there is a reason the buffer cannot be written:
+    // 1. if the 'write' option is set
+    // 2. if there is no file name (even after browsing)
+    // 3. if the 'readonly' is set (even after a dialog)
+    // 4. if overwriting is allowed (even after a dialog)
+    if unsafe { not_writing() } {
+        *error += 1;
+        return WriteAll::Stop;
+    }
+    let mut deleted = false;
+    if unsafe { (*buf).b_ffname.is_null() } {
+        unsafe {
             semsg_c!(
                 gettext(c"E141: No file name for buffer %ld".as_ptr()),
                 (*buf).handle as int64_t,
-            );
-            *error += 1;
-        } else if check_readonly(&raw mut (*eap).forceit, buf)
-            || check_overwrite(eap, buf, (*buf).b_fname, (*buf).b_ffname, false) == FAIL
+            )
+        };
+        *error += 1;
+    } else if unsafe { check_readonly(&raw mut (*eap).forceit, buf) }
+        || unsafe { check_overwrite(eap, buf, (*buf).b_fname, (*buf).b_ffname, false) } == FAIL
+    {
+        *error += 1;
+    } else {
+        let mut bufref = bufref_T::default();
+        unsafe { set_bufref(&raw mut bufref, buf) };
+        if unsafe { handle_mkdir_p_arg(eap, (*buf).b_fname) } == FAIL
+            || unsafe { buf_write_all(buf, (*eap).forceit != 0) } == FAIL
         {
             *error += 1;
-        } else {
-            let mut bufref = bufref_T::default();
-            set_bufref(&raw mut bufref, buf);
-            if handle_mkdir_p_arg(eap, (*buf).b_fname) == FAIL
-                || buf_write_all(buf, (*eap).forceit != 0) == FAIL
-            {
-                *error += 1;
-            }
-            // An autocommand may have deleted the buffer.
-            deleted = !bufref_valid(&raw mut bufref);
         }
-        // check_overwrite() may set it
-        (*eap).forceit = save_forceit;
-        if deleted {
-            WriteAll::Restart
-        } else {
-            WriteAll::Next
-        }
+        // An autocommand may have deleted the buffer.
+        deleted = !unsafe { bufref_valid(&raw mut bufref) };
+    }
+    // check_overwrite() may set it
+    unsafe { (*eap).forceit = save_forceit };
+    if deleted {
+        WriteAll::Restart
+    } else {
+        WriteAll::Next
     }
 }
 
@@ -775,8 +756,8 @@ unsafe fn not_writing() -> bool {
     unsafe {
         emsg(gettext(
             c"E142: File not written: Writing is disabled by 'write' option".as_ptr(),
-        ));
-    }
+        ))
+    };
     true
 }
 
@@ -804,15 +785,15 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: *mut buf_T) -> bool {
     let (is_ro, name) = unsafe { ((*buf).b_p_ro != 0, (*buf).b_fname) };
     if !confirming() || name.is_null() {
         // SAFETY: live message strings; one `%s` for one string.
-        unsafe {
-            if is_ro {
-                emsg(gettext(&raw const e_readonly as *const c_char));
-            } else {
+        if is_ro {
+            unsafe { emsg(gettext(&raw const e_readonly as *const c_char)) };
+        } else {
+            unsafe {
                 semsg_c!(
                     gettext(c"E505: \"%s\" is read-only (add ! to override)".as_ptr()),
                     name,
-                );
-            }
+                )
+            };
         }
         return true;
     }
@@ -867,14 +848,12 @@ pub unsafe fn getfile(
     if fnum == 0 {
         // make ffname full path, set sfname
         // SAFETY: caller's contract; `curbuf` is live.
-        unsafe {
-            fname_expand(curbuf.get(), &raw mut ffname, &raw mut sfname);
-            other = otherfile(ffname);
-        }
+        unsafe { fname_expand(curbuf.get(), &raw mut ffname, &raw mut sfname) };
+        other = unsafe { otherfile(ffname) };
         free_me = Owned(ffname);
     } else {
         // SAFETY: `curbuf` is live.
-        other = fnum != unsafe { (*curbuf.get()).handle };
+        other = fnum != cur_buf().handle;
     }
 
     // Don't wait for the autowrite message. Released at two exits.
@@ -882,7 +861,7 @@ pub unsafe fn getfile(
     // SAFETY: `curbuf` is the live current buffer.
     if other
         && !forceit
-        && unsafe { (*curbuf.get()).b_nwindows } == 1
+        && cur_buf().b_nwindows == 1
         && !unsafe { buf_hide(curbuf.get()) }
         && unsafe { curbuf_is_changed() }
         && unsafe { autowrite(curbuf.get(), forceit) } == FAIL
@@ -907,13 +886,11 @@ pub unsafe fn getfile(
 
     if !other {
         // SAFETY: `curwin` is the live current window.
-        unsafe {
-            if lnum != 0 {
-                (*curwin.get()).w_cursor.lnum = lnum;
-            }
-            check_cursor_lnum(curwin.get());
-            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
+        if lnum != 0 {
+            cur_win().w_cursor.lnum = lnum;
         }
+        unsafe { check_cursor_lnum(curwin.get()) };
+        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
         // it's in the same file
         return GETFILE_SAME_FILE;
     }
@@ -943,4 +920,16 @@ pub unsafe fn getfile(
         // error encountered
         GETFILE_ERROR
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

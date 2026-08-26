@@ -21,7 +21,7 @@ use crate::ex_cmds::{
 };
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, p_gd, sub_nlines, sub_nsubs};
+use crate::main::{p_gd, sub_nlines, sub_nsubs};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xrealloc};
 use crate::message::emsg;
@@ -31,6 +31,7 @@ use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{NUL, OK, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use crate::winlayer::{Buf, Win};
 use ::libc::{memset, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -84,11 +85,9 @@ pub unsafe fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
 pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
     let old = old_sub.get();
     // SAFETY: both pointers were this module's own allocations.
-    unsafe {
-        xfree(old.sub as *mut c_void);
-        if sub.additional_data != old.additional_data {
-            xfree(old.additional_data as *mut c_void);
-        }
+    unsafe { xfree(old.sub as *mut c_void) };
+    if sub.additional_data != old.additional_data {
+        unsafe { xfree(old.additional_data as *mut c_void) };
     }
     old_sub.set(sub);
 }
@@ -135,7 +134,7 @@ pub(crate) unsafe fn sub_joining_lines(
 
     // SAFETY: caller's contract; the current window and buffer are live.
     let joined_lines_count = unsafe {
-        (*curwin.get()).w_cursor.lnum = (*eap).line1;
+        cur_win().w_cursor.lnum = (*eap).line1;
         (*eap).flags = match *cmd as u8 {
             b'l' => EXFLAG_LIST,
             b'#' => EXFLAG_NR,
@@ -146,33 +145,29 @@ pub(crate) unsafe fn sub_joining_lines(
         // plus one more if this is not the end of the file.
         (*eap).line2 - (*eap).line1
             + 1 as linenr_T
-            + linenr_T::from((*eap).line2 < (*curbuf.get()).b_ml.ml_line_count)
+            + linenr_T::from((*eap).line2 < cur_buf().b_ml.ml_line_count)
     };
     if joined_lines_count > 1 as linenr_T {
         // SAFETY: the range is inside the buffer; message state is ready.
-        unsafe {
-            do_join(joined_lines_count as size_t, false, true, false, true);
-            sub_nsubs.set(joined_lines_count - 1 as linenr_T);
-            sub_nlines.set(1 as linenr_T);
-            do_sub_msg(false);
-            ex_may_print(eap);
-        }
+        unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
+        sub_nsubs.set(joined_lines_count - 1 as linenr_T);
+        sub_nlines.set(1 as linenr_T);
+        unsafe { do_sub_msg(false) };
+        unsafe { ex_may_print(eap) };
     }
 
     if save {
         // SAFETY: `pat` is `patlen` bytes long, by the caller's contract.
-        unsafe {
-            if !keeppatterns {
-                save_re_pat(RE_SUBST as c_int, pat, patlen, magic_isset());
-            }
-            // Put the pattern in the search history.
-            add_to_history(
-                HIST_SEARCH as c_int,
-                slice::from_raw_parts(pat as *const u8, patlen),
-                true,
-                NUL as u8,
-            );
+        if !keeppatterns {
+            unsafe { save_re_pat(RE_SUBST as c_int, pat, patlen, magic_isset()) };
         }
+        // Put the pattern in the search history.
+        add_to_history(
+            HIST_SEARCH as c_int,
+            unsafe { slice::from_raw_parts(pat as *const u8, patlen) },
+            true,
+            NUL as u8,
+        );
     }
     true
 }
@@ -197,10 +192,8 @@ pub(crate) unsafe fn sub_grow_buf(
         // avoid too many calls to xmalloc()/free().
         *new_start_len = needed_len + 50 as c_int;
         // SAFETY: a fresh zeroed allocation of the size just chosen.
-        unsafe {
-            *new_start = xcalloc(1 as size_t, *new_start_len as size_t) as *mut c_char;
-            **new_start = NUL as c_char;
-        }
+        *new_start = unsafe { xcalloc(1 as size_t, *new_start_len as size_t) } as *mut c_char;
+        unsafe { **new_start = NUL as c_char };
         return *new_start;
     }
 
@@ -215,15 +208,15 @@ pub(crate) unsafe fn sub_grow_buf(
         let added_len = (*new_start_len as size_t).wrapping_sub(prev_new_start_len);
         // SAFETY: the buffer is ours to grow, and the tail past the old
         // length is what `memset` clears.
+        *new_start =
+            unsafe { xrealloc(*new_start as *mut c_void, *new_start_len as size_t) } as *mut c_char;
         unsafe {
-            *new_start =
-                xrealloc(*new_start as *mut c_void, *new_start_len as size_t) as *mut c_char;
             memset(
                 (*new_start).add(prev_new_start_len) as *mut c_void,
                 0 as c_int,
                 added_len,
-            );
-        }
+            )
+        };
     }
     // SAFETY: `len` is the buffer's own string length.
     unsafe { (*new_start).add(len) }
@@ -337,4 +330,16 @@ pub(crate) unsafe fn check_regexp_delim(c: c_int) -> c_int {
         return FAIL;
     }
     OK
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

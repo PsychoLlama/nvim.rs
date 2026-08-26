@@ -21,8 +21,8 @@ use crate::charset::{getdigits_int, skipwhite};
 use crate::ex_cmds::{FAIL, INT_MAX, kSubIgnoreCase, kSubMatchCase};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{
-    curbuf, curwin, e_backslash, e_invcmd, e_modifiable, e_nopresub, e_trailing_arg,
-    e_val_too_large_len, e_zerocount,
+    e_backslash, e_invcmd, e_modifiable, e_nopresub, e_trailing_arg, e_val_too_large_len,
+    e_zerocount,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
@@ -37,6 +37,7 @@ use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, CMD_tilde, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -154,7 +155,7 @@ unsafe fn read_pattern(
             which_pat,
             has_second_delim: false,
             // SAFETY: the current window is live.
-            endcolumn: unsafe { (*curwin.get()).w_curswant } == MAXCOL as c_int,
+            endcolumn: cur_win().w_curswant == MAXCOL as c_int,
             cmd,
         });
     }
@@ -169,46 +170,46 @@ unsafe fn read_pattern(
     let delimiter;
     let mut has_second_delim = false;
     // SAFETY: the argument is NUL-terminated and writable.
-    unsafe {
-        if *cmd as c_int == '\\' as c_int {
-            // Undocumented vi feature: "\/sub/" and "\?sub?" use the last
-            // search pattern (almost like "//sub/r"), "\&sub&" the last
-            // substitute pattern (like "//sub/").
-            cmd = cmd.add(1);
-            if vim_strchr(c"/?&".as_ptr(), *cmd as u8 as c_int).is_null() {
-                emsg(gettext(&raw const e_backslash as *const c_char));
-                return None;
-            }
-            if *cmd as c_int != '&' as c_int {
-                which_pat = RE_SEARCH as c_int; // use last '/' pattern
-            }
-            pat = c"".as_ptr() as *mut c_char; // empty search pattern
-            patlen = 0 as size_t;
-            delimiter = *cmd as u8 as c_int;
-            cmd = cmd.add(1);
-            has_second_delim = true;
-        } else {
-            // Find the end of the regexp.
-            which_pat = RE_LAST as c_int; // use last used regexp
-            delimiter = *cmd as u8 as c_int;
-            cmd = cmd.add(1);
-            pat = cmd; // remember the start of the search pattern
-            cmd = skip_regexp_ex(
+    if unsafe { *cmd } as c_int == '\\' as c_int {
+        // Undocumented vi feature: "\/sub/" and "\?sub?" use the last
+        // search pattern (almost like "//sub/r"), "\&sub&" the last
+        // substitute pattern (like "//sub/").
+        cmd = unsafe { cmd.add(1) };
+        if unsafe { vim_strchr(c"/?&".as_ptr(), *cmd as u8 as c_int) }.is_null() {
+            unsafe { emsg(gettext(&raw const e_backslash as *const c_char)) };
+            return None;
+        }
+        if unsafe { *cmd } as c_int != '&' as c_int {
+            which_pat = RE_SEARCH as c_int; // use last '/' pattern
+        }
+        pat = c"".as_ptr() as *mut c_char; // empty search pattern
+        patlen = 0 as size_t;
+        delimiter = unsafe { *cmd } as u8 as c_int;
+        cmd = unsafe { cmd.add(1) };
+        has_second_delim = true;
+    } else {
+        // Find the end of the regexp.
+        which_pat = RE_LAST as c_int; // use last used regexp
+        delimiter = unsafe { *cmd } as u8 as c_int;
+        cmd = unsafe { cmd.add(1) };
+        pat = cmd; // remember the start of the search pattern
+        cmd = unsafe {
+            skip_regexp_ex(
                 cmd,
                 delimiter,
                 magic_isset() as c_int,
                 &raw mut (*eap).arg,
                 ptr::null_mut(),
                 ptr::null_mut(),
-            );
-            if *cmd as c_int == delimiter {
-                // End delimiter found: replace it with a NUL.
-                *cmd = NUL as c_char;
-                cmd = cmd.add(1);
-                has_second_delim = true;
-            }
-            patlen = strlen(pat);
+            )
+        };
+        if unsafe { *cmd } as c_int == delimiter {
+            // End delimiter found: replace it with a NUL.
+            unsafe { *cmd = NUL as c_char };
+            cmd = unsafe { cmd.add(1) };
+            has_second_delim = true;
         }
+        patlen = unsafe { strlen(pat) };
     }
 
     // Small incompatibility: vi sees '\n' as end of the command, but we want
@@ -221,14 +222,14 @@ unsafe fn read_pattern(
     };
 
     // SAFETY: caller's contract; `sub.0` is a live copy of the replacement.
-    unsafe {
-        if (*eap).skip == 0 && !keeppatterns && cmdpreview_ns <= 0 as c_int {
+    if unsafe { (*eap).skip } == 0 && !keeppatterns && cmdpreview_ns <= 0 as c_int {
+        unsafe {
             sub_set_replacement(SubReplacementString {
                 sub: xstrdup(sub.0),
                 timestamp: os_time(),
                 additional_data: ptr::null_mut::<AdditionalData>(),
-            });
-        }
+            })
+        };
     }
 
     Some(Parsed {
@@ -271,16 +272,14 @@ unsafe fn read_count(eap: *mut exarg_T, cmd: &mut *mut c_char) -> bool {
                 gettext(&raw const e_val_too_large_len as *const c_char),
                 (*cmd).offset_from(count_arg) as c_int,
                 count_arg,
-            );
-        }
+            )
+        };
         return false;
     }
     // SAFETY: caller's contract; the current buffer is live.
-    unsafe {
-        (*eap).line1 = (*eap).line2;
-        (*eap).line2 += i as linenr_T - 1 as linenr_T;
-        (*eap).line2 = (*eap).line2.min((*curbuf.get()).b_ml.ml_line_count);
-    }
+    unsafe { (*eap).line1 = (*eap).line2 };
+    unsafe { (*eap).line2 += i as linenr_T - 1 as linenr_T };
+    unsafe { (*eap).line2 = (*eap).line2.min(cur_buf().b_ml.ml_line_count) };
     true
 }
 
@@ -341,20 +340,18 @@ pub(super) unsafe fn parse_sub(
 
     // Check for a trailing command or garbage.
     // SAFETY: as above.
-    unsafe {
-        cmd = skipwhite(cmd);
-        if *cmd as c_int != NUL && *cmd as c_int != '"' as c_int {
-            // Not end-of-line or comment.
-            (*eap).nextcmd = check_nextcmd(cmd);
-            if (*eap).nextcmd.is_null() {
-                semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), cmd);
-                return None;
-            }
-        }
-        if (*eap).skip != 0 {
-            // Not executing commands, only parsing.
+    cmd = unsafe { skipwhite(cmd) };
+    if unsafe { *cmd } as c_int != NUL && unsafe { *cmd } as c_int != '"' as c_int {
+        // Not end-of-line or comment.
+        unsafe { (*eap).nextcmd = check_nextcmd(cmd) };
+        if unsafe { (*eap).nextcmd.is_null() } {
+            unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), cmd) };
             return None;
         }
+    }
+    if unsafe { (*eap).skip } != 0 {
+        // Not executing commands, only parsing.
+        return None;
     }
     // Upstream asserts here; the `eap->skip` return above is why it holds --
     // that is the only path that leaves the replacement unset.
@@ -362,7 +359,7 @@ pub(super) unsafe fn parse_sub(
 
     // Substitution is not allowed in a non-'modifiable' buffer.
     // SAFETY: the current buffer is live.
-    if !subflags.with(|flags| flags.do_count) && unsafe { (*curbuf.get()).b_p_ma } == 0 {
+    if !subflags.with(|flags| flags.do_count) && cur_buf().b_p_ma == 0 {
         // SAFETY: a live message string.
         unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
         return None;
@@ -430,4 +427,16 @@ pub(super) unsafe fn parse_sub(
         save_do_all,
         save_do_ask,
     })
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

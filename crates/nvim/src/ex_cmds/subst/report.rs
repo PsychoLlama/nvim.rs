@@ -33,6 +33,7 @@ use crate::types::{
     NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T, colnr_T, exarg_T, handle_T,
     int64_t, linenr_T, lpos_T, pos_T, size_t,
 };
+use crate::winlayer::Win;
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
@@ -101,25 +102,27 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
         // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call;
         // the format strings come from the catalogue and take
         // exactly the two `int64_t` given.
+        if got_int.get() {
+            unsafe { strcpy(buf, gettext(c"(Interrupted) ".as_ptr())) };
+        } else {
+            unsafe { *buf = NUL as c_char };
+        }
+        let single =
+            unsafe { ngettext(forms[0][0].as_ptr(), forms[0][1].as_ptr(), nsubs as c_ulong) };
+        let plural =
+            unsafe { ngettext(forms[1][0].as_ptr(), forms[1][1].as_ptr(), nsubs as c_ulong) };
         unsafe {
-            if got_int.get() {
-                strcpy(buf, gettext(c"(Interrupted) ".as_ptr()));
-            } else {
-                *buf = NUL as c_char;
-            }
-            let single = ngettext(forms[0][0].as_ptr(), forms[0][1].as_ptr(), nsubs as c_ulong);
-            let plural = ngettext(forms[1][0].as_ptr(), forms[1][1].as_ptr(), nsubs as c_ulong);
             vim_snprintf_add(
                 buf,
                 MSG_BUF_LEN as size_t,
                 ngettext(single, plural, nlines as c_ulong),
                 nsubs as int64_t,
                 nlines as int64_t,
-            );
-            if msg(buf, 0 as c_int) {
-                // Save the message to display it after a redraw.
-                set_keep_msg(buf, 0 as c_int);
-            }
+            )
+        };
+        if unsafe { msg(buf, 0 as c_int) } {
+            // Save the message to display it after a redraw.
+            unsafe { set_keep_msg(buf, 0 as c_int) };
         }
         return true;
     }
@@ -229,18 +232,20 @@ impl PreviewBuf {
                 self.col_width - 3 as c_int,
                 lnum,
                 line,
-            );
-            if self.linenr_preview == 0 as linenr_T {
-                ml_replace_buf(self.buf, 1 as linenr_T, self.str, true, false);
-            } else {
+            )
+        };
+        if self.linenr_preview == 0 as linenr_T {
+            unsafe { ml_replace_buf(self.buf, 1 as linenr_T, self.str, true, false) };
+        } else {
+            unsafe {
                 ml_append_buf(
                     self.buf,
                     self.linenr_preview,
                     self.str,
                     self.line_size,
                     false,
-                );
-            }
+                )
+            };
         }
         self.linenr_preview += 1;
     }
@@ -284,10 +289,8 @@ pub(crate) unsafe fn show_sub(
         .find(|r| r.start.lnum >= old_cusr.lnum)
     {
         // SAFETY: the current window is live.
-        unsafe {
-            (*curwin.get()).w_cursor.lnum = curres.start.lnum;
-            (*curwin.get()).w_cursor.col = curres.start.col;
-        }
+        cur_win().w_cursor.lnum = curres.start.lnum;
+        cur_win().w_cursor.col = curres.start.col;
     }
 
     // Update the topline so that the main window is on the correct line.
@@ -349,23 +352,21 @@ pub(crate) unsafe fn show_sub(
     }
 
     // SAFETY: the scratch and the saved option string are both ours.
-    unsafe {
-        if let Some(pv) = pv {
-            xfree(pv.str as *mut c_void);
-        }
-        set_option_direct(
-            kOptShortmess,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(save_shm_p),
-                },
-            },
-            OptionSetFlags::NONE,
-            SID_NONE,
-        );
-        xfree(save_shm_p as *mut c_void);
+    if let Some(pv) = pv {
+        unsafe { xfree(pv.str as *mut c_void) };
     }
+    set_option_direct(
+        kOptShortmess,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { cstr_as_string(save_shm_p) },
+            },
+        },
+        OptionSetFlags::NONE,
+        SID_NONE,
+    );
+    unsafe { xfree(save_shm_p as *mut c_void) };
 
     if preview { 2 as c_int } else { 1 as c_int }
 }
@@ -396,15 +397,21 @@ pub unsafe fn ex_substitute_preview(
     }
     // SAFETY: caller's contract; `do_sub` may move `eap->arg`, which the
     // caller still needs where it was.
-    unsafe {
-        let save_eap = (*eap).arg;
-        let retv = do_sub(
+    let save_eap = unsafe { (*eap).arg };
+    let retv = unsafe {
+        do_sub(
             eap,
             profile_setlimit(p_rdt.get() as int64_t),
             cmdpreview_ns,
             cmdpreview_bufnr,
-        );
-        (*eap).arg = save_eap;
-        retv
-    }
+        )
+    };
+    unsafe { (*eap).arg = save_eap };
+    retv
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

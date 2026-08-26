@@ -34,8 +34,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
 use crate::main::{
-    cmdmod, curtab, curwin, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox,
-    firstwin, g_do_tagpreview, got_int, msg_scroll, quit_more, sandbox, secure,
+    cmdmod, curtab, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox, firstwin,
+    g_do_tagpreview, got_int, msg_scroll, quit_more, sandbox, secure,
 };
 use crate::memory::xfree;
 use crate::message::{
@@ -56,6 +56,7 @@ use crate::types::{
     linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
+use crate::winlayer::Win;
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -215,162 +216,169 @@ pub unsafe fn check_secure() -> bool {
     false
 }
 pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
-    unsafe {
-        if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 {
-            return false;
-        }
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_pvw != 0 {
-                win_enter(wp, undo_sync);
-                return false;
-            }
-            wp = (*wp).w_next;
-        }
-        if win_split(
-            if g_do_tagpreview.get() > 0 as ::core::ffi::c_int {
-                g_do_tagpreview.get()
-            } else {
-                0 as ::core::ffi::c_int
-            },
-            0 as ::core::ffi::c_int,
-        ) == FAIL
-        {
-            return false;
-        }
-        (*curwin.get()).w_onebuf_opt.wo_pvw = 1;
-        (*curwin.get()).w_onebuf_opt.wo_wfh = 1;
-        (*curwin.get()).w_onebuf_opt.wo_scb = 0;
-        (*curwin.get()).w_onebuf_opt.wo_crb = 0;
-        (*curwin.get()).w_onebuf_opt.wo_diff = 0;
-        set_option_direct(
-            kOptFoldcolumn,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: String_0::from_raw_parts(
-                        c"0".as_ptr() as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                            .wrapping_sub(1 as size_t),
-                    ),
-                },
-            },
-            OptionSetFlags::NONE,
-            SID_NONE,
-        );
-        true
+    // SAFETY: every region below reads the live window list and the live
+    // current window, or calls a window-layout function that does; both are
+    // the editor's own and live from startup to exit.
+    if cur_win().w_onebuf_opt.wo_pvw != 0 {
+        return false;
     }
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
+    } else {
+        unsafe { (*curtab.get()).tp_firstwin }
+    };
+    while !wp.is_null() {
+        if unsafe { (*wp).w_onebuf_opt.wo_pvw } != 0 {
+            unsafe { win_enter(wp, undo_sync) };
+            return false;
+        }
+        wp = unsafe { (*wp).w_next };
+    }
+    if win_split(
+        if g_do_tagpreview.get() > 0 as ::core::ffi::c_int {
+            g_do_tagpreview.get()
+        } else {
+            0 as ::core::ffi::c_int
+        },
+        0 as ::core::ffi::c_int,
+    ) == FAIL
+    {
+        return false;
+    }
+    cur_win().w_onebuf_opt.wo_pvw = 1;
+    cur_win().w_onebuf_opt.wo_wfh = 1;
+    cur_win().w_onebuf_opt.wo_scb = 0;
+    cur_win().w_onebuf_opt.wo_crb = 0;
+    cur_win().w_onebuf_opt.wo_diff = 0;
+    set_option_direct(
+        kOptFoldcolumn,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: String_0::from_raw_parts(
+                    c"0".as_ptr() as *mut ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
+                ),
+            },
+        },
+        OptionSetFlags::NONE,
+        SID_NONE,
+    );
+    true
 }
 pub unsafe fn skip_vimgrep_pat(
     mut p: *mut ::core::ffi::c_char,
     mut s: *mut *mut ::core::ffi::c_char,
     mut flags: *mut ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    unsafe {
-        if vim_is_ident_char(*p as uint8_t as ::core::ffi::c_int) {
-            if !s.is_null() {
-                *s = p;
-            }
-            p = skiptowhite(p);
-            if !s.is_null() && *p as ::core::ffi::c_int != NUL {
-                *p = NUL as ::core::ffi::c_char;
-                p = p.offset(1);
-            }
-        } else {
-            if !s.is_null() {
-                *s = p.offset(1 as ::core::ffi::c_int as isize);
-            }
-            let mut c: ::core::ffi::c_int = *p as uint8_t as ::core::ffi::c_int;
-            p = skip_regexp(p.offset(1 as ::core::ffi::c_int as isize), c, 1);
-            if *p as ::core::ffi::c_int != c {
-                return ::core::ptr::null_mut::<::core::ffi::c_char>();
-            }
-            if !s.is_null() {
-                *p = NUL as ::core::ffi::c_char;
-            }
-            p = p.offset(1);
-            while *p as ::core::ffi::c_int == 'g' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == 'j' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == 'f' as ::core::ffi::c_int
-            {
-                if !flags.is_null() {
-                    if *p as ::core::ffi::c_int == 'g' as ::core::ffi::c_int {
-                        *flags |= VGR_GLOBAL as ::core::ffi::c_int;
-                    } else if *p as ::core::ffi::c_int == 'j' as ::core::ffi::c_int {
-                        *flags |= VGR_NOJUMP as ::core::ffi::c_int;
-                    } else {
-                        *flags |= VGR_FUZZY as ::core::ffi::c_int;
-                    }
-                }
-                p = p.offset(1);
-            }
+    // SAFETY: caller's contract -- `p` walks a NUL-terminated pattern and
+    // every step below follows a byte just read and found non-NUL; `s` and
+    // `flags` are written only after a null check.
+    if unsafe { vim_is_ident_char(*p as uint8_t as ::core::ffi::c_int) } {
+        if !s.is_null() {
+            unsafe { *s = p };
         }
-        p
+        p = unsafe { skiptowhite(p) };
+        if !s.is_null() && unsafe { *p } as ::core::ffi::c_int != NUL {
+            unsafe { *p = NUL as ::core::ffi::c_char };
+            p = unsafe { p.offset(1) };
+        }
+    } else {
+        if !s.is_null() {
+            unsafe { *s = p.offset(1 as ::core::ffi::c_int as isize) };
+        }
+        let mut c: ::core::ffi::c_int = unsafe { *p } as uint8_t as ::core::ffi::c_int;
+        p = unsafe { skip_regexp(p.offset(1 as ::core::ffi::c_int as isize), c, 1) };
+        if unsafe { *p } as ::core::ffi::c_int != c {
+            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        }
+        if !s.is_null() {
+            unsafe { *p = NUL as ::core::ffi::c_char };
+        }
+        p = unsafe { p.offset(1) };
+        while unsafe { *p } as ::core::ffi::c_int == 'g' as ::core::ffi::c_int
+            || unsafe { *p } as ::core::ffi::c_int == 'j' as ::core::ffi::c_int
+            || unsafe { *p } as ::core::ffi::c_int == 'f' as ::core::ffi::c_int
+        {
+            if !flags.is_null() {
+                if unsafe { *p } as ::core::ffi::c_int == 'g' as ::core::ffi::c_int {
+                    unsafe { *flags |= VGR_GLOBAL as ::core::ffi::c_int };
+                } else if unsafe { *p } as ::core::ffi::c_int == 'j' as ::core::ffi::c_int {
+                    unsafe { *flags |= VGR_NOJUMP as ::core::ffi::c_int };
+                } else {
+                    unsafe { *flags |= VGR_FUZZY as ::core::ffi::c_int };
+                }
+            }
+            p = unsafe { p.offset(1) };
+        }
     }
+    p
 }
 pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
+    // SAFETY: caller's contract -- `eap` is the live Ex-command argument;
+    // the rest is the message layer and `v:oldfiles`, which the editor owns.
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    unsafe {
-        let mut l: *mut list_T = get_vim_var_list(Vv::Oldfiles);
-        let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if l.is_null() {
-            msg(gettext(c"No old files".as_ptr()), 0 as ::core::ffi::c_int);
-            return;
-        }
-        msg_start();
-        msg_scroll.set(1);
-        let l_: *mut list_T = l;
-        if !l_.is_null() {
-            let mut li: *mut listitem_T = (*l_).lv_first;
-            while !li.is_null() {
-                if got_int.get() {
-                    break;
-                }
-                nr += 1;
-                let mut fname: *const ::core::ffi::c_char = numbuf.string(&raw mut (*li).li_tv);
-                if !message_filtered(fname) {
-                    msg_outnum(nr);
-                    msg_puts(c": ".as_ptr());
+    let mut l: *mut list_T = unsafe { get_vim_var_list(Vv::Oldfiles) };
+    let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    if l.is_null() {
+        unsafe { msg(gettext(c"No old files".as_ptr()), 0 as ::core::ffi::c_int) };
+        return;
+    }
+    unsafe { msg_start() };
+    msg_scroll.set(1);
+    let l_: *mut list_T = l;
+    if !l_.is_null() {
+        let mut li: *mut listitem_T = unsafe { *l_ }.lv_first;
+        while !li.is_null() {
+            if got_int.get() {
+                break;
+            }
+            nr += 1;
+            let mut fname: *const ::core::ffi::c_char =
+                unsafe { numbuf.string(&raw mut (*li).li_tv) };
+            if !unsafe { message_filtered(fname) } {
+                unsafe { msg_outnum(nr) };
+                unsafe { msg_puts(c": ".as_ptr()) };
+                unsafe {
                     msg_outtrans(
                         numbuf2.string(&raw mut (*li).li_tv),
                         0 as ::core::ffi::c_int,
                         false,
-                    );
-                    msg_clr_eos();
-                    msg_putchar('\n' as ::core::ffi::c_int);
-                    os_breakcheck();
-                }
-                li = (*li).li_next;
+                    )
+                };
+                unsafe { msg_clr_eos() };
+                unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                os_breakcheck();
             }
+            li = unsafe { *li }.li_next;
         }
-        got_int.set(false);
-        if cmdmod_has(CmdModFlags::BROWSE) {
-            quit_more.set(false);
-            nr = prompt_for_input(
+    }
+    got_int.set(false);
+    if cmdmod_has(CmdModFlags::BROWSE) {
+        quit_more.set(false);
+        nr = unsafe {
+            prompt_for_input(
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 0 as ::core::ffi::c_int,
                 false,
                 ::core::ptr::null_mut::<bool>(),
-            );
-            msg_starthere();
-            if nr > 0 as ::core::ffi::c_int && nr <= tv_list_len(l) {
-                let p: *const ::core::ffi::c_char =
-                    tv_list_find_str(l, nr - 1 as ::core::ffi::c_int, &mut numbuf2);
-                if p.is_null() {
-                    return;
-                }
-                let s: *mut ::core::ffi::c_char = expand_env_save(p as *mut ::core::ffi::c_char);
-                (*eap).arg = s;
-                (*eap).cmdidx = CMD_edit;
-                cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
-                do_exedit(eap, ::core::ptr::null_mut::<win_T>());
-                xfree(s as *mut ::core::ffi::c_void);
+            )
+        };
+        unsafe { msg_starthere() };
+        if nr > 0 as ::core::ffi::c_int && nr <= unsafe { tv_list_len(l) } {
+            let p: *const ::core::ffi::c_char =
+                unsafe { tv_list_find_str(l, nr - 1 as ::core::ffi::c_int, &mut numbuf2) };
+            if p.is_null() {
+                return;
             }
+            let s: *mut ::core::ffi::c_char =
+                unsafe { expand_env_save(p as *mut ::core::ffi::c_char) };
+            unsafe { (*eap).arg = s };
+            unsafe { (*eap).cmdidx = CMD_edit };
+            cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
+            unsafe { do_exedit(eap, ::core::ptr::null_mut::<win_T>()) };
+            unsafe { xfree(s as *mut ::core::ffi::c_void) };
         }
     }
 }
@@ -381,3 +389,9 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}

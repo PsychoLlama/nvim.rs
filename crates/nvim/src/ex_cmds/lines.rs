@@ -27,6 +27,7 @@ use crate::smsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{OK, OptInt, bcount_t, int64_t, linenr_T, size_t};
 use crate::undo::u_save;
+use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
 use core::ptr;
@@ -54,7 +55,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     // moves as if the lines had, to stay backwards compatible.
     if dest == line1 - 1 || dest == line2 {
         // SAFETY: `curwin` is the live current window.
-        unsafe { (*curwin.get()).w_cursor.lnum = last_moved_line(line1, line2, dest) };
+        cur_win().w_cursor.lnum = last_moved_line(line1, line2, dest);
         return OK;
     }
 
@@ -82,11 +83,9 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     for l in line1..=line2 {
         // SAFETY: `l + extra` tracks the source line as the copies push it
         // down, and `ml_append` takes ownership of nothing.
-        unsafe {
-            let text = xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t);
-            ml_append(dest + l - line1, text, 0, false);
-            xfree(text.cast());
-        }
+        let text = unsafe { xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t) };
+        unsafe { ml_append(dest + l - line1, text, 0, false) };
+        unsafe { xfree(text.cast()) };
         if dest < line1 {
             extra += 1;
         }
@@ -108,7 +107,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
 
     // The last line in the file now that the copies are in.
     // SAFETY: `curbuf` is live.
-    let last_line = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+    let last_line = cur_buf().b_ml.ml_line_count;
     // SAFETY: as above; the range is the one just copied.
     unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
     folds_frozen(|| {
@@ -121,25 +120,21 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
                 last_line + 1,
                 num_lines,
                 false,
-            );
-        }
+            )
+        };
     });
 
     let (line_off, byte_off) = if dest >= line2 {
         // SAFETY: the lines the move stepped over are still in the buffer.
-        unsafe {
-            mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
-            move_folds_in_windows(line1, line2, dest);
-        }
+        unsafe { mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP) };
+        unsafe { move_folds_in_windows(line1, line2, dest) };
         // SAFETY: `curbuf` is live.
         unsafe { set_op_range(dest - num_lines + 1, dest) };
         (-num_lines, -extent_byte)
     } else {
         // SAFETY: as above.
-        unsafe {
-            mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
-            move_folds_in_windows(dest + 1, line1 - 1, line2);
-        }
+        unsafe { mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP) };
+        unsafe { move_folds_in_windows(dest + 1, line1 - 1, line2) };
         // SAFETY: `curbuf` is live.
         unsafe { set_op_range(dest + 1, dest + num_lines) };
         (0, 0)
@@ -153,8 +148,8 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
             -(last_line - dest - extra),
             0,
             kExtmarkNOOP,
-        );
-    }
+        )
+    };
     folds_frozen(|| {
         // SAFETY: as above.
         unsafe {
@@ -165,8 +160,8 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
                 last_line + 1,
                 -extra,
                 false,
-            );
-        }
+            )
+        };
     });
 
     // Send an update regarding the new lines that were added.
@@ -194,8 +189,8 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
                     num_lines as c_ulong,
                 ),
                 num_lines as int64_t,
-            );
-        }
+            )
+        };
     }
 
     // SAFETY: `curbuf` is live and the byte extents were measured before the
@@ -213,25 +208,23 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
             0,
             dest_byte + byte_off,
             kExtmarkUndo,
-        );
-    }
+        )
+    };
 
     // Leave the cursor on the last of the moved lines.
     // SAFETY: `curwin` is the live current window.
-    unsafe { (*curwin.get()).w_cursor.lnum = last_moved_line(line1, line2, dest) };
+    cur_win().w_cursor.lnum = last_moved_line(line1, line2, dest);
 
     // SAFETY: `curbuf` is live; the redrawn span reaches from the first line
     // that moved to the last, whichever direction the move went.
-    unsafe {
-        if line1 < dest {
-            let end = (dest + num_lines + 1).min((*curbuf.get()).b_ml.ml_line_count + 1);
-            changed_lines(curbuf.get(), line1, 0, end, 0, false);
-        } else {
-            changed_lines(curbuf.get(), dest + 1, 0, line1 + num_lines, 0, false);
-        }
-        // Send nvim_buf_lines_event regarding lines that were deleted.
-        buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t);
+    if line1 < dest {
+        let end = (dest + num_lines + 1).min(cur_buf().b_ml.ml_line_count + 1);
+        unsafe { changed_lines(curbuf.get(), line1, 0, end, 0, false) };
+    } else {
+        unsafe { changed_lines(curbuf.get(), dest + 1, 0, line1 + num_lines, 0, false) };
     }
+    // Send nvim_buf_lines_event regarding lines that were deleted.
+    unsafe { buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t) };
 
     OK
 }
@@ -266,10 +259,8 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
-        unsafe {
-            if (*wp).w_buffer == curbuf.get() {
-                fold_move_range(wp, &raw mut (*wp).w_folds, line1, line2, dest);
-            }
+        if unsafe { (*wp).w_buffer } == curbuf.get() {
+            unsafe { fold_move_range(wp, &raw mut (*wp).w_folds, line1, line2, dest) };
         }
     }
 }
@@ -285,12 +276,10 @@ pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
     }
     // SAFETY: caller's contract.  `coladd` is deliberately left alone, as
     // upstream leaves it.
-    unsafe {
-        (*curbuf.get()).b_op_start.lnum = start;
-        (*curbuf.get()).b_op_start.col = 0;
-        (*curbuf.get()).b_op_end.lnum = end;
-        (*curbuf.get()).b_op_end.col = 0;
-    }
+    cur_buf().b_op_start.lnum = start;
+    cur_buf().b_op_start.col = 0;
+    cur_buf().b_op_end.lnum = end;
+    cur_buf().b_op_end.col = 0;
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.
@@ -318,14 +307,14 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     }
 
     // SAFETY: `curwin` is the live current window.
-    unsafe { (*curwin.get()).w_cursor.lnum = n };
+    cur_win().w_cursor.lnum = n;
     while line1 <= line2 {
         // Need to make a copy because the line will be unlocked within
         // `ml_append`.
         // SAFETY: `line1` is a line of the current buffer throughout.
         let cursor = unsafe {
             let text = xstrnsave(ml_get(line1), ml_get_len(line1) as size_t);
-            ml_append((*curwin.get()).w_cursor.lnum, text, 0, false);
+            ml_append(cur_win().w_cursor.lnum, text, 0, false);
             xfree(text.cast());
             &mut (*curwin.get()).w_cursor
         };
@@ -352,4 +341,16 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     }
     // SAFETY: message state, main thread.
     unsafe { msgmore(count) };
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
