@@ -287,10 +287,21 @@ impl Win {
     /// Private, and the module's only way in: every call site is on the same
     /// footing as a caller of [`Win::new`] and says so where it is not
     /// obvious.
+    ///
+    /// A **null** is carried with handle `0`, which names no window, so
+    /// [`Win::valid`] answers `false` for it and nothing is read. That is not
+    /// a nicety: the editor really does hand these around — `curbuf` is null
+    /// for the moment `free_buffer` clears it, and a window being closed has
+    /// a null `w_buffer` — and while this was a bare pointer such a value
+    /// was made and passed on freely. Wrapping one must therefore stay as
+    /// harmless as it was.
     #[inline(always)]
     const fn wrap(wp: *mut win_T) -> Self {
-        // SAFETY: a live window, per this function's own contract.
-        Self(wp, unsafe { (*wp).handle })
+        match wp.is_null() {
+            true => Self(wp, 0),
+            // SAFETY: non-null here is a live window, per the contract above.
+            false => Self(wp, unsafe { (*wp).handle }),
+        }
     }
 
     /// The window `wp` names, `None` for null.
@@ -382,9 +393,15 @@ impl Win {
         self.0 == curwin.get()
     }
 
+    /// The buffer this window shows.
+    ///
+    /// A live window's `w_buffer` is a live buffer — except for the moment
+    /// between losing one and being given another, when it is null and this
+    /// answers a null [`Buf`] rather than reading it. Callers that care use
+    /// [`Win::buffer_or_none`]; the rest only pass the address on, as they
+    /// did while these were bare pointers.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
-        // A live window's buffer is live.
         Buf::wrap(self.w_buffer)
     }
 
@@ -536,11 +553,14 @@ impl Buf {
         Self::wrap(buf)
     }
 
-    /// [`Win::wrap`] for a buffer.
+    /// [`Win::wrap`] for a buffer, nulls and all.
     #[inline(always)]
     const fn wrap(buf: *mut buf_T) -> Self {
-        // SAFETY: a live buffer, per this function's own contract.
-        Self(buf, unsafe { (*buf).handle })
+        match buf.is_null() {
+            true => Self(buf, 0),
+            // SAFETY: non-null here is a live buffer.
+            false => Self(buf, unsafe { (*buf).handle }),
+        }
     }
 
     /// The buffer `buf` names, `None` for null.
@@ -725,11 +745,14 @@ impl TabPage {
         Self::wrap(tp)
     }
 
-    /// [`Win::wrap`] for a tab page.
+    /// [`Win::wrap`] for a tab page, nulls and all.
     #[inline(always)]
     const fn wrap(tp: *mut tabpage_T) -> Self {
-        // SAFETY: a live tab page, per this function's own contract.
-        Self(tp, unsafe { (*tp).handle })
+        match tp.is_null() {
+            true => Self(tp, 0),
+            // SAFETY: non-null here is a live tab page.
+            false => Self(tp, unsafe { (*tp).handle }),
+        }
     }
 
     /// The tab page `tp` names, `None` for null — which is how the window
