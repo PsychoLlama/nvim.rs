@@ -246,7 +246,7 @@ pub(crate) unsafe fn is_ll_window(wp: *const win_T) -> bool {
     // SAFETY: the caller's promise -- a live `win_T`.
     let wp = unsafe { Win::new(wp.cast_mut()) };
     // SAFETY: the caller's window.
-    unsafe { bt_quickfix((*wp).w_buffer) && !(*wp).w_llist_ref.is_null() }
+    unsafe { bt_quickfix(wp.w_buffer) && !wp.w_llist_ref.is_null() }
 }
 
 /// Whether `wp` is a *quickfix* window, as opposed to a location list one.
@@ -254,7 +254,7 @@ pub(crate) unsafe fn is_qf_window(wp: *const win_T) -> bool {
     // SAFETY: the caller's promise -- a live `win_T`.
     let wp = unsafe { Win::new(wp.cast_mut()) };
     // SAFETY: the caller's window.
-    unsafe { bt_quickfix((*wp).w_buffer) && (*wp).w_llist_ref.is_null() }
+    unsafe { bt_quickfix(wp.w_buffer) && wp.w_llist_ref.is_null() }
 }
 
 /// The location list stack `wp` works on: the one it references when it is
@@ -265,9 +265,9 @@ pub(crate) unsafe fn win_loclist(wp: *mut win_T) -> *mut qf_info_T {
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
     if unsafe { is_ll_window(wp.raw().cast_const()) } {
-        (*wp).w_llist_ref
+        wp.w_llist_ref
     } else {
-        (*wp).w_llist
+        wp.w_llist
     }
 }
 
@@ -284,7 +284,7 @@ pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list
     // SAFETY: the caller's stack and a slot it has room for. The pointer
     // is into the `Vec`'s heap buffer, which outlives every borrow of the
     // stack itself and is only invalidated by `qf_resize_stack_base`.
-    unsafe { (*qi).qf_lists.as_mut_ptr().add(idx as usize) }
+    unsafe { qi.qf_lists.as_mut_ptr().add(idx as usize) }
 }
 
 /// The list `:cc` and friends work on.
@@ -297,7 +297,7 @@ pub(crate) unsafe fn qf_get_curlist(qi: *mut qf_info_T) -> *mut qf_list_T {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    unsafe { qf_get_list(qi.raw(), (*qi).qf_curlist) }
+    unsafe { qf_get_list(qi.raw(), qi.qf_curlist) }
 }
 
 /// Drop the oldest list and shuffle the rest down, leaving a zeroed slot at
@@ -356,10 +356,10 @@ unsafe fn wipe_qf_buffer(qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    if (*qi).qf_bufnr == INVALID_QFBUFNR {
+    if qi.qf_bufnr == INVALID_QFBUFNR {
         return;
     }
-    let qfbuf = buflist_findnr((*qi).qf_bufnr);
+    let qfbuf = buflist_findnr(qi.qf_bufnr);
     if qfbuf.is_null() || unsafe { (*qfbuf).b_nwindows } != 0 {
         return;
     }
@@ -371,7 +371,7 @@ unsafe fn wipe_qf_buffer(qi: *mut qf_info_T) {
         cur_win().w_buffer = curbuf.get();
     }
     unsafe { close_buffer(ptr::null_mut(), qfbuf, DOBUF_WIPE as c_int, false, false) };
-    (*qi).qf_bufnr = INVALID_QFBUFNR;
+    qi.qf_bufnr = INVALID_QFBUFNR;
     if buf_was_null {
         cur_win().w_buffer = ptr::null_mut();
     }
@@ -386,7 +386,7 @@ unsafe fn qf_free_list_stack_items(qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    for i in 0..(*qi).qf_listcount {
+    for i in 0..qi.qf_listcount {
         unsafe { qf_free(qf_get_list(qi.raw(), i)) };
     }
 }
@@ -432,8 +432,8 @@ unsafe fn ll_release(qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    (*qi).qf_refcount -= 1;
-    if (*qi).qf_refcount < 1 {
+    qi.qf_refcount -= 1;
+    if qi.qf_refcount < 1 {
         unsafe { wipe_qf_buffer(qi.raw()) };
         unsafe { qf_free_lists(qi.raw()) };
     }
@@ -547,12 +547,12 @@ unsafe fn qf_resize_stack_base(qi: *mut qf_info_T, n: c_int) {
     if n == max {
         return;
     }
-    if n < max && n < (*qi).qf_listcount {
-        for _ in 0..(*qi).qf_listcount - n {
+    if n < max && n < qi.qf_listcount {
+        for _ in 0..qi.qf_listcount - n {
             unsafe { qf_pop_stack(qi.raw(), true) };
         }
     }
-    (*qi).qf_lists.resize(n.max(0) as usize, empty_list());
+    qi.qf_lists.resize(n.max(0) as usize, empty_list());
     qf_redraw(qi, ptr::null_mut());
 }
 
@@ -600,15 +600,15 @@ pub(crate) unsafe fn ll_get_or_alloc_list(wp: *mut win_T) -> *mut qf_info_T {
     let mut wp = unsafe { Win::new(wp) };
     // SAFETY: forwarded from the caller.
     if unsafe { is_ll_window(wp.raw().cast_const()) } {
-        return (*wp).w_llist_ref;
+        return wp.w_llist_ref;
     }
     // A window that is not a location list window has no business
     // referencing someone else's list.
-    unsafe { ll_free_all(&raw mut (*wp).w_llist_ref) };
-    if (*wp).w_llist.is_null() {
-        (*wp).w_llist = qf_alloc_stack(QFLT_LOCATION, (*wp).w_onebuf_opt.wo_lhi as c_int);
+    unsafe { ll_free_all(&raw mut wp.w_llist_ref) };
+    if wp.w_llist.is_null() {
+        wp.w_llist = qf_alloc_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi as c_int);
     }
-    (*wp).w_llist
+    wp.w_llist
 }
 
 /// The stack an Ex command works on. For a location list command that is
@@ -622,7 +622,7 @@ pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut exarg_T, print_emsg: bool) -> *m
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
-    if !unsafe { is_loclist_cmd((*eap).cmdidx as c_int) } {
+    if !unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
         return QfStack::Global.raw();
     }
     let qi = unsafe { win_loclist(curwin.get()) };
@@ -645,7 +645,7 @@ pub(crate) unsafe fn qf_cmd_get_or_alloc_stack(
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap.cast_mut()) };
     // SAFETY: forwarded from the caller.
-    if !unsafe { is_loclist_cmd((*eap).cmdidx as c_int) } {
+    if !unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
         return QfStack::Global.raw();
     }
     unsafe { *pwinp = curwin.get() };
@@ -661,10 +661,10 @@ pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi.cast_mut()) };
     // SAFETY: forwarded from the caller.
-    let count = (*qi).qf_listcount as usize;
+    let count = qi.qf_listcount as usize;
     // SAFETY: as above; the borrow is dropped before the caller can touch
     // the stack again.
-    let lists = &(*qi).qf_lists;
+    let lists = &qi.qf_lists;
     for (idx, list) in lists[..count].iter().enumerate() {
         if list.qf_id == qfid {
             return idx as c_int;
@@ -690,7 +690,7 @@ pub(crate) unsafe fn qf_restore_list(qi: *mut qf_info_T, save_qfid: ::core::ffi:
     if curlist < 0 {
         return FAIL;
     }
-    (*qi).qf_curlist = curlist;
+    qi.qf_curlist = curlist;
     OK
 }
 
@@ -729,7 +729,7 @@ pub(crate) unsafe fn qf_free_stack(mut wp: *mut win_T, qi: *mut qf_info_T) {
     // SAFETY: forwarded from the caller.
     let qfwin = unsafe { qf_find_win(qi.raw().cast_const()) };
     if !qfwin.is_null() {
-        if (*qi).qf_curlist < (*qi).qf_listcount {
+        if qi.qf_curlist < qi.qf_listcount {
             unsafe { qf_free(qf_get_curlist(qi.raw())) };
         }
         qf_redraw(qi, ptr::null_mut());
@@ -744,8 +744,8 @@ pub(crate) unsafe fn qf_free_stack(mut wp: *mut win_T, qi: *mut qf_info_T) {
     }
     unsafe { qf_free_all(wp) };
     if wp.is_null() {
-        (*qi).qf_curlist = 0;
-        (*qi).qf_listcount = 0;
+        qi.qf_curlist = 0;
+        qi.qf_listcount = 0;
     } else if !qfwin.is_null() {
         let new_ll = qf_alloc_stack(QFLT_LOCATION, unsafe { (*wp).w_onebuf_opt.wo_lhi } as c_int);
         unsafe { (*new_ll).qf_bufnr = (*(*qfwin).w_buffer).handle as c_int };

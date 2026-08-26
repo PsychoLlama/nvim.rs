@@ -177,9 +177,7 @@ pub(crate) unsafe fn open_source(
         // If the name is too long we might crash further on, quit
         // here.
         if fnamelen >= MAXPATHL as size_t {
-            {
-                filemess_note(fname, c"Illegal file name")
-            };
+            filemess_note(fname, c"Illegal file name");
             unsafe { msg_end() };
             msg_scroll.set(msg_save);
             return Err(retval);
@@ -189,9 +187,7 @@ pub(crate) unsafe fn open_source(
         // the swap file would destroy it.
         if unsafe { after_pathsep(fname, fname.add(fnamelen)) } != 0 {
             if !silent {
-                {
-                    filemess_note(fname, msg_is_a_directory)
-                };
+                filemess_note(fname, msg_is_a_directory);
             }
             unsafe { msg_end() };
             msg_scroll.set(msg_save);
@@ -211,15 +207,11 @@ pub(crate) unsafe fn open_source(
             // one before os_open().
             if kind == 0o40000 {
                 if !silent {
-                    {
-                        filemess_note(fname, msg_is_a_directory)
-                    };
+                    filemess_note(fname, msg_is_a_directory);
                 }
                 retval = NOTDONE;
             } else {
-                {
-                    filemess_note(fname, c"is not a file")
-                };
+                filemess_note(fname, c"is not a file");
             }
             unsafe { msg_end() };
             msg_scroll.set(msg_save);

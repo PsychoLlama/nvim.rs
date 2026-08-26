@@ -155,7 +155,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
     // SAFETY: forwarded from the caller.
     // Note: `win_close` drops `b_nwindows` behind the raw pointer.
     #[allow(clippy::while_immutable_condition)]
-    while (*buf).b_nwindows > 0 {
+    while buf.b_nwindows > 0 {
         // Only close the window if it is not the last one, and only when
         // closing it actually worked — otherwise this would spin.
         let mut did_one = false;
@@ -171,12 +171,12 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
         }
         if !did_one {
             // The buffer keeps a window; it can only stop being a dummy.
-            (*buf).b_flags.clear(BufFlags::DUMMY);
+            buf.b_flags.clear(BufFlags::DUMMY);
             return;
         }
     }
 
-    if !ptr::eq(curbuf.get(), buf.raw().cast_const()) && (*buf).b_nwindows == 0 {
+    if !ptr::eq(curbuf.get(), buf.raw().cast_const()) && buf.b_nwindows == 0 {
         // Delete the buffer and its swap file. `wipe_buffer` calls
         // `close_buffer`, which may run autocommands, so a pending
         // exception or `:return` has to be parked over the call.
@@ -195,7 +195,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
         return;
     }
 
-    (*buf).b_flags.clear(BufFlags::DUMMY);
+    buf.b_flags.clear(BufFlags::DUMMY);
 }
 
 /// Unload the dummy buffer that `load_dummy_buffer` created, keeping it in

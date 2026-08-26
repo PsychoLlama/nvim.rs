@@ -42,10 +42,10 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
         return;
     };
 
-    let mut errornr = if (*eap).addr_count > 0 {
-        (*eap).line2 as c_int
+    let mut errornr = if eap.addr_count > 0 {
+        eap.line2 as c_int
     } else {
-        match (*eap).cmdidx {
+        match eap.cmdidx {
             // The current entry.
             CMD_cc | CMD_ll => 0,
             CMD_crewind | CMD_lrewind | CMD_cfirst | CMD_lfirst => 1,
@@ -56,21 +56,21 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
 
     // :cdo/:ldo jump to the nth valid entry, :cfdo/:lfdo to the first
     // valid entry of the nth file.
-    let is_do = matches!((*eap).cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
+    let is_do = matches!(eap.cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
     if is_do {
-        let n = if (*eap).addr_count > 0 {
-            debug_assert!((*eap).line1 >= 0);
-            (*eap).line1 as size_t
+        let n = if eap.addr_count > 0 {
+            debug_assert!(eap.line1 >= 0);
+            eap.line1 as size_t
         } else {
             1
         };
-        let per_file = matches!((*eap).cmdidx, CMD_cfdo | CMD_lfdo);
+        let per_file = matches!(eap.cmdidx, CMD_cfdo | CMD_lfdo);
         let valid_entry = unsafe { qf_get_nth_valid_entry(qf_current_list(qi).raw(), n, per_file) };
         debug_assert!(valid_entry <= c_int::MAX as size_t);
         errornr = valid_entry as c_int;
     }
 
-    qf_goto(qi, 0, errornr, (*eap).forceit);
+    qf_goto(qi, 0, errornr, eap.forceit);
 }
 
 /// `:cnext`, `:cprevious`, `:cnfile`, `:cpfile` and their `:l…` twins, plus
@@ -88,16 +88,16 @@ pub unsafe fn ex_cnext(eap: *mut exarg_T) {
 
     // A count says how many entries to move — except for the :cdo
     // family, whose count is the entry it started at.
-    let is_do = matches!((*eap).cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
-    let errornr = if (*eap).addr_count > 0 && !is_do {
-        (*eap).line2 as c_int
+    let is_do = matches!(eap.cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
+    let errornr = if eap.addr_count > 0 && !is_do {
+        eap.line2 as c_int
     } else {
         1
     };
 
     // Depending on the command, jump to either the next or the previous
     // entry, or to one in the next or previous file.
-    let dir = match (*eap).cmdidx {
+    let dir = match eap.cmdidx {
         CMD_cprevious | CMD_lprevious | CMD_cNext | CMD_lNext => BACKWARD,
         CMD_cnfile | CMD_lnfile | CMD_cfdo | CMD_lfdo => FORWARD_FILE,
         CMD_cpfile | CMD_lpfile | CMD_cNfile | CMD_lNfile => BACKWARD_FILE,
@@ -105,7 +105,7 @@ pub unsafe fn ex_cnext(eap: *mut exarg_T) {
         _ => FORWARD,
     };
 
-    qf_goto(qi, dir, errornr, (*eap).forceit);
+    qf_goto(qi, dir, errornr, eap.forceit);
 }
 
 /// The first entry of the list that belongs to buffer `bnr`.
@@ -118,10 +118,10 @@ unsafe fn first_entry_in_buf(qfl: *mut qf_list_T, bnr: c_int) -> Option<At> {
     let qfl = unsafe { Qfl::new(qfl) };
     // SAFETY: forwarded from the caller.
     let mut at = At {
-        entry: (*qfl).qf_start,
+        entry: qfl.qf_start,
         nr: 1,
     };
-    while !got_int.get() && at.nr <= (*qfl).qf_count && !at.entry.is_null() {
+    while !got_int.get() && at.nr <= qfl.qf_count && !at.entry.is_null() {
         if unsafe { (*at.entry).qf_fnum } == bnr {
             return Some(at);
         }
@@ -193,9 +193,9 @@ unsafe fn compare_to_pos(qfp: *const qfline_T, pos: *const pos_T, linewise: bool
     let cols = if linewise {
         (0, 0)
     } else {
-        ((*qfp).qf_col, unsafe { (*pos).col })
+        (qfp.qf_col, unsafe { (*pos).col })
     };
-    ((*qfp).qf_lnum, cols.0).cmp(&(unsafe { (*pos).lnum }, cols.1))
+    (qfp.qf_lnum, cols.0).cmp(&(unsafe { (*pos).lnum }, cols.1))
 }
 
 /// The first entry of buffer `bnr` after `pos`, starting the walk at `at`,
@@ -384,14 +384,14 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
-    if (*eap).addr_count > 0 && (*eap).line2 <= 0 {
+    if eap.addr_count > 0 && eap.line2 <= 0 {
         qf_emsg(&raw const e_invrange as *const c_char);
         return;
     }
 
     // Does the current buffer have any entry of the right kind?
     let quickfix = matches!(
-        (*eap).cmdidx,
+        eap.cmdidx,
         CMD_cabove | CMD_cbelow | CMD_cbefore | CMD_cafter
     );
     let buf_has_flag = if quickfix {
@@ -414,7 +414,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     }
 
     let dir = if matches!(
-        (*eap).cmdidx,
+        eap.cmdidx,
         CMD_cbelow | CMD_lbelow | CMD_cafter | CMD_lafter
     ) {
         FORWARD
@@ -422,7 +422,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
         BACKWARD
     };
     let linewise = matches!(
-        (*eap).cmdidx,
+        eap.cmdidx,
         CMD_cbelow | CMD_lbelow | CMD_cabove | CMD_labove
     );
 
@@ -431,11 +431,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     pos.col += 1;
     let bnr2 = cur_buf().handle;
     let pos2 = &raw const pos;
-    let n2 = if (*eap).addr_count > 0 {
-        (*eap).line2
-    } else {
-        0
-    };
+    let n2 = if eap.addr_count > 0 { eap.line2 } else { 0 };
     let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };
 
     if errornr > 0 {

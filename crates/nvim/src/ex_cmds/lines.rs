@@ -260,7 +260,7 @@ unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
         if unsafe { (*wp).w_buffer } == curbuf.get() {
-            unsafe { fold_move_range(wp, &raw mut (*wp).w_folds, line1, line2, dest) };
+            unsafe { fold_move_range(&raw mut (*wp).w_folds, line1, line2, dest) };
         }
     }
 }

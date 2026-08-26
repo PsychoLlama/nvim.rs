@@ -66,7 +66,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
     let mut qf_winid = 0;
-    if (*qi).qfl_type == QFLT_LOCATION {
+    if qi.qfl_type == QFLT_LOCATION {
         let win = if cur_win().w_llist == qi.raw() {
             curwin.get()
         } else {
@@ -170,16 +170,16 @@ unsafe fn qf_buf_add_line(
         }
 
         // "<where>|<position>| <message>".
-        if !(*qfp).qf_module.is_null() {
-            unsafe { push_cstr(out, (*qfp).qf_module) };
+        if !qfp.qf_module.is_null() {
+            unsafe { push_cstr(out, qfp.qf_module) };
         } else {
-            let errbuf = if (*qfp).qf_fnum != 0 {
-                buflist_findnr((*qfp).qf_fnum)
+            let errbuf = if qfp.qf_fnum != 0 {
+                buflist_findnr(qfp.qf_fnum)
             } else {
                 ptr::null_mut()
             };
             if !errbuf.is_null() && !unsafe { (*errbuf).b_fname.is_null() } {
-                if (*qfp).qf_type as c_int == 1 {
+                if qfp.qf_type as c_int == 1 {
                     // :helpgrep entries name the help file only.
                     unsafe { push_cstr(out, path_tail((*errbuf).b_fname)) };
                 } else {
@@ -191,10 +191,10 @@ unsafe fn qf_buf_add_line(
                     {
                         unsafe { shorten_buf_fname(errbuf, dir.get(), false as c_int) };
                     }
-                    let start_row = if (*qfp).qf_fname.is_null() {
+                    let start_row = if qfp.qf_fname.is_null() {
                         unsafe { (*errbuf).b_fname }
                     } else {
-                        (*qfp).qf_fname
+                        qfp.qf_fname
                     };
                     unsafe { push_cstr(out, start_row) };
                 }
@@ -202,11 +202,11 @@ unsafe fn qf_buf_add_line(
         }
 
         out.push(b'|');
-        if (*qfp).qf_lnum > 0 {
+        if qfp.qf_lnum > 0 {
             unsafe { qf_range_text(out, qfp.raw().cast_const()) };
-            out.extend(qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr).to_bytes());
-        } else if !(*qfp).qf_pattern.is_null() {
-            unsafe { qf_fmt_text(out, (*qfp).qf_pattern) };
+            out.extend(qf_types(qfp.qf_type as c_int, qfp.qf_nr).to_bytes());
+        } else if !qfp.qf_pattern.is_null() {
+            unsafe { qf_fmt_text(out, qfp.qf_pattern) };
         }
         out.push(b'|');
         out.push(b' ');
@@ -217,9 +217,9 @@ unsafe fn qf_buf_add_line(
         // with "^^^^".
         let recognized = out.len() > 3;
         let text = if recognized {
-            unsafe { skipwhite((*qfp).qf_text) }
+            unsafe { skipwhite(qfp.qf_text) }
         } else {
-            (*qfp).qf_text
+            qfp.qf_text
         };
         unsafe { qf_fmt_text(out, text) };
     });
@@ -258,9 +258,9 @@ unsafe fn call_qftf_func(
     if RECURSIVE.get() {
         return ptr::null_mut();
     }
-    let cb = if (*qfl).qf_qftf_cb.type_0 != kCallbackNone {
+    let cb = if qfl.qf_qftf_cb.type_0 != kCallbackNone {
         // SAFETY: the caller's list, whose callback outlives this call.
-        &raw mut (*qfl).qf_qftf_cb
+        &raw mut qfl.qf_qftf_cb
     } else {
         global_qftf()
     };
@@ -275,10 +275,10 @@ unsafe fn call_qftf_func(
     };
     add(
         c"quickfix",
-        varnumber_T::from((*qfl).qfl_type == QFLT_QUICKFIX),
+        varnumber_T::from(qfl.qfl_type == QFLT_QUICKFIX),
     );
     add(c"winid", qf_winid as varnumber_T);
-    add(c"id", (*qfl).qf_id as varnumber_T);
+    add(c"id", qfl.qf_id as varnumber_T);
     add(c"start_idx", start_idx as varnumber_T);
     add(c"end_idx", end_idx as varnumber_T);
     unsafe { (*dict).dv_refcount += 1 };
@@ -434,9 +434,9 @@ pub(crate) unsafe fn qf_fill_buffer(
         let (mut qfp, mut lnum) = if rewriting {
             (unsafe { (*qfl).qf_start }, 0)
         } else if unsafe { (*old_last).qf_next.is_null() } {
-            (old_last, (*buf).b_ml.ml_line_count)
+            (old_last, buf.b_ml.ml_line_count)
         } else {
-            (unsafe { (*old_last).qf_next }, (*buf).b_ml.ml_line_count)
+            (unsafe { (*old_last).qf_next }, buf.b_ml.ml_line_count)
         };
 
         let qftf_list =

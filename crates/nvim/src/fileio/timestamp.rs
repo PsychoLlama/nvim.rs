@@ -298,19 +298,18 @@ unsafe fn warn_changed(
 
     if can_reload {
         append(c"\n%s");
+        let title = c"Warning".as_ptr();
+        let buttons = c"&OK\n&Load File\nLoad File &and Options".as_ptr();
+        let text = tbuf.as_ptr();
+        let warn = VIM_WARNING as c_int;
+        // SAFETY: `tbuf` is this frame's NUL-terminated message, and the
+        // title and buttons are static strings.
+        let answer = unsafe {
+            let (title, buttons) = (gettext(title), gettext(buttons));
+            do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int)
+        };
         return (
-            match {
-                let title = c"Warning".as_ptr();
-                let buttons = c"&OK\n&Load File\nLoad File &and Options".as_ptr();
-                let text = tbuf.as_ptr();
-                let warn = VIM_WARNING as c_int;
-                // SAFETY: `tbuf` is this frame's NUL-terminated message, and
-                // the title and buttons are static strings.
-                unsafe {
-                    let (title, buttons) = (gettext(title), gettext(buttons));
-                    do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int)
-                }
-            } {
+            match answer {
                 2 => Reload::Text,
                 3 => Reload::Detect,
                 _ => Reload::No,

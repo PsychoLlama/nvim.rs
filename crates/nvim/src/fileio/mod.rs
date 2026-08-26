@@ -242,13 +242,9 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
 
     // It's like the unnamed buffer is deleted...
     if cur_buf().b_p_bl != 0 {
-        {
-            autocmd_for_curbuf(EVENT_BUFDELETE)
-        };
+        autocmd_for_curbuf(EVENT_BUFDELETE);
     }
-    {
-        autocmd_for_curbuf(EVENT_BUFWIPEOUT)
-    };
+    autocmd_for_curbuf(EVENT_BUFWIPEOUT);
     if aborting() {
         // Autocommands may abort script processing.
         return FAIL;
@@ -264,13 +260,9 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
     }
 
     // ...and a new named one is created.
-    {
-        autocmd_for_curbuf(EVENT_BUFNEW)
-    };
+    autocmd_for_curbuf(EVENT_BUFNEW);
     if cur_buf().b_p_bl != 0 {
-        {
-            autocmd_for_curbuf(EVENT_BUFADD)
-        };
+        autocmd_for_curbuf(EVENT_BUFADD);
     }
     if aborting() {
         return FAIL;

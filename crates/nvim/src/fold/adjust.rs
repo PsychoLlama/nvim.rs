@@ -514,9 +514,8 @@ pub(super) fn truncate_fold(fold: Fold, end: linenr_T) {
 /// 10. not changed
 ///
 /// # Safety
-/// `wp` must be a live window and `gap` a live fold list.
+/// `gap` must be a live fold list.
 pub unsafe fn fold_move_range(
-    wp: *mut win_T,
     gap: *mut garray_T,
     line1: linenr_T,
     line2: linenr_T,
@@ -534,7 +533,7 @@ pub unsafe fn fold_move_range(
                 let inner = fold.nested().gap();
                 let (a, b, d) = (line1 - fold.top(), line2 - fold.top(), dest - fold.top());
                 // SAFETY: a live window, and the fold's own nested list.
-                unsafe { fold_move_range(wp, inner, a, b, d) };
+                unsafe { fold_move_range(inner, a, b, d) };
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.

@@ -203,7 +203,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
     let mut qi = qf_global();
 
-    let au_name = match (*eap).cmdidx {
+    let au_name = match eap.cmdidx {
         CMD_helpgrep => Some(c"helpgrep"),
         CMD_lhelpgrep => Some(c"lhelpgrep"),
         _ => None,
@@ -220,31 +220,31 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     p_cpo.set(empty_option());
 
     let mut new_qi = false;
-    if unsafe { is_loclist_cmd((*eap).cmdidx as c_int) } {
+    if unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
         qi = unsafe { hgr_get_ll(&mut new_qi) };
     }
 
     incr_quickfix_busy();
 
     // Check for a specified language.
-    let lang = unsafe { check_help_lang((*eap).arg) };
+    let lang = unsafe { check_help_lang(eap.arg) };
     let mut regmatch = regmatch_T {
-        regprog: unsafe { vim_regcomp((*eap).arg, RE_MAGIC + RE_STRING) },
+        regprog: unsafe { vim_regcomp(eap.arg, RE_MAGIC + RE_STRING) },
         rm_ic: false,
         ..regmatch_T::default()
     };
     let updated = !regmatch.regprog.is_null();
     if updated {
         // Create a new quickfix list.
-        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*(*eap).cmdlinep).as_ptr()) };
+        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*eap.cmdlinep).as_ptr()) };
         let mut qfl = qf_current_list(qi);
 
         unsafe { hgr_search_in_rtp(qfl.raw(), &raw mut regmatch, lang) };
         unsafe { vim_regfree(regmatch.regprog) };
 
-        (*qfl).qf_nonevalid = false;
-        (*qfl).qf_ptr = (*qfl).qf_start;
-        (*qfl).qf_index = 1;
+        qfl.qf_nonevalid = false;
+        qfl.qf_ptr = qfl.qf_start;
+        qfl.qf_index = 1;
         qfl_changed(qfl);
     }
 
@@ -280,7 +280,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         // may have made that stack invalid, in which case there is
         // nothing left to jump to.
         if !new_qi
-            && (*qi).qfl_type == QFLT_LOCATION as qfltype_T
+            && qi.qfl_type == QFLT_LOCATION as qfltype_T
             && unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) }.is_null()
         {
             qf_busy_end();
@@ -294,12 +294,12 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     } else {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg) };
+        unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), eap.arg) };
     }
 
     qf_busy_end();
 
-    if (*eap).cmdidx == CMD_lhelpgrep && new_qi {
+    if eap.cmdidx == CMD_lhelpgrep && new_qi {
         if !unsafe { bt_help(cur_win().w_buffer) } || cur_win().w_llist == qi.raw() {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.

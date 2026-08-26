@@ -144,7 +144,7 @@ fn alist_entries(al: *mut alist_T) -> (*mut aentry_T, c_int) {
     // SAFETY: the caller's promise -- a live `alist_T`.
     let al = unsafe { Al::new(al) };
     // SAFETY: every caller holds a valid argument list.
-    let ga = &(*al).al_ga;
+    let ga = &al.al_ga;
     (ga.ga_data as *mut aentry_T, ga.ga_len)
 }
 
@@ -161,7 +161,7 @@ fn win_alist(wp: *mut win_T) -> *mut alist_T {
     // SAFETY: the caller's promise -- a live `win_T`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: every window always has an argument list.
-    (*wp).w_alist
+    wp.w_alist
 }
 
 fn warg(wp: *mut win_T, n: c_int) -> *mut aentry_T {
@@ -254,7 +254,7 @@ unsafe fn alist_clear(al: *mut alist_T) {
             unsafe { xfree((*entries.offset(i as isize)).ae_fname as *mut c_void) };
         }
     }
-    unsafe { ga_clear(&raw mut (*al).al_ga) };
+    unsafe { ga_clear(&raw mut al.al_ga) };
 }
 
 /// Initialise an argument list to no entries.
@@ -266,7 +266,7 @@ pub unsafe fn alist_init(al: *mut alist_T) {
     // SAFETY: the caller's promise -- a live `alist_T`.
     let mut al = unsafe { Al::new(al) };
     // SAFETY: caller contract.
-    unsafe { ga_init(&raw mut (*al).al_ga, size_of::<aentry_T>() as c_int, 5) };
+    unsafe { ga_init(&raw mut al.al_ga, size_of::<aentry_T>() as c_int, 5) };
 }
 
 /// Drop a reference to an argument list, freeing it once no window holds it.
@@ -283,8 +283,8 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
     }
     // SAFETY: caller contract; the list is ours to free once its last
     // reference goes.
-    (*al).al_refcount -= 1;
-    if (*al).al_refcount <= 0 {
+    al.al_refcount -= 1;
+    if al.al_refcount <= 0 {
         unsafe { alist_clear(al.raw()) };
         unsafe { xfree(al.raw().cast()) };
     }
@@ -326,7 +326,7 @@ unsafe fn alist_set(
     // SAFETY: caller contract; `ga_grow` reserves every slot the loop fills,
     // and each name is handed to the entry that takes it over.
     unsafe { alist_clear(al.raw()) };
-    unsafe { ga_grow(&raw mut (*al).al_ga, count) };
+    unsafe { ga_grow(&raw mut al.al_ga, count) };
     for i in 0..count {
         if got_int.get() {
             // Adding many buffers can take a long time, so the user can
@@ -378,13 +378,13 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
     // SAFETY: caller contract; the slot at `ga_len` is the room the caller
     // grew, and `buflist_add` cannot move the list while it is locked.
     unsafe { (*wp).w_locked = true };
-    let at = (*al).al_ga.ga_len;
+    let at = al.al_ga.ga_len;
     unsafe { (*alist_arg(al.raw(), at)).ae_fname = fname };
     if set_fnum > 0 {
         let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
         unsafe { (*alist_arg(al.raw(), at)).ae_fnum = buflist_add(fname, flags) };
     }
-    (*al).al_ga.ga_len += 1;
+    al.al_ga.ga_len += 1;
     unsafe { (*wp).w_locked = false };
     ARGLIST_LOCKED.set(false);
 }
@@ -752,13 +752,13 @@ pub unsafe fn editing_arg_idx(win: *mut win_T) -> bool {
     // SAFETY: the caller's promise -- a live `win_T`.
     let win = unsafe { Win::new(win) };
     // SAFETY: caller contract; the window is valid.
-    let idx = (*win).w_arg_idx;
+    let idx = win.w_arg_idx;
     if idx >= wargcount(win.raw()) {
         return false;
     }
     let entry = warg(win.raw(), idx);
     // SAFETY: `entry` is in range and the window's buffer is valid.
-    let buf = (*win).w_buffer;
+    let buf = win.w_buffer;
     unsafe { (*buf).handle == (*entry).ae_fnum || same_file(alist_name(entry), (*buf).b_ffname) }
 }
 
@@ -773,11 +773,11 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live `win_T`.
     let mut win = unsafe { Win::new(win) };
     // SAFETY: caller contract; the window's buffer and list are valid.
-    let (editing, idx) = unsafe { (editing_arg_idx(win.raw()), (*win).w_arg_idx) };
+    let (editing, idx) = unsafe { (editing_arg_idx(win.raw()), win.w_arg_idx) };
     if wargcount(win.raw()) <= 1 || editing {
         // Editing the current entry: `arg_had_last` if it is the last.
         // SAFETY: caller contract.
-        (*win).w_arg_idx_invalid = false;
+        win.w_arg_idx_invalid = false;
         if idx == wargcount(win.raw()) - 1 && win_alist(win.raw()) == global_arglist() {
             arg_had_last.set(true);
         }
@@ -786,7 +786,7 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     // Not editing the current entry, so `arg_had_last` only if this buffer
     // is the *last* global argument.
     // SAFETY: caller contract.
-    (*win).w_arg_idx_invalid = true;
+    win.w_arg_idx_invalid = true;
     let gcount = alist_count(global_arglist());
     if idx == wargcount(win.raw()) - 1
         || arg_had_last.get()
@@ -800,7 +800,7 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     // SAFETY: `last` is the final entry of the global list, and the window's
     // buffer is valid.
     let holds_last = unsafe {
-        let buf = (*win).w_buffer;
+        let buf = win.w_buffer;
         (*buf).handle == (*last).ae_fnum || same_file(alist_name(last), (*buf).b_ffname)
     };
     if holds_last {

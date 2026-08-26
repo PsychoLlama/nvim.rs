@@ -68,8 +68,8 @@ pub(crate) unsafe fn win_set_loclist(wp: *mut win_T, qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    (*wp).w_llist = qi.raw();
-    (*qi).qf_refcount += 1;
+    wp.w_llist = qi.raw();
+    qi.qf_refcount += 1;
 }
 
 /// Find a help window, or split one off, and enter it.
@@ -104,7 +104,7 @@ pub(crate) unsafe fn jump_to_help_window(
     }
     // A new window asked for by the user gets its own copy of the
     // location list; otherwise it shares this one.
-    let share_loclist = (*qi).qfl_type == QFLT_LOCATION && !newwin;
+    let share_loclist = qi.qfl_type == QFLT_LOCATION && !newwin;
     if share_loclist {
         flags |= WSP_NEWLOC as c_int;
     }

@@ -21,7 +21,7 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract.
-    let cmdidx = (*eap).cmdidx as c_int;
+    let cmdidx = eap.cmdidx as c_int;
     if cmdidx != CMD_args as c_int {
         if arglist_is_locked() {
             return;
@@ -38,7 +38,7 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
     // SAFETY: an ex-command argument is NUL-terminated.
-    if unsafe { *(*eap).arg } as c_int != NUL {
+    if unsafe { *eap.arg } as c_int != NUL {
         if arglist_is_locked() {
             return;
         }
@@ -103,7 +103,7 @@ pub unsafe fn ex_previous(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the count is the command's range.
-    let back = cur_arg_idx() - (*eap).line2 as c_int;
+    let back = cur_arg_idx() - eap.line2 as c_int;
     // If already past the last one, go to the last one.
     let argn = if back >= argcount() {
         argcount() - 1
@@ -131,8 +131,8 @@ pub unsafe fn ex_argument(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the argument number is the command's range.
-    let argn = if (*eap).addr_count > 0 {
-        (*eap).line2 as c_int - 1
+    let argn = if eap.addr_count > 0 {
+        eap.line2 as c_int - 1
     } else {
         cur_arg_idx()
     };
@@ -187,9 +187,9 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
-    let is_split_cmd = unsafe { *(*eap).cmd } as c_int == 's' as c_int;
-    let forceit = (*eap).forceit != 0;
-    let cmdidx = (*eap).cmdidx as c_int;
+    let is_split_cmd = unsafe { *eap.cmd } as c_int == 's' as c_int;
+    let forceit = eap.forceit != 0;
+    let cmdidx = eap.cmdidx as c_int;
     let old_arg_idx = cur_arg_idx();
     if argn < 0 || argn >= argcount() {
         report_no_such_arg(argn);
@@ -202,7 +202,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     let entry_fnum = unsafe { (*arg(argn)).ae_fnum };
     let refused = !is_split_cmd
         && entry_fnum != cur_buf().handle
-        && !check_can_set_curbuf_forceit((*eap).forceit);
+        && !check_can_set_curbuf_forceit(eap.forceit);
     if refused {
         return;
     }
@@ -256,10 +256,10 @@ pub unsafe fn ex_next(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let forceit = (*eap).forceit != 0;
-    let is_snext = (*eap).cmdidx as c_int == CMD_snext as c_int;
+    let forceit = eap.forceit != 0;
+    let is_snext = eap.cmdidx as c_int == CMD_snext as c_int;
     // SAFETY: `arg` points at the command's own text.
-    let has_arg = unsafe { *(*eap).arg } as c_int != NUL;
+    let has_arg = unsafe { *eap.arg } as c_int != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
@@ -273,13 +273,13 @@ pub unsafe fn ex_next(eap: *mut exarg_T) {
     let argn = if has_arg {
         // Redefine the file list.
         // SAFETY: caller contract.
-        if !unsafe { do_arglist((*eap).arg, ArgListOp::Set, 0, true) } {
+        if !unsafe { do_arglist(eap.arg, ArgListOp::Set, 0, true) } {
             return;
         }
         0
     } else {
         // SAFETY: caller contract; the count is the command's range.
-        cur_arg_idx() + (*eap).line2 as c_int
+        cur_arg_idx() + eap.line2 as c_int
     };
     // SAFETY: caller contract.
     unsafe { do_argfile(eap.raw(), argn) };
@@ -326,8 +326,8 @@ pub unsafe fn ex_argedit(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the insertion point is the command's range.
-    let mut argn = if (*eap).addr_count != 0 {
-        (*eap).line2 as c_int
+    let mut argn = if eap.addr_count != 0 {
+        eap.line2 as c_int
     } else {
         cur_arg_idx() + 1
     };
@@ -335,7 +335,7 @@ pub unsafe fn ex_argedit(eap: *mut exarg_T) {
     // SAFETY: reads the current buffer's state.
     let curbuf_is_reusable = unsafe { curbuf_reusable() };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    if !unsafe { do_arglist((*eap).arg, ArgListOp::Add, argn, true) } {
+    if !unsafe { do_arglist(eap.arg, ArgListOp::Add, argn, true) } {
         return;
     }
     // SAFETY: rebuilds the window title from the current buffer.
@@ -358,13 +358,13 @@ pub unsafe fn ex_argadd(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the insertion point is the command's range.
-    let after = if (*eap).addr_count > 0 {
-        (*eap).line2 as c_int
+    let after = if eap.addr_count > 0 {
+        eap.line2 as c_int
     } else {
         cur_arg_idx() + 1
     };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    unsafe { do_arglist((*eap).arg, ArgListOp::Add, after, false) };
+    unsafe { do_arglist(eap.arg, ArgListOp::Add, after, false) };
     unsafe { maketitle() };
 }
 
@@ -377,12 +377,12 @@ pub unsafe fn ex_argdelete(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let by_range = unsafe { (*eap).addr_count > 0 || *(*eap).arg as c_int == NUL };
+    let by_range = unsafe { eap.addr_count > 0 || *eap.arg as c_int == NUL };
     // SAFETY: caller contract.
     if by_range {
         unsafe { delete_arg_range(eap.raw()) };
     } else {
-        unsafe { do_arglist((*eap).arg, ArgListOp::Delete, 0, false) };
+        unsafe { do_arglist(eap.arg, ArgListOp::Delete, 0, false) };
     }
     unsafe { maketitle() };
 }
@@ -393,7 +393,7 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let mut eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let (addr_count, has_arg) = unsafe { ((*eap).addr_count, *(*eap).arg as c_int != NUL) };
+    let (addr_count, has_arg) = unsafe { (eap.addr_count, *eap.arg as c_int != NUL) };
     if addr_count == 0 {
         // ":argdel" works like ":.argdel".
         if cur_arg_idx() >= argcount() {
@@ -401,16 +401,16 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
             return;
         }
         // SAFETY: caller contract.
-        (*eap).line2 = cur_arg_idx() + 1;
-        (*eap).line1 = (*eap).line2;
+        eap.line2 = cur_arg_idx() + 1;
+        eap.line1 = eap.line2;
     // ":1,4argdel": delete all the arguments in the range.
     // SAFETY: caller contract.
-    } else if (*eap).line2 > argcount() {
+    } else if eap.line2 > argcount() {
         // SAFETY: caller contract.
-        (*eap).line2 = argcount();
+        eap.line2 = argcount();
     }
     // SAFETY: caller contract.
-    let (line1, line2) = ((*eap).line1, (*eap).line2);
+    let (line1, line2) = (eap.line1, eap.line2);
     let count = line2 - line1 + 1;
     if has_arg {
         // Can't have both a range and an argument.

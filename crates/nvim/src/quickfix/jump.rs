@@ -54,13 +54,13 @@ unsafe fn list_still_current(
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    if old_curlist == (*qi).qf_curlist
-        && old_changedtick == (*qfl).qf_changedtick
+    if old_curlist == qi.qf_curlist
+        && old_changedtick == qfl.qf_changedtick
         && unsafe { is_qf_entry_present(qfl.raw(), qf_ptr) }
     {
         return true;
     }
-    unsafe { emsg_list_changed((*qfl).qfl_type) };
+    unsafe { emsg_list_changed(qfl.qfl_type) };
     false
 }
 
@@ -83,11 +83,11 @@ unsafe fn qf_jump_edit_buffer(
     // SAFETY: forwarded from the caller.
     let qfl = unsafe { qf_get_curlist(qi.raw()) };
     let old_changedtick = unsafe { (*qfl).qf_changedtick };
-    let old_curlist = (*qi).qf_curlist;
+    let old_curlist = qi.qf_curlist;
     let qfl_type = unsafe { (*qfl).qfl_type };
     let save_qfid = unsafe { (*qfl).qf_id };
 
-    let opened = if (*qf_ptr).qf_type == 1 {
+    let opened = if qf_ptr.qf_type == 1 {
         // A help file: `do_ecmd` sets 'buftype', `readfile` sets
         // 'readonly'.
         if !unsafe { can_abandon(curbuf.get(), forceit != 0) } {
@@ -96,7 +96,7 @@ unsafe fn qf_jump_edit_buffer(
         }
         unsafe {
             do_ecmd(
-                (*qf_ptr).qf_fnum,
+                qf_ptr.qf_fnum,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -111,7 +111,7 @@ unsafe fn qf_jump_edit_buffer(
         }
     } else {
         // Read before the window juggling below, which changes it.
-        let fnum = (*qf_ptr).qf_fnum;
+        let fnum = qf_ptr.qf_fnum;
         match unsafe { escape_winfixbuf(qi.raw(), fnum, forceit, opened_window) } {
             None => return Jumped::Restore,
             Some(false) => false,
@@ -171,7 +171,7 @@ unsafe fn escape_winfixbuf(
     if forceit != 0 || cur_win().w_onebuf_opt.wo_wfb == 0 || cur_buf().handle == fnum {
         return Some(true);
     }
-    if (*qi).qfl_type == QFLT_LOCATION {
+    if qi.qfl_type == QFLT_LOCATION {
         // A location list cannot split or reassign its window.
         qf_emsg(&raw const e_winfixbuf_cannot_go_to_buffer as *const c_char);
         return None;
@@ -288,13 +288,13 @@ unsafe fn qf_jump_print_msg(
     }
     let dirc = IOSIZE as size_t;
     let search_delim = unsafe { gettext(c"(%d of %d)%s%s: ".as_ptr()) };
-    let patlen = (*qf_current_list(qi)).qf_count;
-    let count = if (*qf_ptr).qf_cleared != 0 {
+    let patlen = qf_current_list(qi).qf_count;
+    let count = if qf_ptr.qf_cleared != 0 {
         unsafe { gettext(c" (line deleted)".as_ptr()) }
     } else {
         c"".as_ptr()
     };
-    let types = qf_types((*qf_ptr).qf_type as c_int, (*qf_ptr).qf_nr);
+    let types = qf_types(qf_ptr.qf_type as c_int, qf_ptr.qf_nr);
     let options = types.as_ptr();
     let len = unsafe {
         vim_snprintf_safelen(
@@ -310,7 +310,7 @@ unsafe fn qf_jump_print_msg(
     let text = build_line(|out| {
         out.extend_from_slice(unsafe { slice::from_raw_parts(head.as_ptr().cast::<u8>(), len) });
         // The message itself, without leading whitespace or newlines.
-        unsafe { qf_fmt_text(out, skipwhite((*qf_ptr).qf_text)) };
+        unsafe { qf_fmt_text(out, skipwhite(qf_ptr.qf_text)) };
     });
 
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
@@ -347,10 +347,10 @@ unsafe fn qf_jump_open_window(
     // SAFETY: forwarded from the caller.
     let qfl = unsafe { qf_get_curlist(qi.raw()) };
     let old_changedtick = unsafe { (*qfl).qf_changedtick };
-    let old_curlist = (*qi).qf_curlist;
+    let old_curlist = qi.qf_curlist;
 
     // A `:helpgrep` entry wants a help window.
-    if (*qf_ptr).qf_type == 1
+    if qf_ptr.qf_type == 1
         && (!unsafe { bt_help(cur_win().w_buffer) } || cmdmod_tab() != 0)
         && unsafe { jump_to_help_window(qi.raw(), newwin, opened_window) } == FAIL
     {
@@ -361,10 +361,10 @@ unsafe fn qf_jump_open_window(
     }
 
     if unsafe { bt_quickfix(curbuf.get()) } && !*opened_window {
-        if (*qf_ptr).qf_fnum == 0 {
+        if qf_ptr.qf_fnum == 0 {
             return Jumped::Nowhere;
         }
-        if unsafe { qf_jump_to_usable_window((*qf_ptr).qf_fnum, newwin, opened_window) } == FAIL {
+        if unsafe { qf_jump_to_usable_window(qf_ptr.qf_fnum, newwin, opened_window) } == FAIL {
             return Jumped::Restore;
         }
     }
@@ -396,7 +396,7 @@ unsafe fn qf_jump_to_buffer(
     let old_curbuf = curbuf.get();
     let old_lnum = cur_win().w_cursor.lnum;
 
-    if (*qf_ptr).qf_fnum != 0 {
+    if qf_ptr.qf_fnum != 0 {
         let edited =
             unsafe { qf_jump_edit_buffer(qi, qf_ptr.raw(), forceit, prev_winid, opened_window) };
         if edited != Jumped::Done {
@@ -407,10 +407,10 @@ unsafe fn qf_jump_to_buffer(
     if curbuf.get() == old_curbuf {
         setpcmark();
     }
-    let lnum2 = (*qf_ptr).qf_lnum;
-    let col = (*qf_ptr).qf_col;
-    let viscol = (*qf_ptr).qf_viscol;
-    let pattern = (*qf_ptr).qf_pattern;
+    let lnum2 = qf_ptr.qf_lnum;
+    let col = qf_ptr.qf_col;
+    let viscol = qf_ptr.qf_viscol;
+    let pattern = qf_ptr.qf_pattern;
     unsafe { qf_jump_goto_line(lnum2, col, viscol, pattern) };
     if fdo_flags.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
         unsafe { fold_open_cursor() };
@@ -460,8 +460,8 @@ pub(crate) unsafe fn qf_jump_newwin(
 
     incr_quickfix_busy();
     let mut qfl = qf_current_list(qi);
-    let old_qf_ptr = (*qfl).qf_ptr;
-    let old_qf_index = (*qfl).qf_index;
+    let old_qf_ptr = qfl.qf_ptr;
+    let old_qf_index = qfl.qf_index;
     let mut qf_index = old_qf_index;
     let qf_ptr = unsafe { qf_get_entry(qfl.raw(), errornr, dir, &mut qf_index) };
 
@@ -469,8 +469,8 @@ pub(crate) unsafe fn qf_jump_newwin(
     // list is not ours to write to any more.
     let mut settle = Some((old_qf_ptr, old_qf_index));
     if !qf_ptr.is_null() {
-        (*qfl).qf_index = qf_index;
-        (*qfl).qf_ptr = qf_ptr;
+        qfl.qf_index = qf_index;
+        qfl.qf_ptr = qf_ptr;
         settle = Some((qf_ptr, qf_index));
 
         // No need to print the message when the quickfix window shows it.
@@ -518,8 +518,8 @@ pub(crate) unsafe fn qf_jump_newwin(
         }
     }
     if let Some((entry, index)) = settle {
-        (*qfl).qf_ptr = entry;
-        (*qfl).qf_index = index;
+        qfl.qf_ptr = entry;
+        qfl.qf_index = index;
     }
 
     // Put 'switchbuf' back, unless an autocommand or a modeline changed

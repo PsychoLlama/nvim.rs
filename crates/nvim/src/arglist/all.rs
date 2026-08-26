@@ -61,16 +61,16 @@ unsafe fn next_window_to_walk(wp: *mut win_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live `win_T`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: caller contract; the window list is well formed.
-    if (*wp).w_floating {
-        if unsafe { (*(*wp).w_prev).w_floating } {
-            (*wp).w_prev
+    if wp.w_floating {
+        if unsafe { (*wp.w_prev).w_floating } {
+            wp.w_prev
         } else {
             firstwin.get()
         }
-    } else if (*wp).w_next.is_null() || unsafe { (*(*wp).w_next).w_floating } {
+    } else if wp.w_next.is_null() || unsafe { (*wp.w_next).w_floating } {
         ptr::null_mut()
     } else {
-        (*wp).w_next
+        wp.w_next
     }
 }
 
@@ -99,11 +99,9 @@ unsafe fn arg_index_for_window(
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect and the chain has no bounds check in it.
     let aucmd_win = unsafe { is_aucmd_win(wp.raw()) };
-    let unwanted = (*buf).b_ffname.is_null()
+    let unwanted = buf.b_ffname.is_null()
         || !aall.keep_tabs
-            && ((*buf).b_nwindows > 1
-                || (*wp).w_width != Columns.get()
-                || (*wp).w_floating && !aucmd_win);
+            && (buf.b_nwindows > 1 || wp.w_width != Columns.get() || wp.w_floating && !aucmd_win);
     if unwanted {
         return aall.opened_len;
     }
@@ -118,8 +116,8 @@ unsafe fn arg_index_for_window(
         // put; the buffer is valid.
         // SAFETY: `entry` is the `i`th of a list that holds more than `i`,
         // and both file names are NUL-terminated.
-        let holds_arg = unsafe { (*entry).ae_fnum } == (*buf).handle
-            || unsafe { same_file(alist_name(entry), (*buf).b_ffname) };
+        let holds_arg = unsafe { (*entry).ae_fnum } == buf.handle
+            || unsafe { same_file(alist_name(entry), buf.b_ffname) };
         if !holds_arg {
             i += 1;
             continue;
@@ -152,11 +150,11 @@ unsafe fn arg_index_for_window(
         }
         // SAFETY: `wp` holds a reference of its own to whatever list it has,
         // so dropping it here is balanced by the one taken for `aall.alist`.
-        if (*wp).w_alist != aall.alist {
+        if wp.w_alist != aall.alist {
             // Use the current argument list for every window holding a
             // file from it.
-            unsafe { alist_unlink((*wp).w_alist) };
-            (*wp).w_alist = aall.alist;
+            unsafe { alist_unlink(wp.w_alist) };
+            wp.w_alist = aall.alist;
             unsafe { (*aall.alist).al_refcount += 1 };
         }
         return i;
@@ -186,7 +184,7 @@ unsafe fn close_unused_window(
     let hide = unsafe { buf_hide(buf.raw().cast_const()) };
     // SAFETY: as above.
     let changed = unsafe { buf_is_changed(buf.raw()) };
-    let nwindows = (*buf).b_nwindows;
+    let nwindows = buf.b_nwindows;
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
         return wpnext;
     }
@@ -554,12 +552,12 @@ pub unsafe fn ex_all(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let mut eap = unsafe { Ea::new(eap) };
     // `:all` takes an optional count as its range.
-    if (*eap).addr_count == 0 {
-        (*eap).line2 = 9999 as linenr_T;
+    if eap.addr_count == 0 {
+        eap.line2 = 9999 as linenr_T;
     }
-    let count = (*eap).line2 as c_int;
-    let forceit = (*eap).forceit != 0;
-    let drop = (*eap).cmdidx as c_int == CMD_drop as c_int;
+    let count = eap.line2 as c_int;
+    let forceit = eap.forceit != 0;
+    let drop = eap.cmdidx as c_int == CMD_drop as c_int;
     // SAFETY: no reference into the command block is held across this.
     unsafe { do_arg_all(count, forceit, drop) };
 }

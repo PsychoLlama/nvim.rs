@@ -79,25 +79,25 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
     let mut heading = [0 as c_char; IOSIZE as usize];
     let mut fname = ptr::null_mut::<c_char>();
     // SAFETY: forwarded from the caller.
-    let module = (*qfp).qf_module;
+    let module = qfp.qf_module;
     if !module.is_null() && unsafe { *module } != 0 {
         let heading = heading.as_mut_ptr();
         let size = IOSIZE as size_t;
         let fmt = c"%2d %s".as_ptr();
         unsafe { vim_snprintf(heading, size, fmt, qf_idx, module) };
     } else {
-        let buf = if (*qfp).qf_fnum != 0 {
-            buflist_findnr((*qfp).qf_fnum)
+        let buf = if qfp.qf_fnum != 0 {
+            buflist_findnr(qfp.qf_fnum)
         } else {
             ptr::null_mut()
         };
         if !buf.is_null() {
-            fname = if (*qfp).qf_fname.is_null() {
+            fname = if qfp.qf_fname.is_null() {
                 unsafe { (*buf).b_fname }
             } else {
-                (*qfp).qf_fname
+                qfp.qf_fname
             };
-            if (*qfp).qf_type as c_int == 1 {
+            if qfp.qf_type as c_int == 1 {
                 // :helpgrep entries name the help file only.
                 fname = unsafe { path_tail(fname) };
             }
@@ -125,11 +125,11 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
     if filtered && !fname.is_null() {
         filtered = unsafe { message_filtered(fname) };
     }
-    if filtered && !(*qfp).qf_pattern.is_null() {
-        filtered = unsafe { message_filtered((*qfp).qf_pattern) };
+    if filtered && !qfp.qf_pattern.is_null() {
+        filtered = unsafe { message_filtered(qfp.qf_pattern) };
     }
     if filtered {
-        filtered = unsafe { message_filtered((*qfp).qf_text) };
+        filtered = unsafe { message_filtered(qfp.qf_text) };
     }
     if filtered {
         return;
@@ -142,14 +142,14 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
     unsafe { msg_outtrans(heading.as_mut_ptr(), cursel, false) };
 
     // The position: "<lnum>[-<end>][ col <col>[-<end>]][ <type> <nr>]".
-    if (*qfp).qf_lnum != 0 {
+    if qfp.qf_lnum != 0 {
         unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
     }
     let position = build_line(|out| {
-        if (*qfp).qf_lnum != 0 {
+        if qfp.qf_lnum != 0 {
             unsafe { qf_range_text(out, qfp.raw().cast_const()) };
         }
-        let types = qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr);
+        let types = qf_types(qfp.qf_type as c_int, qfp.qf_nr);
         unsafe { push_cstr(out, types.as_ptr()) };
     });
     if position[0] != 0 {
@@ -157,8 +157,8 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
     }
     unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
 
-    if !(*qfp).qf_pattern.is_null() {
-        let pattern = build_line(|out| unsafe { qf_fmt_text(out, (*qfp).qf_pattern) });
+    if !qfp.qf_pattern.is_null() {
+        let pattern = build_line(|out| unsafe { qf_fmt_text(out, qfp.qf_pattern) });
         unsafe { msg_puts(pattern.as_ptr().cast()) };
         unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
     }
@@ -166,10 +166,10 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
 
     // The message itself. An unrecognized line keeps its indent, since
     // the compiler may be marking a word with "^^^^".
-    let text = if !fname.is_null() || (*qfp).qf_lnum != 0 {
-        unsafe { skipwhite((*qfp).qf_text) }
+    let text = if !fname.is_null() || qfp.qf_lnum != 0 {
+        unsafe { skipwhite(qfp.qf_text) }
     } else {
-        (*qfp).qf_text
+        qfp.qf_text
     };
     let line = build_line(|out| unsafe { qf_fmt_text(out, text) })
         .as_ptr()
@@ -195,7 +195,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
 
     // "+N" lists N entries from the current one; otherwise the argument
     // is a range, counted from the end when negative.
-    let mut arg = (*eap).arg;
+    let mut arg = eap.arg;
     let plus = unsafe { *arg } == b'+' as c_char;
     if plus {
         arg = unsafe { arg.add(1) };
@@ -212,10 +212,10 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
     }
     let qfl = qf_current_list(qi);
     if plus {
-        idx2 = (*qfl).qf_index + idx1;
-        idx1 = (*qfl).qf_index;
+        idx2 = qfl.qf_index + idx1;
+        idx1 = qfl.qf_index;
     } else {
-        let count = (*qfl).qf_count;
+        let count = qfl.qf_count;
         if idx1 < 0 {
             idx1 = if -idx1 > count { 0 } else { idx1 + count + 1 };
         }
@@ -243,13 +243,13 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
 
     // Without "!" only recognised entries are listed — unless none of
     // them is recognised, when they all are.
-    let all = (*eap).forceit != 0 || (*qfl).qf_nonevalid;
+    let all = eap.forceit != 0 || qfl.qf_nonevalid;
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     let mut i: c_int = 1;
-    let mut qfp = (*qfl).qf_start;
-    while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
+    let mut qfp = qfl.qf_start;
+    while !got_int.get() && i <= qfl.qf_count && !qfp.is_null() {
         if (unsafe { (*qfp).qf_valid } != 0 || all) && idx1 <= i && i <= idx2 {
-            unsafe { qf_list_entry(qfp, i, i == (*qfl).qf_index) };
+            unsafe { qf_list_entry(qfp, i, i == qfl.qf_index) };
         }
         os_breakcheck();
         i += 1;
@@ -300,26 +300,26 @@ pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const qfline_T) {
     let buf = range.as_mut_ptr();
     let size = IOSIZE as size_t;
     let fmt = c"%d".as_ptr();
-    let lnum = (*qfp).qf_lnum;
+    let lnum = qfp.qf_lnum;
     let mut len = unsafe { vim_snprintf_safelen(buf, size, fmt, lnum) };
-    if (*qfp).qf_end_lnum > 0 && (*qfp).qf_lnum != (*qfp).qf_end_lnum {
+    if qfp.qf_end_lnum > 0 && qfp.qf_lnum != qfp.qf_end_lnum {
         let at = unsafe { buf.add(len) };
         let room = IOSIZE as size_t - len;
         let fmt = c"-%d".as_ptr();
-        let end_lnum = (*qfp).qf_end_lnum;
+        let end_lnum = qfp.qf_end_lnum;
         len += unsafe { vim_snprintf_safelen(at, room, fmt, end_lnum) };
     }
-    if (*qfp).qf_col > 0 {
+    if qfp.qf_col > 0 {
         let at = unsafe { buf.add(len) };
         let room = IOSIZE as size_t - len;
         let fmt = c" col %d".as_ptr();
-        let col = (*qfp).qf_col;
+        let col = qfp.qf_col;
         len += unsafe { vim_snprintf_safelen(at, room, fmt, col) };
-        if (*qfp).qf_end_col > 0 && (*qfp).qf_col != (*qfp).qf_end_col {
+        if qfp.qf_end_col > 0 && qfp.qf_col != qfp.qf_end_col {
             let at = unsafe { buf.add(len) };
             let room = IOSIZE as size_t - len;
             let fmt = c"-%d".as_ptr();
-            let end_col = (*qfp).qf_end_col;
+            let end_col = qfp.qf_end_col;
             len += unsafe { vim_snprintf_safelen(at, room, fmt, end_col) };
         }
     }
@@ -340,8 +340,8 @@ unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
     let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
     let size = IOSIZE as size_t;
     let fmt = unsafe { gettext(c"%serror list %d of %d; %d errors ".as_ptr()) };
-    let listcount = (*qi).qf_listcount;
-    let count = (*qfl).qf_count;
+    let listcount = qi.qf_listcount;
+    let count = qfl.qf_count;
     let len = unsafe {
         vim_snprintf_safelen(
             buf.as_mut_ptr(),
@@ -353,13 +353,13 @@ unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
             count,
         )
     };
-    if !(*qfl).qf_title.is_null() {
+    if !qfl.qf_title.is_null() {
         // The title starts at a fixed column, when there is room.
         if len < 34 {
             buf[len..34].fill(b' ' as c_char);
             buf[34] = 0;
         }
-        unsafe { xstrlcat(buf.as_mut_ptr(), (*qfl).qf_title, IOSIZE as size_t) };
+        unsafe { xstrlcat(buf.as_mut_ptr(), qfl.qf_title, IOSIZE as size_t) };
     }
     let title = buf.as_mut_ptr();
     let room = Columns.get() - 1;
@@ -378,28 +378,28 @@ pub unsafe fn qf_age(eap: *mut exarg_T) {
     let Some(mut qi) = qf_cmd_stack(eap, true) else {
         return;
     };
-    let count = if (*eap).addr_count != 0 {
-        (*eap).line2 as c_int
+    let count = if eap.addr_count != 0 {
+        eap.line2 as c_int
     } else {
         1
     };
-    let older = (*eap).cmdidx == CMD_colder || (*eap).cmdidx == CMD_lolder;
+    let older = eap.cmdidx == CMD_colder || eap.cmdidx == CMD_lolder;
     for _ in 0..count {
         if older {
-            if (*qi).qf_curlist == 0 {
+            if qi.qf_curlist == 0 {
                 qf_emsg(c"E380: At bottom of quickfix stack".as_ptr());
                 break;
             }
-            (*qi).qf_curlist -= 1;
+            qi.qf_curlist -= 1;
         } else {
-            if (*qi).qf_curlist >= (*qi).qf_listcount - 1 {
+            if qi.qf_curlist >= qi.qf_listcount - 1 {
                 qf_emsg(c"E381: At top of quickfix stack".as_ptr());
                 break;
             }
-            (*qi).qf_curlist += 1;
+            qi.qf_curlist += 1;
         }
     }
-    unsafe { qf_msg(qi.raw(), (*qi).qf_curlist, c"".as_ptr()) };
+    unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };
     qf_redraw(qi, ptr::null_mut());
 }
 
@@ -414,11 +414,11 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     let stack = qf_cmd_stack(eap, false);
-    if (*eap).addr_count > 0 {
+    if eap.addr_count > 0 {
         match stack {
             None => qf_emsg(&raw const e_loclist as *const c_char),
-            Some(mut qi) if (*eap).line2 > 0 && (*eap).line2 <= qi.qf_listcount as linenr_T => {
-                qi.qf_curlist = ((*eap).line2 - 1) as c_int;
+            Some(mut qi) if eap.line2 > 0 && eap.line2 <= qi.qf_listcount as linenr_T => {
+                qi.qf_curlist = (eap.line2 - 1) as c_int;
                 // SAFETY: `qi` is live and `qf_curlist` names one of its
                 // lists, which is the whole of `qf_msg`'s precondition.
                 unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };

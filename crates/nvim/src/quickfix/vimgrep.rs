@@ -128,17 +128,16 @@ impl Search {
         let mut search = Search {
             spat: ptr::null_mut(),
             flags: 0,
-            tomatch: if (*eap).addr_count > 0 {
-                (*eap).line2 as c_int
+            tomatch: if eap.addr_count > 0 {
+                eap.line2 as c_int
             } else {
                 MAXLNUM as c_int
             },
             regmatch: regmmatch_T::default(),
-            qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*(*eap).cmdlinep).as_ptr()) },
+            qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*eap.cmdlinep).as_ptr()) },
         };
 
-        let p =
-            unsafe { skip_vimgrep_pat((*eap).arg, &raw mut search.spat, &raw mut search.flags) };
+        let p = unsafe { skip_vimgrep_pat(eap.arg, &raw mut search.spat, &raw mut search.flags) };
         if p.is_null() {
             qf_emsg(&raw const e_invalpat as *const c_char);
             return None;
@@ -272,13 +271,13 @@ unsafe fn match_buflines(
     let bufnum = if duplicate_name {
         0
     } else {
-        (*buf).handle as c_int
+        buf.handle as c_int
     };
     let global = search.flags & VGR_GLOBAL as c_int != 0;
     let mut found_match = false;
 
     let mut lnum: linenr_T = 1;
-    while lnum <= (*buf).b_ml.ml_line_count && search.tomatch > 0 {
+    while lnum <= buf.b_ml.ml_line_count && search.tomatch > 0 {
         if search.flags & VGR_FUZZY as c_int == 0 {
             let mut col: colnr_T = 0;
             while unsafe {
@@ -423,10 +422,10 @@ unsafe fn existing_swapfile(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- a live `buf_T`.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     // SAFETY: forwarded from the caller.
-    if (*buf).b_ml.ml_mfp.is_null() {
+    if buf.b_ml.ml_mfp.is_null() {
         return false;
     }
-    let fname = unsafe { mf_fname((*buf).b_ml.ml_mfp) };
+    let fname = unsafe { mf_fname(buf.b_ml.ml_mfp) };
     if fname.is_null() {
         return false;
     }
@@ -626,11 +625,11 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
-    if !check_can_set_curbuf_forceit((*eap).forceit) {
+    if !check_can_set_curbuf_forceit(eap.forceit) {
         return;
     }
 
-    let au_name = vgr_get_auname((*eap).cmdidx);
+    let au_name = vgr_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
         if claimed && aborting() {
@@ -647,7 +646,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     };
 
     let adding = matches!(
-        (*eap).cmdidx,
+        eap.cmdidx,
         CMD_grepadd | CMD_lgrepadd | CMD_vimgrepadd | CMD_lvimgrepadd
     );
     if !adding || qf_is_empty(qi) {
@@ -665,9 +664,9 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     }
 
     let mut qfl = qf_current_list(qi);
-    (*qfl).qf_nonevalid = false;
-    (*qfl).qf_ptr = (*qfl).qf_start;
-    (*qfl).qf_index = 1;
+    qfl.qf_nonevalid = false;
+    qfl.qf_ptr = qfl.qf_start;
+    qfl.qf_index = 1;
     qfl_changed(qfl);
 
     qf_redraw(qi, ptr::null_mut());
@@ -690,7 +689,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
         // format literal above and the editor's message buffers.
         unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), search.spat) };
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
-        unsafe { jump_to_match(qi.raw(), (*eap).forceit, &mut out) };
+        unsafe { jump_to_match(qi.raw(), eap.forceit, &mut out) };
     }
 
     qf_busy_end();

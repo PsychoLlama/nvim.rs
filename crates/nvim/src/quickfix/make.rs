@@ -96,7 +96,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
-    if unsafe { grep_internal((*eap).cmdidx) } {
+    if unsafe { grep_internal(eap.cmdidx) } {
         unsafe { ex_vimgrep(eap.raw()) };
         return;
     }
@@ -108,7 +108,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         p_menc.get()
     };
 
-    let au_name = make_get_auname((*eap).cmdidx);
+    let au_name = make_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
         if claimed && aborting() {
@@ -116,7 +116,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         }
     }
 
-    let wp = if unsafe { is_loclist_cmd((*eap).cmdidx as c_int) } {
+    let wp = if unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
         curwin.get()
     } else {
         ptr::null_mut()
@@ -130,12 +130,12 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
     // In case the name is not unique after all.
     unsafe { os_remove(fname) };
 
-    let cmd = unsafe { make_get_fullcmd((*eap).arg, fname) };
+    let cmd = unsafe { make_get_fullcmd(eap.arg, fname) };
     unsafe { do_shell(cmd, ShellOpts::NONE) };
 
     incr_quickfix_busy();
 
-    let is_make = matches!((*eap).cmdidx, CMD_make | CMD_lmake);
+    let is_make = matches!(eap.cmdidx, CMD_make | CMD_lmake);
     let errorformat = if is_make {
         p_efm.get()
     } else {
@@ -146,10 +146,10 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
             p_gefm.get()
         }
     };
-    let newlist = !matches!((*eap).cmdidx, CMD_grepadd | CMD_lgrepadd);
+    let newlist = !matches!(eap.cmdidx, CMD_grepadd | CMD_lgrepadd);
 
     let newlist2 = newlist as c_int;
-    let title = unsafe { qf_cmdtitle(*(*eap).cmdlinep) };
+    let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
     let qf_title = title.as_ptr();
     let res = unsafe { qf_init(wp, fname, errorformat, newlist2, qf_title, enc) };
 
@@ -170,7 +170,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         if let Some(name) = au_name {
             fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
         }
-        if res > 0 && (*eap).forceit == 0 && qf_list_still_valid(wp, save_qfid) {
+        if res > 0 && eap.forceit == 0 && qf_list_still_valid(wp, save_qfid) {
             // Display the first error.
             unsafe { qf_jump_first(qi.raw(), save_qfid, false as c_int) };
         }
