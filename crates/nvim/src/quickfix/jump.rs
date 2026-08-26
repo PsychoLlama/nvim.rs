@@ -477,7 +477,7 @@ pub(crate) unsafe fn qf_jump_newwin(
         settle = Some((qf_ptr, qf_index));
 
         // No need to print the message when the quickfix window shows it.
-        let print_message = !unsafe { qf_win_pos_update(qi.raw(), old_qf_index) };
+        let print_message = !qf_win_pos_update(qi, old_qf_index);
         let prev_winid = cur_win().handle as c_int;
         let mut opened_window = false;
 

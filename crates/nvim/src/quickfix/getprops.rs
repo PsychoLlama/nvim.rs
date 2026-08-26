@@ -255,11 +255,11 @@ unsafe fn qf_winid(qi: *mut qf_info_T) -> c_int {
         if qi.is_null() {
             return 0;
         }
-        let win = qf_find_win(qi);
-        if win.is_null() {
+        // SAFETY: the caller's promise -- a live stack, checked non-null.
+        let Some(win) = qf_find_win(Qi::new(qi)) else {
             return 0;
-        }
-        (*win).handle as c_int
+        };
+        win.handle as c_int
     }
 }
 

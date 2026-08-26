@@ -18,7 +18,7 @@ use crate::types::{
     FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
     bcount_t,
 };
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -53,34 +53,34 @@ impl CurrentDir {
 pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
-    let buf = unsafe { qf_find_buf(qi.raw()) };
-    if buf.is_null() {
+    let Some(mut buf) = qf_find_buf(qi) else {
         return;
-    }
+    };
 
-    let old_line_count = unsafe { (*buf).b_ml.ml_line_count };
-    let old_endcol = unsafe { ml_get_buf_len(buf, old_line_count) };
-    let old_bytecount = unsafe { get_region_bytecount(buf, 1, old_line_count, 0, old_endcol) };
+    let old_line_count = buf.b_ml.ml_line_count;
+    // SAFETY: a live buffer and a line number inside it.
+    let old_endcol = unsafe { ml_get_buf_len(buf.raw(), old_line_count) };
+    // SAFETY: a live buffer and a region inside it.
+    let old_bytecount =
+        unsafe { get_region_bytecount(buf.raw(), 1, old_line_count, 0, old_endcol) };
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
     let mut qf_winid = 0;
     if qi.qfl_type == QFLT_LOCATION {
         let win = if cur_win().w_llist == qi.raw() {
-            curwin.get()
+            cur_win()
         } else {
             // The file window, or failing that the location list window.
-            let mut win = unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) };
-            if win.is_null() {
-                win = unsafe { qf_find_win(qi.raw().cast_const()) };
-            }
-            if win.is_null() {
+            // SAFETY: a live stack.
+            let win = unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) };
+            // SAFETY: `qf_find_win_with_loclist` answers a live window or null.
+            let Some(win) = (unsafe { Win::from_raw(win) }).or_else(|| qf_find_win(qi)) else {
                 return;
-            }
+            };
             win
         };
-        qf_winid = unsafe { (*win).handle };
+        qf_winid = win.handle;
     }
 
     // Autocommands may cause trouble.
@@ -89,18 +89,22 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
     let mut aco = aco_save_T::default();
     if old_last.is_null() {
         // Set curwin/curbuf to buf and save a few things.
-        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+        // SAFETY: a live buffer, and `aco` outlives the restore below.
+        unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
     }
-    unsafe { qf_update_win_titlevar(qi.raw()) };
-    unsafe { qf_fill_buffer(qf_get_curlist(qi.raw()), buf, old_last, qf_winid) };
+    qf_update_win_titlevar(qi);
+    // SAFETY: a live list, buffer and entry.
+    unsafe { qf_fill_buffer(qf_get_curlist(qi.raw()), buf.raw(), old_last, qf_winid) };
 
-    let new_line_count = unsafe { (*buf).b_ml.ml_line_count };
-    let new_endcol = unsafe { ml_get_buf_len(buf, new_line_count) };
+    let new_line_count = buf.b_ml.ml_line_count;
+    // SAFETY: a live buffer and a line number inside it.
+    let new_endcol = unsafe { ml_get_buf_len(buf.raw(), new_line_count) };
     let delta = new_line_count - old_line_count;
     if old_last.is_null() {
-        let bytes = unsafe { get_region_bytecount(buf, 1, new_line_count, 0, new_endcol) };
+        // SAFETY: a live buffer and a region inside it.
+        let bytes = unsafe { get_region_bytecount(buf.raw(), 1, new_line_count, 0, new_endcol) };
         splice(
-            buf,
+            buf.raw(),
             &Splice {
                 start: (0, 0),
                 old: (old_line_count - 1, 0, old_bytecount),
@@ -112,32 +116,37 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
         } else {
             1
         };
-        unsafe { changed_lines(buf, 1, 0, lnume, delta, true) };
+        // SAFETY: a live buffer and lines inside it.
+        unsafe { changed_lines(buf.raw(), 1, 0, lnume, delta, true) };
     } else if delta > 0 {
         let start_lnum = old_line_count + 1;
-        let bytes = unsafe { get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol) };
+        // SAFETY: a live buffer and a region inside it.
+        let bytes =
+            unsafe { get_region_bytecount(buf.raw(), start_lnum, new_line_count, 0, new_endcol) };
         splice(
-            buf,
+            buf.raw(),
             &Splice {
                 start: (old_line_count - 1, old_endcol),
                 old: (0, 0, 0),
                 new: (delta, new_endcol, bytes),
             },
         );
-        unsafe { changed_lines(buf, start_lnum, 0, start_lnum, delta, true) };
+        // SAFETY: a live buffer and lines inside it.
+        unsafe { changed_lines(buf.raw(), start_lnum, 0, start_lnum, delta, true) };
     }
-    unsafe { (*buf).b_changed = false as c_int };
+    buf.b_changed = false as c_int;
 
     if old_last.is_null() {
-        unsafe { qf_win_pos_update(qi.raw(), 0) };
+        qf_win_pos_update(qi, 0);
         // Restore curwin/curbuf and a few other things.
+        // SAFETY: the `aco` `aucmd_prepbuf` above filled in.
         unsafe { aucmd_restbuf(&raw mut aco) };
     }
 
     // Only redraw when the added lines are visible, to avoid flicker.
-    let win = unsafe { qf_find_win(qi.raw().cast_const()) };
-    if !win.is_null() && old_line_count < unsafe { (*win).w_botline } {
-        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+    if qf_find_win(qi).is_some_and(|win| old_line_count < win.w_botline) {
+        // SAFETY: a live buffer.
+        unsafe { redraw_buf_later(buf.raw(), UPD_NOT_VALID) };
     }
 
     // Always called after incr_quickfix_busy().

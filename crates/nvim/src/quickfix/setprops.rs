@@ -406,7 +406,7 @@ unsafe fn qf_setprop_title(
         xfree((*qfl).qf_title.cast());
         (*qfl).qf_title = tv_dict_get_string_alloc(what, c"title".as_ptr());
         if qf_idx == (*qi).qf_curlist {
-            qf_update_win_titlevar(qi);
+            qf_update_win_titlevar(Qi::new(qi));
         }
         Ok(())
     }
@@ -552,7 +552,7 @@ unsafe fn qf_setprop_curidx(
 
         // Update the displayed quickfix list.
         if (*qf_get_curlist(qi)).qf_id == (*qfl).qf_id {
-            qf_win_pos_update(qi, old_qfidx);
+            qf_win_pos_update(Qi::new(qi), old_qfidx);
         }
         Ok(())
     }

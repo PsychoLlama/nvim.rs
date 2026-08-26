@@ -21,7 +21,7 @@
 use super::*;
 use crate::types::event_T;
 use crate::types::{FAIL, OK};
-use crate::winlayer::{Buf, Live, Win};
+use crate::winlayer::{Buf, Ea, Live, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -39,10 +39,6 @@ pub(crate) type Qfl = Live<qf_list_T>;
 
 /// One entry on a list — the same promise as [`Qi`].
 pub(crate) type Qfe = Live<qfline_T>;
-
-/// The Ex command being run — the same promise as [`Qi`], discharged by the
-/// `do_cmdline` frame that owns the `exarg_T` outliving the call.
-pub(crate) type Ea = Live<exarg_T>;
 
 /// The one quickfix stack. It is a static rather than an allocation
 /// because it outlives every window and is never freed. Reached through
@@ -93,6 +89,17 @@ impl QfStack {
             QfStack::Global => ql_info_actual.ptr(),
             QfStack::Local(qi) => qi,
         }
+    }
+
+    /// The same address as a [`Qi`], which is what the checked half of the
+    /// module works through.
+    ///
+    /// Safe because the enum's invariant is the promise `Qi` wants: `Global`
+    /// names a static that outlives the editor, and `Local` is documented
+    /// never null and only built from a live stack.
+    pub(crate) fn qi(self) -> Qi {
+        // SAFETY: both variants name a live stack -- see above.
+        unsafe { Qi::new(self.raw()) }
     }
 }
 
@@ -726,32 +733,40 @@ pub unsafe fn copy_loclist_stack(from: *mut win_T, to: *mut win_T) {
 pub(crate) unsafe fn qf_free_stack(mut wp: *mut win_T, qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
-    let qfwin = unsafe { qf_find_win(qi.raw().cast_const()) };
-    if !qfwin.is_null() {
+    let qfwin = qf_find_win(qi);
+    if qfwin.is_some() {
         if qi.qf_curlist < qi.qf_listcount {
+            // SAFETY: a live stack always has a current list.
             unsafe { qf_free(qf_get_curlist(qi.raw())) };
         }
         qf_redraw(qi, ptr::null_mut());
     }
+    // SAFETY: forwarded from the caller -- null or a live window.
     if !wp.is_null() && unsafe { is_ll_window(wp) } {
         // Prefer the window the location list belongs to over the
         // location list window showing it.
+        // SAFETY: a live stack.
         let llwin = unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) };
         if !llwin.is_null() {
             wp = llwin;
         }
     }
+    // SAFETY: forwarded from the caller -- null or a live window.
     unsafe { qf_free_all(wp) };
     if wp.is_null() {
         qi.qf_curlist = 0;
         qi.qf_listcount = 0;
-    } else if !qfwin.is_null() {
-        let new_ll = qf_alloc_stack(QFLT_LOCATION, unsafe { (*wp).w_onebuf_opt.wo_lhi } as c_int);
-        unsafe { (*new_ll).qf_bufnr = (*(*qfwin).w_buffer).handle as c_int };
-        unsafe { ll_free_all(&raw mut (*qfwin).w_llist_ref) };
-        unsafe { (*qfwin).w_llist_ref = new_ll };
-        if wp != qfwin {
+    } else if let Some(mut qfwin) = qfwin {
+        // SAFETY: a live window.
+        let lhi = unsafe { (*wp).w_onebuf_opt.wo_lhi } as c_int;
+        let new_ll = qf_alloc_stack(QFLT_LOCATION, lhi);
+        // SAFETY: a freshly allocated stack.
+        unsafe { (*new_ll).qf_bufnr = qfwin.buffer().handle as c_int };
+        // SAFETY: the window's own list slot.
+        unsafe { ll_free_all(&raw mut qfwin.w_llist_ref) };
+        qfwin.w_llist_ref = new_ll;
+        if wp != qfwin.raw() {
+            // SAFETY: a live window and a freshly allocated stack.
             unsafe { win_set_loclist(wp, new_ll) };
         }
     }

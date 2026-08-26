@@ -60,7 +60,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
-use crate::winlayer::{Buf, Live, Win};
+use crate::winlayer::{Buf, Ea, Live, Win};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -71,15 +71,6 @@ pub use command::{
     ex_next, ex_previous, ex_rewind, get_arglist_name,
 };
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
-
-/// The Ex command being run, whose caller has promised it outlives the
-/// value.
-///
-/// The promise is discharged by the `do_cmdline` frame that owns the
-/// `exarg_T`: it outlives every command this module runs. Wrapping is the
-/// unsafe step, once per entry point; every `(*eap).field` after it is
-/// ordinary checked code.
-pub(crate) type Ea = Live<exarg_T>;
 
 /// An argument list — the global one, or a window's own copy — the same
 /// promise as [`Ea`]. A list is reference counted and outlives any command

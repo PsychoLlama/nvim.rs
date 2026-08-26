@@ -24,55 +24,13 @@ use crate::window::{
 };
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{CStr, c_char, c_int};
-use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 // ---------------------------------------------------------------------------
 // The stack and the list, which the rest of the quickfix code still hands
 // around as raw pointers.
 
-/// A quickfix or location list stack.
-///
-/// Wrapping one promises it outlives the value, which is the contract every
-/// entry point in this file already states; the `Deref` impls hold the whole
-/// obligation.
-#[derive(Clone, Copy)]
-struct Qi(*mut qf_info_T);
-
-impl Deref for Qi {
-    type Target = qf_info_T;
-
-    fn deref(&self) -> &qf_info_T {
-        // SAFETY: the wrap's promise -- a live stack.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Qi {
-    fn deref_mut(&mut self) -> &mut qf_info_T {
-        // SAFETY: the wrap's promise -- a live stack.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// One list on a stack — the same promise as [`Qi`].
-#[derive(Clone, Copy)]
-struct Qfl(*mut qf_list_T);
-
-impl Deref for Qfl {
-    type Target = qf_list_T;
-
-    fn deref(&self) -> &qf_list_T {
-        // SAFETY: the wrap's promise -- a live list.
-        unsafe { &*self.0 }
-    }
-}
-
 impl Qi {
-    fn raw(self) -> *mut qf_info_T {
-        self.0
-    }
-
     /// `IS_QF_STACK()`: the quickfix stack, rather than a location list.
     fn is_quickfix_stack(self) -> bool {
         self.qfl_type == QFLT_QUICKFIX
@@ -81,25 +39,21 @@ impl Qi {
     /// `qf_get_curlist()`: the list the stack is currently on.
     fn curlist(self) -> Qfl {
         // SAFETY: a live stack, which always has a current list.
-        Qfl(unsafe { qf_get_curlist(self.0) })
+        unsafe { Qfl::new(qf_get_curlist(self.raw())) }
     }
 
     /// `qf_stack_empty()`.
     fn is_empty(self) -> bool {
         // SAFETY: a live stack.
-        unsafe { qf_stack_empty(self.0) }
+        unsafe { qf_stack_empty(self.raw()) }
     }
 }
 
 impl Qfl {
-    fn raw(self) -> *mut qf_list_T {
-        self.0
-    }
-
     /// `qf_list_empty()`.
     fn is_empty(self) -> bool {
         // SAFETY: a live list.
-        unsafe { qf_list_empty(self.0) }
+        unsafe { qf_list_empty(self.raw()) }
     }
 }
 
@@ -185,7 +139,7 @@ fn clamp_cursor(wp: Win) {
 unsafe fn stack_of(eap: *mut exarg_T, print_emsg: bool) -> Option<Qi> {
     // SAFETY: forwarded from the caller.
     let qi = unsafe { qf_cmd_get_stack(eap, print_emsg) };
-    (!qi.is_null()).then_some(Qi(qi))
+    (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
 }
 
 /// Call `wanted` on every window of every tab page, answering the first one
@@ -215,32 +169,13 @@ fn is_qf_win(win: Win, qi: Qi) -> bool {
             || qi.qfl_type == QFLT_LOCATION && ptr::eq(win.w_llist_ref, qi.raw()))
 }
 
-/// The window showing `qi` in the current tab page, or null.
-///
-/// # Safety
-///
-/// `qi` must be a live stack.
-pub(crate) unsafe fn qf_find_win(qi: *const qf_info_T) -> *mut win_T {
-    // SAFETY: the caller's promise -- a live stack.
-    let qi = Qi(qi as *mut qf_info_T);
-    find_win(qi).map_or(ptr::null_mut(), Win::raw)
-}
-
-fn find_win(qi: Qi) -> Option<Win> {
+/// The window showing `qi` in the current tab page, if there is one.
+pub(crate) fn qf_find_win(qi: Qi) -> Option<Win> {
     windows().find(|&win| is_qf_win(win, qi))
 }
 
-/// The buffer the stack is shown in, from any tab page, or null.
-///
-/// # Safety
-///
-/// `qi` must be a live stack.
-pub(crate) unsafe fn qf_find_buf(qi: *mut qf_info_T) -> *mut buf_T {
-    // SAFETY: the caller's promise -- a live stack.
-    find_buffer(Qi(qi)).map_or(ptr::null_mut(), Buf::raw)
-}
-
-fn find_buffer(mut qi: Qi) -> Option<Buf> {
+/// The buffer the stack is shown in, from any tab page, if there is one.
+pub(crate) fn qf_find_buf(mut qi: Qi) -> Option<Buf> {
     if qi.qf_bufnr != INVALID_QFBUFNR {
         if let Some(qfbuf) = find_buf(qi.qf_bufnr) {
             return Some(qfbuf);
@@ -261,7 +196,7 @@ fn find_buffer(mut qi: Qi) -> Option<Buf> {
 /// With `resize` it is also given the size the command asked for, unless
 /// there is no room for it below.
 fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
-    let Some(win) = find_win(qi) else {
+    let Some(win) = qf_find_win(qi) else {
         return false;
     };
     goto_win(win);
@@ -305,7 +240,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
     // leaves this reading a freed buffer either way.
-    let qf_buf = find_buffer(qi);
+    let qf_buf = qf_find_buf(qi);
     // The current window becomes the previous window afterwards.
     let win = curwin.get();
 
@@ -394,13 +329,7 @@ fn set_list_title(qfl: Qfl) {
 
 /// Set `w:quickfix_title` in every window showing the stack, in every tab
 /// page.
-///
-/// # Safety
-///
-/// `qi` must be a live stack.
-pub(crate) unsafe fn qf_update_win_titlevar(qi: *mut qf_info_T) {
-    // SAFETY: the caller's promise -- a live stack.
-    let qi = Qi(qi);
+pub(crate) fn qf_update_win_titlevar(qi: Qi) {
     let qfl = qi.curlist();
     let save_curwin = curwin.get();
     // `set_list_title` only writes a window variable, so the window list is
@@ -472,7 +401,7 @@ pub unsafe fn ex_cwindow(eap: *mut exarg_T) {
         return;
     };
     let qfl = qi.curlist();
-    let win = find_win(qi);
+    let win = qf_find_win(qi);
     if qi.is_empty() || qfl.qf_nonevalid || qfl.is_empty() {
         if win.is_some() {
             // SAFETY: the caller's promise -- a live command.
@@ -494,7 +423,7 @@ pub unsafe fn ex_cclose(eap: *mut exarg_T) {
     let Some(qi) = (unsafe { stack_of(eap, false) }) else {
         return;
     };
-    if let Some(win) = find_win(qi) {
+    if let Some(win) = qf_find_win(qi) {
         close(win, false, false);
     }
 }
@@ -529,7 +458,7 @@ pub unsafe fn ex_cbottom(eap: *mut exarg_T) {
     let Some(qi) = (unsafe { stack_of(eap, true) }) else {
         return;
     };
-    if let Some(win) = find_win(qi) {
+    if let Some(win) = qf_find_win(qi) {
         let last = win.buffer().b_ml.ml_line_count;
         if win.w_cursor.lnum != last {
             win_goto_line(win, last);
@@ -549,28 +478,19 @@ pub unsafe fn qf_current_entry(wp: *mut win_T) -> linenr_T {
 }
 
 fn current_entry(wp: Win) -> linenr_T {
-    let mut qi = Qi(QfStack::Global.raw());
+    let mut qi = QfStack::Global.qi();
     if is_location_list_window(wp) {
         // In the location list window, the referenced list is the one.
-        qi = Qi(wp.w_llist_ref as *mut qf_info_T);
+        qi = QfStack::Local(wp.w_llist_ref.cast()).qi();
     }
     qi.curlist().qf_index as linenr_T
 }
 
 /// Put the cursor of the quickfix window on the current entry, answering
 /// whether there is such a window.
-///
-/// # Safety
-///
-/// `qi` must be a live stack.
-pub(crate) unsafe fn qf_win_pos_update(qi: *mut qf_info_T, old_qf_index: c_int) -> bool {
-    // SAFETY: the caller's promise -- a live stack.
-    win_pos_update(Qi(qi), old_qf_index)
-}
-
-fn win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
+pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
     let qf_index = qi.curlist().qf_index;
-    let Some(mut win) = find_win(qi) else {
+    let Some(mut win) = qf_find_win(qi) else {
         return false;
     };
     if qf_index as linenr_T <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
