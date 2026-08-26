@@ -16,6 +16,7 @@ use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::optionstr::empty_option;
 use crate::types::{FAIL, OK};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
+use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 
@@ -26,16 +27,14 @@ use core::ptr;
 /// `wanted` must not close or reorder windows.
 unsafe fn find_win(mut wanted: impl FnMut(*mut win_T) -> bool) -> *mut win_T {
     // SAFETY: the window list is walked front to back and not modified.
-    unsafe {
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if wanted(wp) {
-                return wp;
-            }
-            wp = (*wp).w_next;
+    let mut wp = firstwin.get();
+    while !wp.is_null() {
+        if wanted(wp) {
+            return wp;
         }
-        ptr::null_mut()
+        wp = unsafe { (*wp).w_next };
     }
+    ptr::null_mut()
 }
 
 /// A window showing a help file, that the user can reach.
@@ -64,11 +63,13 @@ pub(crate) unsafe fn qf_find_win_with_normal_buf() -> *mut win_T {
 ///
 /// `wp` and `qi` must be live, and `wp` must not already hold a list.
 pub(crate) unsafe fn win_set_loclist(wp: *mut win_T, qi: *mut qf_info_T) {
+    // SAFETY: the caller's promise -- a live `win_T`.
+    let mut wp = unsafe { Win::new(wp) };
+    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    unsafe {
-        (*wp).w_llist = qi;
-        (*qi).qf_refcount += 1;
-    }
+    (*wp).w_llist = qi.raw();
+    (*qi).qf_refcount += 1;
 }
 
 /// Find a help window, or split one off, and enter it.
@@ -81,73 +82,68 @@ pub(crate) unsafe fn jump_to_help_window(
     newwin: bool,
     opened_window: *mut bool,
 ) -> c_int {
+    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let wp = if cmdmod_tab() != 0 || newwin {
-            ptr::null_mut()
-        } else {
-            qf_find_help_win()
-        };
-        if !wp.is_null() && (*(*wp).w_buffer).b_nwindows > 0 {
-            win_enter(wp, true);
-            restart_edit.set(0);
-            return OK;
-        }
-
-        // Put the split at the very top when no position was asked for and
-        // the current window is one of a narrow vertical split.
-        let mut flags = WSP_HELP as c_int;
-        if cmdmod_split() == 0
-            && (*curwin.get()).w_width != Columns.get()
-            && (*curwin.get()).w_width < 80
-        {
-            flags |= WSP_TOP as c_int;
-        }
-        // A new window asked for by the user gets its own copy of the
-        // location list; otherwise it shares this one.
-        let share_loclist = (*qi).qfl_type == QFLT_LOCATION && !newwin;
-        if share_loclist {
-            flags |= WSP_NEWLOC as c_int;
-        }
-        if win_split(0, flags) == FAIL {
-            return FAIL;
-        }
-        *opened_window = true;
-        if ((*curwin.get()).w_height as OptInt) < p_hh.get() {
-            win_setheight(p_hh.get() as c_int);
-        }
-        if share_loclist {
-            win_set_loclist(curwin.get(), qi);
-        }
-        // Do not want insert mode in a help file.
+    let wp = if cmdmod_tab() != 0 || newwin {
+        ptr::null_mut()
+    } else {
+        unsafe { qf_find_help_win() }
+    };
+    if !wp.is_null() && unsafe { (*(*wp).w_buffer).b_nwindows } > 0 {
+        unsafe { win_enter(wp, true) };
         restart_edit.set(0);
-        OK
+        return OK;
     }
+
+    // Put the split at the very top when no position was asked for and
+    // the current window is one of a narrow vertical split.
+    let mut flags = WSP_HELP as c_int;
+    if cmdmod_split() == 0 && cur_win().w_width != Columns.get() && cur_win().w_width < 80 {
+        flags |= WSP_TOP as c_int;
+    }
+    // A new window asked for by the user gets its own copy of the
+    // location list; otherwise it shares this one.
+    let share_loclist = (*qi).qfl_type == QFLT_LOCATION && !newwin;
+    if share_loclist {
+        flags |= WSP_NEWLOC as c_int;
+    }
+    if win_split(0, flags) == FAIL {
+        return FAIL;
+    }
+    unsafe { *opened_window = true };
+    if (cur_win().w_height as OptInt) < p_hh.get() {
+        win_setheight(p_hh.get() as c_int);
+    }
+    if share_loclist {
+        unsafe { win_set_loclist(curwin.get(), qi.raw()) };
+    }
+    // Do not want insert mode in a help file.
+    restart_edit.set(0);
+    OK
 }
 
 /// Go to a window showing the buffer, in any tab page.
 pub(crate) unsafe fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
     // SAFETY: the tab and window lists are walked without being modified;
     // `goto_tabpage_win` is the last thing done.
-    unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            let mut wp = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                if (*(*wp).w_buffer).handle == fnum {
-                    goto_tabpage_win(tp, wp);
-                    return true;
-                }
-                wp = (*wp).w_next;
+    let mut tp = first_tabpage.get();
+    while !tp.is_null() {
+        let mut wp = if tp == curtab.get() {
+            firstwin.get()
+        } else {
+            unsafe { (*tp).tp_firstwin }
+        };
+        while !wp.is_null() {
+            if unsafe { (*(*wp).w_buffer).handle } == fnum {
+                unsafe { goto_tabpage_win(tp, wp) };
+                return true;
             }
-            tp = (*tp).tp_next;
+            wp = unsafe { (*wp).w_next };
         }
-        false
+        tp = unsafe { (*tp).tp_next };
     }
+    false
 }
 
 /// Split a window above the quickfix window to show a file in, when the
@@ -158,26 +154,24 @@ pub(crate) unsafe fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
 /// `ll_ref` must be null or a live location list stack.
 unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> c_int {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut flags = WSP_ABOVE as c_int;
-        if !ll_ref.is_null() {
-            flags |= WSP_NEWLOC as c_int;
-        }
-        if win_split(0, flags) == FAIL {
-            // Not enough room for a window.
-            return FAIL;
-        }
-        // Do not split again for the next entry.
-        p_swb.set(empty_option());
-        swb_flags.set(0);
-        (*curwin.get()).w_onebuf_opt.wo_scb = false as c_int;
-        (*curwin.get()).w_onebuf_opt.wo_crb = false as c_int;
-        if !ll_ref.is_null() {
-            // The new window shows the location list window's list.
-            win_set_loclist(curwin.get(), ll_ref);
-        }
-        OK
+    let mut flags = WSP_ABOVE as c_int;
+    if !ll_ref.is_null() {
+        flags |= WSP_NEWLOC as c_int;
     }
+    if win_split(0, flags) == FAIL {
+        // Not enough room for a window.
+        return FAIL;
+    }
+    // Do not split again for the next entry.
+    p_swb.set(empty_option());
+    swb_flags.set(0);
+    cur_win().w_onebuf_opt.wo_scb = false as c_int;
+    cur_win().w_onebuf_opt.wo_crb = false as c_int;
+    if !ll_ref.is_null() {
+        // The new window shows the location list window's list.
+        unsafe { win_set_loclist(curwin.get(), ll_ref) };
+    }
+    OK
 }
 
 /// Enter a window to show a file in, jumping from a *location list* window.
@@ -191,32 +185,30 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> c_int {
 /// `use_win` must be null or a live window, `ll_ref` null or a live stack.
 unsafe fn qf_goto_win_with_ll_file(use_win: *mut win_T, qf_fnum: c_int, ll_ref: *mut qf_info_T) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut win = use_win;
-        if win.is_null() {
-            win = find_win(|wp| (*(*wp).w_buffer).handle == qf_fnum);
-        }
-        if win.is_null() {
-            // Walk backwards from here, wrapping at the top, for a window
-            // holding an ordinary buffer.
-            win = curwin.get();
-            while !bt_normal((*win).w_buffer) {
-                win = if (*win).w_prev.is_null() {
-                    lastwin.get()
-                } else {
-                    (*win).w_prev
-                };
-                if win == curwin.get() {
-                    break;
-                }
+    let mut win = use_win;
+    if win.is_null() {
+        win = unsafe { find_win(|wp| (*(*wp).w_buffer).handle == qf_fnum) };
+    }
+    if win.is_null() {
+        // Walk backwards from here, wrapping at the top, for a window
+        // holding an ordinary buffer.
+        win = curwin.get();
+        while !unsafe { bt_normal((*win).w_buffer) } {
+            win = if unsafe { (*win).w_prev.is_null() } {
+                lastwin.get()
+            } else {
+                unsafe { (*win).w_prev }
+            };
+            if win == curwin.get() {
+                break;
             }
         }
-        win_goto(win);
-        // A window that has no location list of its own adopts the one the
-        // location list window was showing.
-        if (*win).w_llist.is_null() && !ll_ref.is_null() {
-            win_set_loclist(win, ll_ref);
-        }
+    }
+    unsafe { win_goto(win) };
+    // A window that has no location list of its own adopts the one the
+    // location list window was showing.
+    if unsafe { (*win).w_llist.is_null() } && !ll_ref.is_null() {
+        unsafe { win_set_loclist(win, ll_ref) };
     }
 }
 
@@ -233,40 +225,38 @@ unsafe fn qf_goto_win_with_ll_file(use_win: *mut win_T, qf_fnum: c_int, ll_ref: 
 /// The window list must be live.
 unsafe fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut win = curwin.get();
-        let mut altwin: *mut win_T = ptr::null_mut();
-        while (*(*win).w_buffer).handle != qf_fnum {
-            win = if (*win).w_prev.is_null() {
-                lastwin.get()
-            } else {
-                (*win).w_prev
-            };
-            if is_qf_window(win) {
-                win = if swb_flags.get() & kOptSwbFlagUselast as c_uint != 0
-                    && win_valid(prevwin.get())
-                    && (*prevwin.get()).w_onebuf_opt.wo_wfb == 0
-                {
-                    prevwin.get()
-                } else if !altwin.is_null() {
-                    altwin
-                } else if !(*curwin.get()).w_prev.is_null() {
-                    (*curwin.get()).w_prev
-                } else {
-                    (*curwin.get()).w_next
-                };
-                break;
-            }
-            if altwin.is_null()
-                && (*win).w_onebuf_opt.wo_pvw == 0
-                && (*win).w_onebuf_opt.wo_wfb == 0
-                && bt_normal((*win).w_buffer)
+    let mut win = curwin.get();
+    let mut altwin: *mut win_T = ptr::null_mut();
+    while unsafe { (*(*win).w_buffer).handle } != qf_fnum {
+        win = if unsafe { (*win).w_prev.is_null() } {
+            lastwin.get()
+        } else {
+            unsafe { (*win).w_prev }
+        };
+        if unsafe { is_qf_window(win) } {
+            win = if swb_flags.get() & kOptSwbFlagUselast as c_uint != 0
+                && unsafe { win_valid(prevwin.get()) }
+                && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
             {
-                altwin = win;
-            }
+                prevwin.get()
+            } else if !altwin.is_null() {
+                altwin
+            } else if !cur_win().w_prev.is_null() {
+                cur_win().w_prev
+            } else {
+                cur_win().w_next
+            };
+            break;
         }
-        win_goto(win);
+        if altwin.is_null()
+            && unsafe { (*win).w_onebuf_opt.wo_pvw } == 0
+            && unsafe { (*win).w_onebuf_opt.wo_wfb } == 0
+            && unsafe { bt_normal((*win).w_buffer) }
+        {
+            altwin = win;
+        }
     }
+    unsafe { win_goto(win) };
 }
 
 /// Enter a window that can show the file an entry names, splitting one off
@@ -282,38 +272,38 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     opened_window: *mut bool,
 ) -> c_int {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        // A new window must not share the location list the current window
-        // is showing, or two windows would refer to the same one.
-        let ll_ref = if newwin {
-            ptr::null_mut()
-        } else {
-            (*curwin.get()).w_llist_ref
-        };
-        let mut usable_wp = ptr::null_mut();
-        if !ll_ref.is_null() {
-            usable_wp = qf_find_win_with_loclist(ll_ref);
-        }
-        // Upstream throws the window away and keeps only the answer to
-        // "is there one", so a window showing an ordinary buffer does not
-        // become the one jumped to; `qf_goto_win_*` looks again.
-        let mut usable_win = !usable_wp.is_null() || !qf_find_win_with_normal_buf().is_null();
-        if !usable_win && swb_flags.get() & kOptSwbFlagUsetab as c_uint != 0 {
-            usable_win = qf_goto_tabwin_with_file(qf_fnum);
-        }
-
-        let only_the_quickfix_window = firstwin.get() == lastwin.get() && bt_quickfix(curbuf.get());
-        if only_the_quickfix_window || !usable_win || newwin {
-            if qf_open_new_file_win(ll_ref) != OK {
-                return FAIL;
-            }
-            // Close it again if the jump fails.
-            *opened_window = true;
-        } else if !(*curwin.get()).w_llist_ref.is_null() {
-            qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref);
-        } else {
-            qf_goto_win_with_qfl_file(qf_fnum);
-        }
-        OK
+    // A new window must not share the location list the current window
+    // is showing, or two windows would refer to the same one.
+    let ll_ref = if newwin {
+        ptr::null_mut()
+    } else {
+        cur_win().w_llist_ref
+    };
+    let mut usable_wp = ptr::null_mut();
+    if !ll_ref.is_null() {
+        usable_wp = unsafe { qf_find_win_with_loclist(ll_ref) };
     }
+    // Upstream throws the window away and keeps only the answer to
+    // "is there one", so a window showing an ordinary buffer does not
+    // become the one jumped to; `qf_goto_win_*` looks again.
+    let mut usable_win =
+        !usable_wp.is_null() || !unsafe { qf_find_win_with_normal_buf() }.is_null();
+    if !usable_win && swb_flags.get() & kOptSwbFlagUsetab as c_uint != 0 {
+        usable_win = unsafe { qf_goto_tabwin_with_file(qf_fnum) };
+    }
+
+    let only_the_quickfix_window =
+        firstwin.get() == lastwin.get() && unsafe { bt_quickfix(curbuf.get()) };
+    if only_the_quickfix_window || !usable_win || newwin {
+        if unsafe { qf_open_new_file_win(ll_ref) } != OK {
+            return FAIL;
+        }
+        // Close it again if the jump fails.
+        unsafe { *opened_window = true };
+    } else if !cur_win().w_llist_ref.is_null() {
+        unsafe { qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref) };
+    } else {
+        unsafe { qf_goto_win_with_qfl_file(qf_fnum) };
+    }
+    OK
 }

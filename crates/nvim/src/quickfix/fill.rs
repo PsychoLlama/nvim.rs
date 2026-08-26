@@ -16,7 +16,9 @@ use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{
     FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
+    bcount_t,
 };
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -49,112 +51,97 @@ impl CurrentDir {
 ///
 /// `qi` must be a live stack, `old_last` null or one of its entries.
 pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_T) {
+    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let buf = qf_find_buf(qi);
-        if buf.is_null() {
-            return;
-        }
-
-        let old_line_count = (*buf).b_ml.ml_line_count;
-        let old_endcol = ml_get_buf_len(buf, old_line_count);
-        let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
-
-        // A location list's window id goes to 'quickfixtextfunc'; it is the
-        // window the list belongs to, not the one showing it.
-        let mut qf_winid = 0;
-        if (*qi).qfl_type == QFLT_LOCATION {
-            let win = if (*curwin.get()).w_llist == qi {
-                curwin.get()
-            } else {
-                // The file window, or failing that the location list window.
-                let mut win = qf_find_win_with_loclist(qi);
-                if win.is_null() {
-                    win = qf_find_win(qi);
-                }
-                if win.is_null() {
-                    return;
-                }
-                win
-            };
-            qf_winid = (*win).handle;
-        }
-
-        // Autocommands may cause trouble.
-        incr_quickfix_busy();
-
-        let mut aco = aco_save_T::default();
-        if old_last.is_null() {
-            // Set curwin/curbuf to buf and save a few things.
-            aucmd_prepbuf(&raw mut aco, buf);
-        }
-        qf_update_win_titlevar(qi);
-        qf_fill_buffer(qf_get_curlist(qi), buf, old_last, qf_winid);
-
-        let new_line_count = (*buf).b_ml.ml_line_count;
-        let new_endcol = ml_get_buf_len(buf, new_line_count);
-        let delta = new_line_count - old_line_count;
-        if old_last.is_null() {
-            let new_byte_count = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
-            extmark_splice(
-                buf,
-                0,
-                0,
-                old_line_count - 1,
-                0,
-                old_bytecount,
-                new_line_count - 1,
-                new_endcol,
-                new_byte_count,
-                kExtmarkNoUndo,
-            );
-            changed_lines(
-                buf,
-                1,
-                0,
-                if old_line_count > 0 {
-                    old_line_count + 1
-                } else {
-                    1
-                },
-                delta,
-                true,
-            );
-        } else if delta > 0 {
-            let start_lnum = old_line_count + 1;
-            let new_byte_count =
-                get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
-            extmark_splice(
-                buf,
-                old_line_count - 1,
-                old_endcol,
-                0,
-                0,
-                0,
-                delta,
-                new_endcol,
-                new_byte_count,
-                kExtmarkNoUndo,
-            );
-            changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
-        }
-        (*buf).b_changed = false as c_int;
-
-        if old_last.is_null() {
-            qf_win_pos_update(qi, 0);
-            // Restore curwin/curbuf and a few other things.
-            aucmd_restbuf(&raw mut aco);
-        }
-
-        // Only redraw when the added lines are visible, to avoid flicker.
-        let win = qf_find_win(qi);
-        if !win.is_null() && old_line_count < (*win).w_botline {
-            redraw_buf_later(buf, UPD_NOT_VALID);
-        }
-
-        // Always called after incr_quickfix_busy().
-        decr_quickfix_busy();
+    let buf = unsafe { qf_find_buf(qi.raw()) };
+    if buf.is_null() {
+        return;
     }
+
+    let old_line_count = unsafe { (*buf).b_ml.ml_line_count };
+    let old_endcol = unsafe { ml_get_buf_len(buf, old_line_count) };
+    let old_bytecount = unsafe { get_region_bytecount(buf, 1, old_line_count, 0, old_endcol) };
+
+    // A location list's window id goes to 'quickfixtextfunc'; it is the
+    // window the list belongs to, not the one showing it.
+    let mut qf_winid = 0;
+    if (*qi).qfl_type == QFLT_LOCATION {
+        let win = if cur_win().w_llist == qi.raw() {
+            curwin.get()
+        } else {
+            // The file window, or failing that the location list window.
+            let mut win = unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) };
+            if win.is_null() {
+                win = unsafe { qf_find_win(qi.raw().cast_const()) };
+            }
+            if win.is_null() {
+                return;
+            }
+            win
+        };
+        qf_winid = unsafe { (*win).handle };
+    }
+
+    // Autocommands may cause trouble.
+    incr_quickfix_busy();
+
+    let mut aco = aco_save_T::default();
+    if old_last.is_null() {
+        // Set curwin/curbuf to buf and save a few things.
+        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+    }
+    unsafe { qf_update_win_titlevar(qi.raw()) };
+    unsafe { qf_fill_buffer(qf_get_curlist(qi.raw()), buf, old_last, qf_winid) };
+
+    let new_line_count = unsafe { (*buf).b_ml.ml_line_count };
+    let new_endcol = unsafe { ml_get_buf_len(buf, new_line_count) };
+    let delta = new_line_count - old_line_count;
+    if old_last.is_null() {
+        let bytes = unsafe { get_region_bytecount(buf, 1, new_line_count, 0, new_endcol) };
+        splice(
+            buf,
+            &Splice {
+                start: (0, 0),
+                old: (old_line_count - 1, 0, old_bytecount),
+                new: (new_line_count - 1, new_endcol, bytes),
+            },
+        );
+        let lnume = if old_line_count > 0 {
+            old_line_count + 1
+        } else {
+            1
+        };
+        unsafe { changed_lines(buf, 1, 0, lnume, delta, true) };
+    } else if delta > 0 {
+        let start_lnum = old_line_count + 1;
+        let bytes = unsafe { get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol) };
+        splice(
+            buf,
+            &Splice {
+                start: (old_line_count - 1, old_endcol),
+                old: (0, 0, 0),
+                new: (delta, new_endcol, bytes),
+            },
+        );
+        unsafe { changed_lines(buf, start_lnum, 0, start_lnum, delta, true) };
+    }
+    unsafe { (*buf).b_changed = false as c_int };
+
+    if old_last.is_null() {
+        unsafe { qf_win_pos_update(qi.raw(), 0) };
+        // Restore curwin/curbuf and a few other things.
+        unsafe { aucmd_restbuf(&raw mut aco) };
+    }
+
+    // Only redraw when the added lines are visible, to avoid flicker.
+    let win = unsafe { qf_find_win(qi.raw().cast_const()) };
+    if !win.is_null() && old_line_count < unsafe { (*win).w_botline } {
+        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+    }
+
+    // Always called after incr_quickfix_busy().
+    qf_busy_end();
 }
 
 /// Append one entry to the quickfix buffer as a line of text, answering
@@ -171,73 +158,73 @@ unsafe fn qf_buf_add_line(
     qftf_str: *const c_char,
     first_bufline: bool,
 ) -> bool {
+    // SAFETY: the caller's promise -- a live `qfline_T`.
+    let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
     // SAFETY: forwarded from the caller. Nothing in the line building
     // prints or runs an autocommand, which is `build_line`'s contract.
-    unsafe {
-        let line = build_line(|out| {
-            // A non-empty string from 'quickfixtextfunc' is the whole line.
-            if !qftf_str.is_null() && *qftf_str != 0 {
-                push_cstr(out, qftf_str);
-                return;
-            }
+    let line = build_line(|out| {
+        // A non-empty string from 'quickfixtextfunc' is the whole line.
+        if !qftf_str.is_null() && unsafe { *qftf_str } != 0 {
+            unsafe { push_cstr(out, qftf_str) };
+            return;
+        }
 
-            // "<where>|<position>| <message>".
-            if !(*qfp).qf_module.is_null() {
-                push_cstr(out, (*qfp).qf_module);
+        // "<where>|<position>| <message>".
+        if !(*qfp).qf_module.is_null() {
+            unsafe { push_cstr(out, (*qfp).qf_module) };
+        } else {
+            let errbuf = if (*qfp).qf_fnum != 0 {
+                buflist_findnr((*qfp).qf_fnum)
             } else {
-                let errbuf = if (*qfp).qf_fnum != 0 {
-                    buflist_findnr((*qfp).qf_fnum)
+                ptr::null_mut()
+            };
+            if !errbuf.is_null() && !unsafe { (*errbuf).b_fname.is_null() } {
+                if (*qfp).qf_type as c_int == 1 {
+                    // :helpgrep entries name the help file only.
+                    unsafe { push_cstr(out, path_tail((*errbuf).b_fname)) };
                 } else {
-                    ptr::null_mut()
-                };
-                if !errbuf.is_null() && !(*errbuf).b_fname.is_null() {
-                    if (*qfp).qf_type as c_int == 1 {
-                        // :helpgrep entries name the help file only.
-                        push_cstr(out, path_tail((*errbuf).b_fname));
-                    } else {
-                        // Shorten the file name if not done already. For
-                        // speed, only for the first entry of each buffer.
-                        if first_bufline
-                            && ((*errbuf).b_sfname.is_null()
-                                || path_is_absolute((*errbuf).b_sfname))
-                        {
-                            shorten_buf_fname(errbuf, dir.get(), false as c_int);
-                        }
-                        push_cstr(
-                            out,
-                            if (*qfp).qf_fname.is_null() {
-                                (*errbuf).b_fname
-                            } else {
-                                (*qfp).qf_fname
-                            },
-                        );
+                    // Shorten the file name if not done already. For
+                    // speed, only for the first entry of each buffer.
+                    if first_bufline
+                        && (unsafe { (*errbuf).b_sfname.is_null() }
+                            || unsafe { path_is_absolute((*errbuf).b_sfname) })
+                    {
+                        unsafe { shorten_buf_fname(errbuf, dir.get(), false as c_int) };
                     }
+                    let start_row = if (*qfp).qf_fname.is_null() {
+                        unsafe { (*errbuf).b_fname }
+                    } else {
+                        (*qfp).qf_fname
+                    };
+                    unsafe { push_cstr(out, start_row) };
                 }
             }
+        }
 
-            out.push(b'|');
-            if (*qfp).qf_lnum > 0 {
-                qf_range_text(out, qfp);
-                out.extend(qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr).to_bytes());
-            } else if !(*qfp).qf_pattern.is_null() {
-                qf_fmt_text(out, (*qfp).qf_pattern);
-            }
-            out.push(b'|');
-            out.push(b' ');
+        out.push(b'|');
+        if (*qfp).qf_lnum > 0 {
+            unsafe { qf_range_text(out, qfp.raw().cast_const()) };
+            out.extend(qf_types((*qfp).qf_type as c_int, (*qfp).qf_nr).to_bytes());
+        } else if !(*qfp).qf_pattern.is_null() {
+            unsafe { qf_fmt_text(out, (*qfp).qf_pattern) };
+        }
+        out.push(b'|');
+        out.push(b' ');
 
-            // Remove newlines and leading whitespace from the text. An
-            // unrecognized line — one with nothing but the two bars before
-            // it — keeps its indent: the compiler may be marking a word
-            // with "^^^^".
-            let recognized = out.len() > 3;
-            let text = if recognized {
-                skipwhite((*qfp).qf_text)
-            } else {
-                (*qfp).qf_text
-            };
-            qf_fmt_text(out, text);
-        });
+        // Remove newlines and leading whitespace from the text. An
+        // unrecognized line — one with nothing but the two bars before
+        // it — keeps its indent: the compiler may be marking a word
+        // with "^^^^".
+        let recognized = out.len() > 3;
+        let text = if recognized {
+            unsafe { skipwhite((*qfp).qf_text) }
+        } else {
+            (*qfp).qf_text
+        };
+        unsafe { qf_fmt_text(out, text) };
+    });
 
+    unsafe {
         ml_append_buf(
             buf,
             lnum,
@@ -262,63 +249,64 @@ unsafe fn call_qftf_func(
     start_idx: c_int,
     end_idx: c_int,
 ) -> *mut list_T {
+    // SAFETY: the caller's promise -- a live `qf_list_T`.
+    let mut qfl = unsafe { Qfl::new(qfl) };
     /// This does not work properly recursively.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: forwarded from the caller.
-    unsafe {
-        if RECURSIVE.get() {
-            return ptr::null_mut();
-        }
-        let cb = if (*qfl).qf_qftf_cb.type_0 != kCallbackNone {
-            &raw mut (*qfl).qf_qftf_cb
-        } else {
-            global_qftf()
-        };
-        if (*cb).type_0 == kCallbackNone {
-            return ptr::null_mut();
-        }
-        RECURSIVE.set(true);
-
-        let dict = tv_dict_alloc_lock(VAR_FIXED);
-        let add = |key: &CStr, value: varnumber_T| {
-            tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value);
-        };
-        add(
-            c"quickfix",
-            varnumber_T::from((*qfl).qfl_type == QFLT_QUICKFIX),
-        );
-        add(c"winid", qf_winid as varnumber_T);
-        add(c"id", (*qfl).qf_id as varnumber_T);
-        add(c"start_idx", start_idx as varnumber_T);
-        add(c"end_idx", end_idx as varnumber_T);
-        (*dict).dv_refcount += 1;
-
-        let mut args = [typval_T {
-            v_type: VAR_DICT,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_dict: dict },
-        }];
-        let mut rettv = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        let mut answer = ptr::null_mut::<list_T>();
-        let locked = Lock::text();
-        if callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) {
-            if rettv.v_type == VAR_LIST {
-                answer = rettv.vval.v_list;
-                tv_list_ref(answer);
-            }
-            tv_clear(&raw mut rettv);
-        }
-        drop(locked);
-        tv_dict_unref(dict);
-
-        RECURSIVE.set(false);
-        answer
+    if RECURSIVE.get() {
+        return ptr::null_mut();
     }
+    let cb = if (*qfl).qf_qftf_cb.type_0 != kCallbackNone {
+        // SAFETY: the caller's list, whose callback outlives this call.
+        &raw mut (*qfl).qf_qftf_cb
+    } else {
+        global_qftf()
+    };
+    if unsafe { (*cb).type_0 } == kCallbackNone {
+        return ptr::null_mut();
+    }
+    RECURSIVE.set(true);
+
+    let dict = unsafe { tv_dict_alloc_lock(VAR_FIXED) };
+    let add = |key: &CStr, value: varnumber_T| {
+        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+    };
+    add(
+        c"quickfix",
+        varnumber_T::from((*qfl).qfl_type == QFLT_QUICKFIX),
+    );
+    add(c"winid", qf_winid as varnumber_T);
+    add(c"id", (*qfl).qf_id as varnumber_T);
+    add(c"start_idx", start_idx as varnumber_T);
+    add(c"end_idx", end_idx as varnumber_T);
+    unsafe { (*dict).dv_refcount += 1 };
+
+    let mut args = [typval_T {
+        v_type: VAR_DICT,
+        v_lock: VAR_UNLOCKED,
+        vval: typval_vval_union { v_dict: dict },
+    }];
+    let mut rettv = typval_T {
+        v_type: VAR_UNKNOWN,
+        v_lock: VAR_UNLOCKED,
+        vval: typval_vval_union { v_number: 0 },
+    };
+    let mut answer = ptr::null_mut::<list_T>();
+    let locked = Lock::text();
+    if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {
+        if rettv.v_type == VAR_LIST {
+            answer = unsafe { rettv.vval.v_list };
+            unsafe { tv_list_ref(answer) };
+        }
+        unsafe { tv_clear(&raw mut rettv) };
+    }
+    drop(locked);
+    unsafe { tv_dict_unref(dict) };
+
+    RECURSIVE.set(false);
+    answer
 }
 
 /// Empty the quickfix buffer, which must be the current one.
@@ -331,25 +319,25 @@ unsafe fn call_qftf_func(
 /// `curbuf` must be the quickfix buffer.
 unsafe fn clear_qf_buffer() -> bool {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        // No undo information is stored — the quickfix buffer is usually
-        // not modifiable — so the undo stack is cleaned up instead, or an
-        // autocommand could invalidate it.
-        while !(*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
-            if ml_delete(1) == FAIL {
-                internal_error(c"qf_fill_buffer()".as_ptr());
-                return false;
-            }
+    // No undo information is stored — the quickfix buffer is usually
+    // not modifiable — so the undo stack is cleaned up instead, or an
+    // autocommand could invalidate it.
+    while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if unsafe { ml_delete(1) } == FAIL {
+            unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
+            return false;
         }
+    }
+    unsafe {
         find_tab_win(|wp| {
             if (*wp).w_buffer == curbuf.get() {
                 (*wp).w_skipcol = 0;
             }
             false
-        });
-        u_clearallandblockfree(curbuf.get());
-        true
-    }
+        })
+    };
+    unsafe { u_clearallandblockfree(curbuf.get()) };
+    true
 }
 
 /// Set the options a freshly filled quickfix buffer wants, and tell the
@@ -360,35 +348,53 @@ unsafe fn clear_qf_buffer() -> bool {
 /// `curbuf` must be the quickfix buffer.
 unsafe fn finish_qf_buffer() {
     // SAFETY: forwarded from the caller.
+    // Set 'filetype' to "qf" each time after filling the buffer. This
+    // resembles reading a file into a buffer, which is more logical
+    // when using autocommands.
+    cur_buf().b_ro_locked += 1;
+    set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OptionSetFlags::LOCAL);
+    cur_buf().b_p_ma = false as c_int;
+
+    cur_buf().b_keep_filetype = true; // don't detect 'filetype'
+    let start_row = c"quickfix".as_ptr().cast_mut();
+    let start_col = ptr::null_mut();
+    let old_col = curbuf.get();
+    unsafe { apply_autocmds(EVENT_BUFREADPOST, start_row, start_col, false, old_col) };
+    let lnum2 = c"quickfix".as_ptr().cast_mut();
+    let col = ptr::null_mut();
+    let old_col2 = curbuf.get();
+    unsafe { apply_autocmds(EVENT_BUFWINENTER, lnum2, col, false, old_col2) };
+    cur_buf().b_keep_filetype = false;
+    cur_buf().b_ro_locked -= 1;
+
+    // Make sure it will be redrawn.
+    unsafe { redraw_curbuf_later(UPD_NOT_VALID) };
+}
+
+/// What one rewrite of the quickfix buffer moved: where it started, and the
+/// rows, columns and bytes the old and the new text took from there.
+struct Splice {
+    start: (linenr_T, colnr_T),
+    old: (linenr_T, colnr_T, bcount_t),
+    new: (linenr_T, colnr_T, bcount_t),
+}
+
+/// [`extmark_splice`] for a quickfix-buffer rewrite, which is never undoable.
+///
+/// The nine numbers are bound out here rather than written into the call:
+/// rustfmt gives an argument list this wide one line per argument, and all
+/// of them would be inside the region.
+fn splice(buf: *mut buf_T, at: &Splice) {
+    let (srow, scol) = at.start;
+    let (orow, ocol, obytes) = at.old;
+    let (nrow, ncol, nbytes) = at.new;
+    let undo = kExtmarkNoUndo;
+    // SAFETY: `buf` is the quickfix window's buffer, live for the call.
     unsafe {
-        // Set 'filetype' to "qf" each time after filling the buffer. This
-        // resembles reading a file into a buffer, which is more logical
-        // when using autocommands.
-        (*curbuf.get()).b_ro_locked += 1;
-        set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OptionSetFlags::LOCAL);
-        (*curbuf.get()).b_p_ma = false as c_int;
-
-        (*curbuf.get()).b_keep_filetype = true; // don't detect 'filetype'
-        apply_autocmds(
-            EVENT_BUFREADPOST,
-            c"quickfix".as_ptr().cast_mut(),
-            ptr::null_mut(),
-            false,
-            curbuf.get(),
-        );
-        apply_autocmds(
-            EVENT_BUFWINENTER,
-            c"quickfix".as_ptr().cast_mut(),
-            ptr::null_mut(),
-            false,
-            curbuf.get(),
-        );
-        (*curbuf.get()).b_keep_filetype = false;
-        (*curbuf.get()).b_ro_locked -= 1;
-
-        // Make sure it will be redrawn.
-        redraw_curbuf_later(UPD_NOT_VALID);
-    }
+        extmark_splice(
+            buf, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
+        )
+    };
 }
 
 /// Fill the quickfix buffer with the list, replacing what it held.
@@ -406,85 +412,87 @@ pub(crate) unsafe fn qf_fill_buffer(
     old_last: *mut qfline_T,
     qf_winid: c_int,
 ) {
+    // SAFETY: the caller's promise -- a live `buf_T`.
+    let buf = unsafe { Buf::new(buf) };
     let mut numbuf = NumBuf::new();
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let old_key_typed = KeyTyped.get();
-        let rewriting = old_last.is_null();
-        if rewriting {
-            if buf != curbuf.get() {
-                internal_error(c"qf_fill_buffer()".as_ptr());
-                return;
-            }
-            if !clear_qf_buffer() {
-                return;
-            }
+    let rewriting = old_last.is_null();
+    if rewriting {
+        if buf.raw() != curbuf.get() {
+            unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
+            return;
         }
+        if !unsafe { clear_qf_buffer() } {
+            return;
+        }
+    }
 
-        if !qfl.is_null() && !(*qfl).qf_start.is_null() {
-            let mut dir = CurrentDir::new();
-            // One line per entry, from the start or after the last entry
-            // that is already in the buffer.
-            let (mut qfp, mut lnum) = if rewriting {
-                ((*qfl).qf_start, 0)
-            } else if (*old_last).qf_next.is_null() {
-                (old_last, (*buf).b_ml.ml_line_count)
-            } else {
-                ((*old_last).qf_next, (*buf).b_ml.ml_line_count)
-            };
+    if !qfl.is_null() && !unsafe { (*qfl).qf_start.is_null() } {
+        let mut dir = CurrentDir::new();
+        // One line per entry, from the start or after the last entry
+        // that is already in the buffer.
+        let (mut qfp, mut lnum) = if rewriting {
+            (unsafe { (*qfl).qf_start }, 0)
+        } else if unsafe { (*old_last).qf_next.is_null() } {
+            (old_last, (*buf).b_ml.ml_line_count)
+        } else {
+            (unsafe { (*old_last).qf_next }, (*buf).b_ml.ml_line_count)
+        };
 
-            let qftf_list = call_qftf_func(qfl, qf_winid, lnum as c_int + 1, (*qfl).qf_count);
-            let mut qftf_li = tv_list_first(qftf_list);
-            let mut prev_bufnr = -1;
-            let mut invalid_val = false;
+        let qftf_list =
+            unsafe { call_qftf_func(qfl, qf_winid, lnum as c_int + 1, (*qfl).qf_count) };
+        let mut qftf_li = unsafe { tv_list_first(qftf_list) };
+        let mut prev_bufnr = -1;
+        let mut invalid_val = false;
 
-            while lnum < (*qfl).qf_count as linenr_T {
-                // Use the text the user's function supplied, if any. Once
-                // it answers something that is not a string, the rest of
-                // its answer is ignored too.
-                let mut qftf_str = ptr::null::<c_char>();
-                if !qftf_li.is_null() && !invalid_val {
-                    qftf_str = numbuf.string_chk(&raw mut (*qftf_li).li_tv);
-                    if qftf_str.is_null() {
-                        invalid_val = true;
-                    }
+        while lnum < unsafe { (*qfl).qf_count } as linenr_T {
+            // Use the text the user's function supplied, if any. Once
+            // it answers something that is not a string, the rest of
+            // its answer is ignored too.
+            let mut qftf_str = ptr::null::<c_char>();
+            if !qftf_li.is_null() && !invalid_val {
+                qftf_str = unsafe { numbuf.string_chk(&raw mut (*qftf_li).li_tv) };
+                if qftf_str.is_null() {
+                    invalid_val = true;
                 }
+            }
 
-                if !qf_buf_add_line(
-                    buf,
+            if !unsafe {
+                qf_buf_add_line(
+                    buf.raw(),
                     lnum,
                     qfp,
                     &mut dir,
                     qftf_str,
                     prev_bufnr != (*qfp).qf_fnum,
-                ) {
-                    break;
-                }
-                prev_bufnr = (*qfp).qf_fnum;
-                lnum += 1;
-                qfp = (*qfp).qf_next;
-                if qfp.is_null() {
-                    break;
-                }
-                if !qftf_li.is_null() {
-                    qftf_li = (*qftf_li).li_next;
-                }
+                )
+            } {
+                break;
             }
-            if rewriting {
-                // Delete the empty line which is now at the end.
-                ml_delete(lnum + 1);
+            prev_bufnr = unsafe { (*qfp).qf_fnum };
+            lnum += 1;
+            qfp = unsafe { (*qfp).qf_next };
+            if qfp.is_null() {
+                break;
             }
-            release_scratch();
+            if !qftf_li.is_null() {
+                qftf_li = unsafe { (*qftf_li).li_next };
+            }
         }
-
-        // Correct cursor position.
-        check_lnums(true);
-
         if rewriting {
-            finish_qf_buffer();
+            // Delete the empty line which is now at the end.
+            unsafe { ml_delete(lnum + 1) };
         }
-
-        // Restore KeyTyped, setting 'filetype' may reset it.
-        KeyTyped.set(old_key_typed);
+        release_scratch();
     }
+
+    // Correct cursor position.
+    check_lnums(true);
+
+    if rewriting {
+        unsafe { finish_qf_buffer() };
+    }
+
+    // Restore KeyTyped, setting 'filetype' may reset it.
+    KeyTyped.set(KeyTyped.get());
 }

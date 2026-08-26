@@ -29,25 +29,28 @@ const HELP_FILES: &[u8] = br"doc/*.\(txt\|??x\)";
 /// # Safety
 ///
 /// There must be a current window.
-unsafe fn hgr_get_ll(new_ll: &mut bool) -> *mut qf_info_T {
-    // SAFETY: the caller's promise.
-    unsafe {
-        let wp = if bt_help((*curwin.get()).w_buffer) {
-            curwin.get()
-        } else {
-            qf_find_help_win()
-        };
-        let qi = if wp.is_null() {
+unsafe fn hgr_get_ll(new_ll: &mut bool) -> Qi {
+    // SAFETY: the caller's promise -- a current window.
+    let wp = if unsafe { bt_help(cur_win().w_buffer) } {
+        curwin.get()
+    } else {
+        unsafe { qf_find_help_win() }
+    };
+    // SAFETY: `wp` is a live window when it is not null, and its location
+    // list stack outlives it.
+    let existing = unsafe {
+        qf_opt(if wp.is_null() {
             ptr::null_mut()
         } else {
             (*wp).w_llist
-        };
-        if !qi.is_null() {
-            return qi;
-        }
-        *new_ll = true;
-        qf_alloc_stack(QFLT_LOCATION, 1)
+        })
+    };
+    if let Some(qi) = existing {
+        return qi;
     }
+    *new_ll = true;
+    // SAFETY: a stack this call has just allocated.
+    unsafe { Qi::new(qf_alloc_stack(QFLT_LOCATION, 1)) }
 }
 
 /// Add an entry for every line of one help file that the pattern matches.
@@ -61,41 +64,37 @@ unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *
     // it builds and the messages it may raise both write.
     let mut read = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let fd = os_fopen(fname, c"r".as_ptr());
-        if fd.is_null() {
-            return;
-        }
-
-        let line = read.as_mut_ptr();
-        let mut lnum: linenr_T = 1;
-        while !vim_fgets(line, IOSIZE, fd) && !got_int.get() {
-            if vim_regexec(p_regmatch, line, 0) {
-                // Remove the trailing CR, LF, spaces, etc.
-                let mut l = strlen(line);
-                while l > 0 && *line.add(l - 1) as c_int <= ' ' as c_int {
-                    l -= 1;
-                    *line.add(l) = NUL as c_char;
-                }
-
-                qf_add_entry(
-                    qfl,
-                    &NewEntry {
-                        fname,
-                        lnum,
-                        col: (*p_regmatch).startp[0].offset_from(line) as c_int + 1,
-                        end_col: (*p_regmatch).endp[0].offset_from(line) as c_int + 1,
-                        // A help entry, which `qf_jump` opens as help.
-                        kind: 1,
-                        ..NewEntry::new(line)
-                    },
-                );
-            }
-            lnum += 1;
-            line_breakcheck();
-        }
-        fclose(fd);
+    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    if fd.is_null() {
+        return;
     }
+
+    let line = read.as_mut_ptr();
+    let mut lnum: linenr_T = 1;
+    while !unsafe { vim_fgets(line, IOSIZE, fd) } && !got_int.get() {
+        if unsafe { vim_regexec(p_regmatch, line, 0) } {
+            // Remove the trailing CR, LF, spaces, etc.
+            let mut l = unsafe { strlen(line) };
+            while l > 0 && unsafe { *line.add(l - 1) } as c_int <= ' ' as c_int {
+                l -= 1;
+                unsafe { *line.add(l) = NUL as c_char };
+            }
+
+            let entry = &NewEntry {
+                fname,
+                lnum,
+                col: unsafe { (*p_regmatch).startp[0].offset_from(line) } as c_int + 1,
+                end_col: unsafe { (*p_regmatch).endp[0].offset_from(line) } as c_int + 1,
+                // A help entry, which `qf_jump` opens as help.
+                kind: 1,
+                ..NewEntry::new(line)
+            };
+            unsafe { qf_add_entry(qfl, entry) };
+        }
+        lnum += 1;
+        line_breakcheck();
+    }
+    unsafe { fclose(fd) };
 }
 
 /// Search every help file in `dir`'s `doc/` directory, skipping the ones
@@ -113,47 +112,47 @@ unsafe fn hgr_search_files_in_dir(
 ) {
     // SAFETY: the caller's list, pattern and language, plus one owned file
     // pattern that stays alive for the whole call.
-    unsafe {
-        // Find all "*.txt" and "*.??x" files in the "doc" directory.
-        // Upstream builds this in `NameBuff` with `add_pathsep` and
-        // `strcat`, which a 'runtimepath' entry close to MAXPATHL overruns;
-        // the pattern is owned here instead.
-        let mut pattern: Vec<u8> = dir.to_vec();
+    // Find all "*.txt" and "*.??x" files in the "doc" directory.
+    // Upstream builds this in `NameBuff` with `add_pathsep` and
+    // `strcat`, which a 'runtimepath' entry close to MAXPATHL overruns;
+    // the pattern is owned here instead.
+    let mut pattern: Vec<u8> = dir.to_vec();
+    pattern.push(0);
+    let base: *const c_char = pattern.as_ptr().cast();
+    if !dir.is_empty() && unsafe { after_pathsep(base, base.add(dir.len())) } == 0 {
+        pattern[dir.len()] = PATHSEP as u8;
         pattern.push(0);
-        let base: *const c_char = pattern.as_ptr().cast();
-        if !dir.is_empty() && after_pathsep(base, base.add(dir.len())) == 0 {
-            pattern[dir.len()] = PATHSEP as u8;
-            pattern.push(0);
-        }
-        pattern.pop();
-        pattern.extend_from_slice(HELP_FILES);
-        pattern.push(0);
+    }
+    pattern.pop();
+    pattern.extend_from_slice(HELP_FILES);
+    pattern.push(0);
 
-        let mut fcount: c_int = 0;
-        let mut fnames: *mut *mut c_char = ptr::null_mut();
-        let mut arg: *mut c_char = pattern.as_mut_ptr().cast();
-        if gen_expand_wildcards(
+    let mut fcount: c_int = 0;
+    let mut fnames: *mut *mut c_char = ptr::null_mut();
+    let mut arg: *mut c_char = pattern.as_mut_ptr().cast();
+    if unsafe {
+        gen_expand_wildcards(
             1,
             &raw mut arg,
             &raw mut fcount,
             &raw mut fnames,
             ExpandFlags::FILE | ExpandFlags::SILENT,
-        ) != OK
-            || fcount <= 0
-        {
-            return;
-        }
-
-        let mut fi = 0;
-        while fi < fcount && !got_int.get() {
-            let fname = *fnames.offset(fi as isize);
-            if lang.is_null() || wanted_language(lang, fname) {
-                hgr_search_file(qfl, fname, p_regmatch);
-            }
-            fi += 1;
-        }
-        free_wild(fcount, fnames);
+        )
+    } != OK
+        || fcount <= 0
+    {
+        return;
     }
+
+    let mut fi = 0;
+    while fi < fcount && !got_int.get() {
+        let fname = unsafe { *fnames.offset(fi as isize) };
+        if lang.is_null() || unsafe { wanted_language(lang, fname) } {
+            unsafe { hgr_search_file(qfl, fname, p_regmatch) };
+        }
+        fi += 1;
+    }
+    unsafe { free_wild(fcount, fnames) };
 }
 
 /// Whether a help file is one `lang` asked for. The language is the two
@@ -166,8 +165,9 @@ unsafe fn hgr_search_files_in_dir(
 /// long, which every name the wildcard produced is.
 unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
     // SAFETY: the caller's promise.
+    let ext = unsafe { fname.add(strlen(fname)).offset(-3) };
+    // SAFETY: `lang` and `ext` are NUL-terminated and `ext` has three bytes.
     unsafe {
-        let ext = fname.add(strlen(fname)).offset(-3);
         strncasecmp(lang, ext, 2) == 0
             || (strncasecmp(lang, c"en".as_ptr(), 2) == 0
                 && strncasecmp(c"txt".as_ptr(), ext, 3) == 0)
@@ -182,18 +182,14 @@ unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
 unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, lang: *const c_char) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     // SAFETY: forwarded from the caller; `dir` holds MAXPATHL bytes.
-    unsafe {
-        let mut p = p_rtp.get();
-        while *p as c_int != NUL && !got_int.get() {
-            let len = copy_option_part(
-                &raw mut p,
-                dir.as_mut_ptr(),
-                MAXPATHL as size_t,
-                c",".as_ptr().cast_mut(),
-            );
-            let entry = core::slice::from_raw_parts(dir.as_ptr().cast::<u8>(), len);
-            hgr_search_files_in_dir(qfl, entry, p_regmatch, lang);
-        }
+    let mut p = p_rtp.get();
+    while unsafe { *p } as c_int != NUL && !got_int.get() {
+        let option = &raw mut p;
+        let maxlen = MAXPATHL as size_t;
+        let sep_chars = c",".as_ptr().cast_mut();
+        let len = unsafe { copy_option_part(option, dir.as_mut_ptr(), maxlen, sep_chars) };
+        let entry = unsafe { core::slice::from_raw_parts(dir.as_ptr().cast::<u8>(), len) };
+        unsafe { hgr_search_files_in_dir(qfl, entry, p_regmatch, lang) };
     }
 }
 
@@ -203,126 +199,118 @@ unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, la
 ///
 /// `eap` must be a live command.
 pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut qi = QfStack::Global.raw();
+    // SAFETY: the caller's promise -- a live `exarg_T`.
+    let eap = unsafe { Ea::new(eap) };
+    let mut qi = qf_global();
 
-        let au_name = match (*eap).cmdidx {
-            CMD_helpgrep => Some(c"helpgrep"),
-            CMD_lhelpgrep => Some(c"lhelpgrep"),
-            _ => None,
-        };
-        if let Some(name) = au_name {
-            let claimed = apply_autocmds(
-                EVENT_QUICKFIXCMDPRE,
-                name.as_ptr().cast_mut(),
-                (*curbuf.get()).b_fname,
-                true,
-                curbuf.get(),
-            );
-            if claimed && aborting() {
-                return;
-            }
+    let au_name = match (*eap).cmdidx {
+        CMD_helpgrep => Some(c"helpgrep"),
+        CMD_lhelpgrep => Some(c"lhelpgrep"),
+        _ => None,
+    };
+    if let Some(name) = au_name {
+        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        if claimed && aborting() {
+            return;
         }
+    }
 
-        // Make 'cpoptions' empty, the 'l' flag should not be used here.
-        let save_cpo = p_cpo.get();
-        p_cpo.set(empty_option());
+    // Make 'cpoptions' empty, the 'l' flag should not be used here.
+    let save_cpo = p_cpo.get();
+    p_cpo.set(empty_option());
 
-        let mut new_qi = false;
-        if is_loclist_cmd((*eap).cmdidx as c_int) {
-            qi = hgr_get_ll(&mut new_qi);
-        }
+    let mut new_qi = false;
+    if unsafe { is_loclist_cmd((*eap).cmdidx as c_int) } {
+        qi = unsafe { hgr_get_ll(&mut new_qi) };
+    }
 
-        incr_quickfix_busy();
+    incr_quickfix_busy();
 
-        // Check for a specified language.
-        let lang = check_help_lang((*eap).arg);
-        let mut regmatch = regmatch_T {
-            regprog: vim_regcomp((*eap).arg, RE_MAGIC + RE_STRING),
-            rm_ic: false,
-            ..regmatch_T::default()
-        };
-        let updated = !regmatch.regprog.is_null();
-        if updated {
-            // Create a new quickfix list.
-            qf_new_list(qi, qf_cmdtitle(*(*eap).cmdlinep).as_ptr());
-            let qfl = qf_get_curlist(qi);
+    // Check for a specified language.
+    let lang = unsafe { check_help_lang((*eap).arg) };
+    let mut regmatch = regmatch_T {
+        regprog: unsafe { vim_regcomp((*eap).arg, RE_MAGIC + RE_STRING) },
+        rm_ic: false,
+        ..regmatch_T::default()
+    };
+    let updated = !regmatch.regprog.is_null();
+    if updated {
+        // Create a new quickfix list.
+        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*(*eap).cmdlinep).as_ptr()) };
+        let mut qfl = qf_current_list(qi);
 
-            hgr_search_in_rtp(qfl, &raw mut regmatch, lang);
-            vim_regfree(regmatch.regprog);
+        unsafe { hgr_search_in_rtp(qfl.raw(), &raw mut regmatch, lang) };
+        unsafe { vim_regfree(regmatch.regprog) };
 
-            (*qfl).qf_nonevalid = false;
-            (*qfl).qf_ptr = (*qfl).qf_start;
-            (*qfl).qf_index = 1;
-            qf_list_changed(qfl);
-        }
+        (*qfl).qf_nonevalid = false;
+        (*qfl).qf_ptr = (*qfl).qf_start;
+        (*qfl).qf_index = 1;
+        qfl_changed(qfl);
+    }
 
-        if is_empty_option(p_cpo.get()) {
-            p_cpo.set(save_cpo);
-        } else {
-            // Darn, some plugin changed the value. If it's still empty it
-            // was changed and restored, need to restore the complicated way.
-            if *p_cpo.get() as c_int == NUL {
-                set_option_value_give_err(
-                    kOptCpoptions,
-                    OptVal {
-                        type_0: kOptValTypeString,
-                        data: OptValData {
-                            string: cstr_as_string(save_cpo),
-                        },
+    if is_empty_option(p_cpo.get()) {
+        p_cpo.set(save_cpo);
+    } else {
+        // Darn, some plugin changed the value. If it's still empty it
+        // was changed and restored, need to restore the complicated way.
+        if unsafe { *p_cpo.get() } as c_int == NUL {
+            set_option_value_give_err(
+                kOptCpoptions,
+                OptVal {
+                    type_0: kOptValTypeString,
+                    data: OptValData {
+                        string: unsafe { cstr_as_string(save_cpo) },
                     },
-                    OptionSetFlags::NONE,
-                );
-            }
-            free_string_option(save_cpo);
-        }
-
-        if updated {
-            // This may open a window and source scripts, so it waits until
-            // 'cpo' has been restored.
-            qf_update_buffer(qi, ptr::null_mut());
-        }
-
-        if let Some(name) = au_name {
-            apply_autocmds(
-                EVENT_QUICKFIXCMDPOST,
-                name.as_ptr().cast_mut(),
-                (*curbuf.get()).b_fname,
-                true,
-                curbuf.get(),
+                },
+                OptionSetFlags::NONE,
             );
-            // When adding to an existing location list stack, an autocommand
-            // may have made that stack invalid, in which case there is
-            // nothing left to jump to.
-            if !new_qi
-                && (*qi).qfl_type == QFLT_LOCATION as qfltype_T
-                && qf_find_win_with_loclist(qi).is_null()
-            {
-                decr_quickfix_busy();
-                return;
-            }
         }
+        unsafe { free_string_option(save_cpo) };
+    }
 
-        // Jump to the first match.
-        if !qf_list_empty(qf_get_curlist(qi)) {
-            qf_jump(qi, 0, 0, false as c_int);
-        } else {
-            semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg);
+    if updated {
+        // This may open a window and source scripts, so it waits until
+        // 'cpo' has been restored.
+        qf_redraw(qi, ptr::null_mut());
+    }
+
+    if let Some(name) = au_name {
+        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+        // When adding to an existing location list stack, an autocommand
+        // may have made that stack invalid, in which case there is
+        // nothing left to jump to.
+        if !new_qi
+            && (*qi).qfl_type == QFLT_LOCATION as qfltype_T
+            && unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) }.is_null()
+        {
+            qf_busy_end();
+            return;
         }
+    }
 
-        decr_quickfix_busy();
+    // Jump to the first match.
+    if !qfl_is_empty(qf_current_list(qi)) {
+        qf_goto(qi, 0, 0, false as c_int);
+    } else {
+        // SAFETY: the message macros expand to a `vim_snprintf` over the
+        // format literal above and the editor's message buffers.
+        unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg) };
+    }
 
-        if (*eap).cmdidx == CMD_lhelpgrep && new_qi {
-            if !bt_help((*curwin.get()).w_buffer) || (*curwin.get()).w_llist == qi {
-                // The help window was not opened, or it already points at
-                // the right location list: the new one is not wanted.
-                ll_free_all(&raw mut qi);
-            } else if (*curwin.get()).w_llist.is_null() {
-                // The current window had no location list before, so it
-                // takes the new one.
-                (*curwin.get()).w_llist = qi;
-            }
+    qf_busy_end();
+
+    if (*eap).cmdidx == CMD_lhelpgrep && new_qi {
+        if !unsafe { bt_help(cur_win().w_buffer) } || cur_win().w_llist == qi.raw() {
+            // The help window was not opened, or it already points at
+            // the right location list: the new one is not wanted.
+            let mut stack = qi.raw();
+            // SAFETY: the stack this command allocated a moment ago, which
+            // nothing else has been given a reference to.
+            unsafe { ll_free_all(&raw mut stack) };
+        } else if cur_win().w_llist.is_null() {
+            // The current window had no location list before, so it
+            // takes the new one.
+            cur_win().w_llist = qi.raw();
         }
     }
 }
