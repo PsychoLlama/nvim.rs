@@ -222,4 +222,8 @@ refresh *args: apigen keycodes-lua fmt ffigen abi-ledger visibility-ledger (ratc
 # a stale ledger from a fresh one (the ABI ledger and the ratchet also run as
 # pre-commit hooks, see .gitconfig). lint-tools is here rather than in `lint`
 # alone because it is seconds, where the crate's clippy pass is minutes.
-minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build cargo-test
+# build-release follows the debug build because nothing else in the tree
+# compiles with `debug_assertions` off: a `#[cfg(debug_assertions)]` block can
+# leave an import or a helper unused in release, which `-D warnings` rejects,
+# and that break once sat unnoticed for a whole phase. It costs ~40 s.
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test
