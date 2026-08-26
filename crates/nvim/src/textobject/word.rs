@@ -7,15 +7,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
-use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
-use crate::main::{VIsual_select_exclu_adj, curbuf, curwin, p_sel, redraw_cmdline};
+use crate::main::{VIsual_select_exclu_adj, p_sel, redraw_cmdline};
 use crate::mbyte::utf_class;
 use crate::memline::{decl, incl, ml_get};
 use crate::r#move::adjust_skipcol;
@@ -25,7 +25,7 @@ use crate::normal::{
 };
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{FAIL, NUL, OK, linenr_T, oparg_T, pos_T};
+use crate::types::{FAIL, NUL, OK, oparg_T, pos_T};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///
@@ -38,18 +38,17 @@ static cls_bigword: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// With `cls_bigword` set every non-blank answers 1, which is what makes
 /// `W`/`B`/`E` treat a run of anything as one word.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-unsafe fn cls() -> c_int {
-    unsafe {
-        let c = gchar_cursor();
-        if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
-            return 0;
-        }
-        let c = utf_class(c);
-        if c != 0 && cls_bigword.get() { 1 } else { c }
+fn cls() -> c_int {
+    // SAFETY: `curwin` and `curbuf` are set from startup to exit, which is all
+    // `gchar_cursor` asks for; it answers NUL past the end of the line.
+    let c = unsafe { gchar_cursor() };
+    if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
+        return 0;
     }
+    // SAFETY: as above -- `utf_class` only reads the current buffer's
+    // 'iskeyword' table.
+    let c = unsafe { utf_class(c) };
+    if c != 0 && cls_bigword.get() { 1 } else { c }
 }
 
 /// Step over a run of characters of class `cclass`. Answers true when the
@@ -58,19 +57,21 @@ unsafe fn cls() -> c_int {
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 unsafe fn skip_chars(cclass: c_int, dir: c_int) -> bool {
-    unsafe {
-        while cls() == cclass {
-            let step = if dir == FORWARD as c_int {
+    while cls() == cclass {
+        // SAFETY: the caller guarantees a current window with its cursor on a
+        // line of the current buffer, which is what both of these ask for.
+        let step = unsafe {
+            if dir == FORWARD as c_int {
                 inc_cursor()
             } else {
                 dec_cursor()
-            };
-            if step == -1 {
-                return true;
             }
+        };
+        if step == -1 {
+            return true;
         }
-        false
     }
+    false
 }
 
 /// Go back to the start of the word, or of the run of white space, the
@@ -79,14 +80,14 @@ unsafe fn skip_chars(cclass: c_int, dir: c_int) -> bool {
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 unsafe fn back_in_line() {
-    unsafe {
-        let sclass = cls();
-        while (*curwin.get()).w_cursor.col != 0 {
-            dec_cursor();
-            if cls() != sclass {
-                inc_cursor(); // stop at the start of the word
-                break;
-            }
+    let sclass = cls();
+    while cur_win().w_cursor.col != 0 {
+        // SAFETY, both: the caller guarantees a current window with its cursor
+        // on a line of the current buffer.
+        unsafe { dec_cursor() };
+        if cls() != sclass {
+            unsafe { inc_cursor() }; // stop at the start of the word
+            break;
         }
     }
 }
@@ -100,59 +101,59 @@ unsafe fn back_in_line() {
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
-    unsafe {
-        (*curwin.get()).w_cursor.coladd = 0;
-        cls_bigword.set(bigword);
-        loop {
-            count -= 1;
-            if count < 0 {
-                break;
-            }
-            // Inside a fold, move to the last character of the last line.
-            if has_folding(
-                curwin.get(),
-                (*curwin.get()).w_cursor.lnum,
-                ::core::ptr::null_mut::<linenr_T>(),
-                &raw mut (*curwin.get()).w_cursor.lnum,
-            ) {
-                coladvance(curwin.get(), MAXCOL);
-            }
-            let sclass = cls();
+    cur_win().w_cursor.coladd = 0;
+    cls_bigword.set(bigword);
+    loop {
+        count -= 1;
+        if count < 0 {
+            break;
+        }
+        // Inside a fold, move to the last character of the last line.
+        if let Some(last) = cur_win().fold_end(cur_win().w_cursor.lnum) {
+            cur_win().w_cursor.lnum = last;
+            // SAFETY: `cur_win()` is a live window.
+            unsafe { coladvance(cur_win().raw(), MAXCOL) };
+        }
+        let sclass = cls();
 
-            // Always move at least one character, unless this is the last one
-            // in the buffer.
-            let last_line = (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count;
-            let mut i = inc_cursor();
-            if i == -1 || (i >= 1 && last_line) {
-                return FAIL; // started on the last character of the file
-            }
-            if i >= 1 && eol && count == 0 {
-                return OK; // started on the last character of the line
-            }
+        // Always move at least one character, unless this is the last one
+        // in the buffer.
+        let last_line = cur_win().w_cursor.lnum == cur_buf().b_ml.ml_line_count;
+        // SAFETY, for every cursor step below: the caller guarantees a current
+        // window with its cursor on a line of the current buffer, and each
+        // step leaves it on one.
+        let mut i = unsafe { inc_cursor() };
+        if i == -1 || (i >= 1 && last_line) {
+            return FAIL; // started on the last character of the file
+        }
+        if i >= 1 && eol && count == 0 {
+            return OK; // started on the last character of the line
+        }
 
-            // One character past the end of the current word, if any.
-            if sclass != 0 {
-                while cls() == sclass {
-                    i = inc_cursor();
-                    if i == -1 || (i >= 1 && eol && count == 0) {
-                        return OK;
-                    }
-                }
-            }
-            // Then on to the next non-white character.
-            while cls() == 0 {
-                // Stop on a blank line.
-                if (*curwin.get()).w_cursor.col == 0 && *get_cursor_line_ptr() as c_int == NUL {
-                    break;
-                }
-                i = inc_cursor();
+        // One character past the end of the current word, if any.
+        if sclass != 0 {
+            while cls() == sclass {
+                i = unsafe { inc_cursor() };
                 if i == -1 || (i >= 1 && eol && count == 0) {
                     return OK;
                 }
             }
         }
-        OK
+        // Then on to the next non-white character.
+        while cls() == 0 {
+            // Stop on a blank line.
+            // SAFETY: `get_cursor_line_ptr` hands back the cursor's line,
+            // NUL-terminated, so its first byte is there to read.
+            if cur_win().w_cursor.col == 0 && unsafe { *get_cursor_line_ptr() } as c_int == NUL {
+                break;
+            }
+            i = unsafe { inc_cursor() };
+            if i == -1 || (i >= 1 && eol && count == 0) {
+                return OK;
+            }
+        }
     }
+    OK
 }
 
 /// `b` / `B`: move back `count` words. Answers FAIL when the top of the file
@@ -164,53 +165,53 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
-    unsafe {
-        (*curwin.get()).w_cursor.coladd = 0;
-        cls_bigword.set(bigword);
-        loop {
-            count -= 1;
-            if count < 0 {
-                break;
-            }
-            // Inside a fold, move to the first character of the first line.
-            if has_folding(
-                curwin.get(),
-                (*curwin.get()).w_cursor.lnum,
-                &raw mut (*curwin.get()).w_cursor.lnum,
-                ::core::ptr::null_mut::<linenr_T>(),
-            ) {
-                (*curwin.get()).w_cursor.col = 0;
-            }
-            let sclass = cls();
-            if dec_cursor() == -1 {
-                return FAIL; // started at the start of the file
-            }
-            'finished: {
-                if !stop || sclass == cls() || sclass == 0 {
-                    // Skip the white space before the word, stopping on an
-                    // empty line.
-                    while cls() == 0 {
-                        if (*curwin.get()).w_cursor.col == 0
-                            && *ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL
-                        {
-                            break 'finished;
-                        }
-                        if dec_cursor() == -1 {
-                            return OK; // hit the start of the file
-                        }
+    cur_win().w_cursor.coladd = 0;
+    cls_bigword.set(bigword);
+    loop {
+        count -= 1;
+        if count < 0 {
+            break;
+        }
+        // Inside a fold, move to the first character of the first line.
+        if let Some(first) = cur_win().fold_first(cur_win().w_cursor.lnum) {
+            cur_win().w_cursor.lnum = first;
+            cur_win().w_cursor.col = 0;
+        }
+        let sclass = cls();
+        // SAFETY, for every step below: the caller guarantees a current window
+        // with its cursor on a line of the current buffer, and each step
+        // leaves it on one.
+        if unsafe { dec_cursor() } == -1 {
+            return FAIL; // started at the start of the file
+        }
+        'finished: {
+            if !stop || sclass == cls() || sclass == 0 {
+                // Skip the white space before the word, stopping on an
+                // empty line.
+                while cls() == 0 {
+                    // SAFETY: the cursor's line is a line of the buffer, and
+                    // `ml_get` hands it back NUL-terminated.
+                    if cur_win().w_cursor.col == 0
+                        && unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int == NUL
+                    {
+                        break 'finished;
                     }
-                    // Back to the start of this word.
-                    if skip_chars(cls(), BACKWARD as c_int) {
-                        return OK;
+                    if unsafe { dec_cursor() } == -1 {
+                        return OK; // hit the start of the file
                     }
                 }
-                inc_cursor(); // overshot: forward one
+                // Back to the start of this word.
+                if unsafe { skip_chars(cls(), BACKWARD as c_int) } {
+                    return OK;
+                }
             }
-            stop = false;
+            unsafe { inc_cursor() }; // overshot: forward one
         }
-        adjust_skipcol();
-        OK
+        stop = false;
     }
+    // SAFETY: on the main thread with a current window.
+    unsafe { adjust_skipcol() };
+    OK
 }
 
 /// `e` / `E`: move to the end of the `count`th word. Answers FAIL when the
@@ -226,67 +227,69 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: bool) -> c_int {
-    unsafe {
-        (*curwin.get()).w_cursor.coladd = 0;
-        cls_bigword.set(bigword);
+    cur_win().w_cursor.coladd = 0;
+    cls_bigword.set(bigword);
 
-        // Undo a cursor position adjusted for exclusive 'selection'.
-        if *p_sel.get() as c_int == 'e' as c_int
-            && visual_active()
-            && visual_mode().is_char()
-            && VIsual_select_exclu_adj.get()
-        {
-            unadjust_for_sel();
+    // Undo a cursor position adjusted for exclusive 'selection'.
+    // SAFETY: 'selection' is a NUL-terminated option string.
+    if unsafe { *p_sel.get() } as c_int == 'e' as c_int
+        && visual_active()
+        && visual_mode().is_char()
+        && VIsual_select_exclu_adj.get()
+    {
+        // SAFETY: Visual mode is active, with a current window.
+        unsafe { unadjust_for_sel() };
+    }
+
+    loop {
+        count -= 1;
+        if count < 0 {
+            break;
         }
-
-        loop {
-            count -= 1;
-            if count < 0 {
-                break;
-            }
-            // Inside a fold, move to the last character of the last line.
-            if has_folding(
-                curwin.get(),
-                (*curwin.get()).w_cursor.lnum,
-                ::core::ptr::null_mut::<linenr_T>(),
-                &raw mut (*curwin.get()).w_cursor.lnum,
-            ) {
-                coladvance(curwin.get(), MAXCOL);
-            }
-            let sclass = cls();
-            if inc_cursor() == -1 {
-                return FAIL;
-            }
-            'finished: {
-                if cls() == sclass && sclass != 0 {
-                    // In the middle of a word: just go to its end.
-                    if skip_chars(sclass, FORWARD as c_int) {
-                        return FAIL;
+        // Inside a fold, move to the last character of the last line.
+        if let Some(last) = cur_win().fold_end(cur_win().w_cursor.lnum) {
+            cur_win().w_cursor.lnum = last;
+            // SAFETY: `cur_win()` is a live window.
+            unsafe { coladvance(cur_win().raw(), MAXCOL) };
+        }
+        let sclass = cls();
+        // SAFETY, for every step below: the caller guarantees a current window
+        // with its cursor on a line of the current buffer, and each step
+        // leaves it on one.
+        if unsafe { inc_cursor() } == -1 {
+            return FAIL;
+        }
+        'finished: {
+            if cls() == sclass && sclass != 0 {
+                // In the middle of a word: just go to its end.
+                if unsafe { skip_chars(sclass, FORWARD as c_int) } {
+                    return FAIL;
+                }
+            } else if !stop || sclass == 0 {
+                // At the end of a word: go to the end of the next one,
+                // skipping white space first.
+                while cls() == 0 {
+                    // SAFETY: the cursor's line is a line of the buffer, and
+                    // `ml_get` hands it back NUL-terminated.
+                    if empty
+                        && cur_win().w_cursor.col == 0
+                        && unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int == NUL
+                    {
+                        break 'finished;
                     }
-                } else if !stop || sclass == 0 {
-                    // At the end of a word: go to the end of the next one,
-                    // skipping white space first.
-                    while cls() == 0 {
-                        if empty
-                            && (*curwin.get()).w_cursor.col == 0
-                            && *ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL
-                        {
-                            break 'finished;
-                        }
-                        if inc_cursor() == -1 {
-                            return FAIL; // hit the end of the file
-                        }
-                    }
-                    if skip_chars(cls(), FORWARD as c_int) {
-                        return FAIL;
+                    if unsafe { inc_cursor() } == -1 {
+                        return FAIL; // hit the end of the file
                     }
                 }
-                dec_cursor(); // overshot: back one
+                if unsafe { skip_chars(cls(), FORWARD as c_int) } {
+                    return FAIL;
+                }
             }
-            stop = false; // only the first word moves one less
+            unsafe { dec_cursor() }; // overshot: back one
         }
-        OK
+        stop = false; // only the first word moves one less
     }
+    OK
 }
 
 /// `ge` / `gE`: move back to the end of the `count`th previous word. Answers
@@ -297,47 +300,51 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
 /// # Safety
 /// There must be a current line and the cursor must be on it.
 pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
-    unsafe {
-        (*curwin.get()).w_cursor.coladd = 0;
-        cls_bigword.set(bigword);
-        loop {
-            count -= 1;
-            if count < 0 {
-                break;
-            }
-            let sclass = cls();
-            let mut i = dec_cursor();
-            if i == -1 {
-                return FAIL;
-            }
-            if eol && i == 1 {
-                return OK;
-            }
-            // Back to before the start of this word.
-            if sclass != 0 {
-                while cls() == sclass {
-                    i = dec_cursor();
-                    if i == -1 || (eol && i == 1) {
-                        return OK;
-                    }
-                }
-            }
-            // Then back to the end of the previous word.
-            while cls() == 0 {
-                if (*curwin.get()).w_cursor.col == 0
-                    && *ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL
-                {
-                    break;
-                }
-                i = dec_cursor();
+    cur_win().w_cursor.coladd = 0;
+    cls_bigword.set(bigword);
+    loop {
+        count -= 1;
+        if count < 0 {
+            break;
+        }
+        let sclass = cls();
+        // SAFETY, for every step below: the caller guarantees a current window
+        // with its cursor on a line of the current buffer, and each step
+        // leaves it on one.
+        let mut i = unsafe { dec_cursor() };
+        if i == -1 {
+            return FAIL;
+        }
+        if eol && i == 1 {
+            return OK;
+        }
+        // Back to before the start of this word.
+        if sclass != 0 {
+            while cls() == sclass {
+                i = unsafe { dec_cursor() };
                 if i == -1 || (eol && i == 1) {
                     return OK;
                 }
             }
         }
-        adjust_skipcol();
-        OK
+        // Then back to the end of the previous word.
+        while cls() == 0 {
+            // SAFETY: the cursor's line is a line of the buffer, and `ml_get`
+            // hands it back NUL-terminated.
+            if cur_win().w_cursor.col == 0
+                && unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int == NUL
+            {
+                break;
+            }
+            i = unsafe { dec_cursor() };
+            if i == -1 || (eol && i == 1) {
+                return OK;
+            }
+        }
     }
+    // SAFETY: on the main thread with a current window.
+    unsafe { adjust_skipcol() };
+    OK
 }
 
 /// `iw` / `aw` (and the `W` forms): the word under the cursor, cursor left at
@@ -355,142 +362,164 @@ pub unsafe fn current_word(
     include: bool,
     bigword: bool,
 ) -> c_int {
-    unsafe {
-        let mut start_pos = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut inclusive = true;
-        let mut include_white = false;
+    let mut start_pos = pos_T {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    };
+    let mut inclusive = true;
+    let mut include_white = false;
 
-        cls_bigword.set(bigword);
-        clearpos(&mut start_pos);
+    cls_bigword.set(bigword);
+    clearpos(&mut start_pos);
 
-        // Correct the cursor when 'selection' is exclusive.
-        if visual_active()
-            && *p_sel.get() as c_int == 'e' as c_int
-            && lt(visual_anchor(), (*curwin.get()).w_cursor)
-        {
-            dec_cursor();
-        }
+    // Correct the cursor when 'selection' is exclusive.
+    // SAFETY: 'selection' is a NUL-terminated option string.
+    if visual_active()
+        && unsafe { *p_sel.get() } as c_int == 'e' as c_int
+        && lt(visual_anchor(), cur_win().w_cursor)
+    {
+        // SAFETY: the caller guarantees the cursor is on a line of the buffer.
+        unsafe { dec_cursor() };
+    }
 
-        // Outside Visual mode, or with a one-character Visual area, select
-        // the word and/or white space under the cursor.
-        if !visual_active() || equalpos((*curwin.get()).w_cursor, visual_anchor()) {
-            back_in_line();
-            start_pos = (*curwin.get()).w_cursor;
+    // Outside Visual mode, or with a one-character Visual area, select
+    // the word and/or white space under the cursor.
+    if !visual_active() || equalpos(cur_win().w_cursor, visual_anchor()) {
+        // SAFETY, for every walk in this function: the caller guarantees a
+        // current window with its cursor on a line of the current buffer, and
+        // each of these leaves it on one.
+        unsafe { back_in_line() };
+        start_pos = cur_win().w_cursor;
 
-            // Starting on white space that is to be included (" word"), or
-            // off white space that is not ("word"): find the end of the word.
-            if (cls() == 0) == include {
-                if end_word(1, bigword, true, true) == FAIL {
-                    return FAIL;
-                }
+        // Starting on white space that is to be included (" word"), or
+        // off white space that is not ("word"): find the end of the word.
+        if (cls() == 0) == include {
+            if unsafe { end_word(1, bigword, true, true) } == FAIL {
+                return FAIL;
+            }
+        } else {
+            // Starting off white space that is to be included
+            // ("word   "), or on white space that is not ("   "): find
+            // the start of the next word. Landing in the first column of
+            // the next line (a single-character word) means backing up to
+            // the end of this one.
+            unsafe { fwd_word(1, bigword, true) };
+            if cur_win().w_cursor.col == 0 {
+                unsafe { decl(&mut cur_win().cursor()) };
             } else {
-                // Starting off white space that is to be included
-                // ("word   "), or on white space that is not ("   "): find
-                // the start of the next word. Landing in the first column of
-                // the next line (a single-character word) means backing up to
-                // the end of this one.
-                fwd_word(1, bigword, true);
-                if (*curwin.get()).w_cursor.col == 0 {
-                    decl(&mut (*curwin.get()).w_cursor);
-                } else {
-                    oneleft();
-                }
-                if include {
-                    include_white = true;
-                }
+                unsafe { oneleft() };
             }
-
-            if visual_active() {
-                // Should do something when `inclusive` is false.
-                set_visual_anchor(start_pos);
-                redraw_curbuf_later(UPD_INVERTED); // update the inversion
-            } else {
-                (*oap).start = start_pos;
-                (*oap).motion_type = kMTCharWise;
+            if include {
+                include_white = true;
             }
-            count -= 1;
-        }
-
-        // Any count still left extends by that many more objects.
-        while count > 0 {
-            inclusive = true;
-            if visual_active() && lt((*curwin.get()).w_cursor, visual_anchor()) {
-                // In Visual mode with the cursor at the start: move it back.
-                if decl(&mut (*curwin.get()).w_cursor) == -1 {
-                    return FAIL;
-                }
-                if include != (cls() != 0) {
-                    if bck_word(1, bigword, true) == FAIL {
-                        return FAIL;
-                    }
-                } else {
-                    if bckend_word(1, bigword, true) == FAIL {
-                        return FAIL;
-                    }
-                    incl(&mut (*curwin.get()).w_cursor);
-                }
-            } else {
-                // Move the cursor forward one word and/or run of white space.
-                if incl(&mut (*curwin.get()).w_cursor) == -1 {
-                    return FAIL;
-                }
-                if include != (cls() == 0) {
-                    if fwd_word(1, bigword, true) == FAIL && count > 1 {
-                        return FAIL;
-                    }
-                    // An end just past a newline must not include the first
-                    // character of that line: put the cursor on the last
-                    // character of the white space instead.
-                    if oneleft() == FAIL {
-                        inclusive = false;
-                    }
-                } else if end_word(1, bigword, true, true) == FAIL {
-                    return FAIL;
-                }
-            }
-            count -= 1;
-        }
-
-        if include_white && (cls() != 0 || ((*curwin.get()).w_cursor.col == 0 && !inclusive)) {
-            // No white space was included at the end, so take some at the
-            // start instead. That is what makes `daw` work on the last word
-            // of a sentence (and `2daw` on the last but one), and what
-            // handles `2daw` deleting `word.` at the end of a line, where the
-            // cursor ends at the start of the next one. But never take the
-            // white space at the start of a line: that is indent.
-            let pos = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = start_pos;
-            if oneleft() == OK {
-                back_in_line();
-                if cls() == 0 && (*curwin.get()).w_cursor.col > 0 {
-                    if visual_active() {
-                        set_visual_anchor((*curwin.get()).w_cursor);
-                    } else {
-                        (*oap).start = (*curwin.get()).w_cursor;
-                    }
-                }
-            }
-            (*curwin.get()).w_cursor = pos; // put the cursor back at the end
         }
 
         if visual_active() {
-            if *p_sel.get() as c_int == 'e' as c_int
-                && inclusive
-                && ltoreq(visual_anchor(), (*curwin.get()).w_cursor)
-            {
-                inc_cursor();
+            // Should do something when `inclusive` is false.
+            set_visual_anchor(start_pos);
+            // SAFETY: on the main thread with a current buffer.
+            unsafe { redraw_curbuf_later(UPD_INVERTED) }; // update the inversion
+        } else {
+            // SAFETY: the caller guarantees `oap` is a live operator argument.
+            let oap = unsafe { &mut *oap };
+            oap.start = start_pos;
+            oap.motion_type = kMTCharWise;
+        }
+        count -= 1;
+    }
+
+    // Any count still left extends by that many more objects.
+    while count > 0 {
+        inclusive = true;
+        if visual_active() && lt(cur_win().w_cursor, visual_anchor()) {
+            // In Visual mode with the cursor at the start: move it back.
+            if unsafe { decl(&mut cur_win().cursor()) } == -1 {
+                return FAIL;
             }
-            if visual_mode().is_line() {
-                set_visual_mode(VisualMode::CHAR);
-                redraw_cmdline.set(true); // show the mode later
+            if include != (cls() != 0) {
+                if unsafe { bck_word(1, bigword, true) } == FAIL {
+                    return FAIL;
+                }
+            } else {
+                if unsafe { bckend_word(1, bigword, true) } == FAIL {
+                    return FAIL;
+                }
+                unsafe { incl(&mut cur_win().cursor()) };
             }
         } else {
-            (*oap).inclusive = inclusive;
+            // Move the cursor forward one word and/or run of white space.
+            if unsafe { incl(&mut cur_win().cursor()) } == -1 {
+                return FAIL;
+            }
+            if include != (cls() == 0) {
+                if unsafe { fwd_word(1, bigword, true) } == FAIL && count > 1 {
+                    return FAIL;
+                }
+                // An end just past a newline must not include the first
+                // character of that line: put the cursor on the last
+                // character of the white space instead.
+                if unsafe { oneleft() } == FAIL {
+                    inclusive = false;
+                }
+            } else if unsafe { end_word(1, bigword, true, true) } == FAIL {
+                return FAIL;
+            }
         }
-        OK
+        count -= 1;
     }
+
+    if include_white && (cls() != 0 || (cur_win().w_cursor.col == 0 && !inclusive)) {
+        // No white space was included at the end, so take some at the
+        // start instead. That is what makes `daw` work on the last word
+        // of a sentence (and `2daw` on the last but one), and what
+        // handles `2daw` deleting `word.` at the end of a line, where the
+        // cursor ends at the start of the next one. But never take the
+        // white space at the start of a line: that is indent.
+        let pos = cur_win().w_cursor;
+        cur_win().w_cursor = start_pos;
+        if unsafe { oneleft() } == OK {
+            unsafe { back_in_line() };
+            if cls() == 0 && cur_win().w_cursor.col > 0 {
+                if visual_active() {
+                    set_visual_anchor(cur_win().w_cursor);
+                } else {
+                    // SAFETY: `oap` is a live operator argument.
+                    unsafe { (*oap).start = cur_win().w_cursor };
+                }
+            }
+        }
+        cur_win().w_cursor = pos; // put the cursor back at the end
+    }
+
+    if visual_active() {
+        // SAFETY: 'selection' is a NUL-terminated option string.
+        if unsafe { *p_sel.get() } as c_int == 'e' as c_int
+            && inclusive
+            && ltoreq(visual_anchor(), cur_win().w_cursor)
+        {
+            // SAFETY: the cursor is on a line of the current buffer.
+            unsafe { inc_cursor() };
+        }
+        if visual_mode().is_line() {
+            set_visual_mode(VisualMode::CHAR);
+            redraw_cmdline.set(true); // show the mode later
+        }
+    } else {
+        // SAFETY: the caller guarantees `oap` is a live operator argument.
+        unsafe { (*oap).inclusive = inclusive };
+    }
+    OK
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
