@@ -8,6 +8,9 @@
 //! [`SlotTable`] is the table itself. [`HandleRegistry`] is the three
 //! graph registries' shared shape on top of it — see its own docs for the
 //! liveness invariant that makes a lookup a *safe* call.
+//! [`PendingFree`] is the other half of a registry's bookkeeping: the
+//! allocations an autocommand deferred, which used to be a chain threaded
+//! through the graph's own `b_next`/`w_next` links.
 //!
 //! # The order is part of the contract
 //!
@@ -147,9 +150,10 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
 /// for is discharged here, once, rather than at every call site.
 ///
 /// An object that is freed *lazily* is a different matter and is not this
-/// type's business: `au_pending_free_win`/`_buf` defer the free itself, and
-/// the handle stays registered until it runs — which is exactly what the
-/// khash map did, so a lookup answers the same thing it always did.
+/// type's business: the free paths still `forget` first and only then park
+/// the allocation in a [`PendingFree`], so a deferred object is already
+/// unfindable here — exactly what the khash map answered once `map_del` had
+/// run.
 ///
 /// The values are raw pointers rather than owned allocations. Ownership of
 /// the `win_T`/`buf_T`/`tabpage_T` moves in a later slice; what moved here
@@ -185,6 +189,53 @@ impl<T> HandleRegistry<T> {
     /// window relies on that.
     pub(crate) fn forget(&mut self, handle: handle_T) {
         self.live.remove(handle);
+    }
+}
+
+/// The objects of one kind whose memory must outlive the call that gave them
+/// up: the *deferred-free set*.
+///
+/// A window or buffer closed from inside an autocommand cannot have its
+/// allocation given back at once — the handler that closed it, and everything
+/// below it in the nesting, may still hold the address. Upstream parks the
+/// object on a chain threaded through the very `b_next`/`w_next` fields the
+/// editor's own buffer and window lists use; here the set owns its storage,
+/// so those fields have one job.
+///
+/// The order is the C's: pushing at the end and taking from the end is the
+/// same last-in-first-out that a push-at-the-head chain drained from the head
+/// gave. Nothing here dereferences a parked address — this type stores it and
+/// hands it back — which is why the module can `forbid(unsafe_code)` and the
+/// free itself lives with the caller.
+pub(crate) struct PendingFree<T> {
+    /// Parked addresses, oldest first.
+    parked: Vec<*mut T>,
+}
+
+impl<T> PendingFree<T> {
+    /// An empty set. `const`, so it can be a `static`.
+    pub(crate) const fn new() -> Self {
+        PendingFree { parked: Vec::new() }
+    }
+
+    /// Park `object`'s allocation until the deferral ends.
+    pub(crate) fn park(&mut self, object: *mut T) {
+        self.parked.push(object);
+    }
+
+    /// Take the most recently parked allocation out, `None` when the set is
+    /// empty. Callers loop on this rather than draining, so that nothing is
+    /// borrowed while a free runs — the C re-reads its list head for the same
+    /// reason.
+    pub(crate) fn take_next(&mut self) -> Option<*mut T> {
+        self.parked.pop()
+    }
+
+    /// How many allocations are parked. For the tests; the editor only ever
+    /// asks by draining.
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.parked.len()
     }
 }
 
@@ -241,7 +292,7 @@ impl Hasher for IdHasher {
 
 #[cfg(test)]
 mod tests {
-    use super::{HandleRegistry, SlotTable};
+    use super::{HandleRegistry, PendingFree, SlotTable};
 
     /// The table's own view of itself, checked after every mutation: the
     /// index agrees with the slots, and every key is findable.
@@ -430,5 +481,76 @@ mod tests {
         reg.register(8, pa);
         assert_eq!(reg.get(7), None);
         assert_eq!(reg.get(8), Some(pa));
+    }
+
+    // -- PendingFree -------------------------------------------------------
+    //
+    // Miri-sized: the set stores addresses and never reads through one, so
+    // these park the addresses of local `Object`s and check only the order.
+
+    #[test]
+    fn an_empty_pending_set_hands_back_nothing() {
+        let mut pending: PendingFree<Object> = PendingFree::new();
+        assert_eq!(pending.len(), 0);
+        assert!(pending.take_next().is_none());
+    }
+
+    /// The C pushes at the head of a chain and drains from the head, so the
+    /// last object deferred is the first one freed. Parking at the end of a
+    /// `Vec` and taking from the end is the same order.
+    #[test]
+    fn parked_allocations_come_back_last_in_first_out() {
+        let (mut a, mut b, mut c) = (Object, Object, Object);
+        let (pa, pb, pc) = (&raw mut a, &raw mut b, &raw mut c);
+        let mut pending: PendingFree<Object> = PendingFree::new();
+        pending.park(pa);
+        pending.park(pb);
+        pending.park(pc);
+        assert_eq!(pending.len(), 3);
+        assert_eq!(pending.take_next(), Some(pc));
+        assert_eq!(pending.take_next(), Some(pb));
+        assert_eq!(pending.take_next(), Some(pa));
+        assert_eq!(pending.take_next(), None);
+    }
+
+    /// The drain loop the editor runs: take one, free it, ask again. A set
+    /// that grew while it ran would still be emptied, which is what the C's
+    /// re-read of the list head buys.
+    #[test]
+    fn a_drain_loop_empties_the_set_including_what_it_grew_by() {
+        let mut objects = [Object, Object, Object, Object];
+        let addresses: Vec<*mut Object> = objects.iter_mut().map(|o| &raw mut *o).collect();
+        let mut pending: PendingFree<Object> = PendingFree::new();
+        pending.park(addresses[0]);
+        pending.park(addresses[1]);
+        let mut freed = Vec::new();
+        let mut refill = true;
+        while let Some(object) = pending.take_next() {
+            freed.push(object);
+            if refill {
+                refill = false;
+                pending.park(addresses[2]);
+                pending.park(addresses[3]);
+            }
+        }
+        assert_eq!(pending.len(), 0);
+        assert_eq!(
+            freed,
+            [addresses[1], addresses[3], addresses[2], addresses[0]]
+        );
+    }
+
+    /// Parking, draining and parking again is the shape of two nested
+    /// autocommands in a row; the set is reusable, not one-shot.
+    #[test]
+    fn a_drained_set_can_be_used_again() {
+        let mut a = Object;
+        let pa = &raw mut a;
+        let mut pending: PendingFree<Object> = PendingFree::new();
+        for _ in 0..3 {
+            pending.park(pa);
+            assert_eq!(pending.take_next(), Some(pa));
+            assert_eq!(pending.take_next(), None);
+        }
     }
 }

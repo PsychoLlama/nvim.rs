@@ -39,6 +39,7 @@ use core::ffi::c_char;
 use core::ops::{Deref, DerefMut};
 use core::{iter, ptr};
 
+use crate::buffer::free;
 use crate::drawscreen::redraw_later;
 use crate::fold::{has_any_folding, has_folding};
 use crate::global_cell::GlobalCell;
@@ -47,7 +48,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::registry::HandleRegistry;
+use crate::registry::{HandleRegistry, PendingFree};
 use crate::types::{
     StrCharInfo, buf_T, colnr_T, frame_T, handle_T, linenr_T, pos_T, tabpage_T, win_T,
 };
@@ -751,6 +752,63 @@ pub(crate) fn register_tabpage(tp: TabPage) {
 /// [`forget_window`] for a tab page.
 pub(crate) fn forget_tabpage(handle: handle_T) {
     TABPAGES.with_mut(|reg| reg.forget(handle));
+}
+
+// ---------------------------------------------------------------------------
+// Freed while an autocommand is running
+//
+// A window or buffer closed from inside an autocommand cannot have its
+// allocation given back at once: the handler that closed it, and everything
+// below it in the nesting, may still hold the address. Upstream parks the
+// object on a chain threaded through the very `b_next`/`w_next` fields the
+// editor's own buffer and window lists use (`au_pending_free_buf`,
+// `au_pending_free_win`), and the outermost `apply_autocmds` walks the chain
+// once `autocmd_busy` goes false again.
+//
+// Here the pending set owns its storage ([`PendingFree`]), so those two
+// fields have one job. Nothing else changes: `free_buffer`/`win_free` still
+// park under exactly the same `autocmd_busy` test, `apply_autocmds` still
+// drains at exactly the same point, buffers still go before windows, and the
+// order within each is still last-deferred-first-freed.
+
+/// Buffers whose allocation is waiting for the outermost autocommand.
+static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<buf_T>> = GlobalCell::new(PendingFree::new());
+
+/// Windows whose allocation is waiting for the outermost autocommand.
+static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<win_T>> = GlobalCell::new(PendingFree::new());
+
+/// Park `buf`'s allocation until the outermost autocommand returns.
+///
+/// Everything else about the buffer is torn down already and its handle is
+/// out of the registry; what is left is the memory. The caller must not use
+/// `buf` again.
+pub(crate) fn defer_free_buffer(buf: Buf) {
+    let raw = buf.raw();
+    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(raw));
+}
+
+/// [`defer_free_buffer`] for a window.
+pub(crate) fn defer_free_window(win: Win) {
+    let raw = win.raw();
+    PENDING_FREE_WINDOWS.with_mut(|pending| pending.park(raw));
+}
+
+/// Give back everything the handlers deferred: the C's two `while` loops at
+/// the tail of `apply_autocmds`, run when the outermost firing sees
+/// `autocmd_busy` false again.
+///
+/// The set is asked for one allocation at a time rather than drained, so that
+/// no borrow of it is held while a free runs — the same reason the C re-reads
+/// its list head each time round.
+pub(crate) fn free_deferred() {
+    // Each allocation was given up by its owner and nothing has reached it
+    // since: the handle left the registry before it was parked.
+    while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
+        free(buf);
+    }
+    while let Some(win) = PENDING_FREE_WINDOWS.with_mut(PendingFree::take_next) {
+        free(win);
+    }
 }
 
 // ---------------------------------------------------------------------------

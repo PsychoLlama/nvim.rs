@@ -211,10 +211,6 @@ pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub static autocmd_no_enter: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static autocmd_no_leave: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
-pub static au_pending_free_buf: GlobalCell<*mut buf_T> =
-    GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-pub static au_pending_free_win: GlobalCell<*mut win_T> =
-    GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static autocmd_fname: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static autocmd_fname_full: GlobalCell<bool> = GlobalCell::new(false);

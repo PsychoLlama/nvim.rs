@@ -29,8 +29,7 @@ use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::main::{
-    Columns, Rows, au_pending_free_win, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin,
-    p_ch, prevwin, topframe,
+    Columns, Rows, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin, p_ch, prevwin, topframe,
 };
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
@@ -45,7 +44,9 @@ use crate::types::{
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::{Buf, Frame, TabPage, Win, buffers, forget_window, register_window, tabs};
+use crate::winlayer::{
+    Buf, Frame, TabPage, Win, buffers, defer_free_window, forget_window, register_window, tabs,
+};
 use ::libc::abort;
 
 // ---------------------------------------------------------------------------
@@ -339,8 +340,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
         remove(wp, tp);
     }
     if autocmd_busy.get() {
-        wp.w_next = au_pending_free_win.get();
-        au_pending_free_win.set(wp.raw());
+        defer_free_window(wp);
     } else {
         free(wp.raw());
     }

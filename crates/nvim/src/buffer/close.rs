@@ -35,8 +35,7 @@ use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_init, hash_remove};
 use crate::main::{
-    au_pending_free_buf, autocmd_busy, curbuf, curtab, curwin, e_auabort, exiting, firstbuf,
-    lastbuf, updating_screen,
+    autocmd_busy, curbuf, curtab, curwin, e_auabort, exiting, firstbuf, lastbuf, updating_screen,
 };
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
@@ -54,7 +53,7 @@ use crate::types::{
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::uc_clear;
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
-use crate::winlayer::{Buf, TabPage, Win, forget_buffer, tab_windows, windows};
+use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
@@ -834,8 +833,7 @@ fn free_buffer(mut buf: Buf) {
         // it's still needed. Free it when autocmd_busy is reset.
         buf.b_namedm = [ZERO_FMARK; NMARKS as usize];
         buf.b_changelist = [ZERO_FMARK; 100];
-        buf.b_next = au_pending_free_buf.get();
-        au_pending_free_buf.set(buf.raw());
+        defer_free_buffer(buf);
     } else {
         free(buf.raw());
         if curbuf.get() == buf.raw() {

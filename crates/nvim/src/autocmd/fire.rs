@@ -507,16 +507,7 @@ pub unsafe fn apply_autocmds_group(
                     restore_redobuff(&raw mut save_redo);
                 }
                 (*curbuf.get()).b_did_filetype = false;
-                while !au_pending_free_buf.get().is_null() {
-                    let b = (*au_pending_free_buf.get()).b_next;
-                    xfree(au_pending_free_buf.get().cast::<::core::ffi::c_void>());
-                    au_pending_free_buf.set(b);
-                }
-                while !au_pending_free_win.get().is_null() {
-                    let w = (*au_pending_free_win.get()).w_next;
-                    xfree(au_pending_free_win.get().cast::<::core::ffi::c_void>());
-                    au_pending_free_win.set(w);
-                }
+                free_deferred();
             }
 
             // Only if we are still in the same buffer.
