@@ -542,25 +542,6 @@ impl Buf {
         unsafe { ml_get_buf_len(self.0, lnum) }
     }
 
-    /// Where the last operator or put started, which lives inside the buffer.
-    ///
-    /// [`Win::cursor`]'s shape and for the same reason: an operator hands the
-    /// mark's *address* to `decl`, `adjust_cursor`, `check_pos` and friends,
-    /// and computing a field's address is not a dereference.
-    #[inline(always)]
-    pub fn op_start(self) -> Pos {
-        Pos(self
-            .0
-            .wrapping_byte_add(offset_of!(buf_T, b_op_start))
-            .cast())
-    }
-
-    /// Where the last operator or put ended. [`Buf::op_start`].
-    #[inline(always)]
-    pub fn op_end(self) -> Pos {
-        Pos(self.0.wrapping_byte_add(offset_of!(buf_T, b_op_end)).cast())
-    }
-
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
     pub fn snap_to_char(self, pos: Pos) {
