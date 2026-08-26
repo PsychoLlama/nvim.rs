@@ -132,7 +132,8 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
 }
 
 /// The live objects of one kind, found by the handle the user sees: the
-/// shape `buffer_handles`, `window_handles` and `tabpage_handles` share.
+/// shape the window, buffer and tab page registries share. They live in
+/// [`crate::winlayer`], which is the only module that may construct one.
 ///
 /// # The liveness invariant
 ///
