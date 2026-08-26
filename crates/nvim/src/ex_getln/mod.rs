@@ -75,14 +75,13 @@ use crate::main::{
     cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, current_sctx,
     curwin, did_emsg, e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2,
     e_invarg, e_positive, e_textlock, emsg_on_display, emsg_silent, ex_normal_busy, exec_from_reg,
-    exmode_active, firstwin, global_busy, got_int, highlight_match, lines_left, magic_overruled,
-    mod_mask, mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll,
-    msg_scrolled, need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, p_ari, p_arshape,
-    p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal, p_tbidi,
-    p_wbr, p_wc, p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline,
-    redraw_tabline, redrawing_cmdline, restart_edit, search_first_line, search_last_line,
-    search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor, textlock,
-    wild_menu_showing, wim_flags,
+    exmode_active, global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask,
+    mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled,
+    need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, p_ari, p_arshape, p_cedit, p_ch,
+    p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal, p_tbidi, p_wbr, p_wc,
+    p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline,
+    redrawing_cmdline, restart_edit, search_first_line, search_last_line, search_match_endcol,
+    search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing, wim_flags,
 };
 use crate::map::{mh_get_ptr_t, mh_put_ptr_t};
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
