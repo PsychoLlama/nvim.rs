@@ -416,7 +416,6 @@ CELL_PTR_ALLOW_RE = re.compile(
 CELL_PTR_DEFERRED = {
     "window_handles": "khash of window handles; retires with phase 23's registry ownership",
     "buffer_handles": "khash of buffer handles; retires with phase 23's registry ownership",
-    "ql_info_actual": "the quickfix stack behind `qf_info`; F-P22-37, phase 23",
     "tabpage_handles": "khash of tabpage handles; retires with phase 23's registry ownership",
 }
 # Globals a slice ruled may hold more than one site, and the ruling. Counted

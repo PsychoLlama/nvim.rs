@@ -498,8 +498,7 @@ fn numbered(name: &[u8], nr: c_int) -> CString {
 pub unsafe fn qf_view_result(split: bool) {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi = ql_info.get();
-        debug_assert!(!qi.is_null());
+        let mut qi = QfStack::Global.raw();
         let in_ll_window = is_ll_window(curwin.get());
         if in_ll_window {
             qi = (*curwin.get()).w_llist_ref;

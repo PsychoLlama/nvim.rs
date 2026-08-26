@@ -205,8 +205,7 @@ unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, la
 pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi = ql_info.get();
-        debug_assert!(!qi.is_null());
+        let mut qi = QfStack::Global.raw();
 
         let au_name = match (*eap).cmdidx {
             CMD_helpgrep => Some(c"helpgrep"),

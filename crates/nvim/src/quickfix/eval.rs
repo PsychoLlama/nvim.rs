@@ -111,9 +111,9 @@ unsafe fn mark_quickfix_ctx(qi: *mut qf_info_T, copy_id: c_int) -> bool {
 pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
     // SAFETY: the stacks and window lists are only read.
     unsafe {
-        debug_assert!(!ql_info.get().is_null());
-        if mark_quickfix_ctx(ql_info.get(), copy_id)
-            || mark_quickfix_user_data(ql_info.get(), copy_id)
+        let ql = QfStack::Global.raw();
+        if mark_quickfix_ctx(ql, copy_id)
+            || mark_quickfix_user_data(ql, copy_id)
             || set_ref_in_callback(global_qftf(), copy_id, ptr::null_mut(), ptr::null_mut())
         {
             return true;

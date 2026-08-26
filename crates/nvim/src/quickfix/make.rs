@@ -166,8 +166,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
             enc,
         );
 
-        let mut qi = ql_info.get();
-        debug_assert!(!qi.is_null());
+        let mut qi = QfStack::Global.raw();
         // A location list command may have found no list to add to, in
         // which case there is nothing left to do but clean up.
         if !wp.is_null() {

@@ -549,8 +549,7 @@ pub unsafe fn qf_current_entry(wp: *mut win_T) -> linenr_T {
 }
 
 fn current_entry(wp: Win) -> linenr_T {
-    let mut qi = Qi(ql_info.get());
-    debug_assert!(!qi.raw().is_null());
+    let mut qi = Qi(QfStack::Global.raw());
     if is_location_list_window(wp) {
         // In the location list window, the referenced list is the one.
         qi = Qi(wp.w_llist_ref as *mut qf_info_T);

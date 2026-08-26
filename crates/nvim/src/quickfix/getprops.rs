@@ -146,7 +146,7 @@ pub(crate) unsafe fn get_errorlist(
         let mut qi = qi_arg;
         if qi.is_null() {
             qi = if wp.is_null() {
-                ql_info.get()
+                QfStack::Global.raw()
             } else {
                 win_loclist(wp)
             };
@@ -558,8 +558,7 @@ pub(crate) unsafe fn qf_get_properties(
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi = ql_info.get();
-        debug_assert!(!qi.is_null());
+        let mut qi = QfStack::Global.raw();
 
         // A 'lines' key asks about lines the caller supplies, not about a
         // list at all.

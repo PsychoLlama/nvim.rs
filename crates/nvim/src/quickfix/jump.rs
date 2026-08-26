@@ -437,7 +437,7 @@ pub(crate) unsafe fn qf_jump_newwin(
     // SAFETY: forwarded from the caller.
     unsafe {
         if qi.is_null() {
-            qi = ql_info.get();
+            qi = QfStack::Global.raw();
         }
         if qf_stack_empty(qi) || qf_list_empty(qf_get_curlist(qi)) {
             emsg(gettext(&raw const e_no_errors as *const c_char));

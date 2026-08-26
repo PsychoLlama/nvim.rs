@@ -46,8 +46,7 @@ fn cfile_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
 pub unsafe fn ex_cfile(eap: *mut exarg_T) {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi = ql_info.get();
-        debug_assert!(!qi.is_null());
+        let mut qi = QfStack::Global.raw();
 
         let au_name = cfile_get_auname((*eap).cmdidx);
         if let Some(name) = au_name {

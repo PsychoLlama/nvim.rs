@@ -472,7 +472,7 @@ pub unsafe fn qf_mark_adjust(
             return false;
         }
         let qi = if wp.is_null() {
-            ql_info.get()
+            QfStack::Global.raw()
         } else if (*wp).w_llist.is_null() {
             return false;
         } else {

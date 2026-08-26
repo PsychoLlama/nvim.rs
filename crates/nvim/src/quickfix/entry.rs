@@ -251,7 +251,7 @@ pub(crate) unsafe fn qflist_valid(wp: *mut win_T, qf_id: c_uint) -> bool {
     // SAFETY: forwarded from the caller.
     unsafe {
         let qi = if wp.is_null() {
-            ql_info.get()
+            QfStack::Global.raw()
         } else if win_valid(wp) {
             win_loclist(wp)
         } else {

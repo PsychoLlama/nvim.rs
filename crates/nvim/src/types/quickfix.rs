@@ -30,8 +30,10 @@ pub struct qf_info_S {
 }
 
 impl qf_info_S {
-    /// An empty stack with no room for any list; [`qf_alloc_stack`] gives it
-    /// its slots.
+    /// An empty stack with no room for any list. A location list stack gets
+    /// its slots from [`qf_alloc_stack`]; the quickfix stack — this type's
+    /// one `const` use, the static behind `QfStack::Global` — gets them from
+    /// `qf_init_stack` during startup.
     ///
     /// [`qf_alloc_stack`]: ../quickfix/stack/fn.qf_alloc_stack.html
     pub const fn new(qfl_type: qfltype_T) -> Self {

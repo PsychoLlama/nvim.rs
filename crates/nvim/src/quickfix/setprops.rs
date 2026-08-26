@@ -642,7 +642,7 @@ pub unsafe fn set_errorlist(
     // SAFETY: forwarded from the caller.
     unsafe {
         let qi = if wp.is_null() {
-            ql_info.get()
+            QfStack::Global.raw()
         } else {
             ll_get_or_alloc_list(wp)
         };
