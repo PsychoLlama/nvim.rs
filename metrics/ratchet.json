@@ -107,7 +107,7 @@
     "crates/nvim/src/api/win_config/mod.rs": {"pub_items": 48},
     "crates/nvim/src/api/win_config/open.rs": {"missing_safety_doc": 4, "pub_items": 1, "unsafe_lines": 373},
     "crates/nvim/src/api/win_config/parse.rs": {"missing_safety_doc": 7, "unsafe_lines": 636},
-    "crates/nvim/src/api/window.rs": {"pub_items": 20, "unsafe_lines": 155},
+    "crates/nvim/src/api/window.rs": {"pub_items": 20, "unsafe_lines": 152},
     "crates/nvim/src/arglist/all.rs": {"missing_safety_doc": 2, "pub_items": 2, "unsafe_lines": 175},
     "crates/nvim/src/arglist/command.rs": {"missing_safety_doc": 12, "pub_items": 12, "unsafe_lines": 167},
     "crates/nvim/src/arglist/eval.rs": {"pub_items": 4, "unsafe_lines": 50},
@@ -1218,11 +1218,11 @@
     "crates/nvim/src/window/arith.rs": {"pub_items": 12},
     "crates/nvim/src/window/close.rs": {"missing_safety_doc": 7, "pub_items": 8, "unsafe_lines": 16},
     "crates/nvim/src/window/cmd.rs": {"pub_items": 1, "unsafe_lines": 40},
-    "crates/nvim/src/window/config.rs": {"missing_safety_doc": 8, "pub_items": 8, "unsafe_lines": 48},
+    "crates/nvim/src/window/config.rs": {"missing_safety_doc": 8, "pub_items": 8, "unsafe_lines": 47},
     "crates/nvim/src/window/equal.rs": {"missing_safety_doc": 1, "pub_items": 1, "unsafe_lines": 2},
     "crates/nvim/src/window/frame.rs": {"missing_safety_doc": 4, "pub_items": 4, "unsafe_lines": 23},
     "crates/nvim/src/window/framesize.rs": {"missing_safety_doc": 1, "pub_items": 1, "unsafe_lines": 1},
-    "crates/nvim/src/window/goto.rs": {"missing_safety_doc": 7, "pub_items": 8, "unsafe_lines": 24},
+    "crates/nvim/src/window/goto.rs": {"missing_safety_doc": 6, "pub_items": 8, "unsafe_lines": 23},
     "crates/nvim/src/window/mod.rs": {"missing_safety_doc": 5, "pub_items": 121, "unsafe_lines": 28},
     "crates/nvim/src/window/order.rs": {"missing_safety_doc": 3, "pub_items": 3, "unsafe_lines": 23},
     "crates/nvim/src/window/resize.rs": {"missing_safety_doc": 12, "pub_items": 20, "unsafe_lines": 40},
@@ -1233,7 +1233,7 @@
     "crates/nvim/src/window/tabpage.rs": {"missing_safety_doc": 8, "pub_items": 15, "unsafe_lines": 30},
     "crates/nvim/src/window/winclose.rs": {"missing_safety_doc": 2, "pub_items": 3, "unsafe_lines": 12},
     "crates/nvim/src/winfloat.rs": {"extern_abi": 1, "missing_safety_doc": 9, "unsafe_lines": 50},
-    "crates/nvim/src/winlayer.rs": {"pub_items": 13, "unsafe_lines": 31},
+    "crates/nvim/src/winlayer.rs": {"pub_items": 13, "unsafe_lines": 28},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_lines": 40}
   }
 }

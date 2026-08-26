@@ -43,43 +43,44 @@
 //! do either. The value keeps pointing at memory that has gone back to the
 //! allocator, and the next field access is a use-after-free.
 //!
-//! So the shape of every such caller is: **take the handle before, ask the
-//! registry after.**
+//! So the shape of every such caller is: **take the identity before, ask the
+//! registry after.** [`WinId`] and [`BufId`] are that identity — a `handle_T`
+//! with the address dropped. (A `TabPageId` lands with its first caller;
+//! `dead_code` is `-D` here.)
 //!
 //! ```ignore
-//! let handle = win.handle();          // while the window is provably live
+//! let id = win.id();                  // while the window is provably live
 //! apply_autocmds(EVENT_BUFLEAVE, ...);
-//! let Some(mut win) = winlayer::window(handle) else {
+//! let Some(mut win) = id.get() else {
 //!     return;                         // it did not survive
 //! };
 //! win.w_cursor.lnum = 1;              // a fresh value, freshly checked
 //! ```
 //!
-//! [`Win::handle`] is deliberately cheap and reads nothing: the handle is
-//! carried in the value, put there when it was derived. That is what makes
-//! [`Win::valid`] — "is what I was holding still registered?" — answerable
-//! *without* touching the object, and it is why `handle()` still answers
-//! correctly for a window that has since been closed. Nothing else on these
-//! types may be called on a value whose object may be gone.
+//! [`Win::id`] *reads the window*, which is why it must be taken before the
+//! call and not after — and why the identity is a separate value rather than
+//! a second field of [`Win`]. **Building a `Win` reads nothing**, and the
+//! editor depends on that: `win_valid` and `win_find_tabpage` are handed
+//! addresses an autocommand may already have freed, and only compare them.
+//! Reading a handle out of one to answer "is it still there?" is the very
+//! dereference those functions exist to avoid, so such a caller keeps the raw
+//! pointer and keeps the list walk.
 //!
-//! Three shapes of this are already in the tree and are worth copying:
+//! Four shapes of the rule are in the tree and worth copying:
 //!
 //! * `BufRef` (`buffer::BufRef`, upstream's `bufref_T`) — `set_bufref` before,
 //!   `bufref_valid`/`BufRef::get` after. `buffer::enter` uses it twice around
 //!   `BufLeave`.
-//! * A saved `handle_T` plus a registry lookup — `terminal::mode`'s
-//!   `save_curwin_handle` and `win_for_handle`, `autocmd::aucmdwin`'s
+//! * A saved `handle_T` plus a registry lookup — `autocmd::aucmdwin`'s
 //!   `save_curwin_handle`/`save_prevwin_handle`.
-//! * [`Buf::valid`] on a value derived while the buffer was live, which is
-//!   the same question with the handle already in hand.
+//! * [`WinId`] held in a struct that outlives arbitrary re-entry —
+//!   `terminal::mode`'s `save_curwin`, restored with `.get()`.
+//! * [`BufId::valid`] — the same pair as a question; `buffer::enter` asks it
+//!   about a buffer it held across `BufLeave`.
 //!
-//! **`valid()` is not `win_valid()`.** They answer different questions and
-//! are not interchangeable — see [`Win::valid`]'s own docs and the comment
-//! above `window::win_valid`. A caller holding a bare `*mut win_T` that an
-//! autocommand may have freed *cannot* use `valid()` at all: deriving a
-//! `Win` to ask reads the window's handle, which is the very dereference the
-//! question exists to avoid. Such a caller keeps the pointer raw and keeps
-//! the list walk.
+//! **This is not `win_valid()`.** They answer different questions and are
+//! not interchangeable — see [`WinId::get`]'s own docs and the comment above
+//! `window::win_valid`.
 //!
 //! On `&mut`: [`DerefMut`] hands out a borrow that lasts exactly as long as
 //! the field access asking for it, and nothing here offers a scoped
@@ -124,16 +125,16 @@ use crate::types::{
 
 /// A window the caller has promised is live.
 ///
-/// Two words: the address, and the `handle_T` that named the window when the
-/// value was derived. See "Identity, and validity after re-entry" below for
-/// why the handle rides along instead of being read back out of the window.
-#[derive(Clone, Copy, Eq)]
-pub struct Win(*mut win_T, handle_T);
+/// One pointer, and **building one reads nothing**: the editor passes these
+/// addresses around after an autocommand may already have freed them and only
+/// compares them (`win_valid`, `win_find_tabpage`). Identity that outlives the
+/// address is [`WinId`], taken while the window is live.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Win(*mut win_T);
 
-/// A buffer the caller has promised is live. [`Win`]'s shape: address and
-/// buffer number.
-#[derive(Clone, Copy, Eq)]
-pub struct Buf(*mut buf_T, handle_T);
+/// A buffer the caller has promised is live. [`Win`]'s shape.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Buf(*mut buf_T);
 
 /// A frame of the window layout tree the caller has promised is live.
 ///
@@ -144,8 +145,8 @@ pub struct Buf(*mut buf_T, handle_T);
 pub struct Frame(*mut frame_T);
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
-#[derive(Clone, Copy, Eq)]
-pub struct TabPage(*mut tabpage_T, handle_T);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TabPage(*mut tabpage_T);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -154,33 +155,6 @@ pub struct Pos(*mut pos_T);
 /// A NUL-terminated buffer line, as `ml_get_buf` hands it back.
 #[derive(Clone, Copy)]
 pub struct Line(*mut c_char);
-
-/// Two values are the same window when they hold the same address, which is
-/// what the comparison meant while this was a bare pointer. The handle is
-/// derived from the address and cannot disagree with it — handles are handed
-/// out by a monotone counter and never reused — so comparing it as well would
-/// change no answer, and leaving it out keeps the two representations
-/// interchangeable while phase 23 moves between them. As [`Buf`], [`TabPage`].
-impl PartialEq for Win {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl PartialEq for Buf {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl PartialEq for TabPage {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
 
 impl Deref for Win {
     type Target = win_T;
@@ -278,30 +252,7 @@ impl Win {
     /// `wp` must stay a live window for as long as the value is used.
     #[inline(always)]
     pub const unsafe fn new(wp: *mut win_T) -> Self {
-        Self::wrap(wp)
-    }
-
-    /// Wrap a window this module has just established is live, reading the
-    /// handle that becomes the value's identity.
-    ///
-    /// Private, and the module's only way in: every call site is on the same
-    /// footing as a caller of [`Win::new`] and says so where it is not
-    /// obvious.
-    ///
-    /// A **null** is carried with handle `0`, which names no window, so
-    /// [`Win::valid`] answers `false` for it and nothing is read. That is not
-    /// a nicety: the editor really does hand these around — `curbuf` is null
-    /// for the moment `free_buffer` clears it, and a window being closed has
-    /// a null `w_buffer` — and while this was a bare pointer such a value
-    /// was made and passed on freely. Wrapping one must therefore stay as
-    /// harmless as it was.
-    #[inline(always)]
-    const fn wrap(wp: *mut win_T) -> Self {
-        match wp.is_null() {
-            true => Self(wp, 0),
-            // SAFETY: non-null here is a live window, per the contract above.
-            false => Self(wp, unsafe { (*wp).handle }),
-        }
+        Self(wp)
     }
 
     /// The window `wp` names, `None` for null.
@@ -311,11 +262,7 @@ impl Win {
     /// used.
     #[inline(always)]
     pub const unsafe fn from_raw(wp: *mut win_T) -> Option<Self> {
-        if wp.is_null() {
-            None
-        } else {
-            Some(Self::wrap(wp))
-        }
+        if wp.is_null() { None } else { Some(Self(wp)) }
     }
 
     /// The window the editor is working in.
@@ -324,7 +271,7 @@ impl Win {
     /// `curwin` must be set, which it is from startup to exit.
     #[inline(always)]
     pub unsafe fn current() -> Self {
-        Self::wrap(curwin.get())
+        Self(curwin.get())
     }
 
     #[inline(always)]
@@ -333,55 +280,19 @@ impl Win {
     }
 
     /// This window's id: the handle the API, `win_getid()` and the registry
-    /// all name it by. Identity that survives the address being reused.
-    ///
-    /// Read when the value was derived, not now, so this answers correctly
-    /// even for a window an autocommand has since closed — which is what
-    /// makes [`Win::valid`] able to ask about one.
+    /// all name it by. **Reads the window**, so ask it while the window is
+    /// live — which is what the re-entry rule asks anyway: before the call
+    /// that might close it. [`Win::id`] wraps the answer in a type.
     #[inline(always)]
-    pub fn handle(self) -> handle_T {
-        self.1
+    pub(crate) fn handle(self) -> handle_T {
+        self.handle
     }
 
-    /// Give a freshly allocated window the handle that names it from here on.
-    ///
-    /// The one place `w_handle` is written, and the only thing that keeps the
-    /// two halves of this value in step: the allocator wraps the raw memory
-    /// before it has a handle to read, so it must hand the handle back
-    /// through here rather than storing it through [`DerefMut`]. Copies of
-    /// `self` taken before this call keep the old identity, which is why the
-    /// three allocators pass their value on by `&mut`.
+    /// This window's identity, taken while it is live: the value to hold
+    /// across anything that can re-enter the editor. See [`WinId`].
     #[inline(always)]
-    pub(crate) fn assign_handle(&mut self, handle: handle_T) {
-        self.handle = handle;
-        self.1 = handle;
-    }
-
-    /// Whether the window this value was derived from is **still
-    /// registered**: allocated, and not yet freed.
-    ///
-    /// This is *not* `win_valid()`, and the two answer different questions:
-    ///
-    /// * `win_valid(wp)` asks whether an **address** is on the **current tab
-    ///   page's** window list (`win_valid_any_tab` widens that to every tab
-    ///   page). It is a list walk, and it says "no" for a hidden window
-    ///   (`win_alloc(_, true)`) that is on no list but perfectly alive.
-    /// * This asks whether the **object** this value names still exists,
-    ///   by the handle read when the value was made. It says "yes" for that
-    ///   hidden window, and "no" for the autocommand window while it is idle,
-    ///   which `aucmd_restbuf` takes out of the registry.
-    ///
-    /// Ask this one when the question is "did what I was holding survive the
-    /// call I just made"; ask `win_valid` when the question is about layout —
-    /// "is this window on screen, on this tab page". Reaching for the wrong
-    /// one is a behaviour change, not a style choice.
-    ///
-    /// No memory belonging to the window is read, so this is safe to ask of a
-    /// value whose window may already be gone — the one thing the rest of the
-    /// type is not.
-    #[inline(always)]
-    pub fn valid(self) -> bool {
-        window(self.1) == Some(self)
+    pub(crate) fn id(self) -> WinId {
+        WinId(self.handle)
     }
 
     /// Whether this is the window the editor is working in.
@@ -393,16 +304,12 @@ impl Win {
         self.0 == curwin.get()
     }
 
-    /// The buffer this window shows.
-    ///
-    /// A live window's `w_buffer` is a live buffer — except for the moment
-    /// between losing one and being given another, when it is null and this
-    /// answers a null [`Buf`] rather than reading it. Callers that care use
-    /// [`Win::buffer_or_none`]; the rest only pass the address on, as they
-    /// did while these were bare pointers.
+    /// The buffer this window shows, or a null [`Buf`] for the moment between
+    /// losing one and being given another — [`Win::buffer_or_none`] separates
+    /// the two, and the callers that do not care only pass the address on.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
-        Buf::wrap(self.w_buffer)
+        Buf(self.w_buffer)
     }
 
     /// The leaf frame this window sits in. Every window has one, floats
@@ -430,7 +337,7 @@ impl Win {
     pub fn buffer_or_none(self) -> Option<Buf> {
         // A live window's `w_buffer` is a live buffer or null.
         let buf = self.w_buffer;
-        (!buf.is_null()).then(|| Buf::wrap(buf))
+        (!buf.is_null()).then_some(Buf(buf))
     }
 
     /// The next window in this tab page's list, if any.
@@ -438,7 +345,7 @@ impl Win {
     pub fn next(self) -> Option<Self> {
         // A live window's `w_next` is a live window or null.
         let next = self.w_next;
-        (!next.is_null()).then(|| Self::wrap(next))
+        (!next.is_null()).then_some(Self(next))
     }
 
     /// The window before this one in its tab page's list, if any.
@@ -446,7 +353,7 @@ impl Win {
     pub fn prev(self) -> Option<Self> {
         // A live window's `w_prev` is a live window or null.
         let prev = self.w_prev;
-        (!prev.is_null()).then(|| Self::wrap(prev))
+        (!prev.is_null()).then_some(Self(prev))
     }
 
     /// First line of the fold containing `lnum`, if there is one.
@@ -550,17 +457,7 @@ impl Buf {
     /// `buf` must stay a live buffer for as long as the value is used.
     #[inline(always)]
     pub const unsafe fn new(buf: *mut buf_T) -> Self {
-        Self::wrap(buf)
-    }
-
-    /// [`Win::wrap`] for a buffer, nulls and all.
-    #[inline(always)]
-    const fn wrap(buf: *mut buf_T) -> Self {
-        match buf.is_null() {
-            true => Self(buf, 0),
-            // SAFETY: non-null here is a live buffer.
-            false => Self(buf, unsafe { (*buf).handle }),
-        }
+        Self(buf)
     }
 
     /// The buffer `buf` names, `None` for null.
@@ -570,11 +467,7 @@ impl Buf {
     /// used.
     #[inline(always)]
     pub const unsafe fn from_raw(buf: *mut buf_T) -> Option<Self> {
-        if buf.is_null() {
-            None
-        } else {
-            Some(Self::wrap(buf))
-        }
+        if buf.is_null() { None } else { Some(Self(buf)) }
     }
 
     /// The buffer the editor is working in.
@@ -583,7 +476,7 @@ impl Buf {
     /// `curbuf` must be set, which it is from startup to exit.
     #[inline(always)]
     pub unsafe fn current() -> Self {
-        Self::wrap(curbuf.get())
+        Self(curbuf.get())
     }
 
     #[inline(always)]
@@ -592,30 +485,17 @@ impl Buf {
     }
 
     /// This buffer's number: the handle the API and `:ls` show, and what the
-    /// registry finds it by. [`Win::handle`] for a buffer.
+    /// registry finds it by. [`Win::handle`] for a buffer — it reads the
+    /// buffer, so ask it while the buffer is live.
     #[inline(always)]
-    pub fn handle(self) -> handle_T {
-        self.1
+    pub(crate) fn handle(self) -> handle_T {
+        self.handle
     }
 
-    /// [`Win::assign_handle`] for a buffer, whose handle is its number.
+    /// This buffer's identity, taken while it is live. [`Win::id`].
     #[inline(always)]
-    pub(crate) fn assign_handle(&mut self, handle: handle_T) {
-        self.handle = handle;
-        self.1 = handle;
-    }
-
-    /// Whether the buffer this value was derived from is still registered.
-    /// [`Win::valid`] for a buffer, with the same warning attached: this is
-    /// not `buflist_findnr`, and it is not `bufref_valid` either — a
-    /// `bufref_T` also insists the buffer has not been freed *and* reallocated
-    /// under the same number, which cannot happen, and it is checked against a
-    /// buffer that was on the list. The two off-list buffers
-    /// (`ml_recover`'s scratch, `open_spellbuf`'s dummy) are registered by
-    /// nobody and answer `false` here.
-    #[inline(always)]
-    pub fn valid(self) -> bool {
-        buffer(self.1) == Some(self)
+    pub(crate) fn id(self) -> BufId {
+        BufId(self.handle)
     }
 
     #[inline(always)]
@@ -660,7 +540,7 @@ impl Buf {
     pub fn next(self) -> Option<Self> {
         // A live buffer's `b_next` is a live buffer or null.
         let next = self.b_next;
-        (!next.is_null()).then(|| Self::wrap(next))
+        (!next.is_null()).then_some(Self(next))
     }
 }
 
@@ -693,7 +573,7 @@ impl Frame {
         // A live leaf frame's `fr_win` is a live window; a row or column's is
         // null.
         let win = self.fr_win;
-        (!win.is_null()).then(|| Win::wrap(win))
+        (!win.is_null()).then_some(Win(win))
     }
 
     /// The frame this one is a child of — `None` only for the tab page's
@@ -742,17 +622,7 @@ impl TabPage {
     /// `tp` must stay a live tab page for as long as the value is used.
     #[inline(always)]
     pub const unsafe fn new(tp: *mut tabpage_T) -> Self {
-        Self::wrap(tp)
-    }
-
-    /// [`Win::wrap`] for a tab page, nulls and all.
-    #[inline(always)]
-    const fn wrap(tp: *mut tabpage_T) -> Self {
-        match tp.is_null() {
-            true => Self(tp, 0),
-            // SAFETY: non-null here is a live tab page.
-            false => Self(tp, unsafe { (*tp).handle }),
-        }
+        Self(tp)
     }
 
     /// The tab page `tp` names, `None` for null — which is how the window
@@ -763,11 +633,7 @@ impl TabPage {
     /// used.
     #[inline(always)]
     pub const unsafe fn from_raw(tp: *mut tabpage_T) -> Option<Self> {
-        if tp.is_null() {
-            None
-        } else {
-            Some(Self::wrap(tp))
-        }
+        if tp.is_null() { None } else { Some(Self(tp)) }
     }
 
     /// The tab page the editor is working in.
@@ -776,7 +642,7 @@ impl TabPage {
     /// `curtab` must be set, which it is from startup to exit.
     #[inline(always)]
     pub unsafe fn current() -> Self {
-        Self::wrap(curtab.get())
+        Self(curtab.get())
     }
 
     #[inline(always)]
@@ -786,23 +652,8 @@ impl TabPage {
 
     /// This tab page's id. [`Win::handle`] for a tab page.
     #[inline(always)]
-    pub fn handle(self) -> handle_T {
-        self.1
-    }
-
-    /// [`Win::assign_handle`] for a tab page.
-    #[inline(always)]
-    pub(crate) fn assign_handle(&mut self, handle: handle_T) {
-        self.handle = handle;
-        self.1 = handle;
-    }
-
-    /// Whether the tab page this value was derived from is still registered.
-    /// [`Win::valid`] for a tab page — and *not* `valid_tabpage()`, which
-    /// walks the editor's tab page list looking for an address.
-    #[inline(always)]
-    pub fn valid(self) -> bool {
-        tabpage(self.1) == Some(self)
+    pub(crate) fn handle(self) -> handle_T {
+        self.handle
     }
 
     /// Whether this is the tab page the editor is working in.
@@ -827,7 +678,7 @@ impl TabPage {
     pub fn next(self) -> Option<Self> {
         // A live tab page's `tp_next` is a live tab page or null.
         let next = self.tp_next;
-        (!next.is_null()).then(|| Self::wrap(next))
+        (!next.is_null()).then_some(Self(next))
     }
 
     /// The root of this tab page's layout tree, `tp_topframe` verbatim.
@@ -912,6 +763,82 @@ impl Line {
 }
 
 // ---------------------------------------------------------------------------
+// Identity, and validity after re-entry
+//
+// A `Win`/`Buf`/`TabPage` is an *address* the caller has promised is live, and
+// that promise is exactly what an autocommand breaks. The value to carry
+// across such a call is not the address but the **handle**, taken while the
+// object is still there -- which is what these three are. They are the
+// re-entry rule in the type system: you cannot ask "is it still there?" of
+// something whose identity you did not take while it was.
+
+/// A window's identity, taken from a live window: the `handle_T` that names
+/// it, with the address dropped.
+///
+/// Answering [`WinId::get`] costs a registry lookup and reads nothing that
+/// belongs to the window, so it is safe to ask about one an autocommand has
+/// closed. [`Win::id`] is the only way to make one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct WinId(handle_T);
+
+/// A buffer's identity, taken from a live buffer: its number. [`WinId`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct BufId(handle_T);
+
+impl WinId {
+    /// The window again, `None` once it has been freed.
+    ///
+    /// This is the second half of the re-entry rule: `let id = win.id()`
+    /// before the call, `id.get()` after it, and a fresh [`Win`] or nothing.
+    ///
+    /// "Still there" here is **not** `win_valid()`, and the two answer
+    /// different questions:
+    ///
+    /// * `win_valid(wp)` asks whether an **address** is on the **current tab
+    ///   page's** window list (`win_valid_any_tab` widens that to every tab
+    ///   page). It is a list walk, and it says "no" for a hidden window
+    ///   (`win_alloc(_, true)`) that is on no list but perfectly alive.
+    /// * This asks whether the **object** still exists. It says "yes" for
+    ///   that hidden window, and "no" for the autocommand window while it is
+    ///   idle, which `aucmd_restbuf` takes out of the registry.
+    ///
+    /// Ask this one when the question is "did what I was holding survive the
+    /// call I just made"; ask `win_valid` when the question is about layout —
+    /// "is this window on screen, on this tab page". Reaching for the wrong
+    /// one is a behaviour change, not a style choice. And a caller holding a
+    /// bare `*mut win_T` that an autocommand may have freed cannot use this
+    /// at all: taking a [`WinId`] from one would read the window, the very
+    /// dereference the list walk exists to avoid.
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<Win> {
+        window(self.0)
+    }
+
+    /// The bare handle, for the API and RPC edges that speak in numbers.
+    #[inline(always)]
+    pub(crate) fn handle(self) -> handle_T {
+        self.0
+    }
+}
+
+impl BufId {
+    /// The buffer again, `None` once it has been wiped. [`WinId::get`].
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<Buf> {
+        buffer(self.0)
+    }
+
+    /// Whether the buffer is still registered — [`WinId::get`]'s question,
+    /// as a `bool`, with the same warning: this is not `buf_valid`'s walk of
+    /// the buffer list, and the two off-list buffers (`ml_recover`'s scratch,
+    /// `open_spellbuf`'s dummy) are registered by nobody and answer `false`.
+    #[inline(always)]
+    pub(crate) fn valid(self) -> bool {
+        self.get().is_some()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The lists, walked
 //
 // Each of these is one of the C's `FOR_ALL_*` macros. The lists are the
@@ -925,7 +852,7 @@ impl Line {
 /// The windows hanging off `first`, in list order.
 fn win_chain(first: *mut win_T) -> impl Iterator<Item = Win> {
     // The chain is a live window list ending at a null `w_next`.
-    iter::successors((!first.is_null()).then(|| Win::wrap(first)), |wp| wp.next())
+    iter::successors((!first.is_null()).then_some(Win(first)), |wp| wp.next())
 }
 
 /// Every window of the current tab page, in list order: the C's
@@ -952,9 +879,7 @@ pub fn windows_in_tab(tp: TabPage) -> impl Iterator<Item = Win> {
 pub fn tabs() -> impl Iterator<Item = TabPage> {
     // The chain is the editor's tab page list, ending at a null `tp_next`.
     let first = first_tabpage.get();
-    iter::successors((!first.is_null()).then(|| TabPage::wrap(first)), |tp| {
-        tp.next()
-    })
+    iter::successors((!first.is_null()).then_some(TabPage(first)), |tp| tp.next())
 }
 
 /// Every window of every tab page: `FOR_ALL_TAB_WINDOWS`, which is exactly
@@ -980,7 +905,5 @@ pub fn frames_back(first: Option<Frame>) -> impl Iterator<Item = Frame> {
 pub fn buffers() -> impl Iterator<Item = Buf> {
     // The chain is the editor's buffer list, ending at a null `b_next`.
     let first = firstbuf.get();
-    iter::successors((!first.is_null()).then(|| Buf::wrap(first)), |buf| {
-        buf.next()
-    })
+    iter::successors((!first.is_null()).then_some(Buf(first)), |buf| buf.next())
 }

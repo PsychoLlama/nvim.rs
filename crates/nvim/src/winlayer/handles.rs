@@ -51,27 +51,20 @@ static TABPAGES: GlobalCell<HandleRegistry<tabpage_T>> = GlobalCell::new(HandleR
 
 /// The window `handle` names, `None` once it has been closed.
 pub(crate) fn window(handle: handle_T) -> Option<Win> {
-    // The borrow ends with the lookup, which cannot re-enter. The table
-    // already knows the handle, so nothing is read out of the window.
-    WINDOWS
-        .with(|reg| reg.get(handle))
-        .map(|wp| Win(wp, handle))
+    // The borrow ends with the lookup, which cannot re-enter.
+    WINDOWS.with(|reg| reg.get(handle)).map(Win)
 }
 
 /// The buffer numbered `handle`, `None` once it has been wiped.
 pub(crate) fn buffer(handle: handle_T) -> Option<Buf> {
     // As [`window`].
-    BUFFERS
-        .with(|reg| reg.get(handle))
-        .map(|buf| Buf(buf, handle))
+    BUFFERS.with(|reg| reg.get(handle)).map(Buf)
 }
 
 /// The tab page `handle` names, `None` once it has been closed.
 pub(crate) fn tabpage(handle: handle_T) -> Option<TabPage> {
     // As [`window`].
-    TABPAGES
-        .with(|reg| reg.get(handle))
-        .map(|tp| TabPage(tp, handle))
+    TABPAGES.with(|reg| reg.get(handle)).map(TabPage)
 }
 
 /// Record `win` as the live window its handle names.

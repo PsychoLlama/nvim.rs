@@ -208,7 +208,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     // SAFETY: a fresh window, which is live from here on.
     let mut new_wp = unsafe { Win::new(zeroed_window()) };
     last_win_id.set(last_win_id.get() + 1);
-    new_wp.assign_handle(last_win_id.get() as handle_T);
+    new_wp.handle = last_win_id.get() as handle_T;
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);

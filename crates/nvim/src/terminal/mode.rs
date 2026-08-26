@@ -44,11 +44,11 @@ use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
-use crate::types::{OptInt, VimState, colnr_T, handle_T, linenr_T, pos_T, uint8_t, winopt_T};
+use crate::types::{OptInt, VimState, colnr_T, linenr_T, pos_T, uint8_t, winopt_T};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
-use crate::winlayer::{self, Buf, Win};
+use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
@@ -85,9 +85,14 @@ pub(crate) struct TerminalState {
     pub got_bsl_o: bool,
     /// What the UI was last told about cursor visibility.
     pub cursor_visible: bool,
-    /// The window whose options [`set_terminal_winopts`] changed, zero when
+    /// The window whose options [`set_terminal_winopts`] changed, `None` when
     /// none are changed.
-    pub save_curwin_handle: handle_T,
+    ///
+    /// A [`WinId`] and not a `Win`: terminal mode runs the whole editor
+    /// between saving these options and restoring them, so the window may be
+    /// closed by then and its address must not be held. See `winlayer`'s
+    /// re-entry rule.
+    pub save_curwin: Option<WinId>,
     pub save_w_p_cul: bool,
     pub save_w_p_culopt: *mut c_char,
     pub save_w_p_culopt_flags: uint8_t,
@@ -109,7 +114,7 @@ impl TerminalState {
             got_bsl: false,
             got_bsl_o: false,
             cursor_visible: true,
-            save_curwin_handle: 0,
+            save_curwin: None,
             save_w_p_cul: false,
             save_w_p_culopt: ::core::ptr::null_mut(),
             save_w_p_culopt_flags: 0,
@@ -187,11 +192,6 @@ fn current_buf() -> Buf {
     unsafe { Buf::current() }
 }
 
-/// The window a handle names, `None` once it has been closed.
-fn win_for_handle(handle: handle_T) -> Option<Win> {
-    winlayer::window(handle)
-}
-
 /// Tell the child whether it has focus, so it can show its own cursor
 /// accordingly.
 fn terminal_focus(term: Term, focus: bool) {
@@ -213,14 +213,11 @@ fn terminal_focus(term: Term, focus: bool) {
 /// that would draw over the child's output is turned off.
 fn set_terminal_winopts(mut s: Session) {
     assert!(
-        s.save_curwin_handle == 0,
+        s.save_curwin.is_none(),
         "terminal window options saved twice"
     );
     let mut wp = current_win();
-    // The window is named by handle from here on, not by address: the session
-    // outlives calls that can close it, and `win_for_handle` below is the
-    // re-entry rule's other half.
-    s.save_curwin_handle = wp.handle();
+    s.save_curwin = Some(wp.id());
     s.save_w_p_cul = wp.w_onebuf_opt.wo_cul != 0;
     s.save_w_p_culopt = ::core::ptr::null_mut();
     s.save_w_p_culopt_flags = wp.w_p_culopt_flags;
@@ -266,7 +263,7 @@ fn set_terminal_winopts(mut s: Session) {
 /// either way.
 fn unset_terminal_winopts(mut s: Session) {
     assert!(
-        s.save_curwin_handle != 0,
+        s.save_curwin.is_some(),
         "terminal window options restored without being saved"
     );
     if let Some(winopts) = saved_winopts(s) {
@@ -288,13 +285,13 @@ fn unset_terminal_winopts(mut s: Session) {
     // SAFETY: the copy `set_terminal_winopts` made, or null, which this
     // takes as "nothing to free".
     unsafe { free_string_option(s.save_w_p_culopt) };
-    s.save_curwin_handle = 0;
+    s.save_curwin = None;
 }
 
 /// Where [`unset_terminal_winopts`] should write, redrawing the window on
 /// the way if it is still showing the terminal.
 fn saved_winopts(s: Session) -> Option<*mut winopt_T> {
-    let mut wp = win_for_handle(s.save_curwin_handle)?;
+    let mut wp = s.save_curwin?.get()?;
     if wp.buffer().handle != s.term.buf_handle {
         // The window went elsewhere; the terminal's buffer kept a copy of
         // the options this window had while it was showing it.
@@ -484,7 +481,7 @@ fn terminal_check_focus(mut s: Session) -> bool {
     if current_buf().terminal.is_null() {
         return false;
     }
-    if s.save_curwin_handle != current_win().handle {
+    if s.save_curwin != Some(current_win().id()) {
         unset_terminal_winopts(s);
         set_terminal_winopts(s);
     }

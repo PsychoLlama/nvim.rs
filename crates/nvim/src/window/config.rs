@@ -70,10 +70,10 @@ pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
 /// autocommands that implies, and switch back.
 fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     // `do_buffer` below fires `BufLeave`/`BufEnter`, which can close this
-    // window; the handle is taken now so the error message can still name it.
-    let win_handle = win.handle();
-    // SAFETY: a live window; the answer is its tab page.
-    let tab = unsafe { win_find_tabpage(win.raw()) };
+    // window, so its identity is taken now, while it is provably live: the
+    // error message below may have to name a window that is already gone.
+    let win_id = win.id();
+    let tab = win_find_tabpage(win.raw());
     let _redraw_off = Suppress::redraw();
 
     let mut switchwin = switchwin_T {
@@ -108,7 +108,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     if win_result == FAIL && err.type_0 as c_int == kErrorTypeNone as c_int {
         let fmt = c"Failed to switch to window %d".as_ptr();
         // SAFETY: a live `Error` and a static format string.
-        unsafe { api_set_error(err, kErrorTypeException, fmt, win_handle) };
+        unsafe { api_set_error(err, kErrorTypeException, fmt, win_id.handle()) };
     }
     cur_win().validate_cursor();
     // SAFETY: the state `switch_win_noblock` saved.

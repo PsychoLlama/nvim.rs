@@ -244,6 +244,9 @@ pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) 
     let prevbufref = BufRef::of(prevbuf);
     let newbufref = BufRef::of(buf);
     let prev_nwindows = prevbuf.b_nwindows;
+    // The re-entry rule: `buf` is about to be held across two calls that can
+    // wipe it, so its identity is taken now, while it is provably live.
+    let buf_id = buf.id();
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
@@ -256,13 +259,11 @@ pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) 
     // An autocommand may have deleted "buf", already entered it (e.g., when it
     // did ":bunload") or aborted the script processing!  If curwin->w_buffer is
     // null, enter_buffer() will make it valid again.
-    // `buf` was derived while it was live and has been held across two
-    // re-entrant calls, so the re-entry rule applies: ask by the handle it
-    // carries rather than by its address. That is also stricter than the
-    // `buf_valid` list walk this replaces — a buffer wiped and a new one
-    // allocated at the same address would pass an address comparison, which
-    // is the hazard `bufref_T` carries `br_buf_free_count` for.
-    let valid = buf.valid();
+    // The other half of the rule: ask the registry by the identity taken
+    // above, not the buffer list by `buf`'s address. Stricter, too — a buffer
+    // wiped and a new one allocated at the same address would pass an address
+    // comparison, the hazard `bufref_T` carries `br_buf_free_count` for.
+    let valid = buf_id.valid();
     if valid && buf.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows

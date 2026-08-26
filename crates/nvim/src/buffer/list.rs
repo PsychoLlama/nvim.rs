@@ -310,7 +310,7 @@ pub unsafe fn buflist_new(
         // The keymaps have to be reloaded and b:keymap_name set.
         buf.b_kmap_state = (buf.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
     } else {
-        append_to_list(&mut buf);
+        append_to_list(buf);
         // Always copy the options from the current buffer.
         copy_options_into(buf, BCO_ALWAYS as c_int);
     }
@@ -427,7 +427,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Buf {
 }
 
 /// Put a new buffer at the end of the buffer list and give it its number.
-fn append_to_list(buf: &mut Buf) {
+fn append_to_list(mut buf: Buf) {
     buf.b_next = ptr::null_mut();
     match current_last() {
         // The buffer list is empty.
@@ -443,9 +443,9 @@ fn append_to_list(buf: &mut Buf) {
     }
     lastbuf.set(buf.raw());
 
-    buf.assign_handle(top_file_num.get() as handle_T);
+    buf.handle = top_file_num.get() as handle_T;
     top_file_num.set(top_file_num.get() + 1);
-    register_buffer(*buf);
+    register_buffer(buf);
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));

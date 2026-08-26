@@ -92,14 +92,20 @@ fn redraw_winline(wp: Win) {
     unsafe { redraw_win_line(wp.raw(), lnum) };
 }
 
-pub unsafe fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {
-    // SAFETY: the caller's promise -- a live window.
-    raw_tab(find_tab_of(unsafe { Win::new(win) }))
+/// The tab page `win` is on, or null.
+///
+/// `win` stays a raw pointer and is **only compared**, never read: this is one
+/// of the questions the editor asks about a window an autocommand may already
+/// have closed. `nvim_open_win` calls it right after `win_set_buf`, whose
+/// `BufEnter`/`BufLeave` handlers can close the very window being asked about.
+pub fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {
+    raw_tab(find_tab_of(win))
 }
 
-/// The tab page `win` is on, `None` when it is on none.
-fn find_tab_of(win: Win) -> Option<TabPage> {
-    tabs().find(|tp| windows_in_tab(*tp).any(|wp| wp == win))
+/// The tab page `win` is on, `None` when it is on none. `win` is only
+/// compared -- see [`win_find_tabpage`].
+fn find_tab_of(win: *mut win_T) -> Option<TabPage> {
+    tabs().find(|tp| windows_in_tab(*tp).any(|wp| wp.raw() == win))
 }
 
 /// The axis a directional move travels along.

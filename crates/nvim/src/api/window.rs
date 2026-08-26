@@ -316,8 +316,7 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
     else {
         return ().reported(err);
     };
-    // SAFETY: as above; a live window is on a live tab page.
-    let tabpage = unsafe { win_find_tabpage(w.raw()) };
+    let tabpage = win_find_tabpage(w.raw());
     // SAFETY: closing runs autocommands, which `api_try` catches.
     api_try(&mut err, |_| unsafe {
         if is_aucmd_win(w.raw()) {
@@ -342,8 +341,7 @@ pub fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
     else {
         return ().reported(err);
     };
-    // SAFETY: as above.
-    let tabpage = unsafe { win_find_tabpage(w.raw()) };
+    let tabpage = win_find_tabpage(w.raw());
     // `ex_win_close` reads a null tab page as "the current one", which is the
     // only case where it may close the window the user is in.
     let other_tab = if tabpage == curtab.get() {
@@ -364,8 +362,7 @@ pub fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
     let Some(w) = window_by_handle(win, &mut err) else {
         return NIL.reported(err);
     };
-    // SAFETY: `w` is live, and every live window is on a tab page.
-    let tabpage = unsafe { win_find_tabpage(w.raw()) };
+    let tabpage = win_find_tabpage(w.raw());
     // SAFETY: `switch_args` is this frame's own and nothing the call runs can
     // reach it; the call itself runs Lua, which `api_try` catches.
     let res = api_try(&mut err, |err| unsafe {
