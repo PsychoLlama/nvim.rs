@@ -721,15 +721,16 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
 /// for the mark. Nothing has claimed the slot, so this is the comparison
 /// [`keep_newer`] would otherwise make.
 unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !(*buf).b_ffname.is_null()
-                && path_fnamecmp(entry.data.filemark.fname, (*buf).b_ffname) == 0
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, and the entry's
+        // own NUL-terminated file name.
+        unsafe {
+            if !buf.b_ffname.is_null()
+                && path_fnamecmp(entry.data.filemark.fname, buf.b_ffname) == 0
             {
                 let mut fm: fmark_T = fmark_T::UNSET;
                 mark_get(
-                    buf,
+                    buf.raw(),
                     curwin.get(),
                     &raw mut fm,
                     kMarkBufLocal,
@@ -739,8 +740,7 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
                     return true;
                 }
             }
-            buf = (*buf).b_next;
         }
-        false
     }
+    false
 }

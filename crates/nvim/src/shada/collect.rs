@@ -45,13 +45,13 @@ pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: *mut Set_ptr_
 
 /// Collect the buffers whose files are on removable media.
 pub(crate) unsafe fn find_removable_bufs(removable_bufs: *mut Set_ptr_t) {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !(*buf).b_ffname.is_null() && shada_removable((*buf).b_ffname) {
-                set_put_ptr_t(removable_bufs, buf as ptr_t, core::ptr::null_mut());
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, whose name is
+        // only read, and the caller's set.
+        unsafe {
+            if !buf.b_ffname.is_null() && shada_removable(buf.b_ffname) {
+                set_put_ptr_t(removable_bufs, buf.raw() as ptr_t, core::ptr::null_mut());
             }
-            buf = (*buf).b_next;
         }
     }
 }
@@ -65,19 +65,17 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaE
     unsafe {
         let max_bufs = get_shada_parameter('%' as c_int);
         let mut wanted = Vec::new();
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !ignore_buf(buf, removable_bufs)
-                && (*buf).b_p_bl != 0
+        for buf in buffers() {
+            if !ignore_buf(buf.raw(), removable_bufs)
+                && buf.b_p_bl != 0
                 && (max_bufs < 0 || wanted.len() < max_bufs as usize)
             {
                 wanted.push(buffer_list_buffer {
-                    pos: (*buf).b_last_cursor.mark,
-                    fname: (*buf).b_ffname,
-                    additional_data: (*buf).additional_data,
+                    pos: buf.b_last_cursor.mark,
+                    fname: buf.b_ffname,
+                    additional_data: buf.additional_data,
                 });
             }
-            buf = (*buf).b_next;
         }
 
         // The array is `xmalloc`ed because the caller releases it with

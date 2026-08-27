@@ -111,8 +111,8 @@ pub(crate) unsafe fn shada_write(
         // Recording where the cursor is in every window is what makes the
         // `"` mark right on exit. It also means `:wshada` moves that mark
         // to the cursor, as `:wviminfo` did.
-        for wp in all_windows() {
-            set_last_cursor(wp);
+        for wp in tab_windows() {
+            set_last_cursor(wp.raw());
         }
         find_removable_bufs(&raw mut writing.removable_bufs);
 
@@ -458,12 +458,10 @@ impl Writing {
             if self.limits.num_marked_files == 0 {
                 return;
             }
-            let mut buf = firstbuf.get();
-            while !buf.is_null() {
-                if !ignore_buf(buf, &raw mut self.removable_bufs) {
-                    self.collect_one_buffer(buf);
+            for buf in buffers() {
+                if !ignore_buf(buf.raw(), &raw mut self.removable_bufs) {
+                    self.collect_one_buffer(buf.raw());
                 }
-                buf = (*buf).b_next;
             }
         }
     }

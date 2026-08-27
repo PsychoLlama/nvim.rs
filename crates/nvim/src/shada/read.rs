@@ -389,9 +389,9 @@ impl Reading {
             // A window showing a buffer whose change list grew sits at the
             // end of it, as if the changes had just been made.
             if self.cl_bufs.h.n_occupied != 0 {
-                for wp in all_windows() {
-                    if set_has_ptr_t(&raw mut self.cl_bufs, (*wp).w_buffer.cast()) {
-                        (*wp).w_changelistidx = (*(*wp).w_buffer).b_changelistlen;
+                for mut wp in tab_windows() {
+                    if set_has_ptr_t(&raw mut self.cl_bufs, wp.w_buffer.cast()) {
+                        wp.w_changelistidx = (*wp.w_buffer).b_changelistlen;
                     }
                 }
             }
@@ -467,13 +467,11 @@ unsafe fn buffer_for_fname(fname_bufs: *mut Map_cstr_t_ptr_t, fname: *const c_ch
         }
         *key_alloc = xstrdup(fname);
 
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !(*buf).b_ffname.is_null() && path_fnamecmp(fname, (*buf).b_ffname) == 0 {
-                *slot = buf;
-                return buf;
+        for buf in buffers() {
+            if !buf.b_ffname.is_null() && path_fnamecmp(fname, buf.b_ffname) == 0 {
+                *slot = buf.raw();
+                return buf.raw();
             }
-            buf = (*buf).b_next;
         }
         *slot = core::ptr::null_mut();
         core::ptr::null_mut()

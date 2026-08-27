@@ -22,8 +22,7 @@ use crate::fileio::{modname, vim_rename};
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::hash_removed;
 use crate::main::{
-    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, no_hlsearch, p_enc, p_fs, p_hi,
-    p_shada, p_shadafile, p_verbose,
+    curbuf, curwin, no_hlsearch, p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose,
 };
 use crate::map::{
     map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, map_ref_cstr_t_ptr_t, mh_get_cstr_t,
@@ -71,11 +70,12 @@ use crate::types::{
     MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
     String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VAR_UNLOCKED, bln_values,
     buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T, int64_t, kObjectTypeInteger,
-    kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, tabpage_T,
-    typval_T, typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
-    var_flavour_T, win_T, xfmark_T, yankreg_T,
+    kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, typval_T,
+    typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    var_flavour_T, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
+use crate::winlayer::{buffers, tab_windows};
 use ::libc::{atoi, getgid, getuid, qsort, strcmp, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -383,36 +383,6 @@ unsafe fn map_destroy_cstr_t_ptr_t(map: *mut Map_cstr_t_ptr_t) {
         xfree((*map).values.cast());
         (*map).values = ::core::ptr::null_mut();
     }
-}
-
-/// Every window in every tabpage.
-///
-/// The current tabpage keeps its window list in `firstwin` rather than in
-/// the tabpage struct, which is why this is not a plain walk of
-/// `tp_firstwin`.
-unsafe fn all_windows() -> impl Iterator<Item = *mut win_T> {
-    let mut tp = first_tabpage.get() as *mut tabpage_T;
-    let mut wp: *mut win_T = ::core::ptr::null_mut();
-    ::core::iter::from_fn(move || {
-        // SAFETY: walking the editor's window lists on the main thread. No
-        // caller restructures them while iterating.
-        unsafe {
-            while wp.is_null() {
-                if tp.is_null() {
-                    return None;
-                }
-                wp = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp).tp_firstwin
-                };
-                tp = (*tp).tp_next as *mut tabpage_T;
-            }
-            let found = wp;
-            wp = (*found).w_next;
-            Some(found)
-        }
-    })
 }
 
 pub const NMARKS: ::core::ffi::c_int =
