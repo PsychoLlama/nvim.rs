@@ -38,7 +38,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, e_invarg, firstbuf, firstwin, p_enc, starting};
+use crate::main::{curbuf, curwin, e_invarg, p_enc, starting};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::option::{copy_option_part, valid_name};
@@ -60,7 +60,7 @@ use super::{
     MAXWLEN, REGION_ALL, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to, spelload_T,
 };
 use crate::runtime::RuntimeOpts;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers, windows};
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
 fn ascii_isalpha(c: c_int) -> bool {
@@ -631,13 +631,14 @@ pub unsafe fn spell_delete_wordlist() {
 
 /// Free every loaded language and everything derived from them.
 pub unsafe fn spell_free_all() {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            ga_clear(&raw mut (*buf).b_s.b_langp);
-            buf = (*buf).b_next;
-        }
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, and its own
+        // growarray. The address is taken from the raw pointer rather than
+        // through `DerefMut`, so no `&mut buf_T` is formed.
+        unsafe { ga_clear(&raw mut (*buf.raw()).b_s.b_langp) };
+    }
 
+    unsafe {
         while !first_lang.get().is_null() {
             let slang = first_lang.get();
             first_lang.set((*slang).sl_next);
@@ -656,20 +657,23 @@ pub unsafe fn spell_free_all() {
 /// Drop every spelling table and load them again, after `'encoding'`
 /// changed or `:mkspell` ran.
 pub unsafe fn spell_reload() {
+    // SAFETY: on the main thread, as every caller of this is.
     unsafe {
         init_spell_chartab();
         spell_free_all();
+    }
 
-        // Only load word lists where 'spelllang' is set and some window on
-        // the buffer has 'spell' on. The walk is over the current tab, which
-        // always starts at `firstwin`.
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if *(*(*wp).w_s).b_p_spl != 0 && (*wp).w_onebuf_opt.wo_spell != 0 {
-                parse_spelllang(wp);
+    // Only load word lists where 'spelllang' is set and some window on
+    // the buffer has 'spell' on. The walk is over the current tab, which
+    // always starts at `firstwin`.
+    for wp in windows() {
+        // SAFETY: a live window of the current tab page, and the synblock it
+        // points at.
+        unsafe {
+            if *(*wp.w_s).b_p_spl != 0 && wp.w_onebuf_opt.wo_spell != 0 {
+                parse_spelllang(wp.raw());
                 break;
             }
-            wp = (*wp).w_next;
         }
     }
 }
@@ -713,18 +717,15 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 /// Re-parse `'spelllang'` for the current buffer after a spell option
 /// changed.
 pub unsafe fn did_set_spell_option() -> *const c_char {
-    unsafe {
-        let mut errmsg: *const c_char = core::ptr::null();
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_buffer == curbuf.get() && (*wp).w_onebuf_opt.wo_spell != 0 {
-                errmsg = parse_spelllang(wp);
-                break;
-            }
-            wp = (*wp).w_next;
+    let mut errmsg: *const c_char = core::ptr::null();
+    for wp in windows() {
+        if wp.w_buffer == curbuf.get() && wp.w_onebuf_opt.wo_spell != 0 {
+            // SAFETY: a live window of the current tab page.
+            errmsg = unsafe { parse_spelllang(wp.raw()) };
+            break;
         }
-        errmsg
     }
+    errmsg
 }
 
 /// Compile `'spellcapcheck'` into `b_cap_prog`, anchored so that it can
