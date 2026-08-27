@@ -38,12 +38,13 @@ use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
 use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
-use crate::main::{curbuf, p_path, p_wic};
+use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
     BackslashEscape, EvalFuncData, ExpandContext, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, Vv,
     expand_T, garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -189,7 +190,7 @@ fn free(p: *mut c_char) {
 /// global option.
 fn search_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer.
-    let local = unsafe { (*curbuf.get()).b_p_path };
+    let local = cur_buf().b_p_path;
     // SAFETY: an option string is NUL-terminated, so its first byte is there.
     if unsafe { *local } == 0 {
         p_path.get()
@@ -204,7 +205,7 @@ fn suffixes(find_what: c_int) -> *mut c_char {
         return c"".as_ptr().cast_mut();
     }
     // SAFETY: `curbuf` names the live current buffer.
-    unsafe { (*curbuf.get()).b_p_sua }
+    cur_buf().b_p_sua
 }
 
 /// Set `v:val`, or clear it when `name` is NULL.
@@ -261,7 +262,7 @@ fn findfilendir(args: Args<'_>, rettv: &mut typval_T, find_what: c_int) {
         // about to be replaced.
         free(fresult);
         // SAFETY: `curbuf` names the live current buffer.
-        let rel = unsafe { (*curbuf.get()).b_ffname };
+        let rel = cur_buf().b_ffname;
         // Only the first round is given the name; the ones after it continue
         // the walk the context remembers.
         let (p, n) = if first {
@@ -494,4 +495,10 @@ pub unsafe fn f_readdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             list.push(name);
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

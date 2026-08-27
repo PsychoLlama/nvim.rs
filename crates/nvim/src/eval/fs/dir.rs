@@ -549,10 +549,8 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 fn strip_trailing_seps(dir: *mut c_char) {
     // SAFETY: `dir` is NUL-terminated, and both callees answer a pointer
     // inside it, so the terminator lands inside the same string.
-    unsafe {
-        if *path_tail(dir) == 0 {
-            *path_tail_with_sep(dir) = 0;
-        }
+    if unsafe { *path_tail(dir) } == 0 {
+        unsafe { *path_tail_with_sep(dir) = 0 };
     }
 }
 

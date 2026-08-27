@@ -74,8 +74,8 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
             c"variables".as_ptr(),
             c"variables".count_bytes(),
             buf.b_vars,
-        );
-    }
+        )
+    };
 
     // The windows displaying this buffer.
     // SAFETY: the list is handed to the dictionary below, so it is not leaked.
@@ -105,38 +105,37 @@ pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-        let mut argbuf: *mut buf_T = ptr::null_mut();
-        let mut filter = Filter::default();
-        if args.ty(0) == VAR_DICT {
-            let sel_d = args.get(0).vval.v_dict;
-            if !sel_d.is_null() {
-                let flag = |key: &CStr| {
-                    let di = tv_dict_find(sel_d, key.as_ptr(), key.count_bytes().cast_signed());
-                    !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0
-                };
-                filter = Filter {
-                    on: true,
-                    buflisted: flag(c"buflisted"),
-                    bufloaded: flag(c"bufloaded"),
-                    bufmodified: flag(c"bufmodified"),
-                };
-            }
-        } else if args.ty(0) != VAR_UNKNOWN {
-            argbuf = tv_get_buf_from_arg(args.ptr(0));
-            if argbuf.is_null() {
-                return;
-            }
+    let list = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+    let mut argbuf: *mut buf_T = ptr::null_mut();
+    let mut filter = Filter::default();
+    if args.ty(0) == VAR_DICT {
+        let sel_d = unsafe { args.get(0).vval.v_dict };
+        if !sel_d.is_null() {
+            let flag = |key: &CStr| {
+                let di =
+                    unsafe { tv_dict_find(sel_d, key.as_ptr(), key.count_bytes().cast_signed()) };
+                !di.is_null() && unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0
+            };
+            filter = Filter {
+                on: true,
+                buflisted: flag(c"buflisted"),
+                bufloaded: flag(c"bufloaded"),
+                bufmodified: flag(c"bufmodified"),
+            };
         }
-        for buf in buffers() {
-            if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
-                continue;
-            }
-            tv_list_append_dict(list, get_buffer_info(buf));
-            if !argbuf.is_null() {
-                return;
-            }
+    } else if args.ty(0) != VAR_UNKNOWN {
+        argbuf = unsafe { tv_get_buf_from_arg(args.ptr(0)) };
+        if argbuf.is_null() {
+            return;
+        }
+    }
+    for buf in buffers() {
+        if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
+            continue;
+        }
+        unsafe { tv_list_append_dict(list, get_buffer_info(buf)) };
+        if !argbuf.is_null() {
+            return;
         }
     }
 }

@@ -75,10 +75,8 @@ impl Owned {
         // SAFETY: `out` holds `len + n` bytes and a terminator; the copy is
         // `self` and its NUL, and `xstrlcat` then writes at most `n` bytes
         // and a NUL of its own after them.
-        unsafe {
-            memcpy(out.0.cast(), self.0.cast(), len + 1);
-            xstrlcat(out.0.add(len), tail.as_ptr(), (n + 1) as size_t);
-        }
+        unsafe { memcpy(out.0.cast(), self.0.cast(), len + 1) };
+        unsafe { xstrlcat(out.0.add(len), tail.as_ptr(), (n + 1) as size_t) };
         out
     }
 }

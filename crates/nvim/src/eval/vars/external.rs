@@ -35,27 +35,25 @@ pub unsafe fn eval_charconvert(
     fname_from: *const c_char,
     fname_to: *const c_char,
 ) -> c_int {
-    unsafe {
-        let saved_sctx = current_sctx.get();
-        set_vim_var_string(Vv::CharconvertFrom, enc_from, -1);
-        set_vim_var_string(Vv::CharconvertTo, enc_to, -1);
-        set_vim_var_string(Vv::FnameIn, fname_from, -1);
-        set_vim_var_string(Vv::FnameOut, fname_to, -1);
-        current_sctx.set(option_last_set(kOptCharconvert));
+    let saved_sctx = current_sctx.get();
+    unsafe { set_vim_var_string(Vv::CharconvertFrom, enc_from, -1) };
+    unsafe { set_vim_var_string(Vv::CharconvertTo, enc_to, -1) };
+    unsafe { set_vim_var_string(Vv::FnameIn, fname_from, -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, fname_to, -1) };
+    current_sctx.set(option_last_set(kOptCharconvert));
 
-        let mut err = false;
-        if eval_to_bool(p_ccv.get(), &raw mut err, ptr::null_mut(), false, true) {
-            err = true;
-        }
-
-        set_vim_var_string(Vv::CharconvertFrom, ptr::null(), -1);
-        set_vim_var_string(Vv::CharconvertTo, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
-        current_sctx.set(saved_sctx);
-
-        if err { FAIL } else { OK }
+    let mut err = false;
+    if unsafe { eval_to_bool(p_ccv.get(), &raw mut err, ptr::null_mut(), false, true) } {
+        err = true;
     }
+
+    unsafe { set_vim_var_string(Vv::CharconvertFrom, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::CharconvertTo, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    current_sctx.set(saved_sctx);
+
+    if err { FAIL } else { OK }
 }
 
 /// Evaluate `'diffexpr'` to write the difference between `origfile` and
@@ -65,20 +63,18 @@ pub unsafe fn eval_charconvert(
 /// # Safety
 /// The three arguments are NUL-terminated strings.
 pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile: *const c_char) {
-    unsafe {
-        let saved_sctx = current_sctx.get();
-        set_vim_var_string(Vv::FnameIn, origfile, -1);
-        set_vim_var_string(Vv::FnameNew, newfile, -1);
-        set_vim_var_string(Vv::FnameOut, outfile, -1);
-        current_sctx.set(option_last_set(kOptDiffexpr));
+    let saved_sctx = current_sctx.get();
+    unsafe { set_vim_var_string(Vv::FnameIn, origfile, -1) };
+    unsafe { set_vim_var_string(Vv::FnameNew, newfile, -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, outfile, -1) };
+    current_sctx.set(option_last_set(kOptDiffexpr));
 
-        tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true));
+    unsafe { tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true)) };
 
-        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameNew, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
-        current_sctx.set(saved_sctx);
-    }
+    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameNew, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    current_sctx.set(saved_sctx);
 }
 
 /// Evaluate `'patchexpr'` to apply `difffile` to `origfile`, writing the
@@ -87,20 +83,18 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
 /// # Safety
 /// The three arguments are NUL-terminated strings.
 pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfile: *const c_char) {
-    unsafe {
-        let saved_sctx = current_sctx.get();
-        set_vim_var_string(Vv::FnameIn, origfile, -1);
-        set_vim_var_string(Vv::FnameDiff, difffile, -1);
-        set_vim_var_string(Vv::FnameOut, outfile, -1);
-        current_sctx.set(option_last_set(kOptPatchexpr));
+    let saved_sctx = current_sctx.get();
+    unsafe { set_vim_var_string(Vv::FnameIn, origfile, -1) };
+    unsafe { set_vim_var_string(Vv::FnameDiff, difffile, -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, outfile, -1) };
+    current_sctx.set(option_last_set(kOptPatchexpr));
 
-        tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true));
+    unsafe { tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true)) };
 
-        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameDiff, ptr::null(), -1);
-        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
-        current_sctx.set(saved_sctx);
-    }
+    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameDiff, ptr::null(), -1) };
+    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    current_sctx.set(saved_sctx);
 }
 
 /// Evaluate the `expr:` part of `'spellsuggest'` over `badword`, which the
@@ -113,41 +107,39 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 /// `badword` and `expr` are NUL-terminated strings.
 pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut list_T {
     let mut evalarg = EVALARG_EVALUATE;
-    unsafe {
-        let mut p = skipwhite(expr);
-        let saved_sctx = current_sctx.get();
+    let mut p = unsafe { skipwhite(expr) };
+    let saved_sctx = current_sctx.get();
 
-        // `v:val` is the bad word; it has no type of its own, so it has to
-        // be added to the `v:` dictionary and taken out again.
-        let mut save_val = TV_INITIAL_VALUE;
-        prepare_vimvar(Vv::Val, &raw mut save_val);
-        set_vim_var_string(Vv::Val, badword, -1);
-        let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
-        current_sctx.set(option_last_set(kOptSpellsuggest));
+    // `v:val` is the bad word; it has no type of its own, so it has to
+    // be added to the `v:` dictionary and taken out again.
+    let mut save_val = TV_INITIAL_VALUE;
+    unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
+    unsafe { set_vim_var_string(Vv::Val, badword, -1) };
+    let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
+    current_sctx.set(option_last_set(kOptSpellsuggest));
 
-        let mut rettv = TV_INITIAL_VALUE;
-        // A bare `Func(v:val)` call is evaluated without the expression
-        // parser; anything else goes through it.
-        let mut r = may_call_simple_func(p, &raw mut rettv);
-        if r == NOTDONE {
-            r = eval1(&raw mut p, &raw mut rettv, &raw mut evalarg);
-        }
-        let mut list: *mut list_T = ptr::null_mut();
-        if r == OK {
-            if rettv.v_type == VAR_LIST {
-                list = rettv.vval.v_list;
-            } else {
-                tv_clear(&raw mut rettv);
-            }
-        }
-
-        drop(no_emsg);
-        tv_clear(get_vim_var_tv(Vv::Val));
-        restore_vimvar(Vv::Val, &raw mut save_val);
-        current_sctx.set(saved_sctx);
-
-        list
+    let mut rettv = TV_INITIAL_VALUE;
+    // A bare `Func(v:val)` call is evaluated without the expression
+    // parser; anything else goes through it.
+    let mut r = unsafe { may_call_simple_func(p, &raw mut rettv) };
+    if r == NOTDONE {
+        r = unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) };
     }
+    let mut list: *mut list_T = ptr::null_mut();
+    if r == OK {
+        if rettv.v_type == VAR_LIST {
+            list = unsafe { rettv.vval.v_list };
+        } else {
+            unsafe { tv_clear(&raw mut rettv) };
+        }
+    }
+
+    drop(no_emsg);
+    unsafe { tv_clear(get_vim_var_tv(Vv::Val)) };
+    unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
+    current_sctx.set(saved_sctx);
+
+    list
 }
 
 /// One suggestion from [`eval_spell_expr`]'s answer: the word into
@@ -164,18 +156,18 @@ pub unsafe fn get_spellword(
     ret_word: *mut *const c_char,
     numbuf: &mut NumBuf,
 ) -> c_int {
-    unsafe {
-        if tv_list_len(list) != 2 {
+    if unsafe { tv_list_len(list) } != 2 {
+        unsafe {
             emsg(gettext(
                 c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values"
                     .as_ptr(),
-            ));
-            return -1;
-        }
-        *ret_word = tv_list_find_str(list, 0, numbuf);
-        if (*ret_word).is_null() {
-            return -1;
-        }
-        tv_list_find_nr(list, -1, ptr::null_mut()) as c_int
+            ))
+        };
+        return -1;
     }
+    unsafe { *ret_word = tv_list_find_str(list, 0, numbuf) };
+    if unsafe { (*ret_word).is_null() } {
+        return -1;
+    }
+    unsafe { tv_list_find_nr(list, -1, ptr::null_mut()) as c_int }
 }

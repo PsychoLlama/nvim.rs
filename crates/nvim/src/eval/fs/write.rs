@@ -129,11 +129,9 @@ impl Item {
     fn string(self, buf: &mut NumBuf) -> Option<&CStr> {
         // SAFETY: a live item and a scratch of the promised length; the
         // answer is NUL-terminated, or NULL.
-        unsafe {
-            tv_get_string_buf_chk(&raw const (*self.0).li_tv, buf.as_mut_ptr())
-                .as_ref()
-                .map(|p| CStr::from_ptr(p))
-        }
+        let tv = unsafe { &raw const (*self.0).li_tv };
+        unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()).as_ref() }
+            .map(|p| unsafe { CStr::from_ptr(p) })
     }
 
     /// Whether the item is a String or a Number, having reported if not.
@@ -288,10 +286,11 @@ unsafe fn write_data(out: &mut Out, data: *const c_char, len: usize) -> bool {
 fn write_blob(out: &mut Out, blob: *const blob_T) -> bool {
     // SAFETY: a live blob, whose `ga_data` holds `tv_blob_len` readable
     // bytes.
-    unsafe {
-        let (data, len) = ((*blob).bv_ga.ga_data.cast(), tv_blob_len(blob) as usize);
-        write_data(out, data, len)
-    }
+    let (data, len) = (
+        unsafe { (*blob).bv_ga.ga_data }.cast(),
+        unsafe { tv_blob_len(blob) } as usize,
+    );
+    unsafe { write_data(out, data, len) }
 }
 
 fn write_string(out: &mut Out, data: *const c_char) -> bool {

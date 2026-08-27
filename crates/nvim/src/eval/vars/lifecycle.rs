@@ -19,115 +19,122 @@ use crate::types::{FAIL, NUL, Refcount};
 /// # Safety
 /// Called once, before anything reads a variable.
 pub unsafe fn evalvars_init() {
-    unsafe {
-        init_var_dict(get_globvar_dict(), globvar_scope_item(), VAR_DEF_SCOPE);
-        init_var_dict(get_vimvar_dict(), vimvar_scope_item(), VAR_SCOPE);
-        (*get_vimvar_dict()).dv_lock = VarLock::Fixed;
-        hash_init(get_compat_ht());
+    unsafe { init_var_dict(get_globvar_dict(), globvar_scope_item(), VAR_DEF_SCOPE) };
+    unsafe { init_var_dict(get_vimvar_dict(), vimvar_scope_item(), VAR_SCOPE) };
+    unsafe { (*get_vimvar_dict()).dv_lock = VarLock::Fixed };
+    unsafe { hash_init(get_compat_ht()) };
 
-        for i in 0..VIMVAR_COUNT {
-            let p = vimvar_table().add(i);
-            // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
-            // in the table fits in.
-            debug_assert!(strlen((*p).vv_name) <= 16);
-            strcpy((&raw mut (*p).vv_di.di_key).cast(), (*p).vv_name);
+    for i in 0..VIMVAR_COUNT {
+        let p = unsafe { vimvar_table().add(i) };
+        // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
+        // in the table fits in.
+        debug_assert!(unsafe { strlen((*p).vv_name) } <= 16);
+        unsafe { strcpy((&raw mut (*p).vv_di.di_key).cast(), (*p).vv_name) };
 
-            let flags = VimVarFlags::from_bits((*p).vv_flags as c_int);
+        let flags = VimVarFlags::from_bits(unsafe { (*p).vv_flags } as c_int);
+        unsafe {
             (*p).vv_di.di_flags = if flags.has(VimVarFlags::RO) {
                 DI_FLAGS_RO | DI_FLAGS_FIX
             } else if flags.has(VimVarFlags::RO_SBX) {
                 DI_FLAGS_RO_SBX | DI_FLAGS_FIX
             } else {
                 DI_FLAGS_FIX
-            };
+            }
+        };
 
-            // Into the `v:` scope dictionary -- unless the value is not
-            // always available, which is what a `VAR_UNKNOWN` row means.
-            if (*p).vv_di.di_tv.v_type != VAR_UNKNOWN {
-                hash_add(get_vimvar_ht(), (&raw mut (*p).vv_di.di_key).cast());
-            }
-            if flags.has(VimVarFlags::COMPAT) {
-                // ... and into the scope that has no prefix at all.
-                hash_add(get_compat_ht(), (&raw mut (*p).vv_di.di_key).cast());
-            }
+        // Into the `v:` scope dictionary -- unless the value is not
+        // always available, which is what a `VAR_UNKNOWN` row means.
+        if unsafe { (*p).vv_di.di_tv.v_type } != VAR_UNKNOWN {
+            unsafe { hash_add(get_vimvar_ht(), (&raw mut (*p).vv_di.di_key).cast()) };
         }
+        if flags.has(VimVarFlags::COMPAT) {
+            // ... and into the scope that has no prefix at all.
+            unsafe { hash_add(get_compat_ht(), (&raw mut (*p).vv_di.di_key).cast()) };
+        }
+    }
 
-        let vim_version = min_vim_version();
-        set_vim_var_nr(Vv::Version, vim_version as varnumber_T);
+    let vim_version = min_vim_version();
+    unsafe { set_vim_var_nr(Vv::Version, vim_version as varnumber_T) };
+    unsafe {
         set_vim_var_nr(
             Vv::Versionlong,
             (vim_version * 10000 + highest_patch()) as varnumber_T,
-        );
+        )
+    };
 
-        // `v:msgpack_types`: eight empty, locked lists, compared by identity
-        // by the msgpack encoder and decoder rather than by name.
-        let msgpack_types_dict = tv_dict_alloc();
-        let mut type_lists = eval_msgpack_type_lists.get();
-        for (i, name) in msgpack_type_names.iter().enumerate() {
-            let type_list = tv_list_alloc(0);
-            tv_list_set_lock(type_list, VarLock::Fixed);
-            tv_list_ref(type_list);
-            let di = tv_dict_item_alloc(name.as_ptr());
-            (*di).di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
+    // `v:msgpack_types`: eight empty, locked lists, compared by identity
+    // by the msgpack encoder and decoder rather than by name.
+    let msgpack_types_dict = unsafe { tv_dict_alloc() };
+    let mut type_lists = eval_msgpack_type_lists.get();
+    for (i, name) in msgpack_type_names.iter().enumerate() {
+        let type_list = unsafe { tv_list_alloc(0) };
+        unsafe { tv_list_set_lock(type_list, VarLock::Fixed) };
+        unsafe { tv_list_ref(type_list) };
+        let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };
+        unsafe { (*di).di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX };
+        unsafe {
             (*di).di_tv = typval_T {
                 v_type: VAR_LIST,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: type_list },
-            };
-            type_lists[i] = type_list;
-            if tv_dict_add(msgpack_types_dict, di) == FAIL {
-                // The names are distinct by construction.
-                abort();
             }
+        };
+        type_lists[i] = type_list;
+        if unsafe { tv_dict_add(msgpack_types_dict, di) } == FAIL {
+            // The names are distinct by construction.
+            unsafe { abort() };
         }
-        eval_msgpack_type_lists.set(type_lists);
-        (*msgpack_types_dict).dv_lock = VarLock::Fixed;
-        set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict);
+    }
+    eval_msgpack_type_lists.set(type_lists);
+    unsafe { (*msgpack_types_dict).dv_lock = VarLock::Fixed };
+    unsafe { set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict) };
 
-        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed));
-        set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VarLock::Fixed));
-        set_vim_var_list(Vv::Errors, tv_list_alloc(kListLenUnknown as ptrdiff_t));
-        set_vim_var_nr(Vv::Stderr, CHAN_STDERR as varnumber_T);
-        set_vim_var_nr(Vv::Searchforward, 1);
-        set_vim_var_nr(Vv::Hlsearch, 1);
-        set_vim_var_nr(Vv::Count1, 1);
-        set_vim_var_special(Vv::Exiting, kSpecialVarNull);
+    unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
+    unsafe { set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VarLock::Fixed)) };
+    unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(kListLenUnknown as ptrdiff_t)) };
+    unsafe { set_vim_var_nr(Vv::Stderr, CHAN_STDERR as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Searchforward, 1) };
+    unsafe { set_vim_var_nr(Vv::Hlsearch, 1) };
+    unsafe { set_vim_var_nr(Vv::Count1, 1) };
+    unsafe { set_vim_var_special(Vv::Exiting, kSpecialVarNull) };
 
-        // The `v:t_*` type codes, which `type()` answers with.
-        for (idx, code) in [
-            (Vv::TNumber, VAR_TYPE_NUMBER),
-            (Vv::TString, VAR_TYPE_STRING),
-            (Vv::TFunc, VAR_TYPE_FUNC),
-            (Vv::TList, VAR_TYPE_LIST),
-            (Vv::TDict, VAR_TYPE_DICT),
-            (Vv::TFloat, VAR_TYPE_FLOAT),
-            (Vv::TBool, VAR_TYPE_BOOL),
-            (Vv::TBlob, VAR_TYPE_BLOB),
-        ] {
-            set_vim_var_nr(idx, code as varnumber_T);
-        }
+    // The `v:t_*` type codes, which `type()` answers with.
+    for (idx, code) in [
+        (Vv::TNumber, VAR_TYPE_NUMBER),
+        (Vv::TString, VAR_TYPE_STRING),
+        (Vv::TFunc, VAR_TYPE_FUNC),
+        (Vv::TList, VAR_TYPE_LIST),
+        (Vv::TDict, VAR_TYPE_DICT),
+        (Vv::TFloat, VAR_TYPE_FLOAT),
+        (Vv::TBool, VAR_TYPE_BOOL),
+        (Vv::TBlob, VAR_TYPE_BLOB),
+    ] {
+        unsafe { set_vim_var_nr(idx, code as varnumber_T) };
+    }
 
-        set_vim_var_bool(Vv::False, kBoolVarFalse);
-        set_vim_var_bool(Vv::True, kBoolVarTrue);
-        set_vim_var_special(Vv::Null, kSpecialVarNull);
-        set_vim_var_nr(Vv::Numbermax, VARNUMBER_MAX as varnumber_T);
-        set_vim_var_nr(Vv::Numbermin, VARNUMBER_MIN as varnumber_T);
+    unsafe { set_vim_var_bool(Vv::False, kBoolVarFalse) };
+    unsafe { set_vim_var_bool(Vv::True, kBoolVarTrue) };
+    unsafe { set_vim_var_special(Vv::Null, kSpecialVarNull) };
+    unsafe { set_vim_var_nr(Vv::Numbermax, VARNUMBER_MAX as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Numbermin, VARNUMBER_MIN as varnumber_T) };
+    unsafe {
         set_vim_var_nr(
             Vv::Numbersize,
             (::core::mem::size_of::<varnumber_T>() * 8) as varnumber_T,
-        );
-        set_vim_var_nr(Vv::Maxcol, MAXCOL as varnumber_T);
-        set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as varnumber_T);
+        )
+    };
+    unsafe { set_vim_var_nr(Vv::Maxcol, MAXCOL as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as varnumber_T) };
 
-        let vvlua_partial = xcalloc(1, ::core::mem::size_of::<partial_T>()) as *mut partial_T;
-        // The name should never be printed, but do not crash if it is.
-        (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char;
-        (*vvlua_partial).pt_refcount.retain();
-        set_vim_var_partial(Vv::Lua, vvlua_partial);
+    let vvlua_partial =
+        unsafe { xcalloc(1, ::core::mem::size_of::<partial_T>()) } as *mut partial_T;
+    // The name should never be printed, but do not crash if it is.
+    unsafe { (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char };
+    unsafe { (*vvlua_partial).pt_refcount }.retain();
+    unsafe { set_vim_var_partial(Vv::Lua, vvlua_partial) };
 
-        // The default for v:register is not 0 but '"'.
-        set_reg_var(0);
-    }
+    // The default for v:register is not 0 but '"'.
+    unsafe { set_reg_var(0) };
 }
 
 /// Mark everything `g:` reaches as live, for the garbage collector.
@@ -151,18 +158,18 @@ pub unsafe fn garbage_collect_vimvars(copyID: c_int) -> bool {
 /// # Safety
 /// As [`garbage_collect_globvars`].
 pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
-    unsafe {
-        let mut abort = false;
-        for i in 1..=script_count() {
-            abort = abort
-                || set_ref_in_ht(
+    let mut abort = false;
+    for i in 1..=script_count() {
+        abort = abort
+            || unsafe {
+                set_ref_in_ht(
                     &raw mut (*script_sv(i)).sv_dict.dv_hashtab,
                     copyID,
                     ptr::null_mut(),
-                );
-        }
-        abort
+                )
+            };
     }
+    abort
 }
 
 /// Set the variable `name` to the string `value`, taking ownership of it.
@@ -170,14 +177,12 @@ pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
 /// # Safety
 /// `name` is a NUL-terminated string and `value` an owned one.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    unsafe {
-        let mut tv = typval_T {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_string: value },
-        };
-        set_var(name, strlen(name), &raw mut tv, true);
-    }
+    let mut tv = typval_T {
+        v_type: VAR_STRING,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union { v_string: value },
+    };
+    unsafe { set_var(name, strlen(name), &raw mut tv, true) };
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.
@@ -185,18 +190,16 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
 /// # Safety
 /// Nothing.
 pub unsafe fn del_menutrans_vars() {
-    unsafe {
-        let ht = get_globvar_ht();
-        // The walk removes entries as it goes, so the table has to be locked
-        // against the rehash that would otherwise move `ht_array`.
-        hash_lock(ht);
-        for hi in tv_ht_iter(&*ht) {
-            if strncmp((*hi).hi_key, c"menutrans_".as_ptr(), 10) == 0 {
-                delete_var(ht, hi);
-            }
+    let ht = get_globvar_ht();
+    // The walk removes entries as it goes, so the table has to be locked
+    // against the rehash that would otherwise move `ht_array`.
+    unsafe { hash_lock(ht) };
+    for hi in tv_ht_iter(unsafe { &*ht }) {
+        if unsafe { strncmp((*hi).hi_key, c"menutrans_".as_ptr(), 10) } == 0 {
+            unsafe { delete_var(ht, hi) };
         }
-        hash_unlock(ht);
     }
+    unsafe { hash_unlock(ht) };
 }
 
 /// The `g:` scope, as a dictionary.
@@ -253,11 +256,9 @@ pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut list_T {
 /// # Safety
 /// `id` is a live script id whose `sn_vars` has not been set.
 pub unsafe fn new_script_vars(id: scid_T) {
-    unsafe {
-        let sv = xcalloc(1, ::core::mem::size_of::<scriptvar_T>()) as *mut scriptvar_T;
-        init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE);
-        (*script_item(id)).sn_vars = sv;
-    }
+    let sv = unsafe { xcalloc(1, ::core::mem::size_of::<scriptvar_T>()) } as *mut scriptvar_T;
+    unsafe { init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE) };
+    unsafe { (*script_item(id)).sn_vars = sv };
 }
 
 /// Make `dict` a scope dictionary and point `dict_var` at it.
@@ -269,19 +270,17 @@ pub unsafe fn new_script_vars(id: scid_T) {
 /// # Safety
 /// `dict` and `dict_var` are writable and not yet initialised.
 pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem, scope: ScopeType) {
-    unsafe {
-        hash_init(&raw mut (*dict).dv_hashtab);
-        (*dict).dv_lock = VarLock::Unlocked;
-        (*dict).dv_scope = scope;
-        (*dict).dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
-        (*dict).dv_copyID = 0;
-        (*dict_var).di_tv.vval.v_dict = dict;
-        (*dict_var).di_tv.v_type = VAR_DICT;
-        (*dict_var).di_tv.v_lock = VarLock::Fixed;
-        (*dict_var).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-        (*dict_var).di_key[0] = NUL as c_char;
-        queue_init(&raw mut (*dict).watchers);
-    }
+    unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
+    unsafe { (*dict).dv_lock = VarLock::Unlocked };
+    unsafe { (*dict).dv_scope = scope };
+    unsafe { (*dict).dv_refcount = Refcount::new(DO_NOT_FREE_CNT) };
+    unsafe { (*dict).dv_copyID = 0 };
+    unsafe { (*dict_var).di_tv.vval.v_dict = dict };
+    unsafe { (*dict_var).di_tv.v_type = VAR_DICT };
+    unsafe { (*dict_var).di_tv.v_lock = VarLock::Fixed };
+    unsafe { (*dict_var).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
+    unsafe { (*dict_var).di_key[0] = NUL as c_char };
+    unsafe { queue_init(&raw mut (*dict).watchers) };
 }
 
 /// Undo [`init_var_dict`]'s reference count, so that `dict` can be freed.
@@ -289,12 +288,10 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
 /// # Safety
 /// `dict` came from [`init_var_dict`].
 pub unsafe fn unref_var_dict(dict: *mut dict_T) {
-    unsafe {
-        // The reference count is what kept the scope alive; take it back to
-        // the one reference the caller holds.
-        (*dict).dv_refcount.release_many(DO_NOT_FREE_CNT - 1);
-        tv_dict_unref(dict);
-    }
+    // The reference count is what kept the scope alive; take it back to
+    // the one reference the caller holds.
+    unsafe { (*dict).dv_refcount }.release_many(DO_NOT_FREE_CNT - 1);
+    unsafe { tv_dict_unref(dict) };
 }
 
 /// Free every variable in `ht`, and its values.
@@ -311,22 +308,20 @@ pub unsafe fn vars_clear(ht: *mut hashtab_T) {
 /// # Safety
 /// As [`vars_clear`].
 pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
-    unsafe {
-        hash_lock(ht);
-        for hi in tv_ht_iter(&*ht) {
-            // Free the variable, unless it is one of the fixed ones embedded
-            // in a `funccall_S` or a scope dictionary.
-            let v = tv_dict_hi2di(hi);
-            if free_val {
-                tv_clear(&raw mut (*v).di_tv);
-            }
-            if (*v).di_flags & DI_FLAGS_ALLOC != 0 {
-                xfree(v.cast());
-            }
+    unsafe { hash_lock(ht) };
+    for hi in tv_ht_iter(unsafe { &*ht }) {
+        // Free the variable, unless it is one of the fixed ones embedded
+        // in a `funccall_S` or a scope dictionary.
+        let v = unsafe { tv_dict_hi2di(hi) };
+        if free_val {
+            unsafe { tv_clear(&raw mut (*v).di_tv) };
         }
-        hash_clear(ht);
-        hash_init(ht);
+        if unsafe { (*v).di_flags } & DI_FLAGS_ALLOC != 0 {
+            unsafe { xfree(v.cast()) };
+        }
     }
+    unsafe { hash_clear(ht) };
+    unsafe { hash_init(ht) };
 }
 
 /// Remove the variable `hi` names from `ht` and free it.
@@ -334,10 +329,8 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
 /// # Safety
 /// `hi` is a live item of `ht`.
 pub(crate) unsafe fn delete_var(ht: *mut hashtab_T, hi: *mut hashitem_T) {
-    unsafe {
-        let di = tv_dict_hi2di(hi);
-        hash_remove(ht, hi);
-        tv_clear(&raw mut (*di).di_tv);
-        xfree(di.cast());
-    }
+    let di = unsafe { tv_dict_hi2di(hi) };
+    unsafe { hash_remove(ht, hi) };
+    unsafe { tv_clear(&raw mut (*di).di_tv) };
+    unsafe { xfree(di.cast()) };
 }

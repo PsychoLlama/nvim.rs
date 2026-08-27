@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -28,20 +29,18 @@ static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0);
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
-    unsafe {
-        let mut len = strlen(name) + 3;
-        if len > varnamebuflen.get() {
-            xfree(varnamebuf.get().cast());
-            len += 10;
-            varnamebuf.set(xmalloc(len) as *mut c_char);
-            varnamebuflen.set(len);
-        }
-        let buf = varnamebuf.get();
-        *buf = prefix as c_char;
-        *buf.add(1) = b':' as c_char;
-        strcpy(buf.add(2), name);
-        buf
+    let mut len = unsafe { strlen(name) } + 3;
+    if len > varnamebuflen.get() {
+        unsafe { xfree(varnamebuf.get().cast()) };
+        len += 10;
+        varnamebuf.set(unsafe { xmalloc(len) } as *mut c_char);
+        varnamebuflen.set(len);
     }
+    let buf = varnamebuf.get();
+    unsafe { *buf = prefix as c_char };
+    unsafe { *buf.add(1) = b':' as c_char };
+    unsafe { strcpy(buf.add(2), name) };
+    buf
 }
 
 /// The `idx`-th variable name for command-line completion, or NULL when
@@ -56,74 +55,76 @@ pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_c
 /// # Safety
 /// `xp` is a live expansion context.
 pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    unsafe {
-        static gdone: GlobalCell<size_t> = GlobalCell::new(0);
-        static bdone: GlobalCell<size_t> = GlobalCell::new(0);
-        static wdone: GlobalCell<size_t> = GlobalCell::new(0);
-        static tdone: GlobalCell<size_t> = GlobalCell::new(0);
-        static vidx: GlobalCell<size_t> = GlobalCell::new(0);
-        /// The hashtab cursor, shared by the four hashtab scopes: only one
-        /// of them is being walked at a time.
-        static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
+    static gdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static bdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static wdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static tdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static vidx: GlobalCell<size_t> = GlobalCell::new(0);
+    /// The hashtab cursor, shared by the four hashtab scopes: only one
+    /// of them is being walked at a time.
+    static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
 
-        if idx == 0 {
-            gdone.set(0);
-            bdone.set(0);
-            wdone.set(0);
-            tdone.set(0);
-            vidx.set(0);
-        }
-
-        // One step through `ht`: the first call starts at the array, every
-        // later one advances past the slot the previous call answered and
-        // then skips the empty and removed ones.
-        let step = |done: &GlobalCell<size_t>, ht: *const hashtab_T| -> Option<*mut c_char> {
-            let n = done.get();
-            if n >= (*ht).ht_used {
-                return None;
-            }
-            done.set(n + 1);
-            hi.set(if n == 0 {
-                (*ht).ht_array
-            } else {
-                hi.get().add(1)
-            });
-            while !(*hi.get()).is_kept() {
-                hi.set(hi.get().add(1));
-            }
-            Some((*hi.get()).hi_key)
-        };
-
-        if let Some(key) = step(&gdone, get_globvar_ht()) {
-            if strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) == 0 {
-                return cat_prefix_varname(b'g' as c_int, key);
-            }
-            return key;
-        }
-        // The window this completes for is the one the command line was
-        // opened over, which is `prevwin` while the command-line window is
-        // current.
-        let win = prevwin_curwin();
-        if let Some(key) = step(&bdone, &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab) {
-            return cat_prefix_varname(b'b' as c_int, key);
-        }
-        if let Some(key) = step(&wdone, &raw const (*(*win).w_vars).dv_hashtab) {
-            return cat_prefix_varname(b'w' as c_int, key);
-        }
-        if let Some(key) = step(&tdone, &raw const (*(*curtab.get()).tp_vars).dv_hashtab) {
-            return cat_prefix_varname(b't' as c_int, key);
-        }
-        let v = vidx.get();
-        if let Ok(vv) = Vv::try_from(v) {
-            vidx.set(v + 1);
-            return cat_prefix_varname(b'v' as c_int, get_vim_var_name(vv));
-        }
-
-        xfree(varnamebuf.get().cast());
-        varnamebuf.set(ptr::null_mut());
-        varnamebuflen.set(0);
-        ptr::null_mut()
+    if idx == 0 {
+        gdone.set(0);
+        bdone.set(0);
+        wdone.set(0);
+        tdone.set(0);
+        vidx.set(0);
     }
+
+    // One step through `ht`: the first call starts at the array, every
+    // later one advances past the slot the previous call answered and
+    // then skips the empty and removed ones.
+    let step = |done: &GlobalCell<size_t>, ht: *const hashtab_T| -> Option<*mut c_char> {
+        let n = done.get();
+        if n >= unsafe { (*ht).ht_used } {
+            return None;
+        }
+        done.set(n + 1);
+        hi.set(if n == 0 {
+            unsafe { (*ht).ht_array }
+        } else {
+            unsafe { hi.get().add(1) }
+        });
+        while !unsafe { (*hi.get()).is_kept() } {
+            hi.set(unsafe { hi.get().add(1) });
+        }
+        Some(unsafe { (*hi.get()).hi_key })
+    };
+
+    if let Some(key) = step(&gdone, get_globvar_ht()) {
+        if unsafe { strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) } == 0 {
+            return unsafe { cat_prefix_varname(b'g' as c_int, key) };
+        }
+        return key;
+    }
+    // The window this completes for is the one the command line was
+    // opened over, which is `prevwin` while the command-line window is
+    // current.
+    let win = unsafe { prevwin_curwin() };
+    if let Some(key) = step(&bdone, unsafe {
+        &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab
+    }) {
+        return unsafe { cat_prefix_varname(b'b' as c_int, key) };
+    }
+    if let Some(key) = step(&wdone, unsafe { &raw const (*(*win).w_vars).dv_hashtab }) {
+        return unsafe { cat_prefix_varname(b'w' as c_int, key) };
+    }
+    if let Some(key) = step(&tdone, unsafe {
+        &raw const (*(*curtab.get()).tp_vars).dv_hashtab
+    }) {
+        return unsafe { cat_prefix_varname(b't' as c_int, key) };
+    }
+    let v = vidx.get();
+    if let Ok(vv) = Vv::try_from(v) {
+        vidx.set(v + 1);
+        return unsafe { cat_prefix_varname(b'v' as c_int, get_vim_var_name(vv)) };
+    }
+
+    unsafe { xfree(varnamebuf.get().cast()) };
+    varnamebuf.set(ptr::null_mut());
+    varnamebuflen.set(0);
+    ptr::null_mut()
 }
 
 /// Read the variable `name[0..len]` into `rettv`, reporting E121 if it does
@@ -144,26 +145,24 @@ pub unsafe fn eval_variable(
     verbose: bool,
     no_autoload: bool,
 ) -> c_int {
-    unsafe {
-        let v = find_var(name, len as size_t, ptr::null_mut(), no_autoload);
-        if v.is_null() {
-            if !rettv.is_null() && verbose {
-                semsg_c!(
-                    gettext(c"E121: Undefined variable: %.*s".as_ptr()),
-                    len,
-                    name,
-                );
-            }
-            return FAIL;
+    let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
+    if v.is_null() {
+        if !rettv.is_null() && verbose {
+            semsg_c!(
+                unsafe { gettext(c"E121: Undefined variable: %.*s".as_ptr()) },
+                len,
+                name,
+            );
         }
-        if !dip.is_null() {
-            *dip = v;
-        }
-        if !rettv.is_null() {
-            tv_copy(&raw mut (*v).di_tv, rettv);
-        }
-        OK
+        return FAIL;
     }
+    if !dip.is_null() {
+        unsafe { *dip = v };
+    }
+    if !rettv.is_null() {
+        unsafe { tv_copy(&raw mut (*v).di_tv, rettv) };
+    }
+    OK
 }
 
 /// Note in `eval_lavars_used` that `name[0..len]` is a function-local
@@ -172,17 +171,15 @@ pub unsafe fn eval_variable(
 /// # Safety
 /// `name` points at `len` readable bytes.
 pub unsafe fn check_vars(name: *const c_char, len: size_t) {
-    unsafe {
-        if eval_lavars_used.get().is_null() {
-            return;
-        }
-        let mut varname: *const c_char = ptr::null();
-        let ht = find_var_ht(name, len, &raw mut varname);
-        if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
-            && !find_var(name, len, ptr::null_mut(), true).is_null()
-        {
-            *eval_lavars_used.get() = true;
-        }
+    if eval_lavars_used.get().is_null() {
+        return;
+    }
+    let mut varname: *const c_char = ptr::null();
+    let ht = unsafe { find_var_ht(name, len, &raw mut varname) };
+    if (ht == unsafe { get_funccal_local_ht() } || ht == unsafe { get_funccal_args_ht() })
+        && !unsafe { find_var(name, len, ptr::null_mut(), true) }.is_null()
+    {
+        unsafe { *eval_lavars_used.get() = true };
     }
 }
 
@@ -200,29 +197,29 @@ pub unsafe fn find_var(
     htp: *mut *mut hashtab_T,
     no_autoload: bool,
 ) -> *mut dictitem_T {
-    unsafe {
-        let mut varname: *const c_char = ptr::null();
-        let ht = find_var_ht(name, name_len, &raw mut varname);
-        if !htp.is_null() {
-            *htp = ht;
-        }
-        if ht.is_null() {
-            return ptr::null_mut();
-        }
-        let no_autoload = no_autoload || !htp.is_null();
-        let ret = find_var_in_ht(
+    let mut varname: *const c_char = ptr::null();
+    let ht = unsafe { find_var_ht(name, name_len, &raw mut varname) };
+    if !htp.is_null() {
+        unsafe { *htp = ht };
+    }
+    if ht.is_null() {
+        return ptr::null_mut();
+    }
+    let no_autoload = no_autoload || !htp.is_null();
+    let ret = unsafe {
+        find_var_in_ht(
             ht,
             *name as c_int,
             varname,
             name_len - varname.offset_from(name) as size_t,
             no_autoload,
-        );
-        if !ret.is_null() {
-            return ret;
-        }
-        // Search the parent scope, which a lambda can reference.
-        find_var_in_scoped_ht(name, name_len, no_autoload as c_int)
+        )
+    };
+    if !ret.is_null() {
+        return ret;
     }
+    // Search the parent scope, which a lambda can reference.
+    unsafe { find_var_in_scoped_ht(name, name_len, no_autoload as c_int) }
 }
 
 /// The item holding `varname[0..varname_len]` in `ht`, or NULL.
@@ -242,41 +239,39 @@ pub unsafe fn find_var_in_ht(
     varname_len: size_t,
     no_autoload: bool,
 ) -> *mut dictitem_T {
-    unsafe {
-        if varname_len == 0 {
-            // Something like "s:", or `ht` would have been NULL.
-            return match htname as u8 {
-                b's' => (&raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var).cast(),
-                b'g' => globvar_scope_item().cast(),
-                b'v' => vimvar_scope_item().cast(),
-                b'b' => (&raw mut (*curbuf.get()).b_bufvar).cast(),
-                b'w' => (&raw mut (*curwin.get()).w_winvar).cast(),
-                b't' => (&raw mut (*curtab.get()).tp_winvar).cast(),
-                b'l' => get_funccal_local_var(),
-                b'a' => get_funccal_args_var(),
-                _ => ptr::null_mut(),
-            };
-        }
+    if varname_len == 0 {
+        // Something like "s:", or `ht` would have been NULL.
+        return match htname as u8 {
+            b's' => (unsafe { &raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var }).cast(),
+            b'g' => globvar_scope_item().cast(),
+            b'v' => vimvar_scope_item().cast(),
+            b'b' => (unsafe { &raw mut (*curbuf.get()).b_bufvar }).cast(),
+            b'w' => (unsafe { &raw mut (*curwin.get()).w_winvar }).cast(),
+            b't' => (unsafe { &raw mut (*curtab.get()).tp_winvar }).cast(),
+            b'l' => unsafe { get_funccal_local_var() },
+            b'a' => unsafe { get_funccal_args_var() },
+            _ => ptr::null_mut(),
+        };
+    }
 
-        let mut hi = hash_find_len(ht, varname, varname_len);
-        if !(*hi).is_kept() {
-            // A global may be an autoload variable; sourcing its script may
-            // define it.  Don't source one that ran already, or every check
-            // of "is this name a Funcref variable" would re-run it.
-            if ht == get_globvar_ht() && !no_autoload {
-                // script_autoload() may invalidate `hi`, so it has to be
-                // asked for again rather than reused.
-                if !script_autoload(varname, varname_len, false) || aborting() {
-                    return ptr::null_mut();
-                }
-                hi = hash_find_len(ht, varname, varname_len);
-            }
-            if !(*hi).is_kept() {
+    let mut hi = unsafe { hash_find_len(ht, varname, varname_len) };
+    if !unsafe { (*hi).is_kept() } {
+        // A global may be an autoload variable; sourcing its script may
+        // define it.  Don't source one that ran already, or every check
+        // of "is this name a Funcref variable" would re-run it.
+        if ht == get_globvar_ht() && !no_autoload {
+            // script_autoload() may invalidate `hi`, so it has to be
+            // asked for again rather than reused.
+            if !unsafe { script_autoload(varname, varname_len, false) } || aborting() {
                 return ptr::null_mut();
             }
+            hi = unsafe { hash_find_len(ht, varname, varname_len) };
         }
-        tv_dict_hi2di(hi)
+        if !unsafe { (*hi).is_kept() } {
+            return ptr::null_mut();
+        }
     }
+    unsafe { tv_dict_hi2di(hi) }
 }
 
 /// The scope dictionary and hashtab `name[0..name_len]` belongs to, or NULL
@@ -297,74 +292,72 @@ pub(crate) unsafe fn find_var_ht_dict(
     varname: *mut *const c_char,
     d: *mut *mut dict_T,
 ) -> *mut hashtab_T {
-    unsafe {
-        *d = ptr::null_mut();
-        if name_len == 0 {
+    unsafe { *d = ptr::null_mut() };
+    if name_len == 0 {
+        return ptr::null_mut();
+    }
+
+    if name_len == 1 || unsafe { *name.add(1) } != b':' as c_char {
+        // An implicit scope. The name must not start with a colon or a
+        // '#'.
+        if unsafe { *name } == b':' as c_char || unsafe { *name } == AUTOLOAD_CHAR {
+            return ptr::null_mut();
+        }
+        unsafe { *varname = name };
+
+        // "version" is "v:version" in every scope.
+        if unsafe { (*hash_find_len(get_compat_ht(), name, name_len)).is_kept() } {
+            return get_compat_ht();
+        }
+
+        unsafe { *d = unsafe { get_funccal_local_dict() } };
+        if unsafe { (*d).is_null() } {
+            unsafe { *d = get_globvar_dict() };
+        }
+    } else {
+        unsafe { *varname = unsafe { name.add(2) } };
+        if unsafe { *name } == b'g' as c_char {
+            unsafe { *d = get_globvar_dict() };
+        } else if name_len > 2
+            && (!unsafe { memchr(name.add(2).cast(), b':' as c_int, name_len - 2) }.is_null()
+                || !unsafe { memchr(name.add(2).cast(), AUTOLOAD_CHAR as c_int, name_len - 2) }
+                    .is_null())
+        {
+            // Without `g:` there must be no ':' or '#' in the rest.
             return ptr::null_mut();
         }
 
-        if name_len == 1 || *name.add(1) != b':' as c_char {
-            // An implicit scope. The name must not start with a colon or a
-            // '#'.
-            if *name == b':' as c_char || *name == AUTOLOAD_CHAR {
-                return ptr::null_mut();
-            }
-            *varname = name;
-
-            // "version" is "v:version" in every scope.
-            if (*hash_find_len(get_compat_ht(), name, name_len)).is_kept() {
-                return get_compat_ht();
-            }
-
-            *d = get_funccal_local_dict();
-            if (*d).is_null() {
-                *d = get_globvar_dict();
-            }
-        } else {
-            *varname = name.add(2);
-            if *name == b'g' as c_char {
-                *d = get_globvar_dict();
-            } else if name_len > 2
-                && (!memchr(name.add(2).cast(), b':' as c_int, name_len - 2).is_null()
-                    || !memchr(name.add(2).cast(), AUTOLOAD_CHAR as c_int, name_len - 2).is_null())
-            {
-                // Without `g:` there must be no ':' or '#' in the rest.
-                return ptr::null_mut();
-            }
-
-            match *name as u8 {
-                b'b' => *d = (*curbuf.get()).b_vars,
-                b'w' => *d = (*curwin.get()).w_vars,
-                b't' => *d = (*curtab.get()).tp_vars,
-                b'v' => *d = get_vimvar_dict(),
-                b'a' => *d = get_funccal_args_dict(),
-                b'l' => *d = get_funccal_local_dict(),
-                b's' => {
-                    // Both calls below fill `sctx` in, and neither reads the
-                    // cell, so the round trip through a local is what the C's
-                    // write-through-the-pointer amounts to.
-                    let mut sctx = current_sctx.get();
-                    if (sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
-                        && sctx.sc_sid <= script_count()
-                    {
-                        // Resolve the Lua filename and line number, so that
-                        // a later "Last set from" can name them.
-                        nlua_set_sctx(&raw mut sctx);
-                        if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
-                            // An anonymous chunk has no script item yet.
-                            new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid);
-                        }
-                        current_sctx.set(sctx);
-                        *d = &raw mut (*script_sv(sctx.sc_sid)).sv_dict;
+        match unsafe { *name } as u8 {
+            b'b' => unsafe { *d = cur_buf().b_vars },
+            b'w' => unsafe { *d = cur_win().w_vars },
+            b't' => unsafe { *d = unsafe { (*curtab.get()).tp_vars } },
+            b'v' => unsafe { *d = get_vimvar_dict() },
+            b'a' => unsafe { *d = unsafe { get_funccal_args_dict() } },
+            b'l' => unsafe { *d = unsafe { get_funccal_local_dict() } },
+            b's' => {
+                // Both calls below fill `sctx` in, and neither reads the
+                // cell, so the round trip through a local is what the C's
+                // write-through-the-pointer amounts to.
+                let mut sctx = current_sctx.get();
+                if (sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
+                    && sctx.sc_sid <= script_count()
+                {
+                    // Resolve the Lua filename and line number, so that
+                    // a later "Last set from" can name them.
+                    unsafe { nlua_set_sctx(&raw mut sctx) };
+                    if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
+                        // An anonymous chunk has no script item yet.
+                        unsafe { new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid) };
                     }
+                    current_sctx.set(sctx);
+                    unsafe { *d = unsafe { &raw mut (*script_sv(sctx.sc_sid)).sv_dict } };
                 }
-                _ => {}
             }
+            _ => {}
         }
-
-        (*d).as_mut()
-            .map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
     }
+
+    unsafe { (*d).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
 }
 
 /// [`find_var_ht_dict`] without the dictionary.
@@ -376,10 +369,8 @@ pub unsafe fn find_var_ht(
     name_len: size_t,
     varname: *mut *const c_char,
 ) -> *mut hashtab_T {
-    unsafe {
-        let mut d: *mut dict_T = ptr::null_mut();
-        find_var_ht_dict(name, name_len, varname, &raw mut d)
-    }
+    let mut d: *mut dict_T = ptr::null_mut();
+    unsafe { find_var_ht_dict(name, name_len, varname, &raw mut d) }
 }
 
 /// The string value of the variable `name`, or NULL when it does not exist.
@@ -391,13 +382,11 @@ pub unsafe fn find_var_ht(
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_char {
-    unsafe {
-        let v = find_var(name, strlen(name), ptr::null_mut(), false);
-        if v.is_null() {
-            return ptr::null_mut();
-        }
-        numbuf.string(&raw mut (*v).di_tv) as *mut c_char
+    let v = unsafe { find_var(name, strlen(name), ptr::null_mut(), false) };
+    if v.is_null() {
+        return ptr::null_mut();
     }
+    unsafe { numbuf.string(&raw mut (*v).di_tv) as *mut c_char }
 }
 
 /// `exists()` over a variable name: whether `var` names something, including
@@ -407,30 +396,41 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
 /// `var` is a NUL-terminated string.
 pub unsafe fn var_exists(mut var: *const c_char) -> bool {
     let mut evalarg = EVALARG_EVALUATE;
-    unsafe {
-        let mut tofree: *mut c_char = ptr::null_mut();
-        let mut n = false;
-        let mut name = var;
-        // Get the variable name, expanding a `{curly}` name into `tofree`.
-        let len = get_name_len(&raw mut var, &raw mut tofree, true, false);
-        if len > 0 {
-            let mut tv = TV_INITIAL_VALUE;
-            if !tofree.is_null() {
-                name = tofree;
-            }
-            n = eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) == OK;
+    let mut tofree: *mut c_char = ptr::null_mut();
+    let mut n = false;
+    let mut name = var;
+    // Get the variable name, expanding a `{curly}` name into `tofree`.
+    let len = unsafe { get_name_len(&raw mut var, &raw mut tofree, true, false) };
+    if len > 0 {
+        let mut tv = TV_INITIAL_VALUE;
+        if !tofree.is_null() {
+            name = tofree;
+        }
+        n = unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) } == OK;
+        if n {
+            // Handle `d.key`, `l[idx]` and `Func()`.
+            n = unsafe { handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) }
+                == OK;
             if n {
-                // Handle `d.key`, `l[idx]` and `Func()`.
-                n = handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) == OK;
-                if n {
-                    tv_clear(&raw mut tv);
-                }
+                unsafe { tv_clear(&raw mut tv) };
             }
         }
-        if *var != NUL as c_char {
-            n = false;
-        }
-        xfree(tofree.cast());
-        n
     }
+    if unsafe { *var } != NUL as c_char {
+        n = false;
+    }
+    unsafe { xfree(tofree.cast()) };
+    n
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

@@ -62,8 +62,8 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
             c"variables".as_ptr(),
             c"variables".count_bytes(),
             wp.w_vars,
-        );
-    }
+        )
+    };
     dict
 }
 
@@ -94,15 +94,15 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
         append(wp.handle);
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
+    unsafe { tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".count_bytes(), windows) };
     unsafe {
-        tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".count_bytes(), windows);
         tv_dict_add_dict(
             dict,
             c"variables".as_ptr(),
             c"variables".count_bytes(),
             tp.tp_vars,
-        );
-    }
+        )
+    };
     dict
 }
 
@@ -238,19 +238,17 @@ pub unsafe fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, 2);
-        let tp = if !args.has(0) {
-            TabPage::current()
-        } else {
-            let n = number_as_int(tv_get_number(args.ptr(0)));
-            match TabPage::from_raw(find_tabpage(n)) {
-                Some(tp) => tp,
-                None => return,
-            }
-        };
-        get_framelayout(tp.topframe(), list, true);
-    }
+    let list = unsafe { tv_list_alloc_ret(rettv, 2) };
+    let tp = if !args.has(0) {
+        cur_tab()
+    } else {
+        let n = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+        match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+            Some(tp) => tp,
+            None => return,
+        }
+    };
+    unsafe { get_framelayout(tp.topframe(), list, true) };
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.
@@ -259,37 +257,35 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals and `curwin` is set.
-    unsafe {
-        let wp = if !args.has(0) {
-            Win::current()
-        } else {
-            match find_win_by_nr_or_id(args.ptr(0)) {
-                Some(wp) => wp,
-                None => {
-                    rettv.vval.v_string = xstrdup(c"unknown".as_ptr());
-                    return;
-                }
+    let wp = if !args.has(0) {
+        cur_win()
+    } else {
+        match unsafe { find_win_by_nr_or_id(args.ptr(0)) } {
+            Some(wp) => wp,
+            None => {
+                rettv.vval.v_string = unsafe { xstrdup(c"unknown".as_ptr()) };
+                return;
             }
-        };
-        let kind = if is_aucmd_win(wp.raw()) {
-            c"autocmd"
-        } else if wp.w_onebuf_opt.wo_pvw != 0 {
-            c"preview"
-        } else if wp.w_floating {
-            c"popup"
-        } else if wp.raw() == cmdwin_win.get() {
-            c"command"
-        } else if buf_is_quickfix(wp.buffer_or_none()) {
-            if wp.w_llist_ref.is_null() {
-                c"quickfix"
-            } else {
-                c"loclist"
-            }
+        }
+    };
+    let kind = if is_aucmd_win(wp.raw()) {
+        c"autocmd"
+    } else if wp.w_onebuf_opt.wo_pvw != 0 {
+        c"preview"
+    } else if wp.w_floating {
+        c"popup"
+    } else if wp.raw() == cmdwin_win.get() {
+        c"command"
+    } else if buf_is_quickfix(wp.buffer_or_none()) {
+        if wp.w_llist_ref.is_null() {
+            c"quickfix"
         } else {
-            return;
-        };
-        rettv.vval.v_string = xstrdup(kind.as_ptr());
-    }
+            c"loclist"
+        }
+    } else {
+        return;
+    };
+    rettv.vval.v_string = unsafe { xstrdup(kind.as_ptr()) };
 }
 
 /// `getcmdwintype()` — the one-character type of the command-line window, or
@@ -297,10 +293,8 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_getcmdwintype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value; `xmallocz(1)` hands back
     // two writable bytes, the second already NUL.
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        let s = xmallocz(1).cast::<c_char>();
-        *s = cmdwin_type.get().to_le_bytes()[0].cast_signed();
-        (*rettv).vval.v_string = s;
-    }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    let s = unsafe { xmallocz(1) }.cast::<c_char>();
+    unsafe { *s = cmdwin_type.get().to_le_bytes()[0].cast_signed() };
+    unsafe { (*rettv).vval.v_string = s };
 }

@@ -150,15 +150,15 @@ unsafe fn find_win_for_curbuf() {
     // a window that has moved on, hence the second test.
     // SAFETY: `curbuf` is live and its window-info vector holds `size` live
     // entries.
-    unsafe {
-        let buf = Buf::current();
-        let wininfo = &buf.b_wininfo;
-        for i in 0..wininfo.size {
-            let wip: *mut WinInfo = *wininfo.items.add(i);
-            if !(*wip).wi_win.is_null() && (*(*wip).wi_win).w_buffer == curbuf.get() {
-                curwin.set((*wip).wi_win);
-                break;
-            }
+    let buf = unsafe { Buf::current() };
+    let wininfo = &buf.b_wininfo;
+    for i in 0..wininfo.size {
+        let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };
+        if !unsafe { (*wip).wi_win }.is_null()
+            && unsafe { (*(*wip).wi_win).w_buffer } == curbuf.get()
+        {
+            curwin.set(unsafe { (*wip).wi_win });
+            break;
         }
     }
 }

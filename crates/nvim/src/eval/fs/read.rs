@@ -126,11 +126,9 @@ impl Blob {
         // SAFETY: a live blob; `ga_grow` makes room for `len` items past the
         // `ga_len` of zero a fresh blob has, so `ga_data` is writable for as
         // many bytes as `want` asks for -- whenever `len` fits in an `int`.
-        unsafe {
-            ga_grow(&raw mut (*self.0).bv_ga, len as c_int);
-            (*self.0).bv_ga.ga_len = len as c_int;
-            fd.read_into((*self.0).bv_ga.ga_data, want)
-        }
+        unsafe { ga_grow(&raw mut (*self.0).bv_ga, len as c_int) };
+        unsafe { (*self.0).bv_ga.ga_len = len as c_int };
+        unsafe { fd.read_into((*self.0).bv_ga.ga_data, want) }
     }
 
     /// Give the Blob back, which is what an error answers instead.

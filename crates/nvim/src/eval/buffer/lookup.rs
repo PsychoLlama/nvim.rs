@@ -22,28 +22,26 @@ use crate::types::{VAR_NUMBER, VAR_STRING};
 pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     // SAFETY: the caller's obligation; under `VAR_STRING` the union's live arm
     // is `v_string`, a NUL-terminated string or NULL.
-    unsafe {
-        match (*avar).v_type {
-            VAR_NUMBER => find_buf(number_as_int((*avar).vval.v_number))
-                .map_or(ptr::null_mut(), |mut b| b.raw()),
-            VAR_STRING if !(*avar).vval.v_string.is_null() => {
-                let name = (*avar).vval.v_string;
-                if let Some(mut found) = buflist_findname_exp(name) {
-                    return found.raw();
-                }
-                // A buffer with no file of its own — a URL, or a scratch
-                // buffer — is not in the name index, so it is matched
-                // literally instead.
-                buffers()
-                    .find(|b| {
-                        !b.b_fname.is_null()
-                            && (path_with_url(b.b_fname) != 0 || buf_is_nofilename(Some(*b)))
-                            && strcmp(b.b_fname, name) == 0
-                    })
-                    .map_or(ptr::null_mut(), Buf::raw)
+    match unsafe { (*avar).v_type } {
+        VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).vval.v_number }))
+            .map_or(ptr::null_mut(), |mut b| b.raw()),
+        VAR_STRING if !unsafe { (*avar).vval.v_string }.is_null() => {
+            let name = unsafe { (*avar).vval.v_string };
+            if let Some(mut found) = unsafe { buflist_findname_exp(name) } {
+                return found.raw();
             }
-            _ => ptr::null_mut(),
+            // A buffer with no file of its own — a URL, or a scratch
+            // buffer — is not in the name index, so it is matched
+            // literally instead.
+            buffers()
+                .find(|b| {
+                    !b.b_fname.is_null()
+                        && (unsafe { path_with_url(b.b_fname) } != 0 || buf_is_nofilename(Some(*b)))
+                        && unsafe { strcmp(b.b_fname, name) } == 0
+                })
+                .map_or(ptr::null_mut(), Buf::raw)
         }
+        _ => ptr::null_mut(),
     }
 }
 
@@ -53,12 +51,14 @@ pub unsafe fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals and `tv_get_string` hands back a
     // NUL-terminated string.
-    unsafe {
-        let name = numbuf.string(args.ptr(0)) as *mut c_char;
-        // An empty name asks for an unnamed buffer.
-        let name = if *name == 0 { ptr::null_mut() } else { name };
-        rettv.vval.v_number = varnumber_T::from(buflist_add(name, 0));
-    }
+    let name = unsafe { numbuf.string(args.ptr(0)) } as *mut c_char;
+    // An empty name asks for an unnamed buffer.
+    let name = if unsafe { *name } == 0 {
+        ptr::null_mut()
+    } else {
+        name
+    };
+    rettv.vval.v_number = varnumber_T::from(unsafe { buflist_add(name, 0) });
 }
 
 /// `bufexists({buf})`.
@@ -83,18 +83,16 @@ pub unsafe fn f_bufload(argvars: *mut typval_T, unused: *mut typval_T, _fptr: Ev
     let (args, _) = frame!(argvars, unused);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
-    unsafe {
-        let buf = get_buf_arg(args.ptr(0));
-        if buf.is_null() {
-            return;
-        }
-        // A swap file found while loading must not leave the standing
-        // "read-only" answer behind unless that is what it already was.
-        if swap_exists_action.get() != SEA_READONLY {
-            swap_exists_action.set(SEA_NONE);
-        }
-        buf_ensure_loaded(Buf::new(buf));
+    let buf = unsafe { get_buf_arg(args.ptr(0)) };
+    if buf.is_null() {
+        return;
     }
+    // A swap file found while loading must not leave the standing
+    // "read-only" answer behind unless that is what it already was.
+    if swap_exists_action.get() != SEA_READONLY {
+        swap_exists_action.set(SEA_NONE);
+    }
+    buf_ensure_loaded(unsafe { Buf::new(buf) });
 }
 
 /// `bufloaded({buf})`.
@@ -114,17 +112,15 @@ pub unsafe fn f_bufname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals; `curbuf` is set and the resolver
     // answers a live buffer or NULL.
-    unsafe {
-        let buf = if args.has(0) {
-            Buf::from_raw(tv_get_buf_from_arg(args.ptr(0)))
-        } else {
-            Some(Buf::current())
-        };
-        if let Some(buf) = buf
-            && !buf.b_fname.is_null()
-        {
-            rettv.vval.v_string = xstrdup(buf.b_fname);
-        }
+    let buf = if args.has(0) {
+        unsafe { Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) }
+    } else {
+        Some(unsafe { Buf::current() })
+    };
+    if let Some(buf) = buf
+        && !buf.b_fname.is_null()
+    {
+        rettv.vval.v_string = unsafe { xstrdup(buf.b_fname) };
     }
 }
 
@@ -135,32 +131,30 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals and `curbuf` is set.
-    unsafe {
-        let mut buf: *mut buf_T = if !args.has(0) {
-            curbuf.get()
-        } else {
-            if !tv_check_str_or_nr(args.ptr(0)) {
-                return;
-            }
-            // The lookup itself must not report "no such buffer": a second
-            // argument asks for the buffer to be created instead.
-            let _no_emsg = Suppress::emsg();
-            tv_get_buf(args.ptr(0), 0)
-        };
-        let mut error = false;
-        if buf.is_null()
-            && args.has(1)
-            && tv_get_number_chk(args.ptr(1), &raw mut error) != 0
-            && !error
-        {
-            let name = numbuf.string_chk(args.ptr(0));
-            if !name.is_null() {
-                buf = buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0);
-            }
+    let mut buf: *mut buf_T = if !args.has(0) {
+        curbuf.get()
+    } else {
+        if !unsafe { tv_check_str_or_nr(args.ptr(0)) } {
+            return;
         }
-        if let Some(buf) = Buf::from_raw(buf) {
-            rettv.vval.v_number = varnumber_T::from(buf.handle);
+        // The lookup itself must not report "no such buffer": a second
+        // argument asks for the buffer to be created instead.
+        let _no_emsg = Suppress::emsg();
+        unsafe { tv_get_buf(args.ptr(0), 0) }
+    };
+    let mut error = false;
+    if buf.is_null()
+        && args.has(1)
+        && unsafe { tv_get_number_chk(args.ptr(1), &raw mut error) } != 0
+        && !error
+    {
+        let name = unsafe { numbuf.string_chk(args.ptr(0)) };
+        if !name.is_null() {
+            buf = unsafe { buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0) };
         }
+    }
+    if let Some(buf) = unsafe { Buf::from_raw(buf) } {
+        rettv.vval.v_number = varnumber_T::from(buf.handle);
     }
 }
 

@@ -113,11 +113,8 @@ pub(crate) fn str_arg<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> &'a 
 pub(crate) fn str_arg_chk<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> Option<&'a CStr> {
     // SAFETY: a live typval and a scratch of the length the callee is
     // promised; the answer is NUL-terminated, or NULL.
-    unsafe {
-        tv_get_string_buf_chk(args.ptr(i), buf.as_mut_ptr())
-            .as_ref()
-            .map(|p| CStr::from_ptr(p))
-    }
+    unsafe { tv_get_string_buf_chk(args.ptr(i), buf.as_mut_ptr()).as_ref() }
+        .map(|p| unsafe { CStr::from_ptr(p) })
 }
 
 /// Argument `i` as a Number, setting `error` -- and reporting one -- for a

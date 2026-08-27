@@ -20,18 +20,18 @@ use crate::types::{FAIL, NUL, OK};
 /// # Safety
 /// `gap` is a byte garray holding the message.
 pub unsafe fn assert_error(gap: *mut garray_T) {
+    let tv = unsafe { get_vim_var_tv(Vv::Errors) };
+    if unsafe { (*tv).v_type } != VAR_LIST || unsafe { (*tv).vval.v_list }.is_null() {
+        // Something replaced it; make sure `v:errors` is a List again.
+        unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
+    }
     unsafe {
-        let tv = get_vim_var_tv(Vv::Errors);
-        if (*tv).v_type != VAR_LIST || (*tv).vval.v_list.is_null() {
-            // Something replaced it; make sure `v:errors` is a List again.
-            set_vim_var_list(Vv::Errors, tv_list_alloc(1));
-        }
         tv_list_append_string(
             get_vim_var_list(Vv::Errors),
             (*gap).ga_data as *const c_char,
             (*gap).ga_len as ssize_t,
-        );
-    }
+        )
+    };
 }
 
 /// The lvalue `:redir =>` is capturing into, its name (kept because the
@@ -53,25 +53,25 @@ static redir_varname: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut())
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
-    unsafe {
-        // Catch a bad name early.
-        if !eval_isnamec1(*name as c_int) {
-            emsg(gettext(&raw const e_invarg as *const c_char));
-            return FAIL;
-        }
+    // Catch a bad name early.
+    if !eval_isnamec1(unsafe { *name } as c_int) {
+        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        return FAIL;
+    }
 
-        // The name is used again in `var_redir_stop`, so it is copied for as
-        // long as the redirection runs.
-        redir_varname.set(xstrdup(name));
-        redir_lval.set(xcalloc(1, ::core::mem::size_of::<lval_T>()) as *mut lval_T);
-        // The output is collected here until redirection ends.
-        redir_ga.with_mut(|text| {
-            text.clear();
-            text.reserve(500);
-        });
+    // The name is used again in `var_redir_stop`, so it is copied for as
+    // long as the redirection runs.
+    redir_varname.set(unsafe { xstrdup(name) });
+    redir_lval.set(unsafe { xcalloc(1, ::core::mem::size_of::<lval_T>()) } as *mut lval_T);
+    // The output is collected here until redirection ends.
+    redir_ga.with_mut(|text| {
+        text.clear();
+        text.reserve(500);
+    });
 
-        // Parse the name, which may be a Dict or List entry.
-        redir_endp.set(get_lval(
+    // Parse the name, which may be a Dict or List entry.
+    redir_endp.set(unsafe {
+        get_lval(
             redir_varname.get(),
             ptr::null_mut(),
             redir_lval.get(),
@@ -79,33 +79,44 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
             false,
             0,
             FNE_CHECK_START,
-        ));
-        let endp = redir_endp.get();
-        if endp.is_null() || (*redir_lval.get()).ll_name.is_null() || *endp != NUL as c_char {
-            clear_lval(redir_lval.get());
-            if !endp.is_null() && *endp != NUL as c_char {
-                semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), endp);
-            } else {
-                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), name);
-            }
-            // Store no value; only clean up.
-            redir_endp.set(ptr::null_mut());
-            var_redir_stop();
-            return FAIL;
+        )
+    });
+    let endp = redir_endp.get();
+    if endp.is_null()
+        || unsafe { (*redir_lval.get()).ll_name }.is_null()
+        || unsafe { *endp } != NUL as c_char
+    {
+        unsafe { clear_lval(redir_lval.get()) };
+        if !endp.is_null() && unsafe { *endp } != NUL as c_char {
+            semsg_c!(
+                unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
+                endp
+            );
+        } else {
+            semsg_c!(
+                unsafe { gettext(&raw const e_invarg2 as *const c_char) },
+                name
+            );
         }
+        // Store no value; only clean up.
+        redir_endp.set(ptr::null_mut());
+        unsafe { var_redir_stop() };
+        return FAIL;
+    }
 
-        // Check the variable can be written, by setting it to -- or
-        // appending to it -- an empty string.
-        let called_emsg_before = called_emsg.get();
-        did_emsg.set(0);
-        let mut tv = typval_T {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_string: c"".as_ptr() as *mut c_char,
-            },
-        };
-        let op = if append { c"." } else { c"=" };
+    // Check the variable can be written, by setting it to -- or
+    // appending to it -- an empty string.
+    let called_emsg_before = called_emsg.get();
+    did_emsg.set(0);
+    let mut tv = typval_T {
+        v_type: VAR_STRING,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union {
+            v_string: c"".as_ptr() as *mut c_char,
+        },
+    };
+    let op = if append { c"." } else { c"=" };
+    unsafe {
         set_var_lval(
             redir_lval.get(),
             redir_endp.get(),
@@ -113,15 +124,15 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
             true,
             false,
             op.as_ptr(),
-        );
-        clear_lval(redir_lval.get());
-        if called_emsg.get() > called_emsg_before {
-            redir_endp.set(ptr::null_mut());
-            var_redir_stop();
-            return FAIL;
-        }
-        OK
+        )
+    };
+    unsafe { clear_lval(redir_lval.get()) };
+    if called_emsg.get() > called_emsg_before {
+        redir_endp.set(ptr::null_mut());
+        unsafe { var_redir_stop() };
+        return FAIL;
     }
+    OK
 }
 
 /// Append `value[0..value_len]` to what `:redir =>` is capturing, or the
@@ -161,25 +172,25 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
 /// # Safety
 /// Nothing; a call with no redirection running only frees.
 pub unsafe fn var_redir_stop() {
-    unsafe {
-        if !redir_lval.get().is_null() {
-            // Collecting is over: take the buffer, so that a message emitted
-            // from inside `set_var_lval` appends to a fresh one instead of
-            // reallocating under the `typval` that borrows this one.
-            let mut text = redir_ga.take();
-            // Store the text, unless the start failed.
-            if !redir_endp.get().is_null() {
-                text.push(NUL as u8);
-                let mut tv = typval_T {
-                    v_type: VAR_STRING,
-                    v_lock: VarLock::Unlocked,
-                    vval: typval_vval_union {
-                        v_string: text.as_mut_ptr().cast::<c_char>(),
-                    },
-                };
-                // Resolve the name again: inside a Dict or List it may have
-                // moved since.
-                redir_endp.set(get_lval(
+    if !redir_lval.get().is_null() {
+        // Collecting is over: take the buffer, so that a message emitted
+        // from inside `set_var_lval` appends to a fresh one instead of
+        // reallocating under the `typval` that borrows this one.
+        let mut text = redir_ga.take();
+        // Store the text, unless the start failed.
+        if !redir_endp.get().is_null() {
+            text.push(NUL as u8);
+            let mut tv = typval_T {
+                v_type: VAR_STRING,
+                v_lock: VarLock::Unlocked,
+                vval: typval_vval_union {
+                    v_string: text.as_mut_ptr().cast::<c_char>(),
+                },
+            };
+            // Resolve the name again: inside a Dict or List it may have
+            // moved since.
+            redir_endp.set(unsafe {
+                get_lval(
                     redir_varname.get(),
                     ptr::null_mut(),
                     redir_lval.get(),
@@ -187,8 +198,10 @@ pub unsafe fn var_redir_stop() {
                     false,
                     0,
                     FNE_CHECK_START,
-                ));
-                if !redir_endp.get().is_null() && !(*redir_lval.get()).ll_name.is_null() {
+                )
+            });
+            if !redir_endp.get().is_null() && !unsafe { (*redir_lval.get()).ll_name }.is_null() {
+                unsafe {
                     set_var_lval(
                         redir_lval.get(),
                         redir_endp.get(),
@@ -196,15 +209,15 @@ pub unsafe fn var_redir_stop() {
                         false,
                         false,
                         c".".as_ptr(),
-                    );
-                }
-                clear_lval(redir_lval.get());
+                    )
+                };
             }
-
-            xfree(redir_lval.get().cast());
-            redir_lval.set(ptr::null_mut());
+            unsafe { clear_lval(redir_lval.get()) };
         }
-        xfree(redir_varname.get().cast());
-        redir_varname.set(ptr::null_mut());
+
+        unsafe { xfree(redir_lval.get().cast()) };
+        redir_lval.set(ptr::null_mut());
     }
+    unsafe { xfree(redir_varname.get().cast()) };
+    redir_varname.set(ptr::null_mut());
 }

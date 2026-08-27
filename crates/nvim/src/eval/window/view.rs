@@ -47,17 +47,15 @@ pub unsafe fn f_getwinposy(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// The arguments must be live typvals.
 unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
     // SAFETY: the caller's obligation.
-    unsafe {
-        let wp = find_win_by_nr_or_id(args.ptr(0))?;
-        if wp.w_floating {
-            return None;
-        }
-        if !win_valid(wp.raw()) {
-            crate::semsg!("E1308: Cannot resize a window in another tab page");
-            return None;
-        }
-        Some((wp, number_as_int(tv_get_number(args.ptr(1)))))
+    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) }?;
+    if wp.w_floating {
+        return None;
     }
+    if !win_valid(wp.raw()) {
+        crate::semsg!("E1308: Cannot resize a window in another tab page");
+        return None;
+    }
+    Some((wp, number_as_int(unsafe { tv_get_number(args.ptr(1)) })))
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
@@ -69,12 +67,10 @@ pub unsafe fn f_win_move_separator(
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
-    unsafe {
-        let Some((wp, offset)) = drag_target(args) else {
-            return;
-        };
-        win_drag_vsep_line(wp.raw(), offset);
-    }
+    let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
+        return;
+    };
+    unsafe { win_drag_vsep_line(wp.raw(), offset) };
     rettv.vval.v_number = 1;
 }
 
@@ -87,12 +83,10 @@ pub unsafe fn f_win_move_statusline(
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
-    unsafe {
-        let Some((wp, offset)) = drag_target(args) else {
-            return;
-        };
-        win_drag_status_line(wp.raw(), offset);
-    }
+    let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
+        return;
+    };
+    unsafe { win_drag_status_line(wp.raw(), offset) };
     rettv.vval.v_number = 1;
 }
 
@@ -119,25 +113,23 @@ pub unsafe fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 unsafe fn splitmove_options(opts: *mut typval_T) -> (c_int, c_int) {
     // SAFETY: the caller's obligation; `tv_dict_find` hands back a live entry
     // of the same dictionary or NULL.
-    unsafe {
-        let d = (*opts).vval.v_dict;
-        let mut flags = 0;
-        if tv_dict_get_number(d, c"vertical".as_ptr()) != 0 {
-            flags |= WSP_VERT.cast_signed();
-        }
-        let di = tv_dict_find(d, c"rightbelow".as_ptr(), -1);
-        if !di.is_null() {
-            flags |= if tv_get_number(&raw mut (*di).di_tv) != 0 {
-                WSP_BELOW.cast_signed()
-            } else {
-                WSP_ABOVE.cast_signed()
-            };
-        }
-        (
-            flags,
-            number_as_int(tv_dict_get_number(d, c"size".as_ptr())),
-        )
+    let d = unsafe { (*opts).vval.v_dict };
+    let mut flags = 0;
+    if unsafe { tv_dict_get_number(d, c"vertical".as_ptr()) } != 0 {
+        flags |= WSP_VERT.cast_signed();
     }
+    let di = unsafe { tv_dict_find(d, c"rightbelow".as_ptr(), -1) };
+    if !di.is_null() {
+        flags |= if unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0 {
+            WSP_BELOW.cast_signed()
+        } else {
+            WSP_ABOVE.cast_signed()
+        };
+    }
+    (
+        flags,
+        number_as_int(unsafe { tv_dict_get_number(d, c"size".as_ptr()) }),
+    )
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
@@ -147,70 +139,64 @@ pub unsafe fn f_win_splitmove(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
     // autocommand may close one under it.
-    unsafe {
-        let wp = find_win_by_nr_or_id(args.ptr(0));
-        let targetwin = find_win_by_nr_or_id(args.ptr(1));
-        let oldwin = Win::current();
-        let (Some(wp), Some(targetwin)) = (wp, targetwin) else {
-            crate::semsg!("E957: Invalid window number");
-            return;
-        };
-        if wp == targetwin
-            || !win_valid(wp.raw())
-            || !win_valid(targetwin.raw())
-            || targetwin.w_floating
-        {
-            crate::semsg!("E957: Invalid window number");
-            return;
-        }
-        let (flags, size) = if args.has(2) {
-            if tv_check_for_nonnull_dict_arg(argvars, 2) == FAIL {
-                return;
-            }
-            splitmove_options(args.ptr(2))
-        } else {
-            (0, 0)
-        };
-        if is_aucmd_win(wp.raw())
-            || text_or_buf_locked()
-            || check_split_disallowed(wp.raw()) == FAIL
-        {
+    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
+    let targetwin = unsafe { find_win_by_nr_or_id(args.ptr(1)) };
+    let oldwin = cur_win();
+    let (Some(wp), Some(targetwin)) = (wp, targetwin) else {
+        crate::semsg!("E957: Invalid window number");
+        return;
+    };
+    if wp == targetwin
+        || !win_valid(wp.raw())
+        || !win_valid(targetwin.raw())
+        || targetwin.w_floating
+    {
+        crate::semsg!("E957: Invalid window number");
+        return;
+    }
+    let (flags, size) = if args.has(2) {
+        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) } == FAIL {
             return;
         }
-        if !targetwin.is_current() {
-            win_goto(targetwin.raw());
+        unsafe { splitmove_options(args.ptr(2)) }
+    } else {
+        (0, 0)
+    };
+    if is_aucmd_win(wp.raw())
+        || unsafe { text_or_buf_locked() }
+        || unsafe { check_split_disallowed(wp.raw()) } == FAIL
+    {
+        return;
+    }
+    if !targetwin.is_current() {
+        unsafe { win_goto(targetwin.raw()) };
+    }
+    if targetwin.is_current() && win_valid(wp.raw()) {
+        if unsafe { win_splitmove(wp.raw(), size, flags) } == OK {
+            rettv.vval.v_number = 0;
         }
-        if targetwin.is_current() && win_valid(wp.raw()) {
-            if win_splitmove(wp.raw(), size, flags) == OK {
-                rettv.vval.v_number = 0;
-            }
-        } else {
-            crate::semsg!("E855: Autocommands caused command to abort");
-        }
-        if !oldwin.is_current() && win_valid(oldwin.raw()) {
-            win_goto(oldwin.raw());
-        }
+    } else {
+        crate::semsg!("E855: Autocommands caused command to abort");
+    }
+    if !oldwin.is_current() && win_valid(oldwin.raw()) {
+        unsafe { win_goto(oldwin.raw()) };
     }
 }
 
 /// `wincol()` — the cursor's screen column within the window, one-based.
 pub unsafe fn f_wincol(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
-    unsafe {
-        let win = Win::current();
-        validate_cursor(win);
-        (*rettv).vval.v_number = varnumber_T::from(win.w_wcol + 1);
-    }
+    let win = cur_win();
+    validate_cursor(win);
+    unsafe { (*rettv).vval.v_number = varnumber_T::from(win.w_wcol + 1) };
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
 pub unsafe fn f_winline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
-    unsafe {
-        let win = Win::current();
-        validate_cursor(win);
-        (*rettv).vval.v_number = varnumber_T::from(win.w_wrow + 1);
-    }
+    let win = cur_win();
+    validate_cursor(win);
+    unsafe { (*rettv).vval.v_number = varnumber_T::from(win.w_wrow + 1) };
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
@@ -242,7 +228,7 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         let mut ga: garray_T = mem::zeroed();
         // One byte per item: the answer is built as text.
         ga_init(&raw mut ga, 1, 70);
-        ([0 as c_char; 50], ga, TabPage::current())
+        ([0 as c_char; 50], ga, cur_tab())
     };
     // Scoped so the growarray it borrows is free again for the tail below.
     {
@@ -250,16 +236,16 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             // SAFETY: a NUL-terminated format with exactly the two `%d`s it
             // is given, formatted into a live local and appended to a live
             // growarray.
-            unsafe {
-                let len = vim_snprintf_safelen(
+            let len = unsafe {
+                vim_snprintf_safelen(
                     buf.as_mut_ptr(),
                     size_of_val(&buf),
                     format.as_ptr(),
                     winnr,
                     size,
-                );
-                ga_concat_len(&raw mut ga, buf.as_mut_ptr(), len);
-            }
+                )
+            };
+            unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), len) };
         };
         let numbered = || (1..).zip(windows_in_tab(tp).filter(|wp| wp.has_winnr(tp)));
         for _ in 0..2 {
@@ -270,11 +256,9 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         }
     }
     // SAFETY: a live growarray, whose buffer `rettv` takes over.
-    unsafe {
-        ga_append(&raw mut ga, b'\0');
-        (*rettv).vval.v_string = ga.ga_data.cast::<c_char>();
-        (*rettv).v_type = VAR_STRING;
-    }
+    unsafe { ga_append(&raw mut ga, b'\0') };
+    unsafe { (*rettv).vval.v_string = ga.ga_data.cast::<c_char>() };
+    unsafe { (*rettv).v_type = VAR_STRING };
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.
@@ -287,15 +271,13 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
         if tv_check_for_nonnull_dict_arg(argvars, 0) == FAIL {
             return;
         }
-        ((*argvars).vval.v_dict, Win::current())
+        ((*argvars).vval.v_dict, cur_win())
     };
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
         // entry of it or NULL.
-        unsafe {
-            let di = tv_dict_find(dict, key.as_ptr(), key.count_bytes().cast_signed());
-            (!di.is_null()).then(|| tv_get_number(&raw mut (*di).di_tv))
-        }
+        let di = unsafe { tv_dict_find(dict, key.as_ptr(), key.count_bytes().cast_signed()) };
+        (!di.is_null()).then(|| unsafe { tv_get_number(&raw mut (*di).di_tv) })
     };
 
     if let Some(v) = entry(c"lnum") {
@@ -328,14 +310,12 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
     }
 
     // SAFETY: a live window, and `curbuf` is set.
-    unsafe {
-        check_cursor(win);
-        win_new_height(win.raw(), win.w_height);
-        win_new_width(win.raw(), win.w_width);
-        changed_window_setting(win);
-    }
+    check_cursor(win);
+    unsafe { win_new_height(win.raw(), win.w_height) };
+    unsafe { win_new_width(win.raw(), win.w_width) };
+    changed_window_setting(win);
     // SAFETY: `curbuf` is set from startup to exit.
-    let line_count = unsafe { Buf::current() }.line_count();
+    let line_count = cur_buf().line_count();
     win.w_topline = restored_topline(win.w_topline, line_count);
     // SAFETY: a live window.
     check_topfill(win, true);
@@ -364,7 +344,7 @@ pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // dictionary stays alive for the appends because `rettv` owns it.
     let (dict, win) = unsafe {
         tv_dict_alloc_ret(rettv);
-        ((*rettv).vval.v_dict, Win::current())
+        ((*rettv).vval.v_dict, cur_win())
     };
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.

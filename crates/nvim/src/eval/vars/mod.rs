@@ -91,6 +91,7 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
+use crate::winlayer::{Ea, Live};
 use ::libc::{abort, memchr, memcpy, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -157,6 +158,26 @@ pub struct VimVar {
     pub vv_di: VimVarItem,
     pub vv_flags: c_char,
 }
+
+/// One entry of a scope dictionary, whose caller has promised it outlives the
+/// value.
+///
+/// The scopes hand their entries around as a bare `*mut dictitem_T` and the
+/// promise is discharged by the dictionary outliving the call -- which every
+/// caller here already relies on, because the entry is what it came to read.
+/// Wrapping is the unsafe step, once; every `(*di).field` after it is
+/// ordinary checked code. See [`Live`] for what the promise is and is not.
+pub(crate) type Di = Live<dictitem_T>;
+
+/// A value whose caller has promised it outlives the handle.
+pub(crate) type Tv = Live<typval_T>;
+
+/// One row of the `v:` table.
+///
+/// The promise costs nothing here: [`Vv`]'s discriminants are exactly the
+/// rows of the `vimvars` table, and the table is a `static` that outlives
+/// every caller.
+pub(crate) type Vvr = Live<VimVar>;
 
 pub const kGRegExprSrc: GRegFlags = 2;
 

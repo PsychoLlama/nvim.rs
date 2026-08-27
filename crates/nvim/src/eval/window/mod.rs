@@ -89,6 +89,24 @@ use crate::window::{
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
     win_valid, win_vert_neighbor,
 };
+/// The window the editor is working in.
+pub(super) fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The buffer the editor is working in.
+pub(super) fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The tab page the editor is working in.
+pub(super) fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
+}
+
 /// The three window pointers a tab page keeps, read the way upstream reads
 /// them.
 ///
