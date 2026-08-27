@@ -34,9 +34,7 @@ use core::{ptr, slice};
 use crate::charset::{char2cells, hexhex2nr, ptr2cells};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::{schar_from_char, schar_from_str};
-use crate::main::{
-    curtab, curwin, e_invarg, e_leadtab_requires_tab, first_tabpage, firstwin, p_fcs, p_lcs,
-};
+use crate::main::{curwin, e_invarg, e_leadtab_requires_tab, p_fcs, p_lcs};
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
 use crate::option::option_var;
@@ -45,8 +43,9 @@ use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 use crate::types::{
     CharsOption, NUL, OptionSetFlags, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T,
-    schar_T, size_t, tabpage_T, win_T,
+    schar_T, size_t, win_T,
 };
+use crate::winlayer;
 
 use super::{
     clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
@@ -713,7 +712,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
         unsafe { clear_string_option(local_ptr) };
     }
 
-    // SAFETY: the window list is the editor's own.
+    // SAFETY: `for_each_window` only visits live windows.
     unsafe {
         for_each_window(|wp| {
             let opt = if listchars {
@@ -819,7 +818,7 @@ pub unsafe fn check_chars_options() -> *const c_char {
     if !global.is_null() {
         return global;
     }
-    // SAFETY: the window list is the editor's own.
+    // SAFETY: `for_each_window` only visits live windows.
     unsafe {
         for_each_window(|wp| {
             let errmsg = check(wp, (*wp).w_onebuf_opt.wo_lcs, kListchars, true);
@@ -834,30 +833,14 @@ pub unsafe fn check_chars_options() -> *const c_char {
 /// Walk every window of every tab page, stopping at the first message a
 /// visit returns.
 ///
-/// The current tab page's windows are reached through `firstwin` rather
-/// than through the tab page's saved list, which is only up to date for the
-/// tab pages that are not current.
-///
-/// # Safety
-/// The window list is the editor's own and is not modified during the walk.
-unsafe fn for_each_window(mut visit: impl FnMut(*mut win_T) -> *const c_char) -> *const c_char {
-    // SAFETY: the editor's tab page and window lists.
-    unsafe {
-        let mut tp: *mut tabpage_T = first_tabpage.get().cast::<tabpage_T>();
-        while !tp.is_null() {
-            let mut wp = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                let errmsg = visit(wp);
-                if !errmsg.is_null() {
-                    return errmsg;
-                }
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next.cast::<tabpage_T>();
+/// `FOR_ALL_TAB_WINDOWS`, i.e. [`winlayer::tab_windows`] -- which already
+/// knows that the current tab page's windows hang off `firstwin` rather than
+/// off its own stale list.
+fn for_each_window(mut visit: impl FnMut(*mut win_T) -> *const c_char) -> *const c_char {
+    for wp in winlayer::tab_windows() {
+        let errmsg = visit(wp.raw());
+        if !errmsg.is_null() {
+            return errmsg;
         }
     }
     ptr::null()

@@ -35,10 +35,10 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
-    Columns, Rows, clear_cmdline, cmdline_row, curbuf, curtab, curwin, e_invarg, first_tabpage,
-    firstbuf, firstwin, full_screen, lastwin, need_maketitle, p_arshape, p_ch, p_columns, p_deco,
-    p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_ul,
-    p_wh, p_window, p_wiw, readonlymode, starting, topframe, updating_screen,
+    Columns, Rows, clear_cmdline, cmdline_row, curbuf, curtab, curwin, e_invarg, firstwin,
+    full_screen, lastwin, need_maketitle, p_arshape, p_ch, p_columns, p_deco, p_ea, p_enc, p_hh,
+    p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_ul, p_wh, p_window,
+    p_wiw, readonlymode, starting, topframe, updating_screen,
 };
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
@@ -56,7 +56,7 @@ use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
     NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, Vv, buf_T, colnr_T,
-    event_T, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
+    event_T, linenr_T, optset_T, ptrdiff_t, size_t, uint8_t, win_T,
 };
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -74,7 +74,7 @@ use super::{
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{self, Buf, Win};
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
@@ -482,19 +482,10 @@ pub(crate) unsafe fn did_set_numberwidth(args: *mut optset_T) -> *const c_char {
     ptr::null()
 }
 
-/// Every buffer, oldest first.
+/// Every buffer, oldest first: [`winlayer::buffers`] handing back the raw
+/// pointer the option callbacks still take.
 pub(crate) fn buffers() -> impl Iterator<Item = *mut buf_T> {
-    let mut next = firstbuf.get();
-    core::iter::from_fn(move || {
-        let buf = next;
-        if buf.is_null() {
-            return None;
-        }
-        // SAFETY: the buffer list is the editor's own and is not being
-        // rebuilt while an option callback runs.
-        next = unsafe { (*buf).b_next };
-        Some(buf)
-    })
+    winlayer::buffers().map(Buf::raw)
 }
 
 /// 'previewwindow': there can be only one, in the current tab page.
@@ -505,13 +496,11 @@ pub(crate) unsafe fn did_set_previewwindow(args: *mut optset_T) -> *const c_char
         if (*win).w_onebuf_opt.wo_pvw == 0 {
             return ptr::null();
         }
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_pvw != 0 && wp != win {
+        for wp in winlayer::windows() {
+            if wp.w_onebuf_opt.wo_pvw != 0 && wp.raw() != win {
                 (*win).w_onebuf_opt.wo_pvw = 0;
                 return E_PREVIEW_WINDOW_EXISTS.as_ptr();
             }
-            wp = (*wp).w_next;
         }
     }
     ptr::null()
@@ -635,21 +624,9 @@ pub(crate) unsafe fn did_set_swapfile(args: *mut optset_T) -> *const c_char {
 
 /// 'textwidth': a 'colorcolumn' entry may be relative to it, in any window.
 pub(crate) unsafe fn did_set_textwidth(_args: *mut optset_T) -> *const c_char {
-    // SAFETY: the tab page and window lists are the editor's own.
-    unsafe {
-        let mut tp: *mut tabpage_T = first_tabpage.get();
-        while !tp.is_null() {
-            let mut wp = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                check_colorcolumn(ptr::null_mut(), wp);
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next;
-        }
+    for wp in winlayer::tab_windows() {
+        // SAFETY: `wp` is a live window of the editor's own list.
+        unsafe { check_colorcolumn(ptr::null_mut(), wp.raw()) };
     }
     ptr::null()
 }

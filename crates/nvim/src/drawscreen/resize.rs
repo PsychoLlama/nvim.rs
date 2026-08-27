@@ -12,7 +12,7 @@
 use super::*;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
-use crate::winlayer::Win;
+use crate::winlayer::{self, Win};
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot
 /// overflow.
@@ -164,15 +164,13 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 p_ch.set(max_p_ch.max(1) as OptInt);
                 (*curtab.get()).tp_ch_used = p_ch.get();
             }
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                if tp != curtab.get() {
-                    let max_tp_ch = Rows.get() - min_rows(tp) + 1;
-                    if (*tp).tp_ch_used > 0 && (*tp).tp_ch_used > max_tp_ch as OptInt {
-                        (*tp).tp_ch_used = max_tp_ch.max(1) as OptInt;
+            for mut tp in winlayer::tabs() {
+                if !tp.is_current() {
+                    let max_tp_ch = Rows.get() - min_rows(tp.raw()) + 1;
+                    if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
+                        tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
                     }
                 }
-                tp = (*tp).tp_next;
             }
         }
 

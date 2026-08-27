@@ -38,7 +38,7 @@ use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
 use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
-use crate::main::{decor_state, firstwin};
+use crate::main::decor_state;
 use crate::map::set_has_uint32_t;
 use crate::marktree::key::{MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL};
 use crate::memory::{xfree, xmalloc};
@@ -49,7 +49,7 @@ use crate::types::{
     VirtTextChunk, VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t,
     virt_line,
 };
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
 use core::ptr;
 
@@ -638,16 +638,12 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
         }
 
         if sh.flags & kSHConcealLines != 0 {
-            // The current tabpage's window list is in the globals, which is
-            // what `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` expands to.
             // TODO(luukvbaal): redraw only unconcealed lines, and scroll
             // lines below it up or down. Also when opening/closing a fold.
-            let mut wp = firstwin.get();
-            while !wp.is_null() {
-                if (*wp).w_buffer == buf {
-                    changed_window_setting(Win::new(wp));
+            for wp in winlayer::windows() {
+                if wp.w_buffer == buf {
+                    changed_window_setting(wp);
                 }
-                wp = (*wp).w_next;
             }
         }
 

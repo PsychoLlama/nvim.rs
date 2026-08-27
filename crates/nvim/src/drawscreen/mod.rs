@@ -39,9 +39,9 @@ use crate::main::{
     Columns, KeyTyped, RedrawingDisabled, Rows, State, clear_cmdline, cmdline_row,
     cmdline_was_last_drawn, curbuf, curtab, curwin, display_tick, do_redraw, dollar_vcol, dy_flags,
     edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exiting, exmode_active,
-    first_tabpage, firstwin, global_busy, got_int, hl_attr_active, lines_left, mode_displayed,
-    msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount, msg_no_more,
-    msg_row, msg_scrolled, msg_scrolled_at_flush, msg_silent, must_redraw, must_redraw_pum,
+    firstwin, global_busy, got_int, hl_attr_active, lines_left, mode_displayed, msg_col,
+    msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount, msg_no_more, msg_row,
+    msg_scrolled, msg_scrolled_at_flush, msg_silent, must_redraw, must_redraw_pum,
     need_diff_redraw, need_highlight_changed, need_maketitle, need_wait_return, no_hlsearch,
     ns_hl_fast, p_ch, p_columns, p_hls, p_icon, p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc,
     p_sloc, p_smd, p_title, p_wbr, p_wmw, redraw_cmdline, redraw_mode, redraw_not_allowed,
@@ -105,7 +105,7 @@ use crate::window::{
     frame2win, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
     win_fdccol_count, win_new_screensize, win_ui_flush,
 };
-use crate::winlayer::{Cc, Win};
+use crate::winlayer::{self, Cc, Win};
 
 // The carve of the transpiled module; see each child's docs.
 mod resize;
@@ -142,24 +142,14 @@ pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 /// The windows of the current tab page, in layout order.
 ///
-/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The current tab page keeps its window
-/// list in the global `firstwin` rather than in its own struct, which is why
-/// c2rust rendered the macro as `if curtab == curtab { firstwin } else { … }` --
-/// i.e. as `firstwin` and nothing else.
+/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, i.e. [`winlayer::windows`] handing
+/// back the raw pointer its callers still take.
 ///
 /// # Safety
-/// The window list must not be restructured while the iterator is live.
+/// The window list must not be restructured while the iterator is live, and
+/// the pointers it yields are only live for as long as that holds.
 pub(crate) unsafe fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
-    let mut wp = firstwin.get();
-    ::core::iter::from_fn(move || {
-        if wp.is_null() {
-            return None;
-        }
-        let cur = wp;
-        // SAFETY: the caller promises the list is not restructured under us.
-        wp = unsafe { (*cur).w_next };
-        Some(cur)
-    })
+    winlayer::windows().map(Win::raw)
 }
 
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
@@ -471,12 +461,10 @@ pub unsafe fn update_screen() -> c_int {
 
         if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
             update_window_hl(curwin.get(), redr_type >= UPD_NOT_VALID);
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                if tp != curtab.get() {
-                    update_window_hl((*tp).tp_curwin, redr_type >= UPD_NOT_VALID);
+            for tp in winlayer::tabs() {
+                if !tp.is_current() {
+                    update_window_hl(tp.tp_curwin, redr_type >= UPD_NOT_VALID);
                 }
-                tp = (*tp).tp_next;
             }
             draw_tabline();
         }

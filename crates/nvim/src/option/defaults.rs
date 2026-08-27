@@ -27,8 +27,8 @@ use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::{
-    Rows, curbuf, current_sctx, curtab, curwin, fenc_default, first_tabpage, firstwin, p_ch, p_enc,
-    p_hlg, p_icon, p_rtp, p_sh, p_title, p_window,
+    Rows, curbuf, current_sctx, curwin, fenc_default, p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh,
+    p_title, p_window,
 };
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
@@ -50,10 +50,10 @@ use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, PATHSEPSTR, String_0, garray_T,
-    size_t, tabpage_T, uint32_t,
+    size_t, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
-use crate::winlayer::Buf;
+use crate::winlayer::{self, Buf};
 use ::libc::{getuid, strlen};
 
 use super::{
@@ -457,18 +457,8 @@ pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
             }
         }
         // 'scroll' again, this time for every window there is.
-        let mut tp: *mut tabpage_T = first_tabpage.get();
-        while !tp.is_null() {
-            let mut wp = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                win_comp_scroll(wp);
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next;
+        for wp in winlayer::tab_windows() {
+            win_comp_scroll(wp.raw());
         }
         parse_cino(Buf::current());
     }
