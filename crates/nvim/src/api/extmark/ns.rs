@@ -14,7 +14,7 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
 };
-use crate::winlayer::Win;
+use crate::winlayer::tab_windows;
 
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -243,49 +243,40 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                 );
                 i = i.wrapping_add(1);
             }
-            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-            while !tp.is_null() {
-                let mut wp_0: *mut win_T = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp).tp_firstwin
-                };
-                while !wp_0.is_null() {
-                    if set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) as ::core::ffi::c_int != 0
-                        && !set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
-                    {
-                        set_put_uint32_t(
-                            &raw mut (*wp_0).w_ns_set,
-                            ns_id as uint32_t,
-                            ::core::ptr::null_mut::<*mut uint32_t>(),
-                        );
-                        if set_has_uint32_t(
-                            &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
-                                as *mut Map_uint32_t_uint32_t))
-                                .set,
-                            ns_id as uint32_t,
-                        ) {
-                            changed_window_setting(Win::new(wp_0));
-                        }
+            for win in tab_windows() {
+                let wp_0 = win.raw();
+                if set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) as ::core::ffi::c_int != 0
+                    && !set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
+                {
+                    set_put_uint32_t(
+                        &raw mut (*wp_0).w_ns_set,
+                        ns_id as uint32_t,
+                        ::core::ptr::null_mut::<*mut uint32_t>(),
+                    );
+                    if set_has_uint32_t(
+                        &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
+                            as *mut Map_uint32_t_uint32_t))
+                            .set,
+                        ns_id as uint32_t,
+                    ) {
+                        changed_window_setting(win);
                     }
-                    if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
-                        as ::core::ffi::c_int
-                        != 0
-                        && !set_has_ptr_t(&raw mut windows, wp_0 as ptr_t)
-                    {
-                        set_del_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t);
-                        if set_has_uint32_t(
-                            &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
-                                as *mut Map_uint32_t_uint32_t))
-                                .set,
-                            ns_id as uint32_t,
-                        ) {
-                            changed_window_setting(Win::new(wp_0));
-                        }
-                    }
-                    wp_0 = (*wp_0).w_next;
                 }
-                tp = (*tp).tp_next as *mut tabpage_T;
+                if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
+                    as ::core::ffi::c_int
+                    != 0
+                    && !set_has_ptr_t(&raw mut windows, wp_0 as ptr_t)
+                {
+                    set_del_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t);
+                    if set_has_uint32_t(
+                        &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
+                            as *mut Map_uint32_t_uint32_t))
+                            .set,
+                        ns_id as uint32_t,
+                    ) {
+                        changed_window_setting(win);
+                    }
+                }
             }
             xfree(windows.keys as *mut ::core::ffi::c_void);
             xfree(windows.h.hash as *mut ::core::ffi::c_void);
@@ -296,47 +287,29 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
         }
         if set_scoped && !local_scopes().contains(ns_id as uint32_t) {
             local_scopes().insert(ns_id as uint32_t);
-            let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-            while !tp_0.is_null() {
-                let mut wp_1: *mut win_T = if tp_0 == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp_0).tp_firstwin
-                };
-                while !wp_1.is_null() {
-                    if set_has_uint32_t(
-                        &raw mut (*(&raw mut (*(*wp_1).w_buffer).b_extmark_ns
-                            as *mut Map_uint32_t_uint32_t))
-                            .set,
-                        ns_id as uint32_t,
-                    ) {
-                        changed_window_setting(Win::new(wp_1));
-                    }
-                    wp_1 = (*wp_1).w_next;
+            for win in tab_windows() {
+                let wp_1 = win.raw();
+                if set_has_uint32_t(
+                    &raw mut (*(&raw mut (*(*wp_1).w_buffer).b_extmark_ns
+                        as *mut Map_uint32_t_uint32_t))
+                        .set,
+                    ns_id as uint32_t,
+                ) {
+                    changed_window_setting(win);
                 }
-                tp_0 = (*tp_0).tp_next as *mut tabpage_T;
             }
         } else if !set_scoped && local_scopes().contains(ns_id as uint32_t) {
             local_scopes().remove(ns_id as uint32_t);
-            let mut tp_1: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-            while !tp_1.is_null() {
-                let mut wp_2: *mut win_T = if tp_1 == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp_1).tp_firstwin
-                };
-                while !wp_2.is_null() {
-                    if set_has_uint32_t(
-                        &raw mut (*(&raw mut (*(*wp_2).w_buffer).b_extmark_ns
-                            as *mut Map_uint32_t_uint32_t))
-                            .set,
-                        ns_id as uint32_t,
-                    ) {
-                        changed_window_setting(Win::new(wp_2));
-                    }
-                    wp_2 = (*wp_2).w_next;
+            for win in tab_windows() {
+                let wp_2 = win.raw();
+                if set_has_uint32_t(
+                    &raw mut (*(&raw mut (*(*wp_2).w_buffer).b_extmark_ns
+                        as *mut Map_uint32_t_uint32_t))
+                        .set,
+                    ns_id as uint32_t,
+                ) {
+                    changed_window_setting(win);
                 }
-                tp_1 = (*tp_1).tp_next as *mut tabpage_T;
             }
         }
     }
@@ -365,47 +338,29 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
             return opts.reported(error);
         }
         let mut count: size_t = 0 as size_t;
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                if set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id as uint32_t) {
-                    count = count.wrapping_add(1);
-                }
-                wp = (*wp).w_next;
+        for win in tab_windows() {
+            let wp = win.raw();
+            if set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id as uint32_t) {
+                count = count.wrapping_add(1);
             }
-            tp = (*tp).tp_next as *mut tabpage_T;
         }
         windows = arena_array(arena, count);
-        let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp_0.is_null() {
-            let mut wp_0: *mut win_T = if tp_0 == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp_0).tp_firstwin
-            };
-            while !wp_0.is_null() {
-                if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) {
-                    if windows.size == windows.capacity {
-                        windows.capacity = if windows.capacity != 0 {
-                            windows.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        windows.items = xrealloc(
-                            windows.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),
-                        ) as *mut Object;
+        for win in tab_windows() {
+            let wp_0 = win.raw();
+            if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) {
+                if windows.size == windows.capacity {
+                    windows.capacity = if windows.capacity != 0 {
+                        windows.capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
                     };
-                    array_add(&mut windows, Object::integer((*wp_0).handle as Integer));
-                }
-                wp_0 = (*wp_0).w_next;
+                    windows.items = xrealloc(
+                        windows.items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),
+                    ) as *mut Object;
+                };
+                array_add(&mut windows, Object::integer((*wp_0).handle as Integer));
             }
-            tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
         opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
         opts.wins = windows;

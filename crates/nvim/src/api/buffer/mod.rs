@@ -17,7 +17,7 @@ use crate::extmark::extmark_splice;
 use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
-use crate::main::{State, curbuf, curtab, curwin, first_tabpage, firstwin, p_acd};
+use crate::main::{State, curbuf, curwin, p_acd};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{
@@ -39,7 +39,7 @@ use crate::types::{
     LuaRef, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType, WinSplit,
     WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values, dobuf_start_values,
     except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, tabpage_T, uint64_t, win_T,
+    linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
 use ::libc::{memcpy, strlen};

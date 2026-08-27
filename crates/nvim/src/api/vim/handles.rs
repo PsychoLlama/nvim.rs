@@ -12,20 +12,13 @@ use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::types::OptionSetFlags;
 
 use crate::buffer::BufRef;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers, tab_windows, tabs};
 pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
     unsafe {
-        let mut n: size_t = 0 as size_t;
-        let mut b: *mut buf_T = firstbuf.get();
-        while !b.is_null() {
-            n = n.wrapping_add(1);
-            b = (*b).b_next;
-        }
+        let n: size_t = buffers().count();
         let mut rv: Array = arena_array(arena, n);
-        let mut b_0: *mut buf_T = firstbuf.get();
-        while !b_0.is_null() {
-            array_add(&mut rv, Object::buffer((*b_0).handle));
-            b_0 = (*b_0).b_next;
+        for buf in buffers() {
+            array_add(&mut rv, Object::buffer(buf.handle));
         }
         rv
     }
@@ -67,33 +60,10 @@ pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
 
 pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
     unsafe {
-        let mut n: size_t = 0 as size_t;
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                n = n.wrapping_add(1);
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
+        let n: size_t = tab_windows().count();
         let mut rv: Array = arena_array(arena, n);
-        let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp_0.is_null() {
-            let mut wp_0: *mut win_T = if tp_0 == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp_0).tp_firstwin
-            };
-            while !wp_0.is_null() {
-                array_add(&mut rv, Object::window((*wp_0).handle));
-                wp_0 = (*wp_0).w_next;
-            }
-            tp_0 = (*tp_0).tp_next as *mut tabpage_T;
+        for win in tab_windows() {
+            array_add(&mut rv, Object::window(win.handle));
         }
         rv
     }
@@ -251,17 +221,10 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
 
 pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
     unsafe {
-        let mut n: size_t = 0 as size_t;
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            n = n.wrapping_add(1);
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
+        let n: size_t = tabs().count();
         let mut rv: Array = arena_array(arena, n);
-        let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp_0.is_null() {
-            array_add(&mut rv, Object::tabpage((*tp_0).handle));
-            tp_0 = (*tp_0).tp_next as *mut tabpage_T;
+        for tp in tabs() {
+            array_add(&mut rv, Object::tabpage(tp.handle));
         }
         rv
     }

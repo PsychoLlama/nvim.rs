@@ -18,9 +18,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_high;
-use crate::main::{
-    curtab, first_tabpage, firstwin, namespace_ids, namespace_localscope, next_namespace_id,
-};
+use crate::main::{namespace_ids, namespace_localscope, next_namespace_id};
 use crate::map::{
     map_put_ref_string_int, mh_delete_uint32_t, mh_get_ptr_t, mh_get_string, mh_put_ptr_t,
     mh_put_uint32_t, set_has_uint32_t,
@@ -46,7 +44,7 @@ use crate::types::{
     OptionalKeys, Set_ptr_t, Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText,
     VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t, kErrorTypeException,
     kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
-    linenr_T, ptr_t, schar_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    linenr_T, ptr_t, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

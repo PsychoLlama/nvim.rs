@@ -11,7 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::guard::Allow;
 use crate::types::NUL;
-use crate::winlayer::Win;
+use crate::winlayer::{Win, windows};
 
 unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
     unsafe {
@@ -198,16 +198,10 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             || (*opts).winbar as ::core::ffi::c_int != 0
         {
             if win.is_null() {
-                let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*curtab.get()).tp_firstwin
-                };
-                while !wp.is_null() {
+                for wp in windows().map(Win::raw) {
                     if buf.is_null() || (*wp).w_buffer == buf {
                         redraw_status(wp, opts, &raw mut (*opts).flush);
                     }
-                    wp = (*wp).w_next;
                 }
             } else {
                 redraw_status(win, opts, &raw mut (*opts).flush);

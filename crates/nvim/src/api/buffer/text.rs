@@ -12,7 +12,7 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, tab_windows};
 
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
@@ -377,39 +377,29 @@ pub unsafe fn nvim_buf_set_text(
                     extra as linenr_T,
                     true,
                 );
-                let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-                while !tp.is_null() {
-                    let mut win: *mut win_T = if tp == curtab.get() {
-                        firstwin.get()
-                    } else {
-                        (*tp).tp_firstwin
-                    };
-                    while !win.is_null() {
-                        if (*win).w_buffer == b {
-                            if (*win).w_cursor.lnum as Integer >= start_row
-                                && (*win).w_cursor.lnum as Integer <= end_row
-                            {
-                                fix_cursor_cols(
-                                    win,
-                                    start_row as linenr_T,
-                                    start_col as colnr_T,
-                                    end_row as linenr_T,
-                                    end_col as colnr_T,
-                                    new_len as linenr_T,
-                                    last_item.len() as colnr_T,
-                                );
-                            } else {
-                                fix_cursor(
-                                    win,
-                                    start_row as linenr_T,
-                                    end_row as linenr_T,
-                                    extra as linenr_T,
-                                );
-                            }
+                for win in tab_windows().map(Win::raw) {
+                    if (*win).w_buffer == b {
+                        if (*win).w_cursor.lnum as Integer >= start_row
+                            && (*win).w_cursor.lnum as Integer <= end_row
+                        {
+                            fix_cursor_cols(
+                                win,
+                                start_row as linenr_T,
+                                start_col as colnr_T,
+                                end_row as linenr_T,
+                                end_col as colnr_T,
+                                new_len as linenr_T,
+                                last_item.len() as colnr_T,
+                            );
+                        } else {
+                            fix_cursor(
+                                win,
+                                start_row as linenr_T,
+                                end_row as linenr_T,
+                                extra as linenr_T,
+                            );
                         }
-                        win = (*win).w_next;
                     }
-                    tp = (*tp).tp_next as *mut tabpage_T;
                 }
             }
         }

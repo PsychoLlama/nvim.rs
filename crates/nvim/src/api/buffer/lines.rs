@@ -13,7 +13,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win, tab_windows};
 
 pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
@@ -300,20 +300,10 @@ pub unsafe fn nvim_buf_set_lines(
                     extra as linenr_T,
                     true,
                 );
-                let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-                while !tp.is_null() {
-                    let mut win: *mut win_T = if tp == curtab.get() {
-                        firstwin.get()
-                    } else {
-                        (*tp).tp_firstwin
-                    };
-                    while !win.is_null() {
-                        if (*win).w_buffer == b {
-                            fix_cursor(win, start as linenr_T, end as linenr_T, extra as linenr_T);
-                        }
-                        win = (*win).w_next;
+                for win in tab_windows().map(Win::raw) {
+                    if (*win).w_buffer == b {
+                        fix_cursor(win, start as linenr_T, end as linenr_T, extra as linenr_T);
                     }
-                    tp = (*tp).tp_next as *mut tabpage_T;
                 }
             }
         }
