@@ -459,7 +459,7 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: *mut optset_T) -> *cons
 /// 'numberwidth': the cached number-column width is stale.
 pub(crate) unsafe fn did_set_numberwidth(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
-    unsafe { (*Frame::read(args).win).w_nrwidth_line_count = 0 as linenr_T };
+    unsafe { Frame::read(args).win.w_nrwidth_line_count = 0 as linenr_T };
     ptr::null()
 }
 

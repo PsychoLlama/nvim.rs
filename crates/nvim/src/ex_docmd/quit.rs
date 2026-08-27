@@ -89,7 +89,11 @@ pub(crate) unsafe fn ex_bunload(eap: *mut exarg_T) {
 /// Answers `true` when the quit must be abandoned. An autocommand can
 /// close the window, lock the buffer or start a text operation, so both
 /// events are followed by the same three-part re-validation.
-pub fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
+///
+/// # Safety
+/// `wp` must be a live window on entry. It need not survive the call: the
+/// autocommands may close it, which is what `quit_was_cancelled` is for.
+pub(crate) unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
@@ -166,7 +170,8 @@ pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
     if curbuf_locked() {
         return;
     }
-    if before_quit_autocmds(wp, false, eap.forceit != 0) {
+    // SAFETY: `wp` is the window this `:quit` resolved to.
+    if unsafe { before_quit_autocmds(wp, false, eap.forceit != 0) } {
         return;
     }
 
@@ -264,7 +269,8 @@ pub unsafe fn before_quit_all(eap: *mut exarg_T) -> c_int {
         text_locked_msg();
         return FAIL;
     }
-    if before_quit_autocmds(curwin.get(), true, eap.forceit != 0) {
+    // SAFETY: `curwin` is set from startup to exit.
+    if unsafe { before_quit_autocmds(curwin.get(), true, eap.forceit != 0) } {
         return FAIL;
     }
     OK
@@ -604,7 +610,8 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (eap.cmdidx as c_int == CMD_wq as c_int || curbuf_is_changed())
         && unsafe { do_write(eap.raw()) } == FAIL
-        || before_quit_autocmds(curwin.get(), false, eap.forceit != 0)
+        // SAFETY: `curwin` is set from startup to exit.
+        || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }
         || check_more(true, eap.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(eap.forceit != 0, false)
     {

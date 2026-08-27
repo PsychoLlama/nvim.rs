@@ -99,7 +99,7 @@ pub unsafe fn find_win_by_nr(vp: *mut typval_T, tp: Option<TabPage>) -> Option<W
         return Some(cur_win());
     }
     // SAFETY: `curtab` is set from startup to exit.
-    let tp = tp.unwrap_or_else(|| cur_tab());
+    let tp = tp.unwrap_or_else(cur_tab);
     if nr >= LOWEST_WIN_ID {
         return windows_in_tab(tp).find(|wp| wp.handle == nr);
     }

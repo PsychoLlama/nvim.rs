@@ -180,7 +180,7 @@ const RUN_WHILE_SKIPPING: &[CMD_index] = &[
 
 /// Should this command be passed over rather than run?
 pub(crate) fn skip_cmd(eap: Ea) -> bool {
-    (*eap).skip != 0 && !RUN_WHILE_SKIPPING.contains(&((*eap).cmdidx as CMD_index))
+    eap.skip != 0 && !RUN_WHILE_SKIPPING.contains(&(eap.cmdidx as CMD_index))
 }
 
 /// Parse and execute one Ex command, and answer where the next one starts.
@@ -763,7 +763,7 @@ pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
     unsafe { xstrlcat(iobuff, c": ".as_ptr(), IOSIZE as size_t) };
 
     let mut s = cmd;
-    let mut d = unsafe { iobuff.add(strlen(iobuff) as usize) };
+    let mut d = unsafe { iobuff.add(strlen(iobuff)) };
     while byte(s) != NUL && unsafe { d.offset_from(iobuff) } + 5 < IOSIZE as isize {
         if ubyte_at(s, 0) == 0xc2 && ubyte_at(s, 1) == 0xa0 {
             s = unsafe { s.add(2) };

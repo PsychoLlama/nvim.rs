@@ -306,13 +306,13 @@ pub(crate) fn repl_cmdline(
         )
     };
     let tail = offset + len;
-    unsafe { strcpy(new_cmdline.add(tail as usize), src.add(srclen)) };
-    let resume = unsafe { new_cmdline.add(tail as usize) };
+    unsafe { strcpy(new_cmdline.add(tail), src.add(srclen)) };
+    let resume = unsafe { new_cmdline.add(tail) };
 
     if !ea.nextcmd.is_null() {
         let after = strlen(new_cmdline) + 1;
-        unsafe { strcpy(new_cmdline.add(after as usize), ea.nextcmd) };
-        ea.nextcmd = unsafe { new_cmdline.add(after as usize) };
+        unsafe { strcpy(new_cmdline.add(after), ea.nextcmd) };
+        ea.nextcmd = unsafe { new_cmdline.add(after) };
     }
     ea.cmd = unsafe { new_cmdline.offset(ea.cmd.offset_from(*cmdlinep)) };
     ea.arg = unsafe { new_cmdline.offset(ea.arg.offset_from(*cmdlinep)) };

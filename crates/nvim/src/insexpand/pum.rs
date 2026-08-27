@@ -477,13 +477,11 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             if comp.is_original() {
                 shown_match_ok = true;
             }
-            if !shown_match_ok {
-                if let Some(prev) = shown_compl {
-                    // The shown match isn't displayed; use the previously
-                    // displayed match instead.
-                    compl_shown_match.set(prev.raw());
-                    shown_match_ok = true;
-                }
+            if !shown_match_ok && let Some(prev) = shown_compl {
+                // The shown match isn't displayed; use the previously
+                // displayed match instead.
+                compl_shown_match.set(prev.raw());
+                shown_match_ok = true;
             }
         }
     }

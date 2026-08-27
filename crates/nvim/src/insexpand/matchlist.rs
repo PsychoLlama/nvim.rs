@@ -253,47 +253,50 @@ pub(crate) unsafe fn ins_compl_add(
 
     // Link the new match after (FORWARD) or before (BACKWARD) the current
     // match in the list.
-    let first = first_match();
-    if first.is_none() {
-        match_0.cp_prev = ptr::null_mut();
-        match_0.cp_next = ptr::null_mut();
-    } else if cot_fuzzy() && score != FUZZY_SCORE_NONE && compl_get_longest.get() {
-        // The direction is ignored under `longest` + `fuzzy`, because
-        // matches are inserted sorted by score.
-        let mut first = first.expect("checked just above");
-        let mut current = first.next();
-        let mut prev = first;
-        let mut inserted = false;
-        while let Some(mut cur) = current.filter(|cur| *cur != first) {
-            if cur.cp_score < score {
-                match_0.cp_next = cur.raw();
-                match_0.cp_prev = cur.cp_prev;
-                if let Some(mut before) = cur.prev() {
-                    before.cp_next = match_0.raw();
+    match first_match() {
+        // An empty list: the new match stands alone.
+        None => {
+            match_0.cp_prev = ptr::null_mut();
+            match_0.cp_next = ptr::null_mut();
+        }
+        Some(mut first) if cot_fuzzy() && score != FUZZY_SCORE_NONE && compl_get_longest.get() => {
+            // The direction is ignored under `longest` + `fuzzy`, because
+            // matches are inserted sorted by score.
+            let mut current = first.next();
+            let mut prev = first;
+            let mut inserted = false;
+            while let Some(mut cur) = current.filter(|cur| *cur != first) {
+                if cur.cp_score < score {
+                    match_0.cp_next = cur.raw();
+                    match_0.cp_prev = cur.cp_prev;
+                    if let Some(mut before) = cur.prev() {
+                        before.cp_next = match_0.raw();
+                    }
+                    cur.cp_prev = match_0.raw();
+                    inserted = true;
+                    break;
                 }
-                cur.cp_prev = match_0.raw();
-                inserted = true;
-                break;
+                prev = cur;
+                current = cur.next();
             }
-            prev = cur;
-            current = cur.next();
+            if !inserted {
+                prev.cp_next = match_0.raw();
+                match_0.cp_prev = prev.raw();
+                match_0.cp_next = first.raw();
+                first.cp_prev = match_0.raw();
+            }
         }
-        if !inserted {
-            prev.cp_next = match_0.raw();
-            match_0.cp_prev = prev.raw();
-            match_0.cp_next = first.raw();
-            first.cp_prev = match_0.raw();
-        }
-    } else {
-        // A non-empty list always has a current match, which upstream
-        // dereferences here without checking.
-        let curr = curr.expect("a non-empty match list has a current match");
-        if dir == FORWARD {
-            match_0.cp_next = curr.cp_next;
-            match_0.cp_prev = curr.raw();
-        } else {
-            match_0.cp_next = curr.raw();
-            match_0.cp_prev = curr.cp_prev;
+        Some(_) => {
+            // A non-empty list always has a current match, which upstream
+            // dereferences here without checking.
+            let curr = curr.expect("a non-empty match list has a current match");
+            if dir == FORWARD {
+                match_0.cp_next = curr.cp_next;
+                match_0.cp_prev = curr.raw();
+            } else {
+                match_0.cp_next = curr.raw();
+                match_0.cp_prev = curr.cp_prev;
+            }
         }
     }
     if let Some(mut next) = match_0.next() {

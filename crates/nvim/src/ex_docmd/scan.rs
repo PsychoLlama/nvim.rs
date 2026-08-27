@@ -163,7 +163,7 @@ pub(crate) unsafe fn parse_count(
 /// Take the `!` a command may carry. `:substitute` and its two magic
 /// spellings are the exception: there a `!` belongs to the pattern.
 pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
-    let cmdidx = (*eap).cmdidx as c_int;
+    let cmdidx = eap.cmdidx as c_int;
     if byte(unsafe { *p }) == '!' as c_int
         && cmdidx != CMD_substitute as c_int
         && cmdidx != CMD_smagic as c_int
