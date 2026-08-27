@@ -11,7 +11,7 @@ use super::*;
 use crate::cmdexpand::Expanded;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -572,10 +572,8 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
         debug_assert!(!curbuf.get().is_null());
 
         if !compl_started.get() {
-            let mut buf = firstbuf.get();
-            while !buf.is_null() {
-                (*buf).b_scanned = false;
-                buf = (*buf).b_next;
+            for mut buf in buffers() {
+                buf.b_scanned = false;
             }
             if !st_cleared.get() {
                 st_cell.set(INS_COMPL_NEXT_STATE_INIT);

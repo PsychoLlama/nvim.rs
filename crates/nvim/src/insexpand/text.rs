@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::types::{IOSIZE, NUL};
+use crate::winlayer::buffers;
 
 /// The completed text with the case of the originally typed text inferred.
 ///
@@ -223,29 +224,30 @@ pub unsafe fn find_line_end(ptr: *mut c_char) -> *mut c_char {
 
 /// Add every listed buffer's file name that starts with what was typed.
 pub(crate) unsafe fn get_next_bufname_token() {
-    unsafe {
-        let mut b = firstbuf.get();
-        while !b.is_null() {
-            if (*b).b_p_bl != 0 && !(*b).b_sfname.is_null() {
-                let tail = path_tail((*b).b_sfname);
-                let orig = compl_orig_text().value();
-                if strncmp(tail, orig.data(), orig.len()) == 0 {
-                    ins_compl_add(
-                        tail,
-                        strlen(tail) as c_int,
-                        ptr::null_mut(),
-                        ptr::null(),
-                        false,
-                        ptr::null_mut(),
-                        kDirectionNotSet,
-                        if p_ic.get() != 0 { CP_ICASE } else { 0 },
-                        false,
-                        ptr::null(),
-                        FUZZY_SCORE_NONE,
-                    );
-                }
+    for b in buffers() {
+        if b.b_p_bl == 0 || b.b_sfname.is_null() {
+            continue;
+        }
+        // SAFETY: a live buffer from the editor's own list, whose short name
+        // is a NUL-terminated string.
+        unsafe {
+            let tail = path_tail(b.b_sfname);
+            let orig = compl_orig_text().value();
+            if strncmp(tail, orig.data(), orig.len()) == 0 {
+                ins_compl_add(
+                    tail,
+                    strlen(tail) as c_int,
+                    ptr::null_mut(),
+                    ptr::null(),
+                    false,
+                    ptr::null_mut(),
+                    kDirectionNotSet,
+                    if p_ic.get() != 0 { CP_ICASE } else { 0 },
+                    false,
+                    ptr::null(),
+                    FUZZY_SCORE_NONE,
+                );
             }
-            b = (*b).b_next;
         }
     }
 }
