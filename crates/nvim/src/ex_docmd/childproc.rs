@@ -71,7 +71,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
     }
     debug_assert!(len < CMD_LEN);
 
-    if unsafe { *eap.arg } as c_int != NUL {
+    if byte(eap.arg) != NUL {
         let name = vim_strsave_escaped(eap.arg, c"\"\\".as_ptr());
         unsafe {
             snprintf(
@@ -83,7 +83,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
         };
         xfree(name as *mut c_void);
     } else {
-        if unsafe { *p_sh.get() } as c_int == NUL {
+        if byte(p_sh.get()) == NUL {
             unsafe { emsg(gettext(&raw const e_shellempty as *const c_char)) };
             return;
         }
@@ -176,4 +176,10 @@ fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut 
 fn xfree(ptr: *mut c_void) {
     // SAFETY: `xmalloc`ed, or null.
     unsafe { crate::memory::xfree(ptr) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

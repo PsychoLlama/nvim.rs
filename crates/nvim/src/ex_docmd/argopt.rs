@@ -1,8 +1,8 @@
 //! Arguments that are not file names: `++opt=value`, `+cmd`, the tab page
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
-
 use crate::strings::vim_snprintf;
+
 use std::ffi::CString;
 
 use crate::semsg_c;
@@ -40,10 +40,9 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 use crate::types::regexp::regmatch_T;
 use crate::types::{
     CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, NUL, OK, exarg_T,
-    expand_T, int32_t, intmax_t, size_t, uint8_t,
+    expand_T, int32_t, intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
-use ::libc::{strcasecmp, strcmp};
 
 /// Take a `+cmd` argument, and answer the command it names.
 ///
@@ -53,17 +52,17 @@ use ::libc::{strcasecmp, strcmp};
 /// terminator, so the answer borrows the command line.
 pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
     let mut arg = unsafe { *argp };
-    if unsafe { *arg } as c_int != '+' as c_int {
+    if byte(arg) != '+' as c_int {
         return ptr::null_mut();
     }
     arg = unsafe { arg.add(1) };
     let command;
-    if ascii_isspace(unsafe { *arg } as c_int) || unsafe { *arg } as c_int == NUL {
+    if ascii_isspace(byte(arg)) || byte(arg) == NUL {
         command = dollar_command.as_ptr().cast_mut();
     } else {
         command = arg;
         arg = skip_cmd_arg(command, true);
-        if unsafe { *arg } as c_int != NUL {
+        if byte(arg) != NUL {
             unsafe { *arg = NUL as c_char };
             arg = unsafe { arg.add(1) };
         }
@@ -75,14 +74,12 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
 pub unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
-    if unsafe { strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) } == 0 {
+    if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
         eap.bad_char = BAD_KEEP;
-    } else if unsafe { strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) } == 0 {
+    } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
         eap.bad_char = BAD_DROP;
-    } else if utf8len_tab[unsafe { *p } as uint8_t as usize] == 1
-        && unsafe { *p.add(1) } as c_int == NUL
-    {
-        eap.bad_char = unsafe { *p } as uint8_t as c_int;
+    } else if utf8len_tab[ubyte(p) as usize] == 1 && byte_at(p, 1) == NUL {
+        eap.bad_char = ubyte(p) as c_int;
     } else {
         return FAIL;
     }
@@ -113,7 +110,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
     if strncmp(arg, c"bin".as_ptr(), 3) == 0 || strncmp(arg, c"nobin".as_ptr(), 5) == 0 {
-        if unsafe { *arg } as c_int == 'n' as c_int {
+        if byte(arg) == 'n' as c_int {
             arg = unsafe { arg.add(2) };
             ea.force_bin = FORCE_NOBIN;
         } else {
@@ -127,18 +124,14 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
     }
 
     // `++edit`, and not `++editsomething`.
-    if strncmp(arg, c"edit".as_ptr(), 4) == 0
-        && !(unsafe { *arg.add(4) } as u8).is_ascii_alphabetic()
-    {
+    if strncmp(arg, c"edit".as_ptr(), 4) == 0 && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
         ea.read_edit = 1;
         ea.arg = unsafe { skipwhite(arg.add(4)) };
         return OK;
     }
 
     // `++p`, and not `++psomething`.
-    if unsafe { *arg } as c_int == 'p' as c_int
-        && !(unsafe { *arg.add(1) } as u8).is_ascii_alphabetic()
-    {
+    if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
         ea.mkdir_p = 1;
         ea.arg = unsafe { skipwhite(arg.add(1)) };
         return OK;
@@ -166,7 +159,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
         ptr::null_mut()
     };
 
-    if pp.is_null() || unsafe { *arg } as c_int != '=' as c_int {
+    if pp.is_null() || byte(arg) != '=' as c_int {
         return FAIL;
     }
     arg = unsafe { arg.add(1) };
@@ -180,10 +173,10 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
             return FAIL;
         }
         // Only the first letter is kept: 'u', 'd' or 'm'.
-        ea.force_ff = unsafe { *ea.cmd.offset(ea.force_ff as isize) } as uint8_t as c_int;
+        ea.force_ff = ubyte_at(ea.cmd, ea.force_ff as isize) as c_int;
     } else if pp == ea.force_enc_ptr() {
         let mut p = unsafe { ea.cmd.offset(ea.force_enc as isize) };
-        while unsafe { *p } as c_int != NUL {
+        while byte(p) != NUL {
             unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
             p = unsafe { p.add(1) };
         }
@@ -225,7 +218,7 @@ pub unsafe fn expand_argopt(
     let mut x = unsafe { Xp::new(xp) };
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
-    if x.xp_pattern > x.xp_line && unsafe { *x.xp_pattern.offset(-1) } as c_int == '=' as c_int {
+    if x.xp_pattern > x.xp_line && byte_at(x.xp_pattern, -1) == '=' as c_int {
         let name_end = unsafe { x.xp_pattern.offset(-1) };
         let ends_with = |word: &CStr| {
             let n = word.to_bytes().len() as isize;
@@ -288,10 +281,10 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
     };
 
     'theend: {
-        if !ea.arg.is_null() && unsafe { *ea.arg } as c_int != NUL {
+        if !ea.arg.is_null() && byte(ea.arg) != NUL {
             let mut p = ea.arg;
             // `+N`/`-N` means N places to the right/left of here.
-            let relative = match unsafe { *p } as c_int {
+            let relative = match byte(p) {
                 c if c == '-' as c_int => {
                     p = unsafe { p.add(1) };
                     -1
@@ -307,9 +300,9 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
             tab_number = unsafe { getdigits(&raw mut p, false, tab_number as intmax_t) } as c_int;
 
             if relative == 0 {
-                if unsafe { strcmp(p, c"$".as_ptr()) } == 0 {
+                if strcmp(p, c"$".as_ptr()) == 0 {
                     tab_number = last_tab();
-                } else if unsafe { strcmp(p, c"#".as_ptr()) } == 0 {
+                } else if strcmp(p, c"#".as_ptr()) == 0 {
                     if !valid_tabpage(lastused_tabpage.get()) {
                         ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
                         tab_number = 0;
@@ -317,8 +310,8 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     }
                     tab_number = tabpage_index(lastused_tabpage.get());
                 } else if p == p_save
-                    || unsafe { *p_save } as c_int == '-' as c_int
-                    || unsafe { *p } as c_int != NUL
+                    || byte(p_save) == '-' as c_int
+                    || byte(p) != NUL
                     || tab_number > last_tab()
                 {
                     // Not a number.
@@ -326,12 +319,12 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     break 'theend;
                 }
             } else {
-                if unsafe { *p_save } as c_int == NUL {
+                if byte(p_save) == NUL {
                     // A bare `+` or `-` is one place.
                     tab_number = 1;
                 } else if p == p_save
-                    || unsafe { *p_save } as c_int == '-' as c_int
-                    || unsafe { *p } as c_int != NUL
+                    || byte(p_save) == '-' as c_int
+                    || byte(p) != NUL
                     || tab_number == 0
                 {
                     invarg2(ea);
@@ -367,13 +360,12 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     loop {
                         cmdp = unsafe { cmdp.offset(-1) };
                         if !(cmdp > unsafe { *ea.cmdlinep }
-                            && (ascii_iswhite(unsafe { *cmdp } as c_int)
-                                || ascii_isdigit(unsafe { *cmdp } as c_int)))
+                            && (ascii_iswhite(byte(cmdp)) || ascii_isdigit(byte(cmdp))))
                         {
                             break;
                         }
                     }
-                    if unsafe { *cmdp } as c_int == '-' as c_int {
+                    if byte(cmdp) == '-' as c_int {
                         tab_number = tab_number.wrapping_sub(1);
                         if tab_number < unaccept_arg0 {
                             ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
@@ -473,8 +465,7 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
         semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname);
         return ptr::null_mut();
     }
-    if forceit == 0 && unsafe { *mode } as c_int != 'a' as c_int && unsafe { os_path_exists(fname) }
-    {
+    if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {
         semsg_c!(
             gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
             fname,
@@ -568,4 +559,40 @@ fn strncmp(
 ) -> ::core::ffi::c_int {
     // SAFETY: two NUL-terminated strings, and a length within both.
     unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
+}
+
+/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
+fn ubyte_at(p: *const c_char, i: isize) -> u8 {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as u8 }
+}
+
+/// `strcmp()` as checked code.
+fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { ::libc::strcmp(a, b) }
+}
+
+/// `strcasecmp()` as checked code.
+fn strcasecmp(a: *const c_char, b: *const c_char) -> c_int {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { ::libc::strcasecmp(a, b) }
 }

@@ -42,15 +42,15 @@ use crate::os::cshim::snprintf;
 
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, cmdidx_T, event_T, exarg_T, linenr_T,
-    ptrdiff_t, tabpage_T, win_T,
+    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T, ptrdiff_t,
+    tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
-use crate::undo::curbuf_is_changed;
+use crate::undo::{buf_is_changed, curbuf_is_changed};
 
 use crate::window::{
     find_tabpage, goto_tabpage, tabpage_index, trigger_tabclosedpre, valid_tabpage,
-    win_close_othertab, win_goto, win_valid,
+    win_close_othertab, win_goto, win_valid, window_layout_locked,
 };
 
 use crate::winlayer::{Buf, Ea, Win, WinId, first_tab, first_window, last_window, tabs, windows};
@@ -89,10 +89,10 @@ pub(crate) unsafe fn ex_bunload(eap: *mut exarg_T) {
 /// Answers `true` when the quit must be abandoned. An autocommand can
 /// close the window, lock the buffer or start a text operation, so both
 /// events are followed by the same three-part re-validation.
-pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
+pub fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
-    if unsafe { *get_vim_var_str(Vv::Exitreason) } as c_int == NUL {
+    if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
         set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
     }
     unsafe {
@@ -119,7 +119,7 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
             false,
             curbuf.get(),
         );
-        if unsafe { quit_was_cancelled(wp, || curbuf.get()) } {
+        if quit_was_cancelled(wp, || curbuf.get()) {
             return true;
         }
     }
@@ -135,7 +135,7 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
 /// autocommand may have closed `wp` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-unsafe fn quit_was_cancelled(wp: *mut win_T, buf: impl FnOnce() -> *mut buf_T) -> bool {
+fn quit_was_cancelled(wp: *mut win_T, buf: impl FnOnce() -> *mut buf_T) -> bool {
     if win_valid(wp) && !curbuf_locked() {
         let buf = buf();
         if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
@@ -166,7 +166,7 @@ pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
     if curbuf_locked() {
         return;
     }
-    if unsafe { before_quit_autocmds(wp, false, eap.forceit != 0) } {
+    if before_quit_autocmds(wp, false, eap.forceit != 0) {
         return;
     }
 
@@ -264,7 +264,7 @@ pub unsafe fn before_quit_all(eap: *mut exarg_T) -> c_int {
         text_locked_msg();
         return FAIL;
     }
-    if unsafe { before_quit_autocmds(curwin.get(), true, eap.forceit != 0) } {
+    if before_quit_autocmds(curwin.get(), true, eap.forceit != 0) {
         return FAIL;
     }
     OK
@@ -604,7 +604,7 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (eap.cmdidx as c_int == CMD_wq as c_int || curbuf_is_changed())
         && unsafe { do_write(eap.raw()) } == FAIL
-        || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }
+        || before_quit_autocmds(curwin.get(), false, eap.forceit != 0)
         || check_more(true, eap.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(eap.forceit != 0, false)
     {
@@ -650,12 +650,6 @@ fn apply_autocmds(
 fn buf_hide(buf: *const buf_T) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buf_hide(buf) }
-}
-
-/// `buf_is_changed()` as checked code.
-fn buf_is_changed(buf: Buf) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::undo::buf_is_changed(buf)
 }
 
 /// `check_changed_any()` as checked code.
@@ -736,8 +730,8 @@ fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
     unsafe { crate::window::win_close(win, free_buf, force) }
 }
 
-/// `window_layout_locked()` as checked code.
-fn window_layout_locked(cmd: cmdidx_T) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::window::window_layout_locked(cmd)
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

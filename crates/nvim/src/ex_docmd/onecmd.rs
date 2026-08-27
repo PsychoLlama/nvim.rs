@@ -78,14 +78,14 @@ use crate::types::{
     CMD_snomagic, CMD_substitute, CMD_syntax, CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde,
     CMD_topleft, CMD_try, CMD_unlet, CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical,
     CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL,
-    cmdidx_T, cstack_T, exarg_T, size_t, uint8_t,
+    cmdidx_T, cstack_T, exarg_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
 /// promised it outlives the value.
 type Cs = Live<cstack_T>;
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
 ///
@@ -218,9 +218,9 @@ pub(crate) unsafe fn do_one_cmd(
     'doend: {
         // "#!anything" is a comment, so that a script can carry a
         // shebang line.
-        if unsafe { *(*cmdlinep).add(0) } as c_int == '#' as c_int
-            && unsafe { *(*cmdlinep).add(1) } as c_int == '!' as c_int
-        {
+        // SAFETY: `cmdlinep` is the caller's, and names the command line.
+        let line = unsafe { *cmdlinep };
+        if byte_at(line, 0) == '#' as c_int && byte_at(line, 1) == '!' as c_int {
             break 'doend;
         }
 
@@ -273,7 +273,7 @@ pub(crate) unsafe fn do_one_cmd(
         // A range with no command after it. Vi's behaviour, preserved:
         // `:3` jumps to line 3, `:3|…` *prints* line 3, and `:|` prints
         // the current line.
-        if unsafe { *ea.cmd } as c_int == NUL || unsafe { *ea.cmd } as c_int == '"' as c_int || {
+        if byte(ea.cmd) == NUL || byte(ea.cmd) == '"' as c_int || {
             ea.nextcmd = unsafe { check_nextcmd(ea.cmd) };
             !ea.nextcmd.is_null()
         } {
@@ -289,11 +289,11 @@ pub(crate) unsafe fn do_one_cmd(
         if !p.is_null()
             && ea.cmdidx as c_int == CMD_SIZE as c_int
             && ea.skip == 0
-            && (unsafe { *ea.cmd } as u8).is_ascii_uppercase()
+            && (ubyte(ea.cmd)).is_ascii_uppercase()
             && has_event(EVENT_CMDUNDEFINED)
         {
             let mut end = ea.cmd;
-            while (unsafe { *end } as u8).is_ascii_alphanumeric() {
+            while (ubyte(end)).is_ascii_alphanumeric() {
                 end = unsafe { end.add(1) };
             }
             let cmdname =
@@ -418,18 +418,8 @@ pub(crate) unsafe fn do_one_cmd(
             && global_busy.get() == 0
             && ea.addr_type == CmdAddr::Lines
         {
-            has_folding(
-                unsafe { Win::current() },
-                ea.line1,
-                Some(&mut ea.line1),
-                None,
-            );
-            has_folding(
-                unsafe { Win::current() },
-                ea.line2,
-                None,
-                Some(&mut ea.line2),
-            );
+            has_folding(cur_win(), ea.line1, Some(&mut ea.line1), None);
+            has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
         }
 
         // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line
@@ -446,18 +436,13 @@ pub(crate) unsafe fn do_one_cmd(
             skipwhite(p)
         };
 
-        if ea.cmdidx as c_int == CMD_file as c_int
-            && unsafe { *ea.arg } as c_int != NUL
-            && curbuf_locked()
-        {
+        if ea.cmdidx as c_int == CMD_file as c_int && byte(ea.arg) != NUL && curbuf_locked() {
             break 'doend;
         }
 
         // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
         if ea.argt.has(ExArgt::ARGOPT) {
-            while unsafe { *ea.arg.add(0) } as c_int == '+' as c_int
-                && unsafe { *ea.arg.add(1) } as c_int == '+' as c_int
-            {
+            while byte_at(ea.arg, 0) == '+' as c_int && byte_at(ea.arg, 1) == '+' as c_int {
                 if unsafe { getargopt(&raw mut ea) } == FAIL && !ni {
                     errormsg = Some(ex_msg(e_invarg.as_ptr()));
                     break 'doend;
@@ -466,17 +451,15 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if ea.cmdidx as c_int == CMD_write as c_int || ea.cmdidx as c_int == CMD_update as c_int {
-            if unsafe { *ea.arg } as c_int == '>' as c_int {
+            if byte(ea.arg) == '>' as c_int {
                 ea.arg = unsafe { ea.arg.add(1) };
-                if unsafe { *ea.arg } as c_int != '>' as c_int {
+                if byte(ea.arg) != '>' as c_int {
                     errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
                     break 'doend;
                 }
                 ea.arg = unsafe { skipwhite(ea.arg.add(1)) };
                 ea.append = 1;
-            } else if unsafe { *ea.arg } as c_int == '!' as c_int
-                && ea.cmdidx as c_int == CMD_write as c_int
-            {
+            } else if byte(ea.arg) == '!' as c_int && ea.cmdidx as c_int == CMD_write as c_int {
                 // `:w !filter`
                 ea.arg = unsafe { ea.arg.add(1) };
                 ea.usefilter = 1;
@@ -486,7 +469,7 @@ pub(crate) unsafe fn do_one_cmd(
                 // `:r!filter`
                 ea.usefilter = 1;
                 ea.forceit = 0;
-            } else if unsafe { *ea.arg } as c_int == '!' as c_int {
+            } else if byte(ea.arg) == '!' as c_int {
                 // `:r !filter`
                 ea.arg = unsafe { ea.arg.add(1) };
                 ea.usefilter = 1;
@@ -496,7 +479,7 @@ pub(crate) unsafe fn do_one_cmd(
         {
             // How far to shift is how many `<` or `>` were typed.
             ea.amount = 1;
-            while unsafe { *ea.arg } as c_int == unsafe { *ea.cmd } as c_int {
+            while byte(ea.arg) == byte(ea.cmd) {
                 ea.arg = unsafe { ea.arg.add(1) };
                 ea.amount += 1;
             }
@@ -521,9 +504,7 @@ pub(crate) unsafe fn do_one_cmd(
             // backslash before that newline is removed.
             let mut s = ea.arg;
             while unsafe { *s } != 0 {
-                if unsafe { *s } as c_int == '\\' as c_int
-                    && unsafe { *s.add(1) } as c_int == '\n' as c_int
-                {
+                if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
                     unsafe {
                         memmove(
                             s as *mut c_void,
@@ -531,7 +512,7 @@ pub(crate) unsafe fn do_one_cmd(
                             strlen(s.add(1)) + 1,
                         )
                     };
-                } else if unsafe { *s } as c_int == '\n' as c_int {
+                } else if byte(s) == '\n' as c_int {
                     ea.nextcmd = unsafe { s.add(1) };
                     unsafe { *s = NUL as c_char };
                     break;
@@ -554,14 +535,14 @@ pub(crate) unsafe fn do_one_cmd(
         }
         if !ni
             && !ea.argt.has(ExArgt::EXTRA)
-            && unsafe { *ea.arg } as c_int != NUL
-            && unsafe { *ea.arg } as c_int != '"' as c_int
-            && (unsafe { *ea.arg } as c_int != '|' as c_int || !ea.argt.has(ExArgt::TRLBAR))
+            && byte(ea.arg) != NUL
+            && byte(ea.arg) != '"' as c_int
+            && (byte(ea.arg) != '|' as c_int || !ea.argt.has(ExArgt::TRLBAR))
         {
             errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), ea.arg) });
             break 'doend;
         }
-        if !ni && ea.argt.has(ExArgt::NEEDARG) && unsafe { *ea.arg } as c_int == NUL {
+        if !ni && ea.argt.has(ExArgt::NEEDARG) && byte(ea.arg) == NUL {
             errormsg = Some(ex_msg(e_argreq.as_ptr()));
             break 'doend;
         }
@@ -626,7 +607,7 @@ pub(crate) unsafe fn do_one_cmd(
     pending_end_reg_executing.set(save_pending_end_reg_executing);
 
     // A trailing bar with nothing after it is not really a next command.
-    if !ea.nextcmd.is_null() && unsafe { *ea.nextcmd } as c_int == NUL {
+    if !ea.nextcmd.is_null() && byte(ea.nextcmd) == NUL {
         ea.nextcmd = ptr::null_mut();
     }
 
@@ -737,7 +718,7 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
 pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> Option<CString> {
     let mut ea = unsafe { Ea::new(eap) };
     let mut errormsg: Option<CString> = None;
-    if unsafe { *ea.cmd } as c_int == '|' as c_int
+    if byte(ea.cmd) == '|' as c_int
         || (exmode_active.get() && !ptr::eq(ea.cmd, unsafe { exmode_plus.as_ptr().add(1) }))
     {
         ea.cmdidx = CMD_print;
@@ -773,7 +754,7 @@ pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
     let mut buf = [0 as c_char; IOSIZE as usize];
     let iobuff = buf.as_mut_ptr();
     unsafe { xstrlcpy(iobuff, msg.as_ptr(), IOSIZE as size_t) };
-    let len = unsafe { strlen(iobuff) };
+    let len = strlen(iobuff);
     if len > (IOSIZE - 100) as size_t {
         let mut d = unsafe { iobuff.add(IOSIZE as usize - 100) };
         d = unsafe { d.sub(utf_head_off(iobuff, d) as usize) };
@@ -783,8 +764,8 @@ pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
 
     let mut s = cmd;
     let mut d = unsafe { iobuff.add(strlen(iobuff) as usize) };
-    while unsafe { *s } as c_int != NUL && unsafe { d.offset_from(iobuff) } + 5 < IOSIZE as isize {
-        if unsafe { *s.add(0) } as uint8_t == 0xc2 && unsafe { *s.add(1) } as uint8_t == 0xa0 {
+    while byte(s) != NUL && unsafe { d.offset_from(iobuff) } + 5 < IOSIZE as isize {
+        if ubyte_at(s, 0) == 0xc2 && ubyte_at(s, 1) == 0xa0 {
             s = unsafe { s.add(2) };
             unsafe { strcpy(d, c"<a0>".as_ptr() as *mut c_char) };
             d = unsafe { d.add(4) };
@@ -880,4 +861,34 @@ fn xcalloc(count: usize, size: usize) -> *mut c_void {
 fn xfree(ptr: *mut c_void) {
     // SAFETY: `xmalloc`ed, or null.
     unsafe { crate::memory::xfree(ptr) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
+}
+
+/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
+fn ubyte_at(p: *const c_char, i: isize) -> u8 {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as u8 }
+}
+
+/// `strlen()` as checked code.
+fn strlen(s: *const c_char) -> usize {
+    // SAFETY: a NUL-terminated string.
+    unsafe { ::libc::strlen(s) }
 }

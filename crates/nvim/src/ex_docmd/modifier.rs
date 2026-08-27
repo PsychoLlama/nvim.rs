@@ -7,6 +7,7 @@
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::ex_docmd::scan::ends_excmd;
 
 use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -14,7 +15,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::ascii::ascii_iswhite;
+use crate::ascii::{ascii_isdigit, ascii_iswhite};
 
 use crate::buffer::BufFlags;
 use crate::charset::skipdigits;
@@ -130,7 +131,7 @@ pub(crate) unsafe fn parse_command_modifiers(
     // modifier scan.
     if unsafe { strncmp(ea.cmd, c"'<,'>".as_ptr(), 5) } == 0 {
         let p = unsafe { skipwhite(ea.cmd.add(5)) };
-        if unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != '|' as c_int {
+        if byte(p) != NUL && byte(p) != '|' as c_int {
             ea.cmd = unsafe { ea.cmd.add(5) };
             cmd_start = ea.cmd;
             has_visual_range = true;
@@ -138,16 +139,16 @@ pub(crate) unsafe fn parse_command_modifiers(
     }
 
     loop {
-        while unsafe { *ea.cmd } as c_int == ' ' as c_int
-            || unsafe { *ea.cmd } as c_int == '\t' as c_int
-            || unsafe { *ea.cmd } as c_int == ':' as c_int
+        while byte(ea.cmd) == ' ' as c_int
+            || byte(ea.cmd) == '\t' as c_int
+            || byte(ea.cmd) == ':' as c_int
         {
             ea.cmd = unsafe { ea.cmd.add(1) };
         }
 
         // In Ex mode an empty line means "print the next one", which is
         // spelled by substituting a `+` command.
-        if unsafe { *ea.cmd } as c_int == NUL
+        if byte(ea.cmd) == NUL
             && exmode_active.get()
             && unsafe { getline_equal(ea.ea_getline, ea.cookie, Some(getexline)) }
             && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
@@ -159,18 +160,18 @@ pub(crate) unsafe fn parse_command_modifiers(
             }
             break;
         }
-        if unsafe { *ea.cmd } as c_int == '"' as c_int {
+        if byte(ea.cmd) == '"' as c_int {
             ea.nextcmd = unsafe { vim_strchr(ea.cmd, '\n' as c_int) };
             if !ea.nextcmd.is_null() {
                 ea.nextcmd = unsafe { ea.nextcmd.add(1) };
             }
             return FAIL;
         }
-        if unsafe { *ea.cmd } as c_int == '\n' as c_int {
+        if byte(ea.cmd) == '\n' as c_int {
             ea.nextcmd = unsafe { ea.cmd.add(1) };
             return FAIL;
         }
-        if unsafe { *ea.cmd } as c_int == NUL {
+        if byte(ea.cmd) == NUL {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
@@ -181,7 +182,7 @@ pub(crate) unsafe fn parse_command_modifiers(
         // name is looked for past one — but `eap->cmd` only moves for
         // the modifiers that accept that.
         let mut p = unsafe { skip_range(ea.cmd, ptr::null_mut()) };
-        match unsafe { *p } as u8 {
+        match ubyte(p) {
             b'a' => {
                 if !checkforcmd(ea.cmd_ptr(), c"aboveleft".as_ptr(), 3) {
                     break;
@@ -223,15 +224,15 @@ pub(crate) unsafe fn parse_command_modifiers(
                 // it: the whole point is the command it wraps.
                 let mut reg_pat: *mut c_char = ptr::null_mut();
                 if !checkforcmd(&raw mut p, c"filter".as_ptr(), 4)
-                    || unsafe { *p } as c_int == NUL
-                    || ends_excmd(unsafe { *p } as c_int) != 0
+                    || byte(p) == NUL
+                    || ends_excmd(byte(p)) != 0
                 {
                     break;
                 }
-                if unsafe { *p } as c_int == '!' as c_int {
+                if byte(p) == '!' as c_int {
                     cm.cmod_filter_force = true;
                     p = unsafe { skipwhite(p.add(1)) };
-                    if unsafe { *p } as c_int == NUL || ends_excmd(unsafe { *p } as c_int) != 0 {
+                    if byte(p) == NUL || ends_excmd(byte(p)) != 0 {
                         break;
                     }
                 }
@@ -240,7 +241,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                 } else {
                     skip_vimgrep_pat(p, &raw mut reg_pat, ptr::null_mut())
                 };
-                if p.is_null() || unsafe { *p } as c_int == NUL {
+                if p.is_null() || byte(p) == NUL {
                     break;
                 }
                 if !skip_only {
@@ -257,8 +258,8 @@ pub(crate) unsafe fn parse_command_modifiers(
                     cm.cmod_split |= WSP_HOR as c_int;
                 } else if p == ea.cmd
                     && checkforcmd(&raw mut p, c"hide".as_ptr(), 3)
-                    && unsafe { *p } as c_int != NUL
-                    && ends_excmd(unsafe { *p } as c_int) == 0
+                    && byte(p) != NUL
+                    && ends_excmd(byte(p)) == 0
                 {
                     // `:hide` is a command in its own right, so it is
                     // only a modifier when a command follows it and no
@@ -301,9 +302,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                     // `:silent!` only means "and silence errors" when
                     // the `!` is stuck to the word: `:silent !cmd` runs
                     // a shell command quietly.
-                    if unsafe { *ea.cmd } as c_int == '!' as c_int
-                        && !ascii_iswhite(unsafe { *ea.cmd.offset(-1) } as c_int)
-                    {
+                    if byte(ea.cmd) == '!' as c_int && !ascii_iswhite(byte_at(ea.cmd, -1)) {
                         ea.cmd = unsafe { skipwhite(ea.cmd.add(1)) };
                         cm.cmod_flags |= CmdModFlags::ERRSILENT;
                     }
@@ -361,7 +360,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one
                     // to `INT_MAX` and end the process.  C wraps here.
-                    cm.cmod_verbose = if ascii_isdigit(unsafe { *ea.cmd } as c_int) {
+                    cm.cmod_verbose = if ascii_isdigit(byte(ea.cmd)) {
                         unsafe { atoi(ea.cmd) }.saturating_add(1)
                     } else {
                         2
@@ -725,14 +724,14 @@ impl Drop for CmdModScope {
 pub unsafe fn modifier_len(cmd: *mut c_char) -> c_int {
     // A count may precede a modifier, and only the two that accept one
     // match when it does.
-    let p = if ascii_isdigit(unsafe { *cmd } as c_int) {
+    let p = if ascii_isdigit(byte(cmd)) {
         unsafe { skipwhite(skipdigits(cmd.add(1))) }
     } else {
         cmd
     };
     for md in &CMDMODS {
         let j = unsafe { shared_prefix(p, md.name) };
-        let after = unsafe { *p.add(j) } as u8;
+        let after = ubyte_at(p, j as isize);
         if j >= md.minlen && !after.is_ascii_alphabetic() && (p == cmd || md.has_count) {
             return j as c_int + unsafe { p.offset_from(cmd) } as c_int;
         }
@@ -748,7 +747,7 @@ pub unsafe fn modifier_len(cmd: *mut c_char) -> c_int {
 pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
     let name = name.to_bytes_with_nul();
     let mut j = 0usize;
-    while unsafe { *p.add(j) } as c_int != NUL && unsafe { *p.add(j) } as u8 == name[j] {
+    while byte_at(p, j as isize) != NUL && ubyte_at(p, j as isize) == name[j] {
         j += 1;
     }
     j
@@ -798,22 +797,10 @@ fn cur_win() -> Win {
     unsafe { Win::current() }
 }
 
-/// `ascii_isdigit()` as checked code.
-fn ascii_isdigit(c: c_int) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::ascii::ascii_isdigit(c)
-}
-
 /// `checkforcmd()` as checked code.
 fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_docmd::lookup::checkforcmd(pp, cmd, len) }
-}
-
-/// `ends_excmd()` as checked code.
-fn ends_excmd(c: c_int) -> c_int {
-    // SAFETY: a plain character comparison.
-    crate::ex_docmd::scan::ends_excmd(c)
 }
 
 /// `memmove()` as checked code.
@@ -846,4 +833,28 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
+}
+
+/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
+fn ubyte_at(p: *const c_char, i: isize) -> u8 {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as u8 }
 }

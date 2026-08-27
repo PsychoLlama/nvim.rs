@@ -2,6 +2,7 @@
 //! restores for the debugger, the line getter it reads through, the loop
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::buffer::buf_get_changedtick;
 use crate::strings::vim_snprintf;
 
 use crate::getchar::typeahead;
@@ -18,7 +19,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::eval::vars::set_vim_var_string;
 
 use crate::ex_cmds::print_line_no_prefix;
-use crate::ex_docmd::cmdline::do_cmdline;
+use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 
 use crate::ex_docmd::{
     DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_pressedreturn,
@@ -44,8 +45,8 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
 use crate::types::{
-    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, estack_T, except_T, garray_T, linenr_T, msglist_T,
-    ptrdiff_t, size_t, varnumber_T,
+    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
+    size_t,
 };
 
 use crate::winlayer::{Buf, Live, Win};
@@ -363,22 +364,19 @@ pub(crate) fn line_getter_eq(a: LineGetter, b: LineGetter) -> bool {
 /// again, so the chain has to be walked before the comparison means
 /// anything.
 pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
-    let (gp, _) = unsafe { unwrap_loop_getter(fgetline, cookie) };
+    let (gp, _) = unwrap_loop_getter(fgetline, cookie);
     line_getter_eq(gp, func)
 }
 
 /// The cookie at the bottom of that chain — the function or script the
 /// lines really come from.
 pub unsafe fn getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void {
-    let (_, cp) = unsafe { unwrap_loop_getter(fgetline, cookie) };
+    let (_, cp) = unwrap_loop_getter(fgetline, cookie);
     cp as *mut c_void
 }
 
 /// Walk out of every `get_loop_line` wrapper.
-unsafe fn unwrap_loop_getter(
-    fgetline: LineGetter,
-    cookie: *mut c_void,
-) -> (LineGetter, *mut loop_cookie) {
+fn unwrap_loop_getter(fgetline: LineGetter, cookie: *mut c_void) -> (LineGetter, *mut loop_cookie) {
     let mut gp = fgetline;
     let mut cp = cookie as *mut loop_cookie;
     while line_getter_eq(gp, Some(get_loop_line)) {
@@ -437,12 +435,6 @@ fn cur_win() -> Win {
     unsafe { Win::current() }
 }
 
-/// `buf_get_changedtick()` as checked code.
-fn buf_get_changedtick(buf: Buf) -> varnumber_T {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::buffer::buf_get_changedtick(buf)
-}
-
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
@@ -453,12 +445,6 @@ fn emsg(s: *const c_char) -> bool {
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
     unsafe { crate::os::cshim::gettext(__msgid) }
-}
-
-/// `sourcing_entry()` as checked code.
-fn sourcing_entry() -> estack_T {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::ex_docmd::cmdline::sourcing_entry()
 }
 
 /// `v_exception()` as checked code.

@@ -33,7 +33,6 @@ use crate::types::{
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
-use ::libc::strcmp;
 
 /// `:autocmd` and `:augroup`.
 ///
@@ -68,7 +67,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int == NUL {
+    if byte(eap.arg) == NUL {
         unsafe { report_filetype_state() };
         return;
     }
@@ -88,12 +87,10 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         }
     }
 
-    if unsafe { strcmp(arg, c"on".as_ptr()) } == 0
-        || unsafe { strcmp(arg, c"detect".as_ptr()) } == 0
-    {
+    if strcmp(arg, c"on".as_ptr()) == 0 || strcmp(arg, c"detect".as_ptr()) == 0 {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
-        if unsafe { *arg } as c_int == 'o' as c_int || filetype_detect.get() != Some(true) {
+        if byte(arg) == 'o' as c_int || filetype_detect.get() != Some(true) {
             source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
             filetype_detect.set(Some(true));
             if plugin {
@@ -105,7 +102,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
                 filetype_indent.set(Some(true));
             }
         }
-        if unsafe { *arg } as c_int == 'd' as c_int {
+        if byte(arg) == 'd' as c_int {
             // `detect` also applies the result to the buffers already
             // open.
             do_doautocmd(
@@ -115,7 +112,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
             );
             do_modelines(OptionSetFlags::NONE);
         }
-    } else if unsafe { strcmp(arg, c"off".as_ptr()) } == 0 {
+    } else if strcmp(arg, c"off".as_ptr()) == 0 {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
@@ -349,4 +346,16 @@ fn strncmp(
 ) -> ::core::ffi::c_int {
     // SAFETY: two NUL-terminated strings, and a length within both.
     unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// `strcmp()` as checked code.
+fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { ::libc::strcmp(a, b) }
 }

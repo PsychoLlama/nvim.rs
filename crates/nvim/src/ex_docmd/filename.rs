@@ -55,7 +55,7 @@ use crate::types::{
     ssize_t, uint8_t,
 };
 use crate::winlayer::{Buf, Ea};
-use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
+use ::libc::{strcat, strcpy, strpbrk, strrchr};
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the
 /// argument — spliced in here, before `%` and `#` are expanded, so that
@@ -83,12 +83,12 @@ pub unsafe fn replace_makeprg(
 
     let buf = cur_buf();
     let program: *const c_char = if is_grep {
-        if unsafe { *buf.b_p_gp } as c_int == NUL {
+        if byte(buf.b_p_gp) == NUL {
             p_gp.get()
         } else {
             buf.b_p_gp
         }
-    } else if unsafe { *buf.b_p_mp } as c_int == NUL {
+    } else if byte(buf.b_p_mp) == NUL {
         p_mp.get()
     } else {
         buf.b_p_mp
@@ -98,7 +98,7 @@ pub unsafe fn replace_makeprg(
     let mut new_cmdline = unsafe { strrep(program, c"$*".as_ptr(), arg) };
     if new_cmdline.is_null() {
         // No `$*`: the argument goes on the end.
-        new_cmdline = unsafe { xmalloc(strlen(program) + strlen(arg) + 2) } as *mut c_char;
+        new_cmdline = xmalloc(strlen(program) + strlen(arg) + 2) as *mut c_char;
         unsafe { strcpy(new_cmdline, program as *mut c_char) };
         unsafe { strcat(new_cmdline, c" ".as_ptr()) };
         unsafe { strcat(new_cmdline, arg) };
@@ -129,13 +129,13 @@ pub(crate) unsafe fn expand_filename(
     let mut p = skip_grep_pat(ea);
     let mut has_wildcards = path_has_wildcard(p);
 
-    while unsafe { *p } as c_int != NUL {
-        if unsafe { *p } as c_int == '`' as c_int && unsafe { *p.add(1) } as c_int == '=' as c_int {
+    while byte(p) != NUL {
+        if byte(p) == '`' as c_int && byte_at(p, 1) == '=' as c_int {
             // `` `=expr` `` is evaluated much later, by the shell
             // expansion; step over it without touching it.
             p = unsafe { p.add(2) };
             unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
-            if unsafe { *p } as c_int == '`' as c_int {
+            if byte(p) == '`' as c_int {
                 p = unsafe { p.add(1) };
             }
             continue;
@@ -211,7 +211,7 @@ pub(crate) unsafe fn expand_filename(
             repl = escaped_repl;
         }
 
-        p = unsafe { repl_cmdline(eap, p, srclen, repl, cmdlinep) };
+        p = repl_cmdline(eap, p, srclen, repl, cmdlinep);
         xfree(repl as *mut c_void);
     }
 
@@ -230,7 +230,7 @@ pub(crate) unsafe fn expand_filename(
             let out = expanded.as_mut_ptr();
             unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
-            unsafe { repl_cmdline(eap, ea.arg, strlen(ea.arg), out, cmdlinep) };
+            repl_cmdline(eap, ea.arg, strlen(ea.arg), out, cmdlinep);
         }
     }
     if !has_wildcards {
@@ -257,7 +257,7 @@ pub(crate) unsafe fn expand_filename(
     if expanded.is_null() {
         return FAIL;
     }
-    unsafe { repl_cmdline(eap, ea.arg, strlen(ea.arg), expanded, cmdlinep) };
+    repl_cmdline(eap, ea.arg, strlen(ea.arg), expanded, cmdlinep);
     xfree(expanded as *mut c_void);
     OK
 }
@@ -269,7 +269,7 @@ pub(crate) unsafe fn expand_filename(
 /// `cmd`, `arg`, `nextcmd`, the API's argument vector and `do_ecmd_cmd`.
 /// Answers where the text after the replacement now lives, which is where
 /// the caller's scan resumes.
-pub(crate) unsafe fn repl_cmdline(
+pub(crate) fn repl_cmdline(
     eap: *mut exarg_T,
     src: *mut c_char,
     srclen: size_t,
@@ -277,7 +277,7 @@ pub(crate) unsafe fn repl_cmdline(
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
     let mut ea = unsafe { Ea::new(eap) };
-    let len = unsafe { strlen(repl) };
+    let len = strlen(repl);
     // The tail after the replacement, the replacement itself, a
     // terminator, and — because `nextcmd` is stored past the end — the
     // next command and its own terminator.
@@ -286,7 +286,7 @@ pub(crate) unsafe fn repl_cmdline(
         + len
         + 3;
     if !ea.nextcmd.is_null() {
-        size += unsafe { strlen(ea.nextcmd) };
+        size += strlen(ea.nextcmd);
     }
     let new_cmdline = xmalloc(size) as *mut c_char;
 
@@ -310,7 +310,7 @@ pub(crate) unsafe fn repl_cmdline(
     let resume = unsafe { new_cmdline.add(tail as usize) };
 
     if !ea.nextcmd.is_null() {
-        let after = unsafe { strlen(new_cmdline) } + 1;
+        let after = strlen(new_cmdline) + 1;
         unsafe { strcpy(new_cmdline.add(after as usize), ea.nextcmd) };
         ea.nextcmd = unsafe { new_cmdline.add(after as usize) };
     }
@@ -427,7 +427,7 @@ pub unsafe fn eval_vars(
 
     // A backslash before it means "take it literally": remove the
     // backslash and answer nothing.
-    if src > srcstart as *mut c_char && unsafe { *src.offset(-1) } as c_int == '\\' as c_int {
+    if src > srcstart as *mut c_char && byte_at(src, -1) == '\\' as c_int {
         unsafe { *usedlen = 0 };
         unsafe {
             memmove(
@@ -459,11 +459,11 @@ pub unsafe fn eval_vars(
                     valid = 0;
                 } else {
                     result = cur_buf().b_fname;
-                    tilde_file = unsafe { strcmp(result, c"~".as_ptr()) } == 0;
+                    tilde_file = strcmp(result, c"~".as_ptr()) == 0;
                 }
             }
             SPEC_HASH => {
-                if unsafe { *src.add(1) } as c_int == '#' as c_int {
+                if byte_at(src, 1) == '#' as c_int {
                     // `##` is the whole argument list, already escaped.
                     result = unsafe { arg_all() };
                     resultbuf = result;
@@ -474,19 +474,18 @@ pub unsafe fn eval_vars(
                     skip_mod = true;
                 } else {
                     let mut s = unsafe { src.add(1) };
-                    if unsafe { *s } as c_int == '<' as c_int {
+                    if byte(s) == '<' as c_int {
                         s = unsafe { s.add(1) };
                     }
                     let i = unsafe { getdigits_int(&raw mut s, false, 0) };
                     // `#-` is not a negative buffer number; give the `-`
                     // back.
-                    if s == unsafe { src.add(2) } && unsafe { *src.add(1) } as c_int == '-' as c_int
-                    {
+                    if s == unsafe { src.add(2) } && byte_at(src, 1) == '-' as c_int {
                         s = unsafe { s.offset(-1) };
                     }
                     unsafe { *usedlen = s.offset_from(src) as size_t };
 
-                    if unsafe { *src.add(1) } as c_int == '<' as c_int && i != 0 {
+                    if byte_at(src, 1) == '<' as c_int && i != 0 {
                         // `#<3` is the third entry of `v:oldfiles`.
                         if unsafe { *usedlen } < 2 {
                             unsafe { *usedlen = 1 };
@@ -500,10 +499,7 @@ pub unsafe fn eval_vars(
                             return ptr::null_mut();
                         }
                     } else {
-                        if i == 0
-                            && unsafe { *src.add(1) } as c_int == '<' as c_int
-                            && unsafe { *usedlen } > 1
-                        {
+                        if i == 0 && byte_at(src, 1) == '<' as c_int && unsafe { *usedlen } > 1 {
                             unsafe { *usedlen = 1 };
                         }
                         let Some(buf) = find_buf(i) else {
@@ -522,7 +518,7 @@ pub unsafe fn eval_vars(
                             valid = 0;
                         } else {
                             result = buf.b_fname;
-                            tilde_file = unsafe { strcmp(result, c"~".as_ptr()) } == 0;
+                            tilde_file = strcmp(result, c"~".as_ptr()) == 0;
                         }
                     }
                 }
@@ -660,8 +656,8 @@ pub unsafe fn eval_vars(
             }
         }
 
-        resultlen = unsafe { strlen(result) };
-        if unsafe { *src.add(*usedlen) } as c_int == '<' as c_int {
+        resultlen = strlen(result);
+        if byte_at(src, unsafe { *usedlen } as isize) == '<' as c_int {
             // A trailing `<` drops the extension.
             unsafe { *usedlen += 1 };
             let dot = unsafe { strrchr(result, '.' as c_int) };
@@ -741,7 +737,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(srclen as usize) };
             continue;
         }
-        let size = unsafe { strlen(result) } - srclen + unsafe { strlen(repl) } + 1;
+        let size = strlen(result) - srclen + strlen(repl) + 1;
         let newres = xmalloc(size) as *mut c_char;
         unsafe {
             memmove(
@@ -751,7 +747,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             )
         };
         unsafe { strcpy(newres.offset(p.offset_from(result)), repl) };
-        let used = unsafe { strlen(newres) };
+        let used = strlen(newres);
         unsafe { strcat(newres, p.add(srclen as usize)) };
         xfree(repl as *mut c_void);
         xfree(result as *mut c_void);
@@ -821,4 +817,28 @@ fn xfree(ptr: *mut c_void) {
 fn xmalloc(size: usize) -> *mut c_void {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::memory::xmalloc(size) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
+}
+
+/// `strlen()` as checked code.
+fn strlen(s: *const c_char) -> usize {
+    // SAFETY: a NUL-terminated string.
+    unsafe { ::libc::strlen(s) }
+}
+
+/// `strcmp()` as checked code.
+fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { ::libc::strcmp(a, b) }
 }

@@ -217,7 +217,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
-            if unsafe { *eap.arg } as c_int != NUL {
+            if byte(eap.arg) != NUL {
                 let mut opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
@@ -515,4 +515,10 @@ fn xfree(ptr: *mut c_void) {
 fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

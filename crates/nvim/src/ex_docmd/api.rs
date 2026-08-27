@@ -112,20 +112,17 @@ pub unsafe fn parse_cmdline(
         }
 
         ea.cmd = skip_colon_white(ea.cmd, true);
-        if unsafe { *ea.cmd } as c_int == '"' as c_int {
+        if byte(ea.cmd) == '"' as c_int {
             break 'end;
         }
         // Nothing at all: no command, no range, no modifier.
-        if unsafe { *ea.cmd } as c_int == NUL
-            && ea.addr_count == 0
-            && after_modifier == unsafe { *cmdline }
-        {
+        if byte(ea.cmd) == NUL && ea.addr_count == 0 && after_modifier == unsafe { *cmdline } {
             break 'end;
         }
 
         // A range on its own (`:1`) or a modifier on its own
         // (`:aboveleft`) is a legal thing to parse.
-        if unsafe { *ea.cmd } as c_int == NUL && ea.cmdidx as c_int == CMD_SIZE as c_int {
+        if byte(ea.cmd) == NUL && ea.cmdidx as c_int == CMD_SIZE as c_int {
             ea.arg = ea.cmd;
             if ea.addr_count > 0 {
                 ea.argt = ExArgt::RANGE;
@@ -172,10 +169,7 @@ pub unsafe fn parse_cmdline(
             // separator. Skipping expression by expression finds the one
             // that is.
             let mut arg = ea.arg;
-            while unsafe { *arg } as c_int != NUL
-                && unsafe { *arg } as c_int != '|' as c_int
-                && unsafe { *arg } as c_int != '\n' as c_int
-            {
+            while byte(arg) != NUL && byte(arg) != '|' as c_int && byte(arg) != '\n' as c_int {
                 let start = arg;
                 let skipping = Suppress::emsg_skip();
                 unsafe { skip_expr(&raw mut arg, ptr::null_mut()) };
@@ -186,8 +180,7 @@ pub unsafe fn parse_cmdline(
                     arg = unsafe { arg.add(1) };
                 }
             }
-            if unsafe { *arg } as c_int == '|' as c_int || unsafe { *arg } as c_int == '\n' as c_int
-            {
+            if byte(arg) == '|' as c_int || byte(arg) == '\n' as c_int {
                 ea.nextcmd = unsafe { check_nextcmd(arg) };
                 unsafe { *arg = NUL as c_char };
             }
@@ -253,7 +246,7 @@ pub(crate) unsafe fn execute_cmd0(
     // A buffer name may stand in for a buffer number, but not alongside
     // one, and not for a user command.
     if ea.argt.has(ExArgt::BUFNAME)
-        && unsafe { *ea.arg } as c_int != NUL
+        && byte(ea.arg) != NUL
         && ea.addr_count == 0
         && !is_user_cmd(ea.cmdidx)
     {
@@ -269,7 +262,7 @@ pub(crate) unsafe fn execute_cmd0(
                 unsafe { skiptowhite_esc(ea.arg) }
             } else {
                 let mut p = unsafe { ea.arg.add(strlen(ea.arg) as usize) };
-                while p > ea.arg && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
+                while p > ea.arg && ascii_iswhite(byte(unsafe { p.sub(1) })) {
                     p = unsafe { p.sub(1) };
                 }
                 p
@@ -384,7 +377,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
         if !ea.argt.has(ExArgt::CMDWIN)
             && ea.cmdidx as c_int != CMD_checktime as c_int
             && ea.cmdidx as c_int != CMD_edit as c_int
-            && !(ea.cmdidx as c_int == CMD_file as c_int && unsafe { *ea.arg } as c_int == NUL)
+            && !(ea.cmdidx as c_int == CMD_file as c_int && byte(ea.arg) == NUL)
             && !is_user_cmd(ea.cmdidx)
             && unsafe { curbuf_locked() }
         {
@@ -403,18 +396,8 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             && global_busy.get() == 0
             && ea.addr_type == CmdAddr::Lines
         {
-            has_folding(
-                unsafe { Win::current() },
-                ea.line1,
-                Some(&mut ea.line1),
-                None,
-            );
-            has_folding(
-                unsafe { Win::current() },
-                ea.line2,
-                None,
-                Some(&mut ea.line2),
-            );
+            has_folding(cur_win(), ea.line1, Some(&mut ea.line1), None);
+            has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
         }
 
         if unsafe { parse_count(eap, &mut errormsg, true) } == FAIL {
@@ -486,4 +469,10 @@ fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

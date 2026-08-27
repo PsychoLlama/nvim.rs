@@ -9,7 +9,7 @@ use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
-use crate::cursor::check_cursor;
+use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::drawscreen::{UPD_VALID, clearmode, redraw_later, setcursor_mayforce, showmode};
 use crate::edit::{BeginlineOpts, beginline};
@@ -67,7 +67,7 @@ use crate::types::{
     CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag, FAIL,
     NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
     exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t,
-    ssize_t, uint8_t,
+    ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -118,7 +118,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
     // reach: one of them may be shorter than the rest.
     let mut vtopline: linenr_T = 1;
     if cur_win().w_onebuf_opt.wo_scb != 0 {
-        vtopline = get_vtopline(unsafe { Win::current() }) as linenr_T;
+        vtopline = get_vtopline(cur_win()) as linenr_T;
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
                 let limit = unsafe { plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count) }
@@ -166,7 +166,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
 /// is `:lua`'s alias.
 pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int != NUL && unsafe { *eap.arg } as c_int != '|' as c_int {
+    if byte(eap.arg) != NUL && byte(eap.arg) != '|' as c_int {
         unsafe { ex_lua(eap.raw()) };
     } else {
         eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
@@ -177,11 +177,11 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
 pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if cursor_valid(unsafe { Win::current() }) != 0 {
+    if cursor_valid(cur_win()) != 0 {
         unsafe { setcursor_mayforce(curwin.get(), true) };
     }
     let mut len = eap.line2 as int64_t;
-    match unsafe { *eap.arg } as c_int {
+    match byte(eap.arg) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
@@ -287,7 +287,7 @@ fn put_lines(mut eap: Ea, flags: c_int) {
         eap.forceit = 1;
     }
     cur_win().w_cursor.lnum = eap.line2;
-    check_cursor_col(unsafe { Win::current() });
+    check_cursor_col(cur_win());
     unsafe {
         do_put(
             eap.regname,
@@ -342,7 +342,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     } else {
         unsafe { ex_copy(eap.line1, eap.line2, n) };
     }
-    u_clearline(unsafe { Buf::current() });
+    u_clearline(cur_buf());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     unsafe { ex_may_print(eap.raw()) };
 }
@@ -430,9 +430,9 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let prev_len = typeahead().len();
     cur_win().w_cursor.lnum = eap.line2;
-    check_cursor_col(unsafe { Win::current() });
+    check_cursor_col(cur_win());
 
-    let mut c = unsafe { *eap.arg } as uint8_t as c_int;
+    let mut c = ubyte(eap.arg) as c_int;
     if c == NUL {
         c = '@' as c_int;
     }
@@ -524,11 +524,11 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
     let mut sec = false;
     let mut file = false;
     let mut p = eap.arg;
-    if unsafe { *p } as c_int == NUL {
+    if byte(p) == NUL {
         count = 1;
-    } else if ascii_isdigit(unsafe { *p } as uint8_t as c_int) {
+    } else if ascii_isdigit(ubyte(p) as c_int) {
         count = unsafe { getdigits_int(&raw mut p, false, 0) };
-        match unsafe { *p } as u8 {
+        match ubyte(p) {
             b's' => {
                 p = unsafe { p.add(1) };
                 sec = true;
@@ -559,7 +559,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
             _ => {}
         }
     }
-    if unsafe { *p } as c_int != NUL {
+    if byte(p) != NUL {
         semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
         return;
     }
@@ -578,11 +578,11 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
 /// `:mark` and `:k`.
 pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int == NUL {
+    if byte(eap.arg) == NUL {
         emsg(gettext(&raw const e_argreq as *const c_char));
         return;
     }
-    if unsafe { *eap.arg.add(1) } as c_int != NUL {
+    if byte_at(eap.arg, 1) != NUL {
         semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), eap.arg,);
         return;
     }
@@ -602,10 +602,10 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
 /// Put the cursor and the window back in agreement after a command that
 /// moved either.
 pub unsafe fn update_topline_cursor() {
-    check_cursor(unsafe { Win::current() });
-    update_topline(unsafe { Win::current() });
+    check_cursor(cur_win());
+    update_topline(cur_win());
     if cur_win().w_onebuf_opt.wo_wrap == 0 {
-        validate_cursor(unsafe { Win::current() });
+        validate_cursor(cur_win());
     }
     unsafe { update_curswant() };
 }
@@ -682,7 +682,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
                 cur_win().w_cursor.lnum = eap.line1;
                 eap.line1 += 1;
                 cur_win().w_cursor.col = 0 as colnr_T;
-                check_cursor_moved(unsafe { Win::current() });
+                check_cursor_moved(cur_win());
             }
             unsafe {
                 exec_normal_cmd(
@@ -717,11 +717,11 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
     // Count the extra bytes first, so the copy can be sized exactly.
     let mut extra = 0;
     let mut p = src;
-    while unsafe { *p } as c_int != NUL {
+    while byte(p) != NUL {
         let mut l = utfc_ptr2len(p) - 1;
         while l > 0 {
             p = unsafe { p.add(1) };
-            if unsafe { *p } as c_int == K_SPECIAL as c_char as c_int {
+            if byte(p) == K_SPECIAL as c_char as c_int {
                 extra += 2;
             }
             l -= 1;
@@ -735,7 +735,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
     let out = unsafe { xmalloc(strlen(src) + extra as size_t + 1) } as *mut c_char;
     let mut len = 0;
     let mut p = src;
-    while unsafe { *p } as c_int != NUL {
+    while byte(p) != NUL {
         unsafe { *out.offset(len) = *p };
         len += 1;
         let mut l = utfc_ptr2len(p) - 1;
@@ -743,7 +743,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(1) };
             unsafe { *out.offset(len) = *p };
             len += 1;
-            if unsafe { *p } as c_int == K_SPECIAL as c_char as c_int {
+            if byte(p) == K_SPECIAL as c_char as c_int {
                 unsafe { *out.offset(len) = KS_SPECIAL as c_char };
                 len += 1;
                 unsafe { *out.offset(len) = KE_FILLER as c_char };
@@ -873,7 +873,7 @@ pub(crate) unsafe fn ex_folddo(eap: *mut exarg_T) {
     let want_closed = (eap.cmdidx as c_int == CMD_folddoclosed as c_int) as c_int;
     let mut lnum = eap.line1;
     while lnum <= eap.line2 {
-        if has_folding(unsafe { Win::current() }, lnum, None, None) as c_int == want_closed {
+        if has_folding(cur_win(), lnum, None, None) as c_int == want_closed {
             unsafe { ml_setmarked(lnum) };
         }
         lnum += 1;
@@ -892,12 +892,6 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
-}
-
-/// `check_cursor_col()` as checked code.
-fn check_cursor_col(win: Win) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::cursor::check_cursor_col(win)
 }
 
 /// `clear_oparg()` as checked code.
@@ -958,4 +952,22 @@ fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
 fn utfc_ptr2len(p: *const c_char) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mbyte::utfc_ptr2len(p) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
 }

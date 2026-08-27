@@ -35,7 +35,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, uint8_t, varnumber_T};
+use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, varnumber_T};
 
 use crate::winlayer::{Ea, Win};
 use ::libc::{fclose, strcasecmp};
@@ -43,7 +43,7 @@ use ::libc::{fclose, strcasecmp};
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int != NUL {
+    if byte(eap.arg) != NUL {
         if unsafe { load_colors(eap.arg) } == FAIL {
             semsg_c!(
                 gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
@@ -72,7 +72,7 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) unsafe fn ex_highlight(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int == NUL && unsafe { *eap.cmd.add(2) } as c_int == '!' as c_int {
+    if byte(eap.arg) == NUL && byte_at(eap.cmd, 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
     unsafe { do_highlight(eap.arg, eap.forceit != 0, false) };
@@ -87,59 +87,52 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let mut arg = eap.arg;
     if unsafe { strcasecmp(eap.arg, c"END".as_ptr() as *mut c_char) } == 0 {
-        unsafe { close_redir() };
-    } else if unsafe { *arg } as c_int == '>' as c_int {
+        close_redir();
+    } else if byte(arg) == '>' as c_int {
         // `:redir > file` truncates, `:redir >> file` appends.
         arg = unsafe { arg.add(1) };
-        let mode = if unsafe { *arg } as c_int == '>' as c_int {
+        let mode = if byte(arg) == '>' as c_int {
             arg = unsafe { arg.add(1) };
             c"a".as_ptr() as *mut c_char
         } else {
             c"w".as_ptr() as *mut c_char
         };
         arg = skipwhite(arg);
-        unsafe { close_redir() };
+        close_redir();
         let fname = unsafe { expand_env_save(arg) };
         if fname.is_null() {
             return;
         }
         redir_fd.set(unsafe { open_exfile(fname, eap.forceit, mode) });
         xfree(fname as *mut c_void);
-    } else if unsafe { *arg } as c_int == '@' as c_int {
-        unsafe { close_redir() };
+    } else if byte(arg) == '@' as c_int {
+        close_redir();
         arg = unsafe { arg.add(1) };
-        if unsafe { valid_yank_reg(*arg as c_int, true) }
-            && unsafe { *arg } as c_int != '_' as c_int
-        {
-            redir_reg.set(unsafe { *arg } as uint8_t as c_int);
+        if unsafe { valid_yank_reg(*arg as c_int, true) } && byte(arg) != '_' as c_int {
+            redir_reg.set(ubyte(arg) as c_int);
             arg = unsafe { arg.add(1) };
-            if unsafe { *arg } as c_int == '>' as c_int
-                && unsafe { *arg.add(1) } as c_int == '>' as c_int
-            {
+            if byte(arg) == '>' as c_int && byte_at(arg, 1) == '>' as c_int {
                 // `:redir @a>>` appends.
                 arg = unsafe { arg.add(2) };
             } else {
-                if unsafe { *arg } as c_int == '>' as c_int {
+                if byte(arg) == '>' as c_int {
                     arg = unsafe { arg.add(1) };
                 }
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
-                if unsafe { *arg } as c_int == NUL && !(redir_reg.get() as u8).is_ascii_uppercase()
-                {
+                if byte(arg) == NUL && !(redir_reg.get() as u8).is_ascii_uppercase() {
                     unsafe { write_reg_contents(redir_reg.get(), c"".as_ptr(), 0 as ssize_t, 0) };
                 }
             }
         }
-        if unsafe { *arg } as c_int != NUL {
+        if byte(arg) != NUL {
             redir_reg.set(0);
             semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
         }
-    } else if unsafe { *arg } as c_int == '=' as c_int
-        && unsafe { *arg.add(1) } as c_int == '>' as c_int
-    {
-        unsafe { close_redir() };
+    } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
+        close_redir();
         arg = unsafe { arg.add(2) };
-        let append = unsafe { *arg } as c_int == '>' as c_int;
+        let append = byte(arg) == '>' as c_int;
         if append {
             arg = unsafe { arg.add(1) };
         }
@@ -163,8 +156,8 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
         return;
     }
     let lazyredraw_off = suspend_lazyredraw();
-    validate_cursor(unsafe { Win::current() });
-    update_topline(unsafe { Win::current() });
+    validate_cursor(cur_win());
+    update_topline(cur_win());
     if eap.forceit != 0 {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
@@ -240,7 +233,7 @@ fn suspend_lazyredraw() -> LazyRedrawOff {
 }
 
 /// Stop capturing message output, whichever destination is open.
-pub(crate) unsafe fn close_redir() {
+pub(crate) fn close_redir() {
     if !redir_fd.get().is_null() {
         unsafe { fclose(redir_fd.get()) };
         redir_fd.set(ptr::null_mut::<FILE>());
@@ -255,7 +248,7 @@ pub(crate) unsafe fn close_redir() {
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) unsafe fn ex_digraphs(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { *eap.arg } as c_int != NUL {
+    if byte(eap.arg) != NUL {
         putdigraph(unsafe { core::ffi::CStr::from_ptr(eap.arg) }.to_bytes());
     } else {
         listdigraphs(eap.forceit != 0);
@@ -329,4 +322,28 @@ fn update_screen() -> c_int {
 fn xfree(ptr: *mut c_void) {
     // SAFETY: `xmalloc`ed, or null.
     unsafe { crate::memory::xfree(ptr) }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
 }

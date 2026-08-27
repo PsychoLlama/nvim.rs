@@ -55,7 +55,9 @@ use crate::os::cshim::memmove;
 
 use crate::os::input::line_breakcheck;
 use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
-use crate::runtime::{getsourceline, source_breakpoint, source_dbg_tick, source_level};
+use crate::runtime::{
+    getsourceline, set_sourcing_lnum, source_breakpoint, source_dbg_tick, source_level,
+};
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
@@ -821,12 +823,6 @@ fn rewind_conditionals(
 ) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_eval::rewind_conditionals(cstack, idx, cond_type, cond_level) }
-}
-
-/// `set_sourcing_lnum()` as checked code.
-fn set_sourcing_lnum(lnum: linenr_T) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::runtime::set_sourcing_lnum(lnum)
 }
 
 /// `source_finished()` as checked code.

@@ -12,6 +12,7 @@
 //! Each function is a walk over the command line the caller owns, so each
 //! takes one `unsafe` block for its whole body — see `scan.rs`.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::ascii::ascii_isdigit;
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -20,7 +21,7 @@ use std::ffi::CString;
 use crate::buffer::{buf_is_quickfix, current_buf, get_highest_fnum};
 use crate::charset::{getdigits, getdigits_int32};
 
-use crate::cursor::check_cursor_col;
+use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::scan::skip_colon_white;
@@ -119,7 +120,7 @@ const WINCMD_WINDOWS: &[u8] = b"qcowWx\x11\x03\x0f\x17\x18";
 const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
 
 pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut eap: Ea) {
-    let c = unsafe { *arg } as u8;
+    let c = ubyte(arg);
     eap.addr_type = if WINCMD_OTHER.contains(&c) {
         CmdAddr::Other
     } else if WINCMD_BUFFERS.contains(&c) {
@@ -169,7 +170,7 @@ pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
         }
         CmdAddr::Windows => current_win_nr(curwin.get()) as linenr_T,
         CmdAddr::Arguments => {
-            let len = unsafe { arglist_len() };
+            let len = arglist_len();
             if cur_win().w_arg_idx + 1 < len {
                 cur_win().w_arg_idx as linenr_T + 1
             } else {
@@ -210,7 +211,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
         }
         CmdAddr::TabsRelative => ea.line2 = 1,
         CmdAddr::Arguments => {
-            let len = unsafe { arglist_len() };
+            let len = arglist_len();
             if len == 0 {
                 ea.line2 = 0;
                 ea.line1 = 0;
@@ -237,7 +238,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
 }
 
 /// How many files are in the current window's argument list.
-unsafe fn arglist_len() -> c_int {
+fn arglist_len() -> c_int {
     unsafe { (*cur_win().w_alist).al_ga.ga_len }
 }
 
@@ -310,7 +311,7 @@ pub unsafe fn parse_cmd_address(
             }
             if lnum != MAXLNUM as linenr_T {
                 ea.line2 = lnum;
-            } else if unsafe { *ea.cmd } as c_int == '%' as c_int {
+            } else if byte(ea.cmd) == '%' as c_int {
                 // `%` is not an address, it is a whole range, so it is
                 // only recognised where an address was expected and
                 // none was found.
@@ -319,7 +320,7 @@ pub unsafe fn parse_cmd_address(
                     break 'theend;
                 }
                 ea.addr_count += 1;
-            } else if unsafe { *ea.cmd } as c_int == '*' as c_int {
+            } else if byte(ea.cmd) == '*' as c_int {
                 if ea.addr_type != CmdAddr::Lines {
                     *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     break 'theend;
@@ -342,19 +343,19 @@ pub unsafe fn parse_cmd_address(
                 }
             }
             ea.addr_count += 1;
-            if unsafe { *ea.cmd } as c_int == ';' as c_int {
+            if byte(ea.cmd) == ';' as c_int {
                 if ea.skip == 0 {
                     cur_win().w_cursor.lnum = ea.line2;
                     // A zero line number is not a position, so only the
                     // column is worth correcting there.
                     if ea.line2 > 0 {
-                        check_cursor(unsafe { Win::current() });
+                        check_cursor(cur_win());
                     } else {
-                        check_cursor_col(unsafe { Win::current() });
+                        check_cursor_col(cur_win());
                     }
                     need_check_cursor = true;
                 }
-            } else if unsafe { *ea.cmd } as c_int != ',' as c_int {
+            } else if byte(ea.cmd) != ',' as c_int {
                 break;
             }
             ea.cmd = unsafe { ea.cmd.add(1) };
@@ -372,7 +373,7 @@ pub unsafe fn parse_cmd_address(
     // about to delete; putting it back is the caller's problem, so this
     // only re-clamps it.
     if need_check_cursor {
-        check_cursor(unsafe { Win::current() });
+        check_cursor(cur_win());
     }
     ret
 }
@@ -413,7 +414,7 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
             return false;
         }
         CmdAddr::Arguments => {
-            let len = unsafe { arglist_len() };
+            let len = arglist_len();
             if len == 0 {
                 eap.line2 = 0;
                 eap.line1 = 0;
@@ -446,49 +447,47 @@ pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_
     while !unsafe { vim_strchr(c" \t0123456789.$%'/?-+,;\\".as_ptr(), *cmd as u8 as c_int) }
         .is_null()
     {
-        if unsafe { *cmd } as c_int == '\\' as c_int {
+        if byte(cmd) == '\\' as c_int {
             // Only `\/`, `\?` and `\&` are addresses; any other
             // backslash ends the range.
-            let next = unsafe { *cmd.add(1) } as c_int;
+            let next = byte(unsafe { cmd.add(1) });
             if next != '?' as c_int && next != '/' as c_int && next != '&' as c_int {
                 break;
             }
             cmd = unsafe { cmd.add(1) };
-        } else if unsafe { *cmd } as c_int == '\'' as c_int {
+        } else if byte(cmd) == '\'' as c_int {
             cmd = unsafe { cmd.add(1) };
-            if unsafe { *cmd } as c_int == NUL && !ctx.is_null() {
+            if byte(cmd) == NUL && !ctx.is_null() {
                 unsafe { *ctx = ExpandContext::Nothing };
             }
-        } else if unsafe { *cmd } as c_int == '/' as c_int
-            || unsafe { *cmd } as c_int == '?' as c_int
-        {
+        } else if byte(cmd) == '/' as c_int || byte(cmd) == '?' as c_int {
             let delim = unsafe { *cmd };
             cmd = unsafe { cmd.add(1) };
-            while unsafe { *cmd } as c_int != NUL && unsafe { *cmd } != delim {
+            while byte(cmd) != NUL && unsafe { *cmd } != delim {
                 let at = cmd;
                 cmd = unsafe { cmd.add(1) };
-                if unsafe { *at } as c_int == '\\' as c_int && unsafe { *cmd } as c_int != NUL {
+                if byte(at) == '\\' as c_int && byte(cmd) != NUL {
                     cmd = unsafe { cmd.add(1) };
                 }
             }
-            if unsafe { *cmd } as c_int == NUL && !ctx.is_null() {
+            if byte(cmd) == NUL && !ctx.is_null() {
                 unsafe { *ctx = ExpandContext::Nothing };
             }
         }
-        if unsafe { *cmd } as c_int != NUL {
+        if byte(cmd) != NUL {
             cmd = unsafe { cmd.add(1) };
         }
     }
     cmd = unsafe { skip_colon_white(cmd, false) };
     // `:*` is the "last Visual area" range, spelled after the colons.
-    if unsafe { *cmd } as c_int == '*' as c_int {
+    if byte(cmd) == '*' as c_int {
         cmd = unsafe { skipwhite(cmd.add(1)) };
     }
     cmd as *mut c_char
 }
 
 /// E493 or E481, depending on whether the command takes a range at all.
-pub(crate) unsafe fn addr_error(addr_type: CmdAddr) -> CString {
+pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
     if addr_type == CmdAddr::NoRange {
         ex_msg(e_norange.as_ptr())
     } else {
@@ -523,9 +522,9 @@ pub unsafe fn get_address(
         coladd: 0,
     };
     'error: loop {
-        match unsafe { *cmd } as u8 {
+        match ubyte(cmd) {
             b'.' | b'$' => {
-                let want_last = unsafe { *cmd } as u8 == b'$';
+                let want_last = ubyte(cmd) == b'$';
                 cmd = unsafe { cmd.add(1) };
                 let at = if want_last {
                     last_lnum(ea, addr_type)
@@ -536,7 +535,7 @@ pub unsafe fn get_address(
                     Addr::At(n) => lnum = n,
                     Addr::Unchanged => {}
                     Addr::Refused => {
-                        *errormsg = Some(unsafe { addr_error(addr_type) });
+                        *errormsg = Some(addr_error(addr_type));
                         cmd = ptr::null_mut();
                         break;
                     }
@@ -544,12 +543,12 @@ pub unsafe fn get_address(
             }
             b'\'' => {
                 cmd = unsafe { cmd.add(1) };
-                if unsafe { *cmd } as c_int == NUL {
+                if byte(cmd) == NUL {
                     cmd = ptr::null_mut();
                     break;
                 }
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(unsafe { addr_error(addr_type) });
+                    *errormsg = Some(addr_error(addr_type));
                     cmd = ptr::null_mut();
                     break;
                 }
@@ -559,7 +558,7 @@ pub unsafe fn get_address(
                     // A mark in another file is only followed when it
                     // is the whole address and the command can change
                     // file; otherwise only this buffer's marks count.
-                    let flag = if to_other_file != 0 && unsafe { *cmd.add(1) } as c_int == NUL {
+                    let flag = if to_other_file != 0 && byte(unsafe { cmd.add(1) }) == NUL {
                         kMarkAll as c_int
                     } else {
                         kMarkBufLocal as c_int
@@ -590,13 +589,13 @@ pub unsafe fn get_address(
                 cmd = unsafe { cmd.add(1) };
                 let c = c as c_int;
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(unsafe { addr_error(addr_type) });
+                    *errormsg = Some(addr_error(addr_type));
                     cmd = ptr::null_mut();
                     break;
                 }
                 if skip {
                     cmd = unsafe { skip_regexp(cmd, c, magic_isset() as c_int) };
-                    if unsafe { *cmd } as c_int == c {
+                    if byte(cmd) == c {
                         cmd = unsafe { cmd.add(1) };
                     }
                 } else {
@@ -644,15 +643,13 @@ pub unsafe fn get_address(
                 // the last substitute pattern.
                 cmd = unsafe { cmd.add(1) };
                 if addr_type != CmdAddr::Lines {
-                    *errormsg = Some(unsafe { addr_error(addr_type) });
+                    *errormsg = Some(addr_error(addr_type));
                     cmd = ptr::null_mut();
                     break;
                 }
-                let i = if unsafe { *cmd } as c_int == '&' as c_int {
+                let i = if byte(cmd) == '&' as c_int {
                     RE_SUBST as c_int
-                } else if unsafe { *cmd } as c_int == '?' as c_int
-                    || unsafe { *cmd } as c_int == '/' as c_int
-                {
+                } else if byte(cmd) == '?' as c_int || byte(cmd) == '/' as c_int {
                     RE_SEARCH as c_int
                 } else {
                     *errormsg = Some(ex_msg(e_backslash.as_ptr()));
@@ -665,13 +662,13 @@ pub unsafe fn get_address(
                     } else {
                         cur_win().w_cursor.lnum
                     };
-                    pos.col = if unsafe { *cmd } as c_int != '?' as c_int {
+                    pos.col = if byte(cmd) != '?' as c_int {
                         MAXCOL as colnr_T
                     } else {
                         0
                     };
                     pos.coladd = 0;
-                    let dir = if unsafe { *cmd } as c_int == '?' as c_int {
+                    let dir = if byte(cmd) == '?' as c_int {
                         BACKWARD as c_int
                     } else {
                         FORWARD as c_int
@@ -700,7 +697,7 @@ pub unsafe fn get_address(
                 cmd = unsafe { cmd.add(1) };
             }
             _ => {
-                if ascii_isdigit(unsafe { *cmd } as c_int) {
+                if ascii_isdigit(byte(cmd)) {
                     lnum = unsafe { getdigits(&raw mut cmd, false, 0) } as linenr_T;
                 }
             }
@@ -710,10 +707,7 @@ pub unsafe fn get_address(
         // address kind's "here".
         loop {
             cmd = skipwhite(cmd);
-            if unsafe { *cmd } as c_int != '-' as c_int
-                && unsafe { *cmd } as c_int != '+' as c_int
-                && !ascii_isdigit(unsafe { *cmd } as c_int)
-            {
+            if byte(cmd) != '-' as c_int && byte(cmd) != '+' as c_int && !ascii_isdigit(byte(cmd)) {
                 break;
             }
             if lnum == MAXLNUM as linenr_T
@@ -721,14 +715,14 @@ pub unsafe fn get_address(
             {
                 lnum = n;
             }
-            let i = if ascii_isdigit(unsafe { *cmd } as c_int) {
+            let i = if ascii_isdigit(byte(cmd)) {
                 '+' as c_int
             } else {
                 let at = cmd;
                 cmd = unsafe { cmd.add(1) };
                 unsafe { *at as u8 as c_int }
             };
-            let n: linenr_T = if !ascii_isdigit(unsafe { *cmd } as c_int) {
+            let n: linenr_T = if !ascii_isdigit(byte(cmd)) {
                 1
             } else {
                 let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) } as linenr_T;
@@ -754,7 +748,7 @@ pub unsafe fn get_address(
                     && (i == '-' as c_int || i == '+' as c_int)
                     && address_count >= 2
                 {
-                    has_folding(unsafe { Win::current() }, lnum, None, Some(&mut lnum));
+                    has_folding(cur_win(), lnum, None, Some(&mut lnum));
                 }
                 if i == '-' as c_int {
                     lnum -= n;
@@ -770,7 +764,7 @@ pub unsafe fn get_address(
 
         // A search address may be followed by another one, which
         // searches on from where the first landed.
-        if unsafe { *cmd } as c_int != '/' as c_int && unsafe { *cmd } as c_int != '?' as c_int {
+        if byte(cmd) != '/' as c_int && byte(cmd) != '?' as c_int {
             break;
         }
     }
@@ -818,7 +812,7 @@ fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_buf().b_ml.ml_line_count,
         CmdAddr::Windows => current_win_nr(ptr::null()) as linenr_T,
-        CmdAddr::Arguments => unsafe { arglist_len() as linenr_T },
+        CmdAddr::Arguments => arglist_len() as linenr_T,
         CmdAddr::LoadedBuffers => loaded_buffer_range().1,
         CmdAddr::Buffers => tail().handle as linenr_T,
         CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as linenr_T,
@@ -866,7 +860,7 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
         CmdAddr::Arguments => {
             // An empty argument list still accepts line 1, which is
             // what makes `:argdelete` on it report a better message.
-            let len = unsafe { arglist_len() };
+            let len = arglist_len();
             if ea.line2 > len as linenr_T + (len == 0) as c_int {
                 return invrange();
             }
@@ -955,18 +949,6 @@ fn cur_win() -> Win {
     unsafe { Win::current() }
 }
 
-/// `ascii_isdigit()` as checked code.
-fn ascii_isdigit(c: c_int) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::ascii::ascii_isdigit(c)
-}
-
-/// `check_cursor()` as checked code.
-fn check_cursor(wp: Win) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::cursor::check_cursor(wp)
-}
-
 /// `ex_msg()` as checked code.
 fn ex_msg(msg: *const c_char) -> CString {
     // SAFETY: the pointers are the command line's own, and live for the call.
@@ -1001,4 +983,16 @@ fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
 }

@@ -57,7 +57,7 @@ fn global_findfunc() -> *mut Callback {
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
 pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
-    if unsafe { *cur_buf().b_p_ffu } as c_int != NUL {
+    if byte(cur_buf().b_p_ffu) != NUL {
         // SAFETY: `curbuf` is set from startup to exit, and the address
         // of a field is not a read of the buffer.
         unsafe { &raw mut (*curbuf.get()).b_ffu_cb }
@@ -71,7 +71,7 @@ pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
 /// `cmdcomplete` tells the callback whether this is completion (which may
 /// answer many names) or a real `:find` (which wants the one at `count`).
 /// The text lock is held across the call: the callback must not edit.
-pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut list_T {
+pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut list_T {
     let saved_sctx: sctx_T = current_sctx.get();
     let mut args: [typval_T; 3] = unsafe { core::mem::zeroed() };
     args[0].v_type = VAR_STRING;
@@ -116,7 +116,7 @@ pub unsafe fn expand_findfunc(
 ) -> c_int {
     unsafe { *num_matches = 0 };
     unsafe { *files = ptr::null_mut() };
-    let l = unsafe { call_findfunc(pat, kBoolVarTrue) };
+    let l = call_findfunc(pat, kBoolVarTrue);
     if l.is_null() {
         return FAIL;
     }
@@ -155,7 +155,7 @@ pub(crate) unsafe fn findfunc_find_file(
     let saved = unsafe { *findarg.add(findarg_len) };
     unsafe { *findarg.add(findarg_len) = NUL as c_char };
 
-    let fname_list = unsafe { call_findfunc(findarg, kBoolVarFalse) };
+    let fname_list = call_findfunc(findarg, kBoolVarFalse);
     let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
         semsg_c!(
@@ -215,7 +215,7 @@ pub unsafe fn set_ref_in_findfunc(copy_id: c_int) -> bool {
 }
 
 /// The directory `:cd -` would go back to, at this scope.
-pub(crate) unsafe fn get_prevdir(scope: CdScope) -> *mut c_char {
+pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
     match scope as c_int {
         s if s == kCdScopeTabpage as c_int => unsafe { (*curtab.get()).tp_prevdir },
         s if s == kCdScopeWindow as c_int => cur_win().w_prevdir,
@@ -238,7 +238,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
         unsafe { (*curtab.get()).tp_localdir = ptr::null_mut() };
     }
     if (scope as c_int) < kCdScopeGlobal as c_int {
-        let pdir = unsafe { get_prevdir(scope) };
+        let pdir = get_prevdir(scope);
         if globaldir.get().is_null() && !pdir.is_null() {
             globaldir.set(xstrdup(pdir));
         }
@@ -285,7 +285,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
         return false;
     }
     if unsafe { strcmp(new_dir, c"-".as_ptr()) } == 0 {
-        let pdir = unsafe { get_prevdir(scope) };
+        let pdir = get_prevdir(scope);
         if pdir.is_null() {
             emsg(gettext(c"E186: No previous directory".as_ptr()));
             return false;
@@ -300,7 +300,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     };
 
     // `:cd` with no argument means home, when 'cdhome' is set.
-    if unsafe { *new_dir } as c_int == NUL && p_cdh.get() != 0 {
+    if byte(new_dir) == NUL && p_cdh.get() != 0 {
         unsafe { expand_env(c"$HOME".as_ptr() as *mut c_char, dir.as_mut_ptr(), MAXPATHL) };
         new_dir = dir.as_mut_ptr();
     }
@@ -340,7 +340,7 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
     let new_dir = eap.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
-    if unsafe { *new_dir } as c_int == NUL && p_cdh.get() == 0 {
+    if byte(new_dir) == NUL && p_cdh.get() == 0 {
         unsafe { ex_pwd(ptr::null_mut()) };
         return;
     }
@@ -446,4 +446,10 @@ fn xfree(ptr: *mut c_void) {
 fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

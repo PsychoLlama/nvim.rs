@@ -73,12 +73,10 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
         return true;
     }
     // An empty name means "this buffer", not "no buffer".
-    if unsafe { *ffname } as c_int == NUL {
+    if byte(ffname) == NUL {
         return false;
     }
-    if !cur_buf().file_id_valid
-        && !cur_buf().b_sfname.is_null()
-        && unsafe { *cur_buf().b_sfname } as c_int != NUL
+    if !cur_buf().file_id_valid && !cur_buf().b_sfname.is_null() && byte(cur_buf().b_sfname) != NUL
     {
         return unsafe { path_fnamecmp(ffname, cur_buf().b_sfname) } != 0;
     }
@@ -194,7 +192,7 @@ pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
         )
     };
     if !unsaved
-        && (unsafe { *eap.arg } as c_int == NUL
+        && (byte(eap.arg) == NUL
             || unsafe { setfname(Buf::current(), eap.arg, ptr::null_mut(), true) } == OK)
     {
         unsafe { ml_recover(true) };
@@ -213,7 +211,7 @@ pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
     } else {
         1
     };
-    let fname = if unsafe { *get_findfunc() } as c_int != NUL {
+    let fname = if byte(get_findfunc()) != NUL {
         unsafe { findfunc_find_file(eap.arg, strlen(eap.arg), count) }
     } else {
         unsafe { find_nth_on_path(eap.arg, eap.addr_count, eap.line2) }
@@ -287,7 +285,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
     }
     if buf_is_prompt(current_buf())
         && eap.cmdidx as c_int == CMD_edit as c_int
-        && unsafe { *eap.arg } as c_int == NUL
+        && byte(eap.arg) == NUL
     {
         unsafe { emsg(c"cannot :edit a prompt buffer".as_ptr()) };
         return;
@@ -312,7 +310,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
         if ui_has(kUICmdline) {
             ui_ext_cmdline_block_leave();
         }
-        if unsafe { *ea.arg } as c_int == NUL {
+        if byte(ea.arg) == NUL {
             // Inside `:global`, normal mode is entered for the rest of
             // the line and Ex mode resumes afterwards.
             if global_busy.get() != 0 {
@@ -340,7 +338,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
         || idx == CMD_tabnew as c_int
         || idx == CMD_tabedit as c_int
         || idx == CMD_vnew as c_int)
-        && unsafe { *ea.arg } as c_int == NUL
+        && byte(ea.arg) == NUL
     {
         // A new, empty buffer.
         setpcmark();
@@ -362,10 +360,8 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                 ptr::null_mut()
             },
         );
-    } else if idx != CMD_split as c_int && idx != CMD_vsplit as c_int
-        || unsafe { *ea.arg } as c_int != NUL
-    {
-        if unsafe { *ea.arg } as c_int != NUL && unsafe { text_or_buf_locked() } {
+    } else if idx != CMD_split as c_int && idx != CMD_vsplit as c_int || byte(ea.arg) != NUL {
+        if byte(ea.arg) != NUL && unsafe { text_or_buf_locked() } {
             return;
         }
         let saved_readonly = readonlymode.get();
@@ -439,14 +435,14 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
         // A `:split` with no file name: the window is already there.
         run_ecmd_cmd(ea);
         let was_invalid = cur_win().w_arg_idx_invalid;
-        check_arg_idx(unsafe { Win::current() });
+        check_arg_idx(cur_win());
         if was_invalid != cur_win().w_arg_idx_invalid {
             unsafe { maketitle() };
         }
     }
 
     if !old_curwin.is_null()
-        && unsafe { *ea.arg } as c_int != NUL
+        && byte(ea.arg) != NUL
         && curwin.get() != old_curwin
         && win_valid(old_curwin)
         && unsafe { (*old_curwin).w_buffer } != curbuf.get()
@@ -479,7 +475,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         return;
     }
 
-    let read = if unsafe { *eap.arg } as c_int == NUL {
+    let read = if byte(eap.arg) == NUL {
         if unsafe { check_fname() } == FAIL {
             return;
         }
@@ -524,7 +520,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         } else {
             1
         };
-        if unsafe { *ml_get(lnum) } as c_int == NUL && u_savedel(lnum, 1) == OK {
+        if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1) == OK {
             unsafe { ml_delete(lnum) };
             if cur_win().w_cursor.lnum > 1 && cur_win().w_cursor.lnum >= lnum {
                 cur_win().w_cursor.lnum -= 1;
@@ -596,7 +592,7 @@ pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
     let save_shada = p_shada.get();
-    if unsafe { *p_shada.get() } as c_int == NUL {
+    if byte(p_shada.get()) == NUL {
         p_shada.set(c"'100".as_ptr() as *mut c_char);
     }
     if eap.cmdidx as c_int == CMD_rviminfo as c_int || eap.cmdidx as c_int == CMD_rshada as c_int {
@@ -738,4 +734,10 @@ fn u_compute_hash(buf: Buf, hash: *mut uint8_t) {
 fn xfree(ptr: *mut c_void) {
     // SAFETY: `xmalloc`ed, or null.
     unsafe { crate::memory::xfree(ptr) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
 }

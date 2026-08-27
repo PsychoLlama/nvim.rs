@@ -45,14 +45,12 @@ pub fn is_user_cmd(cmdidx: cmdidx_T) -> bool {
 pub unsafe fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
     let p = unsafe { *pp };
     let mut i = 0isize;
-    while unsafe { *cmd.offset(i) } as c_int != NUL
-        && unsafe { *cmd.offset(i) } == unsafe { *p.offset(i) }
-    {
+    while byte_at(cmd, i) != NUL && unsafe { *cmd.offset(i) } == unsafe { *p.offset(i) } {
         i += 1;
     }
     // A letter after the abbreviation means this is a longer word, not
     // this command: `:silentx` is not `:silent`.
-    if i as c_int >= len && !(unsafe { *p.offset(i) } as u8).is_ascii_alphabetic() {
+    if i as c_int >= len && !(ubyte_at(p, i)).is_ascii_alphabetic() {
         unsafe { *pp = skipwhite(p.offset(i)) };
         return true;
     }
@@ -67,8 +65,8 @@ pub unsafe fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) 
 /// `:scriptencoding`, `:sign`, `:simalt`, `:sil…`, `:sre…` and the rest —
 /// which is what the nest of tests below spells out. It is upstream's, byte
 /// for byte, including the `p[3]`/`p[4]` asymmetry in the `:sc…` arm.
-pub(crate) unsafe fn one_letter_cmd(p: *const c_char, idx: *mut cmdidx_T) -> c_int {
-    let at = |n: usize| unsafe { *p.add(n) } as c_int;
+pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut cmdidx_T) -> c_int {
+    let at = |n: usize| byte_at(p, n as isize);
     if at(0) == 'k' as c_int
         && (at(1) != 'e' as c_int || (at(1) == 'e' as c_int && at(2) != 'e' as c_int))
     {
@@ -103,27 +101,25 @@ pub(crate) unsafe fn one_letter_cmd(p: *const c_char, idx: *mut cmdidx_T) -> c_i
 pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_char {
     let mut ea = unsafe { Ea::new(eap) };
     let mut p = ea.cmd;
-    if unsafe { one_letter_cmd(p, ea.cmdidx_ptr()) } != 0 {
+    if one_letter_cmd(p, ea.cmdidx_ptr()) != 0 {
         if !full.is_null() {
             unsafe { *full = 1 };
         }
         return unsafe { p.add(1) };
     }
 
-    while (unsafe { *p } as u8).is_ascii_alphabetic() {
+    while (ubyte(p)).is_ascii_alphabetic() {
         p = unsafe { p.add(1) };
     }
     // `:py3`, `:python3` and `:py3file` are the only commands with a
     // digit in the name.
-    if unsafe { *ea.cmd } as c_int == 'p' as c_int
-        && unsafe { *ea.cmd.add(1) } as c_int == 'y' as c_int
-    {
-        while (unsafe { *p } as u8).is_ascii_alphanumeric() {
+    if byte(ea.cmd) == 'p' as c_int && byte_at(ea.cmd, 1) == 'y' as c_int {
+        while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
     }
     // A command that is punctuation rather than a word.
-    if p == ea.cmd && c"@!=><&~#".to_bytes().contains(&(unsafe { *p } as u8)) {
+    if p == ea.cmd && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
         p = unsafe { p.add(1) };
     }
 
@@ -131,9 +127,8 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
     // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
     // to it, and only when the rest really is an abbreviation of
     // "delete" — `:dj` is `:djump`.
-    if unsafe { *ea.cmd } as c_int == 'd' as c_int
-        && (unsafe { *p.offset(-1) } as c_int == 'l' as c_int
-            || unsafe { *p.offset(-1) } as c_int == 'p' as c_int)
+    if byte(ea.cmd) == 'd' as c_int
+        && (byte_at(p, -1) == 'l' as c_int || byte_at(p, -1) == 'p' as c_int)
     {
         // `with_nul`, not `to_bytes`: the walk is over the *typed*
         // word, which may be longer than "delete", and it is the
@@ -141,12 +136,12 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
         // index past the end.
         let delete = c"delete".to_bytes_with_nul();
         let mut i = 0;
-        while i < len && unsafe { *ea.cmd.offset(i as isize) } as u8 == delete[i as usize] {
+        while i < len && ubyte_at(ea.cmd, i as isize) == delete[i as usize] {
             i += 1;
         }
         if i == len - 1 {
             len -= 1;
-            if unsafe { *p.offset(-1) } as c_int == 'l' as c_int {
+            if byte_at(p, -1) == 'l' as c_int {
                 ea.flags |= EXFLAG_LIST;
             } else {
                 ea.flags |= EXFLAG_PRINT;
@@ -165,7 +160,7 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
     while (ea.cmdidx as c_int) < CMD_SIZE as c_int {
         let name = cmdnames[ea.cmdidx as usize].cmd_name;
         if strncmp(name, ea.cmd, len as size_t) == 0 {
-            if !full.is_null() && unsafe { *name.offset(len as isize) } as c_int == NUL {
+            if !full.is_null() && byte_at(name, len as isize) == NUL {
                 unsafe { *full = 1 };
             }
             break;
@@ -175,8 +170,8 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
 
     // Nothing in the table, and it starts with an upper-case letter:
     // it may be a user command, whose name may hold digits too.
-    if ea.cmdidx as c_int == CMD_SIZE as c_int && (unsafe { *ea.cmd } as u8).is_ascii_uppercase() {
-        while (unsafe { *p } as u8).is_ascii_alphanumeric() {
+    if ea.cmdidx as c_int == CMD_SIZE as c_int && (ubyte(ea.cmd)).is_ascii_uppercase() {
+        while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
         p = unsafe { find_ucmd(eap, p, full, ptr::null_mut(), ptr::null_mut()) };
@@ -196,7 +191,7 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
 /// place — hence the `command_count` check, which is upstream's own guard
 /// against a stale generated header.
 unsafe fn start_index(cmd: *const c_char, len: c_int) -> cmdidx_T {
-    let c1 = unsafe { *cmd } as u8;
+    let c1 = ubyte(cmd);
     if !c1.is_ascii_lowercase() {
         return if c1.is_ascii_uppercase() {
             CMD_Next
@@ -230,28 +225,27 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
     // A modifier is a command as far as `exists()` is concerned.
     for md in &CMDMODS {
         let j = unsafe { shared_prefix(name, md.name) };
-        if unsafe { *name.add(j) } as c_int == NUL && j >= md.minlen {
+        if byte_at(name, j as isize) == NUL && j >= md.minlen {
             return if md.name.to_bytes().len() == j { 2 } else { 1 };
         }
     }
     // `:2match`/`:3match` carry their count in the name.
     let mut ea = blank_exarg();
-    ea.cmd =
-        if unsafe { *name } as c_int == '2' as c_int || unsafe { *name } as c_int == '3' as c_int {
-            unsafe { name.add(1) }
-        } else {
-            name
-        } as *mut c_char;
+    ea.cmd = if byte(name) == '2' as c_int || byte(name) == '3' as c_int {
+        unsafe { name.add(1) }
+    } else {
+        name
+    } as *mut c_char;
     let mut full: c_int = 0;
     let p = unsafe { find_ex_command(&raw mut ea, &raw mut full) };
     if p.is_null() {
         return 3;
     }
     // A leading digit is a range for every command but `:match`.
-    if ascii_isdigit(unsafe { *name } as c_int) && ea.cmdidx as c_int != CMD_match as c_int {
+    if ascii_isdigit(byte(name)) && ea.cmdidx as c_int != CMD_match as c_int {
         return 0;
     }
-    if unsafe { *skipwhite(p) } as c_int != NUL {
+    if byte(skipwhite(p)) != NUL {
         return 0;
     }
     if ea.cmdidx as c_int == CMD_SIZE as c_int {
@@ -273,17 +267,16 @@ pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut name = unsafe { numbuf.string(argvars) } as *mut c_char;
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = ptr::null_mut() };
-    while unsafe { *name } as c_int == ':' as c_int {
+    while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };
     }
     name = unsafe { skip_range(name, ptr::null_mut()) };
     let mut ea = blank_exarg();
-    ea.cmd =
-        if unsafe { *name } as c_int == '2' as c_int || unsafe { *name } as c_int == '3' as c_int {
-            unsafe { name.add(1) }
-        } else {
-            name
-        };
+    ea.cmd = if byte(name) == '2' as c_int || byte(name) == '3' as c_int {
+        unsafe { name.add(1) }
+    } else {
+        name
+    };
     let p = unsafe { find_ex_command(&raw mut ea, ptr::null_mut()) };
     if p.is_null() || ea.cmdidx as c_int == CMD_SIZE as c_int {
         return;
@@ -315,7 +308,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
         return CMD_SIZE;
     }
     let mut idx: cmdidx_T = CMD_append;
-    if unsafe { one_letter_cmd(cmd, &raw mut idx) } != 0 {
+    if one_letter_cmd(cmd, &raw mut idx) != 0 {
         return idx;
     }
     // A linear scan from the head of the table, not the `cmdidxs`
@@ -361,4 +354,28 @@ fn strncmp(
 ) -> ::core::ffi::c_int {
     // SAFETY: two NUL-terminated strings, and a length within both.
     unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
+}
+
+/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
+fn ubyte_at(p: *const c_char, i: isize) -> u8 {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as u8 }
 }

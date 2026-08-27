@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::ascii::{ascii_isspace, ascii_iswhite};
+use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 
 use crate::charset::{getdigits_int32, skipdigits};
 
@@ -46,7 +46,7 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
     } else {
         p as *mut c_char
     };
-    while unsafe { *p } as c_int == ':' as c_int {
+    while byte(p) == ':' as c_int {
         p = unsafe { skipwhite(p.add(1)) };
     }
     p
@@ -62,9 +62,9 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
     let mut ea = unsafe { Ea::new(eap) };
     let is_user_command = (ea.cmdidx as c_int) < 0;
     if !ea.argt.has(ExArgt::REGSTR)
-        || unsafe { *ea.arg } as c_int == NUL
-        || (is_user_command && unsafe { *ea.arg } as c_int == '=' as c_int)
-        || (ea.argt.has(ExArgt::COUNT) && ascii_isdigit(unsafe { *ea.arg } as c_int))
+        || byte(ea.arg) == NUL
+        || (is_user_command && byte(ea.arg) == '=' as c_int)
+        || (ea.argt.has(ExArgt::COUNT) && ascii_isdigit(byte(ea.arg)))
     {
         return;
     }
@@ -76,11 +76,11 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
     if !unsafe { valid_yank_reg(*ea.arg as c_int, writing) } {
         return;
     }
-    ea.regname = unsafe { *ea.arg } as u8 as c_int;
+    ea.regname = ubyte(ea.arg) as c_int;
     ea.arg = unsafe { ea.arg.add(1) };
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.
-    if ea.regname == '=' as c_int && unsafe { *ea.arg } as c_int != NUL {
+    if ea.regname == '=' as c_int && byte(ea.arg) != NUL {
         if ea.skip == 0 {
             unsafe { set_expr_line(xstrdup(ea.arg)) };
         }
@@ -125,14 +125,14 @@ pub(crate) unsafe fn parse_count(
     validate: bool,
 ) -> c_int {
     let mut ea = unsafe { Ea::new(eap) };
-    if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(unsafe { *ea.arg } as c_int) {
+    if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(ea.arg)) {
         return OK;
     }
     // A command that also takes a buffer name (`:buffer 2x`) only reads
     // the digits as a count when they are the whole word.
     if ea.argt.has(ExArgt::BUFNAME) {
         let p = unsafe { skipdigits(ea.arg.add(1)) };
-        if unsafe { *p } as c_int != NUL && !ascii_iswhite(unsafe { *p } as c_int) {
+        if byte(p) != NUL && !ascii_iswhite(byte(p)) {
             return OK;
         }
     }
@@ -164,7 +164,7 @@ pub(crate) unsafe fn parse_count(
 /// spellings are the exception: there a `!` belongs to the pattern.
 pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
     let cmdidx = (*eap).cmdidx as c_int;
-    if unsafe { **p } as c_int == '!' as c_int
+    if byte(unsafe { *p }) == '!' as c_int
         && cmdidx != CMD_substitute as c_int
         && cmdidx != CMD_smagic as c_int
         && cmdidx != CMD_snomagic as c_int
@@ -178,7 +178,7 @@ pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
 /// Take the trailing `l`, `p` and `#` flags a printing command may carry.
 pub(crate) fn get_flags(mut ea: Ea) {
     loop {
-        let flag = match unsafe { *ea.arg } as u8 {
+        let flag = match ubyte(ea.arg) {
             b'l' => EXFLAG_LIST,
             b'p' => EXFLAG_PRINT,
             b'#' => EXFLAG_NR,
@@ -198,7 +198,7 @@ pub(crate) fn skip_grep_pat(mut ea: Ea) -> *mut c_char {
         || cmdidx == CMD_vimgrepadd as c_int
         || cmdidx == CMD_lvimgrepadd as c_int
         || unsafe { grep_internal(ea.cmdidx) };
-    if unsafe { *ea.arg } as c_int == NUL || !is_grep {
+    if byte(ea.arg) == NUL || !is_grep {
         return ea.arg;
     }
     let p = unsafe { skip_vimgrep_pat(ea.arg, ptr::null_mut(), ptr::null_mut()) };
@@ -223,17 +223,17 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
     let mut ea = unsafe { Ea::new(eap) };
     let mut p = skip_grep_pat(ea);
     while unsafe { *p } != 0 {
-        if unsafe { *p } as c_int == Ctrl_V {
+        if byte(p) == Ctrl_V {
             if ea.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
                 p = unsafe { p.add(1) };
             } else {
-                unsafe { drop_one_byte(p) };
+                drop_one_byte(p);
             }
-            if unsafe { *p } as c_int == NUL {
+            if byte(p) == NUL {
                 break;
             }
-        } else if unsafe { *p } as c_int == '`' as c_int
-            && unsafe { *p.add(1) } as c_int == '=' as c_int
+        } else if byte(p) == '`' as c_int
+            && byte_at(p, 1) == '=' as c_int
             && ea.argt.has(ExArgt::XFILE)
         {
             // A backtick-equals expression is stepped over by the
@@ -241,15 +241,15 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
             // ending characters.
             p = unsafe { p.add(2) };
             unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
-            if unsafe { *p } as c_int == NUL {
+            if byte(p) == NUL {
                 break;
             }
         } else if unsafe { ends_argument(ea, p) } {
             let escaped = (!cpo_has(CpoFlag::BAR) || !ea.argt.has(ExArgt::CTRLV))
-                && unsafe { *p.offset(-1) } as c_int == '\\' as c_int;
+                && byte_at(p, -1) == '\\' as c_int;
             if escaped {
                 p = unsafe { p.offset(-1) };
-                unsafe { drop_one_byte(p) };
+                drop_one_byte(p);
             } else {
                 ea.nextcmd = unsafe { check_nextcmd(p) };
                 unsafe { *p = NUL as c_char };
@@ -269,14 +269,14 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
 /// *inside* the loop: the `"` half compares `p` against `eap->arg`, so it
 /// depends on where the walk has got to and cannot be hoisted.
 unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
-    let c = unsafe { *p } as c_int;
+    let c = byte(p);
     let cmdidx = ea.cmdidx as c_int;
     let comment = c == '"' as c_int
         && !ea.argt.has(ExArgt::NOTRLCOM)
         && (cmdidx != CMD_at as c_int || p != ea.arg)
         && (cmdidx != CMD_redir as c_int
             || p != unsafe { ea.arg.add(1) }
-            || unsafe { *p.offset(-1) } as c_int != '@' as c_int);
+            || byte_at(p, -1) != '@' as c_int);
     let bar = c == '|' as c_int
         && cmdidx != CMD_append as c_int
         && cmdidx != CMD_change as c_int
@@ -285,7 +285,7 @@ unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
 }
 
 /// Delete the byte at `p` by pulling the terminator-inclusive tail over it.
-unsafe fn drop_one_byte(p: *mut c_char) {
+fn drop_one_byte(p: *mut c_char) {
     unsafe {
         memmove(
             p.cast(),
@@ -299,10 +299,10 @@ unsafe fn drop_one_byte(p: *mut c_char) {
 /// the backslashes that escaped whitespace inside it.
 pub unsafe fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
     let mut p = p;
-    while unsafe { *p } as c_int != 0 && !ascii_isspace(unsafe { *p } as c_int) {
-        if unsafe { *p } as c_int == '\\' as c_int && unsafe { *p.add(1) } as c_int != NUL {
+    while byte(p) != 0 && !ascii_isspace(byte(p)) {
+        if byte(p) == '\\' as c_int && byte_at(p, 1) != NUL {
             if rembs {
-                unsafe { drop_one_byte(p) };
+                drop_one_byte(p);
             } else {
                 p = unsafe { p.add(1) };
             }
@@ -322,8 +322,8 @@ pub fn ends_excmd(c: c_int) -> c_int {
 /// Unlike `check_nextcmd` this searches rather than only looking ahead.
 pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
     let mut p = p;
-    while unsafe { *p } as c_int != '|' as c_int && unsafe { *p } as c_int != '\n' as c_int {
-        if unsafe { *p } as c_int == NUL {
+    while byte(p) != '|' as c_int && byte(p) != '\n' as c_int {
+        if byte(p) == NUL {
             return ptr::null_mut();
         }
         p = unsafe { p.add(1) };
@@ -334,7 +334,7 @@ pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
 /// The command after `p`, if `p` is at the separator that introduces one.
 pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
     let s = skipwhite(p);
-    if unsafe { *s } as c_int == '|' as c_int || unsafe { *s } as c_int == '\n' as c_int {
+    if byte(s) == '|' as c_int || byte(s) == '\n' as c_int {
         return unsafe { s.add(1) };
     }
     ptr::null_mut()
@@ -344,12 +344,6 @@ pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
 fn cur_buf() -> Buf {
     // SAFETY: `curbuf` is set from startup to exit.
     unsafe { Buf::current() }
-}
-
-/// `ascii_isdigit()` as checked code.
-fn ascii_isdigit(c: c_int) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    crate::ascii::ascii_isdigit(c)
 }
 
 /// `skipwhite()` as checked code.
@@ -362,4 +356,22 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 fn utfc_ptr2len(p: *const c_char) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mbyte::utfc_ptr2len(p) }
+}
+
+/// The byte `p` points at, as the C's `*p` reads it.
+fn byte(p: *const c_char) -> c_int {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as c_int }
+}
+
+/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
+fn ubyte(p: *const c_char) -> u8 {
+    // SAFETY: a NUL-terminated string the command line owns.
+    unsafe { *p as u8 }
+}
+
+/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
+fn byte_at(p: *const c_char, i: isize) -> c_int {
+    // SAFETY: an offset within the NUL-terminated string `p` points into.
+    unsafe { *p.offset(i) as c_int }
 }
