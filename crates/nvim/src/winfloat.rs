@@ -22,7 +22,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::iter;
 use core::ptr::{self, NonNull};
 
 use crate::api::private::helpers::{
@@ -55,7 +54,7 @@ use crate::window::{
     win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
-use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
+use crate::winlayer::{Buf, TabPage, Win, windows_back, windows_in_tab};
 use ::libc::{qsort, strlen};
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
@@ -143,17 +142,7 @@ fn current_win() -> Win {
 /// the end of the window list, so walking back from `lastwin` while
 /// `w_floating` holds visits exactly them. Lazy, as the C's is.
 fn floats() -> impl Iterator<Item = Win> {
-    let mut next = lastwin.get();
-    iter::from_fn(move || {
-        // SAFETY: `lastwin`, and every `w_prev` reached from it, is a live
-        // window or null.
-        let win = (!next.is_null()).then(|| unsafe { Win::new(next) })?;
-        if !win.w_floating {
-            return None;
-        }
-        next = win.w_prev;
-        Some(win)
-    })
+    windows_back().take_while(|win| win.w_floating)
 }
 
 // ---------------------------------------------------------------------------

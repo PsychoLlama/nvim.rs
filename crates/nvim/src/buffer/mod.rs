@@ -46,7 +46,7 @@
 
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{iter, ptr};
+use core::ptr;
 
 use crate::autocmd::{apply_autocmds, apply_autocmds_retval, block_autocmds, unblock_autocmds};
 use crate::change::unchanged;
@@ -72,7 +72,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, buffers_back};
 
 // The carve of the transpiled module; see each child's docs.
 mod all;
@@ -275,7 +275,7 @@ impl BufRef {
     /// was. Only walks the list when the free counter has moved.
     pub(crate) fn valid(self) -> bool {
         self.0.br_buf_free_count == buf_free_count.get()
-            || buffers_backwards().any(|b| b.raw() == self.0.br_buf && b.handle == self.0.br_fnum)
+            || buffers_back().any(|b| b.raw() == self.0.br_buf && b.handle == self.0.br_fnum)
     }
 
     /// The buffer, if it is still the one that was remembered.
@@ -320,20 +320,7 @@ impl BufRef {
 /// callers rely on rather than covering a branch.
 pub unsafe fn buf_valid(buf: *mut buf_T) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
-    !buf.is_null() && buffers_backwards().any(|b| b.raw() == buf)
-}
-
-/// The buffer list from the end -- `FOR_ALL_BUFFERS_BACKWARDS`. Lazy, as the
-/// macro is.
-pub(crate) fn buffers_backwards() -> impl Iterator<Item = Buf> {
-    let mut next = lastbuf.get();
-    iter::from_fn(move || {
-        // SAFETY: `lastbuf`, and every `b_prev` reached from it, is a live
-        // buffer or null.
-        let buf = (!next.is_null()).then(|| unsafe { Buf::new(next) })?;
-        next = buf.b_prev;
-        Some(buf)
-    })
+    !buf.is_null() && buffers_back().any(|b| b.raw() == buf)
 }
 
 static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =

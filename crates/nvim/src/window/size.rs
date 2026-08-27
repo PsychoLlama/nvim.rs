@@ -19,12 +19,10 @@ use core::ffi::{c_char, c_int};
 use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
-use crate::main::{
-    Columns, Rows, cmdline_row, e_noroom, lastwin, p_ch, p_wmh, p_wmw, redraw_cmdline,
-};
+use crate::main::{Columns, Rows, cmdline_row, e_noroom, p_ch, p_wmh, p_wmw, redraw_cmdline};
 use crate::types::{OptInt, kFloatRelativeWindow, optset_T, win_T};
 use crate::winfloat::win_config_float;
-use crate::winlayer::{Frame, Win, frames, frames_back};
+use crate::winlayer::{Frame, Win, frames, frames_back, windows_back};
 
 pub fn win_comp_pos() -> c_int {
     comp_positions()
@@ -36,15 +34,13 @@ pub(crate) fn comp_positions() -> c_int {
     let mut row = tabline_rows();
     let mut col = 0;
     comp_pos(current_topframe(), &mut row, &mut col);
-    // A float anchored to a window may have moved with it.
-    // SAFETY: `lastwin` heads a live window list ending at a null `w_prev`.
-    let mut wp = unsafe { Win::from_raw(lastwin.get()) };
-    while let Some(mut win) = wp.filter(|w| w.w_floating) {
+    // A float anchored to a window may have moved with it. Floats sit at the
+    // end of the window list, so the walk back from `lastwin` stops at the
+    // first window that is not one.
+    for mut win in windows_back().take_while(|w| w.w_floating) {
         if win.w_config.relative == kFloatRelativeWindow {
             win.w_pos_changed = true;
         }
-        // SAFETY: a live window's `w_prev` is a live window or null.
-        wp = unsafe { Win::from_raw(win.w_prev) };
     }
     row + global_stl_rows()
 }

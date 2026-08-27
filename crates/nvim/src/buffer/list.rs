@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{iter, ptr, slice};
+use core::{ptr, slice};
 
 use super::*;
 use crate::allocator::Owned;
@@ -55,7 +55,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
-use crate::winlayer::{Buf, Win, register_buffer, windows};
+use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
 use ::libc::strlen;
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};
@@ -193,19 +193,6 @@ fn current_last() -> Option<Buf> {
     let last = lastbuf.get();
     // SAFETY: `lastbuf` is null only before the first buffer is created.
     (!last.is_null()).then(|| unsafe { Buf::new(last) })
-}
-
-/// The buffer list from the end -- `FOR_ALL_BUFFERS_BACKWARDS`. Lazy, as the
-/// macro is.
-fn buffers_backwards() -> impl Iterator<Item = Buf> {
-    let mut next = lastbuf.get();
-    iter::from_fn(move || {
-        // SAFETY: `lastbuf`, and every `b_prev` reached from it, is a live
-        // buffer or null.
-        let buf = (!next.is_null()).then(|| unsafe { Buf::new(next) })?;
-        next = buf.b_prev;
-        Some(buf)
-    })
 }
 
 fn fire_buf_event(event: event_T, mut buf: Buf) -> bool {
@@ -773,7 +760,7 @@ pub(crate) fn buflist_findname_file_id(
     file_id_valid: bool,
 ) -> Option<Buf> {
     let file_id = (&raw const *file_id).cast_mut();
-    buffers_backwards().find(|buf| {
+    buffers_back().find(|buf| {
         // SAFETY: a live buffer, a NUL-terminated name and a live file id.
         !buf.b_flags.has(BufFlags::DUMMY)
             && !unsafe { otherfile_buf(*buf, ffname, file_id, file_id_valid) }
@@ -875,7 +862,7 @@ fn match_pattern(
             let mut regmatch = NO_REGMATCH;
             regmatch.regprog = regcomp(&buf[from..], flags);
 
-            for b in buffers_backwards() {
+            for b in buffers_back() {
                 if regmatch.regprog.is_null() {
                     // An invalid pattern, possibly after switching engine.
                     free(pat);

@@ -176,3 +176,79 @@ pub(crate) fn free_deferred() {
         free(win);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Identity, and validity after re-entry
+//
+// A `Win`/`Buf`/`TabPage` is an *address* the caller has promised is live, and
+// that promise is exactly what an autocommand breaks. The value to carry
+// across such a call is not the address but the **handle**, taken while the
+// object is still there -- which is what these three are. They are the
+// re-entry rule in the type system: you cannot ask "is it still there?" of
+// something whose identity you did not take while it was.
+
+/// A window's identity, taken from a live window: the `handle_T` that names
+/// it, with the address dropped.
+///
+/// Answering [`WinId::get`] costs a registry lookup and reads nothing that
+/// belongs to the window, so it is safe to ask about one an autocommand has
+/// closed. [`Win::id`] is the only way to make one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct WinId(pub(super) handle_T);
+
+/// A buffer's identity, taken from a live buffer: its number. [`WinId`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct BufId(pub(super) handle_T);
+
+impl WinId {
+    /// The window again, `None` once it has been freed.
+    ///
+    /// This is the second half of the re-entry rule: `let id = win.id()`
+    /// before the call, `id.get()` after it, and a fresh [`Win`] or nothing.
+    ///
+    /// "Still there" here is **not** `win_valid()`, and the two answer
+    /// different questions:
+    ///
+    /// * `win_valid(wp)` asks whether an **address** is on the **current tab
+    ///   page's** window list (`win_valid_any_tab` widens that to every tab
+    ///   page). It is a list walk, and it says "no" for a hidden window
+    ///   (`win_alloc(_, true)`) that is on no list but perfectly alive.
+    /// * This asks whether the **object** still exists. It says "yes" for
+    ///   that hidden window, and "no" for the autocommand window while it is
+    ///   idle, which `aucmd_restbuf` takes out of the registry.
+    ///
+    /// Ask this one when the question is "did what I was holding survive the
+    /// call I just made"; ask `win_valid` when the question is about layout —
+    /// "is this window on screen, on this tab page". Reaching for the wrong
+    /// one is a behaviour change, not a style choice. And a caller holding a
+    /// bare `*mut win_T` that an autocommand may have freed cannot use this
+    /// at all: taking a [`WinId`] from one would read the window, the very
+    /// dereference the list walk exists to avoid.
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<Win> {
+        window(self.0)
+    }
+
+    /// The bare handle, for the API and RPC edges that speak in numbers.
+    #[inline(always)]
+    pub(crate) fn handle(self) -> handle_T {
+        self.0
+    }
+}
+
+impl BufId {
+    /// The buffer again, `None` once it has been wiped. [`WinId::get`].
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<Buf> {
+        buffer(self.0)
+    }
+
+    /// Whether the buffer is still registered — [`WinId::get`]'s question,
+    /// as a `bool`, with the same warning: this is not `buf_valid`'s walk of
+    /// the buffer list, and the two off-list buffers (`ml_recover`'s scratch,
+    /// `open_spellbuf`'s dummy) are registered by nobody and answer `false`.
+    #[inline(always)]
+    pub(crate) fn valid(self) -> bool {
+        self.get().is_some()
+    }
+}
