@@ -37,7 +37,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
     // ASCII in every locale, so this really is the same test.
     let named = (len == 9 && unsafe { strncmp(arg, c"firstline".as_ptr(), 9) } == 0)
         || (len == 8 && unsafe { strncmp(arg, c"lastline".as_ptr(), 8) } == 0);
-    if arg == p.ptr() || unsafe { *arg as u8 }.is_ascii_digit() || named {
+    if arg == p.raw() || unsafe { *arg as u8 }.is_ascii_digit() || named {
         if !skip {
             unsafe { semsg_c!(gettext(c"E125: Illegal argument: %s".as_ptr()), arg) };
         }
@@ -63,7 +63,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
         unsafe { ga_push_string(newargs, arg_copy) };
         p.set(c);
     }
-    p.ptr()
+    p.raw()
 }
 
 /// Parse a definition's argument list, up to and including `endchar`.
@@ -111,24 +111,24 @@ pub(crate) unsafe fn get_function_args(
                 p.step(3);
                 mustend = true;
             } else {
-                let arg = p.ptr();
+                let arg = p.raw();
                 p = unsafe { Walk::new(one_function_arg(arg, newargs, skip)) };
-                if p.ptr() == arg {
+                if p.raw() == arg {
                     break;
                 }
-                if unsafe { *skipwhite(p.ptr()) } == b'=' as c_char && !default_args.is_null() {
+                if unsafe { *skipwhite(p.raw()) } == b'=' as c_char && !default_args.is_null() {
                     let mut rettv = TV_INITIAL_VALUE;
                     any_default = true;
-                    let eq = unsafe { skipwhite(p.ptr()).add(1) };
+                    let eq = unsafe { skipwhite(p.raw()).add(1) };
                     p = unsafe { Walk::new(skipwhite(eq)) };
-                    let mut expr = p.ptr();
+                    let mut expr = p.raw();
                     // SAFETY: `&raw mut p` is this frame's own walk, which
                     // `eval1` advances in place.
                     let parsed =
                         unsafe { eval1((&raw mut p).cast(), &raw mut rettv, ptr::null_mut()) };
                     if parsed != FAIL {
                         unsafe { ga_grow(default_args, 1) };
-                        while p.ptr() > expr && ascii_iswhite(c_int::from(p.behind(1))) {
+                        while p.raw() > expr && ascii_iswhite(c_int::from(p.behind(1))) {
                             p.step_back(1);
                         }
                         // The default is kept as source, so it is copied
@@ -147,14 +147,14 @@ pub(crate) unsafe fn get_function_args(
                     mustend = true;
                 }
                 let comma_after_white = ascii_iswhite(c_int::from(p.byte()))
-                    && unsafe { *skipwhite(p.ptr()) } == b',' as c_char;
+                    && unsafe { *skipwhite(p.raw()) } == b',' as c_char;
                 if comma_after_white {
                     if !skip {
-                        let (fmt, at) = (E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr(), p.ptr());
+                        let (fmt, at) = (E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr(), p.raw());
                         unsafe { semsg_c!(gettext(fmt), c",".as_ptr(), at) };
                         break 'parse false;
                     }
-                    p = unsafe { Walk::new(skipwhite(p.ptr())) };
+                    p = unsafe { Walk::new(skipwhite(p.raw())) };
                 }
                 if p.byte() == b',' {
                     p.step(1);
@@ -162,7 +162,7 @@ pub(crate) unsafe fn get_function_args(
                     mustend = true;
                 }
             }
-            p = unsafe { Walk::new(skipwhite(p.ptr())) };
+            p = unsafe { Walk::new(skipwhite(p.raw())) };
             if mustend && p.chr() != endchar {
                 if !skip {
                     let at = unsafe { *argp };
@@ -174,7 +174,7 @@ pub(crate) unsafe fn get_function_args(
         p.chr() == endchar
     };
     if closed {
-        unsafe { *argp = p.ptr().add(1) };
+        unsafe { *argp = p.raw().add(1) };
         return OK;
     }
 
@@ -207,7 +207,7 @@ pub(crate) unsafe fn get_func_arguments(
     let mut ret = OK;
     while unsafe { *argcount } < MAX_FUNC_ARGS - partial_argc {
         // skip the '(' or ','
-        argp = unsafe { Walk::new(skipwhite(argp.ptr().add(1))) };
+        argp = unsafe { Walk::new(skipwhite(argp.raw().add(1))) };
         if matches!(argp.byte(), b')' | b',') || argp.byte() == NUL as u8 {
             break;
         }
@@ -223,13 +223,13 @@ pub(crate) unsafe fn get_func_arguments(
             break;
         }
     }
-    argp = unsafe { Walk::new(skipwhite(argp.ptr())) };
+    argp = unsafe { Walk::new(skipwhite(argp.raw())) };
     if argp.byte() == b')' {
         argp.step(1);
     } else {
         ret = FAIL;
     }
-    unsafe { *arg = argp.ptr() };
+    unsafe { *arg = argp.raw() };
     ret
 }
 

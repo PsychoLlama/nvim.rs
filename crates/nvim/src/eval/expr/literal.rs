@@ -133,7 +133,7 @@ impl Walk {
     }
 
     /// The pointer back, for the callees that still take one.
-    pub(crate) fn ptr(self) -> *mut c_char {
+    pub(crate) fn raw(self) -> *mut c_char {
         self.0
     }
 
@@ -242,7 +242,7 @@ pub(crate) unsafe fn eval_number(
         get_float = true;
         // SAFETY: `skipdigits` stops at the NUL, and the walk is still
         // inside the expression at every step below.
-        p = unsafe { Walk::new(skipdigits(p.ptr().add(2))) };
+        p = unsafe { Walk::new(skipdigits(p.raw().add(2))) };
         if p.byte() == b'e' || p.byte() == b'E' {
             p.step(1);
             if p.byte() == b'-' || p.byte() == b'+' {
@@ -251,7 +251,7 @@ pub(crate) unsafe fn eval_number(
             if !ascii_isdigit(c_int::from(p.byte())) {
                 get_float = false;
             } else {
-                p = unsafe { Walk::new(skipdigits(p.ptr().add(1))) };
+                p = unsafe { Walk::new(skipdigits(p.raw().add(1))) };
             }
         }
         let after = p.byte();
@@ -306,7 +306,7 @@ pub(crate) unsafe fn eval_number(
             // SAFETY: `rettv` is valid whenever a Blob was allocated.
             unsafe { tv_blob_set_ret(rettv, blob) };
         }
-        cur.set(bp.ptr());
+        cur.set(bp.raw());
     } else {
         let mut len: c_int = 0;
         let mut n: varnumber_T = 0;
@@ -375,13 +375,13 @@ pub(crate) unsafe fn eval_string(
                 }
                 // Skip to the `>` so a `{` inside is not read as the
                 // start of an interpolated expression.
-                let left = unsafe { arg_end.offset_from(p.ptr()) } as size_t;
+                let left = unsafe { arg_end.offset_from(p.raw()) } as size_t;
                 let (walk, mods) = ((&raw mut p).cast(), &raw mut modifiers);
                 // SAFETY: `walk` is this frame's own walk, which
                 // `find_special_key` advances in place.
                 let found = unsafe { find_special_key(walk, left, mods, flags, null_mut()) };
                 if found != 0 {
-                    p = unsafe { Walk::new(p.ptr().sub(1)) }; // leave `p` on the `>`
+                    p = unsafe { Walk::new(p.raw().sub(1)) }; // leave `p` on the `>`
                 }
             }
         } else if interpolate && (p.byte() == b'{' || p.byte() == b'}') {
@@ -396,7 +396,7 @@ pub(crate) unsafe fn eval_string(
             }
             extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
         }
-        p.step(unsafe { utfc_ptr2len(p.ptr()) } as usize);
+        p.step(unsafe { utfc_ptr2len(p.raw()) } as usize);
     }
 
     if p.byte() != b'"' && !(interpolate && p.byte() == b'{') {
@@ -405,7 +405,7 @@ pub(crate) unsafe fn eval_string(
         return FAIL;
     }
     if !evaluate {
-        cur.set(unsafe { p.ptr().add(off) });
+        cur.set(unsafe { p.raw().add(off) });
         return OK;
     }
 
@@ -490,7 +490,7 @@ pub(crate) unsafe fn eval_string(
                     if c != 'X' as c_int {
                         // SAFETY: the measuring pass reserved five bytes for
                         // this escape, which is more than a character takes.
-                        let written = unsafe { utf_char2bytes(nr, end.ptr()) };
+                        let written = unsafe { utf_char2bytes(nr, end.raw()) };
                         end.step(written as usize);
                     } else {
                         end.put(nr as c_char);
@@ -519,15 +519,15 @@ pub(crate) unsafe fn eval_string(
                 if p.at(1) != b'*' {
                     flags |= FSK_SIMPLIFY as c_int;
                 }
-                let left = unsafe { arg_end.offset_from(p.ptr()) } as size_t;
-                let (walk, out) = ((&raw mut p).cast(), end.ptr());
+                let left = unsafe { arg_end.offset_from(p.raw()) } as size_t;
+                let (walk, out) = ((&raw mut p).cast(), end.raw());
                 // SAFETY: `walk` is this frame's own walk, which
                 // `trans_special` advances in place, and `out` has the five
                 // bytes the measuring pass reserved.
                 let written = unsafe { trans_special(walk, left, out, flags, false, null_mut()) };
                 if written != 0 {
                     end.step(written as usize);
-                    if end.ptr() >= buffer.wrapping_offset(len as isize) {
+                    if end.raw() >= buffer.wrapping_offset(len as isize) {
                         // SAFETY: a literal message.
                         unsafe { iemsg(c"eval_string() used more space than allocated".as_ptr()) };
                     }
@@ -547,7 +547,7 @@ pub(crate) unsafe fn eval_string(
     if p.byte() == b'"' && !interpolate {
         p.step(1);
     }
-    cur.set(p.ptr());
+    cur.set(p.raw());
     OK
 }
 
@@ -600,7 +600,7 @@ pub(crate) unsafe fn eval_lit_string(
                 reduce += 1;
             }
         }
-        p.step(unsafe { utfc_ptr2len(p.ptr()) } as usize);
+        p.step(unsafe { utfc_ptr2len(p.raw()) } as usize);
     }
 
     if p.byte() != b'\'' && !(interpolate && p.byte() == b'{') {
@@ -609,7 +609,7 @@ pub(crate) unsafe fn eval_lit_string(
         return FAIL;
     }
     if !evaluate {
-        cur.set(unsafe { p.ptr().add(off) });
+        cur.set(unsafe { p.raw().add(off) });
         return OK;
     }
 
@@ -636,7 +636,7 @@ pub(crate) unsafe fn eval_lit_string(
         unsafe { mb_copy_char((&raw mut p).cast(), (&raw mut str).cast()) };
     }
     str.set(NUL as c_char);
-    cur.set(unsafe { p.ptr().add(off) });
+    cur.set(unsafe { p.raw().add(off) });
     OK
 }
 

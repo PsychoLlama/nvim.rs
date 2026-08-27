@@ -176,7 +176,7 @@ pub(crate) unsafe fn get_function_body(
                 while ascii_iswhite(c_int::from(w.byte())) || w.byte() == b':' {
                     w.step(1);
                 }
-                p = w.ptr();
+                p = w.raw();
 
                 // Check for "endfunction".  The count is decremented on
                 // every one seen; only the outermost ends the body.
@@ -190,7 +190,7 @@ pub(crate) unsafe fn get_function_body(
                     if w.byte() == b'!' {
                         w.step(1);
                     }
-                    p = w.ptr();
+                    p = w.raw();
                     let mut nextcmd: *mut c_char = ptr::null_mut();
                     if w.byte() == b'|' {
                         nextcmd = unsafe { p.add(1) };
