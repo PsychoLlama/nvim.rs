@@ -46,8 +46,8 @@ use crate::eval::vars::{
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
 use crate::eval::{
-    COPYID_INC, COPYID_MASK, DICT_MAXNEST, e_variable_nested_too_deep_for_making_copy, kMTCharWise,
-    set_ref_in_callback, set_ref_in_callback_reader, timers,
+    COPYID_INC, COPYID_MASK, DICT_MAXNEST, Tv, e_variable_nested_too_deep_for_making_copy,
+    kMTCharWise, set_ref_in_callback, set_ref_in_callback_reader, timers,
 };
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
@@ -68,13 +68,14 @@ use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, CONV_NONE, DictWatcher, FAIL, NUL, OK, OptInt, QUEUE, String_0, VAR_BLOB,
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T,
-    ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t, typval_T,
-    typval_vval_union, ufunc_T, vimconv_T, xfmark_T, yankreg_T,
+    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, DictWatcher, FAIL, NUL, OK,
+    OptInt, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, dict_T,
+    dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T,
+    listitem_T, partial_T, pos_T, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T,
+    vimconv_T, win_T, xfmark_T, yankreg_T,
 };
-use crate::winlayer::{buffers, tab_windows, tabs};
+use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -108,147 +109,184 @@ unsafe fn hi2di(hi: *mut hashitem_T) -> *mut dictitem_T {
     unsafe { (*hi).hi_key.sub(offset_of!(dictitem_T, di_key)) as *mut dictitem_T }
 }
 
+/// Mark one root's variable, with neither stack: the collector recurses
+/// into whatever it holds rather than deferring it to a caller's loop.
+///
+/// # Safety
+/// `tv` must be a live typval.
+unsafe fn mark_root(tv: *mut typval_T, copy_id: c_int) -> bool {
+    // SAFETY: the caller's promise; the two nulls are what say "recurse".
+    unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
+}
+
+/// Mark one callback, with neither stack.
+///
+/// # Safety
+/// `cb` must be a live callback.
+unsafe fn mark_cb(cb: *mut Callback, copy_id: c_int) -> bool {
+    // SAFETY: as [`mark_root`].
+    unsafe { set_ref_in_callback(cb, copy_id, null_mut(), null_mut()) }
+}
+
+/// Mark one callback reader, with neither stack.
+///
+/// # Safety
+/// `reader` must be a live reader.
+unsafe fn mark_reader(reader: *mut CallbackReader, copy_id: c_int) -> bool {
+    // SAFETY: as [`mark_root`].
+    unsafe { set_ref_in_callback_reader(reader, copy_id, null_mut(), null_mut()) }
+}
+
 /// Mark, then free. Answers whether anything was freed.
 ///
 /// # Safety
 /// Called from a point where no typval is held in a Rust temporary — see
 /// the module docs; anything the marking pass cannot see is freed.
 pub unsafe fn garbage_collect(testing: bool) -> bool {
-    unsafe {
-        let mut abort = false;
-        if !testing {
-            // Only once per request.
-            want_garbage_collect.set(false);
-            may_garbage_collect.set(false);
-            garbage_collect_at_exit.set(false);
-        }
-
-        trim_exestack();
-
-        let copy_id = get_copy_id();
-
-        // 1. Mark everything reachable from a root.
-
-        // Variables in the previous_funccal list must not be freed unless
-        // they are reachable *only* through it, so this goes first.
-        abort = abort || set_ref_in_previous_funccal(copy_id);
-        abort = abort || garbage_collect_scriptvars(copy_id);
-
-        for buf in buffers() {
-            // The addresses come off `Buf::raw`, never through `DerefMut`, so
-            // no `&mut buf_T` is formed while they are live.
-            let buf = buf.raw();
-            // buffer-local variables
-            abort = abort
-                || set_ref_in_item(
-                    &raw mut (*buf).b_bufvar.di_tv,
-                    copy_id,
-                    null_mut(),
-                    null_mut(),
-                );
-            // buffer callback functions
-            for cb in [
-                &raw mut (*buf).b_prompt_callback,
-                &raw mut (*buf).b_prompt_interrupt,
-                &raw mut (*buf).b_cfu_cb,
-                &raw mut (*buf).b_ofu_cb,
-                &raw mut (*buf).b_tsrfu_cb,
-                &raw mut (*buf).b_tfu_cb,
-                &raw mut (*buf).b_ffu_cb,
-            ] {
-                abort = abort || set_ref_in_callback(cb, copy_id, null_mut(), null_mut());
-            }
-            if !abort && !(*buf).b_p_cpt_cb.is_null() {
-                abort = abort
-                    || set_ref_in_cpt_callbacks((*buf).b_p_cpt_cb, (*buf).b_p_cpt_count, copy_id);
-            }
-        }
-
-        // 'completefunc', 'omnifunc', 'thesaurusfunc', 'operatorfunc',
-        // 'tagfunc' and 'findfunc' callbacks.
-        abort = abort || set_ref_in_insexpand_funcs(copy_id);
-        abort = abort || set_ref_in_opfunc(copy_id);
-        abort = abort || set_ref_in_tagfunc(copy_id);
-        abort = abort || set_ref_in_findfunc(copy_id);
-
-        // window-local variables, in every tab page
-        for wp in tab_windows() {
-            let wp = wp.raw();
-            abort = abort
-                || set_ref_in_item(
-                    &raw mut (*wp).w_winvar.di_tv,
-                    copy_id,
-                    null_mut(),
-                    null_mut(),
-                );
-        }
-
-        // window-local variables in the autocommand windows
-        let wins = aucmd_wins();
-        for i in 0..wins.len() {
-            let win = (*wins.slot(i)).auc_win;
-            if !win.is_null() {
-                abort = abort
-                    || set_ref_in_item(
-                        &raw mut (*win).w_winvar.di_tv,
-                        copy_id,
-                        null_mut(),
-                        null_mut(),
-                    );
-            }
-        }
-
-        walk_shada_iterators();
-
-        // tabpage-local variables
-        for tp in tabs() {
-            let tp = tp.raw();
-            abort = abort
-                || set_ref_in_item(
-                    &raw mut (*tp).tp_winvar.di_tv,
-                    copy_id,
-                    null_mut(),
-                    null_mut(),
-                );
-        }
-
-        abort = abort || garbage_collect_globvars(copy_id) != 0;
-        // function-local variables, then named functions (closures)
-        abort = abort || set_ref_in_call_stack(copy_id);
-        abort = abort || set_ref_in_functions(copy_id);
-
-        // Channels. Deliberately not `abort`ed on: upstream discards these
-        // answers, and doing otherwise would change when a collection is
-        // abandoned.
-        for data in channels.with(SlotTable::snapshot_values) {
-            set_ref_in_callback_reader(&raw mut (*data).on_data, copy_id, null_mut(), null_mut());
-            set_ref_in_callback_reader(&raw mut (*data).on_stderr, copy_id, null_mut(), null_mut());
-            set_ref_in_callback(&raw mut (*data).on_exit, copy_id, null_mut(), null_mut());
-        }
-
-        // Timers, likewise.
-        for timer in timers.with(SlotTable::snapshot_values) {
-            set_ref_in_callback(&raw mut (*timer).callback, copy_id, null_mut(), null_mut());
-        }
-
-        // function call arguments, if v:testing is set
-        abort = abort || set_ref_in_func_args(copy_id);
-        abort = abort || garbage_collect_vimvars(copy_id);
-        abort = abort || set_ref_in_quickfix(copy_id);
-
-        // 2. Free what nothing marked — but only if every root was seen.
-        if abort {
-            if p_verbose.get() > 0 as OptInt {
-                verb_msg(gettext(
-                    c"Not enough memory to set references, garbage collection aborted!".as_ptr(),
-                ));
-            }
-            return false;
-        }
-        let did_free = free_unref_items(copy_id) != 0;
-        // 3. Any funccal that can go now. May call back into here.
-        free_unref_funccal(copy_id, testing as c_int) || did_free
+    let mut abort = false;
+    if !testing {
+        // Only once per request.
+        want_garbage_collect.set(false);
+        may_garbage_collect.set(false);
+        garbage_collect_at_exit.set(false);
     }
+
+    trim_exestack();
+
+    let copy_id = unsafe { get_copy_id() };
+
+    // 1. Mark everything reachable from a root.
+
+    // Variables in the previous_funccal list must not be freed unless
+    // they are reachable *only* through it, so this goes first.
+    abort = abort || unsafe { set_ref_in_previous_funccal(copy_id) };
+    abort = abort || unsafe { garbage_collect_scriptvars(copy_id) };
+
+    for buf in buffers() {
+        // The addresses come off `Buf::raw`, never through `DerefMut`, so
+        // no `&mut buf_T` is formed while they are live. `Live::field_ptr`
+        // is what says where a field is without reading the object, so
+        // naming these seven is ordinary code.
+        // SAFETY: `buffers()` walks the editor's own list of live buffers.
+        let buf = unsafe { Live::<buf_T>::new(buf.raw()) };
+        // buffer-local variables
+        let bufvar = buf.field_ptr(offset_of!(buf_T, b_bufvar.di_tv));
+        // SAFETY: `bufvar` is the buffer's own variable dictionary.
+        abort = abort || unsafe { mark_root(bufvar, copy_id) };
+        // buffer callback functions
+        for offset in [
+            offset_of!(buf_T, b_prompt_callback),
+            offset_of!(buf_T, b_prompt_interrupt),
+            offset_of!(buf_T, b_cfu_cb),
+            offset_of!(buf_T, b_ofu_cb),
+            offset_of!(buf_T, b_tsrfu_cb),
+            offset_of!(buf_T, b_tfu_cb),
+            offset_of!(buf_T, b_ffu_cb),
+        ] {
+            let cb: *mut Callback = buf.field_ptr(offset);
+            // SAFETY: `cb` is one of the buffer's own callbacks.
+            abort = abort || unsafe { mark_cb(cb, copy_id) };
+        }
+        // The buffer's own 'complete' callback list.
+        let (cpt_cb, cpt_count) = (buf.b_p_cpt_cb, buf.b_p_cpt_count);
+        if !abort && !cpt_cb.is_null() {
+            // SAFETY: as above -- `cpt_count` entries of the buffer's list.
+            abort = abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb, cpt_count, copy_id) };
+        }
+    }
+
+    // 'completefunc', 'omnifunc', 'thesaurusfunc', 'operatorfunc',
+    // 'tagfunc' and 'findfunc' callbacks.
+    abort = abort || unsafe { set_ref_in_insexpand_funcs(copy_id) };
+    abort = abort || unsafe { set_ref_in_opfunc(copy_id) };
+    abort = abort || unsafe { set_ref_in_tagfunc(copy_id) };
+    abort = abort || unsafe { set_ref_in_findfunc(copy_id) };
+
+    // window-local variables, in every tab page
+    for wp in tab_windows() {
+        // SAFETY: the walk answers the editor's own live windows.
+        let wp = unsafe { Live::<win_T>::new(wp.raw()) };
+        let winvar = wp.field_ptr(offset_of!(win_T, w_winvar.di_tv));
+        // SAFETY: `winvar` is the window's own variable dictionary.
+        abort = abort || unsafe { mark_root(winvar, copy_id) };
+    }
+
+    // window-local variables in the autocommand windows
+    let wins = aucmd_wins();
+    for i in 0..wins.len() {
+        // SAFETY: `i` is inside the table, whose windows are live.
+        let win = unsafe { (*wins.slot(i)).auc_win };
+        if !win.is_null() {
+            // SAFETY: as above.
+            let win = unsafe { Live::<win_T>::new(win) };
+            let winvar = win.field_ptr(offset_of!(win_T, w_winvar.di_tv));
+            // SAFETY: `winvar` is that window's own variable dictionary.
+            abort = abort || unsafe { mark_root(winvar, copy_id) };
+        }
+    }
+
+    unsafe { walk_shada_iterators() };
+
+    // tabpage-local variables
+    for tp in tabs() {
+        // SAFETY: the walk answers the editor's own live tab pages.
+        let tp = unsafe { Live::<tabpage_T>::new(tp.raw()) };
+        let tpvar = tp.field_ptr(offset_of!(tabpage_T, tp_winvar.di_tv));
+        // SAFETY: `tpvar` is the tab page's own variable dictionary.
+        abort = abort || unsafe { mark_root(tpvar, copy_id) };
+    }
+
+    abort = abort || unsafe { garbage_collect_globvars(copy_id) } != 0;
+    // function-local variables, then named functions (closures)
+    abort = abort || unsafe { set_ref_in_call_stack(copy_id) };
+    abort = abort || unsafe { set_ref_in_functions(copy_id) };
+
+    // Channels. Deliberately not `abort`ed on: upstream discards these
+    // answers, and doing otherwise would change when a collection is
+    // abandoned.
+    for data in channels.with(SlotTable::snapshot_values) {
+        // SAFETY: the snapshot holds the registered live channels.
+        let ch = unsafe { Live::<Channel>::new(data) };
+        let on_data = ch.field_ptr(offset_of!(Channel, on_data));
+        let on_stderr = ch.field_ptr(offset_of!(Channel, on_stderr));
+        let on_exit = ch.field_ptr(offset_of!(Channel, on_exit));
+        // SAFETY: all three are the channel's own callbacks.
+        unsafe { mark_reader(on_data, copy_id) };
+        // SAFETY: as above.
+        unsafe { mark_reader(on_stderr, copy_id) };
+        // SAFETY: as above.
+        unsafe { mark_cb(on_exit, copy_id) };
+    }
+
+    // Timers, likewise.
+    for timer in timers.with(SlotTable::snapshot_values) {
+        // SAFETY: the snapshot holds the registered live timers.
+        let cb = unsafe { Live::<timer_T>::new(timer) }.field_ptr(offset_of!(timer_T, callback));
+        // SAFETY: `cb` is the timer's own callback.
+        unsafe { mark_cb(cb, copy_id) };
+    }
+
+    // function call arguments, if v:testing is set
+    abort = abort || unsafe { set_ref_in_func_args(copy_id) };
+    abort = abort || unsafe { garbage_collect_vimvars(copy_id) };
+    abort = abort || unsafe { set_ref_in_quickfix(copy_id) };
+
+    // 2. Free what nothing marked — but only if every root was seen.
+    if abort {
+        if p_verbose.get() > 0 as OptInt {
+            let msg = c"Not enough memory to set references, garbage collection aborted!";
+            // SAFETY: the message is a NUL-terminated literal.
+            unsafe { verb_msg(gettext(msg.as_ptr())) };
+        }
+        return false;
+    }
+    // SAFETY: the marking pass above is complete, which is what
+    // `free_unref_items` and `free_unref_funccal` both rest on.
+    let did_free = unsafe { free_unref_items(copy_id) } != 0;
+    // 3. Any funccal that can go now. May call back into here.
+    // SAFETY: as above.
+    let freed_funccal = unsafe { free_unref_funccal(copy_id, testing as c_int) };
+    freed_funccal || did_free
 }
 
 /// Give back the execution stack's slack, keeping 150% of what is in use.
@@ -283,50 +321,49 @@ fn trim_exestack() {
 /// # Safety
 /// Called with the register and mark tables initialised.
 unsafe fn walk_shada_iterators() {
-    unsafe {
-        let mut reg_iter: *const c_void = null();
-        loop {
-            let mut reg = yankreg_T {
-                y_array: null_mut::<String_0>(),
-                y_size: 0,
-                y_type: kMTCharWise,
-                y_width: 0,
-                timestamp: 0,
-                additional_data: null_mut::<AdditionalData>(),
-            };
-            let mut name: c_char = NUL as c_char;
-            let mut is_unnamed = false;
-            reg_iter =
-                op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed);
-            if reg_iter.is_null() {
-                break;
-            }
+    let mut reg_iter: *const c_void = null();
+    loop {
+        let mut reg = yankreg_T {
+            y_array: null_mut::<String_0>(),
+            y_size: 0,
+            y_type: kMTCharWise,
+            y_width: 0,
+            timestamp: 0,
+            additional_data: null_mut::<AdditionalData>(),
+        };
+        let mut name: c_char = NUL as c_char;
+        let mut is_unnamed = false;
+        reg_iter = unsafe {
+            op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed)
+        };
+        if reg_iter.is_null() {
+            break;
         }
+    }
 
-        let mut mark_iter: *const c_void = null();
-        loop {
-            let mut fm = xfmark_T {
-                fmark: fmark_T {
-                    mark: pos_T {
-                        lnum: 0,
-                        col: 0,
-                        coladd: 0,
-                    },
-                    fnum: 0,
-                    timestamp: 0,
-                    view: fmarkv_T {
-                        topline_offset: 0,
-                        skipcol: 0,
-                    },
-                    additional_data: null_mut::<AdditionalData>(),
+    let mut mark_iter: *const c_void = null();
+    loop {
+        let mut fm = xfmark_T {
+            fmark: fmark_T {
+                mark: pos_T {
+                    lnum: 0,
+                    col: 0,
+                    coladd: 0,
                 },
-                fname: null_mut::<c_char>(),
-            };
-            let mut name: c_char = NUL as c_char;
-            mark_iter = mark_global_iter(mark_iter, &raw mut name, &raw mut fm);
-            if mark_iter.is_null() {
-                break;
-            }
+                fnum: 0,
+                timestamp: 0,
+                view: fmarkv_T {
+                    topline_offset: 0,
+                    skipcol: 0,
+                },
+                additional_data: null_mut::<AdditionalData>(),
+            },
+            fname: null_mut::<c_char>(),
+        };
+        let mut name: c_char = NUL as c_char;
+        mark_iter = unsafe { mark_global_iter(mark_iter, &raw mut name, &raw mut fm) };
+        if mark_iter.is_null() {
+            break;
         }
     }
 }
@@ -341,58 +378,56 @@ unsafe fn walk_shada_iterators() {
 /// # Safety
 /// Called only from `garbage_collect`, after a complete marking pass.
 pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
-    unsafe {
-        /// Is this mark stale? The low bit is the previous-funccal flag and
-        /// is not part of the comparison.
-        fn stale(mark: c_int, copy_id: c_int) -> bool {
-            mark & COPYID_MASK != copy_id & COPYID_MASK
-        }
-
-        let mut did_free = false;
-        tv_in_free_unref_items.set(true);
-
-        // Pass 1: empty the unreachable dictionaries…
-        let mut dd = gc_first_dict.get();
-        while !dd.is_null() {
-            if stale((*dd).dv_copyID, copy_id) {
-                tv_dict_free_contents(dd);
-                did_free = true;
-            }
-            dd = (*dd).dv_used_next;
-        }
-        // …and the unreachable lists. A list with a watcher is left alone:
-        // the watcher is a borrow the collector cannot see.
-        let mut ll = gc_first_list.get();
-        while !ll.is_null() {
-            if stale(tv_list_copyid(ll), copy_id) && !tv_list_has_watchers(ll) {
-                tv_list_free_contents(ll);
-                did_free = true;
-            }
-            ll = (*ll).lv_used_next;
-        }
-
-        // Pass 2: unlink and free the structures themselves. The `next`
-        // pointer is read before the free.
-        let mut dd = gc_first_dict.get();
-        while !dd.is_null() {
-            let next = (*dd).dv_used_next;
-            if stale((*dd).dv_copyID, copy_id) {
-                tv_dict_free_dict(dd);
-            }
-            dd = next;
-        }
-        let mut ll = gc_first_list.get();
-        while !ll.is_null() {
-            let next = (*ll).lv_used_next;
-            if stale((*ll).lv_copyID, copy_id) && !tv_list_has_watchers(ll) {
-                tv_list_free_list(ll);
-            }
-            ll = next;
-        }
-
-        tv_in_free_unref_items.set(false);
-        did_free as c_int
+    /// Is this mark stale? The low bit is the previous-funccal flag and
+    /// is not part of the comparison.
+    fn stale(mark: c_int, copy_id: c_int) -> bool {
+        mark & COPYID_MASK != copy_id & COPYID_MASK
     }
+
+    let mut did_free = false;
+    tv_in_free_unref_items.set(true);
+
+    // Pass 1: empty the unreachable dictionaries…
+    let mut dd = gc_first_dict.get();
+    while !dd.is_null() {
+        if stale(unsafe { (*dd).dv_copyID }, copy_id) {
+            unsafe { tv_dict_free_contents(dd) };
+            did_free = true;
+        }
+        dd = unsafe { (*dd).dv_used_next };
+    }
+    // …and the unreachable lists. A list with a watcher is left alone:
+    // the watcher is a borrow the collector cannot see.
+    let mut ll = gc_first_list.get();
+    while !ll.is_null() {
+        if stale(unsafe { tv_list_copyid(ll) }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
+            unsafe { tv_list_free_contents(ll) };
+            did_free = true;
+        }
+        ll = unsafe { (*ll).lv_used_next };
+    }
+
+    // Pass 2: unlink and free the structures themselves. The `next`
+    // pointer is read before the free.
+    let mut dd = gc_first_dict.get();
+    while !dd.is_null() {
+        let next = unsafe { (*dd).dv_used_next };
+        if stale(unsafe { (*dd).dv_copyID }, copy_id) {
+            unsafe { tv_dict_free_dict(dd) };
+        }
+        dd = next;
+    }
+    let mut ll = gc_first_list.get();
+    while !ll.is_null() {
+        let next = unsafe { (*ll).lv_used_next };
+        if stale(unsafe { (*ll).lv_copyID }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
+            unsafe { tv_list_free_list(ll) };
+        }
+        ll = next;
+    }
+
+    tv_in_free_unref_items.set(false);
+    did_free as c_int
 }
 
 /// Mark every item of a hashtab, draining the nested hashtabs it finds
@@ -405,43 +440,43 @@ pub unsafe fn set_ref_in_ht(
     copy_id: c_int,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
-    unsafe {
-        let mut abort = false;
-        let mut ht_stack: *mut ht_stack_T = null_mut();
-        let mut cur_ht = ht;
-        loop {
-            if !abort {
-                // A nested hashtab is pushed onto `ht_stack`, a nested list
-                // onto the caller's `list_stack`.
-                let mut todo = (*cur_ht).ht_used;
-                let mut hi: *mut hashitem_T = (*cur_ht).ht_array;
-                while todo != 0 {
-                    if !(*hi).hi_key.is_null()
-                        && !core::ptr::eq((*hi).hi_key, &raw const hash_removed)
-                    {
-                        todo -= 1;
-                        abort = abort
-                            || set_ref_in_item(
+    let mut abort = false;
+    let mut ht_stack: *mut ht_stack_T = null_mut();
+    let mut cur_ht = ht;
+    loop {
+        if !abort {
+            // A nested hashtab is pushed onto `ht_stack`, a nested list
+            // onto the caller's `list_stack`.
+            let mut todo = unsafe { (*cur_ht).ht_used };
+            let mut hi: *mut hashitem_T = unsafe { (*cur_ht).ht_array };
+            while todo != 0 {
+                if !unsafe { (*hi).hi_key }.is_null()
+                    && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
+                {
+                    todo -= 1;
+                    abort = abort
+                        || unsafe {
+                            set_ref_in_item(
                                 &raw mut (*hi2di(hi)).di_tv,
                                 copy_id,
                                 &raw mut ht_stack,
                                 list_stack,
-                            );
-                    }
-                    hi = hi.add(1);
+                            )
+                        };
                 }
+                hi = unsafe { hi.add(1) };
             }
-            // The stack is drained even while aborting, so nothing leaks.
-            if ht_stack.is_null() {
-                break;
-            }
-            cur_ht = (*ht_stack).ht;
-            let done = ht_stack;
-            ht_stack = (*ht_stack).prev as *mut ht_stack_T;
-            xfree(done as *mut c_void);
         }
-        abort
+        // The stack is drained even while aborting, so nothing leaks.
+        if ht_stack.is_null() {
+            break;
+        }
+        cur_ht = unsafe { (*ht_stack).ht };
+        let done = ht_stack;
+        ht_stack = unsafe { (*ht_stack).prev } as *mut ht_stack_T;
+        unsafe { xfree(done as *mut c_void) };
     }
+    abort
 }
 
 /// Mark every item of a list, draining the nested lists it finds into its
@@ -454,36 +489,31 @@ pub unsafe fn set_ref_in_list_items(
     copy_id: c_int,
     ht_stack: *mut *mut ht_stack_T,
 ) -> bool {
-    unsafe {
-        let mut abort = false;
-        let mut list_stack: *mut list_stack_T = null_mut();
-        let mut cur_l = l;
-        loop {
-            if !cur_l.is_null() {
-                let mut li: *mut listitem_T = (*cur_l).lv_first;
-                while !li.is_null() {
-                    if abort {
-                        break;
-                    }
-                    abort = set_ref_in_item(
-                        &raw mut (*li).li_tv,
-                        copy_id,
-                        ht_stack,
-                        &raw mut list_stack,
-                    );
-                    li = (*li).li_next;
+    let mut abort = false;
+    let mut list_stack: *mut list_stack_T = null_mut();
+    let mut cur_l = l;
+    loop {
+        if !cur_l.is_null() {
+            let mut li: *mut listitem_T = unsafe { (*cur_l).lv_first };
+            while !li.is_null() {
+                if abort {
+                    break;
                 }
+                abort = unsafe {
+                    set_ref_in_item(&raw mut (*li).li_tv, copy_id, ht_stack, &raw mut list_stack)
+                };
+                li = unsafe { (*li).li_next };
             }
-            if list_stack.is_null() {
-                break;
-            }
-            cur_l = (*list_stack).list;
-            let done = list_stack;
-            list_stack = (*list_stack).prev as *mut list_stack_T;
-            xfree(done as *mut c_void);
         }
-        abort
+        if list_stack.is_null() {
+            break;
+        }
+        cur_l = unsafe { (*list_stack).list };
+        let done = list_stack;
+        list_stack = unsafe { (*list_stack).prev } as *mut list_stack_T;
+        unsafe { xfree(done as *mut c_void) };
     }
+    abort
 }
 
 /// Mark a dictionary. With no `ht_stack` it recurses; with one it defers,
@@ -497,33 +527,38 @@ pub(crate) unsafe fn set_ref_in_item_dict(
     ht_stack: *mut *mut ht_stack_T,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
-    unsafe {
-        if dd.is_null() || (*dd).dv_copyID == copy_id {
-            return false;
-        }
-        // Not seen yet.
-        (*dd).dv_copyID = copy_id;
-        if ht_stack.is_null() {
-            return set_ref_in_ht(&raw mut (*dd).dv_hashtab, copy_id, list_stack);
-        }
+    if dd.is_null() || unsafe { (*dd).dv_copyID } == copy_id {
+        return false;
+    }
+    // Not seen yet.
+    unsafe { (*dd).dv_copyID = copy_id };
+    if ht_stack.is_null() {
+        return unsafe { set_ref_in_ht(&raw mut (*dd).dv_hashtab, copy_id, list_stack) };
+    }
 
-        let newitem = xmalloc(size_of::<ht_stack_T>()) as *mut ht_stack_T;
-        (*newitem).ht = &raw mut (*dd).dv_hashtab;
+    let newitem = unsafe { xmalloc(size_of::<ht_stack_T>()) } as *mut ht_stack_T;
+    // SAFETY: `newitem` is the block just allocated, and `dd` is a live
+    // Dict whose hashtab lives inside it.
+    unsafe { (*newitem).ht = &raw mut (*dd).dv_hashtab };
+    // SAFETY: the caller's promise about `ht_stack`, which this pushes on.
+    unsafe {
         (*newitem).prev = *ht_stack;
         *ht_stack = newitem;
+    };
 
-        // The watchers' callbacks are marked only on this branch, which is
-        // upstream's. A dictionary reached with no `ht_stack` — that is,
-        // one recursed into directly — does not have them marked.
-        let mut w: *mut QUEUE = (*dd).watchers.next as *mut QUEUE;
-        while w != &raw mut (*dd).watchers {
-            let next: *mut QUEUE = (*w).next as *mut QUEUE;
-            let watcher: *mut DictWatcher = tv_dict_watcher_node_data(w);
-            set_ref_in_callback(&raw mut (*watcher).callback, copy_id, ht_stack, list_stack);
-            w = next;
-        }
-        false
+    // The watchers' callbacks are marked only on this branch, which is
+    // upstream's. A dictionary reached with no `ht_stack` — that is,
+    // one recursed into directly — does not have them marked.
+    let mut w: *mut QUEUE = unsafe { (*dd).watchers.next } as *mut QUEUE;
+    // SAFETY: `dd` is a live Dict, and the queue head lives inside it.
+    let head: *mut QUEUE = unsafe { &raw mut (*dd).watchers };
+    while w != head {
+        let next: *mut QUEUE = unsafe { (*w).next } as *mut QUEUE;
+        let watcher: *mut DictWatcher = unsafe { tv_dict_watcher_node_data(w) };
+        unsafe { set_ref_in_callback(&raw mut (*watcher).callback, copy_id, ht_stack, list_stack) };
+        w = next;
     }
+    false
 }
 
 /// Mark a list. With no `list_stack` it recurses; with one it defers.
@@ -536,20 +571,22 @@ pub(crate) unsafe fn set_ref_in_item_list(
     ht_stack: *mut *mut ht_stack_T,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
+    if ll.is_null() || unsafe { (*ll).lv_copyID } == copy_id {
+        return false;
+    }
+    unsafe { (*ll).lv_copyID = copy_id };
+    if list_stack.is_null() {
+        return unsafe { set_ref_in_list_items(ll, copy_id, ht_stack) };
+    }
+    // SAFETY: `xmalloc` never answers NULL, and the caller's promise about
+    // `list_stack`, which this pushes the new entry onto.
+    let newitem = unsafe { xmalloc(size_of::<list_stack_T>()) } as *mut list_stack_T;
     unsafe {
-        if ll.is_null() || (*ll).lv_copyID == copy_id {
-            return false;
-        }
-        (*ll).lv_copyID = copy_id;
-        if list_stack.is_null() {
-            return set_ref_in_list_items(ll, copy_id, ht_stack);
-        }
-        let newitem = xmalloc(size_of::<list_stack_T>()) as *mut list_stack_T;
         (*newitem).list = ll;
         (*newitem).prev = *list_stack;
         *list_stack = newitem;
-        false
-    }
+    };
+    false
 }
 
 /// Mark a partial: its function, its bound dictionary and its bound
@@ -563,31 +600,31 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     ht_stack: *mut *mut ht_stack_T,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
-    unsafe {
-        if pt.is_null() || (*pt).pt_copyID == copy_id {
-            return false;
-        }
-        (*pt).pt_copyID = copy_id;
+    if pt.is_null() || unsafe { (*pt).pt_copyID } == copy_id {
+        return false;
+    }
+    unsafe { (*pt).pt_copyID = copy_id };
 
-        let mut abort = set_ref_in_func((*pt).pt_name, (*pt).pt_func, copy_id);
-        if !(*pt).pt_dict.is_null() {
-            // A borrowed view, not an owner: `dtv` is never cleared.
-            let mut dtv = UNSET_TV;
-            dtv.v_type = VAR_DICT;
-            dtv.vval.v_dict = (*pt).pt_dict;
-            abort = abort || set_ref_in_item(&raw mut dtv, copy_id, ht_stack, list_stack);
-        }
-        for i in 0..(*pt).pt_argc {
-            abort = abort
-                || set_ref_in_item(
+    let mut abort = unsafe { set_ref_in_func((*pt).pt_name, (*pt).pt_func, copy_id) };
+    if !unsafe { (*pt).pt_dict }.is_null() {
+        // A borrowed view, not an owner: `dtv` is never cleared.
+        let mut dtv = UNSET_TV;
+        dtv.v_type = VAR_DICT;
+        dtv.vval.v_dict = unsafe { (*pt).pt_dict };
+        abort = abort || unsafe { set_ref_in_item(&raw mut dtv, copy_id, ht_stack, list_stack) };
+    }
+    for i in 0..unsafe { (*pt).pt_argc } {
+        abort = abort
+            || unsafe {
+                set_ref_in_item(
                     (*pt).pt_argv.offset(i as isize),
                     copy_id,
                     ht_stack,
                     list_stack,
-                );
-        }
-        abort
+                )
+            };
     }
+    abort
 }
 
 /// Mark whatever a typval holds. The scalar types hold nothing
@@ -601,18 +638,20 @@ pub unsafe fn set_ref_in_item(
     ht_stack: *mut *mut ht_stack_T,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
-    unsafe {
-        match (*tv).v_type {
-            VAR_DICT => set_ref_in_item_dict((*tv).vval.v_dict, copy_id, ht_stack, list_stack),
-            VAR_LIST => set_ref_in_item_list((*tv).vval.v_list, copy_id, ht_stack, list_stack),
-            // A Funcref names a function, which may be a closure holding a
-            // scope of its own.
-            VAR_FUNC => set_ref_in_func((*tv).vval.v_string, null_mut::<ufunc_T>(), copy_id),
-            VAR_PARTIAL => {
-                set_ref_in_item_partial((*tv).vval.v_partial, copy_id, ht_stack, list_stack)
-            }
-            _ => false,
-        }
+    match unsafe { (*tv).v_type } {
+        VAR_DICT => unsafe {
+            set_ref_in_item_dict((*tv).vval.v_dict, copy_id, ht_stack, list_stack)
+        },
+        VAR_LIST => unsafe {
+            set_ref_in_item_list((*tv).vval.v_list, copy_id, ht_stack, list_stack)
+        },
+        // A Funcref names a function, which may be a closure holding a
+        // scope of its own.
+        VAR_FUNC => unsafe { set_ref_in_func((*tv).vval.v_string, null_mut::<ufunc_T>(), copy_id) },
+        VAR_PARTIAL => unsafe {
+            set_ref_in_item_partial((*tv).vval.v_partial, copy_id, ht_stack, list_stack)
+        },
+        _ => false,
     }
 }
 
@@ -633,82 +672,110 @@ pub unsafe fn var_item_copy(
 ) -> c_int {
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
 
-    unsafe {
-        if RECURSE.get() >= DICT_MAXNEST {
-            emsg(gettext(e_variable_nested_too_deep_for_making_copy.as_ptr()));
-            return FAIL;
-        }
-        RECURSE.set(RECURSE.get() + 1);
+    if RECURSE.get() >= DICT_MAXNEST {
+        let msg = e_variable_nested_too_deep_for_making_copy;
+        // SAFETY: a shared NUL-terminated message.
+        unsafe { emsg(gettext(msg.as_ptr())) };
+        return FAIL;
+    }
+    RECURSE.set(RECURSE.get() + 1);
 
-        let mut ret = OK;
-        match (*from).v_type {
-            VAR_STRING => {
-                if conv.is_null() || (*conv).vc_type == CONV_NONE || (*from).vval.v_string.is_null()
-                {
-                    tv_copy(from, to);
-                } else {
-                    (*to).v_type = VAR_STRING;
-                    (*to).v_lock = VarLock::Unlocked;
-                    (*to).vval.v_string = string_convert(
-                        conv as *mut vimconv_T,
-                        (*from).vval.v_string,
-                        null_mut::<size_t>(),
-                    );
-                    // A conversion that failed keeps the original bytes.
-                    if (*to).vval.v_string.is_null() {
-                        (*to).vval.v_string = xstrdup((*from).vval.v_string);
-                    }
+    // SAFETY: the caller's promise -- both typvals outlive the call. Every
+    // union member read below is the one `src.v_type` names, and the
+    // matching member of `dst` is written before it is read.
+    let (src, mut dst) = unsafe { (Tv::new(from), Tv::new(to)) };
+    let mut ret = OK;
+    match src.v_type {
+        VAR_STRING => {
+            // SAFETY: as above; a null `conv` is not read.
+            let plain = conv.is_null()
+                || unsafe { (*conv).vc_type } == CONV_NONE
+                || unsafe { src.vval.v_string }.is_null();
+            if plain {
+                // SAFETY: both typvals are the caller's.
+                unsafe { tv_copy(from, to) };
+            } else {
+                dst.v_type = VAR_STRING;
+                dst.v_lock = VarLock::Unlocked;
+                let (cv, s) = (conv as *mut vimconv_T, unsafe { src.vval.v_string });
+                // SAFETY: `s` is the source string and `cv` the conversion.
+                dst.vval.v_string = unsafe { string_convert(cv, s, null_mut::<size_t>()) };
+                // A conversion that failed keeps the original bytes.
+                // SAFETY: `v_string` is the member just written.
+                if unsafe { dst.vval.v_string }.is_null() {
+                    // SAFETY: `s` is the source's NUL-terminated string.
+                    dst.vval.v_string = unsafe { xstrdup(s) };
                 }
             }
-            VAR_LIST => {
-                (*to).v_type = VAR_LIST;
-                (*to).v_lock = VarLock::Unlocked;
-                if (*from).vval.v_list.is_null() {
-                    (*to).vval.v_list = null_mut::<list_T>();
-                } else if copy_id != 0 && tv_list_copyid((*from).vval.v_list) == copy_id {
-                    // Already copied under this id: share that copy.
-                    (*to).vval.v_list = tv_list_latest_copy((*from).vval.v_list);
-                    tv_list_ref((*to).vval.v_list);
-                } else {
-                    (*to).vval.v_list = tv_list_copy(conv, (*from).vval.v_list, deep, copy_id);
-                }
-                if (*to).vval.v_list.is_null() && !(*from).vval.v_list.is_null() {
-                    ret = FAIL;
-                }
+        }
+        VAR_LIST => {
+            dst.v_type = VAR_LIST;
+            dst.v_lock = VarLock::Unlocked;
+            // SAFETY: `VAR_LIST` says `v_list` is the live member.
+            let l = unsafe { src.vval.v_list };
+            if l.is_null() {
+                dst.vval.v_list = null_mut::<list_T>();
+            // SAFETY: `l` is the source's live List.
+            } else if copy_id != 0 && unsafe { tv_list_copyid(l) } == copy_id {
+                // Already copied under this id: share that copy.
+                // SAFETY: as above -- the copy it was given under this id.
+                dst.vval.v_list = unsafe { tv_list_latest_copy(l) };
+                // SAFETY: the shared copy gains this reference.
+                unsafe { tv_list_ref(dst.vval.v_list) };
+            } else {
+                // SAFETY: as above; `conv` is null or the caller's.
+                dst.vval.v_list = unsafe { tv_list_copy(conv, l, deep, copy_id) };
             }
-            VAR_DICT => {
-                (*to).v_type = VAR_DICT;
-                (*to).v_lock = VarLock::Unlocked;
-                if (*from).vval.v_dict.is_null() {
-                    (*to).vval.v_dict = null_mut::<dict_T>();
-                } else if copy_id != 0 && (*(*from).vval.v_dict).dv_copyID == copy_id {
-                    (*to).vval.v_dict = (*(*from).vval.v_dict).dv_copydict;
-                    (*(*to).vval.v_dict).dv_refcount.retain();
-                } else {
-                    (*to).vval.v_dict = tv_dict_copy(conv, (*from).vval.v_dict, deep, copy_id);
-                }
-                if (*to).vval.v_dict.is_null() && !(*from).vval.v_dict.is_null() {
-                    ret = FAIL;
-                }
-            }
-            VAR_BLOB => {
-                tv_blob_copy((*from).vval.v_blob, to);
-            }
-            VAR_UNKNOWN => {
-                internal_error(c"var_item_copy(UNKNOWN)".as_ptr());
+            // SAFETY: `v_list` is the member just written.
+            if unsafe { dst.vval.v_list }.is_null() && !l.is_null() {
                 ret = FAIL;
             }
-            // Number, Float, Funcref, partial, Boolean and Special copy by
-            // value or by reference count.
-            VAR_NUMBER | VAR_FLOAT | VAR_FUNC | VAR_PARTIAL | VAR_BOOL | VAR_SPECIAL => {
-                tv_copy(from, to);
-            }
-            _ => {}
         }
-
-        RECURSE.set(RECURSE.get() - 1);
-        ret
+        VAR_DICT => {
+            dst.v_type = VAR_DICT;
+            dst.v_lock = VarLock::Unlocked;
+            // SAFETY: `VAR_DICT` says `v_dict` is the live member.
+            let d = unsafe { src.vval.v_dict };
+            if d.is_null() {
+                dst.vval.v_dict = null_mut::<dict_T>();
+            // SAFETY: `d` is the source's live Dict.
+            } else if copy_id != 0 && unsafe { (*d).dv_copyID } == copy_id {
+                // SAFETY: as above -- the copy it was given under this id,
+                // which gains this reference.
+                unsafe {
+                    dst.vval.v_dict = (*d).dv_copydict;
+                    (*dst.vval.v_dict).dv_refcount.retain();
+                };
+            } else {
+                // SAFETY: as above; `conv` is null or the caller's.
+                dst.vval.v_dict = unsafe { tv_dict_copy(conv, d, deep, copy_id) };
+            }
+            // SAFETY: `v_dict` is the member just written.
+            if unsafe { dst.vval.v_dict }.is_null() && !d.is_null() {
+                ret = FAIL;
+            }
+        }
+        VAR_BLOB => {
+            // SAFETY: `VAR_BLOB` says `v_blob` is the live member, and `to`
+            // is the caller's typval.
+            unsafe { tv_blob_copy(src.vval.v_blob, to) };
+        }
+        VAR_UNKNOWN => {
+            // SAFETY: the text is a NUL-terminated literal.
+            unsafe { internal_error(c"var_item_copy(UNKNOWN)".as_ptr()) };
+            ret = FAIL;
+        }
+        // Number, Float, Funcref, partial, Boolean and Special copy by
+        // value or by reference count.
+        VAR_NUMBER | VAR_FLOAT | VAR_FUNC | VAR_PARTIAL | VAR_BOOL | VAR_SPECIAL => {
+            // SAFETY: both typvals are the caller's.
+            unsafe { tv_copy(from, to) };
+        }
+        _ => {}
     }
+
+    RECURSE.set(RECURSE.get() - 1);
+    ret
 }
 
 /// The copy this list was last given under the current `copyID`.
