@@ -10,7 +10,6 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
-use crate::memline::MlFlags;
 use crate::winlayer::Buf;
 
 pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
@@ -159,12 +158,12 @@ pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Er
         dict_put(
             &mut rv,
             c"current_lnum",
-            Object::integer((*b).b_ml.ml_line_lnum as Integer),
+            Object::integer((*b).b_ml.cached_lnum() as Integer),
         );
         dict_put(
             &mut rv,
             c"line_dirty",
-            Object::boolean((*b).b_ml.ml_flags.has(MlFlags::LINE_DIRTY)),
+            Object::boolean((*b).b_ml.line_is_dirty()),
         );
         dict_put(
             &mut rv,

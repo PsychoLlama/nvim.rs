@@ -81,8 +81,8 @@ static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: linenr_T) -> *mut c_char {
     unsafe {
         questions.set([b'?' as c_char, b'?' as c_char, b'?' as c_char, 0]);
-        (*buf).b_ml.ml_line_textlen = 4;
-        (*buf).b_ml.ml_line_lnum = lnum;
+        (*buf).b_ml.set_cached_len(4);
+        (*buf).b_ml.set_cached_lnum(lnum);
         questions.ptr().cast::<c_char>()
     }
 }
@@ -107,7 +107,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
     unsafe {
         if (*buf).b_ml.ml_mfp.is_null() {
             // There are no lines at all.
-            (*buf).b_ml.ml_line_textlen = 1;
+            (*buf).b_ml.set_cached_len(1);
             return c"".as_ptr().cast_mut();
         }
 
@@ -131,7 +131,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
 
         // If it is the line handed out last time, it is already unpacked;
         // otherwise the one that was may need flushing first.
-        if (*buf).b_ml.ml_line_lnum != lnum {
+        if (*buf).b_ml.cached_lnum() != lnum {
             ml_flush_line(buf, false);
 
             // Find the data block holding the line. This also fills the
@@ -166,17 +166,18 @@ pub(crate) unsafe fn ml_get_buf_impl(
                 db_line_start(dp, idx - 1)
             };
 
-            (*buf).b_ml.ml_line_ptr = (dp as *mut c_char).offset(start as isize);
-            (*buf).b_ml.ml_line_textlen = end.wrapping_sub(start) as colnr_T;
-            (*buf).b_ml.ml_line_lnum = lnum;
-            (*buf).b_ml.forget_line();
+            (*buf).b_ml.cache_block_line(
+                (dp as *mut c_char).offset(start as isize),
+                end.wrapping_sub(start) as colnr_T,
+                lnum,
+            );
         }
 
         if will_change {
             (*buf).b_ml.locked_has_moved();
-            ml_add_deleted_len_buf(buf, (*buf).b_ml.ml_line_ptr, -1);
+            ml_add_deleted_len_buf(buf, (*buf).b_ml.cached_text(), -1);
         }
-        (*buf).b_ml.ml_line_ptr
+        (*buf).b_ml.cached_text()
     }
 }
 
@@ -194,19 +195,19 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
         // already off the books by then, so there is nothing left to do.
         static entered: GlobalCell<bool> = GlobalCell::new(false);
 
-        if (*buf).b_ml.ml_line_lnum == 0 || (*buf).b_ml.ml_mfp.is_null() {
+        if (*buf).b_ml.cached_lnum() == 0 || (*buf).b_ml.ml_mfp.is_null() {
             return; // nothing to do
         }
 
-        if (*buf).b_ml.ml_flags.has(MlFlags::LINE_DIRTY) {
+        if (*buf).b_ml.line_is_dirty() {
             if entered.get() {
                 return;
             }
             entered.set(true);
             (*buf).flush_count += 1;
 
-            let lnum = (*buf).b_ml.ml_line_lnum;
-            let new_line = (*buf).b_ml.ml_line_ptr;
+            let lnum = (*buf).b_ml.cached_lnum();
+            let new_line = (*buf).b_ml.cached_text();
 
             let hp = ml_find_line(buf, lnum, ML_FIND);
             if hp.is_null() {
@@ -222,16 +223,14 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
                 xfree(new_line.cast());
             }
             entered.set(false);
-        } else if (*buf).b_ml.ml_flags.has(MlFlags::ALLOCATED) {
-            // The caller must set `MlFlags::LINE_DIRTY` along with noalloc, which
+        } else if (*buf).b_ml.line_is_owned() {
+            // The caller must mark the line dirty along with noalloc, which
             // the branch above handles.
             debug_assert!(!noalloc);
-            xfree((*buf).b_ml.ml_line_ptr.cast());
+            xfree((*buf).b_ml.cached_text().cast());
         }
 
-        (*buf).b_ml.forget_line();
-        (*buf).b_ml.ml_line_lnum = 0;
-        (*buf).b_ml.ml_line_offset = 0;
+        (*buf).b_ml.clear_cache();
     }
 }
 
@@ -254,7 +253,7 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
             // The text of the previous line follows it.
             db_line_start(dp, idx - 1) as c_int - start
         };
-        let new_len = (*buf).b_ml.ml_line_textlen;
+        let new_len = (*buf).b_ml.cached_len();
         // Negative if the line got smaller.
         let extra = new_len - old_len;
 

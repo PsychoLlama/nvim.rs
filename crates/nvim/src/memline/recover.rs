@@ -78,8 +78,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // put on the buffer list -- see `alloc_unregistered_buffer`.
             buf = owned_buf.insert(alloc_unregistered_buffer()).address();
             (*buf).b_ml.stack_clear(); // nothing in the stack
-            (*buf).b_ml.ml_line_lnum = 0; // no cached line
-            (*buf).b_ml.ml_line_offset = 0;
+            (*buf).b_ml.clear_cache(); // no cached line
             (*buf).b_ml.ml_locked = None; // no locked block
             (*buf).b_ml.ml_flags = MlFlags::NONE;
 

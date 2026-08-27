@@ -201,6 +201,49 @@ pub(crate) struct LockedBlock {
     pub moved: bool,
 }
 
+/// The one line `ml_get` last handed out, and whether the memline owns the
+/// memory it is in.
+///
+/// A line read out of a data block is a pointer *into* that block; a line
+/// `ml_replace` put here is the memline's own allocation, waiting for
+/// `ml_flush_line` to write it back. Upstream told the two apart with
+/// `ML_LINE_DIRTY` and `ML_ALLOCATED` in `ml_flags`, so the rule "free
+/// `ml_line_ptr` iff one of these is set" lived in prose next to four loose
+/// fields. It is the type now: the text cannot be set without saying which
+/// kind it is, and the pointer only comes back out of [`Self::take_owned`],
+/// which clears the ownership as it hands it over.
+///
+/// There is no `Drop`. `ml_get` hands `ptr` to every caller in the editor,
+/// and the three places that free it (`ml_flush_line`, `ml_replace_buf_len`
+/// and `ml_close`) each do so at a point they have chosen; a destructor
+/// would claim an exclusive ownership the API does not have.
+#[derive(Default)]
+pub(crate) struct LineCache {
+    /// `ml_line_lnum`: which line is cached, or 0 for none.
+    lnum: linenr_T,
+    /// `ml_line_ptr`: its text, NUL-terminated. Stale whenever `lnum` is 0.
+    ptr: *mut ::core::ffi::c_char,
+    /// `ml_line_textlen`: the text's length *including* the NUL that stands
+    /// for the line break.
+    textlen: colnr_T,
+    /// `ml_line_offset`: the byte offset of the line's start in the buffer,
+    /// remembered so a run of small edits to one line computes it once.
+    /// Zero means "not worked out".
+    offset: size_t,
+    /// `ML_LINE_DIRTY`: the text is a *replacement* for what the block
+    /// holds, and has to be written back before it is dropped.
+    dirty: bool,
+    /// `ML_ALLOCATED`: the text is the memline's own copy of what the block
+    /// holds, taken because the block was about to be released.
+    ///
+    /// Nothing sets it. Upstream only does so under `ML_GET_ALLOC_LINES`, a
+    /// build-time debugging switch that is off in every shipped build and
+    /// was not ported; the field is kept because the *reading* half --
+    /// "owned means free it" -- is real, and because a port of that switch
+    /// would have nowhere else to put it.
+    allocated: bool,
+}
+
 #[derive(Copy, Clone)]
 pub struct infoptr_T {
     pub ip_bnum: blocknr_T,
@@ -222,10 +265,8 @@ pub struct memline_T {
     /// drop.
     pub ml_stack: Vec<infoptr_T>,
     pub ml_flags: MlFlags,
-    pub ml_line_textlen: colnr_T,
-    pub ml_line_lnum: linenr_T,
-    pub ml_line_ptr: *mut ::core::ffi::c_char,
-    pub ml_line_offset: size_t,
+    /// The line `ml_get` last handed out.
+    pub(crate) ml_line: LineCache,
     /// The data block the walk is holding, if it is holding one.
     pub(crate) ml_locked: Option<LockedBlock>,
     /// The chunk index that keeps a byte-offset lookup from walking every
@@ -246,10 +287,7 @@ impl memline_T {
             ml_mfp: ::core::ptr::null_mut(),
             ml_stack: Vec::new(),
             ml_flags: MlFlags::NONE,
-            ml_line_textlen: 0,
-            ml_line_lnum: 0,
-            ml_line_ptr: ::core::ptr::null_mut(),
-            ml_line_offset: 0,
+            ml_line: LineCache::default(),
             ml_locked: None,
             ml_chunks: MlChunks::default(),
         }
@@ -317,22 +355,136 @@ impl memline_T {
         self.ml_stack = Vec::new();
     }
 
-    /// Whether the line `ml_line_ptr` names is the memline's own allocation
-    /// rather than a pointer into the locked block, so that dropping it
-    /// means freeing it.
-    ///
-    /// Either flag says so: `LINE_DIRTY` because a rewritten line is always
-    /// rebuilt into fresh memory, `ALLOCATED` because `ml_get` copies a line
-    /// out of a block it is about to release.
-    pub fn line_is_owned(&self) -> bool {
-        self.ml_flags.has(MlFlags::LINE_DIRTY | MlFlags::ALLOCATED)
+    /// Which line is cached, or 0 for none: upstream's `ml_line_lnum`.
+    pub fn cached_lnum(&self) -> linenr_T {
+        self.ml_line.lnum
     }
 
-    /// Forget the line `ml_line_ptr` names -- the caller has freed it, or
-    /// handed ownership on.
+    /// The cached line's text: upstream's `ml_line_ptr`. Stale unless
+    /// [`Self::cached_lnum`] is non-zero.
+    pub fn cached_text(&self) -> *mut ::core::ffi::c_char {
+        self.ml_line.ptr
+    }
+
+    /// The cached line's length, NUL included: upstream's
+    /// `ml_line_textlen`.
+    pub fn cached_len(&self) -> colnr_T {
+        self.ml_line.textlen
+    }
+
+    /// Say how long the cached line is without touching its text -- the two
+    /// `ml_get` failure paths, which answer a static placeholder, and the
+    /// callers that shorten the text in place.
+    pub fn set_cached_len(&mut self, textlen: colnr_T) {
+        self.ml_line.textlen = textlen;
+    }
+
+    /// Say which line the placeholder `ml_get` just answered stands for.
+    pub fn set_cached_lnum(&mut self, lnum: linenr_T) {
+        self.ml_line.lnum = lnum;
+    }
+
+    /// The cached line's byte offset in the buffer, or 0 for "not worked
+    /// out": upstream's `ml_line_offset`.
+    pub fn cached_offset(&self) -> size_t {
+        self.ml_line.offset
+    }
+
+    /// Remember the cached line's byte offset.
+    pub fn set_cached_offset(&mut self, offset: size_t) {
+        self.ml_line.offset = offset;
+    }
+
+    /// Cache a line that lives *inside* the locked data block, so nothing
+    /// here owns it.
+    pub fn cache_block_line(
+        &mut self,
+        text: *mut ::core::ffi::c_char,
+        textlen: colnr_T,
+        lnum: linenr_T,
+    ) {
+        self.ml_line = LineCache {
+            lnum,
+            ptr: text,
+            textlen,
+            offset: self.ml_line.offset,
+            dirty: false,
+            allocated: false,
+        };
+    }
+
+    /// Cache a *replacement* for line `lnum`, in memory the memline now
+    /// owns: the block it came from is stale until the line is flushed, and
+    /// the buffer is no longer the untouched empty one.
+    pub fn cache_replacement(
+        &mut self,
+        text: *mut ::core::ffi::c_char,
+        textlen: colnr_T,
+        lnum: linenr_T,
+    ) {
+        self.ml_line = LineCache {
+            lnum,
+            ptr: text,
+            textlen,
+            offset: self.ml_line.offset,
+            dirty: true,
+            allocated: false,
+        };
+        self.ml_flags.clear(MlFlags::EMPTY);
+    }
+
+    /// Swap the cached line's text for `text`, which the memline now owns,
+    /// keeping the line number. Answers the old text if it was owned, for
+    /// the caller to free.
+    #[must_use]
+    pub fn swap_cached_text(
+        &mut self,
+        text: *mut ::core::ffi::c_char,
+        textlen: colnr_T,
+    ) -> Option<*mut ::core::ffi::c_char> {
+        let old = self.take_owned();
+        self.ml_line.ptr = text;
+        self.ml_line.textlen = textlen;
+        self.ml_line.dirty = true;
+        old
+    }
+
+    /// Whether the cached text is a replacement that has to be written back:
+    /// `ML_LINE_DIRTY`.
+    pub fn line_is_dirty(&self) -> bool {
+        self.ml_line.dirty
+    }
+
+    /// Whether the cached text is the memline's own allocation rather than a
+    /// pointer into the locked block, so that dropping it means freeing it.
+    ///
+    /// Either kind says so: a rewritten line is always rebuilt into fresh
+    /// memory, and a copied one was taken out of a block that went away.
+    pub fn line_is_owned(&self) -> bool {
+        self.ml_line.dirty || self.ml_line.allocated
+    }
+
+    /// Give up the cached text if the memline owns it, so the caller can
+    /// free it. The ownership is cleared either way; the pointer itself
+    /// stays cached, because callers still read it back.
+    #[must_use]
+    pub fn take_owned(&mut self) -> Option<*mut ::core::ffi::c_char> {
+        debug_assert!(!self.line_is_owned() || self.ml_line.lnum != 0);
+        let owned = self.line_is_owned().then_some(self.ml_line.ptr);
+        self.ml_line.dirty = false;
+        self.ml_line.allocated = false;
+        owned
+    }
+
+    /// Forget that the memline owns the cached text -- the caller has freed
+    /// it, or handed the ownership on.
     pub fn forget_line(&mut self) {
-        self.ml_flags
-            .clear(MlFlags::LINE_DIRTY | MlFlags::ALLOCATED);
+        let _ = self.take_owned();
+    }
+
+    /// Nothing is cached any more.
+    pub fn clear_cache(&mut self) {
+        self.ml_line = LineCache::default();
     }
 
     /// Take a data block: `mf_get` handed `hp` out, and it holds lines `low`
@@ -425,11 +577,10 @@ impl memline_T {
         }
     }
 
-    /// Record that `ml_line_ptr` now holds a *replacement* for the line it
-    /// was read as: the block it came from is stale until the line is
-    /// flushed, and the buffer is no longer the untouched empty one.
+    /// Record that the cached text is a *replacement* for the line it was
+    /// read as, and that the buffer is no longer the untouched empty one.
     pub fn line_was_replaced(&mut self) {
-        self.ml_flags |= MlFlags::LINE_DIRTY;
+        self.ml_line.dirty = true;
         self.ml_flags.clear(MlFlags::EMPTY);
     }
 }

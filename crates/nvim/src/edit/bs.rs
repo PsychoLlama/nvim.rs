@@ -22,7 +22,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -312,12 +311,10 @@ fn bs_join_line() -> bool {
             if len > 0 && unsafe { *ptr.offset((len - 1) as isize) } as c_int == ' ' as c_int {
                 let size = (len - 1) as size_t;
                 let newp = unsafe { xmemdupz(ptr.cast(), size) } as *mut ::core::ffi::c_char;
-                if cur_buf().b_ml.line_is_owned() {
-                    unsafe { xfree(cur_buf().b_ml.ml_line_ptr.cast()) };
+                let shorter = cur_buf().b_ml.cached_len() - 1;
+                if let Some(old) = cur_buf().b_ml.swap_cached_text(newp, shorter) {
+                    unsafe { xfree(old.cast()) };
                 }
-                cur_buf().b_ml.ml_line_ptr = newp;
-                cur_buf().b_ml.ml_line_textlen -= 1;
-                cur_buf().b_ml.ml_flags |= MlFlags::LINE_DIRTY;
             }
         }
 

@@ -221,13 +221,6 @@ crate::flag_set! {
     /// into it -- what a brand new buffer is, and what `:enew` returns one
     /// to. Cleared by the first line that is appended or replaced.
     const EMPTY = 0x1;
-    /// `ml_line_ptr` has been edited since it was read, so the block it
-    /// came from has to be updated before the line is dropped.
-    const LINE_DIRTY = 0x2;
-    /// `ml_line_ptr` is an allocation of the memline's own rather than a
-    /// pointer into a locked block, so it has to be freed and not just
-    /// forgotten.
-    const ALLOCATED = 0x10;
 }
 pub const BH_DIRTY: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -267,8 +260,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         // No stack, no cached block, no cached line, no chunk table yet.
         (*buf).b_ml.stack_clear();
         (*buf).b_ml.ml_locked = None;
-        (*buf).b_ml.ml_line_lnum = 0;
-        (*buf).b_ml.ml_line_offset = 0;
+        (*buf).b_ml.clear_cache();
         (*buf).b_ml.ml_chunks.free();
 
         if cmdmod_has(CmdModFlags::NOSWAPFILE) {
@@ -513,8 +505,10 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
             return; // not open
         }
         mf_close((*buf).b_ml.ml_mfp, del_file != 0); // closes the .swp file
-        if (*buf).b_ml.ml_line_lnum != 0 && (*buf).b_ml.line_is_owned() {
-            xfree((*buf).b_ml.ml_line_ptr.cast());
+        // The cached line, if the memline owns it -- which it can only be
+        // while a line is cached at all.
+        if let Some(owned) = (*buf).b_ml.take_owned() {
+            xfree(owned.cast());
         }
         (*buf).b_ml.stack_free();
         (*buf).b_ml.ml_chunks.free();

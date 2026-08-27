@@ -815,7 +815,7 @@ impl Retab {
             let mut line = new_line;
             if ml_replace(scan.lnum, new_line, false) == OK {
                 // `new_line` may have been copied.
-                line = (*buf).b_ml.ml_line_ptr;
+                line = (*buf).b_ml.cached_text();
                 let lnum = scan.lnum as c_int - 1;
                 extmark_splice_cols(buf, lnum, 0, scan.old_len, new_len - 1, kExtmarkUndo);
             }

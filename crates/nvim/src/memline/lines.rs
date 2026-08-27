@@ -74,8 +74,8 @@ pub unsafe fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T {
         if *ml_get_buf(buf, lnum) == NUL as ::core::ffi::c_char {
             return 0;
         }
-        debug_assert!((*buf).b_ml.ml_line_textlen > 0);
-        (*buf).b_ml.ml_line_textlen - 1
+        debug_assert!((*buf).b_ml.cached_len() > 0);
+        (*buf).b_ml.cached_len() - 1
     }
 }
 
@@ -99,7 +99,7 @@ pub unsafe fn gchar_pos(pos: *mut pos_T) -> ::core::ffi::c_int {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_line_alloced() -> bool {
-    unsafe { (*curbuf.get()).b_ml.ml_flags.has(MlFlags::LINE_DIRTY) }
+    unsafe { (*curbuf.get()).b_ml.line_is_dirty() }
 }
 
 /// Flush any pending change, then insert.
@@ -117,7 +117,7 @@ unsafe fn ml_append_flush(
         if lnum > (*buf).b_ml.ml_line_count {
             return FAIL; // lnum out of range
         }
-        if (*buf).b_ml.ml_line_lnum != 0 {
+        if (*buf).b_ml.cached_lnum() != 0 {
             // This may invoke ml_append_int in turn.
             ml_flush_line(buf, false);
         }
@@ -321,20 +321,19 @@ pub unsafe fn ml_replace_buf_len(
             line_arg
         };
 
-        if (*buf).b_ml.ml_line_lnum != lnum {
+        if (*buf).b_ml.cached_lnum() != lnum {
             ml_flush_line(buf, false); // another line is buffered, flush it
         }
         if (*buf).update_callbacks.size != 0 {
             ml_add_deleted_len_buf(buf, ml_get_buf(buf, lnum), -1);
         }
-        if (*buf).b_ml.line_is_owned() {
-            xfree((*buf).b_ml.ml_line_ptr.cast()); // free the allocated line
+        if let Some(old) = (*buf).b_ml.take_owned() {
+            xfree(old.cast()); // free the allocated line
         }
 
-        (*buf).b_ml.ml_line_ptr = line;
-        (*buf).b_ml.ml_line_textlen = len_arg as colnr_T + 1;
-        (*buf).b_ml.ml_line_lnum = lnum;
-        (*buf).b_ml.line_was_replaced();
+        (*buf)
+            .b_ml
+            .cache_replacement(line, len_arg as colnr_T + 1, lnum);
         if noalloc {
             // Upstream note: a bit of a hack, but replacing lines in a loop
             // is common and a scratch allocation per line is a lot of noise.

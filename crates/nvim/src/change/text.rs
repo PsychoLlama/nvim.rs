@@ -381,7 +381,7 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
         move_bytes(newp, oldp, col as size_t);
         newp
     } else {
-        unsafe { ml_add_deleted_len(cur_buf().b_ml.ml_line_ptr, oldlen as ssize_t) };
+        unsafe { ml_add_deleted_len(cur_buf().b_ml.cached_text(), oldlen as ssize_t) };
         oldp
     };
     let from = oldp
@@ -391,7 +391,7 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
     if alloc_newp {
         unsafe { ml_replace(lnum, newp, false) };
     } else {
-        cur_buf().b_ml.ml_line_textlen = newlen + 1;
+        cur_buf().b_ml.set_cached_len(newlen + 1);
     }
 
     unsafe { inserted_bytes(lnum, col, count, 0) };

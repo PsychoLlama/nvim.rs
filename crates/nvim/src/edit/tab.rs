@@ -281,13 +281,13 @@ fn tab_spaces_to_tabs() {
         if i > 0 {
             if State.get() & VREPLACE_FLAG == 0 {
                 // Rebuild the line without them.
-                let newp_len = cur_buf().b_ml.ml_line_textlen - i;
+                let newp_len = cur_buf().b_ml.cached_len() - i;
                 // SAFETY: `newp` is `newp_len` bytes, `col` is how far
                 // `ptr` is into the line, and `i` is the run of spaces being
                 // dropped -- so the head is `col` bytes and the tail the rest
                 // of the line, and the two together fit.
                 let newp = unsafe { xmalloc(newp_len as size_t) } as *mut c_char;
-                let col = unsafe { ptr.offset_from(cur_buf().b_ml.ml_line_ptr) };
+                let col = unsafe { ptr.offset_from(cur_buf().b_ml.cached_text()) };
                 if col > 0 {
                     let head = unsafe { ptr.offset(-col) };
                     unsafe { memmove(newp.cast(), head.cast(), col as size_t) };
@@ -295,11 +295,9 @@ fn tab_spaces_to_tabs() {
                 let tail = unsafe { ptr.offset(i as isize) };
                 let tail_len = (newp_len as ptrdiff_t - col) as size_t;
                 unsafe { memmove(newp.offset(col).cast(), tail.cast(), tail_len) };
-                if cur_buf().b_ml.line_is_owned() {
-                    unsafe { xfree(cur_buf().b_ml.ml_line_ptr.cast()) };
+                if let Some(old) = cur_buf().b_ml.swap_cached_text(newp, newp_len) {
+                    unsafe { xfree(old.cast()) };
                 }
-                cur_buf().b_ml.ml_line_ptr = newp;
-                cur_buf().b_ml.ml_line_textlen = newp_len;
                 cur_buf().b_ml.line_was_replaced();
                 let old_len = walk_col(&pos, vreplace) - change_col;
                 let new_len = fpos.col - change_col;

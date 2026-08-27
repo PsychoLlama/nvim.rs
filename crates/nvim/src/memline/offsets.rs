@@ -55,7 +55,7 @@ pub(crate) unsafe fn ml_updatechunk(
 
         if updtype == ML_CHNK_UPDLINE && (*buf).b_ml.ml_line_count == 1 {
             // First line in an empty buffer, from ml_flush_line: reset.
-            let textlen = (*buf).b_ml.ml_line_textlen;
+            let textlen = (*buf).b_ml.cached_len();
             (*buf).b_ml.ml_chunks.reset_to_one(textlen);
             return;
         }
@@ -246,11 +246,11 @@ pub unsafe fn ml_find_line_or_offset(
         // Caching does not work with 'fileformat', which is no problem for
         // byte tracking (it ignores 'fileformat'), but a line2byte() call
         // does invalidate the cache for the time being.
-        let can_cache = lnum != 0 && ffdos == 0 && (*buf).b_ml.ml_line_lnum == lnum;
-        if lnum == 0 || (*buf).b_ml.ml_line_lnum < lnum || !no_ff {
+        let can_cache = lnum != 0 && ffdos == 0 && (*buf).b_ml.cached_lnum() == lnum;
+        if lnum == 0 || (*buf).b_ml.cached_lnum() < lnum || !no_ff {
             ml_flush_line(curbuf.get(), false);
-        } else if can_cache && (*buf).b_ml.ml_line_offset > 0 {
-            return (*buf).b_ml.ml_line_offset as c_int;
+        } else if can_cache && (*buf).b_ml.cached_offset() > 0 {
+            return (*buf).b_ml.cached_offset() as c_int;
         }
 
         if (*buf).b_ml.ml_chunks.is_off() || !(*buf).b_ml.ml_chunks.is_built() || lnum < 0 {
@@ -365,7 +365,7 @@ pub unsafe fn ml_find_line_or_offset(
         }
 
         if can_cache && size > 0 {
-            (*buf).b_ml.ml_line_offset = size as size_t;
+            (*buf).b_ml.set_cached_offset(size as size_t);
         }
         size
     }

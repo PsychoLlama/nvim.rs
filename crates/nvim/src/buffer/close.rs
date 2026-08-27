@@ -657,6 +657,10 @@ pub fn buf_clear_file(mut buf: Buf) {
     buf.b_p_bomb = 0;
     buf.b_start_bomb = 0;
     buf.b_ml.ml_mfp = ptr::null_mut::<memfile_T>();
+    // Upstream's `ml_flags = ML_EMPTY` also dropped the ownership of the
+    // cached line, without freeing it; the memfile it pointed into is gone
+    // either way.
+    buf.b_ml.forget_line();
     buf.b_ml.ml_flags = MlFlags::EMPTY; // empty buffer
 }
 
