@@ -82,6 +82,10 @@ impl Cm {
 }
 
 /// Free the four `cptext` strings a caller handed to [`ins_compl_add`].
+///
+/// # Safety
+/// `cptext` is null, or `CPT_COUNT` strings, each null or an allocation
+/// this call takes over.
 #[inline]
 pub(crate) unsafe fn free_cptext(cptext: *const *mut c_char) {
     if cptext.is_null() {
