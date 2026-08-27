@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::types::OptionSetFlags;
 
+use crate::buffer::BufRef;
 use crate::winlayer::Buf;
 pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
     unsafe {
@@ -210,8 +211,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                 (*buf).b_p_ml = 0 as ::core::ffi::c_int;
             }
             unblock_autocmds();
-            let mut bufref: bufref_T = bufref_T::default();
-            set_bufref(&raw mut bufref, buf);
+            let bufref = BufRef::of_opt(Buf::from_raw(buf));
             if !(apply_autocmds(
                 EVENT_BUFNEW,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -220,7 +220,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                 buf,
             ) as ::core::ffi::c_int
                 != 0
-                && !bufref_valid(&raw mut bufref))
+                && !bufref.valid())
                 && !(listed as ::core::ffi::c_int != 0
                     && apply_autocmds(
                         EVENT_BUFADD,
@@ -230,7 +230,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                         buf,
                     ) as ::core::ffi::c_int
                         != 0
-                    && !bufref_valid(&raw mut bufref))
+                    && !bufref.valid())
             {
                 ret = (*buf).handle as Buffer;
             }

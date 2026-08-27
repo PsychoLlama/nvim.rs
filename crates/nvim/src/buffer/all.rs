@@ -26,8 +26,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{
-    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, buf_T, bufref_T, cleanup_T, exarg_T, except_T,
-    linenr_T, tabpage_T, win_T,
+    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, buf_T, cleanup_T, exarg_T, except_T, linenr_T,
+    tabpage_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -165,23 +165,10 @@ fn goto_buf(mut buf: Buf) {
     unsafe { set_curbuf(buf, DOBUF_GOTO as c_int, update_jumplist) };
 }
 
-/// A `bufref_T` for `buf`, the record that survives an autocommand.
-fn bufref_of(mut buf: Buf) -> bufref_T {
-    let mut bufref = bufref_T::default();
-    // SAFETY: a local to fill in, and a live buffer.
-    unsafe { set_bufref(&raw mut bufref, buf.raw()) };
-    bufref
-}
-
-fn still_valid(bufref: &mut bufref_T) -> bool {
-    // SAFETY: a `bufref_T` this function set.
-    unsafe { bufref_valid(bufref) }
-}
-
 /// The swap-file dialogue's aftermath, when the user did not choose Quit.
 fn handled_swap_exists() {
     // SAFETY: null means "no buffer to restore".
-    unsafe { handle_swap_exists(ptr::null_mut()) };
+    handle_swap_exists(None);
 }
 
 /// Reset the error/interrupt/exception state around closing a window, so
@@ -370,7 +357,7 @@ fn open_window_for(
     };
 
     if wp.is_none() && *split_ret == OK {
-        let mut bufref = bufref_of(buf);
+        let bufref = BufRef::of(buf);
         // Split the window and put the buffer in it.
         let p_ea_save = p_ea.get();
         // Use space from all windows.
@@ -385,7 +372,7 @@ fn open_window_for(
         // Open the buffer in this window.
         swap_exists_action.set(SEA_DIALOG);
         goto_buf(buf);
-        if !still_valid(&mut bufref) {
+        if !bufref.valid() {
             // Autocommands deleted the buffer.
             swap_exists_action.set(SEA_NONE);
             return false;

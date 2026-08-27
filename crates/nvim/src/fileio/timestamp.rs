@@ -19,6 +19,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::highlight_group::{HLF_E, HLF_W};
 use crate::types::{FAIL, OK, ShmFlag, Vv};
 
@@ -149,16 +150,11 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
     while let Some(buf) = cur {
         // Only check buffers in a window.
         if buf.b_nwindows > 0 {
-            let mut bufref = bufref_T::default();
-            let at = &raw mut bufref;
-            // SAFETY: a live buffer, and `bufref` is a local.
-            let n = unsafe {
-                set_bufref(at, buf.raw());
-                buf_check_timestamp(buf)
-            };
+            let bufref = BufRef::of(buf);
+            // SAFETY: a live buffer.
+            let n = unsafe { buf_check_timestamp(buf) };
             didit = didit.max(n);
-            // SAFETY: `bufref` is a local.
-            if n > 0 && !unsafe { bufref_valid(at) } {
+            if n > 0 && !bufref.valid() {
                 // Autocommands have removed the buffer. Upstream's
                 // `buf = firstbuf; continue;` still runs the loop's own
                 // step, so this restarts at the *second* buffer.
@@ -237,9 +233,9 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
 /// back afterwards.
 ///
 /// # Safety
-/// `bufref` must be a `bufref_T` that was set for `buf`; the autocommands
-/// this fires may wipe the buffer, which is what it answers.
-unsafe fn file_changed_shell(buf: Buf, bufref: *mut bufref_T, reason: Reason) -> Fcs {
+/// `bufref` must be the reference taken for `buf`; the autocommands this
+/// fires may wipe the buffer, which is what it answers.
+unsafe fn file_changed_shell(buf: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     let name = reason.name();
     BUSY.set(true);
     let len = name.count_bytes() as ptrdiff_t;
@@ -256,7 +252,7 @@ unsafe fn file_changed_shell(buf: Buf, bufref: *mut bufref_T, reason: Reason) ->
     if !handled {
         return Fcs::Ask;
     }
-    if !unsafe { bufref_valid(bufref) } {
+    if !bufref.valid() {
         let msg = c"E246: FileChangedShell autocommand deleted buffer".as_ptr();
         // SAFETY: a static message string.
         unsafe { emsg(gettext(msg)) };
@@ -355,8 +351,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
     let orig_size = buf.b_orig_size;
     let orig_mode = buf.b_orig_mode;
 
-    let mut bufref = bufref_T::default();
-    unsafe { set_bufref(&raw mut bufref, buf.raw()) };
+    let bufref = BufRef::of(buf);
 
     // If it's a terminal, there is no file name, the buffer is not
     // loaded, 'buftype' is set, we are in the middle of a save, or we are
@@ -434,8 +429,8 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
             };
 
             // Only warn if no FileChangedShell autocommand handled it.
-            // SAFETY: `bufref` was set for `buf` above.
-            match unsafe { file_changed_shell(buf, &raw mut bufref, reason) } {
+            // SAFETY: `bufref` was taken for `buf` above.
+            match unsafe { file_changed_shell(buf, bufref, reason) } {
                 Fcs::Handled => return 2,
                 Fcs::Reload(what) => reload = what,
                 Fcs::Ask => {
@@ -502,7 +497,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
     if reload != Reload::No {
         // SAFETY: the caller's promise -- `buf` survives the reload.
         unsafe { buf_reload(buf, orig_mode, reload == Reload::Detect) };
-        if unsafe { bufref_valid(&raw mut bufref) } && buf.b_p_udf != 0 && !buf.b_ffname.is_null() {
+        if bufref.valid() && buf.b_p_udf != 0 && !buf.b_ffname.is_null() {
             // Any existing undo file is unusable, write it now.
             let mut hash = [0u8; UNDO_HASH_SIZE as usize];
             unsafe { u_compute_hash(buf, hash.as_mut_ptr()) };
@@ -511,7 +506,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
     }
 
     // Trigger FileChangedShellPost when the file was changed in any way.
-    if unsafe { bufref_valid(&raw mut bufref) } && retval != 0 {
+    if bufref.valid() && retval != 0 {
         let (post, fname) = (EVENT_FILECHANGEDSHELLPOST, buf.b_fname);
         // SAFETY: a live buffer and its own file name.
         unsafe { apply_autocmds(post, fname, fname, false, buf.raw()) };
@@ -567,11 +562,12 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     // contents. Memory alone will not do, the file might be too big, so
     // move the buffer contents to a hidden buffer.
     let mut savebuf = ptr::null_mut::<buf_T>();
-    let mut bufref = bufref_T::default();
+    let mut bufref = BufRef::NONE;
     if !(unsafe { buf_is_empty(curbuf.get()) } || saved == FAIL) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
-        unsafe { set_bufref(&raw mut bufref, savebuf) };
+        // SAFETY: `buflist_new` answers a live buffer or null.
+        bufref = BufRef::of_opt(unsafe { Buf::from_raw(savebuf) });
         if !savebuf.is_null() && buf.raw() == curbuf.get() {
             // Open the memline.
             curbuf.set(savebuf);
@@ -611,10 +607,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
                 // buffer's own file name.
                 unsafe { semsg_c!(gettext(fmt), fname) };
             }
-            if !savebuf.is_null()
-                && unsafe { bufref_valid(&raw mut bufref) }
-                && buf.raw() == curbuf.get()
-            {
+            if !savebuf.is_null() && bufref.valid() && buf.raw() == curbuf.get() {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
                 while !unsafe { buf_is_empty(curbuf.get()) } {
@@ -641,7 +634,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     }
     unsafe { xfree(ea.cmd.cast()) };
 
-    if !savebuf.is_null() && unsafe { bufref_valid(&raw mut bufref) } {
+    if !savebuf.is_null() && bufref.valid() {
         unsafe { wipe_buffer(Buf::new(savebuf), false) };
     }
 

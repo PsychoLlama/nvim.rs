@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
 use crate::window::{WSP_BELOW, WSP_ROOM};
@@ -193,15 +194,13 @@ unsafe fn close_unused_window(
         // autowriting.
         // SAFETY: `wp` and `buf` are live on entry; both are re-validated
         // afterwards, since `autowrite` runs autocommands.
-        let mut bufref = bufref_T::default();
-        // SAFETY: `bufref` is this frame's, and `buf` is live until the
-        // autowrite -- which is exactly what the check afterwards is for.
-        unsafe { set_bufref(&raw mut bufref, buf.raw()) };
+        // `buf` is live until the autowrite -- which is exactly what the
+        // re-check afterwards is for.
+        let bufref = BufRef::of(buf);
         // SAFETY: as above; this may fire autocommands.
         unsafe { autowrite(buf.raw(), false) };
-        // SAFETY: `win_valid` and `bufref_valid` are the questions to ask
-        // after one.
-        let survived = unsafe { win_valid(wp) && bufref_valid(&raw mut bufref) };
+        // `win_valid` and `BufRef::valid` are the questions to ask after one.
+        let survived = win_valid(wp) && bufref.valid();
         if !survived {
             // Autocommands removed the window; start all over.
             return first_window_to_walk();

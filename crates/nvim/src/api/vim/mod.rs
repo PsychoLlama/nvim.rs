@@ -16,8 +16,8 @@ use crate::autocmd::{
     unblock_autocmds,
 };
 use crate::buffer::{
-    buf_close_terminal, buf_get_changedtick, buflist_new, buflist_nr2name, bufref_valid, do_buffer,
-    read_buffer_into, set_bufref,
+    buf_close_terminal, buf_get_changedtick, buflist_new, buflist_nr2name, do_buffer,
+    read_buffer_into,
 };
 use crate::channel::{
     channel_all_info, channel_alloc, channel_decref, channel_incref, channel_info,
@@ -100,12 +100,12 @@ use crate::types::{
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
     MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, SignTextAttrs,
     String_0, StringBuilder, Tabpage, TerminalOptions, TryState, Vv, Window, bln_values, buf_T,
-    bufref_T, dictitem_T, dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T,
-    int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data, pos_T, ptrdiff_t,
-    schar_T, scid_T, sctx_T, size_t, statuscol_T, tabpage_T, uint8_t, uint16_t, uint64_t,
-    varnumber_T, win_T, xfmark_T, yankreg_T,
+    dictitem_T, dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, int64_t,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T,
+    mpack_token_type_t, msg_data, msglist_T, object, object_data, pos_T, ptrdiff_t, schar_T,
+    scid_T, sctx_T, size_t, statuscol_T, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T,
+    win_T, xfmark_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

@@ -230,6 +230,50 @@ mod tests {
         assert_eq!(drops.get(), 2);
     }
 
+    /// **The shape `free_buffer` has, and the reason a registry holds an
+    /// `Owned` rather than a `Box`.**
+    ///
+    /// An address is taken out while the object is filed (that is `curbuf`),
+    /// the table then changes under it, the free path takes the object out of
+    /// the table, keeps working through the *address*, and drops at the end.
+    /// Written with `Vec<Box<T>>` — `memfile::BlockTable`'s shape — this is
+    /// undefined behaviour: the `Box` that comes out is retagged `Unique`,
+    /// the write through the escaped address invalidates that tag, and Miri
+    /// aborts at the `drop`, under Stacked *and* Tree Borrows. An `Owned` has
+    /// no retag to invalidate. This test is here so that a slice which
+    /// "simplifies" `OwnedRegistry`'s value type back to a `Box` hears about
+    /// it from `just miri` rather than from a user.
+    #[test]
+    fn an_address_survives_the_table_changing_and_the_object_leaving_it() {
+        struct Object<'a> {
+            drops: &'a Cell<u32>,
+            mark: u64,
+        }
+
+        impl Drop for Object<'_> {
+            fn drop(&mut self) {
+                self.drops.set(self.drops.get() + 1);
+            }
+        }
+
+        let drops = Cell::new(0);
+        let object = |drops| Owned::new(Box::new(Object { drops, mark: 0 }));
+        let mut table = vec![object(&drops)];
+        let escaped = table[0].address();
+        table.push(object(&drops));
+        let owned = table.swap_remove(0);
+        // SAFETY: the object is alive -- `owned` holds it -- and `escaped` is
+        // the address it was born with, which nothing has retagged.
+        unsafe { (*escaped).mark = 42 };
+        assert_eq!(owned.address(), escaped);
+        // SAFETY: as above.
+        assert_eq!(unsafe { (*escaped).mark }, 42);
+        drop(owned);
+        assert_eq!(drops.get(), 1);
+        drop(table);
+        assert_eq!(drops.get(), 2);
+    }
+
     /// The shape the objects whose ownership travels as a bare pointer use:
     /// `open_spellbuf` gives the address up, `close_spellbuf` takes it back.
     #[test]

@@ -11,6 +11,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::buffer::BufRef;
+use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win};
 
 pub unsafe fn nvim_open_win(
@@ -21,7 +23,7 @@ pub unsafe fn nvim_open_win(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut bufref: bufref_T = bufref_T::default();
+        let mut bufref = BufRef::NONE;
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
             return (0 as Window).reported(error);
@@ -235,8 +237,7 @@ pub unsafe fn nvim_open_win(
                 if cmdline_offset < INT_MAX {
                     cmdline_win.set(wp);
                 }
-                bufref = bufref_T::default();
-                set_bufref(&raw mut bufref, b);
+                bufref = BufRef::of_opt(Buf::from_raw(b));
                 if !noautocmd {
                     let mut switchwin_0: switchwin_T = switchwin_T {
                         sw_curwin: ::core::ptr::null_mut::<win_T>(),
@@ -262,10 +263,7 @@ pub unsafe fn nvim_open_win(
                     goto_tabpage_win(tp, wp);
                     tp = win_find_tabpage(wp);
                 }
-                if !tp.is_null()
-                    && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                    && b != (*wp).w_buffer
-                {
+                if !tp.is_null() && bufref.valid() && b != (*wp).w_buffer {
                     let au_no_enter_leave: bool = curwin.get() != wp && !noautocmd;
                     if au_no_enter_leave {
                         autocmd_no_enter.set(autocmd_no_enter.get() + 1);

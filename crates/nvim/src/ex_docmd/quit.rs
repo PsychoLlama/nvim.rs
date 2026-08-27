@@ -16,7 +16,7 @@ use core::ptr;
 use crate::autocmd::{
     EVENT_EXITPRE, EVENT_QUITPRE, apply_autocmds, is_aucmd_win, may_trigger_vim_suspend_resume,
 };
-use crate::buffer::{buf_hide, bufref_valid, do_bufdel, no_write_message, set_bufref};
+use crate::buffer::{BufRef, buf_hide, do_bufdel, no_write_message};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_cmds::do_write;
 use crate::ex_cmds2::{autowrite_all, check_changed, check_changed_any, dialog_changed};
@@ -37,7 +37,7 @@ use crate::message::{emsg, msg};
 use crate::os::cshim::{gettext, snprintf};
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t,
+    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, exarg_T, linenr_T, ptrdiff_t,
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
@@ -348,11 +348,10 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) 
         let mut need_hide = buf_is_changed(Buf::new(buf)) && (*buf).b_nwindows <= 1;
         if need_hide && !buf_hide(buf) && forceit == 0 {
             if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
-                let mut bufref: bufref_T = core::mem::zeroed();
-                set_bufref(&raw mut bufref, buf);
+                let bufref = BufRef::of_opt(Buf::from_raw(buf));
                 dialog_changed(buf, false);
                 // The dialog may have wiped the buffer, or written it.
-                if bufref_valid(&raw mut bufref) && buf_is_changed(Buf::new(buf)) {
+                if bufref.valid() && buf_is_changed(Buf::new(buf)) {
                     return;
                 }
                 need_hide = false;

@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::buffer::BufFlags;
+use crate::buffer::BufRef;
 use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
 use crate::winlayer::{Buf, windows};
 use core::ffi::{c_char, c_int};
@@ -70,8 +71,8 @@ pub(crate) unsafe fn load_dummy_buffer(
     }
 
     let mut failed = true;
-    let mut newbufref = bufref_T::default();
-    unsafe { set_bufref(&raw mut newbufref, newbuf) };
+    // SAFETY: `buflist_new` answered this buffer a moment ago.
+    let newbufref = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
 
     // Init the options.
     unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP) as c_int) };
@@ -94,7 +95,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         // work.
         cur_buf().b_flags.clear(BufFlags::DUMMY);
 
-        let mut newbuf_to_wipe = bufref_T::default();
+        let mut newbuf_to_wipe = BufRef::NONE;
         let sfname = ptr::null_mut();
         let lines_to_read = MAXLNUM as linenr_T;
         let eap = ptr::null_mut();
@@ -107,7 +108,7 @@ pub(crate) unsafe fn load_dummy_buffer(
             if !ptr::eq(curbuf.get(), newbuf) {
                 // Bloody autocommands changed the buffer! Restore
                 // the original buffer and wipe the new one later.
-                unsafe { set_bufref(&raw mut newbuf_to_wipe, newbuf) };
+                newbuf_to_wipe = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
                 newbuf = curbuf.get();
             }
         }
@@ -115,10 +116,10 @@ pub(crate) unsafe fn load_dummy_buffer(
         // Restore curwin/curbuf and a few other things.
         unsafe { aucmd_restbuf(&raw mut aco) };
 
-        if !newbuf_to_wipe.br_buf.is_null() && unsafe { bufref_valid(&raw mut newbuf_to_wipe) } {
+        if let Some(to_wipe) = newbuf_to_wipe.get() {
             unsafe { block_autocmds() };
-            // SAFETY: `bufref_valid` just established the buffer.
-            unsafe { wipe_dummy_buffer(Buf::new(newbuf_to_wipe.br_buf), ptr::null()) };
+            // SAFETY: `BufRef::get` just established the buffer.
+            unsafe { wipe_dummy_buffer(to_wipe, ptr::null()) };
             unsafe { unblock_autocmds() };
         }
 
@@ -132,10 +133,10 @@ pub(crate) unsafe fn load_dummy_buffer(
     unsafe { os_dirname(resulting_dir, MAXPATHL as size_t) };
     unsafe { restore_start_dir(dirname_start) };
 
-    if !unsafe { bufref_valid(&raw mut newbufref) } {
+    if !newbufref.valid() {
         return None;
     }
-    // SAFETY: `bufref_valid` just established the buffer.
+    // SAFETY: `BufRef::valid` just established the buffer.
     let newbuf = unsafe { Buf::new(newbuf) };
     if failed {
         // SAFETY: `dirname_start` is the caller's NUL-terminated string.

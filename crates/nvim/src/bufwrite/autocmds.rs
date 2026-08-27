@@ -20,6 +20,7 @@ use core::ffi::{c_char, c_int};
 use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, event_T};
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::option::cpo_has;
 use crate::winlayer::Buf;
 
@@ -113,9 +114,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 
         // Set curwin/curbuf to buf and save a few things.
         let mut aco = aco_save_T::default();
-        let mut bufref = bufref_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
-        set_bufref(&raw mut bufref, buf);
+        let bufref = BufRef::of_opt(Buf::from_raw(buf));
 
         // Did a "Cmd" autocommand write the file itself?
         let mut did_cmd = false;
@@ -170,7 +170,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         aucmd_restbuf(&raw mut aco);
 
         // The buffer is gone if the autocommands deleted or unloaded it.
-        let buf = if bufref_valid(&raw mut bufref) {
+        let buf = if bufref.valid() {
             buf
         } else {
             core::ptr::null_mut()

@@ -23,9 +23,9 @@ use crate::autocmd::{
     EVENT_BUFADD, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, augroup_exists, do_doautocmd,
 };
 use crate::buffer::{
-    BufFlags, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename, buf_name_changed,
-    buflist_findname, buflist_new, bufref_valid, current_buf, do_autochdir, do_modelines, fileinfo,
-    fname_expand, no_write_message, no_write_message_buf, otherfile, set_bufref, setaltfname,
+    BufFlags, BufRef, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename,
+    buf_name_changed, buflist_findname, buflist_new, current_buf, do_autochdir, do_modelines,
+    fileinfo, fname_expand, no_write_message, no_write_message_buf, otherfile, setaltfname,
     setfname,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
@@ -52,7 +52,7 @@ use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::types::{
     CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
-    ShmFlag, buf_T, bufref_T, exarg_T, int32_t, int64_t, linenr_T,
+    ShmFlag, buf_T, exarg_T, int32_t, int64_t, linenr_T,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
@@ -715,16 +715,14 @@ unsafe fn write_one_buffer(
     {
         *error += 1;
     } else {
-        let mut bufref = bufref_T::default();
-        // SAFETY: a live buffer and our own `bufref`.
-        unsafe { set_bufref(&raw mut bufref, buf.raw()) };
+        let bufref = BufRef::of(buf);
         if unsafe { handle_mkdir_p_arg(eap, buf.b_fname) } == FAIL
             || unsafe { buf_write_all(buf.raw(), (*eap).forceit != 0) } == FAIL
         {
             *error += 1;
         }
         // An autocommand may have deleted the buffer.
-        deleted = !unsafe { bufref_valid(&raw mut bufref) };
+        deleted = !bufref.valid();
     }
     // check_overwrite() may set it
     unsafe { (*eap).forceit = save_forceit };

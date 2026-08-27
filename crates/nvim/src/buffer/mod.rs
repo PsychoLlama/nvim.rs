@@ -19,7 +19,8 @@
 //!
 //! What stays here is the flag alphabet the twelve share (`DOBUF_*`,
 //! `BLN_*`, `BFA_*`, `READ_*`), the [`BufRef`] layer every one of them uses to
-//! survive an autocommand (`set_bufref`, `bufref_valid`, `buf_valid`), the
+//! survive an autocommand (upstream's `set_bufref`/`bufref_valid`, plus
+//! [`buf_valid`]), the
 //! `b:changedtick` and buffer-number counters, `buf_meta_total` -- the
 //! marktree accessor `buffer.h` had as a `static inline` -- and the shims for
 //! the neighbours more than one child reaches.
@@ -30,7 +31,9 @@
 //! `BufUnload`, `BufDelete`, `BufWipeout`, ...) and **an autocommand may free
 //! the buffer in hand**.  The C's answer is `bufref_T`: remember the pointer
 //! together with the buffer number and a global free counter, and ask again
-//! afterwards.  [`BufRef`] is that answer as a value type -- [`BufRef::get`]
+//! afterwards.  [`BufRef`] is that answer as a value type: it is *taken* from
+//! a [`Buf`] ([`BufRef::of`], [`BufRef::of_opt`]) rather than written through
+//! an out-pointer the way `set_bufref()` was, and [`BufRef::get`]
 //! re-validates and only then hands a [`Buf`] back, so a stale pointer cannot
 //! be dereferenced by accident.  The discipline the whole family follows is
 //! **hold no [`Buf`], [`Win`] or borrow across a call that can fire an
@@ -249,7 +252,6 @@ impl BufRef {
     /// The reference that names no buffer, for a cell's initial value.
     pub(crate) const NONE: Self = BufRef(bufref_T::new());
 
-    /// `set_bufref()`: remember `buf`, which may be null.
     /// `set_bufref()`, where the C passes a pointer that may be NULL.
     ///
     /// Safe because the absence is in the type: this used to take a
@@ -292,25 +294,17 @@ impl BufRef {
     pub(crate) fn raw(self) -> *mut buf_T {
         self.0.br_buf
     }
-}
 
-/// Store `buf` in `bufref` and set the free count.
-///
-/// # Safety
-/// `bufref` must be a writable `bufref_T`, and `buf` a live buffer or null.
-pub unsafe fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a slot to write, and a live buffer or
-    // null.
-    unsafe { *bufref = BufRef::of_opt(Buf::from_raw(buf)).0 };
-}
+    /// The record itself, for the two places it has to live in a C struct:
+    /// `aco_save_T`'s `new_curbuf`.
+    pub(crate) const fn record(self) -> bufref_T {
+        self.0
+    }
 
-/// Whether `bufref` still names the buffer it was set to.
-///
-/// # Safety
-/// `bufref` must be a `bufref_T` [`set_bufref`] has filled in.
-pub unsafe fn bufref_valid(bufref: *mut bufref_T) -> bool {
-    // SAFETY: the caller's promise -- a filled-in reference.
-    BufRef(unsafe { *bufref }).valid()
+    /// [`record`](BufRef::record) the other way.
+    pub(crate) const fn of_record(record: bufref_T) -> Self {
+        BufRef(record)
+    }
 }
 
 /// Whether `buf` is still in the buffer list.

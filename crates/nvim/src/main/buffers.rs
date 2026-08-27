@@ -46,7 +46,7 @@ use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
     IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, Vv, aentry_T,
-    bufref_T, exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
+    exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -345,7 +345,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                     (*curwin.get()).w_arg_idx = -1;
                     swap_exists_action.set(SEA_NONE);
                 } else {
-                    handle_swap_exists(ptr::null_mut::<bufref_T>());
+                    handle_swap_exists(None);
                 }
                 // The lists may have moved under us.
                 dorewind = true;
@@ -515,12 +515,8 @@ unsafe fn set_shortmess(value: *mut c_char) {
 
 /// Act on the ATTENTION prompt's answer after a buffer was loaded.
 pub(crate) unsafe fn check_swap_exists_action() {
-    // SAFETY: reads one global and either leaves or hands over to the
-    // buffer layer.
-    unsafe {
-        if swap_exists_action.get() == SEA_QUIT {
-            quit_on_swap_exists(false);
-        }
-        handle_swap_exists(ptr::null_mut::<bufref_T>());
+    if swap_exists_action.get() == SEA_QUIT {
+        quit_on_swap_exists(false);
     }
+    handle_swap_exists(None);
 }

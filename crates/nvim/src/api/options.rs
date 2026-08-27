@@ -24,7 +24,7 @@ use crate::autocmd::{
     EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
     unblock_autocmds,
 };
-use crate::buffer::{BufFlags, buflist_new, bufref_valid, set_bufref, wipe_buffer};
+use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -37,8 +37,8 @@ use crate::option::{
 };
 use crate::types::{
     Arena, Dict, Error, FAIL, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData,
-    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, bufref_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, linenr_T, sctx_T, uint64_t,
+    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, int64_t, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, linenr_T, sctx_T, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -255,11 +255,9 @@ unsafe fn do_ft_buf(
         fail(c"Could not load internal buffer");
         return ftbuf;
     }
-    let mut bufref: bufref_T = bufref_T::default();
-    // SAFETY: `bufref` is this frame's own, `aco` the caller's, and `ftbuf`
-    // is live until it is wiped.
+    // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(ftbuf) });
     unsafe {
-        set_bufref(&raw mut bufref, ftbuf);
         aucmd_prepbuf(aco, ftbuf);
         *aco_used = true;
     }
@@ -297,8 +295,7 @@ unsafe fn do_ft_buf(
     let did_au_ft = api_try(unsafe { &mut *err }, |_| {
         do_filetype_autocmd(unsafe { Buf::new(ftbuf) }, true)
     });
-    // SAFETY: `bufref` is this frame's own.
-    if !unsafe { bufref_valid(&raw mut bufref) } {
+    if !bufref.valid() {
         // SAFETY: `err` is the caller's.
         if unsafe { (*err).type_0 } == kErrorTypeNone {
             fail(c"Internal buffer was deleted");
@@ -328,17 +325,16 @@ fn static_option(text: &'static CStr) -> OptVal {
 /// # Safety
 /// `buf` must be a live buffer.
 unsafe fn wipe_ft_buf(buf: *mut buf_T) {
-    // SAFETY: `buf` is the caller's live buffer; `bufref` is this frame's own
-    // and re-checks it after each step that can delete it.
+    // SAFETY: `buf` is the caller's live buffer; the `bufref` re-checks it
+    // after each step that can delete it.
     unsafe {
         block_autocmds();
-        let mut bufref: bufref_T = bufref_T::default();
-        set_bufref(&raw mut bufref, buf);
+        let bufref = BufRef::of_opt(Buf::from_raw(buf));
         close_windows(buf, false);
-        if bufref_valid(&raw mut bufref) && buf != curbuf.get() && (*buf).b_nwindows == 0 {
+        if bufref.valid() && buf != curbuf.get() && (*buf).b_nwindows == 0 {
             wipe_buffer(Buf::new(buf), false);
         }
-        if bufref_valid(&raw mut bufref) {
+        if bufref.valid() {
             (*buf).b_flags.clear(BufFlags::DUMMY);
         }
         unblock_autocmds();

@@ -12,7 +12,6 @@ use crate::api::private::validate::{
 use crate::autocmd::{
     EVENT_WINNEW, apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds,
 };
-use crate::buffer::{bufref_valid, set_bufref};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
@@ -32,8 +31,8 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_SIZE, Error, Float,
     FloatAnchor, FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys, String_0,
-    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, bufref_T,
-    colnr_T, except_T, frame_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, colnr_T,
+    except_T, frame_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
     kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor,
     kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
     kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T,

@@ -9,7 +9,7 @@ use crate::api::private::helpers::{
     find_buffer_by_handle,
 };
 use crate::ascii::ascii_iswhite;
-use crate::buffer::{buf_is_prompt, bufref_valid, current_buf, do_modelines, find_buf, set_bufref};
+use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::typval::{
@@ -65,7 +65,7 @@ use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Callback_data, Error,
     Event, Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal,
     OptValData, OptValType, Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T,
-    auto_event, buf_T, bufref_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t,
+    auto_event, buf_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t,
     kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T, save_redo_T, save_v_event_T,
     sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
 };

@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::smsg_c;
 use crate::types::{FAIL, OK, OptionSetFlags};
 use crate::winlayer::Buf;
@@ -117,7 +118,6 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
     // `check_nomodeline` only advances `arg` inside its own argument.
     let mut arg = unsafe { (*eap).arg };
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
-    let mut bufref = bufref_T::default();
     let mut did_aucmd = false;
 
     let mut retval = OK;
@@ -128,10 +128,11 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
         // the head, or a `b_next` reached below only after `bufref_valid`
         // proved this pass did not delete it.
         if !unsafe { (*buf).b_ml.ml_mfp }.is_null() && buf != curbuf.get() {
-            // SAFETY: `aco` and `bufref` are this frame's own storage, and
-            // `buf` is live as above.
+            // SAFETY: `aco` is this frame's own storage and `buf` is live
+            // as above.
             unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-            unsafe { set_bufref(&raw mut bufref, buf) };
+            // SAFETY: as above -- a live buffer.
+            let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
             // SAFETY: `arg` is the command's own argument and `did_aucmd`
             // this frame's own `bool`.
@@ -150,8 +151,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
             unsafe { aucmd_restbuf(&raw mut aco) };
 
             // Stop on an error, or if the buffer was deleted under us.
-            // SAFETY: `bufref` is this frame's own.
-            if retval == FAIL || !unsafe { bufref_valid(&raw mut bufref) } {
+            if retval == FAIL || !bufref.valid() {
                 retval = FAIL;
                 break;
             }

@@ -26,8 +26,8 @@ use crate::autocmd::{
 };
 use crate::buffer::{
     buf_is_help, buf_is_normal, buf_is_quickfix, buf_valid, buflist_findname_exp, buflist_getfile,
-    buflist_new, bufref_valid, close_buffer, current_buf, do_modelines, find_buf, no_write_message,
-    set_bufref, setfname, wipe_buffer,
+    buflist_new, close_buffer, current_buf, do_modelines, find_buf, no_write_message, setfname,
+    wipe_buffer,
 };
 use crate::change::changed_lines;
 use crate::charset::{skipdigits, skipwhite, vim_isprintc};
@@ -114,7 +114,7 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt,
     OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType,
-    aco_save_T, bln_values, buf_T, bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
+    aco_save_T, bln_values, buf_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
     dobuf_action_values, exarg_T, getf_values, linenr_T, list_T, listitem_T, optset_T, pos_T,
     ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T,
     scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T,

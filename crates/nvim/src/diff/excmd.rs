@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
@@ -231,9 +232,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     let mut eap = unsafe { Live::<exarg_T>::new(eap) };
     let old_curwin: *mut win_T = curwin.get();
-    let mut old_curbuf = bufref_T::default();
-    // SAFETY: the current buffer is live, and `old_curbuf` is a local.
-    unsafe { set_bufref(&raw mut old_curbuf, curbuf.get()) };
+    let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
     unsafe {
         validate_cursor(Win::new(old_curwin));
@@ -258,15 +257,9 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     if win_valid(old_curwin) {
         // SAFETY: the window is live, as just checked.
         diff_win_options(unsafe { Win::new(old_curwin) }, true);
-        // SAFETY: `old_curbuf` is a local `bufref_T`.
-        if unsafe { bufref_valid(&raw mut old_curbuf) } {
+        if let Some(old_buf) = old_curbuf.get() {
             // SAFETY: the old window is live and its buffer reference valid.
-            let lnum = unsafe {
-                diff_get_corresponding_line(
-                    Buf::new(old_curbuf.br_buf),
-                    (*old_curwin).w_cursor.lnum,
-                )
-            };
+            let lnum = unsafe { diff_get_corresponding_line(old_buf, (*old_curwin).w_cursor.lnum) };
             cur_win().w_cursor.lnum = lnum;
         }
     }

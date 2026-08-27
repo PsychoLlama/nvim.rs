@@ -11,8 +11,7 @@ use crate::autocmd::{
 };
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
-    buf_is_normal, buflist_new, bufref_valid, current_buf, do_modelines, set_bufref, setfname,
-    wipe_buffer,
+    buf_is_normal, buflist_new, current_buf, do_modelines, setfname, wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
@@ -83,9 +82,9 @@ use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
-    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, event_T, exarg_T,
-    garray_T, iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T,
-    size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, event_T, exarg_T, garray_T,
+    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
+    ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

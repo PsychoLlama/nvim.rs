@@ -13,9 +13,7 @@ use crate::autocmd::{
     EVENT_FILEWRITEPRE, EVENT_FILTERWRITEPOST, EVENT_FILTERWRITEPRE, apply_autocmds_exarg,
     aucmd_prepbuf, aucmd_restbuf,
 };
-use crate::buffer::{
-    BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id, bufref_valid, set_bufref,
-};
+use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
@@ -55,8 +53,8 @@ use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
     CmdModFlags, CpoFlag, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, ShmFlag, aco_save_T, buf_T,
-    bufref_T, exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t,
-    uv_uid_t, vim_acl_T,
+    exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t,
+    vim_acl_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};

@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
@@ -191,7 +192,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
 
     curbuf.set(buf);
     unsafe { (*aco).new_curwin_handle = cur_win().handle };
-    unsafe { set_bufref(&raw mut (*aco).new_curbuf, curbuf.get()) };
+    unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 
     unsafe { (*aco).save_VIsual_active = visual_active() };
     if !same_buffer {
@@ -295,16 +296,18 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
         if !save_curwin.is_null() {
             // Put back the buffer `curwin` was editing, if it changed
             // and we are still the same window with a valid buffer.
+            // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
+            let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
             if cur_win().handle == unsafe { (*aco).new_curwin_handle }
-                && curbuf.get() != unsafe { (*aco).new_curbuf.br_buf }
-                && unsafe { bufref_valid(&raw mut (*aco).new_curbuf) }
-                && !unsafe { (*(*aco).new_curbuf.br_buf).b_ml.ml_mfp.is_null() }
+                && curbuf.get() != new_curbuf.raw()
+                && new_curbuf.valid()
+                && !unsafe { (*new_curbuf.raw()).b_ml.ml_mfp.is_null() }
             {
                 if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*curbuf.get()).b_s } {
-                    cur_win().w_s = unsafe { &raw mut (*(*aco).new_curbuf.br_buf).b_s };
+                    cur_win().w_s = unsafe { &raw mut (*new_curbuf.raw()).b_s };
                 }
                 cur_buf().b_nwindows -= 1;
-                curbuf.set(unsafe { (*aco).new_curbuf.br_buf });
+                curbuf.set(new_curbuf.raw());
                 cur_win().w_buffer = curbuf.get();
                 cur_buf().b_nwindows += 1;
             }

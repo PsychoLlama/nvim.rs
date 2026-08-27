@@ -32,7 +32,7 @@ use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::autocmd::{EVENT_SPELLFILEMISSING, apply_autocmds};
-use crate::buffer::{bufref_valid, set_bufref};
+use crate::buffer::BufRef;
 use crate::charset::vim_is_fname_char;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
@@ -49,8 +49,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    MAXPATHL, NUL, SPL_FNAME_TMPL, bufref_T, garray_T, langp_T, regprog_T, size_t, slang_T,
-    synblock_T, win_T,
+    MAXPATHL, NUL, SPL_FNAME_TMPL, garray_T, langp_T, regprog_T, size_t, slang_T, synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
 use ::libc::{strcasecmp, strcmp, strcpy, strlen};
@@ -61,6 +60,7 @@ use super::{
     MAXWLEN, REGION_ALL, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to, spelload_T,
 };
 use crate::runtime::RuntimeOpts;
+use crate::winlayer::Buf;
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
 fn ascii_isalpha(c: c_int) -> bool {
@@ -269,8 +269,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         let mut nobreak = false;
         let mut ret_msg: *mut c_char = core::ptr::null_mut();
 
-        let mut bufref: bufref_T = core::mem::zeroed();
-        set_bufref(&raw mut bufref, (*wp).w_buffer);
+        let bufref = BufRef::of_opt(Buf::from_raw((*wp).w_buffer));
 
         let mut ga: garray_T = core::mem::zeroed();
         ga_init(&raw mut ga, size_of::<langp_T>() as c_int, 2);
@@ -374,7 +373,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                     spell_load_lang(lang.as_mut_ptr());
                     // The autocommands may have destroyed the buffer being
                     // used, or closed the window.
-                    if !bufref_valid(&raw mut bufref) || !win_valid_any_tab(wp) {
+                    if !bufref.valid() || !win_valid_any_tab(wp) {
                         ret_msg = c"E797: SpellFileMissing autocommand deleted buffer".as_ptr()
                             as *mut c_char;
                         break 'names;

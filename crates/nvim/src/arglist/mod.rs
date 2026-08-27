@@ -24,8 +24,8 @@ mod eval;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{
-    buf_hide, buf_is_empty, buf_set_name, buflist_add, bufref_valid, curbuf_reusable, find_buf,
-    maketitle, otherfile, set_bufref,
+    buf_hide, buf_is_empty, buf_set_name, buflist_add, curbuf_reusable, find_buf, maketitle,
+    otherfile,
 };
 use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_string,

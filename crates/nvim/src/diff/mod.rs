@@ -37,8 +37,8 @@ use crate::autocmd::{
     block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_valid, buflist_findpat, bufref_valid,
-    current_buf, find_buf, set_bufref,
+    buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_valid, buflist_findpat, current_buf,
+    find_buf,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
@@ -91,8 +91,8 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
     CMD_diffget, CMD_diffput, CMD_split, CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, bufref_T,
-    colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T, garray_T, hlf_T, linenr_T,
+    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, colnr_T,
+    diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T, garray_T, hlf_T, linenr_T,
     mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t,
     xpparam_t,
 };

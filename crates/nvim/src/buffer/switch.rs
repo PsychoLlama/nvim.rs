@@ -45,7 +45,7 @@ use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
     CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CmdModFlags, FAIL,
-    NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
+    NUL, OK, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -249,24 +249,14 @@ pub unsafe fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_
         swap_exists_did_quit.set(true);
         leave_cleanup_now(&mut cs);
     } else {
-        handle_swap_exists_opt(Some(old_curbuf));
+        handle_swap_exists(Some(old_curbuf));
     }
 }
 
-/// Handle the situation of `swap_exists_action` being set.
-///
-/// # Safety
-/// `old_curbuf` may be null or invalid; it is only ever re-validated.
-pub unsafe fn handle_swap_exists(old_curbuf: *mut bufref_T) {
-    let old = match old_curbuf.is_null() {
-        true => None,
-        // SAFETY: the caller's promise -- a filled-in reference.
-        false => Some(BufRef(unsafe { *old_curbuf })),
-    };
-    handle_swap_exists_opt(old);
-}
-
-fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
+/// Handle the situation of `swap_exists_action` being set.  `old_curbuf` is
+/// the buffer to go back to, `None` where the C passed a NULL `bufref_T *`;
+/// it is only ever re-validated, never trusted.
+pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
     let old_tw: OptInt = cur_buf().b_p_tw;
 
     if swap_exists_action.get() == SEA_QUIT {
@@ -840,7 +830,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     let mut unloaded: Option<Buf> = None;
 
     // First use au_new_curbuf.br_buf, if it is valid and not closing.
-    let mut buf = BufRef(au_new_curbuf.get())
+    let mut buf = BufRef::of_record(au_new_curbuf.get())
         .get()
         .filter(|b| b.b_locked_split == 0);
     if buf.is_none() && cur_win().w_jumplistlen > 0 {

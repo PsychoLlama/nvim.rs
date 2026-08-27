@@ -31,9 +31,10 @@ use super::{
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
+use crate::buffer::current_buf;
 use crate::buffer::{
-    BufFlags, buf_clear_file, buf_freeall, bufref_valid, do_autochdir, do_modelines, fileinfo,
-    handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, set_bufref, setaltfname,
+    BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
+    handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
 };
 use crate::charset::skipwhite;
 use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum, get_cursor_line_ptr};
@@ -65,8 +66,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    NUL, OK, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, bufref_T, exarg_T, linenr_T, ptrdiff_t,
-    time_t, win_T,
+    NUL, OK, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, linenr_T, ptrdiff_t, time_t,
+    win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -232,9 +233,7 @@ pub unsafe fn do_ecmd(
         unsafe { (*eap).do_ecmd_cmd }
     };
 
-    let mut old_curbuf = bufref_T::default();
-    // SAFETY: `curbuf` is the live current buffer.
-    unsafe { set_bufref(&raw mut old_curbuf, curbuf.get()) };
+    let mut old_curbuf = BufRef::of_opt(current_buf());
     let mut did_set_swapcommand = false;
 
     'theend: {
@@ -454,15 +453,13 @@ pub unsafe fn do_ecmd(
         do_autochdir();
     }
 
-    // SAFETY: the two buffers are live when their bufrefs say so.
-    if unsafe { bufref_valid(&raw mut old_curbuf) }
-        && !unsafe { (*old_curbuf.br_buf).terminal.is_null() }
+    // SAFETY: the old buffer is live when its bufref says so.
+    if let Some(old) = old_curbuf.get()
+        && !old.terminal.is_null()
     {
-        unsafe { terminal_check_size((*old_curbuf.br_buf).terminal) };
+        unsafe { terminal_check_size(old.terminal) };
     }
-    if (!unsafe { bufref_valid(&raw mut old_curbuf) } || curbuf.get() != old_curbuf.br_buf)
-        && !cur_buf().terminal.is_null()
-    {
+    if (!old_curbuf.valid() || curbuf.get() != old_curbuf.raw()) && !cur_buf().terminal.is_null() {
         unsafe { terminal_check_size(cur_buf().terminal) };
     }
 
@@ -551,8 +548,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     } else {
         unsafe { xstrdup((*buf).b_fname) }
     };
-    let mut bufref = bufref_T::default();
-    unsafe { set_bufref(&raw mut bufref, buf) };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
     // If the buffer was used before, store the current contents so that
     // the reload can be undone.  Do not do this if the (empty) buffer is
@@ -577,7 +573,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
 
     // If autocommands deleted the buffer we were going to re-edit, give up
     // and jump to the end.  `delbuf_msg` frees `new_name`.
-    if !unsafe { bufref_valid(&raw mut bufref) } {
+    if !bufref.valid() {
         unsafe { delbuf_msg(new_name) };
         return false;
     }
@@ -605,7 +601,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
 /// bufref [`do_ecmd`] took on entry.
 unsafe fn enter_new_buffer(
     args: &EcmdArgs,
-    old_curbuf: &mut bufref_T,
+    old_curbuf: &mut BufRef,
     state: &mut Ecmd,
     retval: &mut c_int,
 ) {
@@ -647,7 +643,7 @@ unsafe fn enter_new_buffer(
         if swap_exists_action.get() == SEA_QUIT {
             *retval = FAIL;
         }
-        unsafe { handle_swap_exists(&raw mut *old_curbuf) };
+        handle_swap_exists(Some(*old_curbuf));
     } else {
         // Read the modelines, but only to set window-local options.  Any
         // buffer-local options have already been set and may have been changed

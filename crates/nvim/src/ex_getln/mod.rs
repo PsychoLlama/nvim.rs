@@ -12,8 +12,8 @@ use crate::autocmd::{
     aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
 use crate::buffer::{
-    buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, bufref_valid,
-    close_buffer, do_buffer, find_buf, set_bufref,
+    buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, close_buffer,
+    do_buffer, find_buf,
 };
 use crate::charset::{
     ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
@@ -147,7 +147,7 @@ use crate::types::{
     HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
     OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
     RemapValues, Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T,
-    buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
+    buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
     dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
     hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
     optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,

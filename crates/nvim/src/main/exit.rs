@@ -16,9 +16,7 @@ use crate::autocmd::{
     EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_VIMLEAVE, EVENT_VIMLEAVEPRE, apply_autocmds,
     block_autocmds, is_autocmd_blocked, unblock_autocmds,
 };
-use crate::buffer::{
-    buf_get_changedtick, buf_set_changedtick, buf_valid, bufref_valid, set_bufref,
-};
+use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick, buf_valid};
 use crate::eval::garbage_collect;
 use crate::eval::userfunc::invoke_all_defer;
 use crate::eval::vars::{get_vim_var_str, set_vim_var_nr, set_vim_var_string, set_vim_var_type};
@@ -39,7 +37,7 @@ use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{NUL, VAR_NUMBER, Vv, bufref_T, tabpage_T, varnumber_T};
+use crate::types::{NUL, VAR_NUMBER, Vv, tabpage_T, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
@@ -157,8 +155,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                     let buf = (*wp).w_buffer;
                     // `buf_valid` does the null test itself.
                     if buf_valid(buf) && buf_get_changedtick(Buf::new(buf)) != -1 {
-                        let mut bufref = bufref_T::default();
-                        set_bufref(&raw mut bufref, buf);
+                        let bufref = BufRef::of_opt(Buf::from_raw(buf));
                         apply_autocmds(
                             EVENT_BUFWINLEAVE,
                             (*buf).b_fname,
@@ -166,7 +163,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                             false,
                             buf,
                         );
-                        if bufref_valid(&raw mut bufref) {
+                        if bufref.valid() {
                             buf_set_changedtick(buf, -1);
                         }
                         // The autocommands may have rearranged both lists;
@@ -183,10 +180,9 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             let mut buf = firstbuf.get();
             while !buf.is_null() {
                 if !(*buf).b_ml.ml_mfp.is_null() {
-                    let mut bufref = bufref_T::default();
-                    set_bufref(&raw mut bufref, buf);
+                    let bufref = BufRef::of_opt(Buf::from_raw(buf));
                     apply_autocmds(EVENT_BUFUNLOAD, (*buf).b_fname, (*buf).b_fname, false, buf);
-                    if !bufref_valid(&raw mut bufref) {
+                    if !bufref.valid() {
                         // An autocommand deleted the buffer we were standing
                         // on, so the `b_next` link is gone with it.
                         break;

@@ -45,8 +45,8 @@ mod listdo;
 
 use crate::arglist::{ex_all, ex_rewind, set_arglist};
 use crate::buffer::{
-    buf_hide, buf_is_dontwrite, buf_set_name, buf_spname, bufref_valid, find_buf, no_write_message,
-    no_write_message_nobang, set_bufref, set_curbuf,
+    BufRef, buf_hide, buf_is_dontwrite, buf_set_name, buf_spname, find_buf, no_write_message,
+    no_write_message_nobang, set_curbuf,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
@@ -77,8 +77,8 @@ use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
-    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, bufref_T,
-    exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
+    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, exarg_T,
+    linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -284,13 +284,12 @@ pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
         {
             return FAIL;
         }
-        let mut bufref = bufref_T::default();
-        set_bufref(&raw mut bufref, buf);
+        let bufref = BufRef::of_opt(Buf::from_raw(buf));
         let r = buf_write_all(buf, forceit);
 
         // The write can succeed and still leave the buffer changed, e.g. on
         // a conversion error. That is a failure.
-        if bufref_valid(&raw mut bufref) && buf_is_changed(Buf::new(buf)) {
+        if bufref.valid() && buf_is_changed(Buf::new(buf)) {
             return FAIL;
         }
         r
@@ -313,10 +312,9 @@ pub(crate) unsafe fn autowrite_all() {
         while !buf.is_null() {
             let b = Buf::new(buf);
             if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
-                let mut bufref = bufref_T::default();
-                set_bufref(&raw mut bufref, buf);
+                let bufref = BufRef::of_opt(Buf::from_raw(buf));
                 buf_write_all(buf, false);
-                if !bufref_valid(&raw mut bufref) {
+                if !bufref.valid() {
                     buf = firstbuf.get();
                 }
             }
@@ -332,9 +330,8 @@ pub(crate) unsafe fn autowrite_all() {
 /// Module contract.
 pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
-    let mut bufref = bufref_T::default();
     // SAFETY: module contract, here and at every `unsafe` below.
-    unsafe { set_bufref(&raw mut bufref, buf) };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
     let blocked = unsafe {
         !forceit
@@ -369,11 +366,11 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
         }
     }
     // An autocommand may have deleted the buffer; then it is not changed now.
-    if !unsafe { bufref_valid(&raw mut bufref) } {
+    if !bufref.valid() {
         return false;
     }
     unsafe { dialog_changed(buf, count > 1) };
-    if !unsafe { bufref_valid(&raw mut bufref) } {
+    if !bufref.valid() {
         return false;
     }
     buf_is_changed(unsafe { Buf::new(buf) })
@@ -450,8 +447,7 @@ unsafe fn write_all_writable() {
         while !buf.is_null() {
             let target = Buf::new(buf);
             if buf_is_changed(target) && !(*buf).b_ffname.is_null() && (*buf).b_p_ro == 0 {
-                let mut bufref = bufref_T::default();
-                set_bufref(&raw mut bufref, buf);
+                let bufref = BufRef::of_opt(Buf::from_raw(buf));
                 if !(*buf).b_fname.is_null()
                     && check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false)
                         == OK
@@ -459,7 +455,7 @@ unsafe fn write_all_writable() {
                     // didn't hit Cancel
                     buf_write_all(buf, false);
                 }
-                if !bufref_valid(&raw mut bufref) {
+                if !bufref.valid() {
                     buf = firstbuf.get();
                 }
             }
@@ -561,12 +557,11 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
             if buf.is_null() || hidden && (*buf).b_nwindows != 0 || !buf_is_changed(Buf::new(buf)) {
                 continue;
             }
-            let mut bufref = bufref_T::default();
-            set_bufref(&raw mut bufref, buf);
+            let bufref = BufRef::of_opt(Buf::from_raw(buf));
             // Try auto-writing the buffer. If that fails but the buffer no
             // longer exists it is not changed, and that is fine.
             let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
-            if check_changed(buf, flags) && bufref_valid(&raw mut bufref) {
+            if check_changed(buf, flags) && bufref.valid() {
                 // Didn't save -- still changed.
                 culprit = buf;
                 break;
@@ -588,11 +583,10 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
                 if (*wp).w_buffer != culprit {
                     continue;
                 }
-                let mut bufref = bufref_T::default();
-                set_bufref(&raw mut bufref, culprit);
+                let bufref = BufRef::of_opt(Buf::from_raw(culprit));
                 goto_tabpage_win(tp, wp);
                 // Paranoia: did autocommands wipe out the changed buffer?
-                if !bufref_valid(&raw mut bufref) {
+                if !bufref.valid() {
                     return true;
                 }
                 break;

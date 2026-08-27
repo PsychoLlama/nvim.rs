@@ -21,7 +21,7 @@ use super::*;
 use crate::autocmd::{
     EVENT_WINRESIZED, EVENT_WINSCROLLED, apply_autocmds, event_ignored, has_event,
 };
-use crate::buffer::{bufref_valid, set_bufref};
+use crate::buffer::BufRef;
 use crate::eval::typval::{
     tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc, tv_dict_extend,
     tv_dict_set_keys_readonly, tv_dict_unref, tv_list_alloc, tv_list_append_owned_tv,
@@ -35,8 +35,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, OK, OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, bufref_T, dict_T, garray_T, linenr_T,
-    list_T, ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    FAIL, OK, OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, dict_T, garray_T, linenr_T, list_T,
+    ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -315,20 +315,18 @@ fn scan_windows(what: &mut Scan) {
 /// The window whose id and buffer an event is reported against.
 struct Subject {
     winid: [c_char; NUMBUFLEN as usize],
-    bufref: bufref_T,
+    bufref: BufRef,
 }
 
 impl Subject {
     fn of(win: Win) -> Self {
         let mut subject = Subject {
             winid: [0; NUMBUFLEN as usize],
-            bufref: bufref_T::default(),
+            bufref: BufRef::of_opt(win.buffer_or_none()),
         };
         let name = (&raw mut subject.winid).cast::<c_char>();
         // SAFETY: a 65-byte buffer, which holds any window handle.
         unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), win.handle) };
-        // SAFETY: a live window and its live buffer.
-        unsafe { set_bufref(&raw mut subject.bufref, win.w_buffer) };
         subject
     }
 
@@ -339,9 +337,8 @@ impl Subject {
     /// The buffer to fire the event for: the window's own if it is still
     /// there, the current one otherwise.
     fn buffer(&mut self) -> *mut buf_T {
-        // SAFETY: `bufref_valid` only compares the saved pointer.
-        if unsafe { bufref_valid(&raw mut self.bufref) } {
-            self.bufref.br_buf
+        if self.bufref.valid() {
+            self.bufref.raw()
         } else {
             curbuf.get()
         }

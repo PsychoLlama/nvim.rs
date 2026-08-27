@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::{BufRef, current_buf};
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
@@ -98,8 +99,7 @@ pub unsafe fn did_set_cedit(_args: *mut optset_T) -> *const ::core::ffi::c_char 
 /// executed, `Ctrl_C` if it is to be abandoned, and `K_IGNORE` if editing
 /// continues.
 pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
-    let mut old_curbuf = bufref_T::default();
-    let mut bufref = bufref_T::default();
+    let mut bufref = BufRef::NONE;
     let old_curwin = curwin.get();
     // Uninitialised in the C; `win_size_save` below fills it, and every
     // path that reaches `ga_clear` has been through it.
@@ -122,7 +122,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         return K_IGNORE;
     }
 
-    unsafe { set_bufref(&raw mut old_curbuf, curbuf.get()) };
+    let old_curbuf = BufRef::of_opt(current_buf());
 
     // Save current window sizes.
     unsafe { win_size_save(&raw mut winsizes) };
@@ -149,8 +149,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // buffer. Treat it as abandoning this command line.
     if !win_valid(old_curwin)
         || curwin.get() == old_curwin
-        || !unsafe { bufref_valid(&raw mut old_curbuf) }
-        || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
+        || !old_curbuf.valid()
+        || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
         beep_flush();
         unsafe { ga_clear(&raw mut winsizes) };
@@ -176,21 +176,18 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         || !cmdwin_valid
         || curwin.get() != cmdwin_win.get()
         || !win_valid(old_curwin)
-        || !unsafe { bufref_valid(&raw mut old_curbuf) }
-        || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
+        || !old_curbuf.valid()
+        || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
         if newbuf_status == OK {
-            unsafe { set_bufref(&raw mut bufref, curbuf.get()) };
+            bufref = BufRef::of_opt(current_buf());
         }
         if cmdwin_valid && !unsafe { last_window(cmdwin_win.get()) } {
             unsafe { win_close(cmdwin_win.get(), true, false) };
         }
         // win_close() autocommands may have already deleted the buffer.
-        if newbuf_status == OK
-            && unsafe { bufref_valid(&raw mut bufref) }
-            && bufref.br_buf != curbuf.get()
-        {
-            wipe_buffer(bufref.br_buf);
+        if newbuf_status == OK && bufref.valid() && bufref.raw() != curbuf.get() {
+            wipe_buffer(bufref.raw());
         }
 
         cmdwin_type.set(0);
@@ -314,8 +311,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // Safety check: the old window or buffer was changed or deleted.
     // It is a bug when this happens.
     if !win_valid(old_curwin)
-        || !unsafe { bufref_valid(&raw mut old_curbuf) }
-        || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
+        || !old_curbuf.valid()
+        || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
         cmdwin_result.set(Ctrl_C);
         unsafe {
@@ -383,7 +380,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         cur_win().w_onebuf_opt.wo_cole = 0;
         // First go back to the original window.
         let wp = curwin.get();
-        unsafe { set_bufref(&raw mut bufref, curbuf.get()) };
+        bufref = BufRef::of_opt(current_buf());
         skip_win_fix_cursor.set(true);
         unsafe { win_goto(old_curwin) };
 
@@ -395,8 +392,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         // win_close() may have already wiped the buffer when 'bh' is set
         // to 'wipe'; autocommands may have closed other windows.
-        if unsafe { bufref_valid(&raw mut bufref) } && bufref.br_buf != curbuf.get() {
-            wipe_buffer(bufref.br_buf);
+        if bufref.valid() && bufref.raw() != curbuf.get() {
+            wipe_buffer(bufref.raw());
         }
 
         // Restore window sizes.
@@ -425,7 +422,7 @@ pub fn is_in_cmdwin() -> bool {
 /// window's buffer out, window-less and without forcing.
 fn wipe_buffer(buf: *mut buf_T) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
-    // SAFETY: the callers have just asked `bufref_valid` about `buf`.
+    // SAFETY: the callers have just asked `BufRef::valid` about `buf`.
     unsafe { close_buffer(None, Buf::new(buf), wipe, false, false) };
 }
 

@@ -14,9 +14,10 @@
 
 use super::{Ecmd, EcmdArgs};
 use crate::autocmd::EVENT_BUFLEAVE;
+use crate::buffer::current_buf;
 use crate::buffer::{
-    buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, bufref_valid, close_buffer,
-    find_buf, get_winopts, set_bufref,
+    BufRef, buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, close_buffer, find_buf,
+    get_winopts,
 };
 use crate::ex_cmds::{
     BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
@@ -35,7 +36,7 @@ use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::terminal::terminal_running;
-use crate::types::{CmdModFlags, bufref_T, linenr_T, win_T};
+use crate::types::{CmdModFlags, linenr_T, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use crate::winlayer::{Buf, Win};
@@ -63,7 +64,7 @@ pub(super) enum Switch {
 pub(super) unsafe fn switch_to_other_buffer(
     args: &EcmdArgs,
     oldwin: &mut *mut win_T,
-    old_curbuf: &mut bufref_T,
+    old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
     let EcmdArgs {
@@ -132,8 +133,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         if !oldwin.is_null() {
             *oldwin = curwin.get();
         }
-        // SAFETY: `curbuf` is live.
-        unsafe { set_bufref(&raw mut *old_curbuf, curbuf.get()) };
+        *old_curbuf = BufRef::of_opt(current_buf());
     }
 
     if buf.is_null() {
@@ -173,16 +173,12 @@ pub(super) unsafe fn switch_to_other_buffer(
     } else {
         // Existing memfile.
         state.oldbuf = true;
-        let mut bufref = bufref_T::default();
         // SAFETY: as above.
-        unsafe { set_bufref(&raw mut bufref, buf) };
+        let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
         unsafe { buf_check_timestamp(Buf::new(buf)) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
-        if !unsafe { bufref_valid(&raw mut bufref) }
-            || curbuf.get() != old_curbuf.br_buf
-            || aborting()
-        {
+        if !bufref.valid() || curbuf.get() != old_curbuf.raw() || aborting() {
             return Switch::Abandon;
         }
     }
@@ -224,7 +220,7 @@ unsafe fn leave_for_buffer(
     mut buf: Buf,
     args: &EcmdArgs,
     oldwin: *mut win_T,
-    old_curbuf: &mut bufref_T,
+    old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
     let (eap, flags) = (args.eap, args.flags);
@@ -256,8 +252,7 @@ unsafe fn leave_for_buffer(
         unsafe { xstrdup(buf.b_fname) }
     };
     let save_au_new_curbuf = au_new_curbuf.get();
-    // SAFETY: `set_bufref` only writes the record.
-    au_new_curbuf.with_mut(|r| unsafe { set_bufref(r, buf.raw()) });
+    au_new_curbuf.set(BufRef::of(buf).record());
     buf_autocmd(EVENT_BUFLEAVE, cur_buf());
 
     cmdwin_type.set(save_cmdwin_type);
@@ -298,7 +293,7 @@ unsafe fn leave_for_buffer(
         (*the_curwin).w_locked = true;
         buf.b_locked += 1;
 
-        if curbuf.get() == old_curbuf.br_buf {
+        if curbuf.get() == old_curbuf.raw() {
             buf_copy_options(buf.raw(), BCO_ENTER as c_int);
         }
 
@@ -389,9 +384,7 @@ unsafe fn leave_for_buffer(
 
 /// Is the buffer `au_new_curbuf` names still alive?
 fn au_new_curbuf_valid() -> bool {
-    let mut bufref = au_new_curbuf.get();
-    // SAFETY: `bufref_valid` only reads the record it is given.
-    unsafe { bufref_valid(&raw mut bufref) }
+    BufRef::of_record(au_new_curbuf.get()).valid()
 }
 /// An autocommand deleted the buffer that was about to be edited.
 ///
