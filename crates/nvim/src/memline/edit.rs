@@ -108,10 +108,10 @@ pub(crate) unsafe fn ml_append_int(
         let mut db_idx = if lnum == 0 {
             -1
         } else {
-            lnum - (*buf).b_ml.ml_locked_low
+            lnum - (*buf).b_ml.locked_low()
         };
         // Number of index entries in the block before the insertion.
-        let mut line_count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low;
+        let mut line_count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low();
         let mut dp = (*hp).bh_data as *mut DataBlock;
 
         // If there is no room here, and this is the last line of the block,
@@ -123,15 +123,14 @@ pub(crate) unsafe fn ml_append_int(
             && lnum < (*buf).b_ml.ml_line_count
         {
             // The line is not going into the block ml_find_line just charged
-            // it to, so take it back off through ml_locked_lineadd.
-            (*buf).b_ml.ml_locked_lineadd -= 1;
-            (*buf).b_ml.ml_locked_high -= 1;
+            // it to, so take it back off through the block's `lineadd`.
+            (*buf).b_ml.shift_locked(-1);
             hp = ml_find_line(buf, lnum + 1, ML_INSERT);
             if hp.is_null() {
                 return FAIL;
             }
             db_idx = -1;
-            line_count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low;
+            line_count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low();
             dp = (*hp).bh_data as *mut DataBlock;
         }
 
@@ -221,9 +220,9 @@ unsafe fn ml_insert_in_block(
             *slot |= DB_MARKED;
         }
 
-        (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
+        (*buf).b_ml.locked_is_dirty();
         if flags & ML_APPEND_NEW == 0 {
-            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_POS;
+            (*buf).b_ml.locked_has_moved();
         }
     }
 }
@@ -382,21 +381,20 @@ unsafe fn ml_split_data_block(
         (*dp_right).db_line_count = line_count_right as c_long;
 
         // Release the two data blocks. The new one already has a correct
-        // block number; the old one (still in ml_locked) gets a positive one
+        // block number; the old one (still locked) gets a positive one
         // if it changed and this is not a file being read in for the first
         // time.
         if lines_moved != 0 || in_left {
-            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
+            (*buf).b_ml.locked_is_dirty();
         }
         if flags & ML_APPEND_NEW == 0 && db_idx >= 0 && in_left {
-            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_POS;
+            (*buf).b_ml.locked_has_moved();
         }
         mf_put(mfp, hp_new, true, false);
 
-        // Flush the old data block. ml_locked_lineadd goes to zero because
-        // the pointer blocks are about to be updated by hand.
-        let lineadd = (*buf).b_ml.ml_locked_lineadd;
-        (*buf).b_ml.ml_locked_lineadd = 0;
+        // Flush the old data block. The lines it owes the pointer blocks
+        // above it go with it, because they are about to be paid by hand.
+        let lineadd = (*buf).b_ml.take_locked_lineadd();
         ml_find_line(buf, 0, ML_FLUSH);
 
         SplitBlocks {
@@ -664,9 +662,9 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
 
         let dp = (*hp).bh_data as *mut DataBlock;
         // Number of index entries in the block before the delete. The +2 (not
-        // +1) is because ML_DELETE already took one off ml_locked_high.
-        let count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low + 2;
-        let idx = lnum - (*buf).b_ml.ml_locked_low;
+        // +1) is because ML_DELETE already took one off the block's `high`.
+        let count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low() + 2;
+        let idx = lnum - (*buf).b_ml.locked_low();
 
         if (*buf).b_prev_line_count == 0 {
             (*buf).b_prev_line_count = (*buf).b_ml.ml_line_count;
@@ -719,7 +717,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
 
             // Mark the block dirty, and make sure it reaches the file so a
             // recovery sees the delete.
-            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
+            (*buf).b_ml.locked_has_moved();
         }
 
         ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
@@ -736,8 +734,9 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
 /// `hp` must be the locked data block, and `buf`'s stack the path to it.
 unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr_T) -> bool {
     unsafe {
-        mf_free(mfp, hp); // free the data block
-        (*buf).b_ml.ml_locked = core::ptr::null_mut();
+        mf_free(mfp, hp); // free the data block; the lines it owes the
+        // pointer blocks above it survive it, and are paid below.
+        let locked_lineadd = (*buf).b_ml.forget_locked();
 
         // The stack is invalid until one of the pointer blocks on it survives
         // the unhooking; upstream said so by dropping `ml_stack_top` to zero
@@ -784,11 +783,9 @@ unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr
             (*buf).b_ml.stack_truncate(stack_idx + 1);
             // Fix the line count in the rest of the blocks on the stack --
             // below this one, which is corrected by hand right after.
-            if (*buf).b_ml.ml_locked_lineadd != 0 {
-                ml_lineadd_depth(buf, (*buf).b_ml.ml_locked_lineadd, stack_idx);
-                (*buf)
-                    .b_ml
-                    .stack_add_high(stack_idx, (*buf).b_ml.ml_locked_lineadd);
+            if locked_lineadd != 0 {
+                ml_lineadd_depth(buf, locked_lineadd, stack_idx);
+                (*buf).b_ml.stack_add_high(stack_idx, locked_lineadd);
             }
             return true;
         }

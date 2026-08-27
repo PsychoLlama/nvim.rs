@@ -2,7 +2,7 @@
 //!
 //! A memline is a B-tree: pointer blocks branch by line count, and data blocks
 //! hold the text. `ml_find_line` is the walk every read and write starts from,
-//! and the one place the block stack in `ml_locked`/`ml_stack` is built.
+//! and the one place the locked block and the block stack are built.
 //! `ml_get_buf_impl` is the read on top of it, and `ml_flush_line` the write
 //! back of a line that `ml_replace` handed out.
 
@@ -28,7 +28,8 @@ const ML_SIMPLE: c_int = 0x10;
 /// bounds.
 ///
 /// Entry `i` is the offset from the start of the block at which line
-/// `ml_locked_low + i`'s text begins, with [`DB_MARKED`] possibly set in the
+/// `low + i`'s text begins (`low` being the locked block's first line), with
+/// [`DB_MARKED`] possibly set in the
 /// top bit. Lines are stored back to front: entry 0 is the *last* line's
 /// text, at the highest offset.
 ///
@@ -155,7 +156,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
             }
 
             let dp = (*hp).bh_data as *mut DataBlock;
-            let idx = lnum - (*buf).b_ml.ml_locked_low;
+            let idx = lnum - (*buf).b_ml.locked_low();
             let start = db_line_start(dp, idx);
             // The text ends where the previous line starts; the first line
             // of the block ends at the end of the block.
@@ -172,7 +173,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
         }
 
         if will_change {
-            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
+            (*buf).b_ml.locked_has_moved();
             ml_add_deleted_len_buf(buf, (*buf).b_ml.ml_line_ptr, -1);
         }
         (*buf).b_ml.ml_line_ptr
@@ -243,7 +244,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
 unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_line: *mut c_char) {
     unsafe {
         let dp = (*hp).bh_data as *mut DataBlock;
-        let idx = lnum - (*buf).b_ml.ml_locked_low;
+        let idx = lnum - (*buf).b_ml.locked_low();
         let start = db_line_start(dp, idx) as c_int;
         let old_line = (dp as *mut c_char).offset(start as isize);
         let old_len = if idx == 0 {
@@ -274,7 +275,7 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
             return;
         }
 
-        let count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low + 1;
+        let count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low() + 1;
         if extra != 0 && idx < count - 1 {
             // Move the text of the lines that follow, and adjust their
             // offsets. (Lines are stored back to front, so "following"
@@ -301,7 +302,7 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
             old_line.offset(-(extra as isize)),
             new_len as usize,
         );
-        (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
+        (*buf).b_ml.locked_has_moved();
         // The `extra == 0` case is already covered by the insert and delete.
         if extra != 0 {
             ml_updatechunk(buf, lnum, extra, ML_CHNK_UPDLINE);
@@ -358,8 +359,8 @@ pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
 ///
 /// `ip_high` in each stack entry reflects the last line in that block *after*
 /// the insert or delete, even though the pointer block itself may not have
-/// been updated yet — except that while `ml_locked` is set,
-/// `ml_locked_lineadd` still has to be added to it.
+/// been updated yet — except that while a block is locked, the lines it owes
+/// its parents ([`LockedBlock::lineadd`]) still have to be added to it.
 ///
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
@@ -370,34 +371,28 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         // If a block is locked, see whether the wanted line is in it. Not
         // for ML_FLUSH (the point of which is to release it), and not for
         // the actions that have to rebuild the stack.
-        if !(*buf).b_ml.ml_locked.is_null() {
+        if (*buf).b_ml.is_locked() {
             if action & ML_SIMPLE != 0
-                && (*buf).b_ml.ml_locked_low <= lnum
-                && (*buf).b_ml.ml_locked_high >= lnum
+                && (*buf).b_ml.locked_low() <= lnum
+                && (*buf).b_ml.locked_high() >= lnum
             {
                 // Remember to update the pointer blocks and the stack later.
                 if action == ML_INSERT as c_int {
-                    (*buf).b_ml.ml_locked_lineadd += 1;
-                    (*buf).b_ml.ml_locked_high += 1;
+                    (*buf).b_ml.shift_locked(1);
                 } else if action == ML_DELETE as c_int {
-                    (*buf).b_ml.ml_locked_lineadd -= 1;
-                    (*buf).b_ml.ml_locked_high -= 1;
+                    (*buf).b_ml.shift_locked(-1);
                 }
-                return (*buf).b_ml.ml_locked;
+                return (*buf).b_ml.locked_hp();
             }
 
-            mf_put(
-                mfp,
-                (*buf).b_ml.ml_locked,
-                (*buf).b_ml.ml_flags.has(MlFlags::LOCKED_DIRTY),
-                (*buf).b_ml.ml_flags.has(MlFlags::LOCKED_POS),
-            );
-            (*buf).b_ml.ml_locked = core::ptr::null_mut();
-
-            // Lines were added or deleted in the block that was locked, so
-            // the counts in the pointer blocks above it are stale.
-            if (*buf).b_ml.ml_locked_lineadd != 0 {
-                ml_lineadd(buf, (*buf).b_ml.ml_locked_lineadd);
+            // Give it back, telling the memfile what was done to it, and
+            // then repair the line counts in the pointer blocks above: lines
+            // were added or deleted in it and they were never told.
+            if let Some(locked) = (*buf).b_ml.unlock() {
+                mf_put(mfp, locked.hp, locked.dirty, locked.moved);
+                if locked.lineadd != 0 {
+                    ml_lineadd(buf, locked.lineadd);
+                }
             }
         }
 
@@ -450,11 +445,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
 
             let dp = (*hp).bh_data as *mut DataBlock;
             if (*dp).db_id as c_int == DATA_ID as c_int {
-                (*buf).b_ml.ml_locked = hp;
-                (*buf).b_ml.ml_locked_low = low;
-                (*buf).b_ml.ml_locked_high = high;
-                (*buf).b_ml.ml_locked_lineadd = 0;
-                (*buf).b_ml.block_is_clean();
+                (*buf).b_ml.lock(hp, low, high);
                 return hp;
             }
 

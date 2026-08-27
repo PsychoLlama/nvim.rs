@@ -224,11 +224,6 @@ crate::flag_set! {
     /// `ml_line_ptr` has been edited since it was read, so the block it
     /// came from has to be updated before the line is dropped.
     const LINE_DIRTY = 0x2;
-    /// The locked data block has been changed and must be written back.
-    const LOCKED_DIRTY = 0x4;
-    /// The locked data block's line *positions* changed too, so the index
-    /// above it has to be corrected as well.
-    const LOCKED_POS = 0x8;
     /// `ml_line_ptr` is an allocation of the memline's own rather than a
     /// pointer into a locked block, so it has to be freed and not just
     /// forgotten.
@@ -271,7 +266,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
     unsafe {
         // No stack, no cached block, no cached line, no chunk table yet.
         (*buf).b_ml.stack_clear();
-        (*buf).b_ml.ml_locked = ::core::ptr::null_mut();
+        (*buf).b_ml.ml_locked = None;
         (*buf).b_ml.ml_line_lnum = 0;
         (*buf).b_ml.ml_line_offset = 0;
         (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut();

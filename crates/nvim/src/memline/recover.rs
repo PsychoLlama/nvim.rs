@@ -80,7 +80,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             (*buf).b_ml.stack_clear(); // nothing in the stack
             (*buf).b_ml.ml_line_lnum = 0; // no cached line
             (*buf).b_ml.ml_line_offset = 0;
-            (*buf).b_ml.ml_locked = core::ptr::null_mut(); // no locked block
+            (*buf).b_ml.ml_locked = None; // no locked block
             (*buf).b_ml.ml_flags = MlFlags::NONE;
 
             // Open the memfile on the old swap file. `mf_open` consumes the
@@ -882,7 +882,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
                         status = FAIL;
                         break 'theend;
                     }
-                    lnum = (*buf).b_ml.ml_locked_high + 1;
+                    lnum = (*buf).b_ml.locked_high() + 1;
                 }
                 ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
                 // Sync the pointer blocks that were just updated.

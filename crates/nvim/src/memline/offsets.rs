@@ -210,9 +210,9 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: c_int, curline_arg: linenr_T) -
                 return false;
             }
             let dp = (*hp).bh_data as *mut DataBlock;
-            let count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low + 1;
-            let idx = curline - (*buf).b_ml.ml_locked_low;
-            curline = (*buf).b_ml.ml_locked_high + 1;
+            let count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low() + 1;
+            let idx = curline - (*buf).b_ml.locked_low();
+            curline = (*buf).b_ml.locked_high() + 1;
 
             // Index of the last line of this block that still counts.
             let rest = count - idx;
@@ -384,8 +384,8 @@ pub unsafe fn ml_find_line_or_offset(
                 return -1;
             }
             let dp = (*hp).bh_data as *mut DataBlock;
-            let count = (*buf).b_ml.ml_locked_high - (*buf).b_ml.ml_locked_low + 1;
-            let start_idx = curline - (*buf).b_ml.ml_locked_low;
+            let count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low() + 1;
+            let start_idx = curline - (*buf).b_ml.locked_low();
             let mut idx = start_idx;
             // First line in the block has its text at the end of it.
             let text_end = if idx == 0 {
@@ -432,7 +432,7 @@ pub unsafe fn ml_find_line_or_offset(
                 }
                 return curline;
             }
-            curline = (*buf).b_ml.ml_locked_high + 1;
+            curline = (*buf).b_ml.locked_high() + 1;
         }
 
         if lnum != 0 {

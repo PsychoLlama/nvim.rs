@@ -399,8 +399,8 @@ pub unsafe fn ml_setmarked(lnum: linenr_T) {
             return;
         }
         let dp = (*hp).bh_data as *mut DataBlock;
-        *db_index(dp).offset((lnum - (*curbuf.get()).b_ml.ml_locked_low) as isize) |= DB_MARKED;
-        (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
+        *db_index(dp).offset((lnum - (*curbuf.get()).b_ml.locked_low()) as isize) |= DB_MARKED;
+        (*curbuf.get()).b_ml.locked_is_dirty();
     }
 }
 
@@ -423,12 +423,12 @@ pub unsafe fn ml_firstmarked() -> linenr_T {
                 return 0;
             }
             let dp = (*hp).bh_data as *mut DataBlock;
-            let mut i = lnum - (*curbuf.get()).b_ml.ml_locked_low;
-            while lnum <= (*curbuf.get()).b_ml.ml_locked_high {
+            let mut i = lnum - (*curbuf.get()).b_ml.locked_low();
+            while lnum <= (*curbuf.get()).b_ml.locked_high() {
                 let slot = db_index(dp).offset(i as isize);
                 if *slot & DB_MARKED != 0 {
                     *slot &= DB_INDEX_MASK;
-                    (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
+                    (*curbuf.get()).b_ml.locked_is_dirty();
                     lowest_marked.set(lnum + 1);
                     return lnum;
                 }
@@ -456,12 +456,12 @@ pub unsafe fn ml_clearmarked() {
                 return;
             }
             let dp = (*hp).bh_data as *mut DataBlock;
-            let mut i = lnum - (*curbuf.get()).b_ml.ml_locked_low;
-            while lnum <= (*curbuf.get()).b_ml.ml_locked_high {
+            let mut i = lnum - (*curbuf.get()).b_ml.locked_low();
+            while lnum <= (*curbuf.get()).b_ml.locked_high() {
                 let slot = db_index(dp).offset(i as isize);
                 if *slot & DB_MARKED != 0 {
                     *slot &= DB_INDEX_MASK;
-                    (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
+                    (*curbuf.get()).b_ml.locked_is_dirty();
                 }
                 i += 1;
                 lnum += 1;
