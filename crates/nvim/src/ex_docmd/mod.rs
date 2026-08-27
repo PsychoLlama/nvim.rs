@@ -70,7 +70,7 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
     Callback, Callback_data, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter,
-    LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, dobuf_action_values,
+    LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, cmdidx_T, dobuf_action_values,
     dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T,
     optmagic_T, uint8_t, uint16_t,
 };
@@ -78,6 +78,50 @@ use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
 use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::mem::offset_of;
+
+use crate::winlayer::Ea;
+
+/// Where a field of the running command *is*, without reading the command.
+///
+/// The parsers in this family hand these to `getdigits`, `checkforcmd` and
+/// `getargcmd`, which advance the pointer in place. Writing
+/// `&raw mut eap.field` instead would derive the address from the transient
+/// `&mut exarg_T` that `DerefMut` hands out, which the editor's next read of
+/// the same command invalidates; `Live::field_ptr` names the address and
+/// reads nothing.
+impl Ea {
+    /// `&eap->cmd` — the parse position the modifier and address scanners
+    /// advance past what they recognised.
+    pub(crate) fn cmd_ptr(self) -> *mut *mut c_char {
+        self.field_ptr(offset_of!(exarg_T, cmd))
+    }
+
+    /// `&eap->arg` — the parse position the argument scanners advance.
+    pub(crate) fn arg_ptr(self) -> *mut *mut c_char {
+        self.field_ptr(offset_of!(exarg_T, arg))
+    }
+
+    /// `&eap->cmdidx` — written by the one-letter command lookup.
+    pub(crate) fn cmdidx_ptr(self) -> *mut cmdidx_T {
+        self.field_ptr(offset_of!(exarg_T, cmdidx))
+    }
+
+    /// `&eap->do_ecmd_lnum` — written by the `+cmd` line-number form.
+    pub(crate) fn do_ecmd_lnum_ptr(self) -> *mut linenr_T {
+        self.field_ptr(offset_of!(exarg_T, do_ecmd_lnum))
+    }
+
+    /// `&eap->force_ff` — the `++ff=` argument, filled in by `getargopt`.
+    pub(crate) fn force_ff_ptr(self) -> *mut c_int {
+        self.field_ptr(offset_of!(exarg_T, force_ff))
+    }
+
+    /// `&eap->force_enc` — the `++enc=` argument, likewise.
+    pub(crate) fn force_enc_ptr(self) -> *mut c_int {
+        self.field_ptr(offset_of!(exarg_T, force_enc))
+    }
+}
 
 // Generated from `ex_cmds.lua`; see `tools/apigen` and `just apigen`.
 mod cmdtable;

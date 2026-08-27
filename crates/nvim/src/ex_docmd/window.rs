@@ -56,7 +56,7 @@ use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
     tabpage_move, valid_tab, valid_win,
 };
-use crate::winlayer::{Buf, TabPage, Win, tabs, windows, windows_in_tab};
+use crate::winlayer::{Buf, Ea, TabPage, Win, tabs, windows, windows_in_tab};
 use ::libc::{atol, strlen};
 
 // ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ fn edit(ea: Ex, old_curwin: *mut win_T) {
 /// `errmsg` when the argument is not one.
 fn tabpage_arg(ea: Ex) -> c_int {
     // SAFETY: a live command.
-    unsafe { get_tabpage_arg(ea.raw()) }
+    get_tabpage_arg(unsafe { Ea::new(ea.raw()) })
 }
 
 fn skip_white(p: *mut c_char) -> *mut c_char {
@@ -696,7 +696,7 @@ pub(crate) unsafe fn ex_pbuffer(eap: *mut exarg_T) {
     let curwin_save = curwin.get();
     prepare_preview_window();
     // SAFETY: the caller's promise -- a live command.
-    unsafe { do_exbuffer(eap) };
+    do_exbuffer(unsafe { Ea::new(eap) });
     back_to_current_window(curwin_save);
 }
 

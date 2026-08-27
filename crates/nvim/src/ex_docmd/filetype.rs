@@ -16,7 +16,7 @@ use crate::ex_docmd::{
     kOptValTypeString, kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
-use crate::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
+use crate::main::{cmdmod, e_curdir, e_invarg2, p_rtp, secure};
 use crate::message::emsg;
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
@@ -28,6 +28,7 @@ use crate::types::{
     kErrorTypeNone, kObjectTypeString, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
+use crate::winlayer::{Buf, Ea};
 use ::libc::strcmp;
 
 /// `:autocmd` and `:augroup`.
@@ -35,99 +36,103 @@ use ::libc::strcmp;
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
 pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
-    unsafe {
-        if secure.get() != 0 {
-            // 2 means "an error was already reported for this".
-            secure.set(2);
-            (*eap).errmsg = Some(ex_msg(e_curdir.as_ptr()));
-        } else if (*eap).cmdidx as c_int == CMD_autocmd as c_int {
-            do_autocmd(eap, (*eap).arg, (*eap).forceit);
-        } else {
-            do_augroup((*eap).arg, (*eap).forceit != 0);
-        }
+    let mut eap = unsafe { Ea::new(eap) };
+    if secure.get() != 0 {
+        // 2 means "an error was already reported for this".
+        secure.set(2);
+        eap.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
+    } else if eap.cmdidx as c_int == CMD_autocmd as c_int {
+        unsafe { do_autocmd(eap.raw(), eap.arg, eap.forceit) };
+    } else {
+        unsafe { do_augroup(eap.arg, eap.forceit != 0) };
     }
 }
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
 pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
-    unsafe {
-        let mut arg = (*eap).arg;
-        let call_do_modelines = check_nomodeline(&raw mut arg);
-        let mut did_aucmd = false;
-        do_doautocmd(arg, false, &raw mut did_aucmd);
-        if call_do_modelines && did_aucmd {
-            do_modelines(OptionSetFlags::NONE);
-        }
+    let mut eap = unsafe { Ea::new(eap) };
+    let mut arg = eap.arg;
+    let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
+    let mut did_aucmd = false;
+    unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+    if call_do_modelines && did_aucmd {
+        do_modelines(OptionSetFlags::NONE);
     }
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
-    unsafe {
-        if *(*eap).arg as c_int == NUL {
-            report_filetype_state();
-            return;
-        }
+    let mut eap = unsafe { Ea::new(eap) };
+    if unsafe { *eap.arg } as c_int == NUL {
+        unsafe { report_filetype_state() };
+        return;
+    }
 
-        let mut arg = (*eap).arg;
-        let mut plugin = false;
-        let mut indent = false;
-        loop {
-            if strncmp(arg, c"plugin".as_ptr(), 6) == 0 {
-                plugin = true;
-                arg = skipwhite(arg.add(6));
-            } else if strncmp(arg, c"indent".as_ptr(), 6) == 0 {
-                indent = true;
-                arg = skipwhite(arg.add(6));
-            } else {
-                break;
+    let mut arg = eap.arg;
+    let mut plugin = false;
+    let mut indent = false;
+    loop {
+        if unsafe { strncmp(arg, c"plugin".as_ptr(), 6) } == 0 {
+            plugin = true;
+            arg = unsafe { skipwhite(arg.add(6)) };
+        } else if unsafe { strncmp(arg, c"indent".as_ptr(), 6) } == 0 {
+            indent = true;
+            arg = unsafe { skipwhite(arg.add(6)) };
+        } else {
+            break;
+        }
+    }
+
+    if unsafe { strcmp(arg, c"on".as_ptr()) } == 0
+        || unsafe { strcmp(arg, c"detect".as_ptr()) } == 0
+    {
+        // `:filetype detect` only re-sources the scripts when detection
+        // was off; `:filetype on` always does.
+        if unsafe { *arg } as c_int == 'o' as c_int || filetype_detect.get() != Some(true) {
+            unsafe { source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+            filetype_detect.set(Some(true));
+            if plugin {
+                unsafe { source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                filetype_plugin.set(Some(true));
+            }
+            if indent {
+                unsafe { source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                filetype_indent.set(Some(true));
             }
         }
-
-        if strcmp(arg, c"on".as_ptr()) == 0 || strcmp(arg, c"detect".as_ptr()) == 0 {
-            // `:filetype detect` only re-sources the scripts when detection
-            // was off; `:filetype on` always does.
-            if *arg as c_int == 'o' as c_int || filetype_detect.get() != Some(true) {
-                source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                filetype_detect.set(Some(true));
-                if plugin {
-                    source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_plugin.set(Some(true));
-                }
-                if indent {
-                    source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_indent.set(Some(true));
-                }
-            }
-            if *arg as c_int == 'd' as c_int {
-                // `detect` also applies the result to the buffers already
-                // open.
+        if unsafe { *arg } as c_int == 'd' as c_int {
+            // `detect` also applies the result to the buffers already
+            // open.
+            unsafe {
                 do_doautocmd(
                     c"filetypedetect BufRead".as_ptr() as *mut c_char,
                     true,
                     ptr::null_mut(),
-                );
-                do_modelines(OptionSetFlags::NONE);
+                )
+            };
+            do_modelines(OptionSetFlags::NONE);
+        }
+    } else if unsafe { strcmp(arg, c"off".as_ptr()) } == 0 {
+        if plugin || indent {
+            // Only what was named is turned off; detection stays on.
+            if plugin {
+                unsafe { source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                filetype_plugin.set(Some(false));
             }
-        } else if strcmp(arg, c"off".as_ptr()) == 0 {
-            if plugin || indent {
-                // Only what was named is turned off; detection stays on.
-                if plugin {
-                    source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_plugin.set(Some(false));
-                }
-                if indent {
-                    source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_indent.set(Some(false));
-                }
-            } else {
-                source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                filetype_detect.set(Some(false));
+            if indent {
+                unsafe { source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                filetype_indent.set(Some(false));
             }
         } else {
-            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
+            unsafe { source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+            filetype_detect.set(Some(false));
         }
+    } else {
+        semsg_c!(
+            unsafe { gettext(&raw const e_invarg2 as *const c_char) },
+            arg
+        );
     }
 }
 
@@ -136,53 +141,47 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
 /// Plugin and indent report `(on)` rather than `ON` when detection itself
 /// is off, because nothing will ever ask them to run.
 unsafe fn report_filetype_state() {
-    unsafe {
-        let detecting = filetype_detect.get() == Some(true);
-        let state = |on: bool| -> *const c_char {
-            if !on {
-                c"OFF".as_ptr()
-            } else if detecting {
-                c"ON".as_ptr()
-            } else {
-                c"(on)".as_ptr()
-            }
-        };
-        smsg_c!(
-            0,
-            c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
-            if detecting {
-                c"ON".as_ptr()
-            } else {
-                c"OFF".as_ptr()
-            },
-            state(filetype_plugin.get() == Some(true)),
-            state(filetype_indent.get() == Some(true)),
-        );
-    }
+    let detecting = filetype_detect.get() == Some(true);
+    let state = |on: bool| -> *const c_char {
+        if !on {
+            c"OFF".as_ptr()
+        } else if detecting {
+            c"ON".as_ptr()
+        } else {
+            c"(on)".as_ptr()
+        }
+    };
+    smsg_c!(
+        0,
+        c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
+        if detecting {
+            c"ON".as_ptr()
+        } else {
+            c"OFF".as_ptr()
+        },
+        state(filetype_plugin.get() == Some(true)),
+        state(filetype_indent.get() == Some(true)),
+    );
 }
 
 /// Turn the filetype plugin and indent scripts on, unless they were
 /// explicitly turned off.
 pub unsafe fn filetype_plugin_enable() {
-    unsafe {
-        if filetype_plugin.get().is_none() {
-            source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_plugin.set(Some(true));
-        }
-        if filetype_indent.get().is_none() {
-            source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_indent.set(Some(true));
-        }
+    if filetype_plugin.get().is_none() {
+        unsafe { source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        filetype_plugin.set(Some(true));
+    }
+    if filetype_indent.get().is_none() {
+        unsafe { source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        filetype_indent.set(Some(true));
     }
 }
 
 /// The same for detection.
 pub unsafe fn filetype_maybe_enable() {
-    unsafe {
-        if filetype_detect.get().is_none() {
-            source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_detect.set(Some(true));
-        }
+    if filetype_detect.get().is_none() {
+        unsafe { source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        filetype_detect.set(Some(true));
     }
 }
 
@@ -192,73 +191,73 @@ pub unsafe fn filetype_maybe_enable() {
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
 pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
-    unsafe {
-        if (*curbuf.get()).b_did_filetype {
-            return;
-        }
-        let mut arg = (*eap).arg;
-        if strncmp(arg, c"FALLBACK ".as_ptr(), 9) == 0 {
-            arg = arg.add(9);
-        }
-        set_option_value_give_err(
-            kOptFiletype,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(arg),
-                },
+    let mut eap = unsafe { Ea::new(eap) };
+    if cur_buf().b_did_filetype {
+        return;
+    }
+    let mut arg = eap.arg;
+    if unsafe { strncmp(arg, c"FALLBACK ".as_ptr(), 9) } == 0 {
+        arg = unsafe { arg.add(9) };
+    }
+    set_option_value_give_err(
+        kOptFiletype,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { cstr_as_string(arg) },
             },
-            OptionSetFlags::LOCAL,
-        );
-        if arg != (*eap).arg {
-            (*curbuf.get()).b_did_filetype = false;
-        }
+        },
+        OptionSetFlags::LOCAL,
+    );
+    if arg != eap.arg {
+        cur_buf().b_did_filetype = false;
     }
 }
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
 pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
+    let mut eap = unsafe { Ea::new(eap) };
     let mut env = env_buf();
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ptr::null_mut(),
+    };
+    let mut items: [Object; 2] = unsafe { core::mem::zeroed() };
+    let mut args = Array {
+        size: 0,
+        capacity: 2,
+        items: &raw mut items as *mut Object,
+    };
+
+    // The modifiers are passed as text, because the health check opens
+    // its own window and has to reproduce `:vertical`, `:tab` and the
+    // rest itself.
+    let mut mods: [c_char; 1024] = [0; 1024];
+    let mut mods_len: size_t = 0;
+    if cmdmod_tab() > 0 || cmdmod_split() != 0 {
+        let mut multi_mods = false;
+        mods_len = cmdmod.with(|cmod| unsafe {
+            add_win_cmd_modifiers(&raw mut mods as *mut c_char, cmod, &raw mut multi_mods)
+        });
+        debug_assert!(mods_len < size_of::<[c_char; 1024]>());
+    }
+
+    items[0] = Object {
+        type_0: kObjectTypeString,
+        data: crate::types::object_data {
+            string: String_0::from_raw_parts(&raw mut mods as *mut c_char, mods_len),
+        },
+    };
+    items[1] = Object {
+        type_0: kObjectTypeString,
+        data: crate::types::object_data {
+            string: unsafe { cstr_as_string(eap.arg) },
+        },
+    };
+    args.size = 2;
+
     unsafe {
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
-        let mut items: [Object; 2] = core::mem::zeroed();
-        let mut args = Array {
-            size: 0,
-            capacity: 2,
-            items: &raw mut items as *mut Object,
-        };
-
-        // The modifiers are passed as text, because the health check opens
-        // its own window and has to reproduce `:vertical`, `:tab` and the
-        // rest itself.
-        let mut mods: [c_char; 1024] = [0; 1024];
-        let mut mods_len: size_t = 0;
-        if cmdmod_tab() > 0 || cmdmod_split() != 0 {
-            let mut multi_mods = false;
-            mods_len = cmdmod.with(|cmod| {
-                add_win_cmd_modifiers(&raw mut mods as *mut c_char, cmod, &raw mut multi_mods)
-            });
-            debug_assert!(mods_len < size_of::<[c_char; 1024]>());
-        }
-
-        items[0] = Object {
-            type_0: kObjectTypeString,
-            data: crate::types::object_data {
-                string: String_0::from_raw_parts(&raw mut mods as *mut c_char, mods_len),
-            },
-        };
-        items[1] = Object {
-            type_0: kObjectTypeString,
-            data: crate::types::object_data {
-                string: cstr_as_string((*eap).arg),
-            },
-        };
-        args.size = 2;
-
         nlua_exec(
             lua_chunk(c"vim.health._check(...)"),
             ptr::null(),
@@ -266,33 +265,39 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
             kRetNilBool,
             ptr::null_mut(),
             &raw mut err,
-        );
-        if err.type_0 as c_int == kErrorTypeNone as c_int {
-            return;
-        }
-
-        // The check failed to load at all, which almost always means the
-        // runtime files are not where the editor thinks.
-        let vimruntime = os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env);
-        if vimruntime.is_null() {
-            emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
-        } else if !strstr(p_rtp.get(), vimruntime).is_null() {
-            // Upstream's, and it reads backwards: finding $VIMRUNTIME
-            // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
-            // the invalid one. Left alone — it is a message, not behaviour.
-            semsg_c!(
-                gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
-                vimruntime,
-            );
-        } else {
-            emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
-        }
-        semsg_multiline_c!(c"emsg".as_ptr(), err.msg);
-        api_clear_error(&raw mut err);
+        )
+    };
+    if err.type_0 as c_int == kErrorTypeNone as c_int {
+        return;
     }
+
+    // The check failed to load at all, which almost always means the
+    // runtime files are not where the editor thinks.
+    let vimruntime = unsafe { os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env) };
+    if vimruntime.is_null() {
+        unsafe { emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr())) };
+    } else if !unsafe { strstr(p_rtp.get(), vimruntime) }.is_null() {
+        // Upstream's, and it reads backwards: finding $VIMRUNTIME
+        // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
+        // the invalid one. Left alone — it is a message, not behaviour.
+        semsg_c!(
+            unsafe { gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()) },
+            vimruntime,
+        );
+    } else {
+        unsafe { emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr())) };
+    }
+    semsg_multiline_c!(c"emsg".as_ptr(), err.msg);
+    unsafe { api_clear_error(&raw mut err) };
 }
 
 /// A `'static` Lua source string as the API's counted string.
 fn lua_chunk(src: &'static CStr) -> String_0 {
     String_0::from_raw_parts(src.as_ptr() as *mut c_char, src.to_bytes().len() as size_t)
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

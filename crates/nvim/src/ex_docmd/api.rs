@@ -43,8 +43,8 @@ use crate::ex_getln::{
 use crate::fold::has_folding;
 use crate::guard::Suppress;
 use crate::main::{
-    cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang,
-    e_norange, emsg_silent, global_busy,
+    cmdmod, cmdwin_type, e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange,
+    emsg_silent, global_busy,
 };
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -55,7 +55,7 @@ use crate::types::{
     exarg_T, linenr_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Ea, Win};
 use ::libc::{memset, strlen};
 
 /// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
@@ -74,159 +74,162 @@ pub unsafe fn parse_cmdline(
     cmdinfo: *mut CmdParseInfo,
     errormsg: &mut Option<CString>,
 ) -> bool {
-    unsafe {
-        let save_ex_pressedreturn = ex_pressedreturn.get();
-        let save_cursor: pos_T = (*curwin.get()).w_cursor;
-        save_last_search_pattern();
+    let save_ex_pressedreturn = ex_pressedreturn.get();
+    let save_cursor: pos_T = cur_win().w_cursor;
+    save_last_search_pattern();
 
-        memset(cmdinfo as *mut c_void, 0, size_of::<CmdParseInfo>());
-        *eap = fresh_exarg();
-        let ea = &mut *eap;
-        ea.cmd = *cmdline;
-        ea.cmdlinep = cmdline;
+    unsafe { memset(cmdinfo as *mut c_void, 0, size_of::<CmdParseInfo>()) };
+    unsafe { *eap = fresh_exarg() };
+    let mut ea = unsafe { Ea::new(eap) };
+    ea.cmd = unsafe { *cmdline };
+    ea.cmdlinep = cmdline;
 
-        let mut retval = false;
-        'end: {
-            let orig_cmd = ea.cmd;
-            // A modifier that failed to parse is still a modifier: keep
-            // going, so that the error is reported against the command
-            // rather than against the line.
-            let result = parse_command_modifiers(eap, errormsg, &mut (*cmdinfo).cmdmod, false);
-            let after_modifier = ea.cmd;
-            if result == FAIL && after_modifier == orig_cmd {
-                break 'end;
-            }
+    let mut retval = false;
+    'end: {
+        let orig_cmd = ea.cmd;
+        // A modifier that failed to parse is still a modifier: keep
+        // going, so that the error is reported against the command
+        // rather than against the line.
+        let result =
+            unsafe { parse_command_modifiers(eap, errormsg, &mut (*cmdinfo).cmdmod, false) };
+        let after_modifier = ea.cmd;
+        if result == FAIL && after_modifier == orig_cmd {
+            break 'end;
+        }
 
-            // The command name says what kind of address the range counts in.
-            let mut p = find_excmd_after_range(eap);
-            if p.is_null() {
-                *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
-                break 'end;
-            }
+        // The command name says what kind of address the range counts in.
+        let mut p = find_excmd_after_range(ea);
+        if p.is_null() {
+            *errormsg = Some(unsafe { ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()) });
+            break 'end;
+        }
 
-            set_cmd_addr_type(eap, p);
-            if parse_cmd_address(eap, errormsg, true) == FAIL {
-                break 'end;
-            }
+        unsafe { set_cmd_addr_type(eap, p) };
+        if unsafe { parse_cmd_address(eap, errormsg, true) } == FAIL {
+            break 'end;
+        }
 
-            ea.cmd = skip_colon_white(ea.cmd, true);
-            if *ea.cmd as c_int == '"' as c_int {
-                break 'end;
-            }
-            // Nothing at all: no command, no range, no modifier.
-            if *ea.cmd as c_int == NUL && ea.addr_count == 0 && after_modifier == *cmdline {
-                break 'end;
-            }
+        ea.cmd = unsafe { skip_colon_white(ea.cmd, true) };
+        if unsafe { *ea.cmd } as c_int == '"' as c_int {
+            break 'end;
+        }
+        // Nothing at all: no command, no range, no modifier.
+        if unsafe { *ea.cmd } as c_int == NUL
+            && ea.addr_count == 0
+            && after_modifier == unsafe { *cmdline }
+        {
+            break 'end;
+        }
 
-            // A range on its own (`:1`) or a modifier on its own
-            // (`:aboveleft`) is a legal thing to parse.
-            if *ea.cmd as c_int == NUL && ea.cmdidx as c_int == CMD_SIZE as c_int {
-                ea.arg = ea.cmd;
-                if ea.addr_count > 0 {
-                    ea.argt = ExArgt::RANGE;
-                } else {
-                    ea.argt = ExArgt::NONE;
-                    ea.addr_type = CmdAddr::NoRange;
-                }
-                retval = true;
-                break 'end;
-            }
-
-            if ea.cmdidx as c_int == CMD_SIZE as c_int {
-                // The modifiers parsed, so the error is in what follows them.
-                let cmdname = if after_modifier.is_null() {
-                    *cmdline
-                } else {
-                    after_modifier
-                };
-                let msg = ex_msg(e_not_an_editor_command.as_ptr());
-                *errormsg = Some(append_command(&msg, cmdname));
-                break 'end;
-            }
-
-            ea.forceit = parse_bang(eap, &raw mut p) as c_int;
-            if !is_user_cmd(ea.cmdidx) {
-                ea.argt = cmdnames[ea.cmdidx as usize].cmd_argt;
-            }
-            // `:!` keeps the space: `:!! -l` needs it.
-            ea.arg = if ea.cmdidx as c_int == CMD_bang as c_int {
-                p
+        // A range on its own (`:1`) or a modifier on its own
+        // (`:aboveleft`) is a legal thing to parse.
+        if unsafe { *ea.cmd } as c_int == NUL && ea.cmdidx as c_int == CMD_SIZE as c_int {
+            ea.arg = ea.cmd;
+            if ea.addr_count > 0 {
+                ea.argt = ExArgt::RANGE;
             } else {
-                skipwhite(p)
-            };
-            // `:r!` is a filter, not a bang.
-            if ea.cmdidx as c_int == CMD_read as c_int && ea.forceit != 0 {
-                ea.forceit = 0;
-            }
-
-            if ea.argt.has(ExArgt::TRLBAR) {
-                separate_nextcmd(eap);
-            } else if cmd_has_expr_args(ea.cmdidx) {
-                // A command whose argument is an expression has no
-                // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
-                // separator. Skipping expression by expression finds the one
-                // that is.
-                let mut arg = ea.arg;
-                while *arg as c_int != NUL
-                    && *arg as c_int != '|' as c_int
-                    && *arg as c_int != '\n' as c_int
-                {
-                    let start = arg;
-                    let skipping = Suppress::emsg_skip();
-                    skip_expr(&raw mut arg, ptr::null_mut());
-                    drop(skipping);
-                    // Nothing an expression parser recognises: step over one
-                    // byte, or this loop never ends.
-                    if arg == start {
-                        arg = arg.add(1);
-                    }
-                }
-                if *arg as c_int == '|' as c_int || *arg as c_int == '\n' as c_int {
-                    ea.nextcmd = check_nextcmd(arg);
-                    *arg = NUL as c_char;
-                }
-            }
-
-            if !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
-                *errormsg = Some(ex_msg(e_nobang.as_ptr()));
-                break 'end;
-            }
-            if !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-                *errormsg = Some(ex_msg(e_norange.as_ptr()));
-                break 'end;
-            }
-            if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
-                set_cmd_dflall_range(eap);
-            }
-
-            parse_register(eap);
-            if parse_count(eap, errormsg, false) == FAIL {
-                break 'end;
-            }
-
-            if !ea.nextcmd.is_null() {
-                ea.nextcmd = skip_colon_white(ea.nextcmd, true);
-            }
-
-            // Which characters the caller must escape to have them taken
-            // literally when the command is handed back.
-            if ea.argt.has(ExArgt::XFILE) {
-                (*cmdinfo).magic.file = true;
-            }
-            if ea.argt.has(ExArgt::TRLBAR) {
-                (*cmdinfo).magic.bar = true;
+                ea.argt = ExArgt::NONE;
+                ea.addr_type = CmdAddr::NoRange;
             }
             retval = true;
+            break 'end;
         }
 
-        if !retval {
-            undo_cmdmod(&mut (*cmdinfo).cmdmod);
+        if ea.cmdidx as c_int == CMD_SIZE as c_int {
+            // The modifiers parsed, so the error is in what follows them.
+            let cmdname = if after_modifier.is_null() {
+                unsafe { *cmdline }
+            } else {
+                after_modifier
+            };
+            let msg = unsafe { ex_msg(e_not_an_editor_command.as_ptr()) };
+            *errormsg = Some(unsafe { append_command(&msg, cmdname) });
+            break 'end;
         }
-        ex_pressedreturn.set(save_ex_pressedreturn);
-        (*curwin.get()).w_cursor = save_cursor;
-        restore_last_search_pattern();
-        retval
+
+        ea.forceit = unsafe { parse_bang(ea, &raw mut p) } as c_int;
+        if !is_user_cmd(ea.cmdidx) {
+            ea.argt = cmdnames[ea.cmdidx as usize].cmd_argt;
+        }
+        // `:!` keeps the space: `:!! -l` needs it.
+        ea.arg = if ea.cmdidx as c_int == CMD_bang as c_int {
+            p
+        } else {
+            unsafe { skipwhite(p) }
+        };
+        // `:r!` is a filter, not a bang.
+        if ea.cmdidx as c_int == CMD_read as c_int && ea.forceit != 0 {
+            ea.forceit = 0;
+        }
+
+        if ea.argt.has(ExArgt::TRLBAR) {
+            unsafe { separate_nextcmd(eap) };
+        } else if cmd_has_expr_args(ea.cmdidx) {
+            // A command whose argument is an expression has no
+            // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
+            // separator. Skipping expression by expression finds the one
+            // that is.
+            let mut arg = ea.arg;
+            while unsafe { *arg } as c_int != NUL
+                && unsafe { *arg } as c_int != '|' as c_int
+                && unsafe { *arg } as c_int != '\n' as c_int
+            {
+                let start = arg;
+                let skipping = Suppress::emsg_skip();
+                unsafe { skip_expr(&raw mut arg, ptr::null_mut()) };
+                drop(skipping);
+                // Nothing an expression parser recognises: step over one
+                // byte, or this loop never ends.
+                if arg == start {
+                    arg = unsafe { arg.add(1) };
+                }
+            }
+            if unsafe { *arg } as c_int == '|' as c_int || unsafe { *arg } as c_int == '\n' as c_int
+            {
+                ea.nextcmd = unsafe { check_nextcmd(arg) };
+                unsafe { *arg = NUL as c_char };
+            }
+        }
+
+        if !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
+            *errormsg = Some(unsafe { ex_msg(e_nobang.as_ptr()) });
+            break 'end;
+        }
+        if !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
+            *errormsg = Some(unsafe { ex_msg(e_norange.as_ptr()) });
+            break 'end;
+        }
+        if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
+            unsafe { set_cmd_dflall_range(eap) };
+        }
+
+        unsafe { parse_register(eap) };
+        if unsafe { parse_count(eap, errormsg, false) } == FAIL {
+            break 'end;
+        }
+
+        if !ea.nextcmd.is_null() {
+            ea.nextcmd = unsafe { skip_colon_white(ea.nextcmd, true) };
+        }
+
+        // Which characters the caller must escape to have them taken
+        // literally when the command is handed back.
+        if ea.argt.has(ExArgt::XFILE) {
+            unsafe { (*cmdinfo).magic.file = true };
+        }
+        if ea.argt.has(ExArgt::TRLBAR) {
+            unsafe { (*cmdinfo).magic.bar = true };
+        }
+        retval = true;
     }
+
+    if !retval {
+        unsafe { undo_cmdmod(&mut (*cmdinfo).cmdmod) };
+    }
+    ex_pressedreturn.set(save_ex_pressedreturn);
+    cur_win().w_cursor = save_cursor;
+    restore_last_search_pattern();
+    retval
 }
 
 /// Expand what is left of the argument and call the command's handler.
@@ -239,90 +242,96 @@ pub(crate) unsafe fn execute_cmd0(
     errormsg: &mut Option<CString>,
     preview: bool,
 ) -> c_int {
-    unsafe {
-        let ea = &mut *eap;
-        if ea.argt.has(ExArgt::XFILE) && expand_filename(eap, ea.cmdlinep, errormsg) == FAIL {
-            return FAIL;
-        }
+    let mut ea = unsafe { Ea::new(eap) };
+    if ea.argt.has(ExArgt::XFILE) && unsafe { expand_filename(eap, ea.cmdlinep, errormsg) } == FAIL
+    {
+        return FAIL;
+    }
 
-        // A buffer name may stand in for a buffer number, but not alongside
-        // one, and not for a user command.
-        if ea.argt.has(ExArgt::BUFNAME)
-            && *ea.arg as c_int != NUL
-            && ea.addr_count == 0
-            && !is_user_cmd(ea.cmdidx)
-        {
-            if ea.args.is_null() {
-                // `:bdelete`, `:bwipeout` and `:bunload` take several
-                // space-separated names, so the first one ends at the first
-                // unescaped space; every other command takes one name, so
-                // only trailing space is dropped.
-                let p = if ea.cmdidx as c_int == CMD_bdelete as c_int
-                    || ea.cmdidx as c_int == CMD_bwipeout as c_int
-                    || ea.cmdidx as c_int == CMD_bunload as c_int
-                {
-                    skiptowhite_esc(ea.arg)
-                } else {
-                    let mut p = ea.arg.add(strlen(ea.arg) as usize);
-                    while p > ea.arg && ascii_iswhite(*p.sub(1) as c_int) {
-                        p = p.sub(1);
-                    }
-                    p
-                };
-                ea.line2 = buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false)
-                    as linenr_T;
-                ea.addr_count = 1;
-                ea.arg = skipwhite(p);
+    // A buffer name may stand in for a buffer number, but not alongside
+    // one, and not for a user command.
+    if ea.argt.has(ExArgt::BUFNAME)
+        && unsafe { *ea.arg } as c_int != NUL
+        && ea.addr_count == 0
+        && !is_user_cmd(ea.cmdidx)
+    {
+        if ea.args.is_null() {
+            // `:bdelete`, `:bwipeout` and `:bunload` take several
+            // space-separated names, so the first one ends at the first
+            // unescaped space; every other command takes one name, so
+            // only trailing space is dropped.
+            let p = if ea.cmdidx as c_int == CMD_bdelete as c_int
+                || ea.cmdidx as c_int == CMD_bwipeout as c_int
+                || ea.cmdidx as c_int == CMD_bunload as c_int
+            {
+                unsafe { skiptowhite_esc(ea.arg) }
             } else {
-                // The API gave the argument positions, so the first argument
-                // is the name with no scanning at all.
-                ea.line2 = buflist_findpat(
+                let mut p = unsafe { ea.arg.add(strlen(ea.arg) as usize) };
+                while p > ea.arg && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
+                    p = unsafe { p.sub(1) };
+                }
+                p
+            };
+            ea.line2 =
+                unsafe { buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false) }
+                    as linenr_T;
+            ea.addr_count = 1;
+            ea.arg = unsafe { skipwhite(p) };
+        } else {
+            // The API gave the argument positions, so the first argument
+            // is the name with no scanning at all.
+            ea.line2 = unsafe {
+                buflist_findpat(
                     *ea.args,
                     (*ea.args).add(*ea.arglens),
                     ea.argt.has(ExArgt::BUFUNL),
                     false,
                     false,
-                ) as linenr_T;
-                ea.addr_count = 1;
-                shift_cmd_args(eap);
-            }
-            if ea.line2 < 0 {
-                return FAIL;
-            }
+                )
+            } as linenr_T;
+            ea.addr_count = 1;
+            shift_cmd_args(ea);
         }
-
-        // `:try` saves 'emsg_silent' itself, so `:silent! try` must not
-        // still be silencing by the time the body runs.
-        let did_esilent = cmdmod.with(|mods| mods.cmod_did_esilent);
-        if ea.cmdidx as c_int == CMD_try as c_int && did_esilent > 0 {
-            emsg_silent.set((emsg_silent.get() - did_esilent).max(0));
-            cmdmod.with_mut(|mods| mods.cmod_did_esilent = 0);
+        if ea.line2 < 0 {
+            return FAIL;
         }
+    }
 
-        if is_user_cmd(ea.cmdidx) {
-            *retv = do_ucmd(eap, preview);
-        } else {
-            ea.errmsg = None;
-            if preview {
+    // `:try` saves 'emsg_silent' itself, so `:silent! try` must not
+    // still be silencing by the time the body runs.
+    let did_esilent = cmdmod.with(|mods| mods.cmod_did_esilent);
+    if ea.cmdidx as c_int == CMD_try as c_int && did_esilent > 0 {
+        emsg_silent.set((emsg_silent.get() - did_esilent).max(0));
+        cmdmod.with_mut(|mods| mods.cmod_did_esilent = 0);
+    }
+
+    if is_user_cmd(ea.cmdidx) {
+        unsafe { *retv = do_ucmd(eap, preview) };
+    } else {
+        ea.errmsg = None;
+        if preview {
+            unsafe {
                 *retv = cmdnames[ea.cmdidx as usize]
                     .cmd_preview_func
                     .expect("a command with ExArgt::PREVIEW has a preview callback")(
                     eap,
                     cmdpreview_get_ns(),
                     cmdpreview_get_bufnr(),
-                );
-            } else {
+                )
+            };
+        } else {
+            unsafe {
                 cmdnames[ea.cmdidx as usize]
                     .cmd_func
-                    .expect("every command in the table has a handler")(eap);
-            }
-            if ea.errmsg.is_some() {
-                *errormsg = ea.errmsg.take();
-            }
+                    .expect("every command in the table has a handler")(eap)
+            };
         }
-
-        OK
+        if ea.errmsg.is_some() {
+            *errormsg = ea.errmsg.take();
+        }
     }
+
+    OK
 }
 
 /// Run an `exarg_T` the API built, without re-parsing anything.
@@ -333,91 +342,111 @@ pub(crate) unsafe fn execute_cmd0(
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
 pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
-    unsafe {
-        let ea = &mut *eap;
-        let mut retv: c_int = 0;
-        if do_cmdline_start() == FAIL {
-            emsg(gettext(&raw const e_command_too_recursive as *const c_char));
-            return retv;
-        }
-
-        let mut errormsg: Option<CString> = None;
-        // Shallow both ways: the guard owns what the set it took out
-        // points at until it goes back, and the caller keeps owning
-        // `cmdinfo`.
-        let mods = CmdModScope::enter((*cmdinfo).cmdmod.clone());
-
-        'end: {
-            // `:put` is allowed in a terminal buffer, which is not
-            // 'modifiable'.
-            if (*curbuf.get()).b_p_ma == 0
-                && ea.argt.has(ExArgt::MODIFY)
-                && !(!(*curbuf.get()).terminal.is_null()
-                    && (ea.cmdidx as c_int == CMD_put as c_int
-                        || ea.cmdidx as c_int == CMD_iput as c_int))
-            {
-                errormsg = Some(ex_msg(e_modifiable.as_ptr()));
-                break 'end;
-            }
-            if !is_user_cmd(ea.cmdidx) {
-                if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
-                    errormsg = Some(ex_msg(e_cmdwin.as_ptr()));
-                    break 'end;
-                }
-                if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
-                    errormsg = Some(ex_msg(get_text_locked_msg()));
-                    break 'end;
-                }
-            }
-            // `curbuf->b_ro_locked` forbids editing another buffer.
-            // `:checktime` is postponed, `:edit` is checked later, and
-            // `:file` with no argument only reports.
-            if !ea.argt.has(ExArgt::CMDWIN)
-                && ea.cmdidx as c_int != CMD_checktime as c_int
-                && ea.cmdidx as c_int != CMD_edit as c_int
-                && !(ea.cmdidx as c_int == CMD_file as c_int && *ea.arg as c_int == NUL)
-                && !is_user_cmd(ea.cmdidx)
-                && curbuf_locked()
-            {
-                break 'end;
-            }
-
-            correct_range(eap);
-            if ea.cmdidx as c_int == CMD_SIZE as c_int && ea.addr_count > 0 {
-                errormsg = ex_range_without_command(eap);
-                break 'end;
-            }
-
-            // Put the first line at the start of a closed fold and the last
-            // line at its end.
-            if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
-                && global_busy.get() == 0
-                && ea.addr_type == CmdAddr::Lines
-            {
-                has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
-                has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
-            }
-
-            if parse_count(eap, &mut errormsg, true) == FAIL {
-                break 'end;
-            }
-
-            // A conditional stack of its own: `:try` and friends reached
-            // this way are not nested inside the caller's.
-            let mut cstack: cstack_T = core::mem::zeroed();
-            cstack.cs_idx = -1;
-            ea.cstack = &raw mut cstack;
-
-            execute_cmd0(&raw mut retv, eap, &mut errormsg, preview);
-        }
-
-        if let Some(msg) = &errormsg
-            && !msg.is_empty()
-        {
-            emsg(msg.as_ptr());
-        }
-        drop(mods);
-        do_cmdline_end();
-        retv
+    let mut ea = unsafe { Ea::new(eap) };
+    let mut retv: c_int = 0;
+    if do_cmdline_start() == FAIL {
+        unsafe { emsg(gettext(&raw const e_command_too_recursive as *const c_char)) };
+        return retv;
     }
+
+    let mut errormsg: Option<CString> = None;
+    // Shallow both ways: the guard owns what the set it took out
+    // points at until it goes back, and the caller keeps owning
+    // `cmdinfo`.
+    let mods = unsafe { CmdModScope::enter((*cmdinfo).cmdmod.clone()) };
+
+    'end: {
+        // `:put` is allowed in a terminal buffer, which is not
+        // 'modifiable'.
+        if cur_buf().b_p_ma == 0
+            && ea.argt.has(ExArgt::MODIFY)
+            && !(!cur_buf().terminal.is_null()
+                && (ea.cmdidx as c_int == CMD_put as c_int
+                    || ea.cmdidx as c_int == CMD_iput as c_int))
+        {
+            errormsg = Some(unsafe { ex_msg(e_modifiable.as_ptr()) });
+            break 'end;
+        }
+        if !is_user_cmd(ea.cmdidx) {
+            if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
+                errormsg = Some(unsafe { ex_msg(e_cmdwin.as_ptr()) });
+                break 'end;
+            }
+            if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
+                errormsg = Some(unsafe { ex_msg(get_text_locked_msg()) });
+                break 'end;
+            }
+        }
+        // `curbuf->b_ro_locked` forbids editing another buffer.
+        // `:checktime` is postponed, `:edit` is checked later, and
+        // `:file` with no argument only reports.
+        if !ea.argt.has(ExArgt::CMDWIN)
+            && ea.cmdidx as c_int != CMD_checktime as c_int
+            && ea.cmdidx as c_int != CMD_edit as c_int
+            && !(ea.cmdidx as c_int == CMD_file as c_int && unsafe { *ea.arg } as c_int == NUL)
+            && !is_user_cmd(ea.cmdidx)
+            && unsafe { curbuf_locked() }
+        {
+            break 'end;
+        }
+
+        correct_range(ea);
+        if ea.cmdidx as c_int == CMD_SIZE as c_int && ea.addr_count > 0 {
+            errormsg = unsafe { ex_range_without_command(eap) };
+            break 'end;
+        }
+
+        // Put the first line at the start of a closed fold and the last
+        // line at its end.
+        if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
+            && global_busy.get() == 0
+            && ea.addr_type == CmdAddr::Lines
+        {
+            has_folding(
+                unsafe { Win::current() },
+                ea.line1,
+                Some(&mut ea.line1),
+                None,
+            );
+            has_folding(
+                unsafe { Win::current() },
+                ea.line2,
+                None,
+                Some(&mut ea.line2),
+            );
+        }
+
+        if unsafe { parse_count(eap, &mut errormsg, true) } == FAIL {
+            break 'end;
+        }
+
+        // A conditional stack of its own: `:try` and friends reached
+        // this way are not nested inside the caller's.
+        let mut cstack: cstack_T = unsafe { core::mem::zeroed() };
+        cstack.cs_idx = -1;
+        ea.cstack = &raw mut cstack;
+
+        unsafe { execute_cmd0(&raw mut retv, eap, &mut errormsg, preview) };
+    }
+
+    if let Some(msg) = &errormsg
+        && !msg.is_empty()
+    {
+        unsafe { emsg(msg.as_ptr()) };
+    }
+    drop(mods);
+    do_cmdline_end();
+    retv
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

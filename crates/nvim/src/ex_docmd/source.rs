@@ -28,9 +28,9 @@ use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
     KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf, current_exception,
-    curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint, ex_normal_busy,
-    exiting, exmode_active, force_abort, global_busy, got_int, lines_left, msg_col, msg_row,
-    msg_scroll, msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow, trylevel,
+    did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint, ex_normal_busy, exiting,
+    exmode_active, force_abort, global_busy, got_int, lines_left, msg_col, msg_row, msg_scroll,
+    msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
@@ -45,154 +45,148 @@ use crate::types::{
     FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
 };
 
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 /// Take the whole exception environment out of the way, and answer it.
 ///
 /// Used only by the debugger: a `>quit` at a breakpoint must not be
 /// swallowed by whatever `:try` the script had open.
 pub(crate) unsafe fn save_dbg_stuff(dsp: *mut dbg_stuff) {
-    unsafe {
-        let d = &mut *dsp;
-        d.trylevel = trylevel.get();
-        trylevel.set(0);
-        d.force_abort = force_abort.get() as c_int;
-        force_abort.set(false);
-        d.caught_stack = caught_stack.get();
-        caught_stack.set(ptr::null_mut());
-        // Both of these answer the old value and clear it.
-        d.vv_exception = v_exception(ptr::null_mut());
-        d.vv_throwpoint = v_throwpoint(ptr::null_mut());
-        d.did_emsg = did_emsg.get();
-        did_emsg.set(0);
-        d.got_int = got_int.get() as c_int;
-        got_int.set(false);
-        d.did_throw = did_throw.get();
-        did_throw.set(false);
-        d.need_rethrow = need_rethrow.get() as c_int;
-        need_rethrow.set(false);
-        d.check_cstack = check_cstack.get() as c_int;
-        check_cstack.set(false);
-        d.current_exception = current_exception.get();
-        current_exception.set(ptr::null_mut());
-    }
+    let d = &mut unsafe { *dsp };
+    d.trylevel = trylevel.get();
+    trylevel.set(0);
+    d.force_abort = force_abort.get() as c_int;
+    force_abort.set(false);
+    d.caught_stack = caught_stack.get();
+    caught_stack.set(ptr::null_mut());
+    // Both of these answer the old value and clear it.
+    d.vv_exception = unsafe { v_exception(ptr::null_mut()) };
+    d.vv_throwpoint = unsafe { v_throwpoint(ptr::null_mut()) };
+    d.did_emsg = did_emsg.get();
+    did_emsg.set(0);
+    d.got_int = got_int.get() as c_int;
+    got_int.set(false);
+    d.did_throw = did_throw.get();
+    did_throw.set(false);
+    d.need_rethrow = need_rethrow.get() as c_int;
+    need_rethrow.set(false);
+    d.check_cstack = check_cstack.get() as c_int;
+    check_cstack.set(false);
+    d.current_exception = current_exception.get();
+    current_exception.set(ptr::null_mut());
 }
 
 /// Put it all back.
 pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut dbg_stuff) {
-    unsafe {
-        let d = &*dsp;
-        suppress_errthrow.set(false);
-        trylevel.set(d.trylevel);
-        force_abort.set(d.force_abort != 0);
-        caught_stack.set(d.caught_stack);
-        v_exception(d.vv_exception);
-        v_throwpoint(d.vv_throwpoint);
-        did_emsg.set(d.did_emsg);
-        got_int.set(d.got_int != 0);
-        did_throw.set(d.did_throw);
-        need_rethrow.set(d.need_rethrow != 0);
-        check_cstack.set(d.check_cstack != 0);
-        current_exception.set(d.current_exception);
-    }
+    let d = &unsafe { *dsp };
+    suppress_errthrow.set(false);
+    trylevel.set(d.trylevel);
+    force_abort.set(d.force_abort != 0);
+    caught_stack.set(d.caught_stack);
+    unsafe { v_exception(d.vv_exception) };
+    unsafe { v_throwpoint(d.vv_throwpoint) };
+    did_emsg.set(d.did_emsg);
+    got_int.set(d.got_int != 0);
+    did_throw.set(d.did_throw);
+    need_rethrow.set(d.need_rethrow != 0);
+    check_cstack.set(d.check_cstack != 0);
+    current_exception.set(d.current_exception);
 }
 
 /// Ex mode: read and run one command line at a time, printing the current
 /// line after each one that moved the cursor or changed the buffer.
 pub unsafe fn do_exmode() {
+    exmode_active.set(true);
+    State.set(MODE_NORMAL);
+    unsafe { may_trigger_modechanged() };
+
+    // `:global` runs Ex mode for each line itself; there is no prompt
+    // to give.
+    if global_busy.get() != 0 {
+        return;
+    }
+
+    let save_msg_scroll = msg_scroll.get();
+    let redraw_off = Suppress::redraw();
+    let no_prompt = Suppress::wait_return();
     unsafe {
-        exmode_active.set(true);
-        State.set(MODE_NORMAL);
-        may_trigger_modechanged();
-
-        // `:global` runs Ex mode for each line itself; there is no prompt
-        // to give.
-        if global_busy.get() != 0 {
-            return;
-        }
-
-        let save_msg_scroll = msg_scroll.get();
-        let redraw_off = Suppress::redraw();
-        let no_prompt = Suppress::wait_return();
         msg(
             gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr()),
             0,
-        );
+        )
+    };
 
-        while exmode_active.get() {
-            // `:normal` that ran out of keys leaves Ex mode rather than
-            // waiting for more.
-            if ex_normal_busy.get() > 0 && typeahead().is_empty() {
-                exmode_active.set(false);
-                break;
-            }
-
-            msg_scroll.set(1);
-            need_wait_return.set(false);
-            ex_pressedreturn.set(false);
-            ex_no_reprint.set(false);
-            let changedtick = buf_get_changedtick(Buf::new(curbuf.get()));
-            let prev_msg_row = msg_row.get();
-            let prev_line = (*curwin.get()).w_cursor.lnum;
-            cmdline_row.set(msg_row.get());
-
-            let plain = DoCmdOpts::NONE;
-            do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain);
-            lines_left.set(Rows.get() - 1);
-
-            let moved = prev_line != (*curwin.get()).w_cursor.lnum
-                || changedtick != buf_get_changedtick(Buf::new(curbuf.get()));
-            if moved && !ex_no_reprint.get() {
-                if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
-                    emsg(gettext(&raw const e_empty_buffer as *const c_char));
-                } else {
-                    // A bare Return already scrolled; print over that line
-                    // rather than under it.
-                    if ex_pressedreturn.get() {
-                        msg_scroll_flush();
-                        msg_row.set(prev_msg_row);
-                        if prev_msg_row == Rows.get() - 1 {
-                            msg_row.set(msg_row.get() - 1);
-                        }
-                    }
-                    msg_col.set(0);
-                    print_line_no_prefix((*curwin.get()).w_cursor.lnum, false, false);
-                    msg_clr_eos();
-                }
-            } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
-                // Return on the last line: there is nothing to print.
-                if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
-                    emsg(gettext(&raw const e_empty_buffer as *const c_char));
-                } else {
-                    emsg(gettext(c"E501: At end-of-file".as_ptr()));
-                }
-            }
+    while exmode_active.get() {
+        // `:normal` that ran out of keys leaves Ex mode rather than
+        // waiting for more.
+        if ex_normal_busy.get() > 0 && typeahead().is_empty() {
+            exmode_active.set(false);
+            break;
         }
 
-        drop(redraw_off);
-        drop(no_prompt);
-        redraw_all_later(UPD_NOT_VALID);
-        update_screen();
+        msg_scroll.set(1);
         need_wait_return.set(false);
-        msg_scroll.set(save_msg_scroll);
+        ex_pressedreturn.set(false);
+        ex_no_reprint.set(false);
+        let changedtick = buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
+        let prev_msg_row = msg_row.get();
+        let prev_line = cur_win().w_cursor.lnum;
+        cmdline_row.set(msg_row.get());
+
+        let plain = DoCmdOpts::NONE;
+        unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
+        lines_left.set(Rows.get() - 1);
+
+        let moved = prev_line != cur_win().w_cursor.lnum
+            || changedtick != buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
+        if moved && !ex_no_reprint.get() {
+            if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+                unsafe { emsg(gettext(&raw const e_empty_buffer as *const c_char)) };
+            } else {
+                // A bare Return already scrolled; print over that line
+                // rather than under it.
+                if ex_pressedreturn.get() {
+                    unsafe { msg_scroll_flush() };
+                    msg_row.set(prev_msg_row);
+                    if prev_msg_row == Rows.get() - 1 {
+                        msg_row.set(msg_row.get() - 1);
+                    }
+                }
+                msg_col.set(0);
+                unsafe { print_line_no_prefix(cur_win().w_cursor.lnum, false, false) };
+                unsafe { msg_clr_eos() };
+            }
+        } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
+            // Return on the last line: there is nothing to print.
+            if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+                unsafe { emsg(gettext(&raw const e_empty_buffer as *const c_char)) };
+            } else {
+                unsafe { emsg(gettext(c"E501: At end-of-file".as_ptr())) };
+            }
+        }
     }
+
+    drop(redraw_off);
+    drop(no_prompt);
+    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    unsafe { update_screen() };
+    need_wait_return.set(false);
+    msg_scroll.set(save_msg_scroll);
 }
 
 /// `:verbose` >= 15: report the command about to run, and which line of
 /// which script it is.
 pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
-    unsafe {
-        let _no_prompt = Suppress::wait_return();
-        verbose_enter_scroll();
-        if lnum == 0 {
-            smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd);
-        } else {
-            smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd);
-        }
-        if msg_silent.get() == 0 {
-            msg_puts(c"\n".as_ptr());
-        }
-        verbose_leave_scroll();
+    let _no_prompt = Suppress::wait_return();
+    unsafe { verbose_enter_scroll() };
+    if lnum == 0 {
+        smsg_c!(0, unsafe { gettext(c"Executing: %s".as_ptr()) }, cmd);
+    } else {
+        smsg_c!(0, unsafe { gettext(c"line %d: %s".as_ptr()) }, lnum, cmd);
     }
+    if msg_silent.get() == 0 {
+        unsafe { msg_puts(c"\n".as_ptr()) };
+    }
+    unsafe { verbose_leave_scroll() };
 }
 
 /// Enter a `do_cmdline` call, refusing to nest past 'maxfuncdepth'.
@@ -225,64 +219,64 @@ pub(crate) fn do_cmdline_end() {
 /// is what the user sees; an interrupt says nothing, because the interrupt
 /// message is given elsewhere.
 pub unsafe fn handle_did_throw() {
-    unsafe {
-        debug_assert!(!current_exception.get().is_null());
-        let exception = &mut *current_exception.get();
-        let mut reported: *mut c_char = ptr::null_mut();
-        let mut messages: *mut msglist_T = ptr::null_mut();
+    debug_assert!(!current_exception.get().is_null());
+    let exception = &mut unsafe { *current_exception.get() };
+    let mut reported: *mut c_char = ptr::null_mut();
+    let mut messages: *mut msglist_T = ptr::null_mut();
 
-        match exception.type_0 as c_uint {
-            0 => {
-                // ET_USER
-                let mut buf = [0 as c_char; IOSIZE as usize];
+    match exception.type_0 as c_uint {
+        0 => {
+            // ET_USER
+            let mut buf = [0 as c_char; IOSIZE as usize];
+            unsafe {
                 vim_snprintf(
                     buf.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"E605: Exception not caught: %s".as_ptr()),
                     exception.value,
-                );
-                reported = xstrdup(buf.as_ptr());
-            }
-            1 => {
-                // ET_ERROR: take the messages, so that discarding the
-                // exception does not free them.
-                messages = exception.messages;
-                exception.messages = ptr::null_mut();
-            }
-            // ET_INTERRUPT, and anything else.
-            _ => {}
+                )
+            };
+            reported = unsafe { xstrdup(buf.as_ptr()) };
         }
-
-        // Report against where the exception was thrown, not where it was
-        // caught.
-        estack_push(ETYPE_EXCEPT, exception.throw_name, exception.throw_lnum);
-        exception.throw_name = ptr::null_mut();
-        discard_current_exception();
-
-        // `:silent!` makes even an uncaught exception non-fatal.
-        if emsg_silent.get() == 0 {
-            suppress_errthrow.set(true);
-            force_abort.set(true);
+        1 => {
+            // ET_ERROR: take the messages, so that discarding the
+            // exception does not free them.
+            messages = exception.messages;
+            exception.messages = ptr::null_mut();
         }
-
-        if !messages.is_null() {
-            let mut m = messages;
-            while !m.is_null() {
-                let next = (*m).next;
-                emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E, (*m).multiline);
-                xfree((*m).msg as *mut c_void);
-                xfree((*m).sfile as *mut c_void);
-                xfree(m as *mut c_void);
-                m = next;
-            }
-        } else if !reported.is_null() {
-            emsg(reported);
-            xfree(reported as *mut c_void);
-        }
-
-        xfree(sourcing_entry().es_name as *mut c_void);
-        estack_pop();
+        // ET_INTERRUPT, and anything else.
+        _ => {}
     }
+
+    // Report against where the exception was thrown, not where it was
+    // caught.
+    estack_push(ETYPE_EXCEPT, exception.throw_name, exception.throw_lnum);
+    exception.throw_name = ptr::null_mut();
+    unsafe { discard_current_exception() };
+
+    // `:silent!` makes even an uncaught exception non-fatal.
+    if emsg_silent.get() == 0 {
+        suppress_errthrow.set(true);
+        force_abort.set(true);
+    }
+
+    if !messages.is_null() {
+        let mut m = messages;
+        while !m.is_null() {
+            let next = unsafe { (*m).next };
+            unsafe { emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E, (*m).multiline) };
+            unsafe { xfree((*m).msg as *mut c_void) };
+            unsafe { xfree((*m).sfile as *mut c_void) };
+            unsafe { xfree(m as *mut c_void) };
+            m = next;
+        }
+    } else if !reported.is_null() {
+        unsafe { emsg(reported) };
+        unsafe { xfree(reported as *mut c_void) };
+    }
+
+    unsafe { xfree(sourcing_entry().es_name as *mut c_void) };
+    estack_pop();
 }
 
 /// The line getter `do_one_cmd` is handed inside a `:while` or `:for`.
@@ -299,40 +293,36 @@ pub(crate) unsafe fn get_loop_line(
     indent: c_int,
     do_concat: bool,
 ) -> *mut c_char {
-    unsafe {
-        let cp = &mut *(cookie as *mut loop_cookie);
-        if cp.current_line + 1 >= (*cp.lines_gap).ga_len {
-            // Past the end of what was stored. On a repeat pass that means
-            // the loop body is over.
-            if cp.repeating != 0 {
-                return ptr::null_mut();
-            }
-            let line = match cp.lc_getline {
-                Some(get) => get(c, cp.cookie, indent, do_concat),
-                None => getcmdline(c, 0, indent, do_concat),
-            };
-            if !line.is_null() {
-                store_loop_line(cp.lines_gap, line);
-                cp.current_line += 1;
-            }
-            return line;
+    let cp = &mut unsafe { *(cookie as *mut loop_cookie) };
+    if cp.current_line + 1 >= unsafe { (*cp.lines_gap).ga_len } {
+        // Past the end of what was stored. On a repeat pass that means
+        // the loop body is over.
+        if cp.repeating != 0 {
+            return ptr::null_mut();
         }
-        // A replayed line was not typed.
-        KeyTyped.set(false);
-        cp.current_line += 1;
-        let wp = ((*cp.lines_gap).ga_data as *mut wcmd_T).offset(cp.current_line as isize);
-        set_sourcing_lnum((*wp).lnum);
-        xstrdup((*wp).line)
+        let line = match cp.lc_getline {
+            Some(get) => unsafe { get(c, cp.cookie, indent, do_concat) },
+            None => unsafe { getcmdline(c, 0, indent, do_concat) },
+        };
+        if !line.is_null() {
+            unsafe { store_loop_line(cp.lines_gap, line) };
+            cp.current_line += 1;
+        }
+        return line;
     }
+    // A replayed line was not typed.
+    KeyTyped.set(false);
+    cp.current_line += 1;
+    let wp = unsafe { ((*cp.lines_gap).ga_data as *mut wcmd_T).offset(cp.current_line as isize) };
+    set_sourcing_lnum(unsafe { (*wp).lnum });
+    unsafe { xstrdup((*wp).line) }
 }
 
 /// Remember a line, with the source line number it came from.
 pub(crate) unsafe fn store_loop_line(gap: *mut garray_T, line: *mut c_char) {
-    unsafe {
-        let p = ga_append_via_ptr(gap, size_of::<wcmd_T>()) as *mut wcmd_T;
-        (*p).line = xstrdup(line);
-        (*p).lnum = sourcing_entry().es_lnum;
-    }
+    let p = unsafe { ga_append_via_ptr(gap, size_of::<wcmd_T>()) } as *mut wcmd_T;
+    unsafe { (*p).line = xstrdup(line) };
+    unsafe { (*p).lnum = sourcing_entry().es_lnum };
 }
 
 /// Are these the same line getter? Spelled out so the intent survives the
@@ -351,19 +341,15 @@ pub(crate) fn line_getter_eq(a: LineGetter, b: LineGetter) -> bool {
 /// again, so the chain has to be walked before the comparison means
 /// anything.
 pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
-    unsafe {
-        let (gp, _) = unwrap_loop_getter(fgetline, cookie);
-        line_getter_eq(gp, func)
-    }
+    let (gp, _) = unsafe { unwrap_loop_getter(fgetline, cookie) };
+    line_getter_eq(gp, func)
 }
 
 /// The cookie at the bottom of that chain — the function or script the
 /// lines really come from.
 pub unsafe fn getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void {
-    unsafe {
-        let (_, cp) = unwrap_loop_getter(fgetline, cookie);
-        cp as *mut c_void
-    }
+    let (_, cp) = unsafe { unwrap_loop_getter(fgetline, cookie) };
+    cp as *mut c_void
 }
 
 /// Walk out of every `get_loop_line` wrapper.
@@ -371,15 +357,13 @@ unsafe fn unwrap_loop_getter(
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) -> (LineGetter, *mut loop_cookie) {
-    unsafe {
-        let mut gp = fgetline;
-        let mut cp = cookie as *mut loop_cookie;
-        while line_getter_eq(gp, Some(get_loop_line)) {
-            gp = (*cp).lc_getline;
-            cp = (*cp).cookie as *mut loop_cookie;
-        }
-        (gp, cp)
+    let mut gp = fgetline;
+    let mut cp = cookie as *mut loop_cookie;
+    while line_getter_eq(gp, Some(get_loop_line)) {
+        gp = unsafe { (*cp).lc_getline };
+        cp = unsafe { (*cp).cookie } as *mut loop_cookie;
     }
+    (gp, cp)
 }
 
 /// A translated message, copied into an owned Ex-command error message.
@@ -415,8 +399,18 @@ pub(crate) unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CStr
 
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.
 pub unsafe fn not_exiting(save_exiting: bool) {
-    unsafe {
-        exiting.set(save_exiting);
-        set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
-    }
+    exiting.set(save_exiting);
+    unsafe { set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t) };
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

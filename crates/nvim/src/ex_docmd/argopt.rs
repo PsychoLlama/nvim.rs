@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
@@ -20,8 +21,8 @@ use crate::ex_docmd::{
     dollar_command, quitmore,
 };
 use crate::main::{
-    arg_had_last, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2, e_mkdir,
-    lastused_tabpage, p_confirm,
+    arg_had_last, curtab, e_invarg2, e_invargval, e_invrange, e_isadir2, e_mkdir, lastused_tabpage,
+    p_confirm,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
@@ -45,43 +46,41 @@ use ::libc::{strcasecmp, strcmp};
 /// what `skip_cmd_arg` finds; the byte after it is overwritten with a
 /// terminator, so the answer borrows the command line.
 pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
-    unsafe {
-        let mut arg = *argp;
-        if *arg as c_int != '+' as c_int {
-            return ptr::null_mut();
-        }
-        arg = arg.add(1);
-        let command;
-        if ascii_isspace(*arg as c_int) || *arg as c_int == NUL {
-            command = dollar_command.as_ptr().cast_mut();
-        } else {
-            command = arg;
-            arg = skip_cmd_arg(command, true);
-            if *arg as c_int != NUL {
-                *arg = NUL as c_char;
-                arg = arg.add(1);
-            }
-        }
-        *argp = skipwhite(arg);
-        command
+    let mut arg = unsafe { *argp };
+    if unsafe { *arg } as c_int != '+' as c_int {
+        return ptr::null_mut();
     }
+    arg = unsafe { arg.add(1) };
+    let command;
+    if ascii_isspace(unsafe { *arg } as c_int) || unsafe { *arg } as c_int == NUL {
+        command = dollar_command.as_ptr().cast_mut();
+    } else {
+        command = arg;
+        arg = unsafe { skip_cmd_arg(command, true) };
+        if unsafe { *arg } as c_int != NUL {
+            unsafe { *arg = NUL as c_char };
+            arg = unsafe { arg.add(1) };
+        }
+    }
+    unsafe { *argp = skipwhite(arg) };
+    command
 }
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
-pub unsafe fn get_bad_opt(p: *const c_char, eap: *mut exarg_T) -> c_int {
-    unsafe {
-        if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
-            (*eap).bad_char = BAD_KEEP;
-        } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
-            (*eap).bad_char = BAD_DROP;
-        } else if utf8len_tab[*p as uint8_t as usize] == 1 && *p.add(1) as c_int == NUL {
-            (*eap).bad_char = *p as uint8_t as c_int;
-        } else {
-            return FAIL;
-        }
-        OK
+pub unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
+    if unsafe { strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) } == 0 {
+        eap.bad_char = BAD_KEEP;
+    } else if unsafe { strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) } == 0 {
+        eap.bad_char = BAD_DROP;
+    } else if utf8len_tab[unsafe { *p } as uint8_t as usize] == 1
+        && unsafe { *p.add(1) } as c_int == NUL
+    {
+        eap.bad_char = unsafe { *p } as uint8_t as c_int;
+    } else {
+        return FAIL;
     }
+    OK
 }
 
 /// The completion candidates for `++bad=`.
@@ -102,86 +101,92 @@ pub(crate) fn get_bad_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
 pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
-    unsafe {
-        let ea = &mut *eap;
-        let mut arg = ea.arg.add(2);
-        let mut bad_char_idx: c_int = 0;
+    let mut ea = unsafe { Ea::new(eap) };
+    let mut arg = unsafe { ea.arg.add(2) };
+    let mut bad_char_idx: c_int = 0;
 
-        // `++bin`/`++nobin` and `++binary`/`++nobinary`.
-        if strncmp(arg, c"bin".as_ptr(), 3) == 0 || strncmp(arg, c"nobin".as_ptr(), 5) == 0 {
-            if *arg as c_int == 'n' as c_int {
-                arg = arg.add(2);
-                ea.force_bin = FORCE_NOBIN;
-            } else {
-                ea.force_bin = FORCE_BIN;
-            }
-            if !checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) {
-                return FAIL;
-            }
-            ea.arg = skipwhite(arg);
-            return OK;
+    // `++bin`/`++nobin` and `++binary`/`++nobinary`.
+    if unsafe { strncmp(arg, c"bin".as_ptr(), 3) } == 0
+        || unsafe { strncmp(arg, c"nobin".as_ptr(), 5) } == 0
+    {
+        if unsafe { *arg } as c_int == 'n' as c_int {
+            arg = unsafe { arg.add(2) };
+            ea.force_bin = FORCE_NOBIN;
+        } else {
+            ea.force_bin = FORCE_BIN;
         }
-
-        // `++edit`, and not `++editsomething`.
-        if strncmp(arg, c"edit".as_ptr(), 4) == 0 && !(*arg.add(4) as u8).is_ascii_alphabetic() {
-            ea.read_edit = 1;
-            ea.arg = skipwhite(arg.add(4));
-            return OK;
+        if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
+            return FAIL;
         }
+        ea.arg = unsafe { skipwhite(arg) };
+        return OK;
+    }
 
-        // `++p`, and not `++psomething`.
-        if *arg as c_int == 'p' as c_int && !(*arg.add(1) as u8).is_ascii_alphabetic() {
-            ea.mkdir_p = 1;
-            ea.arg = skipwhite(arg.add(1));
-            return OK;
-        }
+    // `++edit`, and not `++editsomething`.
+    if unsafe { strncmp(arg, c"edit".as_ptr(), 4) } == 0
+        && !(unsafe { *arg.add(4) } as u8).is_ascii_alphabetic()
+    {
+        ea.read_edit = 1;
+        ea.arg = unsafe { skipwhite(arg.add(4)) };
+        return OK;
+    }
 
-        let pp: *mut c_int = if strncmp(arg, c"ff".as_ptr(), 2) == 0 {
-            arg = arg.add(2);
-            &raw mut ea.force_ff
-        } else if strncmp(arg, c"fileformat".as_ptr(), 10) == 0 {
-            arg = arg.add(10);
-            &raw mut ea.force_ff
-        } else if strncmp(arg, c"enc".as_ptr(), 3) == 0 {
-            arg = arg.add(if strncmp(arg, c"encoding".as_ptr(), 8) == 0 {
+    // `++p`, and not `++psomething`.
+    if unsafe { *arg } as c_int == 'p' as c_int
+        && !(unsafe { *arg.add(1) } as u8).is_ascii_alphabetic()
+    {
+        ea.mkdir_p = 1;
+        ea.arg = unsafe { skipwhite(arg.add(1)) };
+        return OK;
+    }
+
+    let pp: *mut c_int = if unsafe { strncmp(arg, c"ff".as_ptr(), 2) } == 0 {
+        arg = unsafe { arg.add(2) };
+        ea.force_ff_ptr()
+    } else if unsafe { strncmp(arg, c"fileformat".as_ptr(), 10) } == 0 {
+        arg = unsafe { arg.add(10) };
+        ea.force_ff_ptr()
+    } else if unsafe { strncmp(arg, c"enc".as_ptr(), 3) } == 0 {
+        arg = unsafe {
+            arg.add(if strncmp(arg, c"encoding".as_ptr(), 8) == 0 {
                 8
             } else {
                 3
-            });
-            &raw mut ea.force_enc
-        } else if strncmp(arg, c"bad".as_ptr(), 3) == 0 {
-            arg = arg.add(3);
-            &raw mut bad_char_idx
-        } else {
-            ptr::null_mut()
+            })
         };
+        ea.force_enc_ptr()
+    } else if unsafe { strncmp(arg, c"bad".as_ptr(), 3) } == 0 {
+        arg = unsafe { arg.add(3) };
+        &raw mut bad_char_idx
+    } else {
+        ptr::null_mut()
+    };
 
-        if pp.is_null() || *arg as c_int != '=' as c_int {
-            return FAIL;
-        }
-        arg = arg.add(1);
-        *pp = arg.offset_from(ea.cmd) as c_int;
-        arg = skip_cmd_arg(arg, false);
-        ea.arg = skipwhite(arg);
-        *arg = NUL as c_char;
-
-        if pp == &raw mut ea.force_ff {
-            if check_ff_value(ea.cmd.offset(ea.force_ff as isize)) == FAIL {
-                return FAIL;
-            }
-            // Only the first letter is kept: 'u', 'd' or 'm'.
-            ea.force_ff = *ea.cmd.offset(ea.force_ff as isize) as uint8_t as c_int;
-        } else if pp == &raw mut ea.force_enc {
-            let mut p = ea.cmd.offset(ea.force_enc as isize);
-            while *p as c_int != NUL {
-                *p = (*p as u8).to_ascii_lowercase() as c_char;
-                p = p.add(1);
-            }
-        } else if get_bad_opt(ea.cmd.offset(bad_char_idx as isize), eap) == FAIL {
-            return FAIL;
-        }
-        OK
+    if pp.is_null() || unsafe { *arg } as c_int != '=' as c_int {
+        return FAIL;
     }
+    arg = unsafe { arg.add(1) };
+    unsafe { *pp = arg.offset_from(ea.cmd) as c_int };
+    arg = unsafe { skip_cmd_arg(arg, false) };
+    ea.arg = unsafe { skipwhite(arg) };
+    unsafe { *arg = NUL as c_char };
+
+    if pp == ea.force_ff_ptr() {
+        if unsafe { check_ff_value(ea.cmd.offset(ea.force_ff as isize)) } == FAIL {
+            return FAIL;
+        }
+        // Only the first letter is kept: 'u', 'd' or 'm'.
+        ea.force_ff = unsafe { *ea.cmd.offset(ea.force_ff as isize) } as uint8_t as c_int;
+    } else if pp == ea.force_enc_ptr() {
+        let mut p = unsafe { ea.cmd.offset(ea.force_enc as isize) };
+        while unsafe { *p } as c_int != NUL {
+            unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
+            p = unsafe { p.add(1) };
+        }
+    } else if unsafe { get_bad_opt(ea.cmd.offset(bad_char_idx as isize), ea) } == FAIL {
+        return FAIL;
+    }
+    OK
 }
 
 /// The completion candidates for `++`.
@@ -212,39 +217,43 @@ pub unsafe fn expand_argopt(
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> c_int {
-    unsafe {
-        let x = &mut *xp;
-        // Past an `=`: complete the value, by whichever option name ends
-        // right before it.
-        if x.xp_pattern > x.xp_line && *x.xp_pattern.offset(-1) as c_int == '=' as c_int {
-            let name_end = x.xp_pattern.offset(-1);
-            let ends_with = |word: &CStr| {
-                let n = word.to_bytes().len() as isize;
+    let x = &mut unsafe { *xp };
+    // Past an `=`: complete the value, by whichever option name ends
+    // right before it.
+    if x.xp_pattern > x.xp_line && unsafe { *x.xp_pattern.offset(-1) } as c_int == '=' as c_int {
+        let name_end = unsafe { x.xp_pattern.offset(-1) };
+        let ends_with = |word: &CStr| {
+            let n = word.to_bytes().len() as isize;
+            unsafe {
                 name_end.offset_from(x.xp_line) >= n
                     && strncmp(name_end.offset(-n), word.as_ptr(), n as size_t) == 0
-            };
-            let cb: CompleteListItemGetter = if ends_with(c"ff") || ends_with(c"fileformat") {
-                Some(get_fileformat_name)
-            } else if ends_with(c"enc") || ends_with(c"encoding") {
-                Some(get_encoding_name)
-            } else if ends_with(c"bad") {
-                Some(get_bad_name)
-            } else {
-                None
-            };
-            if cb.is_none() {
-                return FAIL;
             }
-            expand_generic(pat, xp, rmp, matches, num_matches, cb, false);
-            return OK;
+        };
+        let cb: CompleteListItemGetter = if ends_with(c"ff") || ends_with(c"fileformat") {
+            Some(get_fileformat_name)
+        } else if ends_with(c"enc") || ends_with(c"encoding") {
+            Some(get_encoding_name)
+        } else if ends_with(c"bad") {
+            Some(get_bad_name)
+        } else {
+            None
+        };
+        if cb.is_none() {
+            return FAIL;
         }
-        // `++ff` is the only abbreviation worth finishing on its own.
-        if x.xp_pattern_len == 2 && strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) == 0 {
-            *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char;
-            *num_matches = 1;
-            **matches = xstrdup(c"fileformat=".as_ptr());
-            return OK;
-        }
+        unsafe { expand_generic(pat, xp, rmp, matches, num_matches, cb, false) };
+        return OK;
+    }
+    // `++ff` is the only abbreviation worth finishing on its own.
+    if x.xp_pattern_len == 2
+        && unsafe { strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) } == 0
+    {
+        unsafe { *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char };
+        unsafe { *num_matches = 1 };
+        unsafe { **matches = xstrdup(c"fileformat=".as_ptr()) };
+        return OK;
+    }
+    unsafe {
         expand_generic(
             pat,
             xp,
@@ -253,9 +262,9 @@ pub unsafe fn expand_argopt(
             num_matches,
             Some(get_argopt_name),
             false,
-        );
-        OK
-    }
+        )
+    };
+    OK
 }
 
 /// Which tab page a `:tab…` command means.
@@ -265,127 +274,125 @@ pub unsafe fn expand_argopt(
 /// command refuses it — that is `unaccept_arg0`. An argument may be
 /// absolute (`3`, `$`, `#`), relative (`+2`, `-1`), a range before the
 /// command (`:2tabnext`), or absent.
-pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
-    unsafe {
-        let ea = &mut *eap;
-        let mut tab_number: c_int = 0;
-        let unaccept_arg0 = if ea.cmdidx as c_int == CMD_tabmove as c_int {
-            0
-        } else {
-            1
-        };
-        let last_tab = || current_tab_nr(ptr::null_mut());
-        let invarg2 = |ea: &mut exarg_T| {
-            ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
-        };
+pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
+    let mut tab_number: c_int = 0;
+    let unaccept_arg0 = if ea.cmdidx as c_int == CMD_tabmove as c_int {
+        0
+    } else {
+        1
+    };
+    let last_tab = || current_tab_nr(ptr::null_mut());
+    let invarg2 = |mut ea: Ea| {
+        ea.errmsg = Some(unsafe { ex_errmsg(e_invarg2.as_ptr(), ea.arg) });
+    };
 
-        'theend: {
-            if !ea.arg.is_null() && *ea.arg as c_int != NUL {
-                let mut p = ea.arg;
-                // `+N`/`-N` means N places to the right/left of here.
-                let relative = match *p as c_int {
-                    c if c == '-' as c_int => {
-                        p = p.add(1);
-                        -1
-                    }
-                    c if c == '+' as c_int => {
-                        p = p.add(1);
-                        1
-                    }
-                    _ => 0,
-                };
-
-                let p_save = p;
-                tab_number = getdigits(&raw mut p, false, tab_number as intmax_t) as c_int;
-
-                if relative == 0 {
-                    if strcmp(p, c"$".as_ptr()) == 0 {
-                        tab_number = last_tab();
-                    } else if strcmp(p, c"#".as_ptr()) == 0 {
-                        if !valid_tabpage(lastused_tabpage.get()) {
-                            ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
-                            tab_number = 0;
-                            break 'theend;
-                        }
-                        tab_number = tabpage_index(lastused_tabpage.get());
-                    } else if p == p_save
-                        || *p_save as c_int == '-' as c_int
-                        || *p as c_int != NUL
-                        || tab_number > last_tab()
-                    {
-                        // Not a number.
-                        invarg2(ea);
-                        break 'theend;
-                    }
-                } else {
-                    if *p_save as c_int == NUL {
-                        // A bare `+` or `-` is one place.
-                        tab_number = 1;
-                    } else if p == p_save
-                        || *p_save as c_int == '-' as c_int
-                        || *p as c_int != NUL
-                        || tab_number == 0
-                    {
-                        invarg2(ea);
-                        break 'theend;
-                    }
-                    // `int` arithmetic on a number the user typed: the C
-                    // wraps, and the range check below is what refuses
-                    // whatever comes out. `:tabmove -2147483648` is the
-                    // case that reaches it.
-                    tab_number = tab_number
-                        .wrapping_mul(relative)
-                        .wrapping_add(tabpage_index(curtab.get()));
-                    // `:tabmove -1` moves *before* the tab to the left,
-                    // which is one place further than counting says.
-                    if unaccept_arg0 == 0 && relative == -1 {
-                        tab_number = tab_number.wrapping_sub(1);
-                    }
+    'theend: {
+        if !ea.arg.is_null() && unsafe { *ea.arg } as c_int != NUL {
+            let mut p = ea.arg;
+            // `+N`/`-N` means N places to the right/left of here.
+            let relative = match unsafe { *p } as c_int {
+                c if c == '-' as c_int => {
+                    p = unsafe { p.add(1) };
+                    -1
                 }
-                if tab_number < unaccept_arg0 || tab_number > last_tab() {
+                c if c == '+' as c_int => {
+                    p = unsafe { p.add(1) };
+                    1
+                }
+                _ => 0,
+            };
+
+            let p_save = p;
+            tab_number = unsafe { getdigits(&raw mut p, false, tab_number as intmax_t) } as c_int;
+
+            if relative == 0 {
+                if unsafe { strcmp(p, c"$".as_ptr()) } == 0 {
+                    tab_number = last_tab();
+                } else if unsafe { strcmp(p, c"#".as_ptr()) } == 0 {
+                    if !valid_tabpage(lastused_tabpage.get()) {
+                        ea.errmsg = Some(unsafe { ex_errmsg(e_invargval.as_ptr(), ea.arg) });
+                        tab_number = 0;
+                        break 'theend;
+                    }
+                    tab_number = tabpage_index(lastused_tabpage.get());
+                } else if p == p_save
+                    || unsafe { *p_save } as c_int == '-' as c_int
+                    || unsafe { *p } as c_int != NUL
+                    || tab_number > last_tab()
+                {
+                    // Not a number.
                     invarg2(ea);
-                }
-            } else if ea.addr_count > 0 {
-                if unaccept_arg0 != 0 && ea.line2 == 0 {
-                    ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
-                    tab_number = 0;
-                } else {
-                    tab_number = ea.line2 as c_int;
-                    if unaccept_arg0 == 0 {
-                        // `:-tabmove` is spelled as a range, so the sign has
-                        // to be read back off the command line — the range
-                        // parser has already turned it into a number.
-                        let mut cmdp = ea.cmd;
-                        loop {
-                            cmdp = cmdp.offset(-1);
-                            if !(cmdp > *ea.cmdlinep
-                                && (ascii_iswhite(*cmdp as c_int) || ascii_isdigit(*cmdp as c_int)))
-                            {
-                                break;
-                            }
-                        }
-                        if *cmdp as c_int == '-' as c_int {
-                            tab_number = tab_number.wrapping_sub(1);
-                            if tab_number < unaccept_arg0 {
-                                ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
-                            }
-                        }
-                    }
+                    break 'theend;
                 }
             } else {
-                // No argument at all.
-                tab_number = if ea.cmdidx as c_int == CMD_tabnext as c_int {
-                    let next = tabpage_index(curtab.get()) + 1;
-                    if next > last_tab() { 1 } else { next }
-                } else if ea.cmdidx as c_int == CMD_tabmove as c_int {
-                    last_tab()
-                } else {
-                    tabpage_index(curtab.get())
-                };
+                if unsafe { *p_save } as c_int == NUL {
+                    // A bare `+` or `-` is one place.
+                    tab_number = 1;
+                } else if p == p_save
+                    || unsafe { *p_save } as c_int == '-' as c_int
+                    || unsafe { *p } as c_int != NUL
+                    || tab_number == 0
+                {
+                    invarg2(ea);
+                    break 'theend;
+                }
+                // `int` arithmetic on a number the user typed: the C
+                // wraps, and the range check below is what refuses
+                // whatever comes out. `:tabmove -2147483648` is the
+                // case that reaches it.
+                tab_number = tab_number
+                    .wrapping_mul(relative)
+                    .wrapping_add(tabpage_index(curtab.get()));
+                // `:tabmove -1` moves *before* the tab to the left,
+                // which is one place further than counting says.
+                if unaccept_arg0 == 0 && relative == -1 {
+                    tab_number = tab_number.wrapping_sub(1);
+                }
             }
+            if tab_number < unaccept_arg0 || tab_number > last_tab() {
+                invarg2(ea);
+            }
+        } else if ea.addr_count > 0 {
+            if unaccept_arg0 != 0 && ea.line2 == 0 {
+                ea.errmsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                tab_number = 0;
+            } else {
+                tab_number = ea.line2 as c_int;
+                if unaccept_arg0 == 0 {
+                    // `:-tabmove` is spelled as a range, so the sign has
+                    // to be read back off the command line — the range
+                    // parser has already turned it into a number.
+                    let mut cmdp = ea.cmd;
+                    loop {
+                        cmdp = unsafe { cmdp.offset(-1) };
+                        if !(cmdp > unsafe { *ea.cmdlinep }
+                            && (ascii_iswhite(unsafe { *cmdp } as c_int)
+                                || ascii_isdigit(unsafe { *cmdp } as c_int)))
+                        {
+                            break;
+                        }
+                    }
+                    if unsafe { *cmdp } as c_int == '-' as c_int {
+                        tab_number = tab_number.wrapping_sub(1);
+                        if tab_number < unaccept_arg0 {
+                            ea.errmsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                        }
+                    }
+                }
+            }
+        } else {
+            // No argument at all.
+            tab_number = if ea.cmdidx as c_int == CMD_tabnext as c_int {
+                let next = tabpage_index(curtab.get()) + 1;
+                if next > last_tab() { 1 } else { next }
+            } else if ea.cmdidx as c_int == CMD_tabmove as c_int {
+                last_tab()
+            } else {
+                tabpage_index(curtab.get())
+            };
         }
-        tab_number
     }
+    tab_number
 }
 
 /// Refuse to leave when the argument list has files nobody has edited yet.
@@ -393,24 +400,22 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
 /// Answers `OK` when quitting is allowed. `quitmore` is what makes the
 /// second `:q` work: the refusal sets it, and `do_one_cmd` counts it down.
 pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
-    unsafe {
-        let n = (*(*curwin.get()).w_alist).al_ga.ga_len - (*curwin.get()).w_arg_idx - 1;
-        if forceit
-            || !only_one_window()
-            || (*(*curwin.get()).w_alist).al_ga.ga_len <= 1
-            || arg_had_last.get()
-            || n <= 0
-            || quitmore.get() != 0
-        {
-            return OK;
-        }
-        if !message {
-            return FAIL;
-        }
-        if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM))
-            && !(*curbuf.get()).b_fname.is_null()
-        {
-            let mut buff: [c_char; 1000] = [0; 1000];
+    let n = unsafe { (*cur_win().w_alist).al_ga.ga_len } - cur_win().w_arg_idx - 1;
+    if forceit
+        || !unsafe { only_one_window() }
+        || unsafe { (*cur_win().w_alist).al_ga.ga_len } <= 1
+        || arg_had_last.get()
+        || n <= 0
+        || quitmore.get() != 0
+    {
+        return OK;
+    }
+    if !message {
+        return FAIL;
+    }
+    if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && !cur_buf().b_fname.is_null() {
+        let mut buff: [c_char; 1000] = [0; 1000];
+        unsafe {
             vim_snprintf(
                 &raw mut buff as *mut c_char,
                 DIALOG_MSG_SIZE as size_t,
@@ -420,42 +425,44 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
                     n as c_ulong,
                 ),
                 n,
-            );
-            let answer = vim_dialog_yesno(
+            )
+        };
+        let answer = unsafe {
+            vim_dialog_yesno(
                 VIM_QUESTION as c_int,
                 ptr::null_mut(),
                 &raw mut buff as *mut c_char,
                 1,
-            );
-            return if answer == VIM_YES as c_int { OK } else { FAIL };
-        }
-        semsg_c!(
+            )
+        };
+        return if answer == VIM_YES as c_int { OK } else { FAIL };
+    }
+    semsg_c!(
+        unsafe {
             ngettext(
                 c"E173: %d more file to edit".as_ptr(),
                 c"E173: %d more files to edit".as_ptr(),
                 n as c_ulong,
-            ),
-            n,
-        );
-        quitmore.set(2);
-        FAIL
-    }
+            )
+        },
+        n,
+    );
+    quitmore.set(2);
+    FAIL
 }
 
 /// `mkdir`, reporting the reason it failed.
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
-    unsafe {
-        let ret = os_mkdir(name, prot as int32_t);
-        if ret != 0 {
-            semsg_c!(
-                gettext(&raw const e_mkdir as *const c_char),
-                name,
-                uv_strerror(ret),
-            );
-            return FAIL;
-        }
-        OK
+    let ret = unsafe { os_mkdir(name, prot as int32_t) };
+    if ret != 0 {
+        semsg_c!(
+            unsafe { gettext(&raw const e_mkdir as *const c_char) },
+            name,
+            unsafe { uv_strerror(ret) },
+        );
+        return FAIL;
     }
+    OK
 }
 
 /// Open the file `:mkvimrc` and friends are about to write.
@@ -463,37 +470,49 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
-    unsafe {
-        if os_isdir(fname) {
-            semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname);
-            return ptr::null_mut();
-        }
-        if forceit == 0 && *mode as c_int != 'a' as c_int && os_path_exists(fname) {
-            semsg_c!(
-                gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
-                fname,
-            );
-            return ptr::null_mut();
-        }
-        let fd = os_fopen(fname, mode);
-        if fd.is_null() {
-            semsg_c!(
-                gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
-                fname,
-            );
-        }
-        fd
+    if unsafe { os_isdir(fname) } {
+        semsg_c!(
+            unsafe { gettext(&raw const e_isadir2 as *const c_char) },
+            fname
+        );
+        return ptr::null_mut();
     }
+    if forceit == 0 && unsafe { *mode } as c_int != 'a' as c_int && unsafe { os_path_exists(fname) }
+    {
+        semsg_c!(
+            unsafe { gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()) },
+            fname,
+        );
+        return ptr::null_mut();
+    }
+    let fd = unsafe { os_fopen(fname, mode) };
+    if fd.is_null() {
+        semsg_c!(
+            unsafe { gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()) },
+            fname,
+        );
+    }
+    fd
 }
 
 /// Fill in a dialog message with the file name it is about, or `Untitled`.
 pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_char) {
-    unsafe {
-        let fname = if fname.is_null() {
-            gettext(c"Untitled".as_ptr())
-        } else {
-            fname
-        };
-        vim_snprintf(buff, DIALOG_MSG_SIZE as size_t, format, fname);
-    }
+    let fname = if fname.is_null() {
+        unsafe { gettext(c"Untitled".as_ptr()) }
+    } else {
+        fname
+    };
+    unsafe { vim_snprintf(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

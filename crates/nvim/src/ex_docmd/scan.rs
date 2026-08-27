@@ -19,7 +19,6 @@ use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
-use crate::main::curbuf;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::option::cpo_has;
@@ -34,22 +33,21 @@ use crate::types::{
     CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, CmdAddr,
     CpoFlag, ExArgt, FAIL, NUL, OK, size_t,
 };
+use crate::winlayer::{Buf, Ea};
 use ::libc::strlen;
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
 /// `::::print` both reach the command name.
 pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
-    unsafe {
-        let mut p = if skipleadingwhite {
-            skipwhite(p)
-        } else {
-            p as *mut c_char
-        };
-        while *p as c_int == ':' as c_int {
-            p = skipwhite(p.add(1));
-        }
-        p
+    let mut p = if skipleadingwhite {
+        unsafe { skipwhite(p) }
+    } else {
+        p as *mut c_char
+    };
+    while unsafe { *p } as c_int == ':' as c_int {
+        p = unsafe { skipwhite(p.add(1)) };
     }
+    p
 }
 
 /// Take the register name a command such as `:delete x` may carry.
@@ -59,65 +57,61 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 /// `=`, and a digit belongs to the *count* rather than to a register when
 /// the command takes both.
 pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
-    unsafe {
-        let ea = &mut *eap;
-        let is_user_command = (ea.cmdidx as c_int) < 0;
-        if !ea.argt.has(ExArgt::REGSTR)
-            || *ea.arg as c_int == NUL
-            || (is_user_command && *ea.arg as c_int == '=' as c_int)
-            || (ea.argt.has(ExArgt::COUNT) && ascii_isdigit(*ea.arg as c_int))
-        {
-            return;
-        }
-        // `:put` and `:iput` are the two commands that may name a write-only
-        // register; every other one is writing to whichever it names.
-        let writing = !is_user_command
-            && ea.cmdidx as c_int != CMD_put as c_int
-            && ea.cmdidx as c_int != CMD_iput as c_int;
-        if !valid_yank_reg(*ea.arg as c_int, writing) {
-            return;
-        }
-        ea.regname = *ea.arg as u8 as c_int;
-        ea.arg = ea.arg.add(1);
-        // The expression register swallows the rest of the line: it *is* the
-        // expression, and evaluating it is deferred until the register is read.
-        if ea.regname == '=' as c_int && *ea.arg as c_int != NUL {
-            if ea.skip == 0 {
-                set_expr_line(xstrdup(ea.arg));
-            }
-            ea.arg = ea.arg.add(strlen(ea.arg));
-        }
-        ea.arg = skipwhite(ea.arg);
+    let mut ea = unsafe { Ea::new(eap) };
+    let is_user_command = (ea.cmdidx as c_int) < 0;
+    if !ea.argt.has(ExArgt::REGSTR)
+        || unsafe { *ea.arg } as c_int == NUL
+        || (is_user_command && unsafe { *ea.arg } as c_int == '=' as c_int)
+        || (ea.argt.has(ExArgt::COUNT) && ascii_isdigit(unsafe { *ea.arg } as c_int))
+    {
+        return;
     }
+    // `:put` and `:iput` are the two commands that may name a write-only
+    // register; every other one is writing to whichever it names.
+    let writing = !is_user_command
+        && ea.cmdidx as c_int != CMD_put as c_int
+        && ea.cmdidx as c_int != CMD_iput as c_int;
+    if !unsafe { valid_yank_reg(*ea.arg as c_int, writing) } {
+        return;
+    }
+    ea.regname = unsafe { *ea.arg } as u8 as c_int;
+    ea.arg = unsafe { ea.arg.add(1) };
+    // The expression register swallows the rest of the line: it *is* the
+    // expression, and evaluating it is deferred until the register is read.
+    if ea.regname == '=' as c_int && unsafe { *ea.arg } as c_int != NUL {
+        if ea.skip == 0 {
+            unsafe { set_expr_line(xstrdup(ea.arg)) };
+        }
+        ea.arg = unsafe { ea.arg.add(strlen(ea.arg)) };
+    }
+    ea.arg = unsafe { skipwhite(ea.arg) };
 }
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
 pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool) {
-    unsafe {
-        let ea = &mut *eap;
-        if ea.addr_type != CmdAddr::Lines {
-            ea.line2 = count;
-            if ea.addr_count == 0 {
-                ea.addr_count = 1;
-            }
-            return;
+    let mut ea = unsafe { Ea::new(eap) };
+    if ea.addr_type != CmdAddr::Lines {
+        ea.line2 = count;
+        if ea.addr_count == 0 {
+            ea.addr_count = 1;
         }
-        ea.line1 = ea.line2;
-        // Upstream's overflow guard is `line2 >= INT32_MAX - (count - 1)`,
-        // and for `count == 0` — which only `nvim_cmd` can supply — the
-        // right-hand side itself overflows. The C wraps there, so the
-        // comparison always succeeds and the answer is `INT32_MAX`. Spelled
-        // as a wrapping subtraction so the debug build does not abort.
-        if ea.line2 >= (INT32_MAX as linenr_T).wrapping_sub(count.wrapping_sub(1)) {
-            ea.line2 = INT32_MAX as linenr_T;
-        } else {
-            ea.line2 += count - 1;
-        }
-        ea.addr_count += 1;
-        if validate && ea.line2 > (*curbuf.get()).b_ml.ml_line_count {
-            ea.line2 = (*curbuf.get()).b_ml.ml_line_count;
-        }
+        return;
+    }
+    ea.line1 = ea.line2;
+    // Upstream's overflow guard is `line2 >= INT32_MAX - (count - 1)`,
+    // and for `count == 0` — which only `nvim_cmd` can supply — the
+    // right-hand side itself overflows. The C wraps there, so the
+    // comparison always succeeds and the answer is `INT32_MAX`. Spelled
+    // as a wrapping subtraction so the debug build does not abort.
+    if ea.line2 >= (INT32_MAX as linenr_T).wrapping_sub(count.wrapping_sub(1)) {
+        ea.line2 = INT32_MAX as linenr_T;
+    } else {
+        ea.line2 += count - 1;
+    }
+    ea.addr_count += 1;
+    if validate && ea.line2 > cur_buf().b_ml.ml_line_count {
+        ea.line2 = cur_buf().b_ml.ml_line_count;
     }
 }
 
@@ -128,95 +122,85 @@ pub(crate) unsafe fn parse_count(
     errormsg: &mut Option<CString>,
     validate: bool,
 ) -> c_int {
-    unsafe {
-        let ea = &mut *eap;
-        if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(*ea.arg as c_int) {
+    let mut ea = unsafe { Ea::new(eap) };
+    if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(unsafe { *ea.arg } as c_int) {
+        return OK;
+    }
+    // A command that also takes a buffer name (`:buffer 2x`) only reads
+    // the digits as a count when they are the whole word.
+    if ea.argt.has(ExArgt::BUFNAME) {
+        let p = unsafe { skipdigits(ea.arg.add(1)) };
+        if unsafe { *p } as c_int != NUL && !ascii_iswhite(unsafe { *p } as c_int) {
             return OK;
         }
-        // A command that also takes a buffer name (`:buffer 2x`) only reads
-        // the digits as a count when they are the whole word.
-        if ea.argt.has(ExArgt::BUFNAME) {
-            let p = skipdigits(ea.arg.add(1));
-            if *p as c_int != NUL && !ascii_iswhite(*p as c_int) {
-                return OK;
-            }
-        }
-
-        let n: linenr_T = getdigits_int32(&raw mut ea.arg, false, INT32_MAX);
-        ea.arg = skipwhite(ea.arg);
-        if !ea.args.is_null() {
-            // `nvim_cmd` supplies the arguments already split, so the count
-            // that was just consumed has to come off the first of them.
-            debug_assert!(ea.argc > 0 && ea.arg >= *ea.args);
-            let first = *ea.args;
-            let first_len = *ea.arglens;
-            if ea.arg < first.add(first_len) {
-                *ea.arglens = first_len.wrapping_sub(ea.arg.offset_from(first) as size_t);
-                *ea.args = ea.arg;
-            } else {
-                shift_cmd_args(eap);
-            }
-        }
-        if n <= 0 && !ea.argt.has(ExArgt::ZEROR) {
-            *errormsg = Some(ex_msg(e_zerocount.as_ptr()));
-            return FAIL;
-        }
-        set_cmd_count(eap, n, validate);
-        OK
     }
+
+    let n: linenr_T = unsafe { getdigits_int32(ea.arg_ptr(), false, INT32_MAX) };
+    ea.arg = unsafe { skipwhite(ea.arg) };
+    if !ea.args.is_null() {
+        // `nvim_cmd` supplies the arguments already split, so the count
+        // that was just consumed has to come off the first of them.
+        debug_assert!(ea.argc > 0 && ea.arg >= unsafe { *ea.args });
+        let first = unsafe { *ea.args };
+        let first_len = unsafe { *ea.arglens };
+        if ea.arg < unsafe { first.add(first_len) } {
+            unsafe { *ea.arglens = first_len.wrapping_sub(ea.arg.offset_from(first) as size_t) };
+            unsafe { *ea.args = ea.arg };
+        } else {
+            shift_cmd_args(ea);
+        }
+    }
+    if n <= 0 && !ea.argt.has(ExArgt::ZEROR) {
+        *errormsg = Some(unsafe { ex_msg(e_zerocount.as_ptr()) });
+        return FAIL;
+    }
+    unsafe { set_cmd_count(eap, n, validate) };
+    OK
 }
 
 /// Take the `!` a command may carry. `:substitute` and its two magic
 /// spellings are the exception: there a `!` belongs to the pattern.
-pub(crate) unsafe fn parse_bang(eap: *const exarg_T, p: *mut *mut c_char) -> bool {
-    unsafe {
-        let cmdidx = (*eap).cmdidx as c_int;
-        if **p as c_int == '!' as c_int
-            && cmdidx != CMD_substitute as c_int
-            && cmdidx != CMD_smagic as c_int
-            && cmdidx != CMD_snomagic as c_int
-        {
-            *p = (*p).add(1);
-            return true;
-        }
-        false
+pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
+    let cmdidx = (*eap).cmdidx as c_int;
+    if unsafe { **p } as c_int == '!' as c_int
+        && cmdidx != CMD_substitute as c_int
+        && cmdidx != CMD_smagic as c_int
+        && cmdidx != CMD_snomagic as c_int
+    {
+        unsafe { *p = (*p).add(1) };
+        return true;
     }
+    false
 }
 
 /// Take the trailing `l`, `p` and `#` flags a printing command may carry.
-pub(crate) unsafe fn get_flags(eap: *mut exarg_T) {
-    unsafe {
-        let ea = &mut *eap;
-        loop {
-            let flag = match *ea.arg as u8 {
-                b'l' => EXFLAG_LIST,
-                b'p' => EXFLAG_PRINT,
-                b'#' => EXFLAG_NR,
-                _ => return,
-            };
-            ea.flags |= flag;
-            ea.arg = skipwhite(ea.arg.add(1));
-        }
+pub(crate) fn get_flags(mut ea: Ea) {
+    loop {
+        let flag = match unsafe { *ea.arg } as u8 {
+            b'l' => EXFLAG_LIST,
+            b'p' => EXFLAG_PRINT,
+            b'#' => EXFLAG_NR,
+            _ => return,
+        };
+        ea.flags |= flag;
+        ea.arg = unsafe { skipwhite(ea.arg.add(1)) };
     }
 }
 
 /// Step over a `:vimgrep` pattern, whose delimiters are not the ones the
 /// rest of the argument scan knows about.
-pub(crate) unsafe fn skip_grep_pat(eap: *mut exarg_T) -> *mut c_char {
-    unsafe {
-        let ea = &mut *eap;
-        let cmdidx = ea.cmdidx as c_int;
-        let is_grep = cmdidx == CMD_vimgrep as c_int
-            || cmdidx == CMD_lvimgrep as c_int
-            || cmdidx == CMD_vimgrepadd as c_int
-            || cmdidx == CMD_lvimgrepadd as c_int
-            || grep_internal(ea.cmdidx);
-        if *ea.arg as c_int == NUL || !is_grep {
-            return ea.arg;
-        }
-        let p = skip_vimgrep_pat(ea.arg, ptr::null_mut(), ptr::null_mut());
-        if p.is_null() { ea.arg } else { p }
+pub(crate) fn skip_grep_pat(mut ea: Ea) -> *mut c_char {
+    let cmdidx = ea.cmdidx as c_int;
+    let is_grep = cmdidx == CMD_vimgrep as c_int
+        || cmdidx == CMD_lvimgrep as c_int
+        || cmdidx == CMD_vimgrepadd as c_int
+        || cmdidx == CMD_lvimgrepadd as c_int
+        || unsafe { grep_internal(ea.cmdidx) };
+    if unsafe { *ea.arg } as c_int == NUL || !is_grep {
+        return ea.arg;
     }
+    let p = unsafe { skip_vimgrep_pat(ea.arg, ptr::null_mut(), ptr::null_mut()) };
+    if p.is_null() { ea.arg } else { p }
 }
 
 /// Cut the command's argument at the `|`, `"` or newline that ends it, and
@@ -234,48 +218,46 @@ pub(crate) unsafe fn skip_grep_pat(eap: *mut exarg_T) -> *mut c_char {
 /// A backslash before one of them escapes it — but only while 'cpoptions'
 /// does not contain `b`, or the command does not take CTRL-V escapes.
 pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
-    unsafe {
-        let ea = &mut *eap;
-        let mut p = skip_grep_pat(eap);
-        while *p != 0 {
-            if *p as c_int == Ctrl_V {
-                if ea.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
-                    p = p.add(1);
-                } else {
-                    drop_one_byte(p);
-                }
-                if *p as c_int == NUL {
-                    break;
-                }
-            } else if *p as c_int == '`' as c_int
-                && *p.add(1) as c_int == '=' as c_int
-                && ea.argt.has(ExArgt::XFILE)
-            {
-                // A backtick-equals expression is stepped over by the
-                // evaluator, not by this scan: it may contain any of the
-                // ending characters.
-                p = p.add(2);
-                skip_expr(&raw mut p, ptr::null_mut());
-                if *p as c_int == NUL {
-                    break;
-                }
-            } else if ends_argument(ea, p) {
-                let escaped = (!cpo_has(CpoFlag::BAR) || !ea.argt.has(ExArgt::CTRLV))
-                    && *p.offset(-1) as c_int == '\\' as c_int;
-                if escaped {
-                    p = p.offset(-1);
-                    drop_one_byte(p);
-                } else {
-                    ea.nextcmd = check_nextcmd(p);
-                    *p = NUL as c_char;
-                    break;
-                }
+    let mut ea = unsafe { Ea::new(eap) };
+    let mut p = skip_grep_pat(ea);
+    while unsafe { *p } != 0 {
+        if unsafe { *p } as c_int == Ctrl_V {
+            if ea.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
+                p = unsafe { p.add(1) };
+            } else {
+                unsafe { drop_one_byte(p) };
             }
-            p = p.add(utfc_ptr2len(p) as usize);
+            if unsafe { *p } as c_int == NUL {
+                break;
+            }
+        } else if unsafe { *p } as c_int == '`' as c_int
+            && unsafe { *p.add(1) } as c_int == '=' as c_int
+            && ea.argt.has(ExArgt::XFILE)
+        {
+            // A backtick-equals expression is stepped over by the
+            // evaluator, not by this scan: it may contain any of the
+            // ending characters.
+            p = unsafe { p.add(2) };
+            unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
+            if unsafe { *p } as c_int == NUL {
+                break;
+            }
+        } else if unsafe { ends_argument(ea, p) } {
+            let escaped = (!cpo_has(CpoFlag::BAR) || !ea.argt.has(ExArgt::CTRLV))
+                && unsafe { *p.offset(-1) } as c_int == '\\' as c_int;
+            if escaped {
+                p = unsafe { p.offset(-1) };
+                unsafe { drop_one_byte(p) };
+            } else {
+                ea.nextcmd = unsafe { check_nextcmd(p) };
+                unsafe { *p = NUL as c_char };
+                break;
+            }
         }
-        if !ea.argt.has(ExArgt::NOTRLCOM) {
-            del_trailing_spaces(ea.arg);
-        }
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+    }
+    if !ea.argt.has(ExArgt::NOTRLCOM) {
+        unsafe { del_trailing_spaces(ea.arg) };
     }
 }
 
@@ -284,22 +266,20 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
 /// A named predicate rather than an inline condition, but deliberately
 /// *inside* the loop: the `"` half compares `p` against `eap->arg`, so it
 /// depends on where the walk has got to and cannot be hoisted.
-unsafe fn ends_argument(ea: &exarg_T, p: *mut c_char) -> bool {
-    unsafe {
-        let c = *p as c_int;
-        let cmdidx = ea.cmdidx as c_int;
-        let comment = c == '"' as c_int
-            && !ea.argt.has(ExArgt::NOTRLCOM)
-            && (cmdidx != CMD_at as c_int || p != ea.arg)
-            && (cmdidx != CMD_redir as c_int
-                || p != ea.arg.add(1)
-                || *p.offset(-1) as c_int != '@' as c_int);
-        let bar = c == '|' as c_int
-            && cmdidx != CMD_append as c_int
-            && cmdidx != CMD_change as c_int
-            && cmdidx != CMD_insert as c_int;
-        comment || bar || c == '\n' as c_int
-    }
+unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
+    let c = unsafe { *p } as c_int;
+    let cmdidx = ea.cmdidx as c_int;
+    let comment = c == '"' as c_int
+        && !ea.argt.has(ExArgt::NOTRLCOM)
+        && (cmdidx != CMD_at as c_int || p != ea.arg)
+        && (cmdidx != CMD_redir as c_int
+            || p != unsafe { ea.arg.add(1) }
+            || unsafe { *p.offset(-1) } as c_int != '@' as c_int);
+    let bar = c == '|' as c_int
+        && cmdidx != CMD_append as c_int
+        && cmdidx != CMD_change as c_int
+        && cmdidx != CMD_insert as c_int;
+    comment || bar || c == '\n' as c_int
 }
 
 /// Delete the byte at `p` by pulling the terminator-inclusive tail over it.
@@ -309,27 +289,25 @@ unsafe fn drop_one_byte(p: *mut c_char) {
             p.cast(),
             p.add(1).cast::<c_void>(),
             strlen(p.add(1)).wrapping_add(1),
-        );
-    }
+        )
+    };
 }
 
 /// Step to the end of a whitespace-delimited argument, optionally removing
 /// the backslashes that escaped whitespace inside it.
 pub unsafe fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
-    unsafe {
-        let mut p = p;
-        while *p as c_int != 0 && !ascii_isspace(*p as c_int) {
-            if *p as c_int == '\\' as c_int && *p.add(1) as c_int != NUL {
-                if rembs {
-                    drop_one_byte(p);
-                } else {
-                    p = p.add(1);
-                }
+    let mut p = p;
+    while unsafe { *p } as c_int != 0 && !ascii_isspace(unsafe { *p } as c_int) {
+        if unsafe { *p } as c_int == '\\' as c_int && unsafe { *p.add(1) } as c_int != NUL {
+            if rembs {
+                unsafe { drop_one_byte(p) };
+            } else {
+                p = unsafe { p.add(1) };
             }
-            p = p.add(utfc_ptr2len(p) as usize);
         }
-        p
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
+    p
 }
 
 /// Does this character end an Ex command? Answers a `c_int` rather than a
@@ -341,25 +319,27 @@ pub fn ends_excmd(c: c_int) -> c_int {
 /// The command after the next `|` or newline, or null if there is none.
 /// Unlike `check_nextcmd` this searches rather than only looking ahead.
 pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
-    unsafe {
-        let mut p = p;
-        while *p as c_int != '|' as c_int && *p as c_int != '\n' as c_int {
-            if *p as c_int == NUL {
-                return ptr::null_mut();
-            }
-            p = p.add(1);
+    let mut p = p;
+    while unsafe { *p } as c_int != '|' as c_int && unsafe { *p } as c_int != '\n' as c_int {
+        if unsafe { *p } as c_int == NUL {
+            return ptr::null_mut();
         }
-        (p as *mut c_char).add(1)
+        p = unsafe { p.add(1) };
     }
+    unsafe { (p as *mut c_char).add(1) }
 }
 
 /// The command after `p`, if `p` is at the separator that introduces one.
 pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
-    unsafe {
-        let s = skipwhite(p);
-        if *s as c_int == '|' as c_int || *s as c_int == '\n' as c_int {
-            return s.add(1);
-        }
-        ptr::null_mut()
+    let s = unsafe { skipwhite(p) };
+    if unsafe { *s } as c_int == '|' as c_int || unsafe { *s } as c_int == '\n' as c_int {
+        return unsafe { s.add(1) };
     }
+    ptr::null_mut()
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

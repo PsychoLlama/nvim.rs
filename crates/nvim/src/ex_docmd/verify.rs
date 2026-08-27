@@ -162,12 +162,10 @@ const SMILE: &[&CStr] = &[
 /// Every command name `find_ex_command` failed to resolve reaches here, so
 /// the name test comes first and is exact.
 pub unsafe fn verify_command(cmd: *mut c_char) {
-    unsafe {
-        if CStr::from_ptr(cmd) != c"smile" {
-            return;
-        }
-        for line in SMILE {
-            msg(line.as_ptr(), HLF_E);
-        }
+    if unsafe { CStr::from_ptr(cmd) } != c"smile" {
+        return;
+    }
+    for line in SMILE {
+        unsafe { msg(line.as_ptr(), HLF_E) };
     }
 }
