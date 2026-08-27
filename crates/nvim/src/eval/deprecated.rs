@@ -28,7 +28,7 @@ use crate::eval::typval::{
     NumBuf, kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
 };
 use crate::ex_cmds::check_secure;
-use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
+use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -39,6 +39,7 @@ use crate::types::{
     VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T,
     uint64_t, varnumber_T,
 };
+use crate::winlayer::buffers;
 
 pub const kChannelPartRpc: ChannelPart = 3;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
@@ -268,13 +269,8 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
 /// As the module doc; arity 0.
 pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut n = 0;
-    let mut buf = firstbuf.get();
-    while !buf.is_null() {
-        // SAFETY: the buffer list is a live chain ending in NULL.
-        unsafe {
-            n = n.max((*buf).handle);
-            buf = (*buf).b_next;
-        }
+    for buf in buffers() {
+        n = n.max(buf.handle());
     }
     // SAFETY: the caller's promise about `rettv`.
     unsafe { (*rettv).vval.v_number = n as varnumber_T };

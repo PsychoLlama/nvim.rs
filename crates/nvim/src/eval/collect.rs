@@ -54,8 +54,7 @@ use crate::global_cell::GlobalCell;
 use crate::hashtab::hash_removed;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
 use crate::main::{
-    channels, curtab, first_tabpage, firstbuf, firstwin, garbage_collect_at_exit,
-    may_garbage_collect, p_verbose, want_garbage_collect,
+    channels, garbage_collect_at_exit, may_garbage_collect, p_verbose, want_garbage_collect,
 };
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
@@ -71,10 +70,11 @@ use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, CONV_NONE, DictWatcher, FAIL, NUL, OK, OptInt, QUEUE, String_0, VAR_BLOB,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, dictitem_T, fmark_T, fmarkv_T,
-    hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t,
-    tabpage_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T, yankreg_T,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T,
+    hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t, typval_T,
+    typval_vval_union, ufunc_T, vimconv_T, xfmark_T, yankreg_T,
 };
+use crate::winlayer::{buffers, tab_windows, tabs};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -134,8 +134,10 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         abort = abort || set_ref_in_previous_funccal(copy_id);
         abort = abort || garbage_collect_scriptvars(copy_id);
 
-        let mut buf: *mut buf_T = firstbuf.get();
-        while !buf.is_null() {
+        for buf in buffers() {
+            // The addresses come off `Buf::raw`, never through `DerefMut`, so
+            // no `&mut buf_T` is formed while they are live.
+            let buf = buf.raw();
             // buffer-local variables
             abort = abort
                 || set_ref_in_item(
@@ -160,7 +162,6 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
                 abort = abort
                     || set_ref_in_cpt_callbacks((*buf).b_p_cpt_cb, (*buf).b_p_cpt_count, copy_id);
             }
-            buf = (*buf).b_next;
         }
 
         // 'completefunc', 'omnifunc', 'thesaurusfunc', 'operatorfunc',
@@ -171,24 +172,15 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         abort = abort || set_ref_in_findfunc(copy_id);
 
         // window-local variables, in every tab page
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                abort = abort
-                    || set_ref_in_item(
-                        &raw mut (*wp).w_winvar.di_tv,
-                        copy_id,
-                        null_mut(),
-                        null_mut(),
-                    );
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
+        for wp in tab_windows() {
+            let wp = wp.raw();
+            abort = abort
+                || set_ref_in_item(
+                    &raw mut (*wp).w_winvar.di_tv,
+                    copy_id,
+                    null_mut(),
+                    null_mut(),
+                );
         }
 
         // window-local variables in the autocommand windows
@@ -209,8 +201,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         walk_shada_iterators();
 
         // tabpage-local variables
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
+        for tp in tabs() {
+            let tp = tp.raw();
             abort = abort
                 || set_ref_in_item(
                     &raw mut (*tp).tp_winvar.di_tv,
@@ -218,7 +210,6 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
                     null_mut(),
                     null_mut(),
                 );
-            tp = (*tp).tp_next as *mut tabpage_T;
         }
 
         abort = abort || garbage_collect_globvars(copy_id) != 0;
