@@ -819,7 +819,7 @@
     "crates/nvim/src/popupmenu/layout.rs": {"unsafe_lines": 170},
     "crates/nvim/src/popupmenu/menu.rs": {"pub_items": 2, "unsafe_lines": 32},
     "crates/nvim/src/popupmenu/mod.rs": {"pub_items": 31, "unsafe_lines": 228},
-    "crates/nvim/src/popupmenu/preview.rs": {"pub_items": 1, "unsafe_lines": 274},
+    "crates/nvim/src/popupmenu/preview.rs": {"pub_items": 1, "unsafe_lines": 272},
     "crates/nvim/src/pos.rs": {"pub_items": 6},
     "crates/nvim/src/profile/mod.rs": {"pub_items": 38, "unsafe_lines": 123},
     "crates/nvim/src/profile/report.rs": {"pub_items": 1, "unsafe_lines": 42},

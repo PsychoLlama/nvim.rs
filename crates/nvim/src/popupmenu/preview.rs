@@ -230,11 +230,11 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
         RedrawingDisabled.set(RedrawingDisabled.get() - 1);
         redraw_later(wp.raw(), UPD_NOT_VALID);
 
-        if pum_adjust_info_position(wp.raw(), max_info_width) {
-            wp.raw()
-        } else {
-            ::core::ptr::null_mut()
-        }
+        // `unblock_autocmds` has to run whichever way the placement went, so
+        // the answer is settled before it rather than after.
+        let placed = pum_adjust_info_position(wp.raw(), max_info_width).then(|| wp.raw());
+        unblock_autocmds();
+        placed.unwrap_or(::core::ptr::null_mut())
     }
 }
 
