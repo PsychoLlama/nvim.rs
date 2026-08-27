@@ -64,33 +64,22 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
-        if buf == -1 as ::core::ffi::c_int {
-            gap = global_ucmds();
+        let table = if buf == -1 as ::core::ffi::c_int {
+            Table::Global
         } else {
-            let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
+            let b: *mut buf_T = find_buffer_by_handle(buf, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                 return ().reported(error);
             }
-            gap = &raw mut (*b).b_ucmds;
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*gap).ga_len {
-            let mut cmd: *mut ucmd_T = ((*gap).ga_data as *mut ucmd_T).offset(i as isize);
-            if strcmp(name.data(), (*cmd).uc_name) == 0 {
-                free_ucmd(cmd);
-                (*gap).ga_len -= 1 as ::core::ffi::c_int;
-                if i < (*gap).ga_len {
-                    memmove(
-                        cmd as *mut ::core::ffi::c_void,
-                        cmd.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                        (((*gap).ga_len - i) as size_t)
-                            .wrapping_mul(::core::mem::size_of::<ucmd_T>()),
-                    );
-                }
-                return ().reported(error);
-            }
-            i += 1;
+            Table::Buffer(b)
+        };
+        let found = table
+            .list()
+            .iter()
+            .position(|cmd| strcmp(name.data(), cmd.uc_name) == 0);
+        if let Some(idx) = found {
+            uc_del_command(table, idx);
+            return ().reported(error);
         }
         api_set_error(
             err,

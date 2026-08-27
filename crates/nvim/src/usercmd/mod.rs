@@ -29,11 +29,11 @@
 //! by the entry. That is the contract the `unsafe fn`s here share; each
 //! states it once by reference rather than restating it.
 //!
-//! The one thing to watch is that a borrow of a table -- [`ucmd_list`]'s
+//! The one thing to watch is that a borrow of a table -- [`Table::list`]'s
 //! slice, or a `&ucmd_T` taken out of it -- does not survive anything that
-//! can add or remove a command, because `ga_grow` reallocates. In practice
-//! only [`uc_add_command`] and [`ex_delcommand`] do that, and both take
-//! their index before touching the array.
+//! can add or remove a command, because growing a `Vec` moves its contents.
+//! In practice only [`uc_add_command`] and [`ex_delcommand`] do that, and
+//! both take their index before touching the table.
 //!
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
@@ -58,50 +58,89 @@ pub(crate) use list::commands_array;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::ends_excmd;
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::main::{curbuf, current_sctx, p_cpo};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, LuaRef, OK, exarg_T, expand_T,
-    garray_T, int64_t, size_t, ucmd_T,
+    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, LuaRef, OK, buf_T, exarg_T,
+    expand_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
 use ::libc::strlen;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::{mem, ptr, slice};
 
 pub(crate) const UC_BUFFER: c_int = 1;
 pub(crate) const LUA_NOREF: c_int = -2;
 
-/// The global user commands. A buffer's own live in its `b_ucmds`.
+/// The global user commands, sorted by name. A buffer's own live in its
+/// `b_ucmds`, which is the same `Vec`; [`Table`] is the pair.
 ///
-/// Still a `garray_T`, and still reached by address, which is the one
-/// escape hatch this family keeps. The buffer-local table is the *same
-/// type inside an `xcalloc`ed `buf_T`*, where a `Vec` cannot live — a
-/// zeroed `Vec` is not a valid one — and every walker here is written
-/// against `*mut garray_T` precisely so that one function serves both
-/// scopes. Converting only the global half would split that in two.
-static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: size_of::<ucmd_T>() as c_int,
-    ga_growsize: 4,
-    ga_data: ptr::null_mut(),
-});
+/// The cell's address is never handed out: a read borrows it just long
+/// enough to answer a slice, and a write is a closure that cannot re-enter.
+static ucmds: GlobalCell<Vec<ucmd_T>> = GlobalCell::new(Vec::new());
 
-/// The global command table, by address. The one place [`ucmds`]' escape
-/// hatch is used; see its note for why it is still a `garray_T`.
-pub(crate) fn global_ucmds() -> *mut garray_T {
-    ucmds.ptr()
+/// One command table: the global one, or the one inside a buffer.
+///
+/// The two are the same `Vec<ucmd_T>` in different places, and every walker
+/// here is written against this so that one function serves both. It is the
+/// *where*; [`Scope`] is the *which of the two the current buffer sees*.
+#[derive(Clone, Copy)]
+pub(crate) enum Table {
+    /// The global [`ucmds`].
+    Global,
+    /// `buf`'s own `b_ucmds`.
+    Buffer(*mut buf_T),
+}
+
+impl Table {
+    /// The commands in this table, as a slice.
+    ///
+    /// # Safety
+    /// A [`Table::Buffer`] must name a live buffer, and -- as the module
+    /// docs say -- the borrow must not outlive anything that can add or
+    /// remove a command, because growing a `Vec` moves its contents.
+    pub(crate) unsafe fn list<'a>(self) -> &'a [ucmd_T] {
+        let (data, len) = match self {
+            Table::Global => ucmds.with(|cmds| (cmds.as_ptr(), cmds.len())),
+            // SAFETY: caller contract. The field is reached by raw
+            // projection, so no reference to the whole buffer is formed.
+            Table::Buffer(buf) => unsafe {
+                let cmds = &(*buf).b_ucmds;
+                (cmds.as_ptr(), cmds.len())
+            },
+        };
+        // SAFETY: `Vec::as_ptr` answers an aligned, non-null pointer to
+        // `len` initialised entries even when the table is empty; the
+        // caller keeps the borrow short enough.
+        unsafe { slice::from_raw_parts(data, len) }
+    }
+
+    /// Run `f` on this table, mutably.
+    ///
+    /// `f` holds the only `&mut` to the table, so ruling 6 makes it a leaf:
+    /// it must not re-enter the editor. Releasing what an entry owns calls
+    /// into Lua, so every caller here moves the entry *out* under `f` and
+    /// frees it afterwards.
+    ///
+    /// # Safety
+    /// A [`Table::Buffer`] must name a live buffer.
+    unsafe fn with_mut<R>(self, f: impl FnOnce(&mut Vec<ucmd_T>) -> R) -> R {
+        match self {
+            Table::Global => ucmds.with_mut(f),
+            // SAFETY: caller contract; the raw projection borrows the field
+            // and not the buffer around it.
+            Table::Buffer(buf) => unsafe { f(&mut (*buf).b_ucmds) },
+        }
+    }
 }
 
 /// Which of the two command tables a walk is standing on.
@@ -122,34 +161,26 @@ impl Scope {
     /// Both tables in search order.
     pub(crate) const BOTH: [Scope; 2] = [Scope::Buffer, Scope::Global];
 
-    /// The array this scope names.
+    /// The table this scope names.
     ///
     /// # Safety
     /// Buffer scope reads `prevwin_curwin()`, which must have a buffer --
     /// true whenever there is a current window.
-    pub(crate) unsafe fn table(self) -> *mut garray_T {
+    pub(crate) unsafe fn table(self) -> Table {
         match self {
             // SAFETY: caller contract.
-            Scope::Buffer => unsafe { &raw mut (*(*prevwin_curwin()).w_buffer).b_ucmds },
-            Scope::Global => global_ucmds(),
+            Scope::Buffer => Table::Buffer(unsafe { (*prevwin_curwin()).w_buffer }),
+            Scope::Global => Table::Global,
         }
     }
-}
 
-/// The commands in `gap`, as a slice.
-///
-/// # Safety
-/// `gap` must be a live `garray_T` of `ucmd_T` -- one of the two tables --
-/// and the borrow must not outlive anything that can add or remove a
-/// command.
-pub(crate) unsafe fn ucmd_list<'a>(gap: *const garray_T) -> &'a [ucmd_T] {
-    // SAFETY: caller contract. An empty garray has a null `ga_data`, which
-    // `from_raw_parts` will not accept even for a zero length.
-    unsafe {
-        if (*gap).ga_data.is_null() {
-            return &[];
-        }
-        slice::from_raw_parts((*gap).ga_data.cast::<ucmd_T>(), (*gap).ga_len as usize)
+    /// The commands this scope names, as a slice.
+    ///
+    /// # Safety
+    /// As [`Scope::table`] and [`Table::list`].
+    unsafe fn list<'a>(self) -> &'a [ucmd_T] {
+        // SAFETY: caller contract.
+        unsafe { self.table().list() }
     }
 }
 
@@ -197,7 +228,7 @@ pub(crate) unsafe fn find_ucmd(
 
     for scope in Scope::BOTH {
         // SAFETY: module contract.
-        let cmds = unsafe { ucmd_list(scope.table()) };
+        let cmds = unsafe { scope.list() };
         let mut exact = false;
         for (j, uc) in cmds.iter().enumerate() {
             // SAFETY: module contract.
@@ -359,17 +390,10 @@ pub(crate) unsafe fn uc_add_command(
         }
     }
 
-    let gap = if flags & UC_BUFFER != 0 {
-        // SAFETY: module contract.
-        unsafe {
-            let gap = &raw mut (*curbuf.get()).b_ucmds;
-            if (*gap).ga_itemsize == 0 {
-                ga_init(gap, size_of::<ucmd_T>() as c_int, 4);
-            }
-            gap
-        }
+    let table = if flags & UC_BUFFER != 0 {
+        Table::Buffer(curbuf.get())
     } else {
-        global_ucmds()
+        Table::Global
     };
 
     // SAFETY: caller contract.
@@ -378,8 +402,8 @@ pub(crate) unsafe fn uc_add_command(
     // entry that is not smaller: either this very command, or where it goes.
     let mut idx = 0;
     let mut replacing = false;
-    // SAFETY: module contract; nothing below reallocates before `ga_grow`.
-    for cmd in unsafe { ucmd_list(gap) } {
+    // SAFETY: module contract; the borrow ends with the walk.
+    for cmd in unsafe { table.list() } {
         // SAFETY: module contract.
         match new_name.cmp(unsafe { ucmd_name(cmd) }) {
             Ordering::Equal => {
@@ -392,14 +416,15 @@ pub(crate) unsafe fn uc_add_command(
     }
 
     if replacing {
-        // SAFETY: `idx` indexes the entry the walk just compared.
-        let cmd = unsafe { &mut *(*gap).ga_data.cast::<ucmd_T>().add(idx) };
+        // SAFETY: module contract; `idx` indexes the entry the walk just
+        // compared, and the borrow ends with the copy.
+        let existing = unsafe { table.list()[idx].uc_script_ctx };
         // A command may replace itself while the same script is still
         // sourcing (`sc_seq` differs), but two different scripts need the
         // bang.
         if !force
-            && (cmd.uc_script_ctx.sc_sid != current_sctx.get().sc_sid
-                || cmd.uc_script_ctx.sc_seq == current_sctx.get().sc_seq)
+            && (existing.sc_sid != current_sctx.get().sc_sid
+                || existing.sc_seq == current_sctx.get().sc_seq)
         {
             // SAFETY: `name` is the caller's; this call owns the other five.
             unsafe {
@@ -411,47 +436,69 @@ pub(crate) unsafe fn uc_add_command(
             }
             return FAIL;
         }
-        // SAFETY: the entry owns each of these.
+        // Everything the old entry owned bar its name, taken out of the
+        // table before it is released: freeing a Lua reference re-enters,
+        // and no borrow of the table may be live when it does.
+        // SAFETY: module contract; the closure is a leaf.
+        let (rep, compl_arg, luarefs) = unsafe {
+            table.with_mut(|cmds| {
+                let cmd = &mut cmds[idx];
+                (
+                    mem::replace(&mut cmd.uc_rep, ptr::null_mut()),
+                    mem::replace(&mut cmd.uc_compl_arg, ptr::null_mut()),
+                    [
+                        mem::replace(&mut cmd.uc_luaref, LUA_NOREF),
+                        mem::replace(&mut cmd.uc_compl_luaref, LUA_NOREF),
+                        mem::replace(&mut cmd.uc_preview_luaref, LUA_NOREF),
+                    ],
+                )
+            })
+        };
+        // SAFETY: the entry owned all five and no longer names any of them.
         unsafe {
-            xfree(cmd.uc_rep.cast());
-            cmd.uc_rep = ptr::null_mut();
-            xfree(cmd.uc_compl_arg.cast());
-            cmd.uc_compl_arg = ptr::null_mut();
-            free_luaref(&mut cmd.uc_luaref);
-            free_luaref(&mut cmd.uc_compl_luaref);
-            free_luaref(&mut cmd.uc_preview_luaref);
-        }
-    } else {
-        // SAFETY: module contract; `idx <= ga_len`, so the tail move stays
-        // inside the block `ga_grow` just made room in.
-        unsafe {
-            ga_grow(gap, 1);
-            let slot = (*gap).ga_data.cast::<ucmd_T>().add(idx);
-            memmove(
-                slot.add(1).cast(),
-                slot.cast(),
-                (((*gap).ga_len as usize) - idx) * size_of::<ucmd_T>(),
-            );
-            (*gap).ga_len += 1;
-            (*slot).uc_name = xstrnsave(name, name_len);
+            xfree(rep.cast());
+            xfree(compl_arg.cast());
+            for mut luaref in luarefs {
+                free_luaref(&mut luaref);
+            }
         }
     }
 
-    // SAFETY: `idx` is now a live entry either way.
-    let cmd = unsafe { &mut *(*gap).ga_data.cast::<ucmd_T>().add(idx) };
-    cmd.uc_rep = rep_buf;
-    cmd.uc_argt = argt;
-    cmd.uc_def = def;
-    cmd.uc_compl = context;
-    cmd.uc_script_ctx = current_sctx.get();
-    cmd.uc_script_ctx.sc_lnum += sourcing_lnum();
-    // SAFETY: the field is live for the call.
-    unsafe { nlua_set_sctx(&raw mut cmd.uc_script_ctx) };
-    cmd.uc_compl_arg = compl_arg;
-    cmd.uc_compl_luaref = compl_luaref;
-    cmd.uc_preview_luaref = preview_luaref;
-    cmd.uc_addr_type = addr_type;
-    cmd.uc_luaref = luaref;
+    let mut script_ctx = current_sctx.get();
+    script_ctx.sc_lnum += sourcing_lnum();
+    // SAFETY: the local is live for the call.
+    unsafe { nlua_set_sctx(&raw mut script_ctx) };
+    // A new entry needs a name of its own; a replaced one keeps the name it
+    // was found by, which is the same string.
+    // SAFETY: caller contract; `name` has `name_len` readable bytes.
+    let fresh_name = (!replacing).then(|| unsafe { xstrnsave(name, name_len) });
+
+    // SAFETY: module contract; the closure is a leaf.
+    unsafe {
+        table.with_mut(|cmds| {
+            let entry = |uc_name| ucmd_T {
+                uc_name,
+                uc_argt: argt,
+                uc_rep: rep_buf,
+                uc_def: def,
+                uc_compl: context,
+                uc_addr_type: addr_type,
+                uc_script_ctx: script_ctx,
+                uc_compl_arg: compl_arg,
+                uc_compl_luaref: compl_luaref,
+                uc_preview_luaref: preview_luaref,
+                uc_luaref: luaref,
+            };
+            match fresh_name {
+                // `idx` is where the walk stopped, which keeps it sorted.
+                Some(uc_name) => cmds.insert(idx, entry(uc_name)),
+                None => {
+                    let uc_name = cmds[idx].uc_name;
+                    cmds[idx] = entry(uc_name);
+                }
+            }
+        });
+    }
     OK
 }
 
@@ -598,21 +645,25 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
-        uc_clear(global_ucmds());
+        uc_clear(Table::Global);
         if !curbuf.get().is_null() {
-            uc_clear(&raw mut (*curbuf.get()).b_ucmds);
+            uc_clear(Table::Buffer(curbuf.get()));
         }
     }
 }
 
-/// Release everything one entry owns. The entry itself is the caller's.
+/// Release everything one entry owns.
+///
+/// The entry is taken by value, which is what makes the release exactly
+/// once: `ucmd_T` is neither `Copy` nor `Clone`, so the caller has had to
+/// move it out of the table to get here.
 ///
 /// # Safety
-/// Module contract; `cmd` must be a live entry that is being discarded.
-pub(crate) unsafe fn free_ucmd(cmd: *mut ucmd_T) {
+/// Module contract; `cmd` must be an entry that has been taken out of a
+/// table and is being discarded.
+unsafe fn free_ucmd(mut cmd: ucmd_T) {
     // SAFETY: caller contract; the entry owns all six.
     unsafe {
-        let cmd = &mut *cmd;
         xfree(cmd.uc_name.cast());
         xfree(cmd.uc_rep.cast());
         xfree(cmd.uc_compl_arg.cast());
@@ -622,17 +673,20 @@ pub(crate) unsafe fn free_ucmd(cmd: *mut ucmd_T) {
     }
 }
 
-/// Empty one command table.
+/// Empty one command table, leaving it usable again.
+///
+/// The entries are moved out first and released afterwards: `free_ucmd`
+/// re-enters Lua, so it must not run with the table borrowed, and a table
+/// that has been emptied cannot free the same entry twice.
 ///
 /// # Safety
-/// Module contract; `gap` must be one of the two tables.
-pub(crate) unsafe fn uc_clear(gap: *mut garray_T) {
-    // SAFETY: caller contract.
-    unsafe {
-        for i in 0..ucmd_list(gap).len() {
-            free_ucmd((*gap).ga_data.cast::<ucmd_T>().add(i));
-        }
-        ga_clear(gap);
+/// Module contract; a [`Table::Buffer`] must name a live buffer.
+pub(crate) unsafe fn uc_clear(table: Table) {
+    // SAFETY: caller contract; `mem::take` cannot re-enter.
+    let cmds = unsafe { table.with_mut(mem::take) };
+    for cmd in cmds {
+        // SAFETY: the entry is out of the table and owns what it names.
+        unsafe { free_ucmd(cmd) };
     }
 }
 
@@ -662,9 +716,9 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
     let mut found = None;
     for scope in Scope::BOTH {
         // SAFETY: module contract.
-        let (gap, cmds) = unsafe {
-            let gap = scope.table();
-            (gap, ucmd_list(gap))
+        let (table, cmds) = unsafe {
+            let table = scope.table();
+            (table, table.list())
         };
         idx = 0;
         for cmd in cmds {
@@ -676,7 +730,7 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
             idx += 1;
         }
         if res == Ordering::Equal {
-            found = Some(gap);
+            found = Some(table);
             break;
         }
         if buffer_only {
@@ -684,7 +738,7 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
         }
     }
 
-    let Some(gap) = found else {
+    let Some(table) = found else {
         // SAFETY: module contract.
         unsafe {
             semsg_c!(
@@ -699,15 +753,22 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
         return;
     };
 
-    // SAFETY: module contract; `idx` is the entry just matched, and the
-    // tail move stays inside the array.
-    unsafe {
-        let cmd = (*gap).ga_data.cast::<ucmd_T>().add(idx);
-        free_ucmd(cmd);
-        (*gap).ga_len -= 1;
-        let tail = (*gap).ga_len as usize - idx;
-        if tail > 0 {
-            memmove(cmd.cast(), cmd.add(1).cast(), tail * size_of::<ucmd_T>());
-        }
-    }
+    // SAFETY: module contract; `idx` is the entry just matched.
+    unsafe { uc_del_command(table, idx) };
+}
+
+/// Delete the `idx`th entry of `table`, releasing everything it owns.
+///
+/// The entry is moved out under the borrow and freed once the borrow has
+/// ended: `free_ucmd` re-enters Lua, which must not happen while the table
+/// is borrowed, and an entry that has left the table cannot be freed twice.
+///
+/// # Safety
+/// Module contract; `idx` must index `table`, and a [`Table::Buffer`] must
+/// name a live buffer.
+pub(crate) unsafe fn uc_del_command(table: Table, idx: usize) {
+    // SAFETY: caller contract; the closure is a leaf.
+    let cmd = unsafe { table.with_mut(|cmds| cmds.remove(idx)) };
+    // SAFETY: the entry is out of the table and owns what it names.
+    unsafe { free_ucmd(cmd) };
 }

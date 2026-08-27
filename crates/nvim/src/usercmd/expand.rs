@@ -24,7 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{Scope, ucmd_list};
+use super::Scope;
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -686,7 +686,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
         } else {
             Scope::Buffer
         };
-        &ucmd_list(scope.table())[(*eap).useridx as usize]
+        &scope.list()[(*eap).useridx as usize]
     };
 
     if preview {

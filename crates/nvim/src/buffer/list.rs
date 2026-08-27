@@ -435,10 +435,15 @@ fn new_buffer() -> Owned<buf_T> {
 /// are null, there are no `b:` variables and no undo information. Only what
 /// the caller fills in afterwards may be read.
 pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
+    let mut storage = Box::<buf_T>::new_zeroed();
     // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(buf_T))`
-    // hands a fresh buffer, and every field of `buf_T` that owns an
-    // allocation is null or empty when zeroed.
-    Owned::new(unsafe { Box::<buf_T>::new_zeroed().assume_init() })
+    // hands a fresh buffer, and the one field a zeroed `buf_T` is *not* a
+    // valid value for -- `b_ucmds`, whose empty `Vec` holds a non-null
+    // dangling pointer -- is written before anything can read or drop it.
+    unsafe {
+        (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
+        Owned::new(storage.assume_init())
+    }
 }
 
 /// Put a new buffer at the end of the buffer list, give it its number and

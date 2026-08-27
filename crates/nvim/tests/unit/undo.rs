@@ -151,7 +151,18 @@ mod write {
             // `buflist_new()` leaves a fresh buffer synced with no undo
             // header; the spec then set `b_u_numhead` to pretend the buffer
             // had been changed, which is what makes the writer write.
-            let mut buf: Box<buf_T> = Box::new(unsafe { std::mem::zeroed() });
+            let mut buf: Box<buf_T> = {
+                let mut storage = Box::<buf_T>::new_zeroed();
+                // SAFETY: all-zero bytes are what upstream's `xcalloc` hands
+                // a fresh buffer, and the one field a zeroed `buf_T` is
+                // *not* a valid value for -- `b_ucmds`, whose empty `Vec`
+                // holds a non-null dangling pointer -- is written before
+                // anything can read or drop it.
+                unsafe {
+                    (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
+                    storage.assume_init()
+                }
+            };
             buf.b_u_synced = true;
             buf.b_u_numhead = 1;
 

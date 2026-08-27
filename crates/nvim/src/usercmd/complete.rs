@@ -22,7 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::attr::ADDR_TYPES;
-use super::{Scope, ucmd_list, ucmd_name};
+use super::{Scope, ucmd_name};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::utfc_ptr2len;
@@ -226,12 +226,7 @@ pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
 /// Module contract.
 pub(crate) unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: module contract.
-    let (local, global) = unsafe {
-        (
-            ucmd_list(Scope::Buffer.table()),
-            ucmd_list(Scope::Global.table()),
-        )
-    };
+    let (local, global) = unsafe { (Scope::Buffer.list(), Scope::Global.list()) };
     let idx = idx as usize;
     if idx < local.len() {
         return local[idx].uc_name;
@@ -260,7 +255,8 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_
     };
     // SAFETY: module contract.
     unsafe {
-        ucmd_list(scope.table())
+        scope
+            .list()
             .get(idx as usize)
             .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
     }

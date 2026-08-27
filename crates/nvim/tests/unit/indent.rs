@@ -32,11 +32,17 @@ fn with_buffer(f: impl FnOnce(&mut buf_T)) {
     let _sandbox = Sandbox::globals();
     // Boxed rather than a local: `curbuf` is a raw pointer the crate reads
     // through, and a heap allocation has an address that is nobody else's.
-    //
-    // SAFETY: every field of a `buf_T` is valid all-zero -- null pointers,
-    // false flags and zeroed counters, which is what `xcalloc` hands
-    // `buflist_new` for a real one.
-    let mut buf: Box<buf_T> = Box::new(unsafe { std::mem::zeroed() });
+    let mut buf: Box<buf_T> = {
+        let mut storage = Box::<buf_T>::new_zeroed();
+        // SAFETY: all-zero bytes are what upstream's `xcalloc` hands a fresh
+        // buffer, and the one field a zeroed `buf_T` is *not* a valid value
+        // for -- `b_ucmds`, whose empty `Vec` holds a non-null dangling
+        // pointer -- is written before anything can read or drop it.
+        unsafe {
+            (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
+            storage.assume_init()
+        }
+    };
     let saved = curbuf.get();
     curbuf.set(&raw mut *buf);
     f(&mut buf);

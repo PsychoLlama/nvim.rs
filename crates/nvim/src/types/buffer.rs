@@ -145,6 +145,13 @@ pub struct fcs_chars_T {
     pub trunc: schar_T,
     pub truncrl: schar_T,
 }
+/// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
+/// The registry holds a buffer as an `allocator::Owned<buf_T>`, so this
+/// struct is dropped rather than `xfree`d and a field with a destructor
+/// works: the buffer-local user commands are a `Vec`. Every one of the
+/// seventy raw pointers below is either a borrowed edge into the graph or
+/// an allocation this buffer releases in `free_buffer`, and duplicating one
+/// would make a second owner of all of them.
 pub struct file_buffer {
     pub handle: handle_T,
     pub b_ml: memline_T,
@@ -193,7 +200,9 @@ pub struct file_buffer {
     pub b_chartab: [uint64_t; 4],
     pub b_maphash: [*mut mapblock_T; 256],
     pub b_first_abbr: *mut mapblock_T,
-    pub b_ucmds: garray_T,
+    /// The buffer-local user commands, sorted by name. A `-buffer` command
+    /// shadows a global one; `usercmd`'s `Table` is the walk over both.
+    pub b_ucmds: Vec<ucmd_T>,
     pub b_op_start: pos_T,
     pub b_op_start_orig: pos_T,
     pub b_op_end: pos_T,

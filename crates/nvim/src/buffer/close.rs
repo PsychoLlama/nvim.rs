@@ -52,7 +52,7 @@ use crate::types::{
     hashtab_T, linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
-use crate::usercmd::uc_clear;
+use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
@@ -145,9 +145,11 @@ fn free_extmarks(mut buf: Buf) {
     unsafe { extmark_free_all(buf.raw()) };
 }
 
-fn free_user_commands(ucmds: &mut garray_T) {
-    // SAFETY: a growable array of user commands inside a live buffer.
-    unsafe { uc_clear(ucmds) };
+fn free_user_commands(mut buf: Buf) {
+    // SAFETY: a live buffer. `uc_clear` leaves the table empty and usable,
+    // which is what the buffers that outlive this -- `:bdel`'s, and the
+    // `curbuf` `buflist_new` reuses -- need.
+    unsafe { uc_clear(Table::Buffer(buf.raw())) };
 }
 
 fn free_garray(ga: &mut garray_T) {
@@ -873,7 +875,7 @@ pub(crate) fn free_buffer_stuff(mut buf: Buf, free_flags: c_int) {
     if free_flags & kBffInitChangedtick as c_int != 0 {
         buf_init_changedtick(buf);
     }
-    free_user_commands(&mut buf.b_ucmds); // clear local user commands
+    free_user_commands(buf); // clear local user commands
     free_extmarks(buf); // delete any extmarks
     clear_mappings(buf, false); // clear local mappings
     clear_mappings(buf, true); // clear local abbrevs

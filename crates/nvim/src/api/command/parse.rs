@@ -12,7 +12,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
 use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// A `:map`-family right-hand side is one opaque string, however much
@@ -245,10 +245,15 @@ pub unsafe fn nvim_parse_cmd(
     // `parse_args` reads the arguments `parse_cmdline` left in `ea`.
     let (args, cmd) = unsafe {
         let args = parse_args(&ea, arena);
-        let nth = |ga_data: *mut c_void| ga_data.cast::<ucmd_T>().add(ea.useridx as usize);
+        let nth = |table: Table| {
+            table
+                .list()
+                .get(ea.useridx as usize)
+                .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
+        };
         let cmd: *mut ucmd_T = match ea.cmdidx {
-            CMD_USER => nth((*global_ucmds()).ga_data),
-            CMD_USER_BUF => nth((*curbuf.get()).b_ucmds.ga_data),
+            CMD_USER => nth(Table::Global),
+            CMD_USER_BUF => nth(Table::Buffer(curbuf.get())),
             _ => ptr::null_mut(),
         };
         (args, cmd)

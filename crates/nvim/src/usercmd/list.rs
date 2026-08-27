@@ -17,7 +17,7 @@
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
-use super::{LUA_NOREF, Scope, global_ucmds, ucmd_list, ucmd_name};
+use super::{LUA_NOREF, Scope, Table, ucmd_name};
 use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
 };
@@ -35,7 +35,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Dict, ExArgt, IOSIZE, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T,
+    Arena, Dict, ExArgt, IOSIZE, LuaRef, NUL, Object, buf_T, int64_t, size_t, ucmd_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -112,7 +112,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
     for scope in Scope::BOTH {
         let mut interrupted = false;
         // SAFETY: module contract; nothing below adds or removes a command.
-        for cmd in unsafe { ucmd_list(scope.table()) } {
+        for cmd in unsafe { scope.list() } {
             // SAFETY: module contract.
             let matches =
                 unsafe { ucmd_name(cmd).starts_with(wanted) && !message_filtered(cmd.uc_name) };
@@ -282,14 +282,13 @@ fn dict_of<const N: usize>(
 /// Module contract; `buf` must be null or a live buffer, and `arena` the
 /// dispatcher's.
 pub(crate) unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict {
-    let gap: *mut garray_T = if buf.is_null() {
-        global_ucmds()
+    let table = if buf.is_null() {
+        Table::Global
     } else {
-        // SAFETY: caller contract.
-        unsafe { &raw mut (*buf).b_ucmds }
+        Table::Buffer(buf)
     };
-    // SAFETY: caller contract.
-    let cmds = unsafe { ucmd_list(gap) };
+    // SAFETY: caller contract; nothing below adds or removes a command.
+    let cmds = unsafe { table.list() };
     let mut rv = arena_dict(arena, cmds.len());
     for cmd in cmds {
         // SAFETY: module contract.
