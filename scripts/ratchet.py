@@ -245,6 +245,46 @@ plus these whole-tree metrics, which are not per-file:
                     still declares a cell, so a deleted global cannot leave a
                     stale entry propping the floor up.
 
+  unsafe_lines_outside_perimeter
+                    `unsafe_lines` restricted to files that are *not* on the
+                    unsafe perimeter (PERIMETER, below) — the tree's unchecked
+                    code minus the part that is expected to stay unchecked.
+                    This is the migration's debt number: the total says how
+                    much unchecked code the binary contains, this says how
+                    much of it the compiler should one day be checking, and
+                    the two stop being confused for each other.
+
+                    The perimeter is where unsafe *bottoms out* in something
+                    the migration cannot rewrite: a C library's ABI (LuaJIT,
+                    libuv, libc, libvterm, termkey, tree-sitter, xdiff), the
+                    operating system, the C symbols this tree exports for
+                    others to call, and the raw-memory primitives every safe
+                    abstraction above them is built on (the allocator,
+                    `GlobalCell`, the swap file's page store, winlayer's
+                    handles). Everything else is debt, however raw it looks
+                    today: a transpiled algorithm over pointers, a codec, a
+                    data structure and an on-disk parse can all be safe Rust,
+                    and listing them here would retire them by fiat.
+
+                    Membership is by *module*, not by line or by file: an
+                    entry is a directory prefix (trailing `/`) or one exact
+                    path, because a module is the unit that owns a boundary.
+                    A file inside a perimeter module that turns out to be
+                    ordinary editor logic should move out of the module
+                    rather than be carved out of the list. docs/perimeter.md
+                    is the prose version — what qualifies, the current list,
+                    and what would have to change for an entry to leave.
+
+                    The list is self-pruning: `check_perimeter` fails the run
+                    when an entry has no file with unchecked lines behind it,
+                    so a module that finishes, moves or disappears has to
+                    leave the list in the same commit — the discipline
+                    CELL_PTR_KEEPERS already uses. It cannot silently *grow*
+                    either, and needs no check of its own for that: every
+                    file's `unsafe_lines` is already ratcheted individually,
+                    a new file included, so unchecked code appearing inside
+                    the perimeter is a violation exactly as it is outside.
+
   files_without_forbid_unsafe  the number of source files not carrying
                     #![forbid(unsafe_code)]. The shrink-only trick inverted:
                     fully safe modules take the attribute — which makes
@@ -495,6 +535,49 @@ CELL_COPY_OWNER_RE = re.compile(
 # (`TERMIOS_DEFAULT` does), so only the two words either side of the name are
 # pinned.
 CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
+
+# The unsafe perimeter: the modules whose unchecked code is expected to
+# outlive the migration, because removing it would mean rewriting something
+# this tree does not own. `unsafe_lines_outside_perimeter` is the tree's
+# unchecked lines minus these; docs/perimeter.md carries the prose. An entry
+# is a directory prefix (trailing `/`) or one exact path, and every entry must
+# have a file with unchecked lines behind it or `check_perimeter` fails --
+# the list prunes itself as modules finish.
+PERIMETER = {
+    # -- Foreign ABIs. The unsafe is the call, and it retires when the
+    # library does.
+    "crates/nvim/src/lua/": "LuaJIT's C API: a `lua_State`, its stack, and the "
+    "registry — plus luv and lpeg, which are C libraries of their own",
+    "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
+    "trees, queries and cursors are opaque C objects with C lifetimes",
+    "crates/nvim/src/mpack/lmpack/": "libmpack-lua: a Lua C module, so every "
+    "value it moves crosses the `lua_State` stack",
+    "crates/nvim/src/cjson/lua_cjson/": "lua-cjson: a Lua C module, same stack",
+    "crates/nvim/src/event/": "libuv: the loop, streams, timers, signals and "
+    "processes are C objects registered by address",
+    "crates/nvim/src/os/": "the operating system: syscalls through libc and "
+    "libuv, the PTY, the shell, the environment",
+    "crates/nvim/src/vterm/": "libvterm, ported with its C ABI intact — the "
+    "callbacks it takes and the symbols it exports are that library's",
+    "crates/nvim/src/terminal/": "the terminal emulator's glue: a PTY on one "
+    'side and libvterm\'s `extern "C"` callbacks on the other',
+    "crates/nvim/src/tui/": "the terminal: libuv tty handles, termkey's "
+    "parser, and the terminfo entry unibilium hands back",
+    "crates/nvim/src/xdiff/": "libxdiff, vendored: `mmfile_t` and the emit "
+    "callbacks keep their C layout because the engine's interface is C",
+    # -- The primitives everything else stands on. Their whole job is to be
+    # the one place a raw operation happens, so that callers need not.
+    "crates/nvim/src/allocator.rs": "the global allocator: malloc/realloc/free",
+    "crates/nvim/src/memory/": "xmalloc and the arena — the floor under every "
+    "owned type in the tree",
+    "crates/nvim/src/global_cell.rs": "the checked wrapper over c2rust's "
+    "mutable statics; the raw static is touched here so it is nowhere else",
+    "crates/nvim/src/winlayer.rs": "the window/buffer/position handles: "
+    "constructing one is the unsafe step, dereferencing it is not",
+    "crates/nvim/src/winlayer/": "the same, split out by family",
+    "crates/nvim/src/memfile.rs": "the swap file's page store — the only thing "
+    "that hands out the address of a `.swp` page",
+}
 
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -953,10 +1036,58 @@ def cell_ptr_partition(stats, tree):
     }
 
 
+def in_perimeter_entry(file, entry):
+    """Whether one perimeter entry claims this repo-relative path.
+
+    A directory entry (trailing `/`) claims its whole subtree; anything else
+    is one exact path, so a sibling whose name merely starts with an entry is
+    not caught.
+    """
+    return file.startswith(entry) if entry.endswith("/") else file == entry
+
+
+def in_perimeter(file):
+    """Whether a repo-relative path is on the unsafe perimeter."""
+    return any(in_perimeter_entry(file, entry) for entry in PERIMETER)
+
+
+def perimeter_lines(stats):
+    """(unchecked lines inside the perimeter, unchecked lines outside it)."""
+    inside = sum(c["unsafe_lines"] for f, c in stats.items() if in_perimeter(f))
+    return inside, sum(c["unsafe_lines"] for c in stats.values()) - inside
+
+
+def check_perimeter(stats):
+    """Every perimeter entry still has unchecked code behind it.
+
+    An entry matching nothing is stale: it would sit there excusing a module
+    that has finished, moved or gone away, and would quietly excuse it again
+    if the path came back. A module reaching zero unchecked lines is the
+    outcome the list is for, and it is an outcome that has to say so by
+    leaving the list.
+    """
+    if stale := sorted(
+        entry
+        for entry in PERIMETER
+        if not any(
+            counts["unsafe_lines"] and in_perimeter_entry(file, entry)
+            for file, counts in stats.items()
+        )
+    ):
+        sys.exit(
+            "ratchet: these perimeter entries have no unchecked code behind "
+            "them:\n  "
+            + "\n  ".join(stale)
+            + "\nDrop each from PERIMETER (and from docs/perimeter.md) and "
+            "run `just refresh` to lock the progress in."
+        )
+
+
 def whole_tree(stats, tree):
     """The name-keyed whole-tree counts. See the doc block."""
     return {
         **cell_ptr_partition(stats, tree),
+        "unsafe_lines_outside_perimeter": perimeter_lines(stats)[1],
         "cell_copy_owner": sum(
             len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
         ),
@@ -1051,6 +1182,8 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
         f'  "cell_ptr_keepers": {ledger_counts["cell_ptr_keepers"]},\n'
         f'  "cell_ptr_accessors": {ledger_counts["cell_ptr_accessors"]},\n'
         f'  "cell_copy_owner": {ledger_counts["cell_copy_owner"]},\n'
+        f'  "unsafe_lines_outside_perimeter": '
+        f"{ledger_counts['unsafe_lines_outside_perimeter']},\n"
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
@@ -1066,6 +1199,7 @@ WHOLE_TREE_LABEL = {
     "cell_ptr_keepers": "cell_ptr sites on a ruled multi-site keeper",
     "cell_ptr_accessors": "one-per-cell acquire-once cell_ptr sites",
     "cell_copy_owner": "get() copies of a Copy global owning a pointer",
+    "unsafe_lines_outside_perimeter": "unchecked lines outside the unsafe perimeter",
 }
 
 
@@ -1116,6 +1250,8 @@ def summary(stats, counts, without_forbid, without_deny, without_casts):
         f"{counts['cell_ptr_keepers']} keeper cell_ptr sites",
         f"{counts['cell_ptr_accessors']} acquire-once cell_ptr sites",
         f"{counts['cell_copy_owner']} Copy-owner get()s",
+        f"{counts['unsafe_lines_outside_perimeter']} unchecked lines outside the "
+        f"perimeter ({perimeter_lines(stats)[0]} inside)",
         f"{without_forbid} files without forbid(unsafe_code)",
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
@@ -1373,6 +1509,46 @@ SELF_TEST_CELL_COPY_OWNER = [
 ]
 
 
+# (path, whether the perimeter claims it). A directory entry claims its
+# subtree and nothing else; an exact-path entry claims exactly itself.
+SELF_TEST_PERIMETER = [
+    ("crates/nvim/src/lua/executor/exec.rs", True),
+    ("crates/nvim/src/os/fs/mod.rs", True),
+    ("crates/nvim/src/memfile.rs", True),
+    ("crates/nvim/src/winlayer/live.rs", True),
+    # The editor proper, including modules that merely look raw.
+    ("crates/nvim/src/memline/block0.rs", False),
+    ("crates/nvim/src/marktree/node.rs", False),
+    ("crates/nvim/src/eval/typval.rs", False),
+    # A sibling whose name starts with a directory entry is not inside it.
+    ("crates/nvim/src/luaref.rs", False),
+    # ... and neither is a longer path built on an exact-path entry.
+    ("crates/nvim/src/memfile.rs.orig", False),
+    ("crates/nvim/src/memory.rs", False),
+]
+# (stats, expected (inside, outside)). The split is over `unsafe_lines`
+# alone, and a file with none contributes to neither side.
+SELF_TEST_PERIMETER_SPLIT = [
+    (
+        {
+            "crates/nvim/src/lua/ffi.rs": {"unsafe_lines": 150},
+            "crates/nvim/src/memfile.rs": {"unsafe_lines": 400},
+            "crates/nvim/src/memline/mod.rs": {"unsafe_lines": 183},
+            "crates/nvim/src/types/memline.rs": {"unsafe_lines": 0},
+        },
+        (550, 183),
+    ),
+]
+# (what happens to an otherwise complete tree, whether check_perimeter
+# rejects it). Every entry needs a file with unchecked lines behind it, so
+# the cases are built by taking one entry's file away or making it safe.
+SELF_TEST_PERIMETER_CHECK = [
+    ("keep", False),
+    ("drop", True),
+    ("zero", True),
+]
+
+
 def self_test():
     for source, expected in SELF_TEST:
         got = unsafe_lines(mask(source), False)
@@ -1445,6 +1621,39 @@ def self_test():
     for source, expected in SELF_TEST_PLACE_WRITE:
         got = len(place_writes({"t.rs": mask(source)}))
         assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
+    for file, expected in SELF_TEST_PERIMETER:
+        got = in_perimeter(file)
+        assert got == expected, f"in_perimeter={got}, want {expected}, for {file!r}"
+    for stats, expected in SELF_TEST_PERIMETER_SPLIT:
+        got = perimeter_lines(stats)
+        assert got == expected, f"perimeter_lines={got}, want {expected}"
+    # A nested entry (`lua/treesitter/` under `lua/`) keeps its parent alive,
+    # which is right -- the parent really does still have unchecked code under
+    # it -- so the probe has to be an entry that stands alone.
+    probe = next(
+        entry
+        for entry in PERIMETER
+        if not any(
+            other != entry and (other.startswith(entry) or entry.startswith(other))
+            for other in PERIMETER
+        )
+    )
+    for case, expected in SELF_TEST_PERIMETER_CHECK:
+        stats = {
+            (entry + "x.rs" if entry.endswith("/") else entry): {
+                "unsafe_lines": 0 if case == "zero" and entry == probe else 1
+            }
+            for entry in PERIMETER
+            if not (case == "drop" and entry == probe)
+        }
+        try:
+            check_perimeter(stats)
+            got = False
+        except SystemExit:
+            got = True
+        assert got == expected, (
+            f"check_perimeter rejected={got}, want {expected}, for {case}"
+        )
 
 
 def main():
@@ -1457,6 +1666,7 @@ def main():
     check_place_writes(tree)
     check_cell_ptr(tree)
     check_names(tree)
+    check_perimeter(stats)
     counts = {**ledgers(), **whole_tree(stats, tree)}
     content = render(stats, counts, without_forbid, without_deny, without_casts)
     committed = BASELINE.read_text() if BASELINE.exists() else None
