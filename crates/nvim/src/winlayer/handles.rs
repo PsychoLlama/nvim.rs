@@ -34,6 +34,8 @@
     clippy::ptr_as_ptr
 )]
 
+use core::num::NonZero;
+
 use crate::allocator::Owned;
 use crate::buffer::free;
 use crate::global_cell::GlobalCell;
@@ -193,12 +195,24 @@ pub(crate) fn free_deferred() {
 /// Answering [`WinId::get`] costs a registry lookup and reads nothing that
 /// belongs to the window, so it is safe to ask about one an autocommand has
 /// closed. [`Win::id`] is the only way to make one.
+///
+/// # Why the handle is a [`NonZero`]
+///
+/// Zero names no window, no buffer and no tab page: all three counters
+/// (`last_win_id`, `top_file_num`, `LAST_TP_HANDLE`) are incremented before
+/// they are read, and the editor already spells "no window" as handle `0`
+/// (`aco_save_T::save_prevwin_handle`). Excluding it buys the niche, so an
+/// `Option<WinId>` is four bytes and **all-zero bytes are `None`** — which
+/// is what makes these safe to use as the graph's own list links, since a
+/// `win_T`/`buf_T`/`tabpage_T` is born from `xcalloc` or `Box::new_zeroed`
+/// and its links have to read as "no neighbour" before anyone writes them.
+/// The test at the bottom of this file pins that.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct WinId(pub(super) handle_T);
+pub(crate) struct WinId(pub(super) NonZero<handle_T>);
 
 /// A buffer's identity, taken from a live buffer: its number. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct BufId(pub(super) handle_T);
+pub(crate) struct BufId(pub(super) NonZero<handle_T>);
 
 impl WinId {
     /// The window again, `None` once it has been freed.
@@ -226,13 +240,13 @@ impl WinId {
     /// dereference the list walk exists to avoid.
     #[inline(always)]
     pub(crate) fn get(self) -> Option<Win> {
-        window(self.0)
+        window(self.0.get())
     }
 
     /// The bare handle, for the API and RPC edges that speak in numbers.
     #[inline(always)]
     pub(crate) fn handle(self) -> handle_T {
-        self.0
+        self.0.get()
     }
 }
 
@@ -240,7 +254,7 @@ impl BufId {
     /// The buffer again, `None` once it has been wiped. [`WinId::get`].
     #[inline(always)]
     pub(crate) fn get(self) -> Option<Buf> {
-        buffer(self.0)
+        buffer(self.0.get())
     }
 
     /// Whether the buffer is still registered — [`WinId::get`]'s question,
@@ -250,5 +264,24 @@ impl BufId {
     #[inline(always)]
     pub(crate) fn valid(self) -> bool {
         self.get().is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The property the graph's list links rest on. `NonZero`'s only niche
+    /// is zero, so an `Option` the size of the handle itself is one whose
+    /// `None` *is* the all-zero word — which is what lets a `win_T`,
+    /// `buf_T` or `tabpage_T` come out of `xcalloc`/`Box::new_zeroed` with
+    /// its links already reading "no neighbour". Nothing in the language
+    /// promises the niche is taken, so it is asserted rather than assumed;
+    /// were it ever dropped, reading a zeroed link would be UB and Miri
+    /// would say so, but this fails first and says why.
+    #[test]
+    fn an_absent_id_is_the_zero_word() {
+        assert_eq!(size_of::<Option<WinId>>(), size_of::<handle_T>());
+        assert_eq!(size_of::<Option<BufId>>(), size_of::<handle_T>());
     }
 }

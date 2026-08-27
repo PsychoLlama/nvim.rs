@@ -152,6 +152,7 @@ pub(crate) use handles::{
 
 use core::ffi::c_char;
 use core::mem::offset_of;
+use core::num::NonZero;
 use core::ops::{Deref, DerefMut};
 use core::{iter, ptr};
 
@@ -338,7 +339,9 @@ impl Win {
     /// across anything that can re-enter the editor. See [`WinId`].
     #[inline(always)]
     pub(crate) fn id(self) -> WinId {
-        WinId(self.handle)
+        // A live window's handle is `last_win_id`, which is incremented
+        // before it is read, so it is never zero.
+        WinId(NonZero::new(self.handle).expect("a live window has a handle"))
     }
 
     /// Whether this is the window the editor is working in.
@@ -561,7 +564,9 @@ impl Buf {
     /// This buffer's identity, taken while it is live. [`Win::id`].
     #[inline(always)]
     pub(crate) fn id(self) -> BufId {
-        BufId(self.handle)
+        // A live buffer's number is `top_file_num`, which is incremented
+        // before it is read, so it is never zero.
+        BufId(NonZero::new(self.handle).expect("a live buffer has a number"))
     }
 
     #[inline(always)]
