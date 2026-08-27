@@ -52,11 +52,11 @@ use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, NO_BUFFERS, RedrawingDisabled, Rows,
-    WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin, debug_break_level,
-    embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen, headless_mode,
-    kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll,
-    no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit,
-    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode,
+    err_arg_missing, exmode_active, firstwin, full_screen, headless_mode, kOptCbFlagUnnamed,
+    kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
+    p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
+    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
     ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
@@ -84,13 +84,13 @@ use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
     Callback, Callback_data, CallbackReader, IOSIZE, NUL, OptInt, Vv, dict_T, int64_t, linenr_T,
-    list_T, qf_info_T, varnumber_T, win_T,
+    list_T, qf_info_T, varnumber_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
-use crate::winlayer::Win;
+use crate::winlayer::{Win, windows};
 use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
@@ -489,19 +489,10 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         edit_buffers(&raw mut params);
 
         if params.diff_mode != 0 {
-            // NB: `curtab == curtab` is upstream's `FOR_ALL_WINDOWS_IN_TAB`
-            // macro expanded against the current tab page, so this always
-            // walks `firstwin` however it reads.
-            let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-                firstwin.get()
-            } else {
-                (*curtab.get()).tp_firstwin
-            };
-            while !wp.is_null() {
-                if !(*wp).w_arg_idx_invalid {
-                    diff_win_options(Win::new(wp), true);
+            for wp in windows() {
+                if !wp.w_arg_idx_invalid {
+                    diff_win_options(wp, true);
                 }
-                wp = (*wp).w_next;
             }
         }
 

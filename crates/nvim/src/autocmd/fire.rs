@@ -24,7 +24,7 @@ use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
 use crate::guard::Suppress;
 use crate::types::{FAIL, MAXPATHL, OK};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, tab_windows};
 
 /// An empty `save_redo_T`; `save_redobuff` fills it in.
 const SAVE_REDO_INIT: save_redo_T = save_redo_T {
@@ -242,23 +242,11 @@ pub unsafe fn apply_autocmds_group(
         } else if !buf.is_null() && event_row(event).event <= 0 && unsafe { (*buf).b_nwindows } > 0
         {
             win_ignore = true;
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                let mut wp = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    unsafe { (*tp).tp_firstwin }
-                };
-                while !wp.is_null() {
-                    if unsafe { (*wp).w_buffer } == buf
-                        && !unsafe { event_ignored(event, (*wp).w_onebuf_opt.wo_eiw) }
-                    {
-                        win_ignore = false;
-                        break;
-                    }
-                    wp = unsafe { (*wp).w_next };
+            for wp in tab_windows() {
+                if wp.w_buffer == buf && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw) } {
+                    win_ignore = false;
+                    break;
                 }
-                tp = unsafe { (*tp).tp_next };
             }
         }
         if win_ignore {

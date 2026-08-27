@@ -20,7 +20,7 @@ use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
-use crate::winlayer::{Buf, Win, windows};
+use crate::winlayer::{Buf, Win, tabs, windows, windows_in_tab};
 
 /// The stack of autocommand windows, one slot per nesting level.
 ///
@@ -212,24 +212,19 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
         // may have moved it to another tab page.
         unsafe { block_autocmds() };
         if curwin.get() != awp {
-            let mut tp = first_tabpage.get();
-            'found: while !tp.is_null() {
-                let mut wp = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    unsafe { (*tp).tp_firstwin }
-                };
-                while !wp.is_null() {
-                    if wp == awp {
-                        if tp != curtab.get() {
-                            unsafe { goto_tabpage_tp(tp, true, true) };
+            'found: for tp in tabs() {
+                for wp in windows_in_tab(tp) {
+                    if wp.raw() == awp {
+                        if !tp.is_current() {
+                            unsafe { goto_tabpage_tp(tp.raw(), true, true) };
                         }
                         unsafe { win_goto(awp) };
+                        // Nothing steps the walk after those two: the
+                        // `break` leaves both loops before either iterator
+                        // reads a link the tab switch could have moved.
                         break 'found;
                     }
-                    wp = unsafe { (*wp).w_next };
                 }
-                tp = unsafe { (*tp).tp_next };
             }
         }
 

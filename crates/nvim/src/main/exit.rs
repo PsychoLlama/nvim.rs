@@ -42,7 +42,7 @@ use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
 
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -296,9 +296,8 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
         ml_close_notmod();
 
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            let memfile = (*buf).b_ml.ml_mfp;
+        for buf in buffers() {
+            let memfile = buf.b_ml.ml_mfp;
             if !memfile.is_null() && !mf_fname(memfile).is_null() {
                 if !errmsg.is_null() {
                     fprintf(stderr, c"Nvim: preserving files...\n".as_ptr());
@@ -308,7 +307,6 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
                 ml_sync_all(0, 0, true);
                 break;
             }
-            buf = (*buf).b_next;
         }
 
         // Close the memfiles without deleting them.

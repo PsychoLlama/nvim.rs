@@ -23,8 +23,8 @@ use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    State, autocmd_busy, curbuf, curtab, firstwin, msg_scrolled, starting, stdin_isatty,
-    stdout_isatty, vgetc_busy, wild_menu_showing, windowsVersion,
+    State, autocmd_busy, curbuf, curtab, msg_scrolled, starting, stdin_isatty, stdout_isatty,
+    vgetc_busy, wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
 use crate::memory::xstrdup;
@@ -39,12 +39,12 @@ use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T, garray_T,
-    kErrorTypeNone, kListLenMayKnow, kObjectTypeBoolean, tabpage_T, typval_T, uint8_t, varnumber_T,
-    win_T,
+    kErrorTypeNone, kListLenMayKnow, kObjectTypeBoolean, typval_T, uint8_t, varnumber_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
 use crate::window::find_tabpage;
+use crate::winlayer::{TabPage, windows_in_tab};
 use ::libc::{atoi, strcasecmp, strlen, strtoul};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -538,29 +538,22 @@ pub unsafe fn f_tabpagebuflist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     // SAFETY: the frame is live; the window chain walked below belongs to a
     // tab page that is live for the whole call.
     unsafe {
-        let mut wp: *mut win_T = ptr::null_mut();
-        if !args.has(0) {
-            wp = firstwin.get();
+        let tab = if args.has(0) {
+            TabPage::from_raw(find_tabpage(tv_get_number(args.ptr(0)) as c_int))
         } else {
-            let tp: *mut tabpage_T = find_tabpage(tv_get_number(args.ptr(0)) as c_int);
-            if !tp.is_null() {
-                // The current tab's window list lives in `firstwin`, not in
-                // the tab page record, which is only updated on the way out.
-                wp = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp).tp_firstwin
-                };
-            }
-        }
-        // A bad tab number answers 0, not an empty List.
-        if wp.is_null() {
+            Some(TabPage::new(curtab.get()))
+        };
+        // A bad tab number answers 0, not an empty List. Every live tab page
+        // has at least one window, so this is the only way out.
+        let Some(tab) = tab else {
             return;
-        }
+        };
         let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        while !wp.is_null() {
-            tv_list_append_number(list, (*(*wp).w_buffer).handle as varnumber_T);
-            wp = (*wp).w_next;
+        // `windows_in_tab` knows that the current tab's window list lives in
+        // `firstwin` rather than in the tab page record, which is only
+        // updated on the way out.
+        for wp in windows_in_tab(tab) {
+            tv_list_append_number(list, (*wp.w_buffer).handle as varnumber_T);
         }
     }
 }

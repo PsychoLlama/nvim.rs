@@ -13,7 +13,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
-use crate::winlayer::{Live, Win};
+use crate::winlayer::{Live, Win, tabs};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
 const CALLBACK_INIT: Callback = Callback {
@@ -411,12 +411,10 @@ pub unsafe fn autocmd_register(
             && !(has_event(EVENT_WINSCROLLED) || has_event(EVENT_WINRESIZED))
         {
             let save_curtab = curtab.get();
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
+            for tp in tabs() {
                 unsafe { unuse_tabpage(curtab.get()) };
-                unsafe { use_tabpage(tp) };
+                unsafe { use_tabpage(tp.raw()) };
                 snapshot_windows_scroll_size();
-                tp = unsafe { (*tp).tp_next };
             }
             unsafe { unuse_tabpage(curtab.get()) };
             unsafe { use_tabpage(save_curtab) };
