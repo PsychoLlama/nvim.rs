@@ -279,7 +279,7 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             c"popup"
         } else if wp.raw() == cmdwin_win.get() {
             c"command"
-        } else if buf_is_quickfix(Some(wp.buffer())) {
+        } else if buf_is_quickfix(wp.buffer_or_none()) {
             if wp.w_llist_ref.is_null() {
                 c"quickfix"
             } else {

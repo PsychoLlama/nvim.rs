@@ -82,7 +82,7 @@ pub(crate) fn enter_window(win: Win) {
 
 /// Whether `win` shows a prompt buffer.
 fn is_prompt(win: Win) -> bool {
-    buf_is_prompt(Some(win.buffer()))
+    buf_is_prompt(win.buffer_or_none())
 }
 
 pub unsafe fn win_init_empty(wp: *mut win_T) {

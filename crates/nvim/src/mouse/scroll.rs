@@ -53,7 +53,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
             // previous one to stop insert there properly.
             curwin.set(old_curwin.raw());
             curbuf.set(old_curwin.buffer().raw());
-            if buf_is_prompt(Some(old_curwin.buffer())) {
+            if buf_is_prompt(old_curwin.buffer_or_none()) {
                 // Restart Insert mode when re-entering the prompt buffer.
                 old_curwin.buffer().b_prompt_insert = 'A' as c_int;
             }
