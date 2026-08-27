@@ -302,7 +302,7 @@ pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
         return;
     }
     // SAFETY: the caller's obligation -- a live dictionary.
-    unsafe { (*val).dv_refcount }.retain();
+    unsafe { (*val).dv_refcount.retain() };
     unsafe { tv_dict_set_keys_readonly(val) };
 }
 
@@ -636,7 +636,7 @@ pub(crate) unsafe fn set_vvar_item(
     // `cur` survives the store.
     let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
-    let varname = unsafe { tv_dict_item_key(di) };
+    let varname = tv_dict_item_key(di);
     let watched = unsafe { tv_dict_is_watched(get_vimvar_dict()) };
 
     // `+=` and friends act on the current value, so evaluate them into a

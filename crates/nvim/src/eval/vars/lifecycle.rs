@@ -137,7 +137,9 @@ pub unsafe fn evalvars_init() {
         unsafe { xcalloc(1, ::core::mem::size_of::<partial_T>()) } as *mut partial_T;
     // The name should never be printed, but do not crash if it is.
     unsafe { (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char };
-    unsafe { (*vvlua_partial).pt_refcount }.retain();
+    // SAFETY: the partial just allocated. The region covers the *call*:
+    // `unsafe { … }.retain()` would bump a copy of the count.
+    unsafe { (*vvlua_partial).pt_refcount.retain() };
     unsafe { set_vim_var_partial(Vv::Lua, vvlua_partial) };
 
     // The default for v:register is not 0 but '"'.
@@ -301,7 +303,9 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
 pub unsafe fn unref_var_dict(dict: *mut dict_T) {
     // The reference count is what kept the scope alive; take it back to
     // the one reference the caller holds.
-    unsafe { (*dict).dv_refcount }.release_many(DO_NOT_FREE_CNT - 1);
+    // SAFETY: the caller's obligation -- a dictionary `init_var_dict`
+    // built. The region covers the call, not just the dereference.
+    unsafe { (*dict).dv_refcount.release_many(DO_NOT_FREE_CNT - 1) };
     unsafe { tv_dict_unref(dict) };
 }
 

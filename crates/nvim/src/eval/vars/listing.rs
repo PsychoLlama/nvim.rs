@@ -232,7 +232,7 @@ unsafe fn list_one_var(v: *mut dictitem_T, prefix: *const c_char, first: *mut c_
     // SAFETY: the caller's obligation -- a live item, whose key and value
     // are its own.
     let item = unsafe { Di::new(v) };
-    let key = unsafe { tv_dict_item_key(v) };
+    let key = tv_dict_item_key(v);
     let tv = item.field_ptr(offset_of!(dictitem_T, di_tv));
     let s = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
     let len = unsafe { strlen(key) } as ptrdiff_t;
