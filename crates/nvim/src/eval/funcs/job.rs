@@ -424,10 +424,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     if args.ty(1) != VAR_DICT && args.has(1) {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"expected dictionary".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),) };
         bail!();
     }
 
@@ -460,11 +457,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             if unsafe { strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) } == 0 {
                 stdin_mode = kChannelStdinNull;
             } else if unsafe { strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } != 0 {
-                semsg_c!(
-                    unsafe { gettext(e_invargNval.as_ptr()) },
-                    c"stdin".as_ptr(),
-                    s,
-                );
+                unsafe { semsg_c!(gettext(e_invargNval.as_ptr()), c"stdin".as_ptr(), s,) };
             }
         }
 
@@ -472,17 +465,13 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         // truthy string used to mean something else.
         let job_term = unsafe { tv_dict_find(job_opts, c"term".as_ptr(), 4) };
         if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type } != VAR_BOOL {
-            semsg_c!(
-                unsafe { gettext(e_invarg2.as_ptr()) },
-                c"'term' must be Boolean".as_ptr(),
-            );
+            let what = c"'term' must be Boolean".as_ptr();
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
             bail!();
         }
         if pty && rpc {
-            semsg_c!(
-                unsafe { gettext(e_invarg2.as_ptr()) },
-                c"job cannot have both 'pty' and 'rpc' options set".as_ptr(),
-            );
+            let what = c"job cannot have both 'pty' and 'rpc' options set".as_ptr();
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
             bail!();
         }
 
@@ -490,17 +479,15 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         if !new_cwd.is_null() && unsafe { *new_cwd } as c_int != NUL {
             cwd = new_cwd;
             if !unsafe { os_isdir(cwd) } {
-                semsg_c!(
-                    unsafe { gettext(e_invarg2.as_ptr()) },
-                    c"expected valid directory".as_ptr(),
-                );
+                let what = c"expected valid directory".as_ptr();
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
                 bail!();
             }
         }
 
         job_env = unsafe { tv_dict_find(job_opts, c"env".as_ptr(), 3) };
         if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type } != VAR_DICT {
-            semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, c"env".as_ptr());
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"env".as_ptr()) };
             bail!();
         }
 
@@ -531,10 +518,9 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         }
         if !unsafe { (*curbuf.get()).terminal }.is_null() {
             if unsafe { terminal_running((*curbuf.get()).terminal) } {
-                semsg_c!(
-                    unsafe { gettext(c"Terminal already connected to buffer %d".as_ptr()) },
-                    unsafe { (*curbuf.get()).handle },
-                );
+                let fmt = c"Terminal already connected to buffer %d".as_ptr();
+                let handle = unsafe { (*curbuf.get()).handle };
+                unsafe { semsg_c!(gettext(fmt), handle) };
                 bail!();
             }
             buf_close_terminal(unsafe { Buf::current() });

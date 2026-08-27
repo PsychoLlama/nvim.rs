@@ -243,7 +243,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         return;
     }
     if unsafe { strlen(mode_str) } != 9 {
-        semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, mode_str);
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), mode_str) };
         return;
     }
     let mut mode: c_int = 0;
@@ -315,10 +315,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         _ => {
             // The name is arbitrary user bytes, so this keeps the
             // variadic call.
-            semsg_c!(
-                unsafe { gettext(c"E6100: \"%s\" is not a valid stdpath".as_ptr()) },
-                p
-            );
+            unsafe { semsg_c!(gettext(c"E6100: \"%s\" is not a valid stdpath".as_ptr()), p) };
             return;
         }
     };

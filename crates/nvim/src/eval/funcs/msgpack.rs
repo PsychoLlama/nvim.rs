@@ -73,11 +73,8 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     if unsafe { json_decode_string(s, len, rettv) } == FAIL {
         // The text that failed to parse is arbitrary user bytes, so the
         // message keeps the variadic call and its `%.*s`.
-        semsg_c!(
-            unsafe { gettext(c"E474: Failed to parse %.*s".as_ptr()) },
-            len as c_int,
-            s,
-        );
+        let fmt = c"E474: Failed to parse %.*s".as_ptr();
+        unsafe { semsg_c!(gettext(fmt), len as c_int, s) };
         rettv.v_type = VAR_NUMBER;
         rettv.vval.v_number = 0;
     }
@@ -103,10 +100,7 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
     if args.ty(0) != VAR_LIST {
-        semsg_c!(
-            unsafe { gettext(e_listarg.as_ptr()) },
-            c"msgpackdump()".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"msgpackdump()".as_ptr(),) };
         return;
     }
     let mut packer = packer_string_buffer();
@@ -252,10 +246,7 @@ pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // SAFETY: the argument and the freshly allocated result list are both
     // live for the call.
     if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
-        semsg_c!(
-            unsafe { gettext(e_listblobarg.as_ptr()) },
-            c"msgpackparse()".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_listblobarg.as_ptr()), c"msgpackparse()".as_ptr(),) };
         return;
     }
     let ret_list = list_alloc_ret(rettv, kListLenMayKnow as isize);

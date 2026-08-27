@@ -157,7 +157,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     if err.type_0 != kErrorTypeNone {
         // The message is whatever the API layer produced, so it keeps
         // the variadic call rather than assuming UTF-8.
-        semsg_c!(c"%s".as_ptr(), err.msg);
+        unsafe { semsg_c!(c"%s".as_ptr(), err.msg) };
         unsafe { ctx_free(&raw mut tmp) };
     } else {
         unsafe { ctx_free(ctx) };

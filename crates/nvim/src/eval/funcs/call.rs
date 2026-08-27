@@ -152,13 +152,13 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) } == FAIL
     {
         if !expr_start.is_null() && !aborting() {
-            semsg_c!(unsafe { gettext(e_invexpr2.as_ptr()) }, expr_start);
+            unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), expr_start) };
         }
         need_clr_eos.set(false);
         rettv.v_type = VAR_NUMBER;
         rettv.vval.v_number = 0;
     } else if unsafe { *s } as c_int != NUL {
-        semsg_c!(unsafe { gettext(e_trailing_arg.as_ptr()) }, s);
+        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), s) };
     }
 }
 
@@ -397,14 +397,12 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         || (use_string && ascii_isdigit(unsafe { *s } as c_int))
         || (is_funcref && trans_name.0.is_null())
     {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            if use_string {
-                arg_string(&mut numbuf2, args.get(0))
-            } else {
-                s as *const c_char
-            },
-        );
+        let what = if use_string {
+            arg_string(&mut numbuf2, args.get(0))
+        } else {
+            s as *const c_char
+        };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
     if !trans_name.0.is_null()
@@ -414,10 +412,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             !unsafe { translated_function_exists(trans_name.0) }
         }
     {
-        semsg_c!(
-            unsafe { gettext(c"E700: Unknown function: %s".as_ptr()) },
-            s
-        );
+        unsafe { semsg_c!(gettext(c"E700: Unknown function: %s".as_ptr()), s) };
         return;
     }
 
@@ -515,14 +510,14 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     if dict_idx > 0 {
         // Bound explicitly, so `pt_auto` stays false.
         unsafe { (*pt).pt_dict = args.get(dict_idx as usize).vval.v_dict };
-        unsafe { (*(*pt).pt_dict).dv_refcount }.retain();
+        unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
     } else if !arg_pt.is_null() {
         // A dict bound automatically stays bound automatically. This
         // is what makes `function(dict.func, [], dict)` keep `dict`.
         unsafe { (*pt).pt_dict = (*arg_pt).pt_dict };
         unsafe { (*pt).pt_auto = (*arg_pt).pt_auto };
         if !unsafe { (*pt).pt_dict }.is_null() {
-            unsafe { (*(*pt).pt_dict).dv_refcount }.retain();
+            unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
         }
     }
 
@@ -611,7 +606,7 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     };
     match result {
         None => {
-            semsg_c!(unsafe { gettext(e_libcall.as_ptr()) }, funcname);
+            unsafe { semsg_c!(gettext(e_libcall.as_ptr()), funcname) };
         }
         Some(LibcallResult::Str(s)) => {
             rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);

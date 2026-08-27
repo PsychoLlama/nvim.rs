@@ -184,10 +184,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         match unsafe { CStr::from_ptr(actstr) }.to_bytes() {
             b"r" | b"a" | b"t" => action = unsafe { *actstr },
             _ => {
-                semsg_c!(
-                    unsafe { gettext(c"E962: Invalid action: '%s'".as_ptr()) },
-                    actstr
-                );
+                unsafe { semsg_c!(gettext(c"E962: Invalid action: '%s'".as_ptr()), actstr) };
                 return;
             }
         }

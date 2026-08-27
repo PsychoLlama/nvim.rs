@@ -239,11 +239,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // over `spec` and leaves `p` on the terminator when it consumed the
     // whole width.
     let bad = || {
-        semsg_c!(
-            unsafe { gettext(e_invargNval.as_ptr()) },
-            c"type".as_ptr(),
-            spec,
-        );
+        unsafe { semsg_c!(gettext(e_invargNval.as_ptr()), c"type".as_ptr(), spec,) };
         None
     };
     match unsafe { CStr::from_ptr(spec) }.to_bytes() {
@@ -275,20 +271,14 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
     if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {
-        semsg_c!(
-            unsafe { gettext(e_invalid_line_number_nr.as_ptr()) },
-            p.lnum,
-        );
+        unsafe { semsg_c!(gettext(e_invalid_line_number_nr.as_ptr()), p.lnum,) };
         return None;
     }
     let len = unsafe { ml_get_buf_len(buf, p.lnum) };
     if p.col == MAXCOL as colnr_T {
         p.col = len + 1;
     } else if p.col < 1 || p.col > len + 1 {
-        semsg_c!(
-            unsafe { gettext(e_invalid_column_number_nr.as_ptr()) },
-            p.col,
-        );
+        unsafe { semsg_c!(gettext(e_invalid_column_number_nr.as_ptr()), p.col,) };
         return None;
     }
     Some(())

@@ -407,10 +407,8 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     if buf.is_null() {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
-            semsg_c!(
-                unsafe { gettext(e_invalid_buffer_name_str.as_ptr()) },
-                arg_string(&mut numbuf, args.get(0)),
-            );
+            let what = arg_string(&mut numbuf, args.get(0));
+            unsafe { semsg_c!(gettext(e_invalid_buffer_name_str.as_ptr()), what) };
         }
         return;
     }
@@ -427,7 +425,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         return;
     }
     if slnum < 1 {
-        semsg_c!(unsafe { gettext(e_invargval.as_ptr()) }, c"lnum".as_ptr(),);
+        unsafe { semsg_c!(gettext(e_invargval.as_ptr()), c"lnum".as_ptr(),) };
         return;
     }
     let mut elnum: linenr_T = unsafe { tv_get_lnum_buf(args.ptr(3), buf) };
@@ -435,10 +433,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         return;
     }
     if elnum < 1 || elnum < slnum {
-        semsg_c!(
-            unsafe { gettext(e_invargval.as_ptr()) },
-            c"end_lnum".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_invargval.as_ptr()), c"end_lnum".as_ptr(),) };
         return;
     }
     elnum = elnum.min(unsafe { (*buf).b_ml.ml_line_count });
@@ -479,10 +474,7 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
         return Some(false);
     }
     if unsafe { (*di).di_tv.v_type } != VAR_BOOL {
-        semsg_c!(
-            unsafe { gettext(e_invargval.as_ptr()) },
-            c"submatches".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_invargval.as_ptr()), c"submatches".as_ptr(),) };
         return None;
     }
     Some(unsafe { tv_get_bool(&raw mut (*di).di_tv) } != 0)

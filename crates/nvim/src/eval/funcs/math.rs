@@ -294,7 +294,7 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
             let what = arg_string(&mut numbuf, args.get(0));
-            semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, what);
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;

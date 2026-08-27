@@ -433,10 +433,8 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
             // Kept on the variadic message call: the argument is
             // arbitrary user bytes. Note that this reports and then
             // carries on to the range check below.
-            semsg_c!(
-                unsafe { gettext(e_invarg2.as_ptr()) },
-                arg_string(&mut numbuf, args.get(0)),
-            );
+            let what = arg_string(&mut numbuf, args.get(0));
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         } else if lnum == 0 {
             lnum = unsafe { (*curwin.get()).w_cursor.lnum };
         }

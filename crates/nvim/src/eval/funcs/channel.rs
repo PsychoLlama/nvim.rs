@@ -129,10 +129,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         match found {
             Some(&(_, p)) => part = p,
             None => {
-                semsg_c!(
-                    unsafe { gettext(c"Invalid channel stream \"%s\"".as_ptr()) },
-                    stream
-                );
+                unsafe { semsg_c!(gettext(c"Invalid channel stream \"%s\"".as_ptr()), stream) };
                 return;
             }
         }
@@ -207,17 +204,13 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // Channel 0 is the broadcast channel, so zero is allowed here where
     // `rpcrequest()` insists on a real one.
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } < 0 {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"Channel id must be a positive integer".as_ptr(),
-        );
+        let what = c"Channel id must be a positive integer".as_ptr();
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
     if args.ty(1) != VAR_STRING {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"Event type must be a string".as_ptr(),
-        );
+        let what = c"Event type must be a string".as_ptr();
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
 
@@ -229,10 +222,8 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let ok = unsafe { rpc_send_event(id, event, event_args) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"Channel doesn't exist".as_ptr(),
-        );
+        let what = c"Channel doesn't exist".as_ptr();
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
     rettv.vval.v_number = 1;
@@ -318,17 +309,13 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         return;
     }
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } <= 0 {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"Channel id must be a positive integer".as_ptr(),
-        );
+        let what = c"Channel id must be a positive integer".as_ptr();
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
     if args.ty(1) != VAR_STRING {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"Method name must be a string".as_ptr(),
-        );
+        let what = c"Method name must be a string".as_ptr();
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
         return;
     }
 
@@ -362,22 +349,14 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             unsafe { get_client_info(chan, c"name".as_ptr()) }
         };
         if name.is_null() {
-            semsg_multiline_c!(
-                c"rpc_error".as_ptr(),
-                c"Invoking '%s' on channel %lu:\n%s".as_ptr(),
-                method,
-                chan_id,
-                err.msg,
-            );
+            let kind = c"rpc_error".as_ptr();
+            let fmt = c"Invoking '%s' on channel %lu:\n%s".as_ptr();
+            unsafe { semsg_multiline_c!(kind, fmt, method, chan_id, err.msg) };
         } else {
-            semsg_multiline_c!(
-                c"rpc_error".as_ptr(),
-                c"Invoking '%s' on channel %lu (%s):\n%s".as_ptr(),
-                method,
-                chan_id,
-                name,
-                err.msg,
-            );
+            let kind = c"rpc_error".as_ptr();
+            let fmt = c"Invoking '%s' on channel %lu (%s):\n%s".as_ptr();
+            let msg = err.msg;
+            unsafe { semsg_multiline_c!(kind, fmt, method, chan_id, name, msg) };
         }
     } else {
         unsafe { object_to_vim(result, rettv, &raw mut err) };
@@ -438,15 +417,12 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         if err.type_0 != kErrorTypeNone {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.
-            logmsg_c!(
-                LOGLVL_ERR,
-                ptr::null(),
-                c"f_serverlist".as_ptr(),
-                6338,
-                true,
-                c"vim._core.serverlist failed: %s".as_ptr(),
-                err.msg,
-            );
+            let what = c"vim._core.serverlist failed: %s".as_ptr();
+            let here = c"f_serverlist".as_ptr();
+            let nul = ptr::null();
+            // SAFETY: the log macro's `fprintf` takes the two `'static`
+            // format strings and the error's own message.
+            unsafe { logmsg_c!(LOGLVL_ERR, nul, here, 6338, true, what, err.msg) };
         } else {
             for i in 0..unsafe { rv.data.array }.size {
                 let item = unsafe { rv.data.array.items.add(i) };
@@ -483,14 +459,14 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let result = unsafe { server_start(address) };
     unsafe { xfree(address as *mut c_void) };
     if result != 0 {
-        semsg_c!(
-            c"Failed to start server: %s".as_ptr(),
-            if result > 0 {
-                c"Unknown system error".as_ptr()
-            } else {
-                unsafe { uv_strerror(result) }
-            },
-        );
+        let why = if result > 0 {
+            c"Unknown system error".as_ptr()
+        } else {
+            // SAFETY: `uv_strerror` answers a `'static` message for any code.
+            unsafe { uv_strerror(result) }
+        };
+        let fmt = c"Failed to start server: %s".as_ptr();
+        unsafe { semsg_c!(fmt, why) };
         return;
     }
 
@@ -540,10 +516,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         return;
     }
     if args.ty(2) != VAR_DICT && args.has(2) {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"expected dictionary".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),) };
         return;
     }
 
@@ -554,10 +527,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     } else if unsafe { strcmp(mode, c"pipe".as_ptr()) } == 0 {
         false
     } else {
-        semsg_c!(
-            unsafe { gettext(e_invarg2.as_ptr()) },
-            c"invalid mode".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"invalid mode".as_ptr(),) };
         return;
     };
 
@@ -580,7 +550,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut error = ptr::null::<c_char>();
     let id = unsafe { channel_connect(tcp, address, rpc, on_data, 50, &raw mut error) };
     if !error.is_null() {
-        semsg_c!(unsafe { gettext(c"connection failed: %s".as_ptr()) }, error);
+        unsafe { semsg_c!(gettext(c"connection failed: %s".as_ptr()), error) };
     }
     rettv.vval.v_number = id as varnumber_T;
     rettv.v_type = VAR_NUMBER;
@@ -614,7 +584,7 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut error = ptr::null::<c_char>();
     let id = unsafe { channel_from_stdio(rpc, on_stdin, &raw mut error) };
     if id == 0 {
-        semsg_c!(e_stdiochan2.as_ptr(), error);
+        unsafe { semsg_c!(e_stdiochan2.as_ptr(), error) };
     }
     rettv.vval.v_number = id as varnumber_T;
     rettv.v_type = VAR_NUMBER;

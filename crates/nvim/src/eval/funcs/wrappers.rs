@@ -208,7 +208,7 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
     } else {
         e_toofewarg.as_ptr()
     };
-    semsg_c!(unsafe { gettext(message) }, unsafe { (*fdef).name });
+    unsafe { semsg_c!(gettext(message), (*fdef).name) };
     -1
 }
 
@@ -413,7 +413,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
         _ => {
             let msg = c"E808: Number or Float required";
-            semsg_c!(c"%s".as_ptr(), unsafe { gettext(msg.as_ptr()) });
+            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg.as_ptr())) };
             return false;
         }
     }
@@ -473,7 +473,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
     // SAFETY: `args` is the Array built above and both are locals.
     let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, out) };
     if err.type_0 != kErrorTypeNone {
-        semsg_multiline_c!(c"emsg".as_ptr(), e_api_error.as_ptr(), err.msg,);
+        unsafe { semsg_multiline_c!(c"emsg".as_ptr(), e_api_error.as_ptr(), err.msg,) };
     } else {
         unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true, &raw mut err) };
     }
@@ -556,10 +556,8 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     let buf = unsafe { tv_get_buf(arg, 0) };
     drop(no_emsg);
     if buf.is_null() {
-        semsg_c!(
-            unsafe { gettext(c"E158: Invalid buffer name: %s".as_ptr()) },
-            unsafe { numbuf.string(arg) },
-        );
+        let what = unsafe { numbuf.string(arg) };
+        unsafe { semsg_c!(gettext(c"E158: Invalid buffer name: %s".as_ptr()), what) };
     }
     buf
 }

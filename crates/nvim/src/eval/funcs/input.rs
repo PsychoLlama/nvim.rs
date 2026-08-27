@@ -173,10 +173,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: the frame is live and the List is held by an argument for the
     // whole call.
     if args.ty(0) != VAR_LIST {
-        semsg_c!(
-            unsafe { gettext(e_listarg.as_ptr()) },
-            c"inputlist()".as_ptr(),
-        );
+        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"inputlist()".as_ptr(),) };
         return;
     }
     // Start at the bottom of the screen so the whole list is visible.

@@ -129,7 +129,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             } else {
                 e_trailing_arg.as_ptr()
             };
-            semsg_c!(unsafe { gettext(fmt) }, end);
+            unsafe { semsg_c!(gettext(fmt), end) };
         } else if lv.ll_tv.is_null() {
             let di = unsafe { find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true) };
             if !di.is_null() {
@@ -140,7 +140,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         } else if lv.ll_range {
             semsg!("E786: Range not allowed");
         } else if !lv.ll_newkey.is_null() {
-            semsg_c!(unsafe { gettext(e_dictkey.as_ptr()) }, lv.ll_newkey);
+            unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), lv.ll_newkey) };
         } else if !lv.ll_list.is_null() {
             rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as varnumber_T;
         } else {

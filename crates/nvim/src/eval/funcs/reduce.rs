@@ -115,14 +115,12 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             }
         }
         _ => {
-            semsg_c!(
-                unsafe { gettext(e_listdictarg.as_ptr()) },
-                if domax {
-                    c"max()".as_ptr()
-                } else {
-                    c"min()".as_ptr()
-                },
-            );
+            let what = if domax {
+                c"max()".as_ptr()
+            } else {
+                c"min()".as_ptr()
+            };
+            unsafe { semsg_c!(gettext(e_listdictarg.as_ptr()), what) };
             return;
         }
     }
@@ -222,10 +220,8 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         (*args.get(2), unsafe { tv_list_first(l) })
     } else {
         if unsafe { tv_list_len(l) } == 0 {
-            semsg_c!(
-                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
-                c"List".as_ptr(),
-            );
+            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
+            unsafe { semsg_c!(gettext(fmt), c"List".as_ptr()) };
             return;
         }
         let first = unsafe { tv_list_first(l) };
@@ -260,10 +256,8 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
     let called_emsg_start = called_emsg.get();
     if !args.has(2) {
         if unsafe { *p } as c_int == NUL {
-            semsg_c!(
-                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
-                c"String".as_ptr(),
-            );
+            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
+            unsafe { semsg_c!(gettext(fmt), c"String".as_ptr()) };
             return;
         }
         // With no initial value the first character is it.
@@ -303,10 +297,8 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         (*args.get(2), 0)
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
-            semsg_c!(
-                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
-                c"Blob".as_ptr(),
-            );
+            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
+            unsafe { semsg_c!(gettext(fmt), c"Blob".as_ptr()) };
             return;
         }
         (number_tv(unsafe { tv_blob_get(b, 0) } as varnumber_T), 1)
