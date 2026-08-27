@@ -30,10 +30,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, getout, got_int,
-    inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
-    need_wait_return, no_lines_msg, p_dir, p_shm, p_uc, p_verbose, recoverymode,
-    swap_exists_action,
+    allbuf_lock, cmdline_row, curbuf, did_check_timestamps, getout, got_int, inhibit_delete_count,
+    msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps, need_wait_return, no_lines_msg,
+    p_dir, p_shm, p_uc, p_verbose, recoverymode, swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -240,6 +239,16 @@ pub const B0_FF_MASK: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const B0_SAME_DIR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const B0_HAS_FENC: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+/// A translated static message, as the C string the message layer takes.
+///
+/// `gettext` asks only for a live NUL-terminated string, which is what a
+/// `CStr` is; paying that once here is what keeps the forty-odd
+/// `msg_puts(gettext(c"..."))` in this family out of an `unsafe` region.
+fn tr(text: &::core::ffi::CStr) -> *mut ::core::ffi::c_char {
+    // SAFETY: a `CStr` is NUL-terminated by construction.
+    unsafe { gettext(text.as_ptr()) }
+}
+
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
 /// `ml_firstmarked` need not start its search at line one.
 static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0);
@@ -256,36 +265,39 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// # Safety
 /// `buf` must point at a buffer with no memline open.
 pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
-    unsafe {
-        // No stack, no cached block, no cached line, no chunk table yet.
-        (*buf).b_ml.stack_clear();
-        (*buf).b_ml.ml_locked = None;
-        (*buf).b_ml.clear_cache();
-        (*buf).b_ml.ml_chunks.free();
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    // No stack, no cached block, no cached line, no chunk table yet.
+    b.b_ml.stack_clear();
+    b.b_ml.ml_locked = None;
+    b.b_ml.clear_cache();
+    b.b_ml.ml_chunks.free();
 
-        if cmdmod_has(CmdModFlags::NOSWAPFILE) {
-            (*buf).b_p_swf = 0;
-        }
-        // A swap file may still be opened later, when 'updatecount' is set.
-        (*buf).b_may_swap = (*buf).terminal.is_null() && p_uc.get() != 0 && (*buf).b_p_swf != 0;
-
-        let mfp = mf_open(::core::ptr::null_mut(), 0);
-        let mut hp: *mut bhdr_T = ::core::ptr::null_mut();
-        if !mfp.is_null() {
-            (*buf).b_ml.ml_mfp = mfp;
-            (*buf).b_ml.ml_flags = MlFlags::EMPTY;
-            (*buf).b_ml.ml_line_count = 1;
-            if ml_open_blocks(buf, mfp, &mut hp) {
-                return OK;
-            }
-            if !hp.is_null() {
-                mf_put(mfp, hp, false, false);
-            }
-            mf_close(mfp, true); // also frees the swap file's name
-        }
-        (*buf).b_ml.ml_mfp = ::core::ptr::null_mut();
-        FAIL
+    if cmdmod_has(CmdModFlags::NOSWAPFILE) {
+        b.b_p_swf = 0;
     }
+    // A swap file may still be opened later, when 'updatecount' is set.
+    unsafe {
+        (*buf).b_may_swap = (*buf).terminal.is_null() && p_uc.get() != 0 && (*buf).b_p_swf != 0
+    };
+
+    let mfp = unsafe { mf_open(::core::ptr::null_mut(), 0) };
+    let mut hp: *mut bhdr_T = ::core::ptr::null_mut();
+    if !mfp.is_null() {
+        b.b_ml.ml_mfp = mfp;
+        b.b_ml.ml_flags = MlFlags::EMPTY;
+        b.b_ml.ml_line_count = 1;
+        if unsafe { ml_open_blocks(buf, mfp, &mut hp) } {
+            return OK;
+        }
+        if !hp.is_null() {
+            unsafe { mf_put(mfp, hp, false, false) };
+        }
+        unsafe { mf_close(mfp, true) }; // also frees the swap file's name
+    }
+    b.b_ml.ml_mfp = ::core::ptr::null_mut();
+    FAIL
 }
 
 /// Fill in the three blocks a fresh memline starts with. The block still held
@@ -294,20 +306,23 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
 /// # Safety
 /// `mfp` must be a memfile with no blocks in it yet.
 unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhdr_T) -> bool {
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    // Block zero: the header that says what the rest of the file means.
+    *hp = unsafe { mf_new(mfp, false, 1) };
+    if unsafe { (**hp).bh_bnum } != 0 {
+        unsafe { iemsg(tr(c"E298: Didn't get block nr 0?")) };
+        return false;
+    }
+    let b0p = unsafe { (**hp).bh_data } as *mut ZeroBlock;
+    unsafe { (*b0p).b0_id[0] = BLOCK0_ID0 as ::core::ffi::c_char };
+    unsafe { (*b0p).b0_id[1] = BLOCK0_ID1 as ::core::ffi::c_char };
+    unsafe { (*b0p).b0_magic_long = B0_MAGIC_LONG as ::core::ffi::c_long };
+    unsafe { (*b0p).b0_magic_int = B0_MAGIC_INT as ::core::ffi::c_int };
+    unsafe { (*b0p).b0_magic_short = B0_MAGIC_SHORT as int16_t };
+    unsafe { (*b0p).b0_magic_char = B0_MAGIC_CHAR as ::core::ffi::c_char };
     unsafe {
-        // Block zero: the header that says what the rest of the file means.
-        *hp = mf_new(mfp, false, 1);
-        if (**hp).bh_bnum != 0 {
-            iemsg(gettext(c"E298: Didn't get block nr 0?".as_ptr()));
-            return false;
-        }
-        let b0p = (**hp).bh_data as *mut ZeroBlock;
-        (*b0p).b0_id[0] = BLOCK0_ID0 as ::core::ffi::c_char;
-        (*b0p).b0_id[1] = BLOCK0_ID1 as ::core::ffi::c_char;
-        (*b0p).b0_magic_long = B0_MAGIC_LONG as ::core::ffi::c_long;
-        (*b0p).b0_magic_int = B0_MAGIC_INT as ::core::ffi::c_int;
-        (*b0p).b0_magic_short = B0_MAGIC_SHORT as int16_t;
-        (*b0p).b0_magic_char = B0_MAGIC_CHAR as ::core::ffi::c_char;
         xstrlcpy(
             xstpcpy(
                 (&raw mut (*b0p).b0_version).cast::<::core::ffi::c_char>(),
@@ -315,70 +330,77 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
             ),
             min_vim_version_name().as_ptr(),
             6,
-        );
-        b0_store_number(
-            (*mfp).mf_page_size as ::core::ffi::c_long,
-            &mut (*b0p).b0_page_size,
-        );
+        )
+    };
+    let page_size = unsafe { (*mfp).mf_page_size } as ::core::ffi::c_long;
+    // SAFETY: block zero is the page `hp` holds. The borrow lasts only for
+    // the store -- `&mut unsafe { .. }` would write into a discarded copy
+    // of the field, which is how the page size never reached the file.
+    unsafe { b0_store_number(page_size, &mut (*b0p).b0_page_size) };
 
-        if !(*buf).b_spell {
-            (*b0p).set_dirty((*buf).b_changed != 0);
-            (*b0p).set_flags(get_fileformat(buf) + 1);
-            set_b0_fname(b0p, buf);
+    if !b.b_spell {
+        let changed = b.b_changed != 0;
+        unsafe { (*b0p).set_dirty(changed) };
+        let fileformat = unsafe { get_fileformat(buf) } + 1;
+        unsafe { (*b0p).set_flags(fileformat) };
+        unsafe { set_b0_fname(b0p, buf) };
+        unsafe {
             os_get_username(
                 (&raw mut (*b0p).b0_uname).cast::<::core::ffi::c_char>(),
                 B0_UNAME_SIZE as size_t,
-            );
-            (*b0p).b0_uname[B0_UNAME_SIZE as usize - 1] = NUL as ::core::ffi::c_char;
+            )
+        };
+        unsafe { (*b0p).b0_uname[B0_UNAME_SIZE as usize - 1] = NUL as ::core::ffi::c_char };
+        unsafe {
             os_get_hostname(
                 (&raw mut (*b0p).b0_hname).cast::<::core::ffi::c_char>(),
                 B0_HNAME_SIZE as size_t,
-            );
-            (*b0p).b0_hname[B0_HNAME_SIZE as usize - 1] = NUL as ::core::ffi::c_char;
-            b0_store_number(os_get_pid() as ::core::ffi::c_long, &mut (*b0p).b0_pid);
-        }
-
-        // Always sync block zero, so that findswapname can read the file name
-        // out of the swap file. Not for a help or spell buffer. This only
-        // does anything once there is a swap file; otherwise it happens when
-        // one is created.
-        mf_put(mfp, *hp, true, false);
-        if !(*buf).b_help && !(*buf).b_spell {
-            // Best effort; there may not be a swap file yet.
-            let _ = mf_sync(mfp, 0);
-        }
-
-        // Block one: the root pointer block, pointing at the one data block.
-        *hp = ml_new_ptr(mfp);
-        debug_assert!(!(*hp).is_null());
-        if (**hp).bh_bnum != 1 {
-            iemsg(gettext(c"E298: Didn't get block nr 1?".as_ptr()));
-            return false;
-        }
-        let pp = (**hp).bh_data as *mut PointerBlock;
-        (*pp).pb_count = 1;
-        let entry = pb_entries(pp);
-        (*entry).pe_bnum = 2;
-        (*entry).pe_page_count = 1;
-        (*entry).pe_old_lnum = 1;
-        (*entry).pe_line_count = 1; // line count after the insertion below
-        mf_put(mfp, *hp, true, false);
-
-        // Block two: the first data block, holding one empty line.
-        *hp = ml_new_data(mfp, false, 1);
-        if (**hp).bh_bnum != 2 {
-            iemsg(gettext(c"E298: Didn't get block nr 2?".as_ptr()));
-            return false;
-        }
-        let dp = (**hp).bh_data as *mut DataBlock;
-        (*dp).db_txt_start -= 1; // at the end of the block
-        *db_index(dp) = (*dp).db_txt_start;
-        (*dp).db_free -= 1 + INDEX_SIZE as ::core::ffi::c_uint;
-        (*dp).db_line_count = 1;
-        *(dp as *mut ::core::ffi::c_char).offset((*dp).db_txt_start as isize) =
-            NUL as ::core::ffi::c_char;
-        true
+            )
+        };
+        unsafe { (*b0p).b0_hname[B0_HNAME_SIZE as usize - 1] = NUL as ::core::ffi::c_char };
+        let pid = os_get_pid() as ::core::ffi::c_long;
+        unsafe { b0_store_number(pid, &mut (*b0p).b0_pid) };
     }
+
+    // Always sync block zero, so that findswapname can read the file name
+    // out of the swap file. Not for a help or spell buffer. This only
+    // does anything once there is a swap file; otherwise it happens when
+    // one is created.
+    unsafe { mf_put(mfp, *hp, true, false) };
+    if !b.b_help && !b.b_spell {
+        // Best effort; there may not be a swap file yet.
+        let _ = unsafe { mf_sync(mfp, 0) };
+    }
+
+    // Block one: the root pointer block, pointing at the one data block.
+    *hp = unsafe { ml_new_ptr(mfp) };
+    debug_assert!(!(*hp).is_null());
+    if unsafe { (**hp).bh_bnum } != 1 {
+        unsafe { iemsg(tr(c"E298: Didn't get block nr 1?")) };
+        return false;
+    }
+    let pp = unsafe { (**hp).bh_data } as *mut PointerBlock;
+    unsafe { (*pp).pb_count = 1 };
+    let entry = pb_entries(pp);
+    unsafe { (*entry).pe_bnum = 2 };
+    unsafe { (*entry).pe_page_count = 1 };
+    unsafe { (*entry).pe_old_lnum = 1 };
+    unsafe { (*entry).pe_line_count = 1 }; // line count after the insertion below
+    unsafe { mf_put(mfp, *hp, true, false) };
+
+    // Block two: the first data block, holding one empty line.
+    *hp = unsafe { ml_new_data(mfp, false, 1) };
+    if unsafe { (**hp).bh_bnum } != 2 {
+        unsafe { iemsg(tr(c"E298: Didn't get block nr 2?")) };
+        return false;
+    }
+    let dp = unsafe { (**hp).bh_data } as *mut DataBlock;
+    unsafe { (*dp).db_txt_start -= 1 }; // at the end of the block
+    unsafe { *db_index(dp) = (*dp).db_txt_start };
+    unsafe { (*dp).db_free -= 1 + INDEX_SIZE as ::core::ffi::c_uint };
+    unsafe { (*dp).db_line_count = 1 };
+    unsafe { *db_byte(dp, (*dp).db_txt_start as isize) = NUL as ::core::ffi::c_char };
+    true
 }
 
 /// Open a swap file for every buffer that could use one.
@@ -403,80 +425,83 @@ pub unsafe fn ml_open_files() {
 /// # Safety
 /// `buf` must point at a buffer.
 pub unsafe fn ml_open_file(buf: *mut buf_T) {
-    unsafe {
-        let mfp = (*buf).b_ml.ml_mfp;
-        if mfp.is_null()
-            || (*mfp).mf_fd >= 0
-            || (*buf).b_p_swf == 0
-            || cmdmod_has(CmdModFlags::NOSWAPFILE)
-            || !(*buf).terminal.is_null()
-        {
-            return; // nothing to do
-        }
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    let mfp = b.b_ml.ml_mfp;
+    if mfp.is_null()
+        || unsafe { (*mfp).mf_fd } >= 0
+        || b.b_p_swf == 0
+        || cmdmod_has(CmdModFlags::NOSWAPFILE)
+        || !b.terminal.is_null()
+    {
+        return; // nothing to do
+    }
 
-        // A spell buffer gets a temp file name.
-        if (*buf).b_spell {
-            let fname = vim_tempname();
-            if !fname.is_null() {
-                // A spell buffer keeps working without a swap file.
-                let _ = mf_open_file(mfp, fname); // consumes fname!
-            }
-            (*buf).b_may_swap = false;
-            return;
+    // A spell buffer gets a temp file name.
+    if b.b_spell {
+        let fname = unsafe { vim_tempname() };
+        if !fname.is_null() {
+            // A spell buffer keeps working without a swap file.
+            let _ = unsafe { mf_open_file(mfp, fname) }; // consumes fname!
         }
+        b.b_may_swap = false;
+        return;
+    }
 
-        // Try every directory in 'directory'.
-        let mut dirp = p_dir.get();
-        let mut found_existing_dir = false;
-        while *dirp != NUL as ::core::ffi::c_char {
-            // Between choosing the name and creating the file another Nvim
-            // may have created it; then the create fails and the next
-            // directory is tried.
-            let fname = findswapname(
+    // Try every directory in 'directory'.
+    let mut dirp = p_dir.get();
+    let mut found_existing_dir = false;
+    while unsafe { *dirp } != NUL as ::core::ffi::c_char {
+        // Between choosing the name and creating the file another Nvim
+        // may have created it; then the create fails and the next
+        // directory is tried.
+        let fname = unsafe {
+            findswapname(
                 buf,
                 &raw mut dirp,
                 ::core::ptr::null_mut(),
                 &raw mut found_existing_dir,
-            );
-            if dirp.is_null() {
-                break; // out of memory
-            }
-            if fname.is_null() {
-                continue;
-            }
-            if mf_open_file(mfp, fname).is_err() {
-                // consumes fname!
-                continue;
-            }
-            (*mfp).mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
-            ml_upd_block0(buf, UB_SAME_DIR);
-
-            // Flush block zero, so others can read it.
-            if mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int).is_ok() {
-                // Mark every block that belongs in the swap file dirty, for
-                // when 'swapfile' was reset (deleting the file) and set again.
-                mf_set_dirty(mfp);
-                break;
-            }
-            // Writing block zero failed: close it and try another directory.
-            mf_close_file(buf, false);
+            )
+        };
+        if dirp.is_null() {
+            break; // out of memory
         }
-
-        if *p_dir.get() != NUL as ::core::ffi::c_char && mf_fname(mfp).is_null() {
-            need_wait_return.set(true); // call wait_return() later
-            let _no_prompt = Suppress::wait_return();
-            semsg_c!(
-                gettext(c"E303: Unable to open swap file for \"%s\", recovery impossible".as_ptr()),
-                if !buf_spname(buf).is_null() {
-                    buf_spname(buf)
-                } else {
-                    (*buf).b_fname
-                },
-            );
+        if fname.is_null() {
+            continue;
         }
+        if unsafe { mf_open_file(mfp, fname) }.is_err() {
+            // consumes fname!
+            continue;
+        }
+        unsafe { (*mfp).mf_dirty = MfDirty::YesNoSync }; // don't sync yet in ml_sync_all
+        unsafe { ml_upd_block0(buf, UB_SAME_DIR) };
 
-        (*buf).b_may_swap = false; // don't try to open a swap file again
+        // Flush block zero, so others can read it.
+        if unsafe { mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int) }.is_ok() {
+            // Mark every block that belongs in the swap file dirty, for
+            // when 'swapfile' was reset (deleting the file) and set again.
+            unsafe { mf_set_dirty(mfp) };
+            break;
+        }
+        // Writing block zero failed: close it and try another directory.
+        unsafe { mf_close_file(buf, false) };
     }
+
+    if unsafe { *p_dir.get() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
+        need_wait_return.set(true); // call wait_return() later
+        let _no_prompt = Suppress::wait_return();
+        semsg_c!(
+            tr(c"E303: Unable to open swap file for \"%s\", recovery impossible"),
+            if !unsafe { buf_spname(buf) }.is_null() {
+                unsafe { buf_spname(buf) }
+            } else {
+                b.b_fname
+            },
+        );
+    }
+
+    b.b_may_swap = false; // don't try to open a swap file again
 }
 
 /// Create the swap file now, if one is still wanted and this is a writable
@@ -485,13 +510,11 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn check_need_swap(newfile: bool) {
-    unsafe {
-        // The swap dialog may prompt, and the user has to see it; E325 may
-        // reset this again.
-        let _loud = Allow::messages();
-        if (*curbuf.get()).b_may_swap && ((*curbuf.get()).b_p_ro == 0 || !newfile) {
-            ml_open_file(curbuf.get());
-        }
+    // The swap dialog may prompt, and the user has to see it; E325 may
+    // reset this again.
+    let _loud = Allow::messages();
+    if cur_buf().b_may_swap && (cur_buf().b_p_ro == 0 || !newfile) {
+        unsafe { ml_open_file(curbuf.get()) };
     }
 }
 
@@ -500,24 +523,25 @@ pub unsafe fn check_need_swap(newfile: bool) {
 /// # Safety
 /// `buf` must point at a buffer.
 pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
-    unsafe {
-        if (*buf).b_ml.ml_mfp.is_null() {
-            return; // not open
-        }
-        mf_close((*buf).b_ml.ml_mfp, del_file != 0); // closes the .swp file
-        // The cached line, if the memline owns it -- which it can only be
-        // while a line is cached at all.
-        if let Some(owned) = (*buf).b_ml.take_owned() {
-            xfree(owned.cast());
-        }
-        (*buf).b_ml.stack_free();
-        (*buf).b_ml.ml_chunks.free();
-        (*buf).b_ml.ml_mfp = ::core::ptr::null_mut();
-
-        // Clear the "recovered" flag, so the ATTENTION prompt comes back the
-        // next time this buffer is loaded.
-        (*buf).b_flags.clear(BufFlags::RECOVERED);
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    if b.b_ml.ml_mfp.is_null() {
+        return; // not open
     }
+    unsafe { mf_close((*buf).b_ml.ml_mfp, del_file != 0) }; // closes the .swp file
+    // The cached line, if the memline owns it -- which it can only be
+    // while a line is cached at all.
+    if let Some(owned) = b.b_ml.take_owned() {
+        unsafe { xfree(owned.cast()) };
+    }
+    b.b_ml.stack_free();
+    b.b_ml.ml_chunks.free();
+    b.b_ml.ml_mfp = ::core::ptr::null_mut();
+
+    // Clear the "recovered" flag, so the ATTENTION prompt comes back the
+    // next time this buffer is loaded.
+    b.b_flags.clear(BufFlags::RECOVERED);
 }
 
 /// Close every memline and memfile. Only used when exiting.
@@ -531,10 +555,8 @@ pub unsafe fn ml_close_all(del_file: bool) {
         // the buffer, so the link the walk reads next stays good.
         unsafe { ml_close(buf.raw(), del_file as ::core::ffi::c_int) };
     }
-    unsafe {
-        spell_delete_wordlist(); // delete the internal wordlist
-        vim_deltempdir(); // delete the temp directory that was created
-    }
+    unsafe { spell_delete_wordlist() }; // delete the internal wordlist
+    unsafe { vim_deltempdir() }; // delete the temp directory that was created
 }
 
 /// Close the memfile of every unmodified buffer. Only for use just before
@@ -553,3 +575,9 @@ pub unsafe fn ml_close_notmod() {
 }
 
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}

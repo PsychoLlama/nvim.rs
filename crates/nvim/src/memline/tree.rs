@@ -11,6 +11,7 @@
 use crate::siemsg_c;
 use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int, c_uint};
+use core::mem::offset_of;
 
 use super::*;
 
@@ -33,10 +34,21 @@ const ML_SIMPLE: c_int = 0x10;
 /// top bit. Lines are stored back to front: entry 0 is the *last* line's
 /// text, at the highest offset.
 ///
-/// # Safety
-/// `dp` must point at a data block.
-pub(crate) unsafe fn db_index(dp: *mut DataBlock) -> *mut c_uint {
-    unsafe { (&raw mut (*dp).db_index).cast::<c_uint>() }
+/// Saying where the array is reads nothing -- it is the block's address plus
+/// the header's size -- so this needs no promise of its own; what a caller
+/// then reads or writes through it does.
+pub(crate) fn db_index(dp: *mut DataBlock) -> *mut c_uint {
+    dp.wrapping_byte_add(offset_of!(DataBlock, db_index))
+        .cast::<c_uint>()
+}
+
+/// The byte `at` bytes into the data block's page.
+///
+/// As [`db_index`], this is arithmetic on the block's own address and reads
+/// nothing; the lines' text lives in the same page, back to front from its
+/// end, and this is how a caller names a line's first byte.
+pub(crate) fn db_byte(dp: *mut DataBlock, at: isize) -> *mut c_char {
+    dp.cast::<c_char>().wrapping_offset(at)
 }
 
 /// Where line `idx` of the block starts, with the mark bit stripped.
@@ -44,16 +56,17 @@ pub(crate) unsafe fn db_index(dp: *mut DataBlock) -> *mut c_uint {
 /// # Safety
 /// `dp` must point at a data block holding more than `idx` lines.
 pub(crate) unsafe fn db_line_start(dp: *mut DataBlock, idx: c_int) -> c_uint {
-    unsafe { *db_index(dp).offset(idx as isize) & DB_INDEX_MASK }
+    // SAFETY: the caller's block holds more than `idx` lines.
+    unsafe { *db_index(dp).wrapping_offset(idx as isize) & DB_INDEX_MASK }
 }
 
 /// The entry array that follows a pointer block's header. Same
 /// zero-length-array provenance rule as [`db_index`].
 ///
-/// # Safety
-/// `pp` must point at a pointer block.
-pub(crate) unsafe fn pb_entries(pp: *mut PointerBlock) -> *mut PointerEntry {
-    unsafe { (&raw mut (*pp).pb_pointer).cast::<PointerEntry>() }
+/// As [`db_index`], naming the array costs no read.
+pub(crate) fn pb_entries(pp: *mut PointerBlock) -> *mut PointerEntry {
+    pp.wrapping_byte_add(offset_of!(PointerBlock, pb_pointer))
+        .cast::<PointerEntry>()
 }
 
 impl PointerBlock {
@@ -79,12 +92,13 @@ static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 /// # Safety
 /// `buf` must point at a buffer.
 unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: linenr_T) -> *mut c_char {
-    unsafe {
-        questions.set([b'?' as c_char, b'?' as c_char, b'?' as c_char, 0]);
-        (*buf).b_ml.set_cached_len(4);
-        (*buf).b_ml.set_cached_lnum(lnum);
-        questions.ptr().cast::<c_char>()
-    }
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    questions.set([b'?' as c_char, b'?' as c_char, b'?' as c_char, 0]);
+    b.b_ml.set_cached_len(4);
+    b.b_ml.set_cached_lnum(lnum);
+    questions.ptr().cast::<c_char>()
 }
 
 /// Read line `lnum` of `buf`, as a NUL-terminated pointer into the data
@@ -102,83 +116,79 @@ pub(crate) unsafe fn ml_get_buf_impl(
     lnum: linenr_T,
     will_change: bool,
 ) -> *mut c_char {
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
     // Where the E316 report's buffer name goes; upstream shares `NameBuff`.
     let mut name = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        if (*buf).b_ml.ml_mfp.is_null() {
-            // There are no lines at all.
-            (*buf).b_ml.set_cached_len(1);
-            return c"".as_ptr().cast_mut();
-        }
+    if b.b_ml.ml_mfp.is_null() {
+        // There are no lines at all.
+        b.b_ml.set_cached_len(1);
+        return c"".as_ptr().cast_mut();
+    }
 
-        if lnum > (*buf).b_ml.ml_line_count {
+    if lnum > b.b_ml.ml_line_count {
+        if ml_get_recursive.get() == 0 {
+            // Avoid giving this message for a recursive call, which
+            // happens when the redraw it triggers reads the same line.
+            ml_get_recursive.set(1);
+            siemsg_c!(tr(c"E315: ml_get: Invalid lnum: %ld"), lnum as int64_t,);
+            ml_get_recursive.set(0);
+        }
+        unsafe { ml_flush_line(buf, false) };
+        return unsafe { ml_get_placeholder(buf, lnum) };
+    }
+
+    // Pretend line 0 is line 1.
+    let lnum = lnum.max(1);
+
+    // If it is the line handed out last time, it is already unpacked;
+    // otherwise the one that was may need flushing first.
+    if b.b_ml.cached_lnum() != lnum {
+        unsafe { ml_flush_line(buf, false) };
+
+        // Find the data block holding the line. This also fills the
+        // stack with the blocks from the root down and releases any
+        // block that was locked.
+        let hp = unsafe { ml_find_line(buf, lnum, ML_FIND) };
+        if hp.is_null() {
             if ml_get_recursive.get() == 0 {
-                // Avoid giving this message for a recursive call, which
-                // happens when the redraw it triggers reads the same line.
                 ml_get_recursive.set(1);
+                unsafe { get_trans_bufname(buf, &mut name) };
+                unsafe { shorten_dir(name.as_mut_ptr()) };
+                // The missing space before "in buffer" is upstream's.
                 siemsg_c!(
-                    gettext(c"E315: ml_get: Invalid lnum: %ld".as_ptr()),
+                    tr(c"E316: ml_get: Cannot find line %ldin buffer %d %s"),
                     lnum as int64_t,
+                    b.handle,
+                    name.as_ptr(),
                 );
                 ml_get_recursive.set(0);
             }
-            ml_flush_line(buf, false);
-            return ml_get_placeholder(buf, lnum);
+            return unsafe { ml_get_placeholder(buf, lnum) };
         }
 
-        // Pretend line 0 is line 1.
-        let lnum = lnum.max(1);
+        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let idx = lnum - b.b_ml.locked_low();
+        let start = unsafe { db_line_start(dp, idx) };
+        // The text ends where the previous line starts; the first line
+        // of the block ends at the end of the block.
+        let end = if idx == 0 {
+            unsafe { (*dp).db_txt_end }
+        } else {
+            unsafe { db_line_start(dp, idx - 1) }
+        };
 
-        // If it is the line handed out last time, it is already unpacked;
-        // otherwise the one that was may need flushing first.
-        if (*buf).b_ml.cached_lnum() != lnum {
-            ml_flush_line(buf, false);
-
-            // Find the data block holding the line. This also fills the
-            // stack with the blocks from the root down and releases any
-            // block that was locked.
-            let hp = ml_find_line(buf, lnum, ML_FIND);
-            if hp.is_null() {
-                if ml_get_recursive.get() == 0 {
-                    ml_get_recursive.set(1);
-                    get_trans_bufname(buf, &mut name);
-                    shorten_dir(name.as_mut_ptr());
-                    // The missing space before "in buffer" is upstream's.
-                    siemsg_c!(
-                        gettext(c"E316: ml_get: Cannot find line %ldin buffer %d %s".as_ptr()),
-                        lnum as int64_t,
-                        (*buf).handle,
-                        name.as_ptr(),
-                    );
-                    ml_get_recursive.set(0);
-                }
-                return ml_get_placeholder(buf, lnum);
-            }
-
-            let dp = (*hp).bh_data as *mut DataBlock;
-            let idx = lnum - (*buf).b_ml.locked_low();
-            let start = db_line_start(dp, idx);
-            // The text ends where the previous line starts; the first line
-            // of the block ends at the end of the block.
-            let end = if idx == 0 {
-                (*dp).db_txt_end
-            } else {
-                db_line_start(dp, idx - 1)
-            };
-
-            (*buf).b_ml.cache_block_line(
-                (dp as *mut c_char).offset(start as isize),
-                end.wrapping_sub(start) as colnr_T,
-                lnum,
-            );
-        }
-
-        if will_change {
-            (*buf).b_ml.locked_has_moved();
-            ml_add_deleted_len_buf(buf, (*buf).b_ml.cached_text(), -1);
-        }
-        (*buf).b_ml.cached_text()
+        let text = db_byte(dp, start as isize);
+        let len = end.wrapping_sub(start) as colnr_T;
+        b.b_ml.cache_block_line(text, len, lnum);
     }
+
+    if will_change {
+        b.b_ml.locked_has_moved();
+        unsafe { ml_add_deleted_len_buf(buf, (*buf).b_ml.cached_text(), -1) };
+    }
+    b.b_ml.cached_text()
 }
 
 /// Write the line `ml_replace` left in `ml_line_ptr` back into its data
@@ -190,48 +200,46 @@ pub(crate) unsafe fn ml_get_buf_impl(
 /// # Safety
 /// `buf` must point at a buffer.
 pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
-    unsafe {
-        // ml_append_int/ml_delete_int below call back in here; the line is
-        // already off the books by then, so there is nothing left to do.
-        static entered: GlobalCell<bool> = GlobalCell::new(false);
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    // ml_append_int/ml_delete_int below call back in here; the line is
+    // already off the books by then, so there is nothing left to do.
+    static entered: GlobalCell<bool> = GlobalCell::new(false);
 
-        if (*buf).b_ml.cached_lnum() == 0 || (*buf).b_ml.ml_mfp.is_null() {
-            return; // nothing to do
-        }
-
-        if (*buf).b_ml.line_is_dirty() {
-            if entered.get() {
-                return;
-            }
-            entered.set(true);
-            (*buf).flush_count += 1;
-
-            let lnum = (*buf).b_ml.cached_lnum();
-            let new_line = (*buf).b_ml.cached_text();
-
-            let hp = ml_find_line(buf, lnum, ML_FIND);
-            if hp.is_null() {
-                siemsg_c!(
-                    gettext(c"E320: Cannot find line %ld".as_ptr()),
-                    lnum as int64_t,
-                );
-            } else {
-                ml_store_line(buf, hp, lnum, new_line);
-            }
-
-            if !noalloc {
-                xfree(new_line.cast());
-            }
-            entered.set(false);
-        } else if (*buf).b_ml.line_is_owned() {
-            // The caller must mark the line dirty along with noalloc, which
-            // the branch above handles.
-            debug_assert!(!noalloc);
-            xfree((*buf).b_ml.cached_text().cast());
-        }
-
-        (*buf).b_ml.clear_cache();
+    if b.b_ml.cached_lnum() == 0 || b.b_ml.ml_mfp.is_null() {
+        return; // nothing to do
     }
+
+    if b.b_ml.line_is_dirty() {
+        if entered.get() {
+            return;
+        }
+        entered.set(true);
+        unsafe { (*buf).flush_count += 1 };
+
+        let lnum = b.b_ml.cached_lnum();
+        let new_line = b.b_ml.cached_text();
+
+        let hp = unsafe { ml_find_line(buf, lnum, ML_FIND) };
+        if hp.is_null() {
+            siemsg_c!(tr(c"E320: Cannot find line %ld"), lnum as int64_t,);
+        } else {
+            unsafe { ml_store_line(buf, hp, lnum, new_line) };
+        }
+
+        if !noalloc {
+            unsafe { xfree(new_line.cast()) };
+        }
+        entered.set(false);
+    } else if b.b_ml.line_is_owned() {
+        // The caller must mark the line dirty along with noalloc, which
+        // the branch above handles.
+        debug_assert!(!noalloc);
+        unsafe { xfree((*buf).b_ml.cached_text().cast()) };
+    }
+
+    b.b_ml.clear_cache();
 }
 
 /// The body of [`ml_flush_line`] once the block is found: overwrite line
@@ -241,71 +249,78 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
 /// `hp` must be the block `ml_find_line(buf, lnum, ML_FIND)` returned, still
 /// locked, and `new_line` must hold `ml_line_textlen` readable bytes.
 unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_line: *mut c_char) {
-    unsafe {
-        let dp = (*hp).bh_data as *mut DataBlock;
-        let idx = lnum - (*buf).b_ml.locked_low();
-        let start = db_line_start(dp, idx) as c_int;
-        let old_line = (dp as *mut c_char).offset(start as isize);
-        let old_len = if idx == 0 {
-            // Line is last in the block, so its text runs to the end.
-            (*dp).db_txt_end as c_int - start
-        } else {
-            // The text of the previous line follows it.
-            db_line_start(dp, idx - 1) as c_int - start
-        };
-        let new_len = (*buf).b_ml.cached_len();
-        // Negative if the line got smaller.
-        let extra = new_len - old_len;
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+    let idx = lnum - b.b_ml.locked_low();
+    let start = unsafe { db_line_start(dp, idx) } as c_int;
+    let old_line = db_byte(dp, start as isize);
+    let old_len = if idx == 0 {
+        // Line is last in the block, so its text runs to the end.
+        unsafe { (*dp).db_txt_end as c_int - start }
+    } else {
+        // The text of the previous line follows it.
+        unsafe { db_line_start(dp, idx - 1) as c_int - start }
+    };
+    let new_len = b.b_ml.cached_len();
+    // Negative if the line got smaller.
+    let extra = new_len - old_len;
 
-        if ((*dp).db_free as c_int) < extra {
-            // It does not fit: delete and append instead. Append first,
-            // because ml_delete_int cannot delete the last line of a
-            // buffer, which is trouble for a buffer that has only one. The
-            // mark has to come along.
-            let marked = *db_index(dp).offset(idx as isize) & DB_MARKED != 0;
+    if (unsafe { (*dp).db_free } as c_int) < extra {
+        // It does not fit: delete and append instead. Append first,
+        // because ml_delete_int cannot delete the last line of a
+        // buffer, which is trouble for a buffer that has only one. The
+        // mark has to come along.
+        let marked = unsafe { *db_index(dp).wrapping_offset(idx as isize) } & DB_MARKED != 0;
+        unsafe {
             ml_append_int(
                 buf,
                 lnum,
                 new_line,
                 new_len,
                 if marked { ML_APPEND_MARK as c_int } else { 0 },
-            );
-            ml_delete_int(buf, lnum, 0);
-            return;
-        }
+            )
+        };
+        unsafe { ml_delete_int(buf, lnum, 0) };
+        return;
+    }
 
-        let count = (*buf).b_ml.locked_high() - (*buf).b_ml.locked_low() + 1;
-        if extra != 0 && idx < count - 1 {
-            // Move the text of the lines that follow, and adjust their
-            // offsets. (Lines are stored back to front, so "following"
-            // lines sit at *lower* offsets.)
-            let txt_start = (*dp).db_txt_start as isize;
+    let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
+    if extra != 0 && idx < count - 1 {
+        // Move the text of the lines that follow, and adjust their
+        // offsets. (Lines are stored back to front, so "following"
+        // lines sit at *lower* offsets.)
+        let txt_start = unsafe { (*dp).db_txt_start } as isize;
+        unsafe {
             core::ptr::copy(
-                (dp as *mut c_char).offset(txt_start),
-                (dp as *mut c_char).offset(txt_start - extra as isize),
+                db_byte(dp, txt_start),
+                db_byte(dp, txt_start - extra as isize),
                 (start - (*dp).db_txt_start as c_int) as usize,
-            );
-            for i in idx + 1..count {
-                let slot = db_index(dp).offset(i as isize);
-                *slot = (*slot).wrapping_sub(extra as c_uint);
-            }
+            )
+        };
+        for i in idx + 1..count {
+            let slot = db_index(dp).wrapping_offset(i as isize);
+            unsafe { *slot = (*slot).wrapping_sub(extra as c_uint) };
         }
-        let slot = db_index(dp).offset(idx as isize);
-        *slot = (*slot).wrapping_sub(extra as c_uint);
+    }
+    let slot = db_index(dp).wrapping_offset(idx as isize);
+    unsafe { *slot = (*slot).wrapping_sub(extra as c_uint) };
 
-        (*dp).db_free = (*dp).db_free.wrapping_sub(extra as c_uint);
-        (*dp).db_txt_start = (*dp).db_txt_start.wrapping_sub(extra as c_uint);
+    unsafe { (*dp).db_free = (*dp).db_free.wrapping_sub(extra as c_uint) };
+    unsafe { (*dp).db_txt_start = (*dp).db_txt_start.wrapping_sub(extra as c_uint) };
 
+    unsafe {
         core::ptr::copy(
             new_line,
             old_line.offset(-(extra as isize)),
             new_len as usize,
-        );
-        (*buf).b_ml.locked_has_moved();
-        // The `extra == 0` case is already covered by the insert and delete.
-        if extra != 0 {
-            ml_updatechunk(buf, lnum, extra, ML_CHNK_UPDLINE);
-        }
+        )
+    };
+    b.b_ml.locked_has_moved();
+    // The `extra == 0` case is already covered by the insert and delete.
+    if extra != 0 {
+        unsafe { ml_updatechunk(buf, lnum, extra, ML_CHNK_UPDLINE) };
     }
 }
 
@@ -322,16 +337,14 @@ pub(crate) unsafe fn ml_new_data(
     page_count: int64_t,
 ) -> *mut bhdr_T {
     debug_assert!(page_count >= 0);
-    unsafe {
-        let hp = mf_new(mfp, negative, page_count as c_uint);
-        let dp = (*hp).bh_data as *mut DataBlock;
-        (*dp).db_id = DATA_ID as uint16_t;
-        (*dp).db_txt_end = (page_count as c_uint).wrapping_mul((*mfp).mf_page_size);
-        (*dp).db_txt_start = (*dp).db_txt_end;
-        (*dp).db_free = (*dp).db_txt_start.wrapping_sub(HEADER_SIZE as c_uint);
-        (*dp).db_line_count = 0;
-        hp
-    }
+    let hp = unsafe { mf_new(mfp, negative, page_count as c_uint) };
+    let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+    unsafe { (*dp).db_id = DATA_ID as uint16_t };
+    unsafe { (*dp).db_txt_end = (page_count as c_uint).wrapping_mul((*mfp).mf_page_size) };
+    unsafe { (*dp).db_txt_start = (*dp).db_txt_end };
+    unsafe { (*dp).db_free = (*dp).db_txt_start.wrapping_sub(HEADER_SIZE as c_uint) };
+    unsafe { (*dp).db_line_count = 0 };
+    hp
 }
 
 /// A new, empty pointer block.
@@ -339,14 +352,12 @@ pub(crate) unsafe fn ml_new_data(
 /// # Safety
 /// `mfp` must point at a memfile.
 pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
-    unsafe {
-        let hp = mf_new(mfp, false, 1);
-        let pp = (*hp).bh_data as *mut PointerBlock;
-        (*pp).pb_id = PTR_ID as uint16_t;
-        (*pp).pb_count = 0;
-        (*pp).pb_count_max = PointerBlock::count_max((*mfp).mf_page_size);
-        hp
-    }
+    let hp = unsafe { mf_new(mfp, false, 1) };
+    let pp = unsafe { (*hp).bh_data } as *mut PointerBlock;
+    unsafe { (*pp).pb_id = PTR_ID as uint16_t };
+    unsafe { (*pp).pb_count = 0 };
+    unsafe { (*pp).pb_count_max = PointerBlock::count_max((*mfp).mf_page_size) };
+    hp
 }
 
 /// Find the data block holding line `lnum`, locking it and leaving the path
@@ -364,99 +375,99 @@ pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
 pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int) -> *mut bhdr_T {
-    unsafe {
-        let mfp = (*buf).b_ml.ml_mfp;
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    let mfp = b.b_ml.ml_mfp;
 
-        // If a block is locked, see whether the wanted line is in it. Not
-        // for ML_FLUSH (the point of which is to release it), and not for
-        // the actions that have to rebuild the stack.
-        if (*buf).b_ml.is_locked() {
-            if action & ML_SIMPLE != 0
-                && (*buf).b_ml.locked_low() <= lnum
-                && (*buf).b_ml.locked_high() >= lnum
-            {
-                // Remember to update the pointer blocks and the stack later.
-                if action == ML_INSERT as c_int {
-                    (*buf).b_ml.shift_locked(1);
-                } else if action == ML_DELETE as c_int {
-                    (*buf).b_ml.shift_locked(-1);
-                }
-                return (*buf).b_ml.locked_hp();
-            }
-
-            // Give it back, telling the memfile what was done to it, and
-            // then repair the line counts in the pointer blocks above: lines
-            // were added or deleted in it and they were never told.
-            if let Some(locked) = (*buf).b_ml.unlock() {
-                mf_put(mfp, locked.hp, locked.dirty, locked.moved);
-                if locked.lineadd != 0 {
-                    ml_lineadd(buf, locked.lineadd);
-                }
-            }
-        }
-
-        if action == ML_FLUSH as c_int {
-            return core::ptr::null_mut(); // nothing else to do
-        }
-
-        let mut bnum: blocknr_T = 1; // start at the root of the tree
-        let mut page_count: c_int = 1;
-        let mut low: linenr_T = 1;
-        let mut high: linenr_T = (*buf).b_ml.ml_line_count;
-
-        if action == ML_FIND as c_int {
-            // The previous walk's stack usually still covers this line —
-            // reads come in runs. Restart from the deepest entry that does.
-            let mut top = (*buf).b_ml.stack_len();
-            let mut resumed = false;
-            while top > 0 {
-                top -= 1;
-                let ip = (*buf).b_ml.stack_at(top);
-                if ip.ip_low <= lnum && ip.ip_high >= lnum {
-                    bnum = ip.ip_bnum;
-                    low = ip.ip_low;
-                    high = ip.ip_high;
-                    (*buf).b_ml.stack_truncate(top); // drop the entry itself
-                    resumed = true;
-                    break;
-                }
-            }
-            if !resumed {
-                (*buf).b_ml.stack_clear(); // not found, start at the root
-            }
-        } else {
-            // ML_DELETE or ML_INSERT: the whole path has to be rewritten.
-            (*buf).b_ml.stack_clear();
-        }
-
-        // Search downwards until a data block is found.
-        loop {
-            let hp = mf_get(mfp, bnum, page_count as c_uint);
-            if hp.is_null() {
-                break;
-            }
-
+    // If a block is locked, see whether the wanted line is in it. Not
+    // for ML_FLUSH (the point of which is to release it), and not for
+    // the actions that have to rebuild the stack.
+    if b.b_ml.is_locked() {
+        if action & ML_SIMPLE != 0 && b.b_ml.locked_low() <= lnum && b.b_ml.locked_high() >= lnum {
+            // Remember to update the pointer blocks and the stack later.
             if action == ML_INSERT as c_int {
-                high += 1;
+                b.b_ml.shift_locked(1);
             } else if action == ML_DELETE as c_int {
-                high -= 1;
+                b.b_ml.shift_locked(-1);
             }
+            return b.b_ml.locked_hp();
+        }
 
-            let dp = (*hp).bh_data as *mut DataBlock;
-            if (*dp).db_id as c_int == DATA_ID as c_int {
-                (*buf).b_ml.lock(hp, low, high);
-                return hp;
+        // Give it back, telling the memfile what was done to it, and
+        // then repair the line counts in the pointer blocks above: lines
+        // were added or deleted in it and they were never told.
+        if let Some(locked) = b.b_ml.unlock() {
+            unsafe { mf_put(mfp, locked.hp, locked.dirty, locked.moved) };
+            if locked.lineadd != 0 {
+                unsafe { ml_lineadd(buf, locked.lineadd) };
             }
+        }
+    }
 
-            // Anything that is not a data block must be a pointer block.
-            let pp = dp as *mut PointerBlock;
-            if (*pp).pb_id as c_int != PTR_ID as c_int {
-                iemsg(gettext(c"E317: Pointer block id wrong".as_ptr()));
-                mf_put(mfp, hp, false, false);
+    if action == ML_FLUSH as c_int {
+        return core::ptr::null_mut(); // nothing else to do
+    }
+
+    let mut bnum: blocknr_T = 1; // start at the root of the tree
+    let mut page_count: c_int = 1;
+    let mut low: linenr_T = 1;
+    let mut high: linenr_T = b.b_ml.ml_line_count;
+
+    if action == ML_FIND as c_int {
+        // The previous walk's stack usually still covers this line —
+        // reads come in runs. Restart from the deepest entry that does.
+        let mut top = b.b_ml.stack_len();
+        let mut resumed = false;
+        while top > 0 {
+            top -= 1;
+            let ip = b.b_ml.stack_at(top);
+            if ip.ip_low <= lnum && ip.ip_high >= lnum {
+                bnum = ip.ip_bnum;
+                low = ip.ip_low;
+                high = ip.ip_high;
+                b.b_ml.stack_truncate(top); // drop the entry itself
+                resumed = true;
                 break;
             }
+        }
+        if !resumed {
+            b.b_ml.stack_clear(); // not found, start at the root
+        }
+    } else {
+        // ML_DELETE or ML_INSERT: the whole path has to be rewritten.
+        b.b_ml.stack_clear();
+    }
 
-            let top = ml_add_stack(buf);
+    // Search downwards until a data block is found.
+    loop {
+        let hp = unsafe { mf_get(mfp, bnum, page_count as c_uint) };
+        if hp.is_null() {
+            break;
+        }
+
+        if action == ML_INSERT as c_int {
+            high += 1;
+        } else if action == ML_DELETE as c_int {
+            high -= 1;
+        }
+
+        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        if unsafe { (*dp).db_id } as c_int == DATA_ID as c_int {
+            b.b_ml.lock(hp, low, high);
+            return hp;
+        }
+
+        // Anything that is not a data block must be a pointer block.
+        let pp = dp as *mut PointerBlock;
+        if unsafe { (*pp).pb_id } as c_int != PTR_ID as c_int {
+            unsafe { iemsg(tr(c"E317: Pointer block id wrong")) };
+            unsafe { mf_put(mfp, hp, false, false) };
+            break;
+        }
+
+        let top = unsafe { ml_add_stack(buf) };
+        unsafe {
             (*buf).b_ml.stack_set(
                 top,
                 infoptr_T {
@@ -465,76 +476,73 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
                     ip_high: high,
                     ip_index: -1, // index not known yet
                 },
-            );
+            )
+        };
 
-            let mut dirty = false;
-            let count = (*pp).pb_count as c_int;
-            let mut idx = 0;
-            while idx < count {
-                let entry = pb_entries(pp).offset(idx as isize);
-                let t = (*entry).pe_line_count;
-                low += t;
-                if low > lnum {
-                    (*buf).b_ml.stack_set_index(top, idx);
-                    bnum = (*entry).pe_bnum;
-                    page_count = (*entry).pe_page_count;
-                    high = low - 1;
-                    low -= t;
+        let mut dirty = false;
+        let count = unsafe { (*pp).pb_count } as c_int;
+        let mut idx = 0;
+        while idx < count {
+            let entry = pb_entries(pp).wrapping_offset(idx as isize);
+            let t = unsafe { (*entry).pe_line_count };
+            low += t;
+            if low > lnum {
+                b.b_ml.stack_set_index(top, idx);
+                bnum = unsafe { (*entry).pe_bnum };
+                page_count = unsafe { (*entry).pe_page_count };
+                high = low - 1;
+                low -= t;
 
-                    // A negative block number is one that has not been
-                    // written yet; it may since have been given a real one.
-                    if bnum < 0 {
-                        let bnum2 = mf_trans_del(mfp, bnum);
-                        if bnum != bnum2 {
-                            bnum = bnum2;
-                            (*entry).pe_bnum = bnum;
-                            dirty = true;
-                        }
+                // A negative block number is one that has not been
+                // written yet; it may since have been given a real one.
+                if bnum < 0 {
+                    let bnum2 = unsafe { mf_trans_del(mfp, bnum) };
+                    if bnum != bnum2 {
+                        bnum = bnum2;
+                        unsafe { (*entry).pe_bnum = bnum };
+                        dirty = true;
                     }
-                    break;
                 }
-                idx += 1;
-            }
-
-            if idx >= count {
-                // Past the end: the tree disagrees with the line count.
-                if lnum > (*buf).b_ml.ml_line_count {
-                    siemsg_c!(
-                        gettext(c"E322: Line number out of range: %ld past the end".as_ptr()),
-                        lnum as int64_t - (*buf).b_ml.ml_line_count as int64_t,
-                    );
-                } else {
-                    siemsg_c!(
-                        gettext(c"E323: Line count wrong in block %ld".as_ptr()),
-                        bnum,
-                    );
-                }
-                mf_put(mfp, hp, false, false);
                 break;
             }
+            idx += 1;
+        }
 
-            let entry = pb_entries(pp).offset(idx as isize);
-            if action == ML_DELETE as c_int {
-                (*entry).pe_line_count -= 1;
-                dirty = true;
-            } else if action == ML_INSERT as c_int {
-                (*entry).pe_line_count += 1;
-                dirty = true;
+        if idx >= count {
+            // Past the end: the tree disagrees with the line count.
+            if lnum > b.b_ml.ml_line_count {
+                siemsg_c!(
+                    tr(c"E322: Line number out of range: %ld past the end"),
+                    lnum as int64_t - b.b_ml.ml_line_count as int64_t,
+                );
+            } else {
+                siemsg_c!(tr(c"E323: Line count wrong in block %ld"), bnum,);
             }
-            mf_put(mfp, hp, dirty, false);
+            unsafe { mf_put(mfp, hp, false, false) };
+            break;
         }
 
-        // The walk failed. For ML_DELETE/ML_INSERT the counts on the way
-        // down were already adjusted for a line that will not be
-        // inserted/deleted after all, so put them back.
+        let entry = pb_entries(pp).wrapping_offset(idx as isize);
         if action == ML_DELETE as c_int {
-            ml_lineadd(buf, 1);
+            unsafe { (*entry).pe_line_count -= 1 };
+            dirty = true;
         } else if action == ML_INSERT as c_int {
-            ml_lineadd(buf, -1);
+            unsafe { (*entry).pe_line_count += 1 };
+            dirty = true;
         }
-        (*buf).b_ml.stack_clear();
-        core::ptr::null_mut()
+        unsafe { mf_put(mfp, hp, dirty, false) };
     }
+
+    // The walk failed. For ML_DELETE/ML_INSERT the counts on the way
+    // down were already adjusted for a line that will not be
+    // inserted/deleted after all, so put them back.
+    if action == ML_DELETE as c_int {
+        unsafe { ml_lineadd(buf, 1) };
+    } else if action == ML_INSERT as c_int {
+        unsafe { ml_lineadd(buf, -1) };
+    }
+    b.b_ml.stack_clear();
+    core::ptr::null_mut()
 }
 
 /// Push an entry onto the info-pointer stack and return its index. The
@@ -543,7 +551,10 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
 /// # Safety
 /// `buf` must point at a buffer.
 pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> usize {
-    unsafe { (*buf).b_ml.stack_push() }
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    b.b_ml.stack_push()
 }
 
 /// Add `count` (negative to subtract) to the line count of every pointer
@@ -571,27 +582,28 @@ pub(crate) unsafe fn ml_lineadd(buf: *mut buf_T, count: c_int) {
 /// `buf` must point at a buffer whose memline is open, and `depth` must not
 /// exceed the stack's length.
 pub(crate) unsafe fn ml_lineadd_depth(buf: *mut buf_T, count: c_int, depth: usize) {
-    unsafe {
-        let mfp = (*buf).b_ml.ml_mfp;
-        let mut idx = depth;
-        while idx > 0 {
-            idx -= 1;
-            let ip = (*buf).b_ml.stack_at(idx);
-            let hp = mf_get(mfp, ip.ip_bnum, 1);
-            if hp.is_null() {
-                break;
-            }
-            // Must be a pointer block: it is on the stack.
-            let pp = (*hp).bh_data as *mut PointerBlock;
-            if (*pp).pb_id as c_int != PTR_ID as c_int {
-                mf_put(mfp, hp, false, false);
-                iemsg(gettext(c"E317: Pointer block id wrong 2".as_ptr()));
-                break;
-            }
-            let entry = pb_entries(pp).offset(ip.ip_index as isize);
-            (*entry).pe_line_count += count;
-            (*buf).b_ml.stack_add_high(idx, count);
-            mf_put(mfp, hp, true, false);
+    // SAFETY: the caller's buffer, reached through a handle that
+    // borrows it for the one access that asked and no longer.
+    let mut b = unsafe { Buf::new(buf) };
+    let mfp = b.b_ml.ml_mfp;
+    let mut idx = depth;
+    while idx > 0 {
+        idx -= 1;
+        let ip = b.b_ml.stack_at(idx);
+        let hp = unsafe { mf_get(mfp, ip.ip_bnum, 1) };
+        if hp.is_null() {
+            break;
         }
+        // Must be a pointer block: it is on the stack.
+        let pp = unsafe { (*hp).bh_data } as *mut PointerBlock;
+        if unsafe { (*pp).pb_id } as c_int != PTR_ID as c_int {
+            unsafe { mf_put(mfp, hp, false, false) };
+            unsafe { iemsg(tr(c"E317: Pointer block id wrong 2")) };
+            break;
+        }
+        let entry = pb_entries(pp).wrapping_offset(ip.ip_index as isize);
+        unsafe { (*entry).pe_line_count += count };
+        b.b_ml.stack_add_high(idx, count);
+        unsafe { mf_put(mfp, hp, true, false) };
     }
 }
