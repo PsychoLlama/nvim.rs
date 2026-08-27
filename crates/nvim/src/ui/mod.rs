@@ -52,9 +52,9 @@ use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, emsg_silent,
-    exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, normal_bg, normal_fg,
-    normal_sp, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting,
-    textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
+    exiting, expr_map_lock, full_screen, in_assert_fails, normal_bg, normal_fg, normal_sp, p_debug,
+    p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting, textlock,
+    ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
@@ -80,7 +80,7 @@ use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
 use core::ffi::c_int;
 
-use crate::winlayer::Win;
+use crate::winlayer::{Win, tabs};
 /// The screen the editor draws into when nothing else claims a grid.
 const DEFAULT_GRID_HANDLE: handle_T = 1;
 
@@ -265,12 +265,8 @@ pub unsafe fn ui_refresh() {
                 },
                 OptionSetFlags::NONE,
             );
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                unsafe {
-                    (*tp).tp_ch_used = had_message as _;
-                    tp = (*tp).tp_next;
-                }
+            for mut tp in tabs() {
+                tp.tp_ch_used = had_message as _;
             }
         }
         unsafe { msg_scroll_flush() };

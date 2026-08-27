@@ -18,7 +18,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_int};
-use core::iter;
 
 use super::*;
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
@@ -26,8 +25,8 @@ use crate::charset::{ptr2cells, vim_strsize};
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::main::{
-    Columns, curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, p_sc, p_sloc, p_tal,
-    redraw_tabline, t_colors, tab_page_click_defs, tab_page_click_defs_size, topframe,
+    Columns, curbuf, curtab, curwin, p_sc, p_sloc, p_tal, redraw_tabline, t_colors,
+    tab_page_click_defs, tab_page_click_defs_size, topframe,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
@@ -36,68 +35,27 @@ use crate::path::shorten_dir;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
-    Arena, Buffer, MAXPATHL, Object, StlClickDefinition_type_0, String_0, Tabpage, buf_T,
-    tabpage_T, win_T,
+    Arena, Buffer, MAXPATHL, Object, StlClickDefinition_type_0, String_0, Tabpage, win_T,
 };
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
 use crate::window::tabline_height;
-
-/// The tab pages, in order. C spells this `FOR_ALL_TABS`.
-///
-/// # Safety
-/// The tab page list must be live, which it is from startup to exit.
-unsafe fn tabpages() -> impl Iterator<Item = *mut tabpage_T> {
-    let first: *mut tabpage_T = first_tabpage.get().cast();
-    iter::successors((!first.is_null()).then_some(first), |tp| {
-        // SAFETY: the caller's promise -- a live list.
-        let next = unsafe { (**tp).tp_next };
-        (!next.is_null()).then_some(next)
-    })
-}
-
-/// The buffers, in order. C spells this `FOR_ALL_BUFFERS`.
-///
-/// # Safety
-/// The buffer list must be live, which it is from startup to exit.
-unsafe fn buffers() -> impl Iterator<Item = *mut buf_T> {
-    let first = firstbuf.get();
-    iter::successors((!first.is_null()).then_some(first), |buf| {
-        // SAFETY: the caller's promise -- a live list.
-        let next = unsafe { (**buf).b_next };
-        (!next.is_null()).then_some(next)
-    })
-}
-
-/// The windows of tab page `tp`, in layout order.
-///
-/// # Safety
-/// `tp` must be a live tab page.
-unsafe fn windows_of(tp: *mut tabpage_T) -> impl Iterator<Item = Win> {
-    // The current tab page's window list hangs off `firstwin`, not off the
-    // tab page, which only records it when it is left.
-    // SAFETY: the caller's promise.
-    let first = if tp == curtab.get() {
-        firstwin.get()
-    } else {
-        unsafe { (*tp).tp_firstwin }
-    };
-    // SAFETY: a live window list.
-    iter::successors(unsafe { win_opt(first) }, |win| win.next())
-}
+use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 
 /// The window whose buffer names tab page `tp`.
 ///
 /// # Safety
-/// `tp` must be a live tab page.
-unsafe fn current_window_of(tp: *mut tabpage_T) -> Win {
-    // SAFETY: the caller's promise; as [`windows_of`], the current tab
-    // page's cursor window is `curwin`.
+/// A live tab page's cursor window must be live, which it is.
+unsafe fn current_window_of(tp: TabPage) -> Win {
+    // As with [`windows_in_tab`], the current tab page's cursor window is the
+    // `curwin` global rather than its own `tp_curwin`, which is only recorded
+    // when the tab page is left.
+    // SAFETY: the caller's promise.
     unsafe {
-        Win::new(if tp == curtab.get() {
+        Win::new(if tp.is_current() {
             curwin.get()
         } else {
-            (*tp).tp_curwin
+            tp.tp_curwin
         })
     }
 }
@@ -116,10 +74,10 @@ unsafe fn ui_ext_tabline_update() {
     // editor's own live objects (the caller's promise); the arena outlives
     // every string put in it, and each container is sized by the same walk
     // that fills it.
-    let mut tabs = arena_array(arenap, unsafe { tabpages() }.count());
-    for tp in unsafe { tabpages() } {
+    let mut tab_infos = arena_array(arenap, tabs().count());
+    for tp in tabs() {
         let mut info = arena_dict(arenap, 2);
-        let (handle, cwp) = unsafe { ((*tp).handle as Tabpage, current_window_of(tp)) };
+        let (handle, cwp) = (tp.handle as Tabpage, unsafe { current_window_of(tp) });
         put(&mut info, c"tab", Object::tabpage(handle));
         unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
         put(
@@ -127,20 +85,16 @@ unsafe fn ui_ext_tabline_update() {
             c"name",
             Object::string(unsafe { name_in(arenap, &name) }),
         );
-        push(&mut tabs, Object::dict(info));
+        push(&mut tab_infos, Object::dict(info));
     }
 
     // Unlisted buffers are left out of the event. SAFETY: as above.
-    let listed = || unsafe { buffers() }.filter(|buf| unsafe { (**buf).b_p_bl } != 0);
+    let listed = || buffers().filter(|buf| buf.b_p_bl != 0);
     let mut bufs = arena_array(arenap, listed().count());
     for buf in listed() {
         let mut info = arena_dict(arenap, 2);
-        put(
-            &mut info,
-            c"buffer",
-            Object::buffer(unsafe { (*buf).handle }),
-        );
-        unsafe { get_trans_bufname(buf, &mut name) };
+        put(&mut info, c"buffer", Object::buffer(buf.handle));
+        unsafe { get_trans_bufname(buf.raw(), &mut name) };
         put(
             &mut info,
             c"name",
@@ -155,7 +109,7 @@ unsafe fn ui_ext_tabline_update() {
             (*curtab.get()).handle as Tabpage,
             (*curbuf.get()).handle as Buffer,
         );
-        ui_call_tabline_update(tab, tabs, buf, bufs);
+        ui_call_tabline_update(tab, tab_infos, buf, bufs);
         arena_mem_free(arena_finish(arenap));
     }
 }
@@ -226,8 +180,7 @@ unsafe fn draw_default_tabline() {
 
     // SAFETY: `default_gridview` is live; the batch is flushed below.
     unsafe { view_line_start(default_gridview(), 0) };
-    // SAFETY: the caller's promise.
-    let count = unsafe { tabpages() }.count() as c_int;
+    let count = tabs().count() as c_int;
     let tabwidth = if count > 0 {
         (Columns.get() - 1 + count / 2) / count
     } else {
@@ -238,15 +191,16 @@ unsafe fn draw_default_tabline() {
     let mut attr = attr_nosel;
     let mut col = 0;
     let mut tabcount = 0;
-    // SAFETY: the caller's promise.
-    for tp in unsafe { tabpages() } {
+    for tp in tabs() {
         if col >= Columns.get() - 4 {
             break;
         }
         let scol = col;
         // SAFETY: a live tab page and its own frame pointer.
-        let (cwp, current) =
-            unsafe { (current_window_of(tp), (*tp).tp_topframe == topframe.get()) };
+        let (cwp, current) = (
+            unsafe { current_window_of(tp) },
+            tp.tp_topframe == topframe.get(),
+        );
         if current {
             attr = win_hl(cwp, HLF_TPS);
         }
@@ -266,8 +220,7 @@ unsafe fn draw_default_tabline() {
         // the loop that increments it.
         let mut modified = false;
         let mut wincount = 0;
-        // SAFETY: a live tab page.
-        for win in unsafe { windows_of(tp) } {
+        for win in windows_in_tab(tp) {
             if !win.w_config.focusable || win.w_config.hide {
                 wincount -= 1;
             // SAFETY: a live window's buffer.

@@ -12,7 +12,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
-use crate::winlayer::{Buf, Win, windows};
+use crate::winlayer::{Buf, Win, tabs, windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -183,12 +183,10 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
         if result != OK || diff_flags.get() & DIFF_ANCHOR == 0 {
             return result;
         }
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            if !buflocal || (*tp).tp_diffbuf.contains(&curbuf.get()) {
-                (*tp).tp_diff_invalid = 1;
+        for mut tp in tabs() {
+            if !buflocal || tp.tp_diffbuf.contains(&curbuf.get()) {
+                tp.tp_diff_invalid = 1;
             }
-            tp = (*tp).tp_next;
         }
         result
     }
@@ -263,10 +261,8 @@ pub unsafe fn diffopt_changed() -> c_int {
         }
 
         if diff_flags.get() != flags_new || diff_algorithm.get() != algorithm_new {
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                (*tp).tp_diff_invalid = 1;
-                tp = (*tp).tp_next;
+            for mut tp in tabs() {
+                tp.tp_diff_invalid = 1;
             }
         }
         diff_flags.set(flags_new);

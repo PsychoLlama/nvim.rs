@@ -18,12 +18,10 @@ use super::*;
 use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::grid::default_grid_ref;
-use crate::main::{
-    curtab, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, skip_update_topline,
-};
+use crate::main::{dollar_vcol, mouse_dragging, p_sj, skip_update_topline};
 use crate::option::{ScrollMargin, ScrollOff};
 use crate::types::{OptInt, int64_t, linenr_T};
-use crate::winlayer::Win;
+use crate::winlayer::{Win, tab_windows};
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
 pub fn update_topline(wp: Win) {
@@ -397,28 +395,9 @@ pub fn changed_window_setting(wp: Win) {
 }
 
 /// [`changed_window_setting`] for every window of every tab page.
-///
-/// # Safety
-/// The editor's window list must be valid.
-pub unsafe fn changed_window_setting_all() {
-    let mut tp = first_tabpage.get();
-    while !tp.is_null() {
-        // The current tab page's windows hang off `firstwin`; a tab page's
-        // own list is only filled in when it is left.
-        let first = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            // SAFETY: a live tab page.
-            unsafe { (*tp).tp_firstwin }
-        };
-        // SAFETY: the editor's window list holds live windows.
-        let mut win = (!first.is_null()).then(|| unsafe { Win::new(first) });
-        while let Some(w) = win {
-            w.changed_window_setting();
-            win = w.next();
-        }
-        // SAFETY: a live tab page.
-        tp = unsafe { (*tp).tp_next };
+pub fn changed_window_setting_all() {
+    for win in tab_windows() {
+        win.changed_window_setting();
     }
 }
 
