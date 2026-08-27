@@ -17,6 +17,152 @@ pub struct chunksize_T {
     pub mlcs_numlines: ::core::ffi::c_int,
     pub mlcs_totalsize: ::core::ffi::c_int,
 }
+
+/// The chunk index: a run of between `MLCS_MINL` and `MLCS_MAXL`
+/// consecutive lines with their total byte size, so `ml_find_line_or_offset`
+/// can skip whole runs instead of visiting every block.
+///
+/// Upstream spelled it `ml_chunksize` (the array), `ml_numchunks` (its
+/// capacity) and `ml_usedchunks` (its length, or **-1** for "a walk failed,
+/// the counts are wrong, stop using it"). The capacity is the `Vec`'s
+/// business; the length is the `Vec`'s length; and the two states that are
+/// not a length -- never built, and switched off -- are their own flags,
+/// because they are not the same thing: deleting the only chunk of a
+/// one-chunk table leaves a *built* table with no entries.
+///
+/// All of the arithmetic lives here, in a file that forbids `unsafe`.
+#[derive(Default)]
+pub(crate) struct MlChunks {
+    entries: Vec<chunksize_T>,
+    /// `ml_chunksize != NULL`.
+    built: bool,
+    /// `ml_usedchunks == -1`.
+    off: bool,
+}
+
+impl MlChunks {
+    /// Whether a failed walk has switched the index off. It stays off until
+    /// the memline is reopened.
+    pub(crate) fn is_off(&self) -> bool {
+        self.off
+    }
+
+    /// Switch it off: a tree walk could not find a line it had counted, so
+    /// nothing in here can be trusted.
+    pub(crate) fn switch_off(&mut self) {
+        self.off = true;
+    }
+
+    /// Whether the table has been allocated at all.
+    pub(crate) fn is_built(&self) -> bool {
+        self.built
+    }
+
+    /// Build it, holding the one line a fresh memline has.
+    pub(crate) fn build(&mut self) {
+        self.entries.clear();
+        self.entries.reserve(100);
+        self.entries.push(chunksize_T {
+            mlcs_numlines: 1,
+            mlcs_totalsize: 1,
+        });
+        self.built = true;
+    }
+
+    /// Back to one chunk of one line `size` bytes long: the first line
+    /// written into an empty buffer.
+    pub(crate) fn reset_to_one(&mut self, size: ::core::ffi::c_int) {
+        self.entries.truncate(1);
+        self.entries[0] = chunksize_T {
+            mlcs_numlines: 1,
+            mlcs_totalsize: size,
+        };
+    }
+
+    /// Forget the table and give its memory back, at `ml_close`.
+    pub(crate) fn free(&mut self) {
+        *self = Self::default();
+    }
+
+    /// How many chunks are live: upstream's `ml_usedchunks`.
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Lines in chunk `at`.
+    pub(crate) fn lines(&self, at: usize) -> ::core::ffi::c_int {
+        self.entries[at].mlcs_numlines
+    }
+
+    /// Bytes in chunk `at`.
+    pub(crate) fn size(&self, at: usize) -> ::core::ffi::c_int {
+        self.entries[at].mlcs_totalsize
+    }
+
+    /// Add `delta` lines to chunk `at`.
+    pub(crate) fn add_lines(&mut self, at: usize, delta: ::core::ffi::c_int) {
+        self.entries[at].mlcs_numlines += delta;
+    }
+
+    /// Add `delta` bytes to chunk `at`.
+    pub(crate) fn add_size(&mut self, at: usize, delta: ::core::ffi::c_int) {
+        self.entries[at].mlcs_totalsize += delta;
+    }
+
+    /// Overwrite chunk `at`.
+    pub(crate) fn set(&mut self, at: usize, lines: ::core::ffi::c_int, size: ::core::ffi::c_int) {
+        self.entries[at] = chunksize_T {
+            mlcs_numlines: lines,
+            mlcs_totalsize: size,
+        };
+    }
+
+    /// Start an empty chunk after the last one.
+    pub(crate) fn push_empty(&mut self) {
+        self.entries.push(chunksize_T {
+            mlcs_numlines: 0,
+            mlcs_totalsize: 0,
+        });
+    }
+
+    /// Chunk `at` is about to be cut in two: put a copy of it next to
+    /// itself, for the caller to divide the lines and bytes between.
+    pub(crate) fn split_at(&mut self, at: usize) {
+        self.entries.insert(at, self.entries[at]);
+    }
+
+    /// A line came out of chunk `at`, which may leave it and a neighbour
+    /// short enough between them to be merged. `min_lines` is `MLCS_MINL`.
+    ///
+    /// The whole of upstream's `ml_updatechunk(ML_CHNK_DELLINE)` tail, and
+    /// pure table arithmetic -- no block is read, so none of it has to be
+    /// unsafe any more.
+    pub(crate) fn delete_line(&mut self, at: usize, min_lines: ::core::ffi::c_int) {
+        let mut at = at;
+        self.add_lines(at, -1);
+
+        if at + 1 < self.len() && self.lines(at) + self.lines(at + 1) <= min_lines {
+            // Merge with the chunk after it instead: step onto that one, so
+            // the collapse below folds it into this one.
+            at += 1;
+        } else if at == 0 && self.lines(0) <= 0 {
+            // The first chunk emptied and there is nothing before it to
+            // merge into, so drop it.
+            self.entries.remove(0);
+            return;
+        } else if at == 0
+            || (self.lines(at) > 10 && self.lines(at) + self.lines(at - 1) > min_lines)
+        {
+            return;
+        }
+
+        // Collapse this chunk into the one before it.
+        let gone = self.entries[at];
+        self.add_lines(at - 1, gone.mlcs_numlines);
+        self.add_size(at - 1, gone.mlcs_totalsize);
+        self.entries.remove(at);
+    }
+}
 /// The data block [`crate::memline::ml_find_line`] is holding, and what has
 /// been done to it since.
 ///
@@ -80,15 +226,35 @@ pub struct memline_T {
     pub ml_line_lnum: linenr_T,
     pub ml_line_ptr: *mut ::core::ffi::c_char,
     pub ml_line_offset: size_t,
-    pub ml_line_offset_ff: ::core::ffi::c_int,
     /// The data block the walk is holding, if it is holding one.
     pub(crate) ml_locked: Option<LockedBlock>,
-    pub ml_chunksize: *mut chunksize_T,
-    pub ml_numchunks: ::core::ffi::c_int,
-    pub ml_usedchunks: ::core::ffi::c_int,
+    /// The chunk index that keeps a byte-offset lookup from walking every
+    /// block.
+    pub(crate) ml_chunks: MlChunks,
 }
 
 impl memline_T {
+    /// A closed memline, which is what a fresh `buf_T` holds.
+    ///
+    /// A zeroed `buf_T` is a valid one everywhere *except* the owned
+    /// collections in here -- an empty `Vec` holds a non-null dangling
+    /// pointer, not a zero one -- so `alloc_unregistered_buffer` writes this
+    /// over the zeroes.
+    pub fn closed() -> Self {
+        memline_T {
+            ml_line_count: 0,
+            ml_mfp: ::core::ptr::null_mut(),
+            ml_stack: Vec::new(),
+            ml_flags: MlFlags::NONE,
+            ml_line_textlen: 0,
+            ml_line_lnum: 0,
+            ml_line_ptr: ::core::ptr::null_mut(),
+            ml_line_offset: 0,
+            ml_locked: None,
+            ml_chunks: MlChunks::default(),
+        }
+    }
+
     /// How deep the block stack is: upstream's `ml_stack_top`.
     pub fn stack_len(&self) -> usize {
         self.ml_stack.len()

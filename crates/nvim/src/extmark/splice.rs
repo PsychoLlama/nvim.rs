@@ -101,7 +101,7 @@ pub(crate) fn splice(
     // -- an edge case.
     //
     // TODO(vigoux): maybe there is a better way of testing that?
-    if offset < 0 && buf.b_ml.ml_chunksize.is_null() {
+    if offset < 0 && !buf.b_ml.ml_chunks.is_built() {
         offset = 0;
     }
     let start = Extent {

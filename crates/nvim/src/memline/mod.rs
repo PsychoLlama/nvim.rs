@@ -73,9 +73,9 @@ use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, FAIL, FileInfo, NUL, OK, OptVal, OptValData, OptValType, String_0, StringBuilder,
-    Timestamp, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T, file_comparison,
-    flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T,
-    size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
+    Timestamp, bhdr_T, blocknr_T, buf_T, colnr_T, dict_T, file_comparison, flush_buffers_T,
+    infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t,
+    time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -182,10 +182,10 @@ pub const ML_DELETE: ::core::ffi::c_int = 17;
 pub const ML_INSERT: ::core::ffi::c_int = 18;
 /// `action` for [`ml_find_line`]: just look the line up.
 pub const ML_FIND: ::core::ffi::c_int = 19;
-/// Lines below which two neighbouring `ml_chunksize` entries are merged, and
+/// Lines below which two neighbouring chunk-index entries are merged, and
 /// the size a split aims for.
 pub const MLCS_MINL: ::core::ffi::c_int = 400;
-/// Lines above which an `ml_chunksize` entry is split in two.
+/// Lines above which a chunk-index entry is split in two.
 pub const MLCS_MAXL: ::core::ffi::c_int = 800;
 /// `flags` for `ml_append_int`: carry the `DB_MARKED` bit onto the new line.
 pub const ML_APPEND_MARK: ::core::ffi::c_int = 2;
@@ -269,8 +269,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         (*buf).b_ml.ml_locked = None;
         (*buf).b_ml.ml_line_lnum = 0;
         (*buf).b_ml.ml_line_offset = 0;
-        (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut();
-        (*buf).b_ml.ml_usedchunks = 0;
+        (*buf).b_ml.ml_chunks.free();
 
         if cmdmod_has(CmdModFlags::NOSWAPFILE) {
             (*buf).b_p_swf = 0;
@@ -518,8 +517,7 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
             xfree((*buf).b_ml.ml_line_ptr.cast());
         }
         (*buf).b_ml.stack_free();
-        xfree((*buf).b_ml.ml_chunksize.cast());
-        (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut();
+        (*buf).b_ml.ml_chunks.free();
         (*buf).b_ml.ml_mfp = ::core::ptr::null_mut();
 
         // Clear the "recovered" flag, so the ATTENTION prompt comes back the

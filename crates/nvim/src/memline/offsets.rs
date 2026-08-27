@@ -2,7 +2,7 @@
 //! character count.
 //!
 //! The tree does not store byte offsets, so `ml_find_line_or_offset` walks it
-//! adding up block sizes. `ml_updatechunk` maintains the `b_ml.ml_chunksize`
+//! adding up block sizes. `ml_updatechunk` maintains the `b_ml.ml_chunks`
 //! accelerator that keeps that walk from being O(lines) on every call: a run
 //! of between `MLCS_MINL` and `MLCS_MAXL` consecutive lines, with their total
 //! byte size, so the walk can skip whole runs and only visit blocks inside
@@ -24,7 +24,7 @@ use crate::winlayer::Win;
 static ml_upd_lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(core::ptr::null_mut());
 static ml_upd_lastline: GlobalCell<linenr_T> = GlobalCell::new(0);
 static ml_upd_lastcurline: GlobalCell<linenr_T> = GlobalCell::new(0);
-static ml_upd_lastcurix: GlobalCell<c_int> = GlobalCell::new(0);
+static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Keep the chunk table up to date for a line that was added, removed or
 /// resized.
@@ -46,62 +46,56 @@ pub(crate) unsafe fn ml_updatechunk(
         let mut curline = ml_upd_lastcurline.get();
         let mut curix = ml_upd_lastcurix.get();
 
-        if (*buf).b_ml.ml_usedchunks == -1 || len_arg == 0 {
+        if (*buf).b_ml.ml_chunks.is_off() || len_arg == 0 {
             return;
         }
-        if (*buf).b_ml.ml_chunksize.is_null() {
-            (*buf).b_ml.ml_chunksize = xmalloc(size_of::<chunksize_T>() * 100).cast();
-            (*buf).b_ml.ml_numchunks = 100;
-            (*buf).b_ml.ml_usedchunks = 1;
-            (*(*buf).b_ml.ml_chunksize).mlcs_numlines = 1;
-            (*(*buf).b_ml.ml_chunksize).mlcs_totalsize = 1;
+        if !(*buf).b_ml.ml_chunks.is_built() {
+            (*buf).b_ml.ml_chunks.build();
         }
 
         if updtype == ML_CHNK_UPDLINE && (*buf).b_ml.ml_line_count == 1 {
             // First line in an empty buffer, from ml_flush_line: reset.
-            (*buf).b_ml.ml_usedchunks = 1;
-            (*(*buf).b_ml.ml_chunksize).mlcs_numlines = 1;
-            (*(*buf).b_ml.ml_chunksize).mlcs_totalsize = (*buf).b_ml.ml_line_textlen;
+            let textlen = (*buf).b_ml.ml_line_textlen;
+            (*buf).b_ml.ml_chunks.reset_to_one(textlen);
             return;
         }
 
         // Find the chunk the line belongs to; `curline` ends up at the start
         // of it.
-        let chunks = (*buf).b_ml.ml_chunksize;
         if buf != ml_upd_lastbuf.get()
             || line != ml_upd_lastline.get() + 1
             || updtype != ML_CHNK_ADDLINE
         {
             curline = 1;
             curix = 0;
-            while curix < (*buf).b_ml.ml_usedchunks - 1
-                && line >= curline + (*chunks.offset(curix as isize)).mlcs_numlines
+            while curix + 1 < (*buf).b_ml.ml_chunks.len()
+                && line >= curline + (*buf).b_ml.ml_chunks.lines(curix)
             {
-                curline += (*chunks.offset(curix as isize)).mlcs_numlines;
+                curline += (*buf).b_ml.ml_chunks.lines(curix);
                 curix += 1;
             }
-        } else if curix < (*buf).b_ml.ml_usedchunks - 1
-            && line >= curline + (*chunks.offset(curix as isize)).mlcs_numlines
+        } else if curix + 1 < (*buf).b_ml.ml_chunks.len()
+            && line >= curline + (*buf).b_ml.ml_chunks.lines(curix)
         {
             // The cached position is one chunk stale; step it on.
-            curline += (*chunks.offset(curix as isize)).mlcs_numlines;
+            curline += (*buf).b_ml.ml_chunks.lines(curix);
             curix += 1;
         }
-        let curchnk = chunks.offset(curix as isize);
 
         let len = if updtype == ML_CHNK_DELLINE {
             -len_arg
         } else {
             len_arg
         };
-        (*curchnk).mlcs_totalsize += len;
+        (*buf).b_ml.ml_chunks.add_size(curix, len);
 
         if updtype == ML_CHNK_ADDLINE {
-            if !ml_chunk_addline(buf, line, curline, curix, curchnk) {
+            if !ml_chunk_addline(buf, line, curline, curix) {
                 return;
             }
         } else if updtype == ML_CHNK_DELLINE {
-            ml_chunk_delline(buf, curix, curchnk);
+            ml_upd_lastbuf.set(core::ptr::null_mut()); // force a recalc
+            (*buf).b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
             return;
         }
 
@@ -117,51 +111,34 @@ pub(crate) unsafe fn ml_updatechunk(
 /// invalidates the cache) or the walk failed.
 ///
 /// # Safety
-/// `curchnk` must be chunk `curix` of `buf`.
+/// `buf` must point at a buffer whose chunk index has a chunk `curix`.
 unsafe fn ml_chunk_addline(
     buf: *mut buf_T,
     line: linenr_T,
     curline: linenr_T,
-    curix: c_int,
-    curchnk: *mut chunksize_T,
+    curix: usize,
 ) -> bool {
     unsafe {
-        (*curchnk).mlcs_numlines += 1;
+        (*buf).b_ml.ml_chunks.add_lines(curix, 1);
 
-        // Grow here so that neither branch below has to. This can move the
-        // table, so `curchnk` is dead from this point on.
-        if (*buf).b_ml.ml_usedchunks + 1 >= (*buf).b_ml.ml_numchunks {
-            (*buf).b_ml.ml_numchunks = (*buf).b_ml.ml_numchunks * 3 / 2;
-            (*buf).b_ml.ml_chunksize = xrealloc(
-                (*buf).b_ml.ml_chunksize.cast(),
-                size_of::<chunksize_T>() * (*buf).b_ml.ml_numchunks as usize,
-            )
-            .cast();
-        }
-        let chunks = (*buf).b_ml.ml_chunksize;
-
-        if (*chunks.offset(curix as isize)).mlcs_numlines >= MLCS_MAXL {
+        if (*buf).b_ml.ml_chunks.lines(curix) >= MLCS_MAXL {
             return ml_chunk_split(buf, curix, curline);
         }
 
-        if (*chunks.offset(curix as isize)).mlcs_numlines >= MLCS_MINL
-            && curix == (*buf).b_ml.ml_usedchunks - 1
+        if (*buf).b_ml.ml_chunks.lines(curix) >= MLCS_MINL
+            && curix + 1 == (*buf).b_ml.ml_chunks.len()
             && (*buf).b_ml.ml_line_count - line <= 1
         {
             // This is the last chunk and starting another one after it is
             // cheap right now, so do it and save the walk later on.
-            let curchnk = chunks.offset((curix + 1) as isize);
-            (*buf).b_ml.ml_usedchunks += 1;
-            if line == (*buf).b_ml.ml_line_count {
-                (*curchnk).mlcs_numlines = 0;
-                (*curchnk).mlcs_totalsize = 0;
-            } else {
+            (*buf).b_ml.ml_chunks.push_empty();
+            if line != (*buf).b_ml.ml_line_count {
                 // The line is just before the last one, so move the last
                 // line's size over. This is the common case while loading a
                 // file.
                 let hp = ml_find_line(buf, (*buf).b_ml.ml_line_count, ML_FIND);
                 if hp.is_null() {
-                    (*buf).b_ml.ml_usedchunks = -1;
+                    (*buf).b_ml.ml_chunks.switch_off();
                     return false;
                 }
                 let dp = (*hp).bh_data as *mut DataBlock;
@@ -171,10 +148,9 @@ unsafe fn ml_chunk_addline(
                     db_line_start(dp, ((*dp).db_line_count - 2) as c_int) as c_int
                         - (*dp).db_txt_start as c_int
                 };
-                (*curchnk).mlcs_totalsize = rest;
-                (*curchnk).mlcs_numlines = 1;
-                (*curchnk.offset(-1)).mlcs_totalsize -= rest;
-                (*curchnk.offset(-1)).mlcs_numlines -= 1;
+                (*buf).b_ml.ml_chunks.set(curix + 1, 1, rest);
+                (*buf).b_ml.ml_chunks.add_size(curix, -rest);
+                (*buf).b_ml.ml_chunks.add_lines(curix, -1);
             }
         }
         true
@@ -189,15 +165,10 @@ unsafe fn ml_chunk_addline(
 /// position. Both mean the caller returns without caching.
 ///
 /// # Safety
-/// `buf`'s chunk table must have room for one more entry.
-unsafe fn ml_chunk_split(buf: *mut buf_T, curix: c_int, curline_arg: linenr_T) -> bool {
+/// `buf` must point at a buffer whose chunk index has a chunk `curix`.
+unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: linenr_T) -> bool {
     unsafe {
-        let chunks = (*buf).b_ml.ml_chunksize;
-        core::ptr::copy(
-            chunks.offset(curix as isize),
-            chunks.offset((curix + 1) as isize),
-            ((*buf).b_ml.ml_usedchunks - curix) as usize,
-        );
+        (*buf).b_ml.ml_chunks.split_at(curix);
 
         // Total size of the first MLCS_MINL lines of the chunk.
         let mut curline = curline_arg;
@@ -206,7 +177,7 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: c_int, curline_arg: linenr_T) -
         while curline < (*buf).b_ml.ml_line_count && linecnt < MLCS_MINL {
             let hp = ml_find_line(buf, curline, ML_FIND);
             if hp.is_null() {
-                (*buf).b_ml.ml_usedchunks = -1;
+                (*buf).b_ml.ml_chunks.switch_off();
                 return false;
             }
             let dp = (*hp).bh_data as *mut DataBlock;
@@ -234,64 +205,11 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: c_int, curline_arg: linenr_T) -
             size += text_end - db_line_start(dp, end_idx) as c_int;
         }
 
-        let chunks = (*buf).b_ml.ml_chunksize;
-        (*chunks.offset(curix as isize)).mlcs_numlines = linecnt;
-        (*chunks.offset((curix + 1) as isize)).mlcs_numlines -= linecnt;
-        (*chunks.offset(curix as isize)).mlcs_totalsize = size;
-        (*chunks.offset((curix + 1) as isize)).mlcs_totalsize -= size;
-        (*buf).b_ml.ml_usedchunks += 1;
+        (*buf).b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
+        (*buf).b_ml.ml_chunks.add_size(curix + 1, -size);
+        (*buf).b_ml.ml_chunks.set(curix, linecnt, size);
         ml_upd_lastbuf.set(core::ptr::null_mut()); // force a recalc
         false
-    }
-}
-
-/// A line was removed from chunk `curix`. If that leaves it and a neighbour
-/// short enough between them, the two are merged.
-///
-/// # Safety
-/// `curchnk` must be chunk `curix` of `buf`.
-unsafe fn ml_chunk_delline(buf: *mut buf_T, curix_arg: c_int, curchnk_arg: *mut chunksize_T) {
-    unsafe {
-        let mut curix = curix_arg;
-        let mut curchnk = curchnk_arg;
-        (*curchnk).mlcs_numlines -= 1;
-        ml_upd_lastbuf.set(core::ptr::null_mut()); // force a recalc
-
-        if curix < (*buf).b_ml.ml_usedchunks - 1
-            && (*curchnk).mlcs_numlines + (*curchnk.offset(1)).mlcs_numlines <= MLCS_MINL
-        {
-            // Merge with the chunk after it instead: step onto that one, so
-            // the collapse below folds it into this one.
-            curix += 1;
-            curchnk = (*buf).b_ml.ml_chunksize.offset(curix as isize);
-        } else if curix == 0 && (*curchnk).mlcs_numlines <= 0 {
-            // The first chunk emptied and there is nothing before it to merge
-            // into, so drop it.
-            (*buf).b_ml.ml_usedchunks -= 1;
-            core::ptr::copy(
-                (*buf).b_ml.ml_chunksize.offset(1),
-                (*buf).b_ml.ml_chunksize,
-                (*buf).b_ml.ml_usedchunks as usize,
-            );
-            return;
-        } else if curix == 0
-            || ((*curchnk).mlcs_numlines > 10
-                && (*curchnk).mlcs_numlines + (*curchnk.offset(-1)).mlcs_numlines > MLCS_MINL)
-        {
-            return;
-        }
-
-        // Collapse this chunk into the one before it.
-        (*curchnk.offset(-1)).mlcs_numlines += (*curchnk).mlcs_numlines;
-        (*curchnk.offset(-1)).mlcs_totalsize += (*curchnk).mlcs_totalsize;
-        (*buf).b_ml.ml_usedchunks -= 1;
-        if curix < (*buf).b_ml.ml_usedchunks {
-            core::ptr::copy(
-                (*buf).b_ml.ml_chunksize.offset((curix + 1) as isize),
-                (*buf).b_ml.ml_chunksize.offset(curix as isize),
-                ((*buf).b_ml.ml_usedchunks - curix) as usize,
-            );
-        }
     }
 }
 
@@ -335,7 +253,7 @@ pub unsafe fn ml_find_line_or_offset(
             return (*buf).b_ml.ml_line_offset as c_int;
         }
 
-        if (*buf).b_ml.ml_usedchunks == -1 || (*buf).b_ml.ml_chunksize.is_null() || lnum < 0 {
+        if (*buf).b_ml.ml_chunks.is_off() || !(*buf).b_ml.ml_chunks.is_built() || lnum < 0 {
             // The memline is empty. If it is open at all it still behaves as
             // though it held one empty line.
             if no_ff && !(*buf).b_ml.ml_mfp.is_null() && (lnum == 1 || lnum == 2) {
@@ -352,22 +270,18 @@ pub unsafe fn ml_find_line_or_offset(
 
         // Skip whole chunks, up to but not including the one the answer is
         // in. The last chunk is special: it never qualifies.
-        let chunks = (*buf).b_ml.ml_chunksize;
+        let chunks = &(*buf).b_ml.ml_chunks;
         let mut curline: linenr_T = 1;
-        let mut curix = 0;
+        let mut curix = 0usize;
         let mut size = 0;
-        while curix < (*buf).b_ml.ml_usedchunks - 1
-            && (lnum != 0 && lnum >= curline + (*chunks.offset(curix as isize)).mlcs_numlines
-                || offset != 0
-                    && offset
-                        > size
-                            + (*chunks.offset(curix as isize)).mlcs_totalsize
-                            + ffdos * (*chunks.offset(curix as isize)).mlcs_numlines)
+        while curix + 1 < chunks.len()
+            && (lnum != 0 && lnum >= curline + chunks.lines(curix)
+                || offset != 0 && offset > size + chunks.size(curix) + ffdos * chunks.lines(curix))
         {
-            curline += (*chunks.offset(curix as isize)).mlcs_numlines;
-            size += (*chunks.offset(curix as isize)).mlcs_totalsize;
+            curline += chunks.lines(curix);
+            size += chunks.size(curix);
             if offset != 0 && ffdos != 0 {
-                size += (*chunks.offset(curix as isize)).mlcs_numlines;
+                size += chunks.lines(curix);
             }
             curix += 1;
         }

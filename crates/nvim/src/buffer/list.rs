@@ -50,8 +50,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg_c;
 use crate::types::{
     AdditionalData, Callback, FAIL, FileID, OK, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
-    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, regprog_T, size_t,
-    uint64_t,
+    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T,
+    size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -422,13 +422,13 @@ fn new_buffer() -> Owned<buf_T> {
 pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     let mut storage = Box::<buf_T>::new_zeroed();
     let at = storage.as_mut_ptr();
-    // The two fields a zeroed `buf_T` is *not* a valid value for: an empty
-    // `Vec` holds a non-null dangling pointer, not a zero one.
-    // SAFETY: the field is inside the block just allocated, nothing has read
-    // or dropped it, and `write` does not drop what was there.
+    // The two fields a zeroed `buf_T` is *not* a valid value for -- an empty
+    // `Vec` holds a non-null dangling pointer, not a zero one -- are the
+    // user-command list and everything the memline owns.
+    // SAFETY: both are inside the block just allocated, nothing has read or
+    // dropped them, and `write` does not drop what was there.
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
-    // SAFETY: as above -- the memline's block stack.
-    unsafe { (&raw mut (*at).b_ml.ml_stack).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_ml).write(memline_T::closed()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })
