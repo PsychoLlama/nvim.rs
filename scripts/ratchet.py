@@ -632,6 +632,33 @@ FN_NAME = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")
 # (`&unsafe { render_char(buf, c) }` borrows a value that was returned), so the
 # needle demands a `*` -- optionally behind parentheses -- as the block's first
 # token.
+# `unsafe { *p }.retain()` -- a mutating method called on the *value* an
+# `unsafe` block produced. `&mut self` autorefs the temporary, so the mutation
+# lands in the copy and is discarded, exactly as an assignment would be. rustc
+# allows `&mut` on an rvalue and says nothing.
+#
+# The receiver's type is out of reach of a name-keyed scan, so the needle asks
+# instead which *names* can only be mutating ones: declared `&mut self`
+# somewhere and never `&self`, `self` or `mut self`. That drops `.is_null()`
+# (a `&self` on a raw pointer) and `.has()` (a shared flag test) without
+# needing to know what the receiver is. The three reference-count methods are
+# named outright: `Refcount::release` shares its name with two *consuming*
+# `release(self)` methods, so the exclusivity rule would lose it -- and losing
+# it costs a reference that is never given back. Batch 3 wrote twelve of these
+# in one afternoon, including `:function!` over a referenced function, which
+# leaked the old definition.
+MUT_SELF_FN = re.compile(
+    r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\(\s*&\s*mut\s+self\b"
+)
+NON_MUT_SELF_FN = re.compile(
+    r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\(\s*(?:&\s*self|mut\s+self|self)\b"
+)
+DEREF_METHOD = re.compile(
+    r"unsafe\s*\{\s*\(?\s*\*[^{}]*?\}\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\("
+)
+# `Refcount`/`RefcountSize`, whose whole point is that the count moves.
+REFCOUNT_METHODS = frozenset({"retain", "release", "release_many"})
+
 BORROWED_DEREF = re.compile(
     r"&\s*(?:mut|raw\s+mut|raw\s+const)\s+unsafe\s*\{\s*\(*\s*\*"
 )
@@ -724,6 +751,40 @@ def place_writes(tree):
                 f"{' or '.join(sorted(declared))}"
             )
     return found
+
+
+def mutating_methods(tree):
+    """Method names that can only ever be `&mut self`, plus the refcount three."""
+    mutating, other = set(), set()
+    for masked in tree.values():
+        mutating.update(MUT_SELF_FN.findall(masked))
+        other.update(NON_MUT_SELF_FN.findall(masked))
+    return (mutating - other) | REFCOUNT_METHODS
+
+
+def deref_temporary_mutations(tree):
+    """`unsafe { *p }.retain()` -- a mutation of the block's temporary."""
+    names = mutating_methods(tree)
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in DEREF_METHOD.finditer(masked):
+            if match.group(1) not in names:
+                continue
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(f"  {file}:{line}: .{match.group(1)}()")
+    return found
+
+
+def check_deref_temporary_mutations(tree):
+    if found := deref_temporary_mutations(tree):
+        sys.exit(
+            "ratchet: a mutating method called on the value an `unsafe` block "
+            "produced mutates a *temporary* -- `&mut self` autorefs the copy "
+            "the dereference made, and the change is discarded:\n"
+            + "\n".join(found)
+            + "\nThe region has to cover the call: `unsafe { (*p).count."
+            "retain() }`, or wrap the pointer in a `winlayer::Live<T>` once."
+        )
 
 
 def borrowed_derefs(tree):
@@ -1463,6 +1524,48 @@ SELF_TEST_BORROWED_DEREF = [
     # Prose about one costs nothing.
     ("// let d = &mut unsafe { *dsp };\n", 0),
 ]
+# (source, expected deref_temporary_mutations)
+SELF_TEST_DEREF_MUTATION = [
+    # The shape batch 3 wrote twelve times: a reference given away for free.
+    (
+        "impl R {\n    fn retain(&mut self) {}\n}\nfn f() {\n"
+        "    unsafe { (*fp).uf_refcount }.retain();\n}\n",
+        1,
+    ),
+    # `release` shares its name with a consuming `release(self)`, so it is
+    # named outright rather than left to the exclusivity rule.
+    (
+        "impl S {\n    fn release(self) -> *mut u8 {}\n}\nfn f() {\n"
+        "    unsafe { (*fp).uf_refcount }.release();\n}\n",
+        1,
+    ),
+    # A shared method on the copy reads the same bytes: not this bug.
+    (
+        "impl P {\n    fn is_null(&self) -> bool {}\n}\nfn f() {\n"
+        "    if unsafe { (*ac).pat }.is_null() {}\n}\n",
+        0,
+    ),
+    # A name that is `&mut self` on one type and `&self` on another cannot be
+    # judged by name, so it is left alone.
+    (
+        "impl A {\n    fn has(&mut self, f: c_int) -> bool {}\n}\n"
+        "impl B {\n    fn has(&self, f: c_int) -> bool {}\n}\nfn f() {\n"
+        "    if unsafe { (*args).os_flags }.has(LOCAL) {}\n}\n",
+        0,
+    ),
+    # The sound spelling: the region covers the call.
+    (
+        "impl R {\n    fn retain(&mut self) {}\n}\nfn f() {\n"
+        "    unsafe { (*fp).uf_refcount.retain() };\n}\n",
+        0,
+    ),
+    # Prose about one costs nothing.
+    (
+        "impl R {\n    fn retain(&mut self) {}\n}\n"
+        "// unsafe { (*fp).uf_refcount }.retain();\n",
+        0,
+    ),
+]
 # (source, expected pub_items)
 SELF_TEST_PUB_ITEMS = [
     ("pub fn f() {}\n", 1),
@@ -1684,6 +1787,11 @@ def self_test():
     for source, expected in SELF_TEST_PLACE_WRITE:
         got = len(place_writes({"t.rs": mask(source)}))
         assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_DEREF_MUTATION:
+        got = len(deref_temporary_mutations({"t.rs": mask(source)}))
+        assert got == expected, (
+            f"deref_temporary_mutations={got}, want {expected}, for {source!r}"
+        )
     for source, expected in SELF_TEST_BORROWED_DEREF:
         got = len(borrowed_derefs({"t.rs": mask(source)}))
         assert got == expected, (
@@ -1733,6 +1841,7 @@ def main():
     stats, without_forbid, without_deny, without_casts, tree = measure()
     check_place_writes(tree)
     check_borrowed_derefs(tree)
+    check_deref_temporary_mutations(tree)
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
