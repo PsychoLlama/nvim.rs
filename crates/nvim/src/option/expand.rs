@@ -38,6 +38,7 @@ use crate::types::{
     BackslashEscape, ExpandContext, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T,
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
+use crate::winlayer::Live;
 use ::libc::{strcmp, strlen};
 
 use super::{
@@ -332,9 +333,8 @@ unsafe fn take_option_name(
         return None;
     }
     let nextchar = unsafe { **p };
-    let opt_idx = find_option_len(unsafe {
-        slice::from_raw_parts(arg.cast::<u8>(), p.offset_from(arg) as usize)
-    });
+    let len = unsafe { p.offset_from(arg) } as usize;
+    let opt_idx = find_option_len(unsafe { slice::from_raw_parts(arg.cast::<u8>(), len) });
     if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
         unsafe { (*xp).xp_context = ExpandContext::Nothing };
         return None;
@@ -368,20 +368,18 @@ unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t
             | kOptCdpath
             | kOptViewdir
     );
-    unsafe {
-        (*xp).xp_context = if directories {
-            ExpandContext::Directories
-        } else {
-            ExpandContext::Files
-        }
+    let context = if directories {
+        ExpandContext::Directories
+    } else {
+        ExpandContext::Files
     };
-    unsafe {
-        (*xp).xp_backslash = if three {
-            BackslashEscape::THREE
-        } else {
-            BackslashEscape::ONE
-        }
+    let backslash = if three {
+        BackslashEscape::THREE
+    } else {
+        BackslashEscape::ONE
     };
+    unsafe { (*xp).xp_context = context };
+    unsafe { (*xp).xp_backslash = backslash };
     if flags & kOptFlagComma as uint32_t != 0 {
         unsafe { (*xp).xp_backslash |= BackslashEscape::COMMA };
     }
@@ -421,6 +419,23 @@ unsafe fn seek_item_start(xp: *mut expand_T, argend: *mut c_char, flags: uint32_
     }
 }
 
+/// Where one completion pass puts what it matches, and how it matches.
+///
+/// `match_str` used to take these five alongside the candidate and the
+/// index, which is what its `too_many_arguments` allow was for; a pass sees
+/// one set of them throughout, so it builds the value once.
+#[derive(Clone, Copy)]
+struct Matcher {
+    regmatch: *mut regmatch_T,
+    /// The plain array of names.
+    matches: *mut *mut c_char,
+    /// The scored array, used instead when `fuzzy`.
+    fuzmatch: *mut fuzmatch_str_T,
+    /// What a fuzzy pass matches against.
+    fuzzystr: *const c_char,
+    fuzzy: bool,
+}
+
 /// Whether `str` matches, recording it as match `idx` unless only the count
 /// is wanted. The fuzzy form records a score instead.
 ///
@@ -428,33 +443,26 @@ unsafe fn seek_item_start(xp: *mut expand_T, argend: *mut c_char, flags: uint32_
 ///
 /// `matches`/`fuzmatch` must have room for `idx`, and the strings must be
 /// NUL-terminated.
-#[allow(clippy::too_many_arguments)]
-unsafe fn match_str(
-    str: *mut c_char,
-    regmatch: *mut regmatch_T,
-    matches: *mut *mut c_char,
-    idx: c_int,
-    test_only: bool,
-    fuzzy: bool,
-    fuzzystr: *const c_char,
-    fuzmatch: *mut fuzmatch_str_T,
-) -> bool {
+unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -> bool {
     // SAFETY: the caller's strings and output arrays.
-    if !fuzzy {
-        if !unsafe { vim_regexec(regmatch, str, 0 as colnr_T) } {
+    if !m.fuzzy {
+        if !unsafe { vim_regexec(m.regmatch, str, 0 as colnr_T) } {
             return false;
         }
         if !test_only {
-            unsafe { *matches.offset(idx as isize) = xstrdup(str) };
+            unsafe { *m.matches.offset(idx as isize) = xstrdup(str) };
         }
         return true;
     }
-    let score = unsafe { fuzzy_match_str(str, fuzzystr) };
+    let score = unsafe { fuzzy_match_str(str, m.fuzzystr) };
     if score == FUZZY_SCORE_NONE {
         return false;
     }
     if !test_only {
-        let slot = &mut unsafe { *fuzmatch.offset(idx as isize) };
+        // SAFETY: the caller promised room for `idx`. The handle borrows
+        // the slot for the one field write that asked and no longer -- a
+        // `&mut *p` here would write into a discarded copy of the slot.
+        let mut slot = unsafe { Live::new(m.fuzmatch.offset(idx as isize)) };
         slot.idx = idx;
         slot.str = unsafe { xstrdup(str) };
         slot.score = score;
@@ -491,23 +499,21 @@ pub(crate) unsafe fn expand_settings(
     for pass in 0..2 {
         let counting = pass == 0;
         unsafe { (*regmatch).rm_ic = ic };
+        // Both output arrays are allocated at the end of the counting
+        // pass, so one matcher stands for the whole of this one.
+        let m = Matcher {
+            regmatch,
+            // SAFETY: the caller's out-parameter.
+            matches: unsafe { *matches },
+            fuzmatch,
+            fuzzystr,
+            fuzzy,
+        };
 
         // "all" is a `:set` keyword rather than an option, so it is
         // only offered where a non-boolean name would be.
-        if !booleans_only
-            && unsafe {
-                match_str(
-                    c"all".as_ptr() as *mut c_char,
-                    regmatch,
-                    *matches,
-                    count,
-                    counting,
-                    fuzzy,
-                    fuzzystr,
-                    fuzmatch,
-                )
-            }
-        {
+        let all = c"all".as_ptr() as *mut c_char;
+        if !booleans_only && unsafe { match_str(all, count, counting, m) } {
             if counting {
                 num_normal += 1;
             } else {
@@ -522,18 +528,7 @@ pub(crate) unsafe fn expand_settings(
             {
                 continue;
             }
-            if unsafe {
-                match_str(
-                    opt.fullname,
-                    regmatch,
-                    *matches,
-                    count,
-                    counting,
-                    fuzzy,
-                    fuzzystr,
-                    fuzmatch,
-                )
-            } {
+            if unsafe { match_str(opt.fullname, count, counting, m) } {
                 if counting {
                     num_normal += 1;
                 } else {
@@ -560,16 +555,12 @@ pub(crate) unsafe fn expand_settings(
             }
             unsafe { *numMatches = num_normal };
             if fuzzy {
-                fuzmatch = unsafe {
-                    xmalloc((num_normal as size_t).wrapping_mul(size_of::<fuzmatch_str_T>()))
-                }
-                .cast::<fuzmatch_str_T>();
+                let room = (num_normal as size_t).wrapping_mul(size_of::<fuzmatch_str_T>());
+                fuzmatch = unsafe { xmalloc(room) }.cast::<fuzmatch_str_T>();
             } else {
-                unsafe {
-                    *matches =
-                        xmalloc((num_normal as size_t).wrapping_mul(size_of::<*mut c_char>()))
-                            .cast::<*mut c_char>()
-                };
+                let room = (num_normal as size_t).wrapping_mul(size_of::<*mut c_char>());
+                let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();
+                unsafe { *matches = array };
             }
         }
     }
@@ -680,9 +671,9 @@ pub(crate) unsafe fn expand_setting_subtract(
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
         return unsafe { expand_old_setting(numMatches, matches) };
     }
-    let value = unsafe {
-        *get_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get()).string_var()
-    };
+    let (buf, win) = (curbuf.get(), curwin.get());
+    let varp = unsafe { get_varp_scope_from(opt_idx, FLAGS.get(), buf, win) };
+    let value = unsafe { *varp.string_var() };
     let flags = get_option(opt_idx).flags;
 
     if flags & kOptFlagComma as uint32_t != 0 {
@@ -720,10 +711,9 @@ pub(crate) unsafe fn expand_setting_subtract(
                 && unsafe { vim_regexec(regmatch, item, 0 as colnr_T) }
             {
                 unsafe { ga_grow(&raw mut ga, 1) };
-                unsafe {
-                    *ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize) =
-                        escape_option_str_cmdline(item)
-                };
+                let slot = ga.ga_data.cast::<*mut c_char>();
+                let escaped = unsafe { escape_option_str_cmdline(item) };
+                unsafe { *slot.offset(ga.ga_len as isize) = escaped };
                 ga.ga_len += 1;
             }
             if next.is_null() {
@@ -747,20 +737,17 @@ pub(crate) unsafe fn expand_setting_subtract(
         if num_flags == 0 {
             return FAIL;
         }
-        unsafe {
-            *matches = xmalloc(size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1)))
-                .cast::<*mut c_char>()
-        };
+        let room = size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1));
+        let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();
+        unsafe { *matches = array };
         let mut count = 0;
         unsafe { *(*matches) = xmemdupz(value.cast::<c_void>(), num_flags).cast::<c_char>() };
         count += 1;
         if num_flags > 1 {
             let mut flag = value;
             while unsafe { *flag } != NUL as c_char {
-                unsafe {
-                    *(*matches).offset(count as isize) =
-                        xmemdupz(flag.cast::<c_void>(), 1).cast::<c_char>()
-                };
+                let copy = unsafe { xmemdupz(flag.cast::<c_void>(), 1) }.cast::<c_char>();
+                unsafe { *(*matches).offset(count as isize) = copy };
                 count += 1;
                 flag = unsafe { flag.add(1) };
             }

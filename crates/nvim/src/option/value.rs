@@ -121,15 +121,9 @@ pub(crate) fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
         kOptValTypeBoolean => (unsafe { o1.data.boolean }) == unsafe { o2.data.boolean },
         kOptValTypeNumber => (unsafe { o1.data.number }) == unsafe { o2.data.number },
         kOptValTypeString => {
-            unsafe { o1.data.string }.len() == unsafe { o2.data.string }.len()
-                && (unsafe { o1.data.string }.data() == unsafe { o2.data.string }.data()
-                    || unsafe {
-                        strnequal(
-                            o1.data.string.data(),
-                            o2.data.string.data(),
-                            o1.data.string.len(),
-                        )
-                    })
+            let (s1, s2) = unsafe { (o1.data.string, o2.data.string) };
+            s1.len() == s2.len()
+                && (s1.data() == s2.data() || unsafe { strnequal(s1.data(), s2.data(), s1.len()) })
         }
         _ => unreachable!("option value type {}", o1.type_0),
     }
@@ -210,13 +204,14 @@ pub(crate) fn optval_to_cstr(value: OptVal) -> *mut c_char {
     // SAFETY: each arm reads the payload its own tag selected.
     match value.type_0 {
         kOptValTypeNil => unsafe { xstrdup(c"".as_ptr()) },
-        kOptValTypeBoolean => unsafe {
-            xstrdup(if value.data.boolean != 0 {
-                c"true".as_ptr()
+        kOptValTypeBoolean => {
+            let word = if unsafe { value.data.boolean } != 0 {
+                c"true"
             } else {
-                c"false".as_ptr()
-            })
-        },
+                c"false"
+            };
+            unsafe { xstrdup(word.as_ptr()) }
+        }
         kOptValTypeNumber => {
             let len = NUMBUFLEN as size_t;
             let buf = unsafe { xmalloc(len) }.cast::<c_char>();

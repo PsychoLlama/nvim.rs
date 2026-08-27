@@ -306,20 +306,28 @@ pub(crate) unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
 /// `buf` must be live; `eap`, when non-null, must be a live command.
 pub(crate) unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_int {
     // SAFETY: the caller's pointers are live.
-    let c = unsafe {
-        if !eap.is_null() && (*eap).force_ff != 0 {
-            (*eap).force_ff
+    // SAFETY: the caller's command, where they gave one. Reading both
+    // fields together is the same answer: they are plain fields of a live
+    // `exarg_T`, and only their values decide anything below.
+    let (force_ff, force_bin) = if eap.is_null() {
+        (0, 0)
+    } else {
+        unsafe { ((*eap).force_ff, (*eap).force_bin) }
+    };
+    let c = if force_ff != 0 {
+        force_ff
+    } else {
+        let binary = if force_bin != 0 {
+            (force_bin == FORCE_BIN) as c_int
         } else {
-            let binary = if !eap.is_null() && (*eap).force_bin != 0 {
-                ((*eap).force_bin == FORCE_BIN) as c_int
-            } else {
-                (*buf).b_p_bin
-            };
-            if binary != 0 {
-                return EOL_UNIX;
-            }
-            *(*buf).b_p_ff as c_uchar as c_int
+            // SAFETY: the caller's buffer is live.
+            unsafe { (*buf).b_p_bin }
+        };
+        if binary != 0 {
+            return EOL_UNIX;
         }
+        // SAFETY: 'fileformat' is a string option, so it is never null.
+        (unsafe { *(*buf).b_p_ff }) as c_uchar as c_int
     };
     match c as u8 {
         b'u' => EOL_UNIX,

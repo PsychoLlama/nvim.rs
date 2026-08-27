@@ -45,6 +45,17 @@ use super::{
     set_op_T,
 };
 
+/// `memmove` between two points of the same value buffer, without the two
+/// `void *` casts that make every call site here go vertical.
+///
+/// # Safety
+///
+/// `dst` and `src` must be `n` bytes of one live buffer.
+unsafe fn shift(dst: *mut c_char, src: *const c_char, n: size_t) {
+    // SAFETY: the caller's buffer.
+    unsafe { memmove(dst.cast::<c_void>(), src.cast::<c_void>(), n) };
+}
+
 /// How much room the assembled value needs: the argument, plus the current
 /// value when the operator keeps it, plus a terminator for each.
 ///
@@ -85,7 +96,7 @@ pub(crate) unsafe fn stropt_copy_value(
             arg = unsafe { arg.add(1) }; // Remove the backslash.
         }
         let len = unsafe { utfc_ptr2len(arg) } as usize;
-        unsafe { memmove(s.cast::<c_void>(), arg.cast::<c_void>(), len) };
+        unsafe { shift(s, arg, len) };
         arg = unsafe { arg.add(len) };
         s = unsafe { s.add(len) };
     }
@@ -152,25 +163,13 @@ pub(crate) unsafe fn stropt_concat_with_comma(
             len -= 1;
         }
         // Shift the new part along and put the current value in front.
-        unsafe {
-            memmove(
-                newval.add(len + comma).cast::<c_void>(),
-                newval.cast::<c_void>(),
-                strlen(newval) + 1,
-            )
-        };
-        unsafe { memmove(newval.cast::<c_void>(), origval.cast::<c_void>(), len) };
+        unsafe { shift(newval.add(len + comma), newval, strlen(newval) + 1) };
+        unsafe { shift(newval, origval, len) };
         len
     } else {
         // Prepending: the new part is already in front.
         let len = unsafe { strlen(newval) };
-        unsafe {
-            memmove(
-                newval.add(len + comma).cast::<c_void>(),
-                origval.cast::<c_void>(),
-                strlen(origval) + 1,
-            )
-        };
+        unsafe { shift(newval.add(len + comma), origval, strlen(origval) + 1) };
         len
     };
     if separated {
@@ -212,13 +211,7 @@ pub(crate) unsafe fn stropt_remove_val(
         }
     }
     let at = unsafe { strval.offset_from(origval) } as usize;
-    unsafe {
-        memmove(
-            newval.add(at).cast::<c_void>(),
-            strval.add(len).cast::<c_void>(),
-            strlen(strval.add(len)) + 1,
-        )
-    };
+    unsafe { shift(newval.add(at), strval.add(len), strlen(strval.add(len)) + 1) };
 }
 
 /// Find the item of `src` that opens with `key`, and report how long it is.
@@ -262,21 +255,9 @@ pub(crate) unsafe fn remove_comma_item(str: *const c_char, item: *mut c_char, it
     // SAFETY: the caller's string, as documented above.
     let after = unsafe { item.offset(itemlen) };
     if unsafe { *after } == b',' as c_char {
-        unsafe {
-            memmove(
-                item.cast::<c_void>(),
-                after.add(1).cast::<c_void>(),
-                strlen(after.add(1)) + 1,
-            )
-        };
+        unsafe { shift(item, after.add(1), strlen(after.add(1)) + 1) };
     } else if item > str.cast_mut() && unsafe { *item.sub(1) } == b',' as c_char {
-        unsafe {
-            memmove(
-                item.sub(1).cast::<c_void>(),
-                after.cast::<c_void>(),
-                strlen(after) + 1,
-            )
-        };
+        unsafe { shift(item.sub(1), after, strlen(after) + 1) };
     } else {
         // The only item there was.
         unsafe { *item = NUL as c_char };
@@ -328,13 +309,7 @@ pub(crate) unsafe fn append_item(str: *mut c_char, item: *mut c_char, item_len: 
         unsafe { *str.offset(len) = b',' as c_char };
         len += 1;
     }
-    unsafe {
-        memmove(
-            str.offset(len).cast::<c_void>(),
-            item.cast::<c_void>(),
-            item_len as size_t,
-        )
-    };
+    unsafe { shift(str.offset(len), item, item_len as size_t) };
     unsafe { *str.offset(len + item_len) = NUL as c_char };
 }
 
@@ -346,20 +321,8 @@ pub(crate) unsafe fn prepend_item(str: *mut c_char, item: *mut c_char, item_len:
     // SAFETY: the caller's buffer, as documented above.
     let len = unsafe { strlen(str) };
     let comma = usize::from(len > 0);
-    unsafe {
-        memmove(
-            str.offset(item_len).add(comma).cast::<c_void>(),
-            str.cast::<c_void>(),
-            len + 1,
-        )
-    };
-    unsafe {
-        memmove(
-            str.cast::<c_void>(),
-            item.cast::<c_void>(),
-            item_len as size_t,
-        )
-    };
+    unsafe { shift(str.offset(item_len).add(comma), str, len + 1) };
+    unsafe { shift(str, item, item_len as size_t) };
     if comma != 0 {
         unsafe { *str.offset(item_len) = b',' as c_char };
     }
@@ -507,7 +470,7 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
         } else {
             unsafe { s.add(1) }
         };
-        unsafe { memmove(s.cast::<c_void>(), past.cast::<c_void>(), strlen(past) + 1) };
+        unsafe { shift(s, past, strlen(past) + 1) };
     }
 }
 

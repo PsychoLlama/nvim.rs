@@ -78,15 +78,14 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     let mut items: Vec<OptIndex> = Vec::with_capacity(kOptCount as usize);
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    unsafe {
-        msg_puts_title(gettext(if opt_flags.has(OptionSetFlags::GLOBAL) {
-            c"\n--- Global option values ---".as_ptr()
-        } else if opt_flags.has(OptionSetFlags::LOCAL) {
-            c"\n--- Local option values ---".as_ptr()
-        } else {
-            c"\n--- Options ---".as_ptr()
-        }))
+    let title = if opt_flags.has(OptionSetFlags::GLOBAL) {
+        c"\n--- Global option values ---"
+    } else if opt_flags.has(OptionSetFlags::LOCAL) {
+        c"\n--- Local option values ---"
+    } else {
+        c"\n--- Options ---"
     };
+    unsafe { msg_puts_title(gettext(title.as_ptr())) };
 
     for run in 1..=2 {
         if got_int.get() {
@@ -202,16 +201,15 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
         true => !curbuf_is_changed(),
         false => word() == 0,
     };
-    unsafe {
-        msg_puts(if boolean && is_off() {
-            c"no".as_ptr()
-        } else if boolean && word() < 0 {
-            // A global-local boolean with no local value.
-            c"--".as_ptr()
-        } else {
-            c"  ".as_ptr()
-        })
+    let prefix = if boolean && is_off() {
+        c"no"
+    } else if boolean && word() < 0 {
+        // A global-local boolean with no local value.
+        c"--"
+    } else {
+        c"  "
     };
+    unsafe { msg_puts(prefix.as_ptr()) };
     unsafe { msg_puts(opt.fullname) };
 
     if !boolean {
@@ -301,15 +299,9 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                 // undo the rest of the session, so they are only set
                 // when they are not already right.
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
+                let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
                 if guarded
-                    && (unsafe {
-                        fprintf(
-                            fd,
-                            c"if &%s != '%s'".as_ptr(),
-                            get_option(opt_idx).fullname,
-                            *varp.string_var(),
-                        )
-                    } < 0
+                    && (unsafe { fprintf(fd, guard, name, *varp.string_var()) } < 0
                         || unsafe { put_eol(fd) } < 0)
                 {
                     return FAIL;

@@ -241,12 +241,10 @@ pub(crate) unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex
         unsafe { *opt_idxp = kOptInvalid };
         return ptr::null();
     }
-    unsafe {
-        *opt_idxp = super::find_option_len(slice::from_raw_parts(
-            arg.cast::<u8>(),
-            p.offset_from(arg) as usize,
-        ))
-    };
+    // The name runs from `arg` up to the cursor.
+    let len = unsafe { p.offset_from(arg) } as usize;
+    let name = unsafe { slice::from_raw_parts(arg.cast::<u8>(), len) };
+    unsafe { *opt_idxp = super::find_option_len(name) };
     p
 }
 
@@ -284,16 +282,12 @@ unsafe fn get_option_newval(
     // Setting the local value of a global-local option amends whatever
     // it is currently reading through, which may be the global value.
     let oldval_is_global = option_is_global_local(opt_idx) && opt_flags.has(OptionSetFlags::LOCAL);
-    let oldval = unsafe {
-        optval_from_varp(
-            opt_idx,
-            if oldval_is_global {
-                get_varp(opt_idx)
-            } else {
-                varp
-            },
-        )
+    let from = if oldval_is_global {
+        get_varp(opt_idx)
+    } else {
+        varp
     };
+    let oldval = unsafe { optval_from_varp(opt_idx, from) };
 
     // `:set opt&`. Deliberately `OptionSetFlags::GLOBAL` rather than `opt_flags`, so
     // that a `:setlocal opt&` on a global-local option gets the real
@@ -344,16 +338,9 @@ unsafe fn get_option_newval(
         }
         kOptValTypeString => {
             let mut op = op;
-            let newval_str = unsafe {
-                stropt_get_newval(
-                    opt_idx,
-                    argp,
-                    varp,
-                    oldval.data.string.data(),
-                    &raw mut op,
-                    flags,
-                )
-            };
+            let old = unsafe { oldval.data.string }.data();
+            let op_var = &raw mut op;
+            let newval_str = unsafe { stropt_get_newval(opt_idx, argp, varp, old, op_var, flags) };
             OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
@@ -482,13 +469,12 @@ unsafe fn do_one_set_option(
             && unsafe { *argp.add(1) } as c_int == 'v' as c_int
             && unsafe { *argp.add(2) } as c_int == 'i' as c_int
         {
-            *argp = unsafe {
-                argp.add(if *argp.add(3) as c_int == 'm' as c_int {
-                    3
-                } else {
-                    2
-                })
+            let step = if (unsafe { *argp.add(3) }) as c_int == 'm' as c_int {
+                3
+            } else {
+                2
             };
+            *argp = unsafe { argp.add(step) };
         }
         // Nothing may follow the ones that take no value.
         if !unsafe { vim_strchr(c"?!&<".as_ptr(), nextchar) }.is_null()
@@ -639,16 +625,9 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
             let startarg = arg;
             let mut errmsg: *const c_char = ptr::null();
             let mut errbuf: [c_char; 80] = [0; 80];
-            unsafe {
-                do_one_set_option(
-                    opt_flags,
-                    &mut arg,
-                    &mut did_show,
-                    errbuf.as_mut_ptr(),
-                    errbuf.len(),
-                    &mut errmsg,
-                )
-            };
+            let (buf, len) = (errbuf.as_mut_ptr(), errbuf.len());
+            let (a, show, msg) = (&mut arg, &mut did_show, &mut errmsg);
+            unsafe { do_one_set_option(opt_flags, a, show, buf, len, msg) };
             // Step over the value, and over an `=` that starts another
             // one — twice at most, which is what `:set opt=a=b` needs.
             for _ in 0..2 {
@@ -697,20 +676,10 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     debug_assert!(end >= start);
     let arglen = unsafe { end.offset_from(start) };
     if at as isize + arglen < IOSIZE as isize {
-        unsafe {
-            xstrlcpy(
-                buf.offset(at as isize - 2),
-                c": ".as_ptr(),
-                (IOSIZE - at + 2) as size_t,
-            )
-        };
-        unsafe {
-            memmove(
-                buf.offset(at as isize).cast::<c_void>(),
-                start.cast::<c_void>(),
-                arglen as size_t,
-            )
-        };
+        let room = (IOSIZE - at + 2) as size_t;
+        unsafe { xstrlcpy(buf.offset(at as isize - 2), c": ".as_ptr(), room) };
+        let dst = unsafe { buf.offset(at as isize) }.cast::<c_void>();
+        unsafe { memmove(dst, start.cast::<c_void>(), arglen as size_t) };
         unsafe { *buf.offset(at as isize + arglen) = NUL as c_char };
     }
     unsafe { trans_characters(buf, IOSIZE) };
@@ -746,15 +715,9 @@ unsafe fn find_key_len(arg: *const c_char, len: size_t, has_lt: bool) -> c_int {
     // Back up over the `<` that `has_lt` says was there.
     let mut p = unsafe { arg.sub(1) };
     let mut modifiers = 0;
-    let key = unsafe {
-        find_special_key(
-            &raw mut p,
-            len.wrapping_add(1),
-            &raw mut modifiers,
-            FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int,
-            ptr::null_mut::<bool>(),
-        )
-    };
+    let how = FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int;
+    let (pp, mods, none) = (&raw mut p, &raw mut modifiers, ptr::null_mut::<bool>());
+    let key = unsafe { find_special_key(pp, len.wrapping_add(1), mods, how, none) };
     // A key with a modifier left over does not fit in one option value.
     if modifiers != 0 { 0 } else { key }
 }

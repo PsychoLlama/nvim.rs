@@ -145,26 +145,11 @@ pub(crate) fn didset_options2() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
     unsafe { highlight_changed() };
     let win = curwin.get();
-    unsafe {
-        set_chars_option(
-            win,
-            (*win).w_onebuf_opt.wo_fcs,
-            kFillchars,
-            true,
-            ptr::null_mut::<c_char>(),
-            0 as size_t,
-        )
-    };
-    unsafe {
-        set_chars_option(
-            win,
-            (*win).w_onebuf_opt.wo_lcs,
-            kListchars,
-            true,
-            ptr::null_mut::<c_char>(),
-            0 as size_t,
-        )
-    };
+    let no_err = ptr::null_mut::<c_char>();
+    let fcs = unsafe { (*win).w_onebuf_opt.wo_fcs };
+    unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
+    let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
+    unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
     unsafe { check_opt_wim() };
     let buf = curbuf.get();
     unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
@@ -319,10 +304,10 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 /// `wp` must be live.
 pub(crate) unsafe fn check_blending(wp: *mut win_T) {
     // SAFETY: the caller's window is live.
-    unsafe {
-        (*wp).w_grid_alloc.blending =
-            (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt || ((*wp).w_floating && (*wp).w_config.shadow)
-    };
+    // SAFETY: the caller's window.
+    let mut wp = unsafe { Win::new(wp) };
+    wp.w_grid_alloc.blending =
+        wp.w_onebuf_opt.wo_winbl > 0 as OptInt || (wp.w_floating && wp.w_config.shadow);
 }
 
 /// Parse 'winhighlight' — a comma-separated list of `from:to` group pairs —

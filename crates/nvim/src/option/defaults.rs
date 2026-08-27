@@ -174,15 +174,9 @@ fn set_init_default_backupskip() {
                 let seplen = size_t::from(ga.ga_len != 0);
                 unsafe { ga_grow(&raw mut ga, (seplen + itemlen + 1) as c_int) };
                 let comma = if seplen > 0 { c"," } else { c"" };
-                ga.ga_len += unsafe {
-                    vim_snprintf(
-                        ga.ga_data.cast::<c_char>().offset(ga.ga_len as isize),
-                        seplen + itemlen + 1,
-                        c"%s%s".as_ptr(),
-                        comma.as_ptr(),
-                        item,
-                    )
-                };
+                let at = unsafe { ga.ga_data.cast::<c_char>().offset(ga.ga_len as isize) };
+                let (room, sep) = (seplen + itemlen + 1, comma.as_ptr());
+                ga.ga_len += unsafe { vim_snprintf(at, room, c"%s%s".as_ptr(), sep, item) };
             }
             unsafe { xfree(item.cast::<c_void>()) };
         }
@@ -304,20 +298,10 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     let len = unsafe { strlen(subpath) };
     let backupdir =
         unsafe { xrealloc(subpath.cast::<c_void>(), len.wrapping_add(3)) }.cast::<c_char>();
-    unsafe {
-        memmove(
-            backupdir.add(2).cast::<c_void>(),
-            backupdir.cast::<c_void>(),
-            len.wrapping_add(1),
-        )
-    };
-    unsafe {
-        memmove(
-            backupdir.cast::<c_void>(),
-            c".,".as_ptr().cast::<c_void>(),
-            2,
-        )
-    };
+    let after = unsafe { backupdir.add(2) }.cast::<c_void>();
+    unsafe { memmove(after, backupdir.cast::<c_void>(), len.wrapping_add(1)) };
+    let dot = c".,".as_ptr().cast::<c_void>();
+    unsafe { memmove(backupdir.cast::<c_void>(), dot, 2) };
     unsafe { set_string_default(kOptBackupdir, backupdir, true) };
 
     for (opt_idx, name) in [

@@ -140,17 +140,17 @@ fn dup_static(name: &CStr) -> *mut c_char {
 pub(crate) unsafe fn win_copy_options(wp_from: *mut win_T, wp_to: *mut win_T) {
     // SAFETY: the caller's windows; naming a field of one reads nothing,
     // so the four addresses below are ordinary checked code.
-    unsafe {
-        copy_winopt(
-            win_field!(wp_from, w_onebuf_opt),
-            win_field!(wp_to, w_onebuf_opt),
-        );
-        copy_winopt(
-            win_field!(wp_from, w_allbuf_opt),
-            win_field!(wp_to, w_allbuf_opt),
-        );
-        didset_window_options(wp_to, true);
-    };
+    let one = (
+        win_field!(wp_from, w_onebuf_opt),
+        win_field!(wp_to, w_onebuf_opt),
+    );
+    let all = (
+        win_field!(wp_from, w_allbuf_opt),
+        win_field!(wp_to, w_allbuf_opt),
+    );
+    unsafe { copy_winopt(one.0, one.1) };
+    unsafe { copy_winopt(all.0, all.1) };
+    unsafe { didset_window_options(wp_to, true) };
 }
 
 /// A copy of a string option's value, sharing the unset string rather than
@@ -349,11 +349,9 @@ pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
     // null out-parameters say "report nothing", which each accepts.
-    unsafe {
-        check_colorcolumn(ptr::null_mut(), wp);
-        briopt_check(ptr::null_mut(), wp);
-        fill_culopt_flags(None, wp);
-    }
+    unsafe { check_colorcolumn(ptr::null_mut(), wp) };
+    unsafe { briopt_check(ptr::null_mut(), wp) };
+    unsafe { fill_culopt_flags(None, wp) };
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
     let fcs = w.w_onebuf_opt.wo_fcs;
@@ -362,12 +360,10 @@ pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     let lcs = w.w_onebuf_opt.wo_lcs;
     unsafe { set_chars_option(wp, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
-    unsafe {
-        parse_winhl_opt(ptr::null(), wp);
-        check_blending(wp);
-        set_winbar_win(wp, false, valid_cursor);
-        check_signcolumn(ptr::null_mut(), wp);
-    }
+    unsafe { parse_winhl_opt(ptr::null(), wp) };
+    unsafe { check_blending(wp) };
+    unsafe { set_winbar_win(wp, false, valid_cursor) };
+    unsafe { check_signcolumn(ptr::null_mut(), wp) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 

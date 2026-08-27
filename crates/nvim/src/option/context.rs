@@ -114,13 +114,8 @@ impl OptionContext {
                 {
                     unsafe { restore_win_noblock(switchwin, true) };
                     if unsafe { (*err).type_0 } == kErrorTypeNone {
-                        unsafe {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                c"Problem while switching windows".as_ptr(),
-                            )
-                        };
+                        let why = c"Problem while switching windows".as_ptr();
+                        unsafe { api_set_error(err, kErrorTypeException, why) };
                     }
                     return false;
                 }
