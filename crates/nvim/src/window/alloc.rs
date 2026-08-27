@@ -278,7 +278,6 @@ pub unsafe fn win_free(wp: *mut win_T, tp: *mut tabpage_T) {
 /// Take `wp` off the window list and free everything hanging off it.
 fn free_win(wp: Win, tp: Option<TabPage>) {
     let mut wp = wp;
-    forget_window(wp.handle());
     // SAFETY: a live window; reduces the reference count to its argument list.
     clear_folding(wp);
     // SAFETY: the window's own argument list.
@@ -340,6 +339,13 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     if win_valid_any_tab(wp.raw()) {
         remove(wp, tp);
     }
+    // Out of the registry only now, *after* the unlink: the list links are
+    // handles, so a window that is still on a list has to stay findable or
+    // every walk stops at it. Upstream forgets the handle at the top of this
+    // function, where a pointer link could not care. Nothing between the two
+    // points can look a window up -- `block_autocmds` covers all but the two
+    // calls above it, and neither reaches the registry.
+    forget_window(wp.handle());
     if autocmd_busy.get() {
         defer_free_window(wp);
     } else {
