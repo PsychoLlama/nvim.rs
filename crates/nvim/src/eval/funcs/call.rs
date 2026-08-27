@@ -107,15 +107,11 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let mut tofree = Owned(ptr::null_mut());
     if args.ty(0) == VAR_STRING {
         let mut p = func;
-        tofree = Owned(unsafe {
-            trans_function_name(
-                &raw mut p,
-                false,
-                TFN_INT as c_int | TFN_QUIET as c_int,
-                ptr::null_mut::<funcdict_T>(),
-                ptr::null_mut::<*mut partial_T>(),
-            )
-        });
+        let name = &raw mut p;
+        let flags = TFN_INT as c_int | TFN_QUIET as c_int;
+        let (fd, pt) = (ptr::null_mut::<funcdict_T>(), ptr::null_mut());
+        // SAFETY: `p` walks a NUL-terminated string the frame owns.
+        tofree = Owned(unsafe { trans_function_name(name, false, flags, fd, pt) });
         if tofree.0.is_null() {
             unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), func) };
             return;
@@ -277,14 +273,13 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
             _list: list,
             item: unsafe { tv_list_first(list) },
         };
-        unsafe {
-            do_cmdline(
-                ptr::null_mut(),
-                Some(get_list_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
-                &raw mut cookie as *mut c_void,
-                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED,
-            )
-        };
+        type GetLine = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
+        let getline = Some(get_list_line as GetLine);
+        let cookie = (&raw mut cookie).cast::<c_void>();
+        let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED;
+        // SAFETY: `cookie` is the walk state this frame owns and outlives
+        // the call, which is what `get_list_line` asks for.
+        unsafe { do_cmdline(ptr::null_mut(), getline, cookie, opts) };
         unsafe { tv_list_unref(list) };
     }
 
@@ -343,9 +338,9 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         b':' => unsafe { cmd_exists(p.add(1)) },
         // `##event` asks whether the event name is known at all;
         // `#event` asks whether an autocommand is defined for it.
-        b'#' if unsafe { *p.add(1) } as u8 == b'#' => unsafe {
-            autocmd_supported(p.add(2)) as c_int
-        },
+        b'#' if unsafe { *p.add(1) } as u8 == b'#' => {
+            (unsafe { autocmd_supported(p.add(2)) }) as c_int
+        }
         b'#' => unsafe { au_exists(p.add(1)) as c_int },
         _ => unsafe { var_exists(p) as c_int },
     };
@@ -386,17 +381,14 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     let mut trans_name = Owned(ptr::null_mut());
     if (use_string && unsafe { vim_strchr(s, AUTOLOAD_CHAR) }.is_null()) || is_funcref {
         let mut name = s;
-        trans_name = Owned(unsafe {
-            save_function_name(
-                &raw mut name,
-                false,
-                TFN_INT as c_int
-                    | TFN_QUIET as c_int
-                    | TFN_NO_AUTOLOAD as c_int
-                    | TFN_NO_DEREF as c_int,
-                ptr::null_mut::<funcdict_T>(),
-            )
-        });
+        let out = &raw mut name;
+        let flags = TFN_INT as c_int
+            | TFN_QUIET as c_int
+            | TFN_NO_AUTOLOAD as c_int
+            | TFN_NO_DEREF as c_int;
+        let fd = ptr::null_mut::<funcdict_T>();
+        // SAFETY: `name` walks a NUL-terminated string the frame owns.
+        trans_name = Owned(unsafe { save_function_name(out, false, flags, fd) });
         // Anything left over means the name was not a name.
         if unsafe { *name } as c_int != NUL {
             s = ptr::null_mut();
@@ -469,11 +461,8 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         }
         if arg_idx > 0 {
             if args.ty(arg_idx as usize) != VAR_LIST {
-                unsafe {
-                    emsg(gettext(
-                        c"E923: Second argument of function() must be a list or a dict".as_ptr(),
-                    ))
-                };
+                let msg = c"E923: Second argument of function() must be a list or a dict";
+                unsafe { emsg(gettext(msg.as_ptr())) };
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
@@ -507,17 +496,13 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         };
         let lv_len = unsafe { tv_list_len(list) };
         unsafe { (*pt).pt_argc = arg_len + lv_len };
-        unsafe {
-            (*pt).pt_argv = xmalloc(size_of::<typval_T>() * (*pt).pt_argc as usize) as *mut typval_T
-        };
+        let bytes = size_of::<typval_T>() * unsafe { (*pt).pt_argc } as usize;
+        unsafe { (*pt).pt_argv = xmalloc(bytes) as *mut typval_T };
         let mut i = 0;
         while i < arg_len {
-            unsafe {
-                tv_copy(
-                    (*arg_pt).pt_argv.add(i as usize),
-                    (*pt).pt_argv.add(i as usize),
-                )
-            };
+            let from = unsafe { (*arg_pt).pt_argv.add(i as usize) };
+            let to = unsafe { (*pt).pt_argv.add(i as usize) };
+            unsafe { tv_copy(from, to) };
             i += 1;
         }
         if lv_len > 0 && !list.is_null() {

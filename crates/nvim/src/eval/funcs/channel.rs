@@ -183,15 +183,11 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     let mut error = ptr::null::<c_char>();
-    rettv.vval.v_number = unsafe {
-        channel_send(
-            args.get(0).vval.v_number as uint64_t,
-            input,
-            input_len as usize,
-            true,
-            &raw mut error,
-        )
-    } as varnumber_T;
+    let id = unsafe { args.get(0).vval.v_number } as uint64_t;
+    let len = input_len as usize;
+    let err = &raw mut error;
+    let sent = unsafe { channel_send(id, input, len, true, err) };
+    rettv.vval.v_number = sent as varnumber_T;
     if !error.is_null() {
         unsafe { emsg(error) };
     }
@@ -228,13 +224,9 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut items = [NIL; MAX_FUNC_ARGS as usize];
     let mut arena: Arena = ARENA_EMPTY;
     let event_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
-    let ok = unsafe {
-        rpc_send_event(
-            args.get(0).vval.v_number as uint64_t,
-            arg_string(&mut numbuf, args.get(1)),
-            event_args,
-        )
-    };
+    let id = unsafe { args.get(0).vval.v_number } as uint64_t;
+    let event = arg_string(&mut numbuf, args.get(1));
+    let ok = unsafe { rpc_send_event(id, event, event_args) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
         semsg_c!(
@@ -409,14 +401,14 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let list = list_alloc_ret(rettv, n as isize);
     for i in 0..n {
         unsafe { tv_list_append_allocated_string(list, *addrs.add(i)) };
-        unsafe {
-            *addrs_arr.items.add(addrs_arr.size) = object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: cstr_as_string(*addrs.add(i)),
-                },
-            }
+        let addr = unsafe { *addrs.add(i) };
+        let entry = object {
+            type_0: kObjectTypeString,
+            data: object_data {
+                string: unsafe { cstr_as_string(addr) },
+            },
         };
+        unsafe { *addrs_arr.items.add(addrs_arr.size) = entry };
         addrs_arr.size += 1;
     }
 
@@ -427,12 +419,11 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         let mut lua_args = ARRAY_DICT_INIT;
         lua_args.capacity = 1;
         lua_args.items = items.as_mut_ptr();
-        unsafe {
-            *lua_args.items = object {
-                type_0: kObjectTypeArray,
-                data: object_data { array: addrs_arr },
-            }
+        let entry = object {
+            type_0: kObjectTypeArray,
+            data: object_data { array: addrs_arr },
         };
+        unsafe { *lua_args.items = entry };
         lua_args.size = 1;
 
         let mut err = Error {
@@ -440,16 +431,10 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             msg: ptr::null_mut(),
         };
         const PEERS: &str = "return require('vim._core.server').serverlist(...)";
-        let rv = unsafe {
-            nlua_exec(
-                String_0::from_raw_parts(PEERS.as_ptr() as *mut c_char, PEERS.len()),
-                ptr::null(),
-                lua_args,
-                kRetObject,
-                &raw mut arena,
-                &raw mut err,
-            )
-        };
+        let code = PEERS.as_ptr() as *mut c_char;
+        let code = String_0::from_raw_parts(code, PEERS.len());
+        let (mem, out) = (&raw mut arena, &raw mut err);
+        let rv = unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem, out) };
         if err.type_0 != kErrorTypeNone {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.
@@ -464,13 +449,9 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             );
         } else {
             for i in 0..unsafe { rv.data.array }.size {
-                unsafe {
-                    tv_list_append_string(
-                        list,
-                        (*rv.data.array.items.add(i)).data.string.data(),
-                        -1,
-                    )
-                };
+                let item = unsafe { rv.data.array.items.add(i) };
+                let addr = unsafe { (*item).data.string.data() };
+                unsafe { tv_list_append_string(list, addr, -1) };
             }
         }
     }

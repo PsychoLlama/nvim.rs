@@ -265,16 +265,12 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                 let li4 = unsafe { (*li3).li_next };
                 unsafe { xfree((*li1).li_tv.vval.v_string as *mut c_void) };
                 let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
-                unsafe {
-                    (*li1).li_tv.vval.v_string =
-                        xmemdupz(regmatch.startp[0] as *const c_void, rd) as *mut c_char
-                };
-                unsafe {
-                    (*li3).li_tv.vval.v_number = regmatch.startp[0].offset_from(expr) as varnumber_T
-                };
-                unsafe {
-                    (*li4).li_tv.vval.v_number = regmatch.endp[0].offset_from(expr) as varnumber_T
-                };
+                let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
+                unsafe { (*li1).li_tv.vval.v_string = text as *mut c_char };
+                let start = unsafe { regmatch.startp[0].offset_from(expr) };
+                unsafe { (*li3).li_tv.vval.v_number = start as varnumber_T };
+                let end = unsafe { regmatch.endp[0].offset_from(expr) };
+                unsafe { (*li4).li_tv.vval.v_number = end as varnumber_T };
                 if !l.is_null() {
                     unsafe { (*li2).li_tv.vval.v_number = idx as varnumber_T };
                 }
@@ -284,13 +280,10 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                     if regmatch.endp[i].is_null() {
                         unsafe { tv_list_append_string(rettv.vval.v_list, ptr::null(), 0) };
                     } else {
-                        unsafe {
-                            tv_list_append_string(
-                                rettv.vval.v_list,
-                                regmatch.startp[i],
-                                regmatch.endp[i].offset_from(regmatch.startp[i]),
-                            )
-                        };
+                        let (start, end) = (regmatch.startp[i], regmatch.endp[i]);
+                        let list = unsafe { rettv.vval.v_list };
+                        let len = unsafe { end.offset_from(start) };
+                        unsafe { tv_list_append_string(list, start, len) };
                     }
                 }
             }
@@ -362,23 +355,11 @@ unsafe fn get_matches_in_str(
         } else {
             unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as varnumber_T) };
         }
-        unsafe {
-            tv_dict_add_nr(
-                d,
-                c"byteidx".as_ptr(),
-                7,
-                (*rmp).startp[0].offset_from(str) as colnr_T as varnumber_T,
-            )
-        };
-        unsafe {
-            tv_dict_add_str_len(
-                d,
-                c"text".as_ptr(),
-                4,
-                (*rmp).startp[0],
-                (*rmp).endp[0].offset_from((*rmp).startp[0]) as c_int,
-            )
-        };
+        let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
+        let byteidx = unsafe { start.offset_from(str) } as colnr_T as varnumber_T;
+        unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
+        let matchlen = unsafe { end.offset_from(start) } as c_int;
+        unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
         if submatches {
             let sml = unsafe { tv_list_alloc(NSUBEXP as isize - 1) };
             unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, sml) };
@@ -386,13 +367,9 @@ unsafe fn get_matches_in_str(
                 if unsafe { (*rmp).endp[i] }.is_null() {
                     unsafe { tv_list_append_string(sml, c"".as_ptr(), 0) };
                 } else {
-                    unsafe {
-                        tv_list_append_string(
-                            sml,
-                            (*rmp).startp[i],
-                            (*rmp).endp[i].offset_from((*rmp).startp[i]),
-                        )
-                    };
+                    let (start, end) = unsafe { ((*rmp).startp[i], (*rmp).endp[i]) };
+                    let len = unsafe { end.offset_from(start) };
+                    unsafe { tv_list_append_string(sml, start, len) };
                 }
             }
         }
@@ -583,16 +560,9 @@ pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         let li_tv = &unsafe { (*li).li_tv };
         // A non-String item, and the null String, contribute nothing.
         if li_tv.v_type == VAR_STRING && !unsafe { li_tv.vval.v_string }.is_null() {
-            unsafe {
-                get_matches_in_str(
-                    li_tv.vval.v_string,
-                    &raw mut prog.0,
-                    retlist,
-                    idx,
-                    submatches,
-                    false,
-                )
-            };
+            let str = unsafe { li_tv.vval.v_string };
+            let rmp = &raw mut prog.0;
+            unsafe { get_matches_in_str(str, rmp, retlist, idx, submatches, false) };
         }
         idx += 1;
         li = unsafe { (*li).li_next };

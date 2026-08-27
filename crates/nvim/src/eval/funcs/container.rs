@@ -69,30 +69,29 @@ pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_empty(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let tv = args.get(0);
-    // SAFETY: every read below is guarded by the type tag that says which
-    // union member is live. A String, List, Dict or Blob pointer may still
-    // be null, which each reader treats as empty.
-    let empty = unsafe {
-        match tv.v_type {
-            VAR_STRING | VAR_FUNC => {
-                tv.vval.v_string.is_null() || *tv.vval.v_string == NUL as c_char
-            }
-            VAR_PARTIAL => false,
-            VAR_NUMBER => tv.vval.v_number == 0,
-            VAR_FLOAT => tv.vval.v_float == 0.0,
-            VAR_LIST => tv_list_len(tv.vval.v_list) == 0,
-            VAR_DICT => tv_dict_len(tv.vval.v_dict) == 0,
-            VAR_BLOB => tv_blob_len(tv.vval.v_blob) == 0,
-            VAR_SPECIAL => tv.vval.v_special == kSpecialVarNull,
-            // A Bool other than the two named values leaves the answer at
-            // its "empty" default, as upstream's switch does.
-            VAR_BOOL => tv.vval.v_bool != kBoolVarTrue,
-            VAR_UNKNOWN => {
-                internal_error(c"f_empty(UNKNOWN)".as_ptr());
-                true
-            }
-            _ => true,
+    // SAFETY throughout: every read is guarded by the type tag that says
+    // which union member is live. A String, List, Dict or Blob pointer may
+    // still be null, which each reader treats as empty.
+    let empty = match tv.v_type {
+        VAR_STRING | VAR_FUNC => {
+            let s = unsafe { tv.vval.v_string };
+            s.is_null() || unsafe { *s } == NUL as c_char
         }
+        VAR_PARTIAL => false,
+        VAR_NUMBER => (unsafe { tv.vval.v_number }) == 0,
+        VAR_FLOAT => (unsafe { tv.vval.v_float }) == 0.0,
+        VAR_LIST => (unsafe { tv_list_len(tv.vval.v_list) }) == 0,
+        VAR_DICT => (unsafe { tv_dict_len(tv.vval.v_dict) }) == 0,
+        VAR_BLOB => (unsafe { tv_blob_len(tv.vval.v_blob) }) == 0,
+        VAR_SPECIAL => (unsafe { tv.vval.v_special }) == kSpecialVarNull,
+        // A Bool other than the two named values leaves the answer at its
+        // "empty" default, as upstream's switch does.
+        VAR_BOOL => (unsafe { tv.vval.v_bool }) != kBoolVarTrue,
+        VAR_UNKNOWN => {
+            unsafe { internal_error(c"f_empty(UNKNOWN)".as_ptr()) };
+            true
+        }
+        _ => true,
     };
     rettv.vval.v_number = empty as varnumber_T;
 }
@@ -135,11 +134,8 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
             return;
         }
         if depth < 0 {
-            unsafe {
-                emsg(gettext(
-                    c"E900: maxdepth must be non-negative number".as_ptr(),
-                ))
-            };
+            let msg = c"E900: maxdepth must be non-negative number";
+            unsafe { emsg(gettext(msg.as_ptr())) };
             return;
         }
         depth
@@ -158,25 +154,17 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
             return;
         }
     } else {
-        if unsafe {
-            value_check_lock(
-                tv_list_locked(list),
-                c"flatten() argument".as_ptr(),
-                TV_TRANSLATE as usize,
-            )
-        } {
+        // SAFETY: `list` is the live List argument 0 named.
+        let lock = unsafe { tv_list_locked(list) };
+        let what = c"flatten() argument".as_ptr();
+        if unsafe { value_check_lock(lock, what, TV_TRANSLATE as usize) } {
             return;
         }
         unsafe { tv_list_ref(list) };
     }
-    unsafe {
-        tv_list_flatten(
-            list,
-            ptr::null_mut(),
-            tv_list_len(list) as i64,
-            maxdepth as i64,
-        )
-    };
+    // SAFETY: `list` is the live List argument 0 named.
+    let len = unsafe { tv_list_len(list) } as i64;
+    unsafe { tv_list_flatten(list, ptr::null_mut(), len, maxdepth as i64) };
 }
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
@@ -356,14 +344,9 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
 unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
     let (mut required, mut optional, mut varargs) = (0, 0, false);
-    unsafe {
-        get_func_arity(
-            partial_name(pt),
-            &raw mut required,
-            &raw mut optional,
-            &raw mut varargs,
-        )
-    };
+    let name = unsafe { partial_name(pt) };
+    let (req, opt, var) = (&raw mut required, &raw mut optional, &raw mut varargs);
+    unsafe { get_func_arity(name, req, opt, var) };
     rettv.v_type = VAR_DICT;
     dict_alloc_ret(rettv);
     let dict = unsafe { rettv.vval.v_dict };
@@ -617,9 +600,10 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     // SAFETY: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
     rettv.vval.v_number = match tv.v_type {
-        VAR_STRING | VAR_NUMBER => unsafe {
-            strlen(arg_string(&mut numbuf, args.get(0))) as varnumber_T
-        },
+        VAR_STRING | VAR_NUMBER => {
+            let s = arg_string(&mut numbuf, args.get(0));
+            unsafe { strlen(s) as varnumber_T }
+        }
         VAR_BLOB => unsafe { tv_blob_len(tv.vval.v_blob) as varnumber_T },
         VAR_LIST => unsafe { tv_list_len(tv.vval.v_list) as varnumber_T },
         VAR_DICT => unsafe { tv_dict_len(tv.vval.v_dict) as varnumber_T },

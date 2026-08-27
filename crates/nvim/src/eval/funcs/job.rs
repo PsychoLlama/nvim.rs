@@ -133,13 +133,12 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         unsafe { emsg(gettext(e_channotpty.as_ptr())) };
         return;
     }
-    unsafe {
-        pty_proc_resize(
-            channel_pty(data),
-            args.get(1).vval.v_number as uint16_t,
-            args.get(2).vval.v_number as uint16_t,
-        )
-    };
+    // SAFETY: the tags checked above say both arguments are Numbers, and
+    // `data` is the live channel the id resolved to.
+    let width = unsafe { args.get(1).vval.v_number } as uint16_t;
+    let height = unsafe { args.get(2).vval.v_number } as uint16_t;
+    let pty = unsafe { channel_pty(data) };
+    unsafe { pty_proc_resize(pty, width, height) };
     rettv.vval.v_number = 1;
 }
 
@@ -332,15 +331,12 @@ unsafe fn create_environment(
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
-        unsafe {
-            f_environ(
-                ptr::null_mut(),
-                &raw mut inherited,
-                EvalFuncData {
-                    null: ptr::null_mut(),
-                },
-            )
+        let out = &raw mut inherited;
+        let row = EvalFuncData {
+            null: ptr::null_mut(),
         };
+        // SAFETY: `f_environ` reads no arguments and fills `inherited`.
+        unsafe { f_environ(ptr::null_mut(), out, row) };
         unsafe { tv_dict_extend(env, inherited.vval.v_dict, c"force".as_ptr()) };
         unsafe { tv_dict_free(inherited.vval.v_dict) };
 
@@ -511,14 +507,11 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             bail!();
         }
 
-        if !unsafe {
-            common_job_callbacks(
-                job_opts,
-                &raw mut on_stdout,
-                &raw mut on_stderr,
-                &raw mut on_exit,
-            )
-        } {
+        let out = &raw mut on_stdout;
+        let err = &raw mut on_stderr;
+        let exit = &raw mut on_exit;
+        // SAFETY: `job_opts` is null or a live Dict; the three are locals.
+        if !unsafe { common_job_callbacks(job_opts, out, err, exit) } {
             bail!();
         }
     }
@@ -535,11 +528,8 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             bail!();
         }
         if unsafe { (*curbuf.get()).b_changed } != 0 {
-            unsafe {
-                emsg(gettext(
-                    c"jobstart(...,{term=true}) requires unmodified buffer".as_ptr(),
-                ))
-            };
+            let msg = c"jobstart(...,{term=true}) requires unmodified buffer";
+            unsafe { emsg(gettext(msg.as_ptr())) };
             bail!();
         }
         if !unsafe { (*curbuf.get()).terminal }.is_null() {
@@ -578,6 +568,11 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     let env = unsafe { create_environment(job_env, clear_env, pty, term_name) };
+    let pid_out = &raw mut rettv.vval.v_number;
+    // SAFETY: `argv` is a NUL-terminated vector this frame owns, `env` the
+    // environment built above, and `pid_out` the return value's own slot.
+    // The fifteen arguments are what upstream's `channel_job_start` takes;
+    // there is no shorter way to write the call.
     let chan = unsafe {
         channel_job_start(
             argv,
@@ -594,7 +589,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             width,
             height,
             env,
-            &raw mut rettv.vval.v_number,
+            pid_out,
         )
     };
     if chan.is_null() {
@@ -632,30 +627,16 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     }
     unsafe { channel_incref(chan) };
     unsafe { channel_terminal_alloc(buf, chan) };
-    unsafe {
-        apply_autocmds(
-            EVENT_BUFFILEPRE,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            buf,
-        )
-    };
+    let noname = ptr::null_mut::<c_char>();
+    unsafe { apply_autocmds(EVENT_BUFFILEPRE, noname, noname, false, buf) };
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
     if unsafe { terminal_live(chan) } {
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
         unsafe { vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false) };
-        let len = unsafe {
-            home_replace(
-                ptr::null(),
-                name.as_mut_ptr(),
-                shortened.as_mut_ptr(),
-                IOSIZE as usize,
-                true,
-            )
-        };
+        let (src, dst) = (name.as_mut_ptr(), shortened.as_mut_ptr());
+        let len = unsafe { home_replace(ptr::null(), src, dst, IOSIZE as usize, true) };
         // Drop a trailing separator, but keep `/` itself meaningful by
         // spelling it `/.`.
         if len != 1 && matches!(shortened[len - 1] as u8, b'\\' | b'/') {
@@ -665,26 +646,12 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
             shortened[1] = b'.' as c_char;
             shortened[2] = NUL as c_char;
         }
-        unsafe {
-            snprintf(
-                name.as_mut_ptr(),
-                MAXPATHL as usize,
-                c"term://%s//%d:%s".as_ptr(),
-                shortened.as_ptr(),
-                pid,
-                cmd,
-            )
-        };
+        let out = name.as_mut_ptr();
+        let fmt = c"term://%s//%d:%s".as_ptr();
+        let dir = shortened.as_ptr();
+        unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
         unsafe { setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true) };
-        unsafe {
-            apply_autocmds(
-                EVENT_BUFFILEPOST,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                false,
-                buf,
-            )
-        };
+        unsafe { apply_autocmds(EVENT_BUFFILEPOST, noname, noname, false, buf) };
 
         if unsafe { terminal_live(chan) } {
             let mut err = Error {
@@ -722,20 +689,14 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 /// # Safety
 /// `buf` is a live buffer and `err` a live out-parameter.
 unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Error) {
-    // SAFETY: the caller's obligation; the name is `'static`.
-    unsafe {
-        dict_set_var(
-            (*buf).b_vars,
-            cstr_as_string(name.as_ptr()),
-            object {
-                type_0: kObjectTypeInteger,
-                data: object_data { integer: value },
-            },
-            false,
-            false,
-            ptr::null_mut::<Arena>(),
-            err,
-        )
+    let value = object {
+        type_0: kObjectTypeInteger,
+        data: object_data { integer: value },
     };
+    let arena = ptr::null_mut::<Arena>();
+    // SAFETY: the caller's obligation; the name is `'static`.
+    let vars = unsafe { (*buf).b_vars };
+    let name = unsafe { cstr_as_string(name.as_ptr()) };
+    unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
     unsafe { api_clear_error(err) };
 }

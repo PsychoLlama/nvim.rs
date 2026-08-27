@@ -86,14 +86,11 @@ pub unsafe fn f_escape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut buf = NumBuf::new();
-    // SAFETY: the arguments are live typvals and `buf` outlives the call
-    // `tv_get_string_buf` may fill it for.
-    rettv.vval.v_string = unsafe {
-        vim_strsave_escaped(
-            arg_string(&mut numbuf, args.get(0)),
-            arg_string(&mut buf, args.get(1)),
-        )
-    };
+    let str = arg_string(&mut numbuf, args.get(0));
+    let chars = arg_string(&mut buf, args.get(1));
+    // SAFETY: both are NUL-terminated and outlive the call, `chars` because
+    // `buf` does.
+    rettv.vval.v_string = unsafe { vim_strsave_escaped(str, chars) };
     rettv.v_type = VAR_STRING;
 }
 
@@ -141,23 +138,18 @@ pub unsafe fn f_keytrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_nr2char(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut error = false;
-    // SAFETY: the arguments are live typvals.
-    let num = unsafe {
-        if args.has(1) && !tv_check_num(args.ptr(1)) {
-            return;
-        }
-        arg_number_chk(args.get(0), Some(&mut error))
-    };
+    // SAFETY: argument 1 is a live typval.
+    if args.has(1) && !unsafe { tv_check_num(args.ptr(1)) } {
+        return;
+    }
+    let num = arg_number_chk(args.get(0), Some(&mut error));
     if error {
         return;
     }
     if num < 0 {
         // SAFETY: a literal message.
-        unsafe {
-            emsg(gettext(
-                c"E5070: Character number must not be less than zero".as_ptr(),
-            ))
-        };
+        let msg = c"E5070: Character number must not be less than zero";
+        unsafe { emsg(gettext(msg.as_ptr())) };
         return;
     }
     if num > c_int::MAX as varnumber_T {
@@ -170,10 +162,9 @@ pub unsafe fn f_nr2char(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut buf: [c_char; 6] = [0; 6];
     // SAFETY: `buf` has room for the longest UTF-8 sequence
     // `utf_char2bytes` writes, and the returned length is what it wrote.
-    rettv.vval.v_string = unsafe {
-        let len = utf_char2bytes(num as c_int, buf.as_mut_ptr());
-        xmemdupz(buf.as_ptr().cast::<c_void>(), len as usize).cast::<c_char>()
-    };
+    let len = unsafe { utf_char2bytes(num as c_int, buf.as_mut_ptr()) };
+    let src = buf.as_ptr().cast::<c_void>();
+    rettv.vval.v_string = unsafe { xmemdupz(src, len as usize) }.cast::<c_char>();
     rettv.v_type = VAR_STRING;
 }
 
@@ -258,14 +249,11 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
         return;
     }
     for i in 0..len / slen {
-        unsafe {
-            tv_blob_set_range(
-                out,
-                (i * slen) as varnumber_T,
-                ((i + 1) * slen - 1) as varnumber_T,
-                args.ptr(0),
-            )
-        };
+        let from = (i * slen) as varnumber_T;
+        let to = ((i + 1) * slen - 1) as varnumber_T;
+        // SAFETY: `out` has room for `len` bytes and the source is a live
+        // Blob typval.
+        unsafe { tv_blob_set_range(out, from, to, args.ptr(0)) };
     }
 }
 
@@ -306,25 +294,28 @@ pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
-    // SAFETY: `args.ptr(0)` is a live typval. For the Blob branch the tag
-    // proves the union holds a blob pointer, which may be null (an empty
-    // literal) or hold a null buffer; both read as no bytes. For the String
-    // branch `tv_get_string` hands back a NUL-terminated buffer.
-    let hash = unsafe {
-        if args.ty(0) == VAR_BLOB {
-            let blob = args.get(0).vval.v_blob;
-            let bytes = match blob.is_null() || (*blob).bv_ga.ga_data.is_null() {
-                true => &[][..],
-                false => core::slice::from_raw_parts(
-                    (*blob).bv_ga.ga_data.cast::<u8>(),
-                    (*blob).bv_ga.ga_len as usize,
-                ),
-            };
-            hex_digest(bytes)
+    let hash = if args.ty(0) == VAR_BLOB {
+        // SAFETY: the tag proves the union holds a blob pointer, which may
+        // be null (an empty literal) or hold a null buffer; both read as no
+        // bytes. Past that, the garray holds `ga_len` initialised bytes.
+        let blob = unsafe { args.get(0).vval.v_blob };
+        let ga = if blob.is_null() {
+            GA_EMPTY_INIT_VALUE
         } else {
-            let p = arg_string(&mut numbuf, args.get(0));
-            hex_digest(core::slice::from_raw_parts(p.cast::<u8>(), strlen(p)))
-        }
+            unsafe { (*blob).bv_ga }
+        };
+        let bytes = if ga.ga_data.is_null() {
+            &[][..]
+        } else {
+            let data = ga.ga_data.cast::<u8>();
+            unsafe { core::slice::from_raw_parts(data, ga.ga_len as usize) }
+        };
+        hex_digest(bytes)
+    } else {
+        // SAFETY: `tv_get_string` hands back a NUL-terminated buffer.
+        let p = arg_string(&mut numbuf, args.get(0));
+        let bytes = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), strlen(p)) };
+        hex_digest(bytes)
     };
     // SAFETY: `hash` is a live buffer of `hash.len()` bytes.
     rettv.vval.v_string =
@@ -337,9 +328,8 @@ pub unsafe fn f_shellescape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     let do_special = unsafe { non_zero_arg(args.ptr(1)) };
-    rettv.vval.v_string = unsafe {
-        vim_strsave_shellescape(arg_string(&mut numbuf, args.get(0)), do_special, do_special)
-    };
+    let str = arg_string(&mut numbuf, args.get(0));
+    rettv.vval.v_string = unsafe { vim_strsave_shellescape(str, do_special, do_special) };
     rettv.v_type = VAR_STRING;
 }
 
@@ -357,11 +347,9 @@ pub unsafe fn f_soundfold(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// Both spelling builtins open this way, and both must put the window's own
 /// 'spell' back on every path out — including the error one.
-///
-/// # Safety
-/// Runs with `curwin` live, which is every builtin's situation.
-unsafe fn with_spell(body: impl FnOnce()) {
-    // SAFETY: the caller's obligation.
+fn with_spell(body: impl FnOnce()) {
+    // SAFETY: `curwin` names a live window from startup to exit, and the
+    // spell state hanging off it is initialised with the window.
     let win = curwin.get();
     let saved = unsafe { (*win).w_onebuf_opt.wo_spell };
     if unsafe { (*win).w_onebuf_opt.wo_spell } == 0 {
@@ -384,42 +372,37 @@ pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let mut attr: hlf_T = HLF_COUNT;
     let mut len: usize = 0;
     let mut reported = false;
-    // SAFETY: `curwin`/`curbuf` are live, and `args.ptr(0)` is a live
-    // typval. `spell_check` advances `str` by the length it reports, which
-    // never passes the terminator.
-    unsafe {
-        with_spell(|| {
-            reported = true;
-            if !args.has(0) {
-                len = spell_move_to(curwin.get(), FORWARD, SMT_ALL, true, &raw mut attr);
-                if len != 0 {
-                    word = get_cursor_pos_ptr();
-                    (*curwin.get()).w_set_curswant = true;
-                }
-            } else if *(*curbuf.get()).b_s.b_p_spl != NUL as c_char {
-                let mut str = arg_string_chk(&mut numbuf, args.get(0));
-                let mut capcol: c_int = -1;
-                if !str.is_null() {
-                    while *str != NUL as c_char {
-                        len = spell_check(
-                            curwin.get(),
-                            str as *mut c_char,
-                            &raw mut attr,
-                            &raw mut capcol,
-                            false,
-                        );
-                        if attr != HLF_COUNT {
-                            word = str;
-                            break;
-                        }
-                        str = str.add(len);
-                        capcol -= len as c_int;
-                        len = 0;
+    // SAFETY throughout the closure: `curwin`/`curbuf` are live, and
+    // `args.ptr(0)` is a live typval. `spell_check` advances `str` by the
+    // length it reports, which never passes the terminator.
+    with_spell(|| {
+        reported = true;
+        if !args.has(0) {
+            let at = &raw mut attr;
+            len = unsafe { spell_move_to(curwin.get(), FORWARD, SMT_ALL, true, at) };
+            if len != 0 {
+                word = get_cursor_pos_ptr();
+                unsafe { (*curwin.get()).w_set_curswant = true };
+            }
+        } else if unsafe { *(*curbuf.get()).b_s.b_p_spl } != NUL as c_char {
+            let mut str = arg_string_chk(&mut numbuf, args.get(0));
+            let mut capcol: c_int = -1;
+            if !str.is_null() {
+                while unsafe { *str } != NUL as c_char {
+                    let p = str as *mut c_char;
+                    let (at, cap) = (&raw mut attr, &raw mut capcol);
+                    len = unsafe { spell_check(curwin.get(), p, at, cap, false) };
+                    if attr != HLF_COUNT {
+                        word = str;
+                        break;
                     }
+                    str = unsafe { str.add(len) };
+                    capcol -= len as c_int;
+                    len = 0;
                 }
             }
-        })
-    };
+        }
+    });
     if !reported {
         return;
     }
@@ -445,49 +428,39 @@ pub unsafe fn f_spellsuggest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let (args, rettv) = frame!(argvars, rettv);
     let mut ga: garray_T = GA_EMPTY_INIT_VALUE;
     let mut reported = false;
-    // SAFETY: `curwin` is live and the arguments are live typvals; `ga` is
-    // a local garray that `spell_suggest_list` fills and `ga_clear` frees.
-    unsafe {
-        with_spell(|| {
-            reported = true;
-            let str = arg_string(&mut numbuf, args.get(0));
-            let mut typeerr = false;
-            let (maxcount, need_capital) = if !args.has(1) {
-                (25, false)
-            } else {
-                let maxcount = arg_number_chk(args.get(1), Some(&mut typeerr)) as c_int;
-                // A non-positive maximum leaves the list empty, and does so
-                // before the type error from argument 2 could be reported.
-                if maxcount <= 0 {
-                    return;
-                }
-                let need_capital =
-                    args.has(2) && arg_number_chk(args.get(2), Some(&mut typeerr)) != 0;
-                if typeerr {
-                    return;
-                }
-                (maxcount, need_capital)
-            };
-            spell_suggest_list(
-                &raw mut ga,
-                str as *mut c_char,
-                maxcount,
-                need_capital,
-                false,
-            );
-        })
-    };
+    with_spell(|| {
+        reported = true;
+        let str = arg_string(&mut numbuf, args.get(0));
+        let mut typeerr = false;
+        let (maxcount, need_capital) = if !args.has(1) {
+            (25, false)
+        } else {
+            let maxcount = arg_number_chk(args.get(1), Some(&mut typeerr)) as c_int;
+            // A non-positive maximum leaves the list empty, and does so
+            // before the type error from argument 2 could be reported.
+            if maxcount <= 0 {
+                return;
+            }
+            let need_capital = args.has(2) && arg_number_chk(args.get(2), Some(&mut typeerr)) != 0;
+            if typeerr {
+                return;
+            }
+            (maxcount, need_capital)
+        };
+        let (out, word) = (&raw mut ga, str as *mut c_char);
+        // SAFETY: `ga` is a local garray that `spell_suggest_list` fills and
+        // `ga_clear` frees, and `word` is the NUL-terminated argument.
+        unsafe { spell_suggest_list(out, word, maxcount, need_capital, false) };
+    });
     if !reported {
         return;
     }
     let list = list_alloc_ret(rettv, ga.ga_len as isize);
     for i in 0..ga.ga_len {
-        unsafe {
-            tv_list_append_allocated_string(
-                list,
-                *ga.ga_data.cast::<*mut c_char>().offset(i as isize),
-            )
-        };
+        // SAFETY: the garray holds `ga_len` allocated strings, and the list
+        // takes each one over.
+        let word = unsafe { *ga.ga_data.cast::<*mut c_char>().offset(i as isize) };
+        unsafe { tv_list_append_allocated_string(list, word) };
     }
     unsafe { ga_clear(&raw mut ga) };
 }
@@ -739,16 +712,14 @@ pub unsafe fn f_substitute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         if str.is_null() || pat.is_null() || (sub.is_null() && expr.is_null()) || flg.is_null() {
             ptr::null_mut()
         } else {
-            unsafe {
-                do_string_sub(
-                    str as *mut c_char,
-                    strlen(str),
-                    pat as *mut c_char,
-                    sub as *mut c_char,
-                    expr,
-                    flg as *mut c_char,
-                    ptr::null_mut(),
-                )
-            }
+            let str = str as *mut c_char;
+            let pat = pat as *mut c_char;
+            let sub = sub as *mut c_char;
+            let flg = flg as *mut c_char;
+            let out = ptr::null_mut();
+            // SAFETY: every string is NUL-terminated and outlives the call,
+            // and `expr` is null or argument 2.
+            let len = unsafe { strlen(str) };
+            unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
         };
 }

@@ -220,15 +220,10 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
                     fp.col = len;
                 }
             }
-            unsafe {
-                getvvcol(
-                    Win::new(wp),
-                    &raw mut fp,
-                    &raw mut vcol_start,
-                    ptr::null_mut(),
-                    &raw mut vcol_end,
-                )
-            };
+            let (pos, start, end) = (&raw mut fp, &raw mut vcol_start, &raw mut vcol_end);
+            // SAFETY: `wp` is the window resolved above and the three
+            // out-parameters are locals.
+            unsafe { getvvcol(Win::new(wp), pos, start, ptr::null_mut(), end) };
             vcol_start += 1;
             vcol_end += 1;
         }
@@ -245,31 +240,32 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// `line({expr} [, {winid}])`.
 pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments are live typvals.
-    let fp = unsafe {
-        let mut fnum: c_int = 0;
-        if !args.has(1) {
-            var2fpos(args.ptr(0), true, &raw mut fnum, false, curwin.get())
-        } else {
-            match win_and_tab_by_id(arg_number(args.get(1)) as c_int) {
-                None => None,
-                Some((wp, _)) => {
-                    let wp = wp.raw();
-                    // Resolving a position in another window moves its
-                    // cursor, and 'splitkeep' decides whether that is allowed
-                    // to scroll it. Diff-mode windows are always exempt
-                    // because their scroll is bound to this one's.
-                    if *p_spk.get() != b'c' as c_char
-                        || ((*wp).w_onebuf_opt.wo_diff != 0
-                            && (*curwin.get()).w_onebuf_opt.wo_diff != 0)
-                    {
-                        skip_update_topline.set(true);
-                    }
-                    check_cursor(Win::new(wp));
-                    let fp = var2fpos(args.ptr(0), true, &raw mut fnum, false, wp);
-                    skip_update_topline.set(false);
-                    fp
+    let mut fnum: c_int = 0;
+    let out = &raw mut fnum;
+    let fp = if !args.has(1) {
+        // SAFETY: argument 0 is a live typval and `curwin` a live window.
+        unsafe { var2fpos(args.ptr(0), true, out, false, curwin.get()) }
+    } else {
+        match win_and_tab_by_id(arg_number(args.get(1)) as c_int) {
+            None => None,
+            Some((wp, _)) => {
+                let wp = wp.raw();
+                // Resolving a position in another window moves its cursor,
+                // and 'splitkeep' decides whether that is allowed to scroll
+                // it. Diff-mode windows are always exempt because their
+                // scroll is bound to this one's.
+                // SAFETY: `wp` is the window the id resolved to, and
+                // `curwin` is live.
+                let both_diff = unsafe { (*wp).w_onebuf_opt.wo_diff } != 0
+                    && unsafe { (*curwin.get()).w_onebuf_opt.wo_diff } != 0;
+                if unsafe { *p_spk.get() } != b'c' as c_char || both_diff {
+                    skip_update_topline.set(true);
                 }
+                // SAFETY: `wp` is the window the id resolved to.
+                check_cursor(unsafe { Win::new(wp) });
+                let fp = unsafe { var2fpos(args.ptr(0), true, out, false, wp) };
+                skip_update_topline.set(false);
+                fp
             }
         }
     };
@@ -378,18 +374,16 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
     if wp == cur {
         unsafe { update_curswant() };
     }
-    unsafe {
-        tv_list_append_number(
-            l,
-            if wp.is_null() {
-                0
-            } else if (*wp).w_curswant == END_OF_LINE {
-                MAXCOL as varnumber_T
-            } else {
-                (*wp).w_curswant as varnumber_T + 1
-            },
-        )
+    // SAFETY: `wp` is null or the window resolved above, and `l` the list
+    // being filled in.
+    let curswant = if wp.is_null() {
+        0
+    } else if unsafe { (*wp).w_curswant } == END_OF_LINE {
+        MAXCOL as varnumber_T
+    } else {
+        (unsafe { (*wp).w_curswant }) as varnumber_T + 1
     };
+    unsafe { tv_list_append_number(l, curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
     if wp == cur && saved_set_curswant {
@@ -429,16 +423,10 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
     let (lnum, mut col, coladd) = if args.ty(0) == VAR_LIST {
         let mut pos = NOWHERE;
         let mut curswant: colnr_T = -1;
-        if unsafe {
-            list2fpos(
-                args.ptr(0),
-                &raw mut pos,
-                ptr::null_mut(),
-                &raw mut curswant,
-                charcol,
-            )
-        } == FAIL
-        {
+        let (out, want) = (&raw mut pos, &raw mut curswant);
+        // SAFETY: argument 0 is a live typval and both are locals.
+        let read = unsafe { list2fpos(args.ptr(0), out, ptr::null_mut(), want, charcol) };
+        if read == FAIL {
             unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return;
         }
@@ -524,16 +512,9 @@ unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
     let mut pos = NOWHERE;
     let mut fnum: c_int = 0;
     let mut curswant: colnr_T = -1;
-    if unsafe {
-        list2fpos(
-            args.ptr(1),
-            &raw mut pos,
-            &raw mut fnum,
-            &raw mut curswant,
-            charpos,
-        )
-    } != OK
-    {
+    let (out, buf, want) = (&raw mut pos, &raw mut fnum, &raw mut curswant);
+    // SAFETY: argument 1 is a live typval and the three are locals.
+    if unsafe { list2fpos(args.ptr(1), out, buf, want, charpos) } != OK {
         return;
     }
     if pos.col != END_OF_LINE {
@@ -569,22 +550,10 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
     unsafe { tv_dict_alloc_ret(rettv) };
     let dict = unsafe { (*rettv).vval.v_dict };
     unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
-    unsafe {
-        tv_dict_add_nr(
-            dict,
-            c"forward".as_ptr(),
-            7,
-            last_csearch_forward() as varnumber_T,
-        )
-    };
-    unsafe {
-        tv_dict_add_nr(
-            dict,
-            c"until".as_ptr(),
-            5,
-            last_csearch_until() as varnumber_T,
-        )
-    };
+    let forward = last_csearch_forward() as varnumber_T;
+    unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
+    let until = last_csearch_until() as varnumber_T;
+    unsafe { tv_dict_add_nr(dict, c"until".as_ptr(), 5, until) };
 }
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
