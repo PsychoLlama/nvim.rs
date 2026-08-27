@@ -1,6 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::offset_of;
 use core::{ptr, slice};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
@@ -8,6 +9,7 @@ use crate::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
 use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::eval::EVALARG_EVALUATE;
+pub(crate) use crate::eval::Tv;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
@@ -44,11 +46,11 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::main::{
-    KeyTyped, Rows, cmdline_row, curbuf, current_sctx, curwin, debug_backtrace_level, debug_tick,
-    did_emsg, did_throw, do_profiling, e_dictkey, e_invarg2, e_invexpr2, e_invrange,
-    e_missingparen, e_not_callable_type_str, e_str_not_inside_function, e_toofewarg, e_toomanyarg,
-    e_trailing_arg, e_unknown_function_str, e_usingsid, emsg_severe, ex_nesting_level, got_int,
-    lines_left, msg_row, msg_scroll, need_wait_return, p_ic, p_mfd, p_verbose, sandbox, trylevel,
+    KeyTyped, Rows, cmdline_row, current_sctx, debug_backtrace_level, debug_tick, did_emsg,
+    did_throw, do_profiling, e_dictkey, e_invarg2, e_invexpr2, e_invrange, e_missingparen,
+    e_not_callable_type_str, e_str_not_inside_function, e_toofewarg, e_toomanyarg, e_trailing_arg,
+    e_unknown_function_str, e_usingsid, emsg_severe, ex_nesting_level, got_int, lines_left,
+    msg_row, msg_scroll, need_wait_return, p_ic, p_mfd, p_verbose, sandbox, trylevel,
     want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
@@ -85,6 +87,7 @@ use crate::types::{
     varnumber_T,
 };
 use crate::ui::ui_has;
+pub(crate) use crate::winlayer::{Ea, Live};
 use ::libc::{abort, memcmp, memcpy, memset, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -109,6 +112,23 @@ pub use self::lambda::*;
 pub use self::listing::*;
 pub use self::name::*;
 pub use self::ret::*;
+/// The two pointees this family passes around, as `Copy` newtypes.
+///
+/// Each is a [`Live<T>`](crate::winlayer::Live): a record that whoever built
+/// it promised the pointee outlives the value. Construction is the one
+/// unsafe step; every `(*p).field` after it is ordinary checked code.
+///
+/// Emphatically **not** `&mut *p`. A user function re-enters the evaluator,
+/// autocommands and Lua while the same `funccall_T` is still reachable
+/// through `current_funccal` and the same `ufunc_T` through the function
+/// table, and a `&mut` is `noalias` to LLVM.
+///
+/// A user function and its body.
+pub(crate) type Uf = Live<ufunc_T>;
+
+/// One call of one: its `a:`/`l:` scopes, its caller and its return value.
+pub(crate) type Fc = Live<funccall_T>;
+
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
@@ -233,10 +253,11 @@ pub(crate) const FUNCDICT_INIT: funcdict_T = funcdict_T {
 /// The name a `ufunc_T` carries in the flexible member at its end -- C's
 /// `UF2HIKEY`, and the key the function hashtable is indexed by.
 ///
-/// # Safety
-/// `fp` is a live function.
-pub(crate) unsafe fn uf_name_ptr(fp: *mut ufunc_T) -> *mut c_char {
-    unsafe { (&raw mut (*fp).uf_name) as *mut c_char }
+/// Safe: a field's address is the object's plus a constant, so saying where
+/// the name is reads nothing. Whether there is a name *there* is the
+/// caller's business, as it is for every other pointer it holds.
+pub(crate) fn uf_name_ptr(fp: *mut ufunc_T) -> *mut c_char {
+    fp.wrapping_byte_add(offset_of!(ufunc_T, uf_name)).cast()
 }
 
 /// The innermost entry of the `:source`/function call stack: what C's
@@ -263,10 +284,8 @@ pub(crate) fn sourcing_lnum() -> linenr_T {
 /// just called `ga_grow`), and `s` is an allocation `ga_clear_strings` may
 /// free.
 pub(crate) unsafe fn ga_push_string(gap: *mut garray_T, s: *mut c_char) {
-    unsafe {
-        *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = s;
-        (*gap).ga_len += 1;
-    }
+    unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = s };
+    unsafe { (*gap).ga_len += 1 };
 }
 
 /// The `char *` items a string `garray_T` holds, as a slice.
