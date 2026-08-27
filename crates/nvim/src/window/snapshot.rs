@@ -20,7 +20,7 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{curbuf, e_invarg, lastwin};
+use crate::main::{curbuf, e_invarg};
 use crate::memory::{xcalloc, xmalloc};
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
@@ -29,7 +29,9 @@ use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
 use crate::types::{Integer, NUL, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
 use crate::ui::ui_call_win_hide;
-use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, tabs, windows_in_tab};
+use crate::winlayer::{
+    Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+};
 
 // ---------------------------------------------------------------------------
 // Revalidating cursors against a buffer that changed length
@@ -451,11 +453,13 @@ pub unsafe fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T {
 /// The last non-floating window of `tp`, or of the current tab page.
 pub(crate) fn last_nonfloating(tp: Option<TabPage>) -> Win {
     debug_assert!(tp.is_none_or(|tp| !tp.is_current()), "tp != curtab || !tp");
-    // SAFETY: the tail of a live window list is a live window.
-    let mut res = unsafe { Win::new(tp.map_or_else(|| lastwin.get(), |tp| tp.tp_lastwin)) };
+    let mut res = match tp {
+        Some(tp) => tp.tp_lastwin.and_then(WinId::get),
+        None => last_window(),
+    }
+    .expect("a window list has a tail");
     while res.w_floating {
-        // SAFETY: a floating window is never the first, so `w_prev` is live.
-        res = unsafe { Win::new(res.w_prev) };
+        res = res.prev().expect("a float is never the first window");
     }
     res
 }

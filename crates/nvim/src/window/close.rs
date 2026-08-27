@@ -26,13 +26,13 @@ use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
 use crate::main::{
     State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
-    curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstwin, lastwin, mode_displayed, p_confirm,
-    p_write, restart_edit, stop_insert_mode,
+    curbuf, curtab, curwin, e_cmdwin, e_floatonly, mode_displayed, p_confirm, p_write,
+    restart_edit, stop_insert_mode,
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
 use crate::types::{CMD_SIZE, CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
-use crate::winlayer::{first_buffer, tabs};
+use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
@@ -154,9 +154,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
             let mut nexttp = tp.next();
             if !tp.is_current() {
                 // Start from `tp_lastwin` to close floating windows first.
-                // SAFETY: a live tab page's last window, or null when it has
-                // none.
-                let mut cur = unsafe { Win::from_raw(tp.tp_lastwin) };
+                let mut cur = tp.tp_lastwin.and_then(WinId::get);
                 while let Some(wp) = cur {
                     if wp.w_buffer == buf.raw() && !locked(wp) {
                         if layout_locked(CMD_SIZE) {
@@ -206,9 +204,11 @@ pub unsafe fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool {
 /// This is what to ask in place of `ONE_WINDOW`, with `firstwin` or the
 /// affected window as the argument depending on the situation.
 pub(crate) fn only_window(win: Win, tp: Option<TabPage>) -> bool {
-    let first = tp.map_or_else(|| firstwin.get(), |tp| tp.tp_firstwin);
-    // SAFETY: the head of a live window list is a live window.
-    let first = unsafe { Win::new(first) };
+    let first = match tp {
+        Some(tp) => tp.tp_firstwin.and_then(WinId::get),
+        None => first_window(),
+    }
+    .expect("a window list has a head");
     debug_assert!(
         tp.is_none_or(|tp| !tp.is_current()) && !first.w_floating,
         "(!tp || tp != curtab) && !first->w_floating"
@@ -224,16 +224,18 @@ pub(crate) fn can_close_floats(tp: Option<TabPage>) -> bool {
             && (tp.is_some() || !is_autocmd_window(Some(last_win()))),
         "tp != curtab && (tp || !is_aucmd_win(lastwin))"
     );
-    // SAFETY: the tail of a live window list is a live window.
-    let mut wp = unsafe { Win::new(tp.map_or_else(|| lastwin.get(), |tp| tp.tp_lastwin)) };
+    let mut wp = match tp {
+        Some(tp) => tp.tp_lastwin.and_then(WinId::get),
+        None => crate::winlayer::last_window(),
+    }
+    .expect("a window list has a tail");
     while wp.w_floating {
         let buf = wp.buffer();
         let need_hide = is_changed(buf) && buf.b_nwindows <= 1;
         if need_hide && !hides(buf) {
             return false;
         }
-        // SAFETY: a floating window is never the first, so `w_prev` is live.
-        wp = unsafe { Win::new(wp.w_prev) };
+        wp = wp.prev().expect("a float is never the first window");
     }
     true
 }
@@ -292,7 +294,7 @@ pub(crate) fn close_last_tabpage_window(
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
     if let Some(prev) = valid_tab(prev_curtab).filter(|_| curtab.get() != prev_curtab)
-        && prev.tp_firstwin == win.raw()
+        && prev.tp_firstwin == Some(win.id())
     {
         close_othertab(win, free_buf, prev, false);
     }
@@ -386,9 +388,9 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 
     // Be very careful here: autocommands may change the window layout.
-    let mut next = firstwin.get();
+    let mut next = first_window().map_or(ptr::null_mut(), Win::raw);
     while let Some(mut wp) = valid_win(next) {
-        let mut nextwp = wp.w_next;
+        let mut nextwp = wp.next().map_or(ptr::null_mut(), Win::raw);
         'skip: {
             // autocommands messed this one up
             if !old_curwin.is_current() && valid_win(old_curwin.raw()).is_some() {
@@ -407,7 +409,7 @@ fn close_all_others(message: bool, forceit: bool) {
             // Check whether it is allowed to abandon this window.
             let r = may_abandon(wp.buffer(), forceit);
             if valid_win(wp.raw()).is_none() {
-                nextwp = firstwin.get(); // autocommands messed `wp` up
+                nextwp = first_window().map_or(ptr::null_mut(), Win::raw); // messed up
                 break 'skip;
             }
             if !r {
@@ -415,7 +417,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 if message && confirm && p_write.get() != 0 {
                     ask_about_changes(wp.buffer());
                     if valid_win(wp.raw()).is_none() {
-                        nextwp = firstwin.get(); // autocommands messed `wp` up
+                        nextwp = first_window().map_or(ptr::null_mut(), Win::raw); // messed up
                         break 'skip;
                     }
                 }

@@ -13,7 +13,7 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::r#move::WinValid;
 use crate::undo::store::UndoStore;
-use crate::winlayer::{BufId, TabId};
+use crate::winlayer::{BufId, TabId, WinId};
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -597,8 +597,12 @@ pub struct tabpage_S {
     pub tp_topframe: *mut frame_T,
     pub tp_curwin: *mut win_T,
     pub tp_prevwin: *mut win_T,
-    pub tp_firstwin: *mut win_T,
-    pub tp_lastwin: *mut win_T,
+    /// This tab page's window list, its two ends. Handles, as the links
+    /// between them are. **Stale while the tab page is the current one** —
+    /// the `firstwin`/`lastwin` globals are then the truth, which is what
+    /// `winlayer::windows_in_tab` encodes.
+    pub(crate) tp_firstwin: Option<WinId>,
+    pub(crate) tp_lastwin: Option<WinId>,
     pub tp_old_Rows_avail: int64_t,
     pub tp_old_Columns: int64_t,
     pub tp_ch_used: OptInt,
@@ -642,8 +646,16 @@ pub struct window_S {
     /// Whether the window's highlight namespace has to be re-resolved
     /// before it is next drawn.
     pub w_hl_needs_update: bool,
-    pub w_prev: *mut win_T,
-    pub w_next: *mut win_T,
+    /// This tab page's window list. Handles rather than addresses, as the
+    /// buffer and tab page lists' links are: `winlayer::Win::next`/`prev`
+    /// and `winlayer::windows`/`windows_back` are how they are walked.
+    ///
+    /// A window is registered from `win_alloc` to `win_free`, so a link can
+    /// always be resolved -- with one hole the tree keeps: the autocommand
+    /// window is *unregistered while idle*, and `aucmd_prepbuf` therefore
+    /// puts it back in the registry before `win_append` files it here.
+    pub(crate) w_prev: Option<WinId>,
+    pub(crate) w_next: Option<WinId>,
     pub w_locked: bool,
     pub w_frame: *mut frame_T,
     pub w_cursor: pos_T,

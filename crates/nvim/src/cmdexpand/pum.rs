@@ -11,6 +11,7 @@
 use super::*;
 use crate::grid::default_gridview;
 use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
+use crate::winlayer::last_window;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -363,7 +364,9 @@ pub(crate) unsafe fn redraw_wildmenu(
                     // Create status line if needed by setting 'laststatus' to
                     // 2.  Set 'winminheight' to zero to avoid that the window
                     // is resized.
-                    if (*lastwin.get()).w_status_height == 0 && global_stl_height() == 0 {
+                    if last_window().is_some_and(|wp| wp.w_status_height == 0)
+                        && global_stl_height() == 0
+                    {
                         save_p_ls.set(p_ls.get() as c_int);
                         save_p_wmh.set(p_wmh.get() as c_int);
                         p_ls.set(2 as OptInt);

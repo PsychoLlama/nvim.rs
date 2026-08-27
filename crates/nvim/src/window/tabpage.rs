@@ -46,7 +46,7 @@ use crate::types::{
     int64_t, switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
-use crate::winlayer::{forget_tabpage, register_tabpage, tabs};
+use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
 pub unsafe fn unuse_tabpage(tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
@@ -188,8 +188,8 @@ pub(crate) fn new_tabpage(
         stash_tabpage(cur);
         // Save this to tell whether room must be made for the tabline.
         cur.tp_old_Rows_avail = rows_avail();
-        firstwin.set(ptr::null_mut::<win_T>());
-        lastwin.set(ptr::null_mut::<win_T>());
+        firstwin.set(None);
+        lastwin.set(None);
     }
 
     newtp.tp_localdir = clone_dir(old_curtab.tp_localdir);
@@ -221,7 +221,7 @@ pub(crate) fn new_tabpage(
         tp.tp_next = Some(newtp.id());
     }
     newtp.tp_curwin = opened.raw();
-    newtp.tp_lastwin = newtp.tp_curwin;
+    newtp.tp_lastwin = Some(opened.id());
     newtp.tp_firstwin = newtp.tp_lastwin;
 
     win_init_size();
@@ -451,8 +451,8 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> c_int {
     if tp.tp_old_Columns != -1 as int64_t {
         tp.tp_old_Columns = Columns.get() as int64_t;
     }
-    firstwin.set(ptr::null_mut::<win_T>());
-    lastwin.set(ptr::null_mut::<win_T>());
+    firstwin.set(None);
+    lastwin.set(None);
     OK
 }
 
@@ -464,8 +464,11 @@ fn enter_tab(
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
-    // SAFETY: the head of a live tab page's window list is a live window.
-    let old_off = unsafe { Win::new(tp.tp_firstwin) }.w_winrow;
+    let old_off = tp
+        .tp_firstwin
+        .and_then(WinId::get)
+        .expect("a live tab page has a first window")
+        .w_winrow;
     let next_prevwin = tp.tp_prevwin;
     let old_curtab = cur_tab();
     adopt_tabpage(tp);
@@ -551,9 +554,7 @@ fn set_cmdheight(n: OptInt) {
 /// External floats are independent of tab pages, which is implemented by
 /// always moving them to `curtab`.
 fn check_tabpage_windows(old_curtab: TabPage) {
-    // SAFETY: the head of a live tab page's window list is a live window, or
-    // null.
-    let mut cur = unsafe { Win::from_raw(old_curtab.tp_firstwin) };
+    let mut cur = old_curtab.tp_firstwin.and_then(WinId::get);
     while let Some(mut wp) = cur {
         let next_wp = wp.next();
         if wp.w_floating {

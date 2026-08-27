@@ -119,14 +119,12 @@ pub(crate) fn exchange(prenum: c_int) {
 
     // Remove `curwin` from the list, and put it in `wp`'s place; then do the
     // same the other way round.
-    // SAFETY: a live window's `w_prev` is a live window or null.
-    let wp2 = unsafe { Win::from_raw(cur.w_prev) };
+    let wp2 = cur.prev();
     let frp2 = frame.prev();
-    if wp.w_prev != cur.raw() {
+    if wp.w_prev != Some(cur.id()) {
         remove(cur, None);
         frame_remove(frame);
-        // SAFETY: as above.
-        append(unsafe { Win::from_raw(wp.w_prev) }, cur, None);
+        append(wp.prev(), cur, None);
         frame_insert(frp, frame);
     }
     if Some(wp) != wp2 {
@@ -210,14 +208,12 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
                 .last()
                 .expect("at least one");
             let w1 = frp.win().expect("a leaf frame holds a window");
-            // SAFETY: a live window's `w_prev` is a live window or null.
-            wp2 = unsafe { Win::from_raw(w1.w_prev) };
+            wp2 = w1.prev();
             remove(w1, None);
             frame_remove(frp);
             let first = parent.child().expect("frp->fr_parent->fr_child");
             let head = first.win().expect("a leaf frame holds a window");
-            // SAFETY: as above.
-            append(unsafe { Win::from_raw(head.w_prev) }, w1, None);
+            append(head.prev(), w1, None);
             frame_insert(first, frp);
             wp1 = Some(w1);
         }
@@ -284,8 +280,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
             // SAFETY: as above.
             unsafe { winframe_restore(wp.raw(), dir, unflat_altfr) };
         }
-        // SAFETY: a live window's `w_prev` is a live window or null.
-        append(unsafe { Win::from_raw(wp.w_prev) }, wp, None);
+        append(wp.prev(), wp, None);
         return FAIL;
     }
 
@@ -313,7 +308,7 @@ fn move_after(win1: Win, win2: Win) {
     if win1 == win2 {
         return;
     }
-    if win2.w_next != win1.raw() {
+    if win2.w_next != Some(win1.id()) {
         if win1.frame().fr_parent != win2.frame().fr_parent {
             // SAFETY: a static message.
             unsafe { iemsg(c"INTERNAL: trying to move a window into another frame".as_ptr()) };
@@ -321,9 +316,8 @@ fn move_after(win1: Win, win2: Win) {
         }
         // The last window has no separator or status line: exchange the chrome
         // with whichever window is about to become last.
-        if win1.raw() == lastwin.get() {
-            // SAFETY: `win1` is not first, so `w_prev` is a live window.
-            let mut prev = unsafe { Win::new(win1.w_prev) };
+        if lastwin.get() == Some(win1.id()) {
+            let mut prev = win1.prev().expect("`win1` is not the first window");
             core::mem::swap(&mut prev.w_status_height, &mut win1.w_status_height);
             core::mem::swap(&mut prev.w_hsep_height, &mut win1.w_hsep_height);
             if prev.w_vsep_width == 1 {
@@ -333,7 +327,7 @@ fn move_after(win1: Win, win2: Win) {
                 win1.w_vsep_width = 1;
                 win1.frame().fr_width += 1;
             }
-        } else if win2.raw() == lastwin.get() {
+        } else if lastwin.get() == Some(win2.id()) {
             core::mem::swap(&mut win1.w_status_height, &mut win2.w_status_height);
             core::mem::swap(&mut win1.w_hsep_height, &mut win2.w_hsep_height);
             if win1.w_vsep_width == 1 {

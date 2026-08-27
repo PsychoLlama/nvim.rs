@@ -55,8 +55,8 @@ use crate::lua::executor::{
 };
 use crate::main::{
     Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, current_sctx, curtab, curwin,
-    did_emsg, e_cmdwin, e_invchan, ex_normal_busy, firstwin, g_stats, lines_left, msg_didany,
-    msg_no_more, msg_scroll, must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz,
+    did_emsg, e_cmdwin, e_invchan, ex_normal_busy, g_stats, lines_left, msg_didany, msg_no_more,
+    msg_scroll, must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz,
     redraw_tabline, tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
 };
 use crate::mapping::{keymap_array, modify_keymap};

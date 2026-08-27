@@ -27,8 +27,8 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
 use crate::main::{
-    curbuf, curwin, firstwin, globaldir, last_chdir_reason, msg_scrolled, p_acd, p_spk, p_wh,
-    p_wiw, prevwin, redraw_tabline, restart_edit,
+    curbuf, curwin, globaldir, last_chdir_reason, msg_scrolled, p_acd, p_spk, p_wh, p_wiw, prevwin,
+    redraw_tabline, restart_edit,
 };
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
@@ -43,7 +43,7 @@ use crate::types::{
     tabpage_T,
 };
 use crate::undo::u_sync;
-use crate::winlayer::{frames, tabs, windows_in_tab};
+use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
 pub unsafe fn win_goto(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
@@ -199,8 +199,7 @@ pub(crate) fn goto_hor(left: bool, count: c_int) {
 fn neighbor(tp: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> Option<Win> {
     if wp.w_floating {
         let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
-        // SAFETY: `firstwin` is set from startup to exit.
-        return Some(prev.unwrap_or_else(|| unsafe { Win::new(firstwin.get()) }));
+        return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 
     let mut foundfr = wp.frame();

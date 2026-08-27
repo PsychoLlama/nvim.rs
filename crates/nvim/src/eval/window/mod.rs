@@ -60,7 +60,7 @@ use crate::eval::typval::{
 use crate::ex_getln::text_or_buf_locked;
 use crate::garray::{ga_append, ga_concat_len, ga_init};
 use crate::main::{
-    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, lastwin, p_acd, prevwin,
+    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, p_acd, prevwin,
 };
 use crate::memory::{strequal, xfree, xmallocz, xstrdup};
 use crate::r#move::{
@@ -72,7 +72,9 @@ use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::strings::vim_snprintf_safelen;
 use crate::types::*;
-use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, tabs, windows_in_tab};
+use crate::winlayer::{
+    Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+};
 use ::libc::{memset, strcmp, strtol};
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
@@ -111,14 +113,11 @@ impl TabPage {
 
     /// The last window of this tab page.
     fn lastwin(self) -> Win {
-        let wp = if self.is_current() {
-            lastwin.get()
-        } else {
-            self.tp_lastwin
+        let wp = match self.is_current() {
+            true => last_window(),
+            false => self.tp_lastwin.and_then(WinId::get),
         };
-        // SAFETY: a live tab page's last window is live, and `lastwin` is set
-        // from startup to exit.
-        unsafe { Win::new(wp) }
+        wp.expect("a live tab page has a last window")
     }
 
     /// The window that was current before this tab page's current one — `None`

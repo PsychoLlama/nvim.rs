@@ -20,7 +20,7 @@ use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
-use crate::winlayer::{Buf, Win, tabs, windows, windows_in_tab};
+use crate::winlayer::{Buf, Win, first_window, last_window, tabs, windows, windows_in_tab};
 
 /// The stack of autocommand windows, one slot per nesting level.
 ///
@@ -171,10 +171,13 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
 
         unsafe { block_autocmds() };
         if need_append {
-            unsafe { win_append(lastwin.get(), auc_win, ::core::ptr::null_mut()) };
-            // The window is findable by handle again for as long as it
-            // is on a list; `aucmd_restbuf` takes it back out.
+            // Findable by handle again *before* it goes on a list, not
+            // after: the list links are handles, so a window that is on one
+            // has to be in the registry or the walk stops at it.
+            // `aucmd_restbuf` takes it back out, after the `win_remove`.
             register_window(unsafe { Win::new(auc_win) });
+            let last = last_window().map_or(::core::ptr::null_mut(), Win::raw);
+            unsafe { win_append(last, auc_win, ::core::ptr::null_mut()) };
             unsafe { win_config_float(Win::new(auc_win), (*auc_win).w_config.clone()) };
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
@@ -251,7 +254,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
         // The original window may have disappeared under the
         // autocommand; the first one is then as good as any.
         curwin.set(if save_curwin.is_null() {
-            firstwin.get()
+            first_window().map_or(::core::ptr::null_mut(), Win::raw)
         } else {
             save_curwin
         });

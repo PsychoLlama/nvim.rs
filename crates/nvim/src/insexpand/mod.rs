@@ -62,7 +62,7 @@ use crate::main::{
     KeyTyped, State, arrow_used, can_si, can_si_back, cmdwin_type, cot_flags, curbuf, curwin,
     did_ai, did_emsg, did_si, dollar_vcol, e_invarg, e_list_index_out_of_range_nr, e_listreq,
     e_notset, e_patnotf, edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre,
-    emsg_silent, ex_normal_busy, firstwin, g_tag_at_cursor, global_busy, got_int, in_assert_fails,
+    emsg_silent, ex_normal_busy, g_tag_at_cursor, global_busy, got_int, in_assert_fails,
     msg_hist_off, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js, p_paste, p_scs,
     p_smd, p_tsr, p_tsrfu, p_wic, p_ws, pum_want, redraw_cmdline, redraw_mode, sc_col,
     test_disable_char_avail,

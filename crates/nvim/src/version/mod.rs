@@ -23,8 +23,8 @@ use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_s
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::main::{
-    Columns, Rows, curbuf, curwin, firstwin, got_int, hl_attr_active, msg_col, p_ls, p_shm,
-    p_verbose, starting, topframe,
+    Columns, Rows, curbuf, curwin, got_int, hl_attr_active, msg_col, p_ls, p_shm, p_verbose,
+    starting, topframe,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
@@ -37,6 +37,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
+use crate::winlayer::first_window;
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
@@ -523,7 +524,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         let mut col = ((Columns.get() - vim_strsize(mesg.as_ptr())) / 2).max(0);
         grid_line_start(
             if !colon && ui_has(kUIMultigrid) {
-                (*firstwin.get()).w_grid
+                first_window().map_or_else(default_gridview, |wp| wp.w_grid)
             } else {
                 default_gridview()
             },

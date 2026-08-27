@@ -16,7 +16,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
 use crate::types::{NUL, OK, OptionSetFlags};
-use crate::winlayer::{TabPage, Win};
+use crate::winlayer::{TabPage, Win, WinId, first_window};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
@@ -377,12 +377,15 @@ pub unsafe fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let varname = numbuf.string_chk(argvars.add(1));
         let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
         // Any window of that tab page will do: only its `t:` scope is read.
-        let win = if tp.is_null() {
-            ptr::null_mut()
-        } else if tp == curtab.get() || (*tp).tp_firstwin.is_null() {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
+        let win = match TabPage::from_raw(tp) {
+            None => ptr::null_mut(),
+            Some(tab) => {
+                let head = match tab.is_current() || tab.tp_firstwin.is_none() {
+                    true => first_window(),
+                    false => tab.tp_firstwin.and_then(WinId::get),
+                };
+                head.map_or(ptr::null_mut(), Win::raw)
+            }
         };
         get_var_from(
             varname,

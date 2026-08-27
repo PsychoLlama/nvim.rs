@@ -31,7 +31,7 @@ use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
     SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
-    autocmd_no_leave, curbuf, curwin, did_emsg, firstwin, got_int, kOptErrorfile, kOptShortmess,
+    autocmd_no_leave, curbuf, curwin, did_emsg, got_int, kOptErrorfile, kOptShortmess,
     kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls,
     p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
@@ -57,7 +57,7 @@ use crate::window::{
 use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
-use crate::winlayer::{Buf, TabPage};
+use crate::winlayer::{Buf, TabPage, Win, first_window};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
@@ -271,7 +271,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
             if (*parmp).window_layout == WIN_TABS as c_int {
                 (*parmp).window_count = make_tabpages((*parmp).window_count);
                 time_msg_at(c"making tab pages");
-            } else if (*firstwin.get()).w_next.is_null() || (*(*firstwin.get()).w_next).w_floating {
+            } else if first_win().next().is_none_or(|next| next.w_floating) {
                 (*parmp).window_count = make_windows(
                     (*parmp).window_count,
                     (*parmp).window_layout == WIN_VER as c_int,
@@ -309,7 +309,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                 if (*parmp).window_layout == WIN_TABS as c_int {
                     goto_tabpage(1);
                 } else {
-                    curwin.set(firstwin.get());
+                    curwin.set(first_win().raw());
                 }
             } else if (*parmp).window_layout == WIN_TABS as c_int {
                 if TabPage::current().next().is_none() {
@@ -317,10 +317,10 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                 }
                 goto_tabpage(0);
             } else {
-                if (*curwin.get()).w_next.is_null() {
+                let Some(next) = Win::current().next() else {
                     break;
-                }
-                curwin.set((*curwin.get()).w_next);
+                };
+                curwin.set(next.raw());
             }
             dorewind = false;
             curbuf.set((*curwin.get()).w_buffer);
@@ -362,7 +362,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
         if (*parmp).window_layout == WIN_TABS as c_int {
             goto_tabpage(1);
         } else {
-            curwin.set(firstwin.get());
+            curwin.set(first_win().raw());
         }
         curbuf.set((*curwin.get()).w_buffer);
         autocmd_no_enter.set(autocmd_no_enter.get() - 1);
@@ -417,17 +417,17 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
                         set_shortmess(shm.as_mut_ptr());
                     }
                 } else {
-                    if (*curwin.get()).w_next.is_null() {
+                    let Some(next) = Win::current().next() else {
                         break;
-                    }
-                    win_enter((*curwin.get()).w_next, false);
+                    };
+                    win_enter(next.raw(), false);
                 }
             }
             advance = true;
 
             // Only load a file into a window that is still showing the first
             // window's buffer, or an unnamed one.
-            if curbuf.get() == (*firstwin.get()).w_buffer || (*curbuf.get()).b_ffname.is_null() {
+            if curbuf.get() == first_win().w_buffer || (*curbuf.get()).b_ffname.is_null() {
                 (*curwin.get()).w_arg_idx = arg_idx;
                 swap_exists_did_quit.set(false);
                 let alist = global_arglist();
@@ -477,15 +477,15 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
         autocmd_no_enter.set(autocmd_no_enter.get() - 1);
 
         // Start in the first window that is not a preview.
-        let mut win = firstwin.get();
-        while (*win).w_onebuf_opt.wo_pvw != 0 {
-            win = (*win).w_next;
-            if win.is_null() {
-                win = firstwin.get();
+        let mut win = first_win();
+        while win.w_onebuf_opt.wo_pvw != 0 {
+            let Some(next) = win.next() else {
+                win = first_win();
                 break;
-            }
+            };
+            win = next;
         }
-        win_enter(win, false);
+        win_enter(win.raw(), false);
         autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
         time_msg_at(c"editing files in windows");
@@ -519,4 +519,10 @@ pub(crate) unsafe fn check_swap_exists_action() {
         quit_on_swap_exists(false);
     }
     handle_swap_exists(None);
+}
+
+/// The first window of the current tab page, which exists from the moment
+/// startup makes it until exit.
+fn first_win() -> Win {
+    first_window().expect("the editor always has a window")
 }

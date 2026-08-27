@@ -485,14 +485,12 @@ fn cur_buf() -> Buf {
 
 /// The first window of the current tab page.
 fn first_win() -> Win {
-    // SAFETY: `firstwin` is set from startup to exit.
-    unsafe { Win::new(firstwin.get()) }
+    crate::winlayer::first_window().expect("the editor always has a window")
 }
 
 /// The last window of the current tab page, floats included.
 fn last_win() -> Win {
-    // SAFETY: `lastwin` is set from startup to exit.
-    unsafe { Win::new(lastwin.get()) }
+    crate::winlayer::last_window().expect("the editor always has a window")
 }
 
 /// The first tab page, which is the only one when it has no `tp_next`.

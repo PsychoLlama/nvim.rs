@@ -32,7 +32,7 @@ use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
     au_new_curbuf, cmdline_row, curbuf, e_cannot_switch_to_a_closing_buffer,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, e_nobufnr, e_trailing_arg,
-    got_int, jop_flags, lastwin, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
+    got_int, jop_flags, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
     swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::mark_jumplist_forget_file;
@@ -51,7 +51,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
     win_split,
 };
-use crate::winlayer::{buffers, windows};
+use crate::winlayer::{buffers, last_window as last_listed_window, windows};
 use crate::{semsg_c, smsg_c};
 
 use super::expand::find_buf;
@@ -751,7 +751,8 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
     // a window with this buffer.
     while buf.raw() == curbuf.get()
         && !(window_locked(cur_win()) || cur_win().buffer().b_locked > 0)
-        && (is_autocmd_window(lastwin.get()) || !is_last_window(cur_win()))
+        && (last_listed_window().is_some_and(|wp| is_autocmd_window(wp.raw()))
+            || !is_last_window(cur_win()))
     {
         if close_win(cur_win(), false, false) == FAIL {
             break;

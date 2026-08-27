@@ -49,8 +49,8 @@ use crate::main::{
     e_cannot_change_readonly_variable_str, e_cannot_delete_variable_str, e_cannot_mod,
     e_cannot_set_variable_in_sandbox_str, e_illvar, e_invarg, e_invarg2, e_letwrong, e_listreq,
     e_missing_close_curly_str, e_stray_closing_curly_str, e_string_required, e_trailing_arg,
-    e_unknown_option2, emsg_severe, firstwin, got_int, lastused_tabpage, no_hlsearch, p_ccv, p_dex,
-    p_pex, p_verbose, sandbox, sc_col,
+    e_unknown_option2, emsg_severe, got_int, lastused_tabpage, no_hlsearch, p_ccv, p_dex, p_pex,
+    p_verbose, sandbox, sc_col,
 };
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{

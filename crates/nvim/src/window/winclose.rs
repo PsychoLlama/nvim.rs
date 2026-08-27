@@ -35,7 +35,7 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{CMD_SIZE, CMD_close, FAIL, Integer, OK, frame_T, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::tabs;
+use crate::winlayer::{WinId, tabs};
 
 pub unsafe fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
@@ -168,7 +168,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
                     // An autocommand can still abort the closing of this
                     // window, but carrying the change out anyway is no
                     // catastrophe.
-                    tp.tp_curwin = tp.tp_firstwin;
+                    tp.tp_curwin = raw_win(tp.tp_firstwin.and_then(WinId::get));
                 }
             }
         }
@@ -597,8 +597,9 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
 /// The last window of `tp`, floats included. `tp` is never the current tab
 /// page here, so `tp_lastwin` is the live answer.
 fn tab_last_win(tp: TabPage) -> Win {
-    // SAFETY: the tail of a live window list is a live window.
-    unsafe { Win::new(tp.tp_lastwin) }
+    tp.tp_lastwin
+        .and_then(WinId::get)
+        .expect("a window list has a tail")
 }
 
 /// Whether any autocommand is listening for `event`.

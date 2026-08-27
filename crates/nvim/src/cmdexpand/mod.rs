@@ -47,10 +47,10 @@ use crate::lua::executor::{
 };
 use crate::main::{
     Columns, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_win, curbuf, current_sctx, curwin,
-    e_invarg, e_invarg2, e_nomatch2, e_toomany, got_int, hl_attr_active, lastwin, msg_col,
-    msg_didany, msg_row, msg_scrolled, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu,
-    pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe,
-    wild_menu_showing, wop_flags,
+    e_invarg, e_invarg2, e_nomatch2, e_toomany, got_int, hl_attr_active, msg_col, msg_didany,
+    msg_row, msg_scrolled, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, pum_want,
+    save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing,
+    wop_flags,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};

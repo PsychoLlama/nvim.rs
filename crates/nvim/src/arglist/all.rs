@@ -14,7 +14,7 @@ use crate::buffer::BufRef;
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
 use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
-use crate::winlayer::{TabPage, first_tab, windows};
+use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, windows};
 
 /// What the two passes of `:all` share. A stack local of [`do_arg_all`],
 /// never handed to C, so the passes take it by reference and its fields
@@ -46,12 +46,17 @@ struct ArgAllState {
 /// invalidated it: floating windows are walked first, backwards, then the
 /// ordinary ones.
 fn first_window_to_walk() -> *mut win_T {
-    // SAFETY: firstwin and lastwin are always valid.
-    if unsafe { (*lastwin.get()).w_floating } {
-        lastwin.get()
-    } else {
-        firstwin.get()
-    }
+    let last = last_window().expect("the editor always has a window");
+    let head = match last.w_floating {
+        true => Some(last),
+        false => first_window(),
+    };
+    raw_win(head)
+}
+
+/// `Win::raw`, or a null for "no window", as the walk above answers.
+fn raw_win(wp: Option<Win>) -> *mut win_T {
+    wp.map_or(ptr::null_mut(), Win::raw)
 }
 
 /// The window after `wp` in that walk, or null at its end.
@@ -64,15 +69,13 @@ unsafe fn next_window_to_walk(wp: *mut win_T) -> *mut win_T {
     let wp = unsafe { Win::new(wp) };
     // SAFETY: caller contract; the window list is well formed.
     if wp.w_floating {
-        if unsafe { (*wp.w_prev).w_floating } {
-            wp.w_prev
-        } else {
-            firstwin.get()
-        }
-    } else if wp.w_next.is_null() || unsafe { (*wp.w_next).w_floating } {
-        ptr::null_mut()
+        let prev = wp.prev().expect("a float is never the first window");
+        raw_win(match prev.w_floating {
+            true => Some(prev),
+            false => first_window(),
+        })
     } else {
-        wp.w_next
+        raw_win(wp.next().filter(|next| !next.w_floating))
     }
 }
 
@@ -456,7 +459,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
 /// Open up to `count` windows, one per argument. `keep_tabs` is
 /// `:tab drop`'s "leave the existing layout alone".
 unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
-    debug_assert!(!firstwin.get().is_null(), "firstwin != NULL");
+    debug_assert!(first_window().is_some(), "firstwin != NULL");
     if cmdwin_type.get() != 0 {
         crate::semsg!("E11: Invalid in command-line window; <CR> executes, CTRL-C quits");
         return;

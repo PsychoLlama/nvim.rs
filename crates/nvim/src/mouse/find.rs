@@ -21,17 +21,16 @@ use core::ptr;
 
 use super::*;
 use crate::grid::get_win_by_grid_handle;
-use crate::main::{firstwin, msg_grid, msg_grid_pos, topframe};
+use crate::main::{msg_grid, msg_grid_pos, topframe};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, handle_T, linenr_T};
 use crate::ui_compositor::ui_comp_mouse_focus;
-use crate::winlayer::{Frame, windows};
+use crate::winlayer::{Frame, first_window, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
 pub(crate) fn first_window_row() -> c_int {
-    // SAFETY: the window list is live from startup to exit.
-    unsafe { (*firstwin.get()).w_winrow }
+    first_window().map_or(0, |wp| wp.w_winrow)
 }
 
 // ---------------------------------------------------------------------------

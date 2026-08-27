@@ -22,8 +22,8 @@ use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::fold::copy_folding_state;
 use crate::main::{
-    Columns, Rows, cmdmod, e_noroom, firstwin, msg_col, msg_row, p_ch, p_ea, p_ead, p_ls, p_sb,
-    p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw, sc_col,
+    Columns, Rows, cmdmod, e_noroom, msg_col, msg_row, p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr,
+    p_wh, p_wiw, p_wmh, p_wmw, sc_col,
 };
 use crate::mark::copy_jumplist;
 use crate::memory::{xcalloc, xstrdup};
@@ -36,7 +36,7 @@ use crate::types::{FAIL, Integer, OK, OptInt, frame_T, qf_info_T, win_T};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
-use crate::winlayer::{Frame, Win, frames, tabs};
+use crate::winlayer::{Frame, Win, WinId, frames, tabs};
 use ::libc::memset;
 
 pub fn win_split(size: c_int, flags: c_int) -> c_int {
@@ -130,8 +130,7 @@ fn split_ins(
     }
 
     let mut oldwin = if flags & WSP_TOP as c_int != 0 {
-        // SAFETY: `firstwin` is set from startup to exit.
-        unsafe { Win::new(firstwin.get()) }
+        first_win()
     } else if flags & WSP_BOT as c_int != 0 || cur_win().w_floating {
         // Can't split a float: use the last non-floating window instead.
         last_nonfloating(None)
@@ -145,8 +144,7 @@ fn split_ins(
 
     // Add a status line when 'laststatus' is 1 and the first window is split.
     let mut need_status = 0;
-    // SAFETY: `firstwin` is live.
-    let first = unsafe { Win::new(firstwin.get()) };
+    let first = first_win();
     if is_only_window(first, None) && p_ls.get() == 1 as OptInt && oldwin.w_status_height == 0 {
         if oldwin.w_height as OptInt <= p_wmh.get() {
             err(&raw const e_noroom as *const c_char);
@@ -454,12 +452,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         && (flags & WSP_BOT as c_int != 0
             || flags & WSP_BELOW as c_int != 0
             || (flags & WSP_ABOVE as c_int == 0 && split_after(_vertical)));
-    // SAFETY: a live window's `w_prev` is a live window or null.
-    let after = if below {
-        Some(oldwin)
-    } else {
-        unsafe { Win::from_raw(oldwin.w_prev) }
-    };
+    let after = if below { Some(oldwin) } else { oldwin.prev() };
     let Some(mut wp) = new_wp else {
         // SAFETY: `win_alloc` answers a live window.
         let wp = unsafe { Win::new(win_alloc(raw_win(after), false)) };
@@ -488,7 +481,10 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     if wp.w_config.external {
         for mut tp in tabs().filter(|tp| !tp.is_current()) {
             if tp.tp_curwin == wp.raw() {
-                tp.tp_curwin = tp.tp_firstwin;
+                tp.tp_curwin = tp
+                    .tp_firstwin
+                    .and_then(WinId::get)
+                    .map_or(ptr::null_mut(), Win::raw);
             }
         }
     }

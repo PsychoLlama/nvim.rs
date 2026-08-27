@@ -26,7 +26,7 @@ use crate::types::{
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
     xfmark_T,
 };
-use crate::winlayer::{BufId, TabId};
+use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
 mod entry;
@@ -697,8 +697,12 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-pub static firstwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static lastwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+/// The current tab page's window list, its two ends — handles, as the
+/// `w_next`/`w_prev` links they anchor are. `winlayer::first_window` and
+/// `last_window` resolve them; a tab page that is *not* current keeps its
+/// own copies in `tp_firstwin`/`tp_lastwin`.
+pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());

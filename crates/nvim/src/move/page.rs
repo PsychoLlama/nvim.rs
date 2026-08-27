@@ -33,7 +33,7 @@ use crate::search::FORWARD;
 use crate::types::{
     Direction, FAIL, OK, OptInt, cmdarg_T, colnr_T, linenr_T, oparg_T, pos_T, win_T,
 };
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, first_window};
 
 /// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.
 const CMDARG_ZERO: cmdarg_T = cmdarg_T {
@@ -240,8 +240,7 @@ pub unsafe fn do_check_cursorbind() {
     // Upstream asks the tab page for its window list, but the *current* tab
     // page's windows always hang off `firstwin` -- `tp_firstwin` is only
     // filled in when a tab page is left.
-    // SAFETY: the editor's window list holds live windows.
-    let mut next = (!firstwin.get().is_null()).then(|| unsafe { Win::new(firstwin.get()) });
+    let mut next = first_window();
     while let Some(mut win) = next {
         curwin.set(win.raw());
         curbuf.set(win.buffer().raw());

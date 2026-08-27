@@ -12,7 +12,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
-use crate::winlayer::{Buf, first_buffer};
+use crate::winlayer::{Buf, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -367,11 +367,9 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
         unsafe {
             loop {
                 // Move to the next window, wrapping to the first at the end.
-                wp.set(if !(*wp.get()).w_next.is_null() {
-                    (*wp.get()).w_next
-                } else {
-                    firstwin.get()
-                });
+                let cur = Win::new(wp.get());
+                let next = cur.next().or_else(first_window);
+                wp.set(next.map_or(::core::ptr::null_mut(), Win::raw));
                 // Stop if we're back at the start, or found an unscanned
                 // buffer in a focusable window.
                 if wp.get() == curwin.get()

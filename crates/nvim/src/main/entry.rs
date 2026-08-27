@@ -53,7 +53,7 @@ use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, NO_BUFFERS, RedrawingDisabled, Rows,
     WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode,
-    err_arg_missing, exmode_active, firstwin, full_screen, headless_mode, kOptCbFlagUnnamed,
+    err_arg_missing, exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed,
     kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
     p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
     silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
@@ -90,7 +90,7 @@ use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
-use crate::winlayer::{Win, windows};
+use crate::winlayer::{Win, first_window, windows};
 use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
@@ -321,7 +321,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
         win_init_size();
         if params.diff_mode != 0 {
-            diff_win_options(Win::new(firstwin.get()), false);
+            diff_win_options(first_win(), false);
         }
 
         debug_assert!(
@@ -358,7 +358,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             time_msg_at(c"waiting for UI");
             remote_ui_wait_for_attach();
             time_msg_at(c"done waiting for UI");
-            (*firstwin.get()).w_prev_height = (*firstwin.get()).w_height;
+            let mut first = first_win();
+            first.w_prev_height = first.w_height;
         }
 
         starting.set(NO_BUFFERS);
@@ -599,4 +600,10 @@ pub fn main() {
 
     // SAFETY: `args` outlives the call, and `main_0` never returns.
     unsafe { ::std::process::exit(main_0((argv.len() - 1) as c_int, argv.as_mut_ptr()) as i32) }
+}
+
+/// The first window of the current tab page, which exists from the moment
+/// startup makes it until exit.
+fn first_win() -> Win {
+    first_window().expect("the editor always has a window")
 }

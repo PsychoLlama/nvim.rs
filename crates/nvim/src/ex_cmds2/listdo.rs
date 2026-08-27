@@ -29,7 +29,7 @@ use crate::autocmd::{
 };
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::main::{curbuf, curwin, firstwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin};
+use crate::main::{curbuf, curwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin};
 use crate::mark::setpcmark;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
@@ -42,7 +42,7 @@ use crate::types::{
     cmdidx_T, exarg_T, linenr_T, size_t,
 };
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
-use crate::winlayer::{Buf, Win, first_buffer, first_tab};
+use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -183,13 +183,13 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
     unsafe {
         let mut i: c_int = 0;
         // Start at the eap->line1'th argument/window/tab page.
-        let mut wp = firstwin.get();
+        let mut wp = first_window();
         let mut tp = first_tab();
         match list {
             ListDo::Windows => {
-                while !wp.is_null() && (i as linenr_T + 1) < (*eap).line1 {
+                while let Some(cur) = wp.filter(|_| (i as linenr_T + 1) < (*eap).line1) {
                     i += 1;
-                    wp = (*wp).w_next;
+                    wp = cur.next();
                 }
             }
             ListDo::Tabs => {
@@ -271,19 +271,18 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                 }
                 ListDo::Windows => {
                     // Go to window "wp".
-                    if !win_valid(wp) {
+                    let Some(cur) = wp.filter(|wp| win_valid(wp.raw())) else {
                         break;
-                    }
-                    execute =
-                        !(*wp).w_floating || (!(*wp).w_config.hide && (*wp).w_config.focusable);
+                    };
+                    execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
                     if execute {
-                        win_goto(wp);
-                        if curwin.get() != wp {
+                        win_goto(cur.raw());
+                        if curwin.get() != cur.raw() {
                             // Something must be wrong.
                             break;
                         }
                     }
-                    wp = (*wp).w_next;
+                    wp = cur.next();
                 }
                 ListDo::Tabs => {
                     // Go to tab page "tp".

@@ -16,7 +16,7 @@ use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::optionstr::empty_option;
 use crate::types::{FAIL, OK};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
-use crate::winlayer::{Win, tabs, windows, windows_in_tab};
+use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 
@@ -184,14 +184,9 @@ unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref:
 /// The window before `wp` in the current tab page's list, wrapping round to
 /// the last: the step of the two backwards walks below.
 fn prev_window(wp: Win) -> Win {
-    let prev = if wp.w_prev.is_null() {
-        lastwin.get()
-    } else {
-        wp.w_prev
-    };
-    // SAFETY: `w_prev`/`lastwin` are links of the live window list, and the
-    // list is never empty.
-    unsafe { Win::new(prev) }
+    wp.prev()
+        .or_else(last_window)
+        .expect("the window list is never empty")
 }
 
 /// Enter a window to show a file in, jumping from a *quickfix* window.
@@ -221,14 +216,10 @@ fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
                 // The quickfix window is not the only one here -- the
                 // caller splits one off when it is -- so it has a
                 // neighbour on one side or the other.
-                let neighbour = if cur_win().w_prev.is_null() {
-                    cur_win().w_next
-                } else {
-                    cur_win().w_prev
-                };
-                // SAFETY: a link of the live window list, non-null by the
-                // reasoning above.
-                unsafe { Win::new(neighbour) }
+                cur_win()
+                    .prev()
+                    .or_else(|| cur_win().next())
+                    .expect("the quickfix window has a neighbour")
             };
             break;
         }

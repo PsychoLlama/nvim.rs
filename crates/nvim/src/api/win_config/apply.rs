@@ -159,9 +159,9 @@ unsafe fn win_config_split(
                                             == kWinSplitLeft as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                     {
-                                        neighbor = (*win).w_next;
+                                        neighbor = raw_win(Win::new(win).next());
                                     } else {
-                                        neighbor = (*win).w_prev;
+                                        neighbor = raw_win(Win::new(win).prev());
                                     }
                                 }
                                 altwin_0 = winframe_remove(
@@ -263,7 +263,7 @@ unsafe fn win_config_split(
                     .is_null();
                     if !to_split_ok {
                         win_append(
-                            (*win).w_prev,
+                            raw_win(Win::new(win).prev()),
                             win,
                             if win_tp == curtab.get() {
                                 ::core::ptr::null_mut::<tabpage_T>()
@@ -479,4 +479,10 @@ pub unsafe fn nvim_win_set_config(
         }
     }
     ().reported(error)
+}
+
+/// `Win::raw`, or a null for "no neighbour" — the shape the transpiled
+/// window family still takes.
+fn raw_win(wp: Option<Win>) -> *mut win_T {
+    wp.map_or(::core::ptr::null_mut(), Win::raw)
 }

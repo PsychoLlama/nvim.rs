@@ -46,7 +46,7 @@ use crate::window::{
     close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
     valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
 };
-use crate::winlayer::{Buf, first_tab, tabs, windows};
+use crate::winlayer::{Buf, Win, WinId, first_tab, first_window, last_window, tabs, windows};
 
 /// The key a command-line window sends back to close itself, with the
 /// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
@@ -204,19 +204,23 @@ pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
-unsafe fn window_at(nr: linenr_T) -> *mut win_T {
-    unsafe {
-        let mut wp = firstwin.get();
-        let mut n = nr;
-        while !(*wp).w_next.is_null() {
-            n -= 1;
-            if n <= 0 {
-                break;
-            }
-            wp = (*wp).w_next;
+fn window_at(nr: linenr_T) -> *mut win_T {
+    let mut wp = first_win();
+    let mut n = nr;
+    while let Some(next) = wp.next() {
+        n -= 1;
+        if n <= 0 {
+            break;
         }
-        wp
+        wp = next;
     }
+    wp.raw()
+}
+
+/// The head of the current tab page's window list, which exists from
+/// startup to exit — upstream dereferences `firstwin` here unguarded.
+fn first_win() -> Win {
+    first_window().expect("the editor always has a window")
 }
 
 /// `:cquit` — exit with a status, never returning.
@@ -305,7 +309,7 @@ fn numbered_window(nr: linenr_T) -> *mut win_T {
             return wp.raw();
         }
     }
-    lastwin.get()
+    last_window().map_or(ptr::null_mut(), Win::raw)
 }
 
 /// `:pclose` — close the preview window, wherever it is.
@@ -499,7 +503,11 @@ pub unsafe fn tabpage_close_other(tp: *mut tabpage_T, forceit: c_int) {
                 tabpage_index(tp),
             );
             let wp = (*tp).tp_lastwin;
-            ex_win_close(forceit, wp, tp);
+            ex_win_close(
+                forceit,
+                wp.and_then(WinId::get).map_or(ptr::null_mut(), Win::raw),
+                tp,
+            );
             if !valid_tabpage(tp) {
                 break;
             }
@@ -535,19 +543,17 @@ pub(crate) unsafe fn ex_only(eap: *mut exarg_T) {
 ///
 /// `:1only` is the *current* window: the count is spent before the walk
 /// starts, unlike `window_at`, which always steps at least once.
-unsafe fn window_at_stepwise(nr: linenr_T) -> *mut win_T {
-    unsafe {
-        let mut wp = firstwin.get();
-        let mut n = nr;
-        loop {
-            n -= 1;
-            if n <= 0 || (*wp).w_next.is_null() {
-                break;
-            }
-            wp = (*wp).w_next;
-        }
-        wp
+fn window_at_stepwise(nr: linenr_T) -> *mut win_T {
+    let mut wp = first_win();
+    let mut n = nr;
+    loop {
+        n -= 1;
+        let (true, Some(next)) = (n > 0, wp.next()) else {
+            break;
+        };
+        wp = next;
     }
+    wp.raw()
 }
 
 /// `:hide` used as a command rather than as a modifier.

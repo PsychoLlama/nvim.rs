@@ -41,6 +41,20 @@
 //! `win_T` until that idle window has a named owner. `registry`'s two types
 //! say which is which.
 //!
+//! **The five list links are handles all the same.** `b_next`/`b_prev`,
+//! `w_next`/`w_prev` and `tp_next` — and the six anchors `firstbuf`,
+//! `lastbuf`, `firstwin`, `lastwin`, `tp_firstwin`/`tp_lastwin` and
+//! `first_tabpage` — hold a [`BufId`]/[`WinId`]/[`TabId`], not an address,
+//! so the graph's *lists* are index-shaped whether or not the allocation
+//! has moved. Ownership is what a `Vec` inside the object needs; a handle
+//! link is what makes a stale link answer `None` instead of pointing into
+//! freed memory, and it is why the window list is safe to walk even though
+//! nobody owns a `win_T` yet. The one thing it asks of the allocator is an
+//! order: **a window, buffer or tab page must be in the registry before it
+//! is spliced into a list, and must leave the list before it leaves the
+//! registry.** `buflist_new` and `aucmd_prepbuf` were both the other way
+//! round and were swapped for this.
+//!
 //! None of that changes what a [`Buf`] or a [`Win`] *is*. Both are still one
 //! address and building one still reads nothing: `Owned::address` hands back
 //! the pointer it was born with rather than borrowing the table, so the
@@ -399,17 +413,13 @@ impl Win {
     /// The next window in this tab page's list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        // A live window's `w_next` is a live window or null.
-        let next = self.w_next;
-        (!next.is_null()).then_some(Self(next))
+        self.w_next.and_then(WinId::get)
     }
 
     /// The window before this one in its tab page's list, if any.
     #[inline(always)]
     pub fn prev(self) -> Option<Self> {
-        // A live window's `w_prev` is a live window or null.
-        let prev = self.w_prev;
-        (!prev.is_null()).then_some(Self(prev))
+        self.w_prev.and_then(WinId::get)
     }
 
     /// First line of the fold containing `lnum`, if there is one.
@@ -867,17 +877,27 @@ impl Line {
 // index; the walks are over a handful of entries and none of them is in the
 // draw path's inner loop.
 
-/// The windows hanging off `first`, in list order.
-fn win_chain(first: *mut win_T) -> impl Iterator<Item = Win> {
-    // The chain is a live window list ending at a null `w_next`.
-    iter::successors((!first.is_null()).then_some(Win(first)), |wp| wp.next())
+/// `first` and every window after it in its tab page's list.
+pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
+    iter::successors(first, |wp| wp.next())
+}
+
+/// The head of the current tab page's window list, `None` only before the
+/// first window exists and while the editor is tearing the last one down.
+pub(crate) fn first_window() -> Option<Win> {
+    firstwin.get().and_then(WinId::get)
+}
+
+/// The tail of the current tab page's window list. [`first_window`].
+pub(crate) fn last_window() -> Option<Win> {
+    lastwin.get().and_then(WinId::get)
 }
 
 /// Every window of the current tab page, in list order: the C's
 /// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab` test always
 /// picks `firstwin`.
 pub fn windows() -> impl Iterator<Item = Win> {
-    win_chain(firstwin.get())
+    windows_from(first_window())
 }
 
 /// Every window of tab page `tp`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
@@ -886,10 +906,10 @@ pub fn windows() -> impl Iterator<Item = Win> {
 /// off its own `tp_firstwin`, which is stale while it is current — that is
 /// what the macro's first arm reads.
 pub fn windows_in_tab(tp: TabPage) -> impl Iterator<Item = Win> {
-    win_chain(if tp.is_current() {
-        firstwin.get()
+    windows_from(if tp.is_current() {
+        first_window()
     } else {
-        tp.tp_firstwin
+        tp.tp_firstwin.and_then(WinId::get)
     })
 }
 
@@ -948,7 +968,5 @@ pub(crate) fn buffers_back() -> impl Iterator<Item = Buf> {
 /// out as a `while` loop each time it needs it — the float walks in
 /// `winfloat` and `window::size` are the two.
 pub(crate) fn windows_back() -> impl Iterator<Item = Win> {
-    // The chain is a live window list ending at a null `w_prev`.
-    let last = lastwin.get();
-    iter::successors((!last.is_null()).then_some(Win(last)), |wp| wp.prev())
+    iter::successors(last_window(), |wp| wp.prev())
 }

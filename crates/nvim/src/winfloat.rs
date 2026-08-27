@@ -31,7 +31,7 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
-use crate::main::{Columns, Rows, cmdwin_win, e_cmdwin, firstwin, lastwin, p_ch, p_ls, prevwin};
+use crate::main::{Columns, Rows, cmdwin_win, e_cmdwin, p_ch, p_ls, prevwin};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_inner};
@@ -54,7 +54,9 @@ use crate::window::{
     win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
-use crate::winlayer::{Buf, TabPage, Win, windows_back, windows_in_tab};
+use crate::winlayer::{
+    Buf, TabPage, Win, WinId, first_window, last_window, windows_back, windows_in_tab,
+};
 use ::libc::{qsort, strlen};
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
@@ -413,7 +415,7 @@ fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig, err: &mut Error) 
 /// the right tab page's list and make it float-shaped.
 fn alloc_new_float(last: bool, fconfig: &WinConfig, err: &mut Error) -> Option<Win> {
     let mut tp_last = if last {
-        lastwin.get()
+        last_window().map_or(ptr::null_mut(), Win::raw)
     } else {
         last_nofloat(None)
     };
@@ -443,12 +445,11 @@ fn unfloat_to_float(win: Win, err: &mut Error) -> Option<Win> {
     let win_tp = tabpage_of(win);
     debug_assert!(win_tp.is_some(), "win_tp");
     let win_tp = win_tp?;
-    let first_in_tab = if win_tp.is_current() {
-        firstwin.get()
-    } else {
-        win_tp.tp_firstwin
+    let first_in_tab = match win_tp.is_current() {
+        true => first_window(),
+        false => win_tp.tp_firstwin.and_then(WinId::get),
     };
-    if first_in_tab == win.raw() && last_nofloat(win_tp.into_other()) == win.raw() {
+    if first_in_tab == Some(win) && last_nofloat(win_tp.into_other()) == win.raw() {
         set_error(err, c"Cannot change last window into float");
         return None;
     } else if !cmdwin_win.get().is_null() && !cmdwin_is_float() {
@@ -791,14 +792,15 @@ pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: Option<TabPage
         return valid_window(prevwin.get())
             .filter(|wp| wp.raw() != win.cast_mut())
             .filter(|wp| wp.w_config.focusable && !wp.w_config.hide)
-            // SAFETY: `firstwin` is a live window once the editor has one.
-            .or_else(|| unsafe { Win::from_raw(firstwin.get()) });
+            .or_else(first_window);
     };
 
     debug_assert!(!tp.is_current(), "tp != curtab");
     let wp = valid_in_tab(tp, tp.tp_prevwin);
-    // SAFETY: a live tab page's first window is live.
-    let first = unsafe { Win::new(tp.tp_firstwin) };
+    let first = tp
+        .tp_firstwin
+        .and_then(WinId::get)
+        .expect("a window list has a head");
     let wp = wp.unwrap_or(first);
     if wp.w_config.focusable && !wp.w_config.hide {
         Some(wp)

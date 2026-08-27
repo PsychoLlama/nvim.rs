@@ -18,8 +18,8 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
 use crate::main::{
-    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, firstwin, got_int, jop_flags,
-    lastwin, p_ch, p_ea, p_tpm, swap_exists_action, swap_exists_did_quit,
+    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, got_int, jop_flags, p_ch, p_ea,
+    p_tpm, swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
@@ -34,7 +34,7 @@ use crate::window::{
     lastwin_nofloating, tabline_height, tabpage_index, win_close, win_enter, win_locked,
     win_move_after, win_split, win_valid,
 };
-use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, windows};
+use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, first_window, last_window, windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -44,20 +44,21 @@ use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, windows};
 // through one wrapper here rather than through an `unsafe` at every call
 // site.
 
-fn win_of(win: *mut win_T) -> Option<Win> {
-    // SAFETY: every pointer reached below comes from the window list, so it
-    // is null or a live window.
-    (!win.is_null()).then(|| unsafe { Win::new(win) })
+/// Where `close_superfluous_windows` starts, and restarts: floats live at
+/// the end of the list and are closed first.
+fn walk_head() -> Option<Win> {
+    match last_win().w_floating {
+        true => last_window(),
+        false => first_window(),
+    }
 }
 
 fn first_win() -> Win {
-    // SAFETY: `firstwin` is set from startup to exit.
-    unsafe { Win::new(firstwin.get()) }
+    first_window().expect("the editor always has a window")
 }
 
 fn last_win() -> Win {
-    // SAFETY: `lastwin` is set from startup to exit.
-    unsafe { Win::new(lastwin.get()) }
+    last_window().expect("the editor always has a window")
 }
 
 fn current_win() -> Win {
@@ -233,7 +234,7 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
 
     autocmd_no_enter.set(autocmd_no_enter.get() - 1);
     // Back to the first window.
-    enter_win(firstwin.get());
+    enter_win(first_win().raw());
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
     close_extra_windows(count, &mut open_wins);
@@ -248,24 +249,18 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
     loop {
         let mut tpnext = current_tab().next();
         // Try to close floating windows first.
-        let mut wp = if last_win().w_floating {
-            lastwin.get()
-        } else {
-            firstwin.get()
-        };
-        while let Some(w) = win_of(wp) {
+        let mut wp = walk_head();
+        while let Some(w) = wp {
             let mut wpnext = if w.w_floating {
-                // SAFETY: a float always has a predecessor, as upstream's
-                // unguarded `wp->w_prev->w_floating` assumes.
-                if unsafe { Win::new(w.w_prev) }.w_floating {
-                    w.w_prev
-                } else {
-                    firstwin.get()
+                // A float always has a predecessor, as upstream's unguarded
+                // `wp->w_prev->w_floating` assumes.
+                let prev = w.prev().expect("a float is never the first window");
+                match prev.w_floating {
+                    true => Some(prev),
+                    false => first_window(),
                 }
-            } else if w.w_next.is_null() || win_of(w.w_next).is_some_and(|n| n.w_floating) {
-                ptr::null_mut()
             } else {
-                w.w_next
+                w.next().filter(|next| !next.w_floating)
             };
             if should_close(w, had_tab) {
                 if close_win(w, false) == FAIL {
@@ -273,11 +268,7 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
                 }
                 // Just in case an autocommand does something strange with
                 // windows: start all over.
-                wpnext = if last_win().w_floating {
-                    lastwin.get()
-                } else {
-                    firstwin.get()
-                };
+                wpnext = walk_head();
                 tpnext = first_tab();
                 *open_wins = 0;
             } else {
@@ -392,24 +383,24 @@ fn open_window_for(
 
 /// The last stage: close the windows over the count asked for.
 fn close_extra_windows(count: linenr_T, open_wins: &mut c_int) {
-    let mut wp = lastwin.get();
+    let mut wp = last_window();
     while *open_wins as linenr_T > count {
-        let Some(win) = win_of(wp) else { break };
+        let Some(win) = wp else { break };
         let r = (buf_hidden(win.buffer())
             || !buf_changed(win.buffer())
             || auto_write(win.buffer()) == OK)
             && !is_aucmd(win);
-        if !is_valid(wp) {
+        if !is_valid(win.raw()) {
             // A BufWrite autocommand made the window invalid; start over.
-            wp = lastwin.get();
+            wp = last_window();
         } else if r {
             let free_buf = !buf_hidden(win.buffer());
             close_win(win, free_buf);
             *open_wins -= 1;
-            wp = lastwin.get();
+            wp = last_window();
         } else {
-            wp = win.w_prev;
-            if wp.is_null() {
+            wp = win.prev();
+            if wp.is_none() {
                 break;
             }
         }

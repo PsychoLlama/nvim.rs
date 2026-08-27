@@ -52,7 +52,7 @@ use crate::types::{
     frame_T, hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
-use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, tabs, windows_in_tab};
+use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -364,7 +364,10 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 }
             }
 
-            if !tab_firstwin.is_null() && !(*tab_firstwin).w_next.is_null() {
+            if tab_firstwin
+                .and_then(WinId::get)
+                .is_some_and(|w| w.next().is_some())
+            {
                 // Go to the first window, then pin 'winheight'/'winwidth' to
                 // 1 so that moving between windows does not resize them --
                 // before restoring the views, so that the topline and the

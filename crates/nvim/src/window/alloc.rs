@@ -45,7 +45,8 @@ use crate::types::{
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::{
-    Buf, Frame, TabPage, Win, buffers, defer_free_window, forget_window, register_window, tabs,
+    Buf, Frame, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
+    tabs,
 };
 use ::libc::abort;
 
@@ -171,7 +172,7 @@ pub(crate) fn attach_frame(wp: Win) -> Frame {
 }
 
 pub fn win_init_size() {
-    let mut win = first_window();
+    let mut win = first_win();
     let mut top = current_topframe();
     let rows = (Rows.get() as OptInt
         - p_ch.get()
@@ -189,10 +190,10 @@ pub fn win_init_size() {
     top.fr_width = Columns.get();
 }
 
-/// The first window of the current tab page.
-fn first_window() -> Win {
-    // SAFETY: `firstwin` is set from startup to exit.
-    unsafe { Win::new(firstwin.get()) }
+/// The first window of the current tab page, which exists from startup to
+/// exit. The fallible form is `winlayer::first_window`.
+fn first_win() -> Win {
+    crate::winlayer::first_window().expect("the editor always has a window")
 }
 
 // ---------------------------------------------------------------------------
@@ -420,19 +421,19 @@ pub(crate) fn append(after: Option<Win>, wp: Win, tp: Option<TabPage>) {
     );
     // After `None` is in front of the first.
     let before = match after {
-        // SAFETY: a live window's `w_next` is a live window or null.
-        Some(after) => unsafe { Win::from_raw(after.w_next) },
+        Some(after) => after.next(),
         None => list_first(tp),
     };
-    wp.w_next = raw_win(before);
-    wp.w_prev = raw_win(after);
+    let id = Some(wp.id());
+    wp.w_next = before.map(Win::id);
+    wp.w_prev = after.map(Win::id);
     match after {
-        Some(mut after) => after.w_next = wp.raw(),
-        None => set_first(tp, wp.raw()),
+        Some(mut after) => after.w_next = id,
+        None => set_first(tp, id),
     }
     match before {
-        Some(mut before) => before.w_prev = wp.raw(),
-        None => set_last(tp, wp.raw()),
+        Some(mut before) => before.w_prev = id,
+        None => set_last(tp, id),
     }
 }
 
@@ -448,8 +449,7 @@ pub(crate) fn remove(wp: Win, tp: Option<TabPage>) {
         tp.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
     );
-    // SAFETY: a live window's neighbours are live windows or null.
-    let (prev, next) = unsafe { (Win::from_raw(wp.w_prev), Win::from_raw(wp.w_next)) };
+    let (prev, next) = (wp.prev(), wp.next());
     match prev {
         Some(mut prev) => prev.w_next = wp.w_next,
         None => {
@@ -470,20 +470,22 @@ pub(crate) fn remove(wp: Win, tp: Option<TabPage>) {
 
 /// The head of `tp`'s window list, or of the current tab page's.
 fn list_first(tp: Option<TabPage>) -> Option<Win> {
-    // SAFETY: the head of a live window list is a live window or null.
-    unsafe { Win::from_raw(tp.map_or_else(|| firstwin.get(), |tp| tp.tp_firstwin)) }
+    match tp {
+        Some(tp) => tp.tp_firstwin.and_then(WinId::get),
+        None => crate::winlayer::first_window(),
+    }
 }
 
 /// The current tab page's list head lives in the `firstwin` global; another
 /// tab page's in its own `tp_firstwin`.
-fn set_first(tp: Option<TabPage>, wp: *mut win_T) {
+fn set_first(tp: Option<TabPage>, wp: Option<WinId>) {
     match tp {
         Some(mut tp) => tp.tp_firstwin = wp,
         None => firstwin.set(wp),
     }
 }
 
-fn set_last(tp: Option<TabPage>, wp: *mut win_T) {
+fn set_last(tp: Option<TabPage>, wp: Option<WinId>) {
     match tp {
         Some(mut tp) => tp.tp_lastwin = wp,
         None => lastwin.set(wp),
@@ -491,13 +493,13 @@ fn set_last(tp: Option<TabPage>, wp: *mut win_T) {
 }
 
 /// `win_remove`'s extra write, which `win_append` does not make.
-fn sync_tab_first(tp: Option<TabPage>, wp: *mut win_T) {
+fn sync_tab_first(tp: Option<TabPage>, wp: Option<WinId>) {
     if tp.is_none() {
         cur_tab().tp_firstwin = wp;
     }
 }
 
-fn sync_tab_last(tp: Option<TabPage>, wp: *mut win_T) {
+fn sync_tab_last(tp: Option<TabPage>, wp: Option<WinId>) {
     if tp.is_none() {
         cur_tab().tp_lastwin = wp;
     }
