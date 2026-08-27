@@ -377,16 +377,7 @@ pub unsafe fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let varname = numbuf.string_chk(argvars.add(1));
         let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
         // Any window of that tab page will do: only its `t:` scope is read.
-        let win = match TabPage::from_raw(tp) {
-            None => ptr::null_mut(),
-            Some(tab) => {
-                let head = match tab.is_current() || tab.tp_firstwin.is_none() {
-                    true => first_window(),
-                    false => tab.tp_firstwin.and_then(WinId::get),
-                };
-                head.map_or(ptr::null_mut(), Win::raw)
-            }
-        };
+        let win = any_window_of(TabPage::from_raw(tp));
         get_var_from(
             varname,
             rettv,
@@ -516,4 +507,19 @@ pub unsafe fn f_setbufvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: 
             curbuf.set(save_curbuf);
         }
     }
+}
+
+/// Any window of `tab`, for the sake of its `t:` scope; a null when there is
+/// no such tab page. The current tab page's list hangs off `firstwin`, which
+/// upstream spells out here rather than reaching for the macro.
+fn any_window_of(tab: Option<TabPage>) -> *mut win_T {
+    let tab = match tab {
+        Some(tab) => tab,
+        None => return ptr::null_mut(),
+    };
+    match tab.is_current() || tab.tp_firstwin.is_none() {
+        true => first_window(),
+        false => tab.tp_firstwin.and_then(WinId::get),
+    }
+    .map_or(ptr::null_mut(), Win::raw)
 }

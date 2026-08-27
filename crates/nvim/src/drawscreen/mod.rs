@@ -152,6 +152,12 @@ pub(crate) unsafe fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
     winlayer::windows().map(Win::raw)
 }
 
+/// The head of the current tab page's window list as the raw pointer the
+/// transpiled redraw entry points still take, or a null before there is one.
+fn first_win_raw() -> *mut win_T {
+    winlayer::first_window().map_or(core::ptr::null_mut(), Win::raw)
+}
+
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
@@ -329,10 +335,7 @@ pub unsafe fn update_screen() -> c_int {
     // SAFETY: the whole screen pipeline, on the main thread.
     unsafe {
         if STILL_MAY_INTRO.get() && !may_show_intro() {
-            redraw_later(
-                winlayer::first_window().map_or(core::ptr::null_mut(), Win::raw),
-                UPD_NOT_VALID,
-            );
+            redraw_later(first_win_raw(), UPD_NOT_VALID);
             STILL_MAY_INTRO.set(false);
         }
 

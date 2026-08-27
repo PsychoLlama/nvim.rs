@@ -358,8 +358,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             time_msg_at(c"waiting for UI");
             remote_ui_wait_for_attach();
             time_msg_at(c"done waiting for UI");
-            let mut first = first_win();
-            first.w_prev_height = first.w_height;
+            first_win().w_prev_height = first_win().w_height;
         }
 
         starting.set(NO_BUFFERS);

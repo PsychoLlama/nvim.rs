@@ -208,10 +208,8 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
             ListDo::Buffers => {
                 // Advance to the first listed buffer after "eap->line1".
                 let mut cur = first_buffer();
-                while let Some(b) = cur {
-                    if (b.handle as linenr_T) >= (*eap).line1 && b.b_p_bl != 0 {
-                        break;
-                    }
+                let unlisted = |b: &Buf| (b.handle as linenr_T) < (*eap).line1 || b.b_p_bl == 0;
+                while let Some(b) = cur.filter(unlisted) {
                     if b.handle as linenr_T > (*eap).line2 {
                         cur = None;
                         break;

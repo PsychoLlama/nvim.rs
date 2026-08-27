@@ -697,27 +697,18 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-/// The current tab page's window list, its two ends — handles, as the
-/// `w_next`/`w_prev` links they anchor are. `winlayer::first_window` and
-/// `last_window` resolve them; a tab page that is *not* current keeps its
-/// own copies in `tp_firstwin`/`tp_lastwin`.
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
-/// The tab page list's head, a handle as the `tp_next` links it anchors
-/// are. `winlayer::first_tab` resolves it and `winlayer::tabs` walks it.
 pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 pub static curtab: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
-/// The buffer list's two ends. Handles rather than addresses, as the
-/// `b_next`/`b_prev` links they anchor are — `winlayer::first_buffer` and
-/// `last_buffer` resolve them, and `winlayer::buffers` walks between them.
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());

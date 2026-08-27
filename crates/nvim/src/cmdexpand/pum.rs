@@ -364,9 +364,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                     // Create status line if needed by setting 'laststatus' to
                     // 2.  Set 'winminheight' to zero to avoid that the window
                     // is resized.
-                    if last_window().is_some_and(|wp| wp.w_status_height == 0)
-                        && global_stl_height() == 0
-                    {
+                    if needs_status_line() {
                         save_p_ls.set(p_ls.get() as c_int);
                         save_p_wmh.set(p_wmh.get() as c_int);
                         p_ls.set(2 as OptInt);
@@ -407,4 +405,10 @@ pub(crate) unsafe fn redraw_wildmenu(
         win_redraw_last_status(topframe.get());
         xfree(buf as *mut c_void);
     }
+}
+
+/// Whether the wildmenu has to turn 'laststatus' on to get a line to draw
+/// in: upstream's `lastwin->w_status_height == 0 && global_stl_height() == 0`.
+fn needs_status_line() -> bool {
+    last_window().is_some_and(|wp| wp.w_status_height == 0) && global_stl_height() == 0
 }

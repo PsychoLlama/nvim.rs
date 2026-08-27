@@ -183,8 +183,7 @@ struct Walk<'a> {
 impl<'a> Walk<'a> {
     fn new(sorted: Option<&'a [*mut buf_T]>) -> Self {
         let next = match sorted {
-            // SAFETY: every entry of the sorted array is a live buffer.
-            Some(list) => list.first().map(|&buf| unsafe { Buf::new(buf) }),
+            Some(list) => nth(list, 0),
             None => first_buffer(),
         };
         Walk {
@@ -202,13 +201,18 @@ impl<'a> Walk<'a> {
         self.next = match self.sorted {
             Some(list) => {
                 self.at += 1;
-                // SAFETY: as the constructor -- a live buffer.
-                list.get(self.at).map(|&buf| unsafe { Buf::new(buf) })
+                nth(list, self.at)
             }
             None => buf.next(),
         };
         Some(buf)
     }
+}
+
+/// Entry `at` of the sorted array, which holds live buffers.
+fn nth(list: &[*mut buf_T], at: usize) -> Option<Buf> {
+    // SAFETY: every entry of the sorted array is a live buffer.
+    list.get(at).map(|&buf| unsafe { Buf::new(buf) })
 }
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
