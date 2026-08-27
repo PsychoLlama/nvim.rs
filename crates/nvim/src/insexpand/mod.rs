@@ -74,8 +74,8 @@ use crate::mbyte::{
 };
 use crate::memline::{dec, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{
-    MergeSortCompareFunc, mergesort_list, strequal, xcalloc, xfree, xmalloc, xmemdupz, xstrdup,
-    xstrlcpy,
+    MergeSortCompareFunc, MergeSortGetFunc, MergeSortSetFunc, mergesort_list, strequal, xcalloc,
+    xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,
 };
 use crate::message::{
     emsg, internal_error, msg, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
@@ -121,7 +121,8 @@ use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
 use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
-use ::libc::{abs, atoi, fclose, memcmp, qsort, strcat, strcmp, strcpy, strlen, strncpy, strrchr};
+use crate::winlayer::{BufId, WinId};
+use ::libc::{atoi, fclose, memcmp, qsort, strcat, strcmp, strcpy, strlen, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;
@@ -519,6 +520,49 @@ static compl_shown_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
 static compl_old_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
+
+/// The head of the match list, `None` while there is no completion.
+pub(crate) fn first_match() -> Option<Cm> {
+    Cm::at(compl_first_match.get())
+}
+
+/// The match a CTRL-N/CTRL-P walk has reached.
+pub(crate) fn curr_match() -> Option<Cm> {
+    Cm::at(compl_curr_match.get())
+}
+
+/// The match the popup menu highlights.
+pub(crate) fn shown_match() -> Option<Cm> {
+    Cm::at(compl_shown_match.get())
+}
+
+/// The match that was shown before the last walk step.
+pub(crate) fn old_match() -> Option<Cm> {
+    Cm::at(compl_old_match.get())
+}
+
+/// The list from `start` onwards, stopping at the end of an opened list or
+/// on the way back round a closed one.
+///
+/// C's `for (m = start; m != NULL; m = m->cp_next) { …; if (is_first_match(m->cp_next)) break; }`
+/// — the walk every reader of the ring writes by hand. `start` itself is
+/// always yielded, even when it is the head.
+///
+/// The link is read when the *next* item is asked for, not when the current
+/// one is handed out, so a body that relinks the node it was given walks the
+/// list it left behind — which is the timing the hand-written loops have.
+pub(crate) fn matches_from(start: Option<Cm>) -> impl Iterator<Item = Cm> {
+    let mut start = start;
+    let mut current: Option<Cm> = None;
+    ::core::iter::from_fn(move || {
+        current = match current {
+            None => start.take(),
+            Some(m) => m.next().filter(|next| !next.is_first()),
+        };
+        current
+    })
+}
+
 static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false);
 static COMPL_LEADER: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
@@ -568,13 +612,19 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
         coladd: 0,
     },
 });
-/// The window and buffer the running completion started in. Both stay raw:
-/// they outlive arbitrary re-entry (a completion runs user functions and Lua),
-/// so a `GlobalCell<Win>` would promise a liveness nothing here keeps. They are
-/// only ever compared -- `ins_compl_win_active` is the one reader -- never
-/// dereferenced, which is the case `winlayer`'s docs reserve for raw pointers.
-static compl_curr_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-static compl_curr_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+/// The window and buffer the running completion started in, as identities
+/// rather than addresses.
+///
+/// They outlive arbitrary re-entry -- a completion runs `'completefunc'`,
+/// autocommands and Lua, any of which can close the window or wipe the
+/// buffer -- so a `Win`/`Buf` here would promise a liveness nothing keeps.
+/// Upstream compares the raw pointers, which cannot tell "still here" from
+/// "freed and a new object at the same address"; a [`WinId`]/[`BufId`] can,
+/// and comparison is all `ins_compl_win_active` ever does with them. This is
+/// phase 23's re-entry rule applied to state rather than to a local: take
+/// the identity while the object is live, ask about it afterwards.
+static compl_curr_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+static compl_curr_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
 static compl_autocomplete: GlobalCell<bool> = GlobalCell::new(false);
 static compl_timeout_ms: GlobalCell<uint64_t> =

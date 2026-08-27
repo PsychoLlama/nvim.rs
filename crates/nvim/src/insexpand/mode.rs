@@ -14,7 +14,7 @@ use crate::keycodes::{
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
 use crate::types::NUL;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 /// The `'s'` of C's `case 's': case Ctrl_S:` in [`set_ctrl_x_mode`].  A cast
 /// is not a pattern, so the literal needs a name to be matched on.
@@ -22,24 +22,23 @@ const LOWER_S: c_int = b's' as c_int;
 
 /// Enter CTRL-X mode, or — already on the command line — its CTRL-X flavour.
 pub unsafe fn ins_ctrl_x() {
-    unsafe {
-        if ctrl_x_mode_cmdline() {
-            ctrl_x_mode.set(CTRL_X_CMDLINE_CTRL_X);
+    if ctrl_x_mode_cmdline() {
+        ctrl_x_mode.set(CTRL_X_CMDLINE_CTRL_X);
+    } else {
+        // CTRL-X after a completion that was interrupted keeps the ADDING
+        // state; a fresh one clears it.
+        if compl_cont_status.get() & CONT_N_ADDS != 0 {
+            compl_cont_status.set(compl_cont_status.get() | CONT_INTRPT);
         } else {
-            // CTRL-X after a completion that was interrupted keeps the ADDING
-            // state; a fresh one clears it.
-            if compl_cont_status.get() & CONT_N_ADDS != 0 {
-                compl_cont_status.set(compl_cont_status.get() | CONT_INTRPT);
-            } else {
-                compl_cont_status.set(0);
-            }
-            ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
-            edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
-            edit_submode_pre.set(ptr::null_mut());
-            redraw_mode.set(true);
+            compl_cont_status.set(0);
         }
-        may_trigger_modechanged();
+        ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
+        edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
+        edit_submode_pre.set(ptr::null_mut());
+        redraw_mode.set(true);
     }
+    // SAFETY: the editor exists; this only reports the new mode.
+    unsafe { may_trigger_modechanged() };
 }
 
 pub fn ctrl_x_mode_none() -> bool {
@@ -151,34 +150,41 @@ pub(crate) fn compl_shows_dir_backward() -> bool {
 /// Check that `'dictionary'` (`dict_opt`) or `'thesaurus'` can be used;
 /// complain, beep and leave CTRL-X mode when it cannot.
 pub unsafe fn check_compl_option(dict_opt: bool) -> bool {
-    unsafe {
-        let empty = if dict_opt {
-            *(*curbuf.get()).b_p_dict as c_int == NUL
-                && *p_dict.get() as c_int == NUL
-                && (*curwin.get()).w_onebuf_opt.wo_spell == 0
-        } else {
-            *(*curbuf.get()).b_p_tsr as c_int == NUL
+    let empty = if dict_opt {
+        // SAFETY: an option string is a NUL-terminated allocation, never
+        // null.
+        let unset = unsafe { *cur_buf().b_p_dict as c_int == NUL && *p_dict.get() as c_int == NUL };
+        unset && cur_win().w_onebuf_opt.wo_spell == 0
+    } else {
+        // SAFETY: as above.
+        unsafe {
+            *cur_buf().b_p_tsr as c_int == NUL
                 && *p_tsr.get() as c_int == NUL
-                && *(*curbuf.get()).b_p_tsrfu as c_int == NUL
+                && *cur_buf().b_p_tsrfu as c_int == NUL
                 && *p_tsrfu.get() as c_int == NUL
-        };
-        if !empty {
-            return true;
         }
-        ctrl_x_mode.set(CTRL_X_NORMAL);
-        edit_submode.set(ptr::null_mut());
-        emsg(gettext(if dict_opt {
-            c"'dictionary' option is empty".as_ptr()
-        } else {
-            c"'thesaurus' option is empty".as_ptr()
-        }));
-        if emsg_silent.get() == 0 && !in_assert_fails.get() {
+    };
+    if !empty {
+        return true;
+    }
+    ctrl_x_mode.set(CTRL_X_NORMAL);
+    edit_submode.set(ptr::null_mut());
+    let msg = if dict_opt {
+        c"'dictionary' option is empty".as_ptr()
+    } else {
+        c"'thesaurus' option is empty".as_ptr()
+    };
+    // SAFETY: a static NUL-terminated message.
+    unsafe { emsg(gettext(msg)) };
+    if emsg_silent.get() == 0 && !in_assert_fails.get() {
+        // SAFETY: the editor exists and this runs on its own thread.
+        unsafe {
             vim_beep(kOptBoFlagComplete);
             setcursor();
             msg_delay(2004, false);
         }
-        false
     }
+    false
 }
 
 /// Is `c` a key that goes to, or keeps us in, the current CTRL-X mode?
@@ -238,11 +244,6 @@ pub unsafe fn vim_is_ctrl_x_key(c: c_int) -> bool {
     }
 }
 
-/// True if `match_0` is the original text the completion began with.
-pub(crate) unsafe fn match_at_original_text(match_0: *const compl_T) -> bool {
-    unsafe { (*match_0).cp_flags & CP_ORIGINAL_TEXT != 0 }
-}
-
 /// True if `match_0` is the first match in the completion list.
 pub(crate) fn is_first_match(match_0: *const compl_T) -> bool {
     ptr::eq(match_0, compl_first_match.get())
@@ -254,51 +255,56 @@ pub unsafe fn ins_compl_accept_char(c: c_int) -> bool {
     if compl_autocomplete.get() && compl_from_nonkeyword.get() {
         return false;
     }
-    unsafe {
-        if ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0 {
-            // Expanding an identifier: only identifier characters.
-            return vim_is_ident_char(c);
+    if ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0 {
+        // Expanding an identifier: only identifier characters.
+        // SAFETY: the character tables belong to the current buffer, which
+        // exists whenever a completion is running.
+        return unsafe { vim_is_ident_char(c) };
+    }
+    match ctrl_x_mode.get() {
+        // File names, but not path separators, so that "proto/<Tab>"
+        // expands files in "proto", not "proto/" as a whole.
+        CTRL_X_FILES => {
+            // SAFETY: as above.
+            let isfilec = unsafe { vim_isfilec(c) };
+            isfilec && !vim_ispathsep(c)
         }
-        match ctrl_x_mode.get() {
-            // File names, but not path separators, so that "proto/<Tab>"
-            // expands files in "proto", not "proto/" as a whole.
-            CTRL_X_FILES => vim_isfilec(c) && !vim_ispathsep(c),
-            // Command line and omni completion take just about any printable
-            // character, but do stop at white space.
-            CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
-                vim_isprintc(c) && !ascii_iswhite(c)
-            }
-            // For whole-line completion a space can be part of the line.
-            CTRL_X_WHOLE_LINE => vim_isprintc(c),
-            _ => vim_iswordc(c),
+        // Command line and omni completion take just about any printable
+        // character, but do stop at white space.
+        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
+            // SAFETY: as above.
+            let isprintc = unsafe { vim_isprintc(c) };
+            isprintc && !ascii_iswhite(c)
         }
+        // For whole-line completion a space can be part of the line.
+        // SAFETY: as above.
+        CTRL_X_WHOLE_LINE => unsafe { vim_isprintc(c) },
+        // SAFETY: as above.
+        _ => unsafe { vim_iswordc(c) },
     }
 }
 
 /// `'completeopt'` has `fuzzy` (and this is not thesaurus completion, which
 /// never fuzzy-matches).
-pub(crate) unsafe fn cot_fuzzy() -> bool {
-    unsafe { get_cot_flags() & kOptCotFlagFuzzy != 0 && !ctrl_x_mode_thesaurus() }
+pub(crate) fn cot_fuzzy() -> bool {
+    completeopt_flags() & kOptCotFlagFuzzy != 0 && !ctrl_x_mode_thesaurus()
 }
 
 /// Matches are ordered by distance from the cursor: `'completeopt'` has
 /// `nearest`, or autocompletion is on, and `fuzzy` is not overriding it.
-pub(crate) unsafe fn is_nearest_active() -> bool {
-    unsafe {
-        (compl_autocomplete.get() || get_cot_flags() & kOptCotFlagNearest != 0) && !cot_fuzzy()
-    }
+pub(crate) fn is_nearest_active() -> bool {
+    (compl_autocomplete.get() || completeopt_flags() & kOptCotFlagNearest != 0) && !cot_fuzzy()
 }
 
 pub unsafe fn ins_compl_is_match_selected() -> bool {
-    !compl_shown_match.get().is_null() && !is_first_match(compl_shown_match.get())
+    shown_match().is_some_and(|shown| !shown.is_first())
 }
 
 /// Autocompletion inserting the longest common prefix: `'completeopt'` has
 /// `longest` without `preinsert` or `fuzzy`.
 pub unsafe fn ins_compl_preinsert_longest() -> bool {
     compl_autocomplete.get()
-        && unsafe { get_cot_flags() }
-            & (kOptCotFlagLongest | kOptCotFlagPreinsert | kOptCotFlagFuzzy)
+        && completeopt_flags() & (kOptCotFlagLongest | kOptCotFlagPreinsert | kOptCotFlagFuzzy)
             == kOptCotFlagLongest
 }
 
@@ -323,40 +329,57 @@ pub(crate) fn ins_compl_leader_len() -> size_t {
 }
 
 /// The shown match spans more than one line.
+///
+/// # Safety
+/// A completion with a shown match is running: upstream dereferences
+/// `compl_shown_match` here without checking it.
 pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
+    // SAFETY: the caller's promise, and a match's text is NUL-terminated.
     unsafe { !vim_strchr((*compl_shown_match.get()).cp_str.data(), NL).is_null() }
 }
 
 /// `lnum` is one of the lines a multi-line match is being inserted over.
+///
+/// # Safety
+/// As [`ins_compl_has_multiple`], which this asks first.
 pub unsafe fn ins_compl_lnum_in_range(lnum: linenr_T) -> bool {
-    unsafe {
-        ins_compl_has_multiple()
-            && lnum >= compl_lnum.get()
-            && lnum <= (*curwin.get()).w_cursor.lnum
-    }
+    // SAFETY: the caller's promise, passed straight on.
+    let multiple = unsafe { ins_compl_has_multiple() };
+    multiple && lnum >= compl_lnum.get() && lnum <= cur_win().w_cursor.lnum
 }
 
 pub unsafe fn ins_compl_has_shown_match() -> bool {
-    let shown = compl_shown_match.get();
-    shown.is_null() || shown != unsafe { (*shown).cp_next }
+    match shown_match() {
+        None => true,
+        Some(shown) => shown.cp_next != shown.raw(),
+    }
 }
 
 /// The shown match is longer than what has been inserted so far.
 pub unsafe fn ins_compl_long_shown_match() -> bool {
-    let shown = compl_shown_match.get();
-    !shown.is_null()
-        && unsafe {
-            !(*shown).cp_str.data().is_null()
-                && (*shown).cp_str.len() as colnr_T > (*curwin.get()).w_cursor.col - compl_col.get()
-        }
+    let Some(shown) = shown_match() else {
+        return false;
+    };
+    let typed = cur_win().w_cursor.col - compl_col.get();
+    !shown.cp_str.data().is_null() && shown.cp_str.len() as colnr_T > typed
 }
 
 /// `'completeopt'`, buffer-local value first.
+///
+/// Safe: both halves are ordinary reads of live editor state.
+pub(crate) fn completeopt_flags() -> c_uint {
+    let local = cur_buf().b_cot_flags;
+    if local != 0 { local } else { cot_flags.get() }
+}
+
+/// [`completeopt_flags`] under the name the rest of the editor calls it by.
+///
+/// # Safety
+/// None left. It keeps the `unsafe` only so that the call sites outside
+/// `insexpand/` -- which still wrap it in a lone `unsafe {}` -- do not become
+/// `unused_unsafe`; it goes with the last of them.
 pub unsafe fn get_cot_flags() -> c_uint {
-    unsafe {
-        let local = (*curbuf.get()).b_cot_flags;
-        if local != 0 { local } else { cot_flags.get() }
-    }
+    completeopt_flags()
 }
 
 pub fn ins_compl_active() -> bool {
@@ -365,10 +388,12 @@ pub fn ins_compl_active() -> bool {
 
 /// A completion is running, and `wp` is the window it started in.
 ///
-/// Safe: [`Win`] is a live window, and the two globals are only compared
-/// against it.
+/// Safe: [`Win`] is a live window, and the two globals hold only the
+/// identities it is compared against.
 pub fn ins_compl_win_active(wp: Win) -> bool {
-    ins_compl_active() && wp.raw() == compl_curr_win.get() && wp.w_buffer == compl_curr_buf.get()
+    ins_compl_active()
+        && compl_curr_win.get() == Some(wp.id())
+        && compl_curr_buf.get() == wp.buffer_or_none().map(Buf::id)
 }
 
 pub fn ins_compl_used_match() -> bool {
@@ -399,7 +424,7 @@ pub fn ins_compl_len() -> c_int {
 /// `'completeopt'` has `preinsert` (with `menuone`, when autocompletion is
 /// off) and not `fuzzy`.
 pub unsafe fn ins_compl_has_preinsert() -> bool {
-    let flags = unsafe { get_cot_flags() };
+    let flags = completeopt_flags();
     if compl_autocomplete.get() && p_ic.get() != 0 && p_inf.get() == 0 {
         return false;
     }
@@ -413,10 +438,10 @@ pub unsafe fn ins_compl_has_preinsert() -> bool {
 
 /// A previewed match is currently in the buffer ahead of the cursor.
 pub unsafe fn ins_compl_preinsert_effect() -> bool {
-    unsafe {
-        (ins_compl_has_preinsert() || ins_compl_preinsert_longest())
-            && (*curwin.get()).w_cursor.col < compl_ins_end_col.get()
-    }
+    // SAFETY: neither has a precondition left; both are still `unsafe fn`s
+    // for their call sites outside this family.
+    let previewing = unsafe { ins_compl_has_preinsert() || ins_compl_preinsert_longest() };
+    previewing && cur_win().w_cursor.col < compl_ins_end_col.get()
 }
 
 /// The completion function asked for its matches to be recomputed on every
@@ -431,14 +456,14 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
 pub unsafe fn ins_compl_has_autocomplete() -> bool {
-    let local = unsafe { (*curbuf.get()).b_p_ac };
+    let local = cur_buf().b_p_ac;
     (if local >= 0 { local } else { p_ac.get() }) != 0
 }
 
 /// How much of the leader has been typed: the cursor's distance from
 /// `compl_col`, never negative.
-pub(crate) unsafe fn get_compl_len() -> c_int {
-    let off = unsafe { (*curwin.get()).w_cursor.col } - compl_col.get();
+pub(crate) fn get_compl_len() -> c_int {
+    let off = cur_win().w_cursor.col - compl_col.get();
     off.max(0)
 }
 
@@ -448,131 +473,134 @@ pub(crate) unsafe fn get_compl_len() -> c_int {
 /// (CTRL-X CTRL-Z).
 pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
     let mut retval = false;
-    unsafe {
-        'chord: {
-            match c {
-                // Scroll the window one line up or down.
-                Ctrl_E | Ctrl_Y => {
-                    ctrl_x_mode.set(CTRL_X_SCROLL);
-                    edit_submode.set(gettext(if State.get() & REPLACE_FLAG == 0 {
-                        c" (insert) Scroll (^E/^Y)".as_ptr()
-                    } else {
-                        c" (replace) Scroll (^E/^Y)".as_ptr()
-                    }));
-                    edit_submode_pre.set(ptr::null_mut());
-                    redraw_mode.set(true);
-                    break 'chord;
-                }
-                // Complete whole lines.
-                Ctrl_L => {
-                    ctrl_x_mode.set(CTRL_X_WHOLE_LINE);
-                    break 'chord;
-                }
-                // Complete file names.
-                Ctrl_F => {
-                    ctrl_x_mode.set(CTRL_X_FILES);
-                    break 'chord;
-                }
-                // Complete words from a dictionary.
-                Ctrl_K => {
-                    ctrl_x_mode.set(CTRL_X_DICTIONARY);
-                    break 'chord;
-                }
-                Ctrl_R => {
-                    // CTRL-R followed by '=' is an expression register, not
-                    // register completion: leave the mode alone.
-                    if vpeekc() != '=' as c_int {
-                        ctrl_x_mode.set(CTRL_X_REGISTER);
-                    }
-                    break 'chord;
-                }
-                // Complete words from a thesaurus.
-                Ctrl_T => {
-                    ctrl_x_mode.set(CTRL_X_THESAURUS);
-                    break 'chord;
-                }
-                // User defined completion.
-                Ctrl_U => {
-                    ctrl_x_mode.set(CTRL_X_FUNCTION);
-                    break 'chord;
-                }
-                // Omni completion.
-                Ctrl_O => {
-                    ctrl_x_mode.set(CTRL_X_OMNI);
-                    break 'chord;
-                }
-                // Complete spelling suggestions.
-                LOWER_S | Ctrl_S => {
-                    ctrl_x_mode.set(CTRL_X_SPELL);
-                    let no_emsg = Suppress::emsg(); // avoid E756 twice
-                    spell_back_to_badword();
-                    drop(no_emsg);
-                    break 'chord;
-                }
-                // Complete tag names.
-                Ctrl_RSB => {
-                    ctrl_x_mode.set(CTRL_X_TAGS);
-                    break 'chord;
-                }
-                // Complete keywords from included files.
-                Ctrl_I | K_S_TAB => {
-                    ctrl_x_mode.set(CTRL_X_PATH_PATTERNS);
-                    break 'chord;
-                }
-                // Complete definitions from included files.
-                Ctrl_D => {
-                    ctrl_x_mode.set(CTRL_X_PATH_DEFINES);
-                    break 'chord;
-                }
-                // Complete Vim commands.
-                Ctrl_V | Ctrl_Q => {
-                    ctrl_x_mode.set(CTRL_X_CMDLINE);
-                    break 'chord;
-                }
-                // Stop completion.
-                Ctrl_Z => {
-                    ctrl_x_mode.set(CTRL_X_NORMAL);
-                    edit_submode.set(ptr::null_mut());
-                    redraw_mode.set(true);
-                    retval = true;
-                    break 'chord;
-                }
-                // CTRL-X CTRL-P means LOCAL expansion if nothing interrupted (we
-                // just started CTRL-X mode, or there were enough CTRL-X's to
-                // cancel the previous mode, say ^X^F^X^X^P or ^P^X^X^X^P); normal
-                // expansion when interrupting a different mode (^X^F^X^P or
-                // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
-                // does not change when going to ADDING mode.  -- Acevedo
-                Ctrl_P | Ctrl_N => {
-                    if compl_cont_status.get() & CONT_INTRPT == 0 {
-                        compl_cont_status.set(compl_cont_status.get() | CONT_LOCAL);
-                    } else if compl_cont_mode.get() != 0 {
-                        compl_cont_status.set(compl_cont_status.get() & !CONT_LOCAL);
-                    }
-                    // C: FALLTHROUGH into `default`, which is the tail below.
-                }
-                _ => {}
-            }
-            // C's `default:` arm, which CTRL-P and CTRL-N fall into.
-            //
-            // After at least two CTRL-X's, for modes != 0 we clear
-            // `compl_cont_status` (as if CTRL-X mode had just started); for mode 0
-            // we set `compl_cont_mode` to an impossible value.  Either way ^X^X
-            // restarts the same mode, avoiding ADDING mode.  Undocumented: in a
-            // mode != 0, ^X^P and ^X^X^P start 'complete' and local ^P expansions
-            // respectively; in mode 0 an extra ^X is needed, since ^X^P goes to
-            // ADDING mode.  -- Acevedo
-            if c == Ctrl_X {
-                if compl_cont_mode.get() != 0 {
-                    compl_cont_status.set(0);
+    'chord: {
+        match c {
+            // Scroll the window one line up or down.
+            Ctrl_E | Ctrl_Y => {
+                ctrl_x_mode.set(CTRL_X_SCROLL);
+                let scroll = if State.get() & REPLACE_FLAG == 0 {
+                    c" (insert) Scroll (^E/^Y)".as_ptr()
                 } else {
-                    compl_cont_mode.set(CTRL_X_NOT_DEFINED_YET);
-                }
+                    c" (replace) Scroll (^E/^Y)".as_ptr()
+                };
+                // SAFETY: a static NUL-terminated message.
+                let scroll = unsafe { gettext(scroll) };
+                edit_submode.set(scroll);
+                edit_submode_pre.set(ptr::null_mut());
+                redraw_mode.set(true);
+                break 'chord;
             }
-            ctrl_x_mode.set(CTRL_X_NORMAL);
-            edit_submode.set(ptr::null_mut());
-            redraw_mode.set(true);
+            // Complete whole lines.
+            Ctrl_L => {
+                ctrl_x_mode.set(CTRL_X_WHOLE_LINE);
+                break 'chord;
+            }
+            // Complete file names.
+            Ctrl_F => {
+                ctrl_x_mode.set(CTRL_X_FILES);
+                break 'chord;
+            }
+            // Complete words from a dictionary.
+            Ctrl_K => {
+                ctrl_x_mode.set(CTRL_X_DICTIONARY);
+                break 'chord;
+            }
+            Ctrl_R => {
+                // CTRL-R followed by '=' is an expression register, not
+                // register completion: leave the mode alone.
+                if vpeekc() != '=' as c_int {
+                    ctrl_x_mode.set(CTRL_X_REGISTER);
+                }
+                break 'chord;
+            }
+            // Complete words from a thesaurus.
+            Ctrl_T => {
+                ctrl_x_mode.set(CTRL_X_THESAURUS);
+                break 'chord;
+            }
+            // User defined completion.
+            Ctrl_U => {
+                ctrl_x_mode.set(CTRL_X_FUNCTION);
+                break 'chord;
+            }
+            // Omni completion.
+            Ctrl_O => {
+                ctrl_x_mode.set(CTRL_X_OMNI);
+                break 'chord;
+            }
+            // Complete spelling suggestions.
+            LOWER_S | Ctrl_S => {
+                ctrl_x_mode.set(CTRL_X_SPELL);
+                let no_emsg = Suppress::emsg(); // avoid E756 twice
+                // SAFETY: the editor exists and the cursor is in a buffer,
+                // which is all the move back to the bad word needs.
+                unsafe { spell_back_to_badword() };
+                drop(no_emsg);
+                break 'chord;
+            }
+            // Complete tag names.
+            Ctrl_RSB => {
+                ctrl_x_mode.set(CTRL_X_TAGS);
+                break 'chord;
+            }
+            // Complete keywords from included files.
+            Ctrl_I | K_S_TAB => {
+                ctrl_x_mode.set(CTRL_X_PATH_PATTERNS);
+                break 'chord;
+            }
+            // Complete definitions from included files.
+            Ctrl_D => {
+                ctrl_x_mode.set(CTRL_X_PATH_DEFINES);
+                break 'chord;
+            }
+            // Complete Vim commands.
+            Ctrl_V | Ctrl_Q => {
+                ctrl_x_mode.set(CTRL_X_CMDLINE);
+                break 'chord;
+            }
+            // Stop completion.
+            Ctrl_Z => {
+                ctrl_x_mode.set(CTRL_X_NORMAL);
+                edit_submode.set(ptr::null_mut());
+                redraw_mode.set(true);
+                retval = true;
+                break 'chord;
+            }
+            // CTRL-X CTRL-P means LOCAL expansion if nothing interrupted (we
+            // just started CTRL-X mode, or there were enough CTRL-X's to
+            // cancel the previous mode, say ^X^F^X^X^P or ^P^X^X^X^P); normal
+            // expansion when interrupting a different mode (^X^F^X^P or
+            // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
+            // does not change when going to ADDING mode.  -- Acevedo
+            Ctrl_P | Ctrl_N => {
+                if compl_cont_status.get() & CONT_INTRPT == 0 {
+                    compl_cont_status.set(compl_cont_status.get() | CONT_LOCAL);
+                } else if compl_cont_mode.get() != 0 {
+                    compl_cont_status.set(compl_cont_status.get() & !CONT_LOCAL);
+                }
+                // C: FALLTHROUGH into `default`, which is the tail below.
+            }
+            _ => {}
         }
+        // C's `default:` arm, which CTRL-P and CTRL-N fall into.
+        //
+        // After at least two CTRL-X's, for modes != 0 we clear
+        // `compl_cont_status` (as if CTRL-X mode had just started); for mode 0
+        // we set `compl_cont_mode` to an impossible value.  Either way ^X^X
+        // restarts the same mode, avoiding ADDING mode.  Undocumented: in a
+        // mode != 0, ^X^P and ^X^X^P start 'complete' and local ^P expansions
+        // respectively; in mode 0 an extra ^X is needed, since ^X^P goes to
+        // ADDING mode.  -- Acevedo
+        if c == Ctrl_X {
+            if compl_cont_mode.get() != 0 {
+                compl_cont_status.set(0);
+            } else {
+                compl_cont_mode.set(CTRL_X_NOT_DEFINED_YET);
+            }
+        }
+        ctrl_x_mode.set(CTRL_X_NORMAL);
+        edit_submode.set(ptr::null_mut());
+        redraw_mode.set(true);
     }
     retval
 }
@@ -621,10 +649,9 @@ pub(crate) fn ins_compl_pum_key(c: c_int) -> bool {
 
 /// How many matches the key typed moves: one for most keys, a menu's height
 /// for the page keys.
-pub(crate) unsafe fn ins_compl_key2count(c: c_int) -> c_int {
+pub(crate) fn ins_compl_key2count(c: c_int) -> c_int {
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
-        let offset = pum_want.get().item - compl_selected_item.get();
-        return unsafe { abs(offset) };
+        return (pum_want.get().item - compl_selected_item.get()).abs();
     }
     if ins_compl_pum_key(c) && c != K_UP && c != K_DOWN {
         let h = pum_get_height();
@@ -655,9 +682,23 @@ pub fn ins_compl_enable_autocomplete() {
 
 /// `preinserted()`: is a previewed match currently in the buffer?
 pub unsafe fn f_preinserted(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY: `ins_compl_preinsert_effect` has no precondition left, and
+    // `rettv` is the live return value the caller allocated.
     unsafe {
         if ins_compl_preinsert_effect() {
             (*rettv).vval.v_number = 1;
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
