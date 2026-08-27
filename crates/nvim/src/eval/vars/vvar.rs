@@ -72,11 +72,16 @@ fn vimvar_key(idx: Vv) -> *mut c_char {
 /// # Safety
 /// `idx` names a `v:` variable and `save_tv` is writable.
 pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
-    let mut vv = vimvar(idx);
+    // Written through the row's *value* rather than through the row: the
+    // `v:` hashtab keeps a pointer to `di_key`, which is a member of
+    // `VimVar`, and a write through a borrow of the whole row would
+    // invalidate it (see [`Live`]'s module docs). A `Live<typval_T>` borrows
+    // only the value.
+    let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is writable.
-    unsafe { *save_tv = vv.vv_di.di_tv };
-    vv.vv_di.di_tv.vval.v_string = ptr::null_mut();
-    if vv.vv_di.di_tv.v_type == VAR_UNKNOWN {
+    unsafe { *save_tv = *tv };
+    tv.vval.v_string = ptr::null_mut();
+    if tv.v_type == VAR_UNKNOWN {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
         // SAFETY: the `v:` hashtab, and a key that is the row's own.
@@ -89,11 +94,12 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
 /// # Safety
 /// As [`prepare_vimvar`], with the `save_tv` it filled.
 pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
-    let mut vv = vimvar(idx);
+    // Through the value, for [`prepare_vimvar`]'s reason.
+    let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is the value the paired
     // `prepare_vimvar` filled.
-    vv.vv_di.di_tv = unsafe { *save_tv };
-    if vv.vv_di.di_tv.v_type != VAR_UNKNOWN {
+    *tv = unsafe { *save_tv };
+    if tv.v_type != VAR_UNKNOWN {
         return;
     }
     // SAFETY: the `v:` hashtab and the row's own key; `hash_find` answers an
@@ -529,9 +535,13 @@ pub unsafe fn before_set_vvar(
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation -- `di` is an item of the `v:` scope
     // dictionary and `tv` the value being stored, both live for this call.
-    let (mut di, mut tv) = unsafe { (Di::new(di), Tv::new(tv)) };
-    let cur = di.field_ptr::<typval_T>(offset_of!(dictitem_T, di_tv));
-    if di.di_tv.v_type == VAR_STRING {
+    // The item is reached through its *value*: `cur` points into the item,
+    // so a write through a borrow of the whole item -- which `Live`'s
+    // `DerefMut` hands out -- would invalidate the pointer the watcher
+    // notification below is handed. See [`Live`]'s module docs.
+    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    let (mut stored, mut tv) = unsafe { (Tv::new(cur), Tv::new(tv)) };
+    if stored.v_type == VAR_STRING {
         let mut oldtv = TV_INITIAL_VALUE;
         if watched {
             // SAFETY: a live value and a live local.
@@ -539,8 +549,8 @@ pub unsafe fn before_set_vvar(
         }
         // SAFETY: the type tag says the union holds the string arm, which
         // this item owns.
-        unsafe { xfree(di.di_tv.vval.v_string.cast()) };
-        di.di_tv.vval.v_string = ptr::null_mut();
+        unsafe { xfree(stored.vval.v_string.cast()) };
+        stored.vval.v_string = ptr::null_mut();
 
         if copy || tv.v_type != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
@@ -549,13 +559,13 @@ pub unsafe fn before_set_vvar(
             // itself raise an error, which sets the variable -- so only
             // store when it is still empty.
             // SAFETY: the string arm, as above.
-            if unsafe { di.di_tv.vval.v_string }.is_null() {
-                di.di_tv.vval.v_string = unsafe { xstrdup(val) };
+            if unsafe { stored.vval.v_string }.is_null() {
+                stored.vval.v_string = unsafe { xstrdup(val) };
             }
         } else {
             // Take the string over, rather than copy and free.
             // SAFETY: the type tag says the union holds the string arm.
-            di.di_tv.vval.v_string = unsafe { tv.vval.v_string };
+            stored.vval.v_string = unsafe { tv.vval.v_string };
             tv.vval.v_string = ptr::null_mut();
         }
         if watched {
@@ -564,7 +574,7 @@ pub unsafe fn before_set_vvar(
             clear_local(&mut oldtv);
         }
         return false;
-    } else if di.di_tv.v_type == VAR_NUMBER {
+    } else if stored.v_type == VAR_NUMBER {
         let mut oldtv = TV_INITIAL_VALUE;
         if watched {
             // SAFETY: a live value and a live local.
@@ -572,7 +582,7 @@ pub unsafe fn before_set_vvar(
         }
         // SAFETY: a live value; the Number arm is what the tag declares.
         let n = unsafe { tv_get_number(tv.raw()) };
-        di.di_tv.vval.v_number = n;
+        stored.vval.v_number = n;
         // SAFETY: the caller's obligation -- `varname` is NUL-terminated.
         if unsafe { strcmp(varname, c"searchforward".as_ptr()) } == 0 {
             set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
@@ -586,7 +596,7 @@ pub unsafe fn before_set_vvar(
             clear_local(&mut oldtv);
         }
         return false;
-    } else if di.di_tv.v_type != tv.v_type {
+    } else if stored.v_type != tv.v_type {
         // SAFETY: the caller's obligation -- `type_error` is writable.
         unsafe { *type_error = true };
         return false;
@@ -622,8 +632,9 @@ pub(crate) unsafe fn set_vvar_item(
 ) {
     // SAFETY: the caller's obligation -- `di` is an item of the `v:` scope
     // dictionary, live for this call.
-    let mut item = unsafe { Di::new(di) };
-    let cur = item.field_ptr::<typval_T>(offset_of!(dictitem_T, di_tv));
+    // As [`before_set_vvar`], the item is written through its value, so that
+    // `cur` survives the store.
+    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
     let varname = unsafe { tv_dict_item_key(di) };
     let watched = unsafe { tv_dict_is_watched(get_vimvar_dict()) };
@@ -680,8 +691,9 @@ pub(crate) unsafe fn set_vvar_item(
         unsafe { tv_copy(val, cur) };
     } else {
         // SAFETY: as above; the value is moved out and blanked.
-        item.di_tv = unsafe { *val };
-        item.di_tv.v_lock = VarLock::Unlocked;
+        let mut cur = unsafe { Tv::new(cur) };
+        *cur = unsafe { *val };
+        cur.v_lock = VarLock::Unlocked;
         unsafe { tv_init(val) };
     }
     if watched {

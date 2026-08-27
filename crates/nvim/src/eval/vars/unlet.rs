@@ -350,7 +350,6 @@ unsafe fn do_lock_var(
         }
         // SAFETY: `find_var` answers a live item or NULL.
         let mut di = unsafe { Di::new(di) };
-        let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
         // A fixed variable -- one of `v:` or a scope dictionary -- can
         // only be locked through the container it holds.
         if di.di_flags & DI_FLAGS_FIX != 0
@@ -365,6 +364,9 @@ unsafe fn do_lock_var(
         } else {
             di.di_flags &= !DI_FLAGS_LOCK;
         }
+        // The value's address is taken after the flag write: it points into
+        // the item, and the write goes through a borrow of the whole item.
+        let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
         if deep != 0 {
             unsafe { tv_item_lock(tv, deep, lock, false) };
         }

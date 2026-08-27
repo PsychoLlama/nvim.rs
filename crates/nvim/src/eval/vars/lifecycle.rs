@@ -27,14 +27,6 @@ pub unsafe fn evalvars_init() {
 
     for i in 0..VIMVAR_COUNT {
         let mut row = vimvar_row(i);
-        let key = vimvar_row_key(row);
-        // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
-        // in the table fits in.
-        // SAFETY: the row's name is a NUL-terminated literal, and its key
-        // member is the 17 bytes the assertion above just measured against.
-        debug_assert!(unsafe { strlen(row.vv_name) } <= 16);
-        unsafe { strcpy(key, row.vv_name) };
-
         let flags = VimVarFlags::from_bits(row.vv_flags as c_int);
         row.vv_di.di_flags = if flags.has(VimVarFlags::RO) {
             DI_FLAGS_RO | DI_FLAGS_FIX
@@ -43,11 +35,24 @@ pub unsafe fn evalvars_init() {
         } else {
             DI_FLAGS_FIX
         };
+        let (name, declared) = (row.vv_name, row.vv_di.di_tv.v_type);
+
+        // The key's address is taken *after* the last field access, and
+        // nothing touches the row again: `di_key` is a member of `VimVar`,
+        // so a borrow of the whole row -- which `Live`'s `Deref` hands out
+        // -- would invalidate the pointer the hashtab is about to keep.
+        let key = vimvar_row_key(row);
+        // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
+        // in the table fits in.
+        // SAFETY: the row's name is a NUL-terminated literal, and its key
+        // member is the 17 bytes the assertion just measured against.
+        debug_assert!(unsafe { strlen(name) } <= 16);
+        unsafe { strcpy(key, name) };
 
         // Into the `v:` scope dictionary -- unless the value is not
         // always available, which is what a `VAR_UNKNOWN` row means.
         // SAFETY: the two scope hashtabs, and the row's own key.
-        if row.vv_di.di_tv.v_type != VAR_UNKNOWN {
+        if declared != VAR_UNKNOWN {
             unsafe { hash_add(get_vimvar_ht(), key) };
         }
         if flags.has(VimVarFlags::COMPAT) {
@@ -271,7 +276,6 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
     // call; the hashtab and the watcher queue are fields of the dictionary
     // itself, so initialising them in place is what the C does.
     let (mut d, mut var) = unsafe { (Live::new(dict), Live::new(dict_var)) };
-    unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
     d.dv_lock = VarLock::Unlocked;
     d.dv_scope = scope;
     d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
@@ -281,6 +285,12 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
     var.di_tv.v_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key[0] = NUL as c_char;
+    // Both of these leave the dictionary pointing at *itself* -- `ht_array`
+    // at the inline `ht_smallarray`, the watcher queue's head at its own
+    // node -- so they go last: a borrow of the whole `dict_T` afterwards
+    // would invalidate the pointer each has just stored. The plain field
+    // writes above are independent of both.
+    unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
     unsafe { queue_init(&raw mut (*dict).watchers) };
 }
 

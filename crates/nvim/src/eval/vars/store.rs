@@ -194,13 +194,17 @@ pub unsafe fn set_var_const(
 
     // SAFETY: `di` is the item found or the one just added, and `tv` the
     // caller's live value.
-    let mut item = unsafe { Di::new(di) };
-    let cur = item.field_ptr(offset_of!(dictitem_T, di_tv));
+    // The store goes through the item's *value*: `cur` points into the item,
+    // so writing a field through a borrow of the whole item would invalidate
+    // the pointer the watcher notification and the `:const` lock below are
+    // handed. See [`Live`]'s module docs.
+    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
     if copy || tvh.v_type == VAR_NUMBER || tvh.v_type == VAR_FLOAT {
         unsafe { tv_copy(tv, cur) };
     } else {
-        item.di_tv = *tvh;
-        item.di_tv.v_lock = VarLock::Unlocked;
+        let mut into = unsafe { Tv::new(cur) };
+        *into = *tvh;
+        into.v_lock = VarLock::Unlocked;
         unsafe { tv_init(tv) };
     }
 
