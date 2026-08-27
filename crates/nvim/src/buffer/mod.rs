@@ -207,8 +207,10 @@ pub const NMARKS: ::core::ffi::c_int =
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
-pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    unsafe { (*buf).changedtick_di.di_tv.vval.v_number }
+pub fn buf_get_changedtick(buf: Buf) -> varnumber_T {
+    // SAFETY: `b:changedtick`'s dict item is always a `VAR_NUMBER`, which is
+    // the only variant this union is ever given here.
+    unsafe { buf.changedtick_di.di_tv.vval.v_number }
 }
 static e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] =
     c_bytes(b"E937: Attempt to delete a buffer that is in use: %s\0");
@@ -248,23 +250,23 @@ impl BufRef {
     pub(crate) const NONE: Self = BufRef(bufref_T::new());
 
     /// `set_bufref()`: remember `buf`, which may be null.
-    pub(crate) fn of_raw(buf: *mut buf_T) -> Self {
-        // SAFETY: a null pointer is never dereferenced below.
-        let fnum = if buf.is_null() {
-            0
-        } else {
-            unsafe { Buf::new(buf) }.handle as c_int
-        };
+    /// `set_bufref()`, where the C passes a pointer that may be NULL.
+    ///
+    /// Safe because the absence is in the type: this used to take a
+    /// `*mut buf_T` and read `(*buf).handle` whenever it was non-null, which
+    /// made it a *safe* function with an unstated precondition about a
+    /// pointer -- the shape p23-5 rules out.
+    pub(crate) fn of_opt(buf: Option<Buf>) -> Self {
         BufRef(bufref_T {
-            br_buf: buf,
-            br_fnum: fnum,
+            br_buf: buf.map_or(ptr::null_mut(), Buf::raw),
+            br_fnum: buf.map_or(0, |b| b.handle as c_int),
             br_buf_free_count: buf_free_count.get(),
         })
     }
 
     /// `set_bufref()` over a buffer the caller already holds.
     pub(crate) fn of(buf: Buf) -> Self {
-        Self::of_raw(buf.raw())
+        Self::of_opt(Some(buf))
     }
 
     /// `bufref_valid()`: whether the remembered buffer is still the buffer it
@@ -297,8 +299,9 @@ impl BufRef {
 /// # Safety
 /// `bufref` must be a writable `bufref_T`, and `buf` a live buffer or null.
 pub unsafe fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a slot to write.
-    unsafe { *bufref = BufRef::of_raw(buf).0 };
+    // SAFETY: the caller's promise -- a slot to write, and a live buffer or
+    // null.
+    unsafe { *bufref = BufRef::of_opt(Buf::from_raw(buf)).0 };
 }
 
 /// Whether `bufref` still names the buffer it was set to.
@@ -355,8 +358,10 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 
 /// The buffer's running total of one kind of extmark metadata, kept at the
 /// root of its marktree. `buffer.h` had this as a `static inline`.
-pub unsafe fn buf_meta_total(b: *const buf_T, m: MetaIndex) -> uint32_t {
-    unsafe { (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize] }
+pub fn buf_meta_total(b: Buf, m: MetaIndex) -> uint32_t {
+    // SAFETY: the buffer's own marktree, read through the layout the
+    // extmark code gives it.
+    unsafe { (*(&raw const b.b_marktree as *const MarkTree)).meta_root[m as usize] }
 }
 
 // ---------------------------------------------------------------------------
@@ -493,9 +498,8 @@ pub(crate) fn delete_line(lnum: linenr_T) {
 }
 
 /// `unchanged()`: clear `'modified'`, and with `ff` the file-format flags.
-pub(crate) fn unchanged_now(mut buf: Buf, ff: bool, always_inc_changedtick: bool) {
-    // SAFETY: a live buffer.
-    unsafe { unchanged(buf.raw(), ff, always_inc_changedtick) };
+pub(crate) fn unchanged_now(buf: Buf, ff: bool, always_inc_changedtick: bool) {
+    unchanged(buf, ff, always_inc_changedtick);
 }
 
 pub(crate) fn end_visual() {
@@ -518,12 +522,12 @@ pub(crate) fn recheck_colorcolumn(mut win: Win) {
 
 pub(crate) fn clear_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { clear_folding(win.raw()) };
+    clear_folding(win);
 }
 
 pub(crate) fn invalidate_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { fold_update_all(win.raw()) };
+    fold_update_all(win);
 }
 
 /// Drop the window's own syntax state (`:ownsyntax`).
@@ -541,7 +545,7 @@ pub(crate) fn set_pcmark() {
 /// Whether `buf` has unsaved changes.
 pub(crate) fn is_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_changed(buf.raw()) }
+    buf_is_changed(buf)
 }
 
 /// `semsg(fmt, n)`, for the three errors that name a buffer number.

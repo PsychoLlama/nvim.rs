@@ -14,6 +14,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::types::NUL;
 
+use crate::winlayer::Buf;
 /// Start syntax recognition for a line.
 ///
 /// Normally called from the screen update, once per displayed line. The window
@@ -30,13 +31,13 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
         current_sub_char.set(NUL);
         if syn_block.get() != (*wp).w_s
             || syn_buf.get() != (*wp).w_buffer
-            || changedtick.get() != buf_get_changedtick(syn_buf.get())
+            || changedtick.get() != buf_get_changedtick(Buf::new(syn_buf.get()))
         {
             invalidate_current_state();
             syn_buf.set((*wp).w_buffer);
             syn_block.set((*wp).w_s);
         }
-        changedtick.set(buf_get_changedtick(syn_buf.get()));
+        changedtick.set(buf_get_changedtick(Buf::new(syn_buf.get())));
         syn_win.set(wp);
 
         syn_stack_alloc();

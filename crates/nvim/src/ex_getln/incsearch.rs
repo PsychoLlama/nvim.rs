@@ -81,7 +81,7 @@ pub(crate) fn set_search_match(t: &mut pos_T) {
     if t.lnum > cur_buf().b_ml.ml_line_count {
         t.lnum = cur_buf().b_ml.ml_line_count;
         // SAFETY: `curwin` is a live window.
-        unsafe { coladvance(curwin.get(), MAXCOL) };
+        coladvance(unsafe { Win::current() }, MAXCOL);
     }
 }
 
@@ -328,7 +328,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     }
 
     // If there is a character waiting, search and redraw later.
-    if unsafe { char_avail() } {
+    if char_avail() {
         restore_last_search_pattern();
         s.incsearch_postponed = true;
         return;
@@ -404,11 +404,11 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         // Interrupted while searching: behave as if it failed.
         if got_int.get() {
             // Remove <C-C> from the input stream.
-            unsafe { vpeekc() };
+            vpeekc();
             // Don't abandon the command line.
             got_int.set(false);
             found = 0;
-        } else if unsafe { char_avail() } {
+        } else if char_avail() {
             // Searching was cancelled because a character was typed.
             s.incsearch_postponed = true;
         }
@@ -670,7 +670,8 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     let no_emsg = Suppress::emsg();
     let save = unsafe { *pat.offset(patlen as isize) };
     unsafe { *pat.offset(patlen as isize) = NUL as ::core::ffi::c_char };
-    let (w, b) = (curwin.get(), curbuf.get());
+    // SAFETY: `curwin` and `curbuf` are the live window and buffer.
+    let (w, b) = unsafe { (Some(Win::current()), Buf::current()) };
     let (tp, e) = (&raw mut t, ::core::ptr::null_mut::<pos_T>());
     let dir = if next_match { FORWARD } else { BACKWARD } as Direction;
     let (plen, flags) = (patlen as size_t, search_flags);
@@ -813,15 +814,15 @@ fn set_cmd_byte(cc: Cc, i: ::core::ffi::c_int, b: ::core::ffi::c_char) {
 fn curwin_cursor_moved() {
     // SAFETY: `curwin` is a live window.
     unsafe {
-        changed_cline_bef_curs(curwin.get());
-        update_topline(curwin.get());
+        changed_cline_bef_curs(Win::current());
+        update_topline(Win::current());
     }
 }
 
 /// C's `validate_cursor(curwin)`.
 fn validate_curwin_cursor() {
     // SAFETY: `curwin` is a live window.
-    unsafe { validate_cursor(curwin.get()) };
+    validate_cursor(unsafe { Win::current() });
 }
 
 /// The buffer the editor is working in.

@@ -97,7 +97,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     // byte of the match and back is what gives the match's screen columns.
     unsafe {
         getvcol(
-            curwin.get(),
+            Win::new(curwin.get()),
             &raw mut (*curwin.get()).w_cursor,
             &raw mut sc,
             ptr::null_mut(),
@@ -107,7 +107,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     cur_win().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
     unsafe {
         getvcol(
-            curwin.get(),
+            Win::new(curwin.get()),
             &raw mut (*curwin.get()).w_cursor,
             ptr::null_mut(),
             ptr::null_mut(),
@@ -208,8 +208,8 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     highlight_match.set(true);
 
     // SAFETY: the current window is live.
-    unsafe { update_topline(curwin.get()) };
-    unsafe { validate_cursor(curwin.get()) };
+    update_topline(unsafe { Win::current() });
+    validate_cursor(unsafe { Win::current() });
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
     unsafe { update_screen() };

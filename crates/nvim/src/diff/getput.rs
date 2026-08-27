@@ -22,9 +22,8 @@ fn emsg_gettext(msg: *const c_char) {
 
 /// Whether `:diffput` may write into `buf` -- or the command is not
 /// `:diffput` at all, in which case nothing has to be modifiable.
-fn writable_target(buf: *mut buf_T, cmdidx: c_int) -> bool {
-    // SAFETY: a live buffer of the current tab page's diff.
-    cmdidx != CMD_diffput as c_int || unsafe { (*buf).b_p_ma } != 0
+fn writable_target(buf: Buf, cmdidx: c_int) -> bool {
+    cmdidx != CMD_diffput as c_int || buf.b_p_ma != 0
 }
 
 /// `do` and `dp`: get or put the diff block under the cursor.
@@ -102,7 +101,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     let mut eap = unsafe { Live::<exarg_T>::new(eap) };
     let tp = cur_tab();
-    let idx_cur = diff_slot(curbuf.get(), tp);
+    let idx_cur = diff_slot(cur_buf(), tp);
     if idx_cur == DB_COUNT {
         emsg_gettext(c"E99: Current buffer is not in diff mode".as_ptr());
         return;
@@ -117,7 +116,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         while idx_other < DB_COUNT {
             let buf = tp.tp_diffbuf[idx_other as usize];
             if buf != curbuf.get() && !buf.is_null() {
-                if writable_target(buf, cmdidx) {
+                if writable_target(unsafe { Buf::new(buf) }, cmdidx) {
                     break;
                 }
                 found_not_ma = true;
@@ -134,7 +133,10 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         }
         for i in idx_other + 1..DB_COUNT {
             let buf = tp.tp_diffbuf[i as usize];
-            if buf != curbuf.get() && !buf.is_null() && writable_target(buf, cmdidx) {
+            if buf != curbuf.get()
+                && !buf.is_null()
+                && writable_target(unsafe { Buf::new(buf) }, cmdidx)
+            {
                 let msg = c"E101: More than two buffers in diff mode, don't know which one to use";
                 emsg_gettext(msg.as_ptr());
                 return;
@@ -165,13 +167,12 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
             }
             found
         };
-        let buf = buflist_findnr(nr);
-        if buf.is_null() {
+        let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
             unsafe { semsg_c!(gettext(c"E102: Can't find buffer \"%s\"".as_ptr()), eap.arg) };
             return;
-        }
-        if buf == curbuf.get() {
+        };
+        if buf.raw() == curbuf.get() {
             return;
         }
         idx_other = diff_slot(buf, tp);
@@ -197,10 +198,10 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         // SAFETY: the current window is live and `linestatus` is a local, in
         // both calls; the short circuit is upstream's.
         let below_end = line1 == cur_buf().b_ml.ml_line_count
-            && unsafe { diff_check_with_linestatus(cur_win().raw(), line1, status) } == 0
+            && unsafe { diff_check_with_linestatus(cur_win(), line1, status) } == 0
             && linestatus == 0
             && (line1 == 1 as linenr_T
-                || unsafe { diff_check_with_linestatus(cur_win().raw(), line1 - 1, status) } >= 0
+                || unsafe { diff_check_with_linestatus(cur_win(), line1 - 1, status) } >= 0
                     && linestatus == 0);
         if below_end {
             eap.line2 += 1;
@@ -226,9 +227,9 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     '_theend: {
         if cur_buf().b_changed == 0 {
             // SAFETY: the current buffer is live.
-            unsafe { change_warning(curbuf.get(), 0) };
+            unsafe { change_warning(cur_buf(), 0) };
             // The warning can run autocommands, which can move us.
-            if diff_slot(curbuf.get(), tp) != idx_to {
+            if diff_slot(cur_buf(), tp) != idx_to {
                 emsg_gettext(c"E787: Buffer changed unexpectedly".as_ptr());
                 break '_theend;
             }
@@ -238,7 +239,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         if put {
             if KeyTyped.get() {
                 // SAFETY: the editor exists.
-                unsafe { u_sync(false) };
+                u_sync(false);
             }
             // SAFETY: `aco` was filled in by `aucmd_prepbuf` above.
             unsafe { aucmd_restbuf(&raw mut aco) };
@@ -251,7 +252,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     }
     // SAFETY: the current window is live, in both calls.
     unsafe {
-        check_cursor(cur_win().raw());
+        check_cursor(cur_win());
         changed_line_abv_curs();
     }
     if tp.tp_first_diff.is_null() {
@@ -263,7 +264,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
             let by_diff = unsafe { *wp.w_onebuf_opt.wo_fdm } as c_int == 'd' as c_int;
             if wp.w_onebuf_opt.wo_diff != 0 && by_diff && wp.w_onebuf_opt.wo_fen != 0 {
                 // SAFETY: a live window.
-                unsafe { fold_update_all(wp.raw()) };
+                fold_update_all(wp);
             }
         }
     }
@@ -402,7 +403,7 @@ fn diffgetput(
                     freed = Some(*dp);
                     // SAFETY: a live block and its predecessor in the list;
                     // the answer is the following block, or null.
-                    let next = unsafe { diff_free(tp.raw(), dprev, dp.raw()) };
+                    let next = unsafe { diff_free(tp, dprev, dp.raw()) };
                     // SAFETY: as above.
                     cursor = unsafe { Df::from_raw(next) };
                 }
@@ -427,7 +428,7 @@ fn diffgetput(
             // SAFETY: the current buffer is live, in both calls.
             unsafe {
                 extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
-                changed_lines(cb, lnum, 0 as colnr_T, lnum + count, amount, true);
+                changed_lines(Buf::new(cb), lnum, 0 as colnr_T, lnum + count, amount, true);
             }
             if let Some(mut copy) = freed {
                 // SAFETY: `copy` is this frame's copy of the freed block.

@@ -541,7 +541,7 @@ pub unsafe fn internal_format(
     win.w_onebuf_opt.wo_lbr = has_lbr;
 
     if !format_only && haveto_redraw {
-        unsafe { update_topline(win.raw()) };
+        update_topline(win);
         redraw_curbuf_later(UPD_VALID);
     }
 }

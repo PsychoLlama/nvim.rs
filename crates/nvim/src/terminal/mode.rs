@@ -314,7 +314,7 @@ fn saved_winopts(s: Session) -> Option<*mut winopt_T> {
     // registered by construction. What is asked here is the *layout*
     // question — is it still on this tab page's window list — which stays a
     // list walk. SAFETY: the pointer is only compared.
-    if unsafe { win_valid(wp.raw()) } {
+    if win_valid(wp.raw()) {
         if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
             wp.redraw_later(UPD_SOME_VALID);
         } else if s.save_w_p_cul as c_int != wp.w_onebuf_opt.wo_cul
@@ -364,7 +364,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     terminal_focus(s.term, true);
     let mut buf = current_buf();
     // SAFETY: a live buffer's own change counter.
-    buf.b_last_changedtick_i = unsafe { buf_get_changedtick(buf.raw()) };
+    buf.b_last_changedtick_i = buf_get_changedtick(buf);
 
     s.term.refcount += 1;
     let none = ::core::ptr::null_mut();
@@ -396,7 +396,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     terminal_focus(s.term, false);
     let mut buf = current_buf();
     // SAFETY: a live buffer's own change counter.
-    buf.b_last_changedtick = unsafe { buf_get_changedtick(buf.raw()) };
+    buf.b_last_changedtick = buf_get_changedtick(buf);
     if buf.terminal == s.term.raw() && !s.close {
         terminal_check_cursor(s.term);
     }
@@ -449,7 +449,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     let topline = (buf.line_count() - win.w_view_height as linenr_T + 1).max(1);
     if topline != win.w_topline {
         // SAFETY: a live window.
-        unsafe { set_topline(win.raw(), topline) };
+        set_topline(win, topline);
     }
 
     if term.suspended && State.get() & MODE_TERMINAL != 0 {
@@ -469,7 +469,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     };
     let col = (term.cursor.col + off).max(0) as colnr_T;
     // SAFETY: a live window, and a column of the line its cursor is on.
-    unsafe { coladvance(win.raw(), col) };
+    coladvance(win, col);
 }
 
 /// Follow the user moving between windows or buffers without leaving
@@ -524,7 +524,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     unsafe { terminal_check_refresh() };
     terminal_check_cursor(s.term);
     // SAFETY: a live window.
-    unsafe { validate_cursor(current_win().raw()) };
+    validate_cursor(current_win());
 
     // TextChangedT observers can close the terminal.
     s.term.refcount += 1;
@@ -532,14 +532,14 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     let observed = has_event(EVENT_TEXTCHANGEDT);
     let mut buf = current_buf();
     // SAFETY: a live buffer's own change counter.
-    if observed && buf.b_last_changedtick_i != unsafe { buf_get_changedtick(buf.raw()) } {
+    if observed && buf.b_last_changedtick_i != buf_get_changedtick(buf) {
         let none = ::core::ptr::null_mut();
         // SAFETY: TextChangedT against a live buffer; nothing of the
         // terminal or the session is borrowed across it.
         unsafe { apply_autocmds(EVENT_TEXTCHANGEDT, none, none, false, buf.raw()) };
         let mut buf = current_buf();
         // SAFETY: as above.
-        buf.b_last_changedtick_i = unsafe { buf_get_changedtick(buf.raw()) };
+        buf.b_last_changedtick_i = buf_get_changedtick(buf);
     }
     // SAFETY: reports scrolls and resizes, which run autocommands.
     unsafe { may_trigger_win_scrolled_resized() };
@@ -554,7 +554,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     }
     terminal_check_cursor(s.term);
     // SAFETY: a live window.
-    unsafe { validate_cursor(current_win().raw()) };
+    validate_cursor(current_win());
     // SAFETY: schedules the cursor-position report.
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {

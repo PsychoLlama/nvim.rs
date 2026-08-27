@@ -222,13 +222,13 @@ fn tab_spaces_to_tabs() {
     let mut want_vcol: colnr_T = 0;
     let none = ::core::ptr::null_mut();
     // SAFETY: `fpos` and `cursor` are live positions in the current buffer.
-    unsafe { getvcol(curwin.get(), &raw mut fpos, &raw mut vcol, none, none) };
+    unsafe { getvcol(cur_win(), &raw mut fpos, &raw mut vcol, none, none) };
     let cursor: *mut pos_T = if vreplace {
         &raw mut pos
     } else {
         &raw mut cur_win().w_cursor
     };
-    unsafe { getvcol(curwin.get(), cursor, &raw mut want_vcol, none, none) };
+    unsafe { getvcol(cur_win(), cursor, &raw mut want_vcol, none, none) };
 
     // Use as many TABs as possible, measuring each one's width where it
     // lands.
@@ -237,7 +237,7 @@ fn tab_spaces_to_tabs() {
     // are asked of a live window.
     let tab_v = unsafe { *tab } as uint8_t as int32_t;
     let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), 0, tab) };
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, tab) };
     loop {
         let byte = unsafe { *ptr } as c_int;
         if !ascii_iswhite(byte) {
@@ -264,7 +264,7 @@ fn tab_spaces_to_tabs() {
     if change_col >= 0 {
         // Skip over the spaces the TABs have made redundant.
         let mut repl_off = 0;
-        cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), 0, ptr) };
+        cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, ptr) };
         while vcol < want_vcol && unsafe { *ptr } as c_int == ' ' as c_int {
             vcol += unsafe { win_charsize(cstype, vcol, ptr, b' ' as int32_t, &mut csarg) }.width;
             ptr = unsafe { ptr.offset(1) };
@@ -366,9 +366,9 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
 
     // In 'virtualedit' past the end of the line, make the position real
     // first.
-    if unsafe { virtual_active(curwin.get()) } && cur_win().w_cursor.coladd > 0 {
+    if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
         let vcol = unsafe { getviscol() };
-        unsafe { coladvance(curwin.get(), vcol) };
+        coladvance(cur_win(), vcol);
     }
 
     // In 'revins' the cursor is at the start of what was typed, and the

@@ -355,7 +355,7 @@ typedef unsigned int ExprVarScope;
 typedef unsigned int ExtmarkOp;
 typedef unsigned int ExtmarkType;
 typedef struct undo_object ExtmarkUndoObject;
-typedef KeySetLink *(*FieldHashfn)(const char *, size_t);
+typedef const KeySetLink *(*FieldHashfn)(const char *, size_t);
 typedef unsigned int file_comparison;
 typedef file_comparison FileComparison;
 typedef double Float;

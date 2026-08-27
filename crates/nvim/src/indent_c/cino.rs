@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 /// Set every `b_ind_*` on `buf` from its 'cinoptions'.
@@ -32,13 +33,15 @@ use core::ffi::{CStr, c_int};
 /// eleven aborted cases until then.
 ///
 /// # Safety
-/// `buf` must be a valid buffer.
-pub unsafe fn parse_cino(buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- `buf` is a valid buffer.
-    let sw = unsafe { get_sw_value(buf) };
-    // SAFETY: the same.  Nothing else holds the buffer while this runs, and
-    // the option string walked below is a separate allocation.
-    let buf = unsafe { &mut *buf };
+///
+/// Nothing else may hold the buffer while this runs: it takes a `&mut` to it
+/// for the whole of the parse.
+pub unsafe fn parse_cino(buf: Buf) {
+    // SAFETY: a live buffer, by `Buf`'s contract.
+    let sw = unsafe { get_sw_value(buf.raw()) };
+    // SAFETY: the caller promises nothing else holds the buffer, and the
+    // option string walked below is a separate allocation.
+    let buf = unsafe { &mut *buf.raw() };
 
     // The defaults.  A `sw` here means the option tracks 'shiftwidth'
     // unless 'cinoptions' overrides it.

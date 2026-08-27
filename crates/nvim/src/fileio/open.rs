@@ -30,7 +30,7 @@ use crate::types::{FAIL, MAXPATHL, OK, ShmFlag};
 fn filemess_note(fname: *mut c_char, note: &'static CStr) {
     let text = translate(note).as_ptr().cast_mut();
     // SAFETY: the current buffer is live and the note outlives the process.
-    unsafe { filemess(curbuf.get(), fname, text) };
+    unsafe { filemess(Buf::current(), fname, text) };
 }
 
 /// One of the `*ReadPre`/`*ReadCmd` autocommands, which all take the same
@@ -233,7 +233,7 @@ pub(crate) unsafe fn open_source(
     if how.newfile && !how.stdin && !how.buffer && !how.fifo {
         // Remember the time of the file.
         if unsafe { os_fileinfo(fname, &raw mut file_info) } {
-            unsafe { buf_store_file_info(curbuf.get(), &raw mut file_info) };
+            unsafe { buf_store_file_info(Buf::current(), &raw mut file_info) };
             cur_buf().b_mtime_read = cur_buf().b_mtime;
             cur_buf().b_mtime_read_ns = cur_buf().b_mtime_ns;
             // Use the protection bits of the original file for the
@@ -299,7 +299,7 @@ pub(crate) unsafe fn open_source(
                 } else {
                     c"[New DIRECTORY]"
                 };
-                unsafe { filemess(curbuf.get(), sfname, translate(note).as_ptr().cast_mut()) };
+                unsafe { filemess(Buf::current(), sfname, translate(note).as_ptr().cast_mut()) };
             }
             // Even though this is a new file, it might have been
             // edited before and deleted. Get the old marks.
@@ -312,7 +312,7 @@ pub(crate) unsafe fn open_source(
                 apply_autocmds_exarg(EVENT_BUFNEWFILE, sfname, sfname, false, curbuf.get(), eap)
             };
             // Remember the current fileformat.
-            unsafe { save_file_ff(curbuf.get()) };
+            save_file_ff(unsafe { Buf::current() });
 
             if !aborting() {
                 // Autocommands may abort script processing; a new file
@@ -329,7 +329,7 @@ pub(crate) unsafe fn open_source(
         } else {
             c"[Permission Denied]"
         };
-        unsafe { filemess(curbuf.get(), sfname, translate(note).as_ptr().cast_mut()) };
+        unsafe { filemess(Buf::current(), sfname, translate(note).as_ptr().cast_mut()) };
         cur_buf().b_p_ro = true as c_int; // must use "w!" now
         return Err(retval);
     }

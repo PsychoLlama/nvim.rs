@@ -19,7 +19,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win, windows};
 
 /// The stack of autocommand windows, one slot per nesting level.
 ///
@@ -78,7 +78,11 @@ impl AucmdWins {
 }
 
 /// Whether `win` is one of the autocommand windows currently in use.
-pub unsafe fn is_aucmd_win(win: *mut win_T) -> bool {
+///
+/// Safe, and it keeps the raw pointer on purpose: `win` is only ever
+/// *compared*, never dereferenced, so a caller may hand it an address an
+/// autocommand has already freed — exactly as `win_valid` is.
+pub fn is_aucmd_win(win: *mut win_T) -> bool {
     let vec = aucmd_wins();
     (0..vec.len()).any(|i| {
         // SAFETY: `i` is below `len`, so the slot is initialised.
@@ -97,19 +101,13 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
     // A window already showing `buf` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
     // why `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` starts at `firstwin`.
-    let mut win: *mut win_T = ::core::ptr::null_mut();
-    if same_buffer {
-        win = curwin.get();
+    let win: *mut win_T = if same_buffer {
+        curwin.get()
     } else {
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if unsafe { (*wp).w_buffer } == buf {
-                win = wp;
-                break;
-            }
-            wp = unsafe { (*wp).w_next };
-        }
-    }
+        windows()
+            .find(|wp| wp.w_buffer == buf)
+            .map_or(::core::ptr::null_mut(), Win::raw)
+    };
 
     // Allocate an autocommand window when there is no window to use.
     let mut need_append = true;
@@ -176,7 +174,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
             // The window is findable by handle again for as long as it
             // is on a list; `aucmd_restbuf` takes it back out.
             register_window(unsafe { Win::new(auc_win) });
-            unsafe { win_config_float(auc_win, (*auc_win).w_config.clone()) };
+            unsafe { win_config_float(Win::new(auc_win), (*auc_win).w_config.clone()) };
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
         // `RedrawingDisabled` keeps it from redrawing or setting the
@@ -285,7 +283,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
 
         // The buffer's contents may have changed under the cursor.
         set_visual_active(unsafe { (*aco).save_VIsual_active });
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
         if cur_win().w_topline > cur_buf().b_ml.ml_line_count {
             cur_win().w_topline = cur_buf().b_ml.ml_line_count;
             cur_win().w_topfill = 0;
@@ -318,15 +316,15 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
             // The autocommand may have left the cursor where curbuf has
             // no such position.
             set_visual_active(unsafe { (*aco).save_VIsual_active });
-            unsafe { check_cursor(curwin.get()) };
+            check_cursor(unsafe { Win::current() });
         }
     }
 
     set_visual_active(unsafe { (*aco).save_VIsual_active });
     // Just in case lines got deleted.
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
     if visual_active() {
-        with_visual_anchor(|anchor| unsafe { check_pos(curbuf.get(), anchor) });
+        with_visual_anchor(|anchor| unsafe { check_pos(Buf::current(), anchor) });
     }
 }
 

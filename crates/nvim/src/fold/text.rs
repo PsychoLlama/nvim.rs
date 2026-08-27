@@ -40,10 +40,9 @@ use crate::options::kWinOptFoldtext;
 /// Otherwise the result is in allocated memory.
 ///
 /// # Safety
-/// `wp` must be a live window, `buf` writable for [`FOLD_TEXT_LEN`] bytes,
-/// and `vt` writable.
+/// `buf` must be writable for [`FOLD_TEXT_LEN`] bytes, and `vt` writable.
 pub unsafe fn get_foldtext(
-    wp: *mut win_T,
+    wp: Win,
     lnum: linenr_T,
     lnume: linenr_T,
     foldinfo: foldinfo_T,
@@ -59,7 +58,7 @@ pub unsafe fn get_foldtext(
     static last_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
     let save_did_emsg = did_emsg.get();
     if last_wp.get().is_null()
-        || last_wp.get() != wp
+        || last_wp.get() != wp.raw()
         || last_lnum.get() > lnum
         || last_lnum.get() == 0
     {
@@ -68,8 +67,7 @@ pub unsafe fn get_foldtext(
     if !got_fdt_error.get() {
         did_emsg.set(0);
     }
-    // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
+    let win = wp;
     // SAFETY: 'foldtext' is a NUL-terminated option string.
     if unsafe { *win.w_onebuf_opt.wo_fdt } as c_int != NUL {
         let mut dashes: [c_char; 22] = [0; 22];
@@ -87,11 +85,11 @@ pub unsafe fn get_foldtext(
         if !got_fdt_error.get() {
             let save_curwin = curwin.get();
             let saved_sctx = current_sctx.get();
-            curwin.set(wp);
+            curwin.set(wp.raw());
             curbuf.set(win.w_buffer);
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
-            let mut obj: Object = unsafe { eval_foldtext(wp) };
+            let mut obj: Object = unsafe { eval_foldtext(wp.raw()) };
             if obj.type_0 as c_uint == kObjectTypeArray as c_uint {
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
@@ -122,7 +120,7 @@ pub unsafe fn get_foldtext(
             current_sctx.set(saved_sctx);
         }
         last_lnum.set(lnum);
-        last_wp.set(wp);
+        last_wp.set(wp.raw());
         unsafe { set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t) };
         if did_emsg.get() == 0 && save_did_emsg != 0 {
             did_emsg.set(save_did_emsg);
@@ -214,8 +212,8 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
         cms_elen = cms_elen.wrapping_sub(gap(s, cms_end));
         cms_end = s;
     }
-    // SAFETY: `curwin` is a live window.
-    unsafe { parse_marker(curwin.get()) };
+    // SAFETY: `curwin` is set from startup to exit.
+    parse_marker(unsafe { Win::current() });
 
     // Each half of 'commentstring' is only removed once.
     let mut did1 = false;

@@ -39,6 +39,7 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::strings::xstrnsave;
 use crate::types::CmdModFlags;
 use crate::undo::{u_clearline, u_save, u_savecommon};
+use crate::winlayer::{Buf, Win};
 use ::libc::memset;
 
 /// Whether the cursor is before (or, with `extra` zero, on) the first
@@ -105,7 +106,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
         // when undoing.
         let mut i = 0;
         if u_savecommon(
-            buf,
+            Buf::new(buf),
             start_lnum - 1,
             start_lnum + line_count,
             start_lnum + line_count,
@@ -169,7 +170,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
             } else {
                 last_changed + 1
             };
-            changed_lines(buf, first_changed, 0, end, 0, true);
+            changed_lines(Buf::new(buf), first_changed, 0, end, 0, true);
         } else if (*oap).is_VIsual {
             redraw_curbuf_later(UPD_INVERTED);
         }
@@ -377,7 +378,7 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
         let mut vcol = 0;
         if *line != 0 {
             let mut csarg = CharsizeArg::default();
-            let cstype = init_charsize_arg(&mut csarg, win, 0, line);
+            let cstype = init_charsize_arg(&mut csarg, Win::new(win), 0, line);
             let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
             loop {
                 let next_vcol =
@@ -546,7 +547,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
         (*win).w_onebuf_opt.wo_list = save_p_list;
         (*win).w_cursor.col = new_cursor_col.max(0) as colnr_T;
         (*win).w_set_curswant = true;
-        changed_cline_bef_curs(win);
+        changed_cline_bef_curs(Win::new(win));
         if State.get() & MODE_INSERT != 0 {
             adjust_insert_start(insstart_less);
         }
@@ -848,11 +849,7 @@ impl Retab {
         // Written inside `unsafe` blocks so that the walk stays checked code.
         let byte = |s: &LineScan| unsafe { *s.ptr.offset(s.col as isize) };
         let width = |s: &LineScan| unsafe {
-            win_chartabsize(
-                curwin.get(),
-                s.ptr.offset(s.col as isize),
-                s.vcol as colnr_T,
-            )
+            win_chartabsize(cur_win(), s.ptr.offset(s.col as isize), s.vcol as colnr_T)
         };
         let charlen = |s: &LineScan| unsafe { utfc_ptr2len(s.ptr.offset(s.col as isize)) };
         loop {
@@ -943,6 +940,7 @@ pub unsafe fn ex_retab(eap: *mut exarg_T) {
     unsafe {
         let win = curwin.get();
         let buf = curbuf.get();
+        let b = Buf::new(buf);
         let save_list = (*win).w_onebuf_opt.wo_list;
         (*win).w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
         let Some(tabs) = parse_retab_arg((*eap).arg) else {
@@ -981,13 +979,19 @@ pub unsafe fn ex_retab(eap: *mut exarg_T) {
             redraw_curbuf_later(UPD_NOT_VALID);
         }
         if retab.first_line != 0 {
-            changed_lines(buf, retab.first_line, 0, retab.last_line + 1, 0, true);
+            changed_lines(b, retab.first_line, 0, retab.last_line + 1, 0, true);
         }
         (*win).w_onebuf_opt.wo_list = save_list; // restore 'list'
         if !tabs.ts_str.is_null() {
             set_retab_tabstop(&tabs);
         }
-        coladvance(win, (*win).w_curswant);
-        u_clearline(buf);
+        coladvance(Win::new(win), (*win).w_curswant);
+        u_clearline(b);
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

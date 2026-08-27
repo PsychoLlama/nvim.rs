@@ -50,7 +50,7 @@ use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, buf_T, exarg_T, int64_t, linenr_T,
-    size_t, time_t, win_T,
+    size_t, time_t,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
@@ -99,7 +99,7 @@ fn has_flag(arg: *const c_char, c: u8) -> bool {
 
 fn buf_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_changed(buf.raw()) }
+    buf_is_changed(buf)
 }
 
 /// Whether `buf`'s terminal, if it has one, still has a job attached.
@@ -113,9 +113,9 @@ fn special_name(mut buf: Buf) -> *mut c_char {
     unsafe { buf_spname(buf.raw()) }
 }
 
-fn remembered_lnum(mut buf: Buf) -> linenr_T {
-    // SAFETY: a live buffer.
-    unsafe { buflist_findlnum(buf.raw()) }
+fn remembered_lnum(buf: Buf) -> linenr_T {
+    // SAFETY: the answer is a live mark.
+    unsafe { buflist_findlnum(buf) }
 }
 
 fn dont_write(mut buf: Buf) -> bool {
@@ -452,7 +452,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         let fmt = tr(c"line %ld of %ld --%d%%-- col ");
         out.put_position(fmt, cursor, lines, percentage(cursor, lines));
         // SAFETY: a live window.
-        unsafe { validate_virtcol(win.raw()) };
+        validate_virtcol(win);
         out.put_column(win.w_cursor.col as c_int + 1, win.w_virtcol as c_int + 1);
     }
 
@@ -483,7 +483,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
 
 fn curbuf_changed() -> bool {
     // SAFETY: reads the current buffer's undo state.
-    unsafe { curbuf_is_changed() }
+    curbuf_is_changed()
 }
 
 fn percentage(part: linenr_T, whole: linenr_T) -> c_int {
@@ -569,7 +569,7 @@ impl Msg {
     fn put_arg_number(&mut self, mut win: Win) {
         let (dst, room) = self.tail();
         // SAFETY: a live window, and the buffer's own tail.
-        unsafe { append_arg_number(win.raw(), dst, room) };
+        unsafe { append_arg_number(win, dst, room) };
     }
 
     /// `home_replace` into the tail, followed by the length it wrote --
@@ -746,18 +746,17 @@ pub unsafe fn resettitle() {
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
 /// into `buf`.
-pub unsafe fn get_rel_pos(wp: *mut win_T, buf: *mut c_char, buflen: c_int) -> c_int {
+pub unsafe fn get_rel_pos(wp: Win, buf: *mut c_char, buflen: c_int) -> c_int {
     // At least three characters are needed to write anything.
     if buflen < 3 {
         return 0;
     }
-    // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
+    let win = wp;
     let room = buflen as size_t;
 
     // The number of lines above the window.
     // SAFETY: a live window and one of its line numbers.
-    let fill = unsafe { win_get_fill(wp, win.w_topline) };
+    let fill = unsafe { win_get_fill(win, win.w_topline) };
     let mut above = win.w_topline - 1 + (fill - win.w_topfill) as linenr_T;
     if win.w_topline == 1 && win.w_topfill >= 1 {
         // All the buffer's lines are displayed and there is an indication of
@@ -791,7 +790,7 @@ pub unsafe fn get_rel_pos(wp: *mut win_T, buf: *mut c_char, buflen: c_int) -> c_
 
 /// Append "(2 of 8)" to `buf`, when more than one file is being edited.
 /// Answers how many characters that took.
-pub unsafe fn append_arg_number(wp: *mut win_T, buf: *mut c_char, buflen: size_t) -> c_int {
+pub unsafe fn append_arg_number(wp: Win, buf: *mut c_char, buflen: size_t) -> c_int {
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
     // SAFETY: the current window's argument list is live.
@@ -800,8 +799,7 @@ pub unsafe fn append_arg_number(wp: *mut win_T, buf: *mut c_char, buflen: size_t
         // Nothing to do.
         return 0;
     }
-    // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
+    let win = wp;
     let fmt = if win.w_arg_idx_invalid {
         tr(c" ((%d) of %d)")
     } else {

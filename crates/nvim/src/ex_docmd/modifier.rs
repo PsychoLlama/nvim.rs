@@ -758,7 +758,8 @@ pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
 ///
 /// The dummy buffer an expression mapping is evaluated in is exempt: the
 /// lock is about the *user's* text.
-pub unsafe fn expr_map_locked() -> bool {
+pub fn expr_map_locked() -> bool {
+    // SAFETY: `curbuf` is a live buffer whenever a mapping can be running.
     unsafe { expr_map_lock.get() > 0 && !(*curbuf.get()).b_flags.has(BufFlags::DUMMY) }
 }
 

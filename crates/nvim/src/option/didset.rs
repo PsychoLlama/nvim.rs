@@ -74,6 +74,7 @@ use super::{
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
+use crate::winlayer::{Buf, Win};
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
@@ -105,7 +106,7 @@ impl Frame {
         // SAFETY: the caller's frame.
         unsafe {
             Frame {
-                varp: OptSlot::from_raw((*args).os_idx, (*args).os_varp),
+                varp: (*args).os_varp,
                 idx: (*args).os_idx,
                 flags: (*args).os_flags,
                 old: (*args).os_oldval,
@@ -146,7 +147,7 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
         if (*win).w_onebuf_opt.wo_arab == 0 {
             if p_tbidi.get() == 0 && (*win).w_onebuf_opt.wo_rl != 0 {
                 (*win).w_onebuf_opt.wo_rl = 0;
-                changed_window_setting(win);
+                changed_window_setting(Win::new(win));
             }
             (*(*win).w_buffer).b_p_iminsert = B_IMODE_NONE as OptInt;
             (*(*win).w_buffer).b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
@@ -158,7 +159,7 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             // Arabic needs.
             if (*win).w_onebuf_opt.wo_rl == 0 {
                 (*win).w_onebuf_opt.wo_rl = 1;
-                changed_window_setting(win);
+                changed_window_setting(Win::new(win));
             }
             if p_arshape.get() == 0 {
                 p_arshape.set(1);
@@ -256,9 +257,9 @@ pub(crate) unsafe fn did_set_diff(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe {
         let win = Frame::read(args).win;
-        diff_buf_adjust(win);
-        if foldmethod_is_diff(win) {
-            fold_update_all(win);
+        diff_buf_adjust(Win::new(win));
+        if foldmethod_is_diff(Win::new(win)) {
+            fold_update_all(Win::new(win));
         }
     }
     ptr::null()
@@ -293,7 +294,8 @@ pub(crate) unsafe fn did_set_foldlevel(_args: *mut optset_T) -> *const c_char {
 /// 'foldminlines': the fold sizes all change.
 pub(crate) unsafe fn did_set_foldminlines(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
-    unsafe { fold_update_all(Frame::read(args).win) };
+    // SAFETY: the table's call frame, and the window it names is live.
+    fold_update_all(unsafe { Win::new(Frame::read(args).win) });
     ptr::null()
 }
 
@@ -302,8 +304,8 @@ pub(crate) unsafe fn did_set_foldnestmax(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe {
         let win = Frame::read(args).win;
-        if foldmethod_is_syntax(win) || foldmethod_is_indent(win) {
-            fold_update_all(win);
+        if foldmethod_is_syntax(Win::new(win)) || foldmethod_is_indent(Win::new(win)) {
+            fold_update_all(Win::new(win));
         }
     }
     ptr::null()
@@ -449,7 +451,7 @@ pub(crate) unsafe fn did_set_modified(args: *mut optset_T) -> *const c_char {
     unsafe {
         let f = Frame::read(args);
         if f.new_boolean() == Some(false) {
-            save_file_ff(f.buf);
+            save_file_ff(Buf::new(f.buf));
         }
         redraw_titles();
         (*f.buf).b_modified_was_set = f.new_boolean() != Some(false);
@@ -565,7 +567,7 @@ pub(crate) unsafe fn did_set_scrollbind(args: *mut optset_T) -> *const c_char {
             return ptr::null();
         }
         do_check_scrollbind(false);
-        (*win).w_scbind_pos = get_vtopline(win);
+        (*win).w_scbind_pos = get_vtopline(Win::new(win));
     }
     ptr::null()
 }
@@ -575,13 +577,13 @@ pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c
     // SAFETY: the table's call frame, and the window and buffer it names.
     unsafe {
         let f = Frame::read(args);
-        if foldmethod_is_indent(f.win) {
-            fold_update_all(f.win);
+        if foldmethod_is_indent(Win::new(f.win)) {
+            fold_update_all(Win::new(f.win));
         }
         // A zero 'shiftwidth' means "use 'tabstop'", so 'tabstop' feeds the
         // C indent options too.
         if f.varp == OptSlot::Number(&raw mut (*f.buf).b_p_sw) || (*f.buf).b_p_sw == 0 {
-            parse_cino(f.buf);
+            parse_cino(Buf::new(f.buf));
         }
     }
     ptr::null()
@@ -683,8 +685,8 @@ pub(crate) unsafe fn did_set_undofile(args: *mut optset_T) -> *const c_char {
             // A `:setlocal` only reaches its own buffer; `:set` and
             // `:setglobal` reach all of them.
             let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
-            if reaches && !buf_is_changed(bp) && !(*bp).b_ml.ml_mfp.is_null() {
-                u_compute_hash(bp, hash.as_mut_ptr());
+            if reaches && !buf_is_changed(Buf::new(bp)) && !(*bp).b_ml.ml_mfp.is_null() {
+                u_compute_hash(Buf::new(bp), hash.as_mut_ptr());
                 u_read_undo(ptr::null_mut(), hash.as_mut_ptr(), (*bp).b_fname);
             }
         }
@@ -811,7 +813,7 @@ pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
         if f.varp == option_var(kOptChistory) {
             qf_resize_stack(*arg as c_int);
         } else {
-            ll_resize_stack(f.win, *arg as c_int);
+            ll_resize_stack(Win::new(f.win), *arg as c_int);
         }
     }
     ptr::null()

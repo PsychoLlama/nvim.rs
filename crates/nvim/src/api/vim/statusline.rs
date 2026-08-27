@@ -307,7 +307,7 @@ unsafe fn statuscol_state(
     statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {
-        let foldinfo = fold_info(win.raw(), lnum);
+        let foldinfo = fold_info(win, lnum);
         win_update_cursorline(win.raw(), &raw mut cursorline_fi);
         (foldinfo, use_cursor_line_highlight(win.raw(), lnum))
     };
@@ -331,7 +331,7 @@ unsafe fn statuscol_state(
     // SAFETY: three plain number variables of the editor's own.
     unsafe {
         set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
-        let rel = labs(get_cursor_rel_lnum(win.raw(), lnum) as ::core::ffi::c_long);
+        let rel = labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long);
         set_vim_var_nr(Vv::Relnum, rel as varnumber_T);
         set_vim_var_nr(Vv::Virtnum, 0 as varnumber_T);
     }

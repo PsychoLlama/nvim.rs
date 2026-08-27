@@ -14,6 +14,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::winlayer::Win;
 
 /// Where `ml_updatechunk` last left off. Appending runs down the buffer in
 /// order, so the next call almost always wants the same chunk or the next
@@ -473,14 +474,14 @@ pub unsafe fn goto_byte(cnt: c_int) {
             // Past the end.
             (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
             (*curwin.get()).w_curswant = MAXCOL as c_int;
-            coladvance(curwin.get(), MAXCOL as c_int);
+            coladvance(Win::current(), MAXCOL as c_int);
         } else {
             (*curwin.get()).w_cursor.lnum = lnum;
             (*curwin.get()).w_cursor.col = boff;
             (*curwin.get()).w_cursor.coladd = 0;
             (*curwin.get()).w_set_curswant = true;
         }
-        check_cursor(curwin.get());
+        check_cursor(Win::current());
 
         // Make sure the cursor is on the first byte of a multi-byte char.
         mb_adjust_cursor();

@@ -51,20 +51,17 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
         // SAFETY: `curwin` is set from startup to exit.
         unsafe { Win::current() }.w_cursor.lnum
     } else {
-        // SAFETY: a live buffer.
-        unsafe { buflist_findlnum(buf.raw()) }
+        // SAFETY: the answer is a live mark.
+        unsafe { buflist_findlnum(buf) }
     };
     nr(c"lnum", varnumber_T::from(lnum));
     nr(c"linecount", varnumber_T::from(buf.line_count()));
     nr(c"loaded", varnumber_T::from(!buf.b_ml.ml_mfp.is_null()));
     nr(c"listed", varnumber_T::from(buf.b_p_bl));
     // SAFETY: a live buffer.
-    nr(
-        c"changed",
-        varnumber_T::from(unsafe { buf_is_changed(buf.raw()) }),
-    );
+    nr(c"changed", varnumber_T::from(buf_is_changed(buf)));
     // SAFETY: a live buffer.
-    nr(c"changedtick", unsafe { buf_get_changedtick(buf.raw()) });
+    nr(c"changedtick", buf_get_changedtick(buf));
     nr(
         c"hidden",
         varnumber_T::from(!buf.b_ml.ml_mfp.is_null() && buf.b_nwindows == 0),

@@ -121,21 +121,21 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
 
         // Every window may own a location list, and a location list window
         // may be the last thing referring to one.
-        let aborting = |win: *mut win_T| {
-            let own = (*win).w_llist;
+        let aborting = |win: Win| {
+            let own = win.w_llist;
             if !own.is_null()
                 && (mark_quickfix_ctx(own, copy_id) || mark_quickfix_user_data(own, copy_id))
             {
                 return true;
             }
-            let shown = (*win).w_llist_ref;
+            let shown = win.w_llist_ref;
             if is_ll_window(win) && (*shown).qf_refcount == 1 {
                 return mark_quickfix_ctx(shown, copy_id)
                     || mark_quickfix_user_data(shown, copy_id);
             }
             false
         };
-        !find_tab_win(aborting).is_null()
+        find_tab_win(aborting).is_some()
     }
 }
 
@@ -144,10 +144,10 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
 ///
 /// # Safety
 ///
-/// `wp` must be null or a live window, and the two values live.
+/// The two values must be live.
 unsafe fn get_qf_loc_list(
     is_qf: bool,
-    wp: *mut win_T,
+    wp: Option<Win>,
     what_arg: *mut typval_T,
     rettv: *mut typval_T,
 ) {
@@ -155,7 +155,7 @@ unsafe fn get_qf_loc_list(
     unsafe {
         if (*what_arg).v_type == VAR_UNKNOWN {
             tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-            if is_qf || !wp.is_null() {
+            if is_qf || wp.is_some() {
                 // No list, or an empty one, is an empty answer, not an error.
                 let _ = get_errorlist(ptr::null_mut(), wp, -1, 0, (*rettv).vval.v_list);
             }
@@ -163,7 +163,7 @@ unsafe fn get_qf_loc_list(
         }
 
         tv_dict_alloc_ret(rettv);
-        if !is_qf && wp.is_null() {
+        if !is_qf && wp.is_none() {
             return;
         }
         if (*what_arg).v_type != VAR_DICT {
@@ -187,8 +187,7 @@ unsafe fn get_qf_loc_list(
 pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
     unsafe {
-        let wp = find_win_by_nr_or_id(argvars).map_or(ptr::null_mut(), Win::raw);
-        get_qf_loc_list(false, wp, argvars.add(1), rettv);
+        get_qf_loc_list(false, find_win_by_nr_or_id(argvars), argvars.add(1), rettv);
     }
 }
 
@@ -199,7 +198,7 @@ pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// Called through the Vimscript function table with its argument array.
 pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least one value.
-    unsafe { get_qf_loc_list(true, ptr::null_mut(), argvars, rettv) }
+    unsafe { get_qf_loc_list(true, None, argvars, rettv) }
 }
 
 /// The body of `setqflist()` and `setloclist()`: a list of entries, an
@@ -209,7 +208,7 @@ pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// # Safety
 ///
 /// `wp` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval_T) {
+unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typval_T) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
@@ -266,7 +265,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
         }
 
         if title.is_null() {
-            title = if wp.is_null() {
+            title = if wp.is_none() {
                 c":setqflist()".as_ptr()
             } else {
                 c":setloclist()".as_ptr()
@@ -292,7 +291,7 @@ pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     unsafe {
         (*rettv).vval.v_number = -1;
         if let Some(win) = find_win_by_nr_or_id(argvars) {
-            set_qf_ll_list(win.raw(), argvars.add(1), rettv);
+            set_qf_ll_list(Some(win), argvars.add(1), rettv);
         }
     }
 }
@@ -304,5 +303,5 @@ pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// Called through the Vimscript function table with its argument array.
 pub unsafe fn f_setqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least three values.
-    unsafe { set_qf_ll_list(ptr::null_mut(), argvars, rettv) }
+    unsafe { set_qf_ll_list(None, argvars, rettv) }
 }

@@ -24,6 +24,7 @@
 use super::*;
 use crate::grid::linebuf;
 use crate::types::NUL;
+use crate::winlayer::Win;
 
 /// The variables `win_line` passes to the functions that draw parts of a line.
 ///
@@ -435,7 +436,7 @@ pub(crate) unsafe fn margin_columns_win(
     // SAFETY: the caller's window.
     unsafe {
         let width1 = (*wp).w_view_width - win_col_off(wp);
-        let width2 = width1 + win_col_off2(wp);
+        let width2 = width1 + win_col_off2(Win::new(wp));
         if SAVED_W_VIRTCOL.get() == (*wp).w_virtcol
             && PREV_WP.get() == wp
             && PREV_WIDTH1.get() == width1
@@ -580,7 +581,7 @@ impl WinLineVars {
                 self.line_attr_lowprio = self.cursorline_attr;
             } else if State.get() & MODE_INSERT == 0
                 && bt_quickfix((*wp).w_buffer)
-                && qf_current_entry(wp) == self.lnum
+                && qf_current_entry(Win::new(wp)) == self.lnum
             {
                 // A quickfix window's current-entry highlight keeps its own
                 // colours; CursorLine goes underneath it.

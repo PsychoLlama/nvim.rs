@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::guard::Allow;
 use crate::types::NUL;
+use crate::winlayer::Win;
 
 unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
     unsafe {
@@ -18,7 +19,7 @@ unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut f
             && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
         {
             (*wp).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
-            changed_window_setting(wp);
+            changed_window_setting(Win::new(wp));
         }
         let mut old_row_offset: ::core::ffi::c_int = (*wp).w_grid.row_offset;
         win_grid_alloc(wp);
@@ -220,8 +221,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             (*opts).flush = true;
         }
         if (*opts).flush as ::core::ffi::c_int != 0 && !cmdpreview.get() {
-            validate_cursor(curwin.get());
-            update_topline(curwin.get());
+            validate_cursor(Win::current());
+            update_topline(Win::current());
             update_screen();
         }
         if (*opts).cursor {

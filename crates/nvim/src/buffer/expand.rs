@@ -5,7 +5,7 @@
 //! with the fuzzy matcher, sort the results by score or by last-used time,
 //! and return them as the completion candidates.  [`buflist_match`] and
 //! [`fname_match`] are the per-buffer test it and `buflist_findpat` share,
-//! and [`buflist_findnr`]/[`buflist_nr2name`] the number lookups.
+//! and [`find_buf`]/[`buflist_nr2name`] the number lookups.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
@@ -101,7 +101,7 @@ fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
 
 fn diff_mode(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { diff_mode_buf(buf.raw()) }
+    diff_mode_buf(buf)
 }
 
 fn current_win() -> Win {
@@ -350,12 +350,10 @@ fn fname_match(rmp: &mut regmatch_T, name: *mut c_char, ignore_case: bool) -> *m
 // Looking one up by number
 
 /// The buffer numbered `nr`, or the alternate file for 0.
-pub fn buflist_findnr(nr: c_int) -> *mut buf_T {
-    find_buf(nr).map_or(ptr::null_mut(), Buf::raw)
-}
-
-/// [`buflist_findnr`] with its answer wrapped -- the registry lookup both
-/// rest on, "0 means the alternate file" included.
+///
+/// The registry lookup the whole editor's "buffer by number" rests on,
+/// upstream's `find_buf` under its Rust name: a number naming no
+/// buffer is `None` rather than a null to test for.
 pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
     let nr = if nr == 0 {
         current_win().w_alt_fnum

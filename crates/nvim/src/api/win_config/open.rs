@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::winlayer::{TabPage, Win};
 
 pub unsafe fn nvim_open_win(
     buf: Buffer,
@@ -290,9 +291,9 @@ pub unsafe fn nvim_open_win(
                     if style as ::core::ffi::c_uint
                         == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        win_set_minimal_style(wp);
+                        win_set_minimal_style(Win::new(wp));
                         didset_window_options(wp, true);
-                        changed_window_setting(wp);
+                        changed_window_setting(Win::new(wp));
                     }
                     rv = (*wp).handle as Window;
                 }
@@ -417,14 +418,8 @@ pub(crate) unsafe fn win_can_move_tp(
 pub(crate) unsafe fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut win_T {
     unsafe {
         if (*win).w_floating {
-            win_float_find_altwin(
-                win,
-                if tp == curtab.get() {
-                    ::core::ptr::null_mut::<tabpage_T>()
-                } else {
-                    tp
-                },
-            )
+            let at = (tp != curtab.get()).then(|| TabPage::new(tp));
+            win_float_find_altwin(win, at).map_or(::core::ptr::null_mut(), Win::raw)
         } else {
             let mut dir: ::core::ffi::c_int = 0;
             winframe_find_altwin(

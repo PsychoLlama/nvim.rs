@@ -7,57 +7,6 @@
 
 use super::*;
 
-/// The Lua binding for `nvim_set_var`, as a `lua_CFunction`.
-///
-/// # Safety
-/// LuaJIT's contract: `lstate` is the running Lua state, with this
-/// binding's arguments on top of its stack and nothing of this frame's
-/// below them. The ABI is `C-unwind` because a refused argument ends in
-/// `lua_error`, which unwinds through this frame rather than returning.
-pub unsafe extern "C-unwind" fn nlua_api_nvim_set_var(lstate: *mut lua_State) -> c_int {
-    /// Pop the arguments, call the API function, hand the result back.
-    /// Each argument that owns Lua references arms a guard, so every way
-    /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
-        let Call {
-            arena,
-            err,
-            err_param,
-        } = call;
-        // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_object(lstate, true, arena, err) };
-        if err.type_0 != kErrorTypeNone {
-            *err_param = c"value".as_ptr().cast_mut();
-            return;
-        }
-        // SAFETY: the conversion took the references and nothing else
-        // releases them.
-        let arg_2 = unsafe { ObjectArg::new(arg_2) };
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
-            *err_param = c"name".as_ptr().cast_mut();
-            return;
-        }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_set_var(arg_1, arg_2.value) } {
-            active_lstate.set(saved_lstate);
-            *err = e;
-            return;
-        }
-        active_lstate.set(saved_lstate);
-    }
-    // SAFETY: `lstate` is the state Lua called this binding on.
-    unsafe { dispatch(lstate, c"nvim_set_var", 2, 0, convert) }
-}
-
 /// The Lua binding for `nvim_set_vvar`, as a `lua_CFunction`.
 ///
 /// # Safety

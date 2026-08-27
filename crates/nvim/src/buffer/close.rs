@@ -131,7 +131,7 @@ fn free_update_callbacks(mut buf: Buf) {
 
 fn diff_forget(mut buf: Buf) {
     // SAFETY: a live buffer.
-    unsafe { diff_buf_delete(buf.raw()) };
+    diff_buf_delete(buf);
 }
 
 /// Whether `'diffopt'` contains `hiddenoff`.
@@ -157,7 +157,7 @@ fn free_garray(ga: &mut garray_T) {
 /// Drop every buffer-local mapping (`abbrev` picks the abbreviation table).
 fn clear_mappings(mut buf: Buf, abbrev: bool) {
     // SAFETY: a live buffer.
-    unsafe { map_clear_mode(buf.raw(), MAP_ALL_MODES, true, abbrev) };
+    unsafe { map_clear_mode(buf, MAP_ALL_MODES, true, abbrev) };
 }
 
 fn free_callback(cb: &mut Callback) {
@@ -196,7 +196,7 @@ fn forget_lines(mut buf: Buf, count: linenr_T) {
 
 fn free_undo(mut buf: Buf) {
     // SAFETY: a live buffer.
-    unsafe { u_clearallandblockfree(buf.raw()) };
+    u_clearallandblockfree(buf);
 }
 
 fn clear_syntax(syn: &mut synblock_T) {
@@ -259,7 +259,7 @@ fn release_vars(mut buf: Buf) {
 
 fn forget_autocmds(mut buf: Buf) {
     // SAFETY: a live buffer.
-    unsafe { aubuflocal_remove(buf.raw()) };
+    unsafe { aubuflocal_remove(buf) };
 }
 
 /// Drop the buffer's number from the registry, so that nothing can look it
@@ -358,9 +358,7 @@ pub(crate) fn can_unload_buffer(mut buf: Buf) -> bool {
     can_unload
 }
 
-pub unsafe fn buf_close_terminal(buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub fn buf_close_terminal(mut buf: Buf) {
     debug_assert!(!buf.terminal.is_null(), "buf->terminal");
     buf.b_locked += 1;
     // SAFETY: a live terminal, the assertion above having ruled out null.
@@ -383,18 +381,20 @@ pub unsafe fn buf_close_terminal(buf: *mut buf_T) {
 /// The answer is whether `b_nwindows` was decremented by this call itself,
 /// rather than by an autocommand.
 ///
-/// # Safety
-/// `buf` must be a live buffer; `win` a live window or null.
-pub unsafe fn close_buffer(
-    win: *mut win_T,
-    buf: *mut buf_T,
+pub fn close_buffer(
+    win: Option<Win>,
+    buf: Buf,
     action: c_int,
     abort_if_last: bool,
     ignore_abort: bool,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
-    close_buffer_inner(win, buf, action, abort_if_last, ignore_abort)
+    close_buffer_inner(
+        win.map_or(ptr::null_mut(), Win::raw),
+        buf,
+        action,
+        abort_if_last,
+        ignore_abort,
+    )
 }
 
 fn close_buffer_inner(
@@ -429,7 +429,7 @@ fn close_buffer_inner(
         let cursor = wp.w_cursor;
         let lnum = if cursor.lnum == 1 { 0 } else { cursor.lnum };
         // SAFETY: a live buffer and a live window.
-        unsafe { buflist_setfpos(buf.raw(), wp.raw(), lnum, cursor.col, true) };
+        unsafe { buflist_setfpos(buf, Some(wp), lnum, cursor.col, true) };
     }
 
     let bufref = BufRef::of(buf);
@@ -486,8 +486,7 @@ fn close_buffer_inner(
 
     buf.b_nwindows = nwindows;
 
-    // SAFETY: a live buffer.
-    unsafe { buf_freeall(buf.raw(), how.free_flags(ignore_abort)) };
+    buf_freeall(buf, how.free_flags(ignore_abort));
 
     // Autocommands may have deleted the buffer.
     let Some(mut buf) = bufref.get() else {
@@ -541,7 +540,7 @@ fn close_buffer_inner(
             buf.b_p_initialized = false;
         }
         // SAFETY: a live buffer.
-        unsafe { buf_clear_file(buf.raw()) };
+        buf_clear_file(buf);
         if let Some(mut wp) = clear_w_buf {
             wp.w_buffer = ptr::null_mut();
         }
@@ -641,11 +640,7 @@ fn unlink_and_free(mut buf: Buf, clear_w_buf: Option<Win>) {
 
 /// Make buffer not contain a file.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_clear_file(buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub fn buf_clear_file(mut buf: Buf) {
     buf.b_ml.ml_line_count = 1 as linenr_T;
     unchanged_now(buf, true, true);
     buf.b_p_eof = 0;
@@ -682,11 +677,7 @@ pub fn buf_clear() {
 ///
 /// Careful: gets here with `curwin` NULL when exiting.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_freeall(buf: *mut buf_T, flags: c_int) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+pub fn buf_freeall(buf: Buf, flags: c_int) {
     let is_curbuf = buf.raw() == curbuf.get();
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buf.raw());
     let the_curwin = curwin.get();
@@ -732,8 +723,7 @@ pub unsafe fn buf_freeall(buf: *mut buf_T, flags: c_int) {
     // Autocommands may have opened another terminal. Block them this time.
     if !buf.terminal.is_null() {
         block_autocmds_now();
-        // SAFETY: a live buffer with a live terminal.
-        unsafe { buf_close_terminal(buf.raw()) };
+        buf_close_terminal(buf);
         unblock_autocmds_now();
     }
 
@@ -770,8 +760,7 @@ fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
     let bufref = BufRef::of(buf);
 
     if !buf.terminal.is_null() {
-        // SAFETY: a live buffer with a live terminal.
-        unsafe { buf_close_terminal(buf.raw()) };
+        buf_close_terminal(buf);
     }
     detach_updates(buf);
 
@@ -867,7 +856,7 @@ pub(crate) fn free_buffer_stuff(mut buf: Buf, free_flags: c_int) {
     if free_flags & kBffClearWinInfo as c_int != 0 {
         clear_wininfo(buf); // including window-local options
         // SAFETY: a live buffer.
-        unsafe { free_buf_options(buf.raw(), true) };
+        unsafe { free_buf_options(buf, true) };
         free_garray(&mut buf.b_s.b_langp);
     }
     clear_buf_vars(buf); // free all internal variables
@@ -886,22 +875,11 @@ pub(crate) fn free_buffer_stuff(mut buf: Buf, free_flags: c_int) {
 /// Wipe out `buf` outright, with autocommands blocked unless `aucmd` says the
 /// caller is already inside one.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn wipe_buffer(buf: *mut buf_T, aucmd: bool) {
+pub fn wipe_buffer(buf: Buf, aucmd: bool) {
     if !aucmd {
         block_autocmds_now();
     }
-    // SAFETY: the caller's promise -- a live buffer.
-    unsafe {
-        close_buffer(
-            ptr::null_mut::<win_T>(),
-            buf,
-            DOBUF_WIPE as c_int,
-            false,
-            true,
-        )
-    };
+    close_buffer(None, buf, DOBUF_WIPE as c_int, false, true);
     if !aucmd {
         unblock_autocmds_now();
     }

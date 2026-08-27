@@ -40,6 +40,7 @@ use crate::types::{
     list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::undo::u_clearallandblockfree;
+use crate::winlayer::Buf;
 use ::libc::strlen;
 
 /// A freshly declared typval.
@@ -442,7 +443,7 @@ pub unsafe fn prompt_invoke_callback() {
             tv_clear(&raw mut rettv);
         }
 
-        u_clearallandblockfree(curbuf.get());
+        u_clearallandblockfree(Buf::current());
         (*curbuf.get()).b_prompt_start.mark.lnum = (*curbuf.get()).b_ml.ml_line_count;
         (*curbuf.get()).b_prompt_append_new_line = true;
     }

@@ -245,7 +245,7 @@ impl Env {
         let mut buf = [0u8; TMPLEN as usize];
         // SAFETY: the buffer is this frame's, and its length is what
         // `get_rel_pos` is told.
-        unsafe { get_rel_pos(self.win.raw(), buf.as_mut_ptr().cast::<c_char>(), TMPLEN) };
+        unsafe { get_rel_pos(self.win, buf.as_mut_ptr().cast::<c_char>(), TMPLEN) };
         text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
     }
 
@@ -255,11 +255,7 @@ impl Env {
         // SAFETY: as [`Env::rel_pos`]. The buffer starts empty because
         // `append_arg_number` appends to what is already there.
         let len = unsafe {
-            append_arg_number(
-                self.win.raw(),
-                buf.as_mut_ptr().cast::<c_char>(),
-                TMPLEN as usize,
-            )
+            append_arg_number(self.win, buf.as_mut_ptr().cast::<c_char>(), TMPLEN as usize)
         };
         if len > 0 {
             text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
@@ -301,7 +297,7 @@ impl Env {
     /// `%m`/`%M`: whether the buffer has unsaved changes.
     pub(super) fn is_changed(&self) -> bool {
         // SAFETY: a live buffer.
-        unsafe { buf_is_changed(self.buf.raw()) }
+        buf_is_changed(self.buf)
     }
 
     /// `%b`/`%B`: the character under the cursor, with the line ending the

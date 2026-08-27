@@ -52,15 +52,15 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
-    let buf: *mut buf_T = unsafe { (*args).os_buf.cast() };
+    let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
     let value = unsafe { (*args).os_newval.string.data() };
     let retval = if unsafe { (*args).os_flags.has(OptionSetFlags::LOCAL) } {
-        unsafe { option_set_callback_func(value, &raw mut (*buf).b_tfu_cb) }
+        unsafe { option_set_callback_func(value, &raw mut buf.b_tfu_cb) }
     } else {
         let retval = unsafe { option_set_callback_func(value, global_tagfunc()) };
         if retval == OK && !unsafe { (*args).os_flags.has(OptionSetFlags::GLOBAL) } {
             // `:set` without a scope sets the buffer-local copy too.
-            unsafe { set_buflocal_tfu_callback(buf) };
+            set_buflocal_tfu_callback(buf);
         }
         retval
     };
@@ -82,13 +82,14 @@ pub unsafe fn set_ref_in_tagfunc(copyID: c_int) -> bool {
 
 /// Copy the global `'tagfunc'` callback into `buf`'s local one.
 ///
-/// # Safety
-/// `buf` must be live.
-pub unsafe fn set_buflocal_tfu_callback(buf: *mut buf_T) {
-    // SAFETY: the caller's promise; the buffer owns its own callback.
-    unsafe { callback_free(&raw mut (*buf).b_tfu_cb) };
+/// Safe: the buffer is live by [`Buf`]'s promise, and the global callback
+/// lives in a static.
+pub fn set_buflocal_tfu_callback(mut buf: Buf) {
+    // SAFETY: a live buffer owns its own callback, and `global_tagfunc`
+    // answers the address of a static.
+    unsafe { callback_free(&raw mut buf.b_tfu_cb) };
     if unsafe { (*global_tagfunc()).type_0 } != kCallbackNone {
-        unsafe { callback_copy(&raw mut (*buf).b_tfu_cb, global_tagfunc()) };
+        unsafe { callback_copy(&raw mut buf.b_tfu_cb, global_tagfunc()) };
     }
 }
 
@@ -190,7 +191,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
     cur_win().w_cursor = save_pos;
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
     unsafe { (*info).dv_refcount -= 1 };
 
     if result == FAIL {

@@ -15,6 +15,7 @@ use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
 use crate::types::CpoFlag;
+use crate::winlayer::Win;
 
 /// Walks `search_hl` together with a window's match list.
 ///
@@ -347,12 +348,7 @@ pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, 
             if (*shl).first_lnum == 0 {
                 (*shl).first_lnum = lnum;
                 while (*shl).first_lnum > (*wp).w_topline {
-                    if has_folding(
-                        wp,
-                        (*shl).first_lnum - 1,
-                        ::core::ptr::null_mut(),
-                        ::core::ptr::null_mut(),
-                    ) {
+                    if has_folding(Win::new(wp), (*shl).first_lnum - 1, None, None) {
                         break;
                     }
                     (*shl).first_lnum -= 1;

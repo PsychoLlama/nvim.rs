@@ -99,7 +99,7 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
         cur_win().w_cursor = saved_cursor.get();
         saved_cursor.set(saved_cursor.get().with_lnum(0));
         // Formatting may have made the position invalid.
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
     }
     if oap.is_VIsual {
         // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The macro's tab page test is
@@ -371,7 +371,7 @@ pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
 
                 // Put the cursor on the last non-space.
                 State.set(MODE_NORMAL); // don't go past end-of-line
-                unsafe { coladvance(curwin.get(), MAXCOL) };
+                coladvance(unsafe { Win::current() }, MAXCOL);
                 while cur_win().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
                     dec_cursor();
                 }

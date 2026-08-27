@@ -56,8 +56,7 @@ pub unsafe fn handle_nvim_open_tabpage(
                 return NIL;
             }
         };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }

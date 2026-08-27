@@ -220,6 +220,10 @@ pub const CP_EQUAL: ::core::ffi::c_int = 8;
 pub struct ins_compl_next_state_T {
     pub e_cpt_copy: *mut ::core::ffi::c_char,
     pub e_cpt: *mut ::core::ffi::c_char,
+    /// The buffer being scanned. Deliberately raw: it outlives the user
+    /// functions and Lua a completion runs, which is exactly the liveness a
+    /// [`crate::winlayer::Buf`] would be promising. Each use builds one where
+    /// the buffer is known live and drops it again.
     pub ins_buf: *mut buf_T,
     pub cur_match_pos: *mut pos_T,
     pub prev_match_pos: pos_T,
@@ -565,6 +569,11 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
         coladd: 0,
     },
 });
+/// The window and buffer the running completion started in. Both stay raw:
+/// they outlive arbitrary re-entry (a completion runs user functions and Lua),
+/// so a `GlobalCell<Win>` would promise a liveness nothing here keeps. They are
+/// only ever compared -- `ins_compl_win_active` is the one reader -- never
+/// dereferenced, which is the case `winlayer`'s docs reserve for raw pointers.
 static compl_curr_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 static compl_curr_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;

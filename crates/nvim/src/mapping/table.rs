@@ -19,6 +19,7 @@
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -79,23 +80,21 @@ pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
 #[derive(Copy, Clone)]
 pub(crate) enum MapTable {
     Global,
-    Buffer(*mut buf_T),
+    Buffer(Buf),
 }
 
 impl MapTable {
     /// The head of the list this table keeps at `hash`, or of its single
     /// abbreviation list.
     ///
-    /// # Safety
-    /// A `Buffer` must name a live buffer.
-    unsafe fn head(self, hash: usize, abbr: bool) -> *mut mapblock_T {
-        unsafe {
-            match (self, abbr) {
-                (MapTable::Global, true) => FIRST_ABBR.get(),
-                (MapTable::Global, false) => MAPHASH.with(|table| table[hash]),
-                (MapTable::Buffer(buf), true) => (*buf).b_first_abbr,
-                (MapTable::Buffer(buf), false) => (*buf).b_maphash[hash],
-            }
+    /// Safe: the global tables are statics, and a `Buffer` names a live
+    /// buffer by [`Buf`]'s promise.
+    fn head(self, hash: usize, abbr: bool) -> *mut mapblock_T {
+        match (self, abbr) {
+            (MapTable::Global, true) => FIRST_ABBR.get(),
+            (MapTable::Global, false) => MAPHASH.with(|table| table[hash]),
+            (MapTable::Buffer(buf), true) => buf.b_first_abbr,
+            (MapTable::Buffer(buf), false) => buf.b_maphash[hash],
         }
     }
 }
@@ -171,7 +170,7 @@ pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
 /// Every pointer argument must be live, and `keys` NUL-terminated.
 #[allow(clippy::too_many_arguments)] // upstream's; the caller has no struct to pass
 pub(crate) unsafe fn map_add(
-    buf: *mut buf_T,
+    buf: Buf,
     map_table: *mut *mut mapblock_T,
     abbr_table: *mut *mut mapblock_T,
     keys: *const c_char,
@@ -183,6 +182,10 @@ pub(crate) unsafe fn map_add(
     lnum: linenr_T,
     simplified: bool,
 ) -> *mut mapblock_T {
+    // The buffer's tables are reached through the one raw pointer, not
+    // through `Buf`'s `DerefMut`: `map_table` already points into
+    // `b_maphash`, and a fresh `&mut buf_T` would invalidate it.
+    let buf = buf.raw();
     unsafe {
         let mp: *mut mapblock_T = xcalloc(1, size_of::<mapblock_T>()).cast();
 
@@ -237,8 +240,12 @@ pub(crate) unsafe fn map_add(
 /// to another bucket.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn map_clear_mode(buf: *mut buf_T, mode: c_int, local: bool, abbr: bool) {
+/// The lists this walks must not be reached from anywhere else while it
+/// runs.
+pub unsafe fn map_clear_mode(buf: Buf, mode: c_int, local: bool, abbr: bool) {
+    // As in [`map_add`]: `mpp` points into `b_maphash`, so the tables are
+    // reached through the one raw pointer rather than through `DerefMut`.
+    let buf = buf.raw();
     unsafe {
         for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
             let mut mpp: *mut *mut mapblock_T = match (local, abbr) {
@@ -337,7 +344,7 @@ pub(crate) unsafe fn map_to_exists(
 pub unsafe fn map_to_exists_mode(rhs: *const c_char, mode: c_int, abbr: bool) -> bool {
     unsafe {
         // Do it twice: once for global maps and once for local maps.
-        for table in [MapTable::Global, MapTable::Buffer(curbuf.get())] {
+        for table in [MapTable::Global, MapTable::Buffer(Buf::current())] {
             let found = map_walk(table, abbr, |mp| {
                 ((*mp).m_mode & mode != 0 && !strstr((*mp).m_str, rhs).is_null()).then_some(())
             });
@@ -380,7 +387,7 @@ pub(crate) unsafe fn check_map(
     unsafe {
         let len = strlen(keys) as c_int;
         for (local, table) in [
-            (true, MapTable::Buffer(curbuf.get())),
+            (true, MapTable::Buffer(Buf::current())),
             (false, MapTable::Global),
         ] {
             let found = map_walk(table, abbr, |mp| {

@@ -117,6 +117,7 @@ mod write {
     use neovim::types::buf_T;
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
+    use neovim::winlayer::Buf;
 
     use crate::support::{Editor, editor_lock};
 
@@ -172,7 +173,7 @@ mod write {
                 old_curbuf,
             };
             // SAFETY: the buffer is live and `hash` is `UNDO_HASH_SIZE` long.
-            unsafe { u_compute_hash(&raw mut *fixture.buf, fixture.hash.as_mut_ptr()) };
+            unsafe { u_compute_hash(Buf::new(&raw mut *fixture.buf), fixture.hash.as_mut_ptr()) };
             fixture
         }
 
@@ -206,7 +207,14 @@ mod write {
             let ptr = name.as_ref().map_or(std::ptr::null(), |n| n.as_ptr());
             // SAFETY: the buffer and hash are the fixture's, and `ptr` is
             // either NULL or a NUL-terminated name alive for the call.
-            unsafe { u_write_undo(ptr, forceit, &raw mut *self.buf, self.hash.as_mut_ptr()) };
+            unsafe {
+                u_write_undo(
+                    ptr,
+                    forceit,
+                    Buf::new(&raw mut *self.buf),
+                    self.hash.as_mut_ptr(),
+                )
+            };
         }
     }
 

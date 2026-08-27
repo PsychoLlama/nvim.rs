@@ -219,7 +219,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             let prev_col = unsafe { (*end_insert_pos).col };
 
             cur_win().w_cursor = unsafe { *end_insert_pos };
-            unsafe { check_cursor_col(curwin.get()) }; // make sure it is not past the line
+            check_cursor_col(unsafe { Win::current() }); // make sure it is not past the line
             loop {
                 if char_at_cursor() == NUL && cur_win().w_cursor.col > 0 {
                     cur_win().w_cursor.col -= 1;
@@ -273,11 +273,12 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
 pub(crate) unsafe fn ins_apply_autocmds(event: event_T) -> c_int {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
-    let tick = unsafe { buf_get_changedtick(curbuf.get()) };
+    let tick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
     let none = ::core::ptr::null_mut();
     let r = unsafe { apply_autocmds(event, none, none, false, curbuf.get()) } as c_int;
 
-    if event != EVENT_INSERTLEAVE && tick != unsafe { buf_get_changedtick(curbuf.get()) } {
+    if event != EVENT_INSERTLEAVE && tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
+    {
         u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
     }
     r

@@ -18,7 +18,7 @@ use crate::drawscreen::{setcursor, update_screen};
 use crate::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
-use crate::ex_getln::{cmdline_overstrike, get_cmdline_info};
+use crate::ex_getln::cmdline_overstrike;
 use crate::getchar::{
     check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, typeahead, using_script,
     vpeekc,
@@ -36,9 +36,10 @@ use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
 use crate::types::{
-    Direction, NUL, ProcType, VimState, hashitem_T, hashtab_T, save_v_event_T, uint8_t, win_T,
+    Direction, NUL, ProcType, VimState, hashitem_T, hashtab_T, save_v_event_T, uint8_t,
 };
 use crate::ui::ui_flush;
+use crate::winlayer::{Cc, Win};
 
 pub const kProcTypePty: ProcType = 1;
 pub const kDirectionNotSet: Direction = 0;
@@ -94,11 +95,8 @@ pub unsafe fn state_enter(s: *mut VimState) {
             if key == K_EVENT {
                 // The queue is about to run arbitrary code, so anything the
                 // key-reading side was in the middle of has to be settled.
-                // SAFETY: the editor is initialized.
-                unsafe {
-                    check_end_reg_executing(true);
-                    may_sync_undo();
-                }
+                check_end_reg_executing(true);
+                may_sync_undo();
             }
             let mut keyname_buf;
             let keyname = if key == K_EVENT {
@@ -189,10 +187,7 @@ pub unsafe fn state_handle_k_event() {
 }
 
 /// Whether the cursor may sit where there is no character, in `wp`.
-///
-/// # Safety
-/// `wp` must point at a live window.
-pub unsafe fn virtual_active(wp: *mut win_T) -> bool {
+pub fn virtual_active(wp: Win) -> bool {
     // Inside an operator, the operator's own answer stands.
     if let Some(active) = virtual_op.get() {
         return active;
@@ -200,8 +195,7 @@ pub unsafe fn virtual_active(wp: *mut win_T) -> bool {
     if State.get() & MODE_TERMINAL != 0 {
         return true;
     }
-    // SAFETY: the caller's window.
-    let flags = unsafe { get_ve_flags(wp) };
+    let flags = get_ve_flags(wp);
     ve_flags_allow(flags, State.get(), visual_active(), visual_mode().raw())
 }
 
@@ -410,8 +404,7 @@ pub unsafe fn get_mode() -> ModeName {
     let in_cmdline = state & MODE_CMDLINE != 0;
     mode_name(&ModeInputs {
         state,
-        // SAFETY: the editor is initialized, so the command-line state is live.
-        cmdline_one_key: in_cmdline && unsafe { (*get_cmdline_info()).one_key },
+        cmdline_one_key: in_cmdline && Cc::current().one_key(),
         cmdline_overstrike: in_cmdline && cmdline_overstrike(),
         exmode_active: exmode_active.get(),
         ins_compl_active: ins_compl_active(),

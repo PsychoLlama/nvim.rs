@@ -75,6 +75,7 @@ use crate::types::{
     CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL,
     cmdidx_T, cstack_T, exarg_T, size_t, uint8_t,
 };
+use crate::winlayer::Win;
 use ::libc::{strcpy, strlen};
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
@@ -407,8 +408,8 @@ pub(crate) unsafe fn do_one_cmd(
                 && global_busy.get() == 0
                 && ea.addr_type == CmdAddr::Lines
             {
-                has_folding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
-                has_folding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
+                has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
+                has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
             }
 
             // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line

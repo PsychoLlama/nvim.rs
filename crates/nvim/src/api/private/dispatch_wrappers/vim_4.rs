@@ -87,8 +87,7 @@ pub unsafe fn handle_nvim_set_current_line(
         wrong_type(error, 1, c"nvim_set_current_line", c"String");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }

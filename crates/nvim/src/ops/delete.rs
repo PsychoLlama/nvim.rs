@@ -266,8 +266,8 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
     }
 
     let (lnum, col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
-    unsafe { check_cursor_col(curwin.get()) };
-    unsafe { changed_lines(curbuf.get(), lnum, col, oap.end.lnum + 1, 0, true) };
+    check_cursor_col(unsafe { Win::current() });
+    changed_lines(cur_buf(), lnum, col, oap.end.lnum + 1, 0, true);
     // No whole lines were deleted, so `msgmore` must not report any.
     oap.line_count = 0;
     Ok(())
@@ -287,7 +287,7 @@ fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
         unsafe { del_lines(oap.line_count, true) };
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         // `U` is not possible after `dd`.
-        unsafe { u_clearline(curbuf.get()) };
+        u_clearline(cur_buf());
         return Ok(());
     }
 
@@ -313,7 +313,7 @@ fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
     unsafe { truncate_line(0) };
     if oap.line_count > 1 {
         // `U` is not possible after `2cc`.
-        unsafe { u_clearline(curbuf.get()) };
+        u_clearline(cur_buf());
     }
     Ok(())
 }
@@ -449,8 +449,8 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
     let startpos = cur_win().w_cursor;
     let (lnum, col) = (startpos.lnum, startpos.col);
-    let buf = curbuf.get();
-    let spanned = unsafe { get_region_bytecount(buf, lnum, oap.end.lnum, col, oap.end.col) };
+    let buf = cur_buf();
+    let spanned = get_region_bytecount(buf, lnum, oap.end.lnum, col, oap.end.col);
     let deleted_bytes = spanned + bcount_t::from(oap.inclusive);
 
     // From the cursor to the end of the line.

@@ -78,7 +78,7 @@ pub(crate) unsafe fn prepare_line(
         }
 
         s.bg_attr = win_bg_attr(wp);
-        s.diff_state(wlv, wp);
+        s.diff_state(wlv, Win::new(wp));
         s.filler_lines(wlv, wp);
         s.cursorline(wlv, wp);
         s.signs_and_statuscolumn(wlv, wp);
@@ -153,7 +153,7 @@ pub(crate) unsafe fn prepare_line(
 
         // Insert-mode completion highlights the text it inserted.
         if State.get() & MODE_INSERT != 0
-            && ins_compl_win_active(wp)
+            && ins_compl_win_active(Win::new(wp))
             && (s.in_curline || ins_compl_lnum_in_range(lnum))
         {
             s.area_highlighting = true;
@@ -168,7 +168,7 @@ pub(crate) unsafe fn prepare_line(
             s.extra_check = true;
         }
         s.may_have_inline_virt =
-            !s.has_foldtext && buf_meta_total((*wp).w_buffer, kMTMetaInline) > 0;
+            !s.has_foldtext && buf_meta_total(Win::new(wp).buffer(), kMTMetaInline) > 0;
 
         s
     }
@@ -317,7 +317,7 @@ impl LineSetup {
                         wlv.fromcol = 0;
                     } else {
                         getvvcol(
-                            wp,
+                            Win::new(wp),
                             &raw mut top,
                             &raw mut wlv.fromcol,
                             ::core::ptr::null_mut(),
@@ -344,7 +344,7 @@ impl LineSetup {
                         let mut pos = bot;
                         if *p_sel.get() == b'e' as ::core::ffi::c_char {
                             getvvcol(
-                                wp,
+                                Win::new(wp),
                                 &raw mut pos,
                                 &raw mut wlv.tocol,
                                 ::core::ptr::null_mut(),
@@ -352,7 +352,7 @@ impl LineSetup {
                             );
                         } else {
                             getvvcol(
-                                wp,
+                                Win::new(wp),
                                 &raw mut pos,
                                 ::core::ptr::null_mut(),
                                 ::core::ptr::null_mut(),
@@ -390,7 +390,7 @@ impl LineSetup {
         unsafe {
             if lnum == (*curwin.get()).w_cursor.lnum {
                 getvcol(
-                    curwin.get(),
+                    Win::new(curwin.get()),
                     &raw mut (*curwin.get()).w_cursor,
                     &raw mut wlv.fromcol,
                     ::core::ptr::null_mut(),
@@ -406,7 +406,7 @@ impl LineSetup {
                     coladd: 0,
                 };
                 getvcol(
-                    curwin.get(),
+                    Win::new(curwin.get()),
                     &raw mut pos,
                     &raw mut wlv.tocol,
                     ::core::ptr::null_mut(),
@@ -427,9 +427,9 @@ impl LineSetup {
     /// and which diff highlight its text takes.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn diff_state(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
-        // SAFETY: the caller's window.
+    /// `self.line_changes` must be writable.
+    unsafe fn diff_state(&mut self, wlv: &mut WinLineVars, wp: Win) {
+        // SAFETY: `linestatus` and `line_changes` are writable.
         unsafe {
             let mut linestatus = 0;
             wlv.filler_lines = diff_check_with_linestatus(wp, wlv.lnum, &raw mut linestatus);
@@ -569,7 +569,7 @@ impl LineSetup {
             }
 
             // The quickfix window highlights the entry the cursor is on.
-            if bt_quickfix((*wp).w_buffer) && qf_current_entry(wp) == wlv.lnum {
+            if bt_quickfix((*wp).w_buffer) && qf_current_entry(Win::new(wp)) == wlv.lnum {
                 wlv.line_attr = win_hl_attr(wp, HLF_QFL);
             }
             if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
@@ -725,7 +725,7 @@ impl LineSetup {
             let mut prev_ptr = self.ptr;
             let mut cs = CharSize { width: 0, head: 0 };
             let mut csarg = CharsizeArg::default();
-            let cstype = init_charsize_arg(&mut csarg, wp, wlv.lnum, self.line);
+            let cstype = init_charsize_arg(&mut csarg, Win::new(wp), wlv.lnum, self.line);
             csarg.max_head_vcol = start_vcol;
             let mut vcol = wlv.vcol;
             let mut ci = utf_ptr2str_char_info(self.ptr);
@@ -751,7 +751,7 @@ impl LineSetup {
             if wlv.vcol < start_vcol
                 && ((*wp).w_onebuf_opt.wo_cuc != 0
                     || !wlv.color_cols.is_null()
-                    || virtual_active(wp)
+                    || virtual_active(Win::new(wp))
                     || (visual_active() && (*wp).w_buffer == (*curwin.get()).w_buffer)
                     || self.has_fold)
             {

@@ -84,7 +84,7 @@ pub(crate) unsafe fn set_buffer_lines(
                     if u_savesub(lnum) == OK && ml_replace(lnum, line, true) == OK {
                         inserted_bytes(lnum, 0, old_len, len_as_int(strlen(line)));
                         if is_curbuf && lnum == Win::current().w_cursor.lnum {
-                            check_cursor_col(curwin.get());
+                            check_cursor_col(Win::current());
                         }
                         (*rettv).vval.v_number = 0;
                     }
@@ -112,8 +112,8 @@ pub(crate) unsafe fn set_buffer_lines(
                         wp.w_cursor.lnum += added;
                     }
                 }
-                check_cursor_col(curwin.get());
-                update_topline(curwin.get());
+                check_cursor_col(Win::current());
+                update_topline(Win::current());
             }
         }
         if !is_curbuf {
@@ -333,7 +333,7 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                     wp.w_cursor.lnum = line_count;
                 }
             }
-            check_cursor_col(curwin.get());
+            check_cursor_col(Win::current());
             deleted_lines_mark(first, count);
             rettv.vval.v_number = 0;
         }

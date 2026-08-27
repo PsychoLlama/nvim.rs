@@ -54,20 +54,20 @@ use crate::winlayer::{Frame, TabPage, Win, tabs, windows};
 
 /// How many screen lines line `lnum` takes in `wp`.
 fn plines(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
-    // SAFETY: a live window and a line of its buffer.
-    unsafe { plines_win(wp.raw(), lnum, limit_winheight) }
+    // SAFETY: a line of the window's own buffer.
+    unsafe { plines_win(wp, lnum, limit_winheight) }
 }
 
 /// [`plines`] up to and including column `col` of the line.
 fn plines_to_col(wp: Win, lnum: linenr_T, col: ::core::ffi::c_long) -> c_int {
-    // SAFETY: a live window and a position in its buffer.
-    unsafe { plines_win_col(wp.raw(), lnum, col) }
+    // SAFETY: a position in the window's own buffer.
+    unsafe { plines_win_col(wp, lnum, col) }
 }
 
 /// [`plines`] without the virtual lines a diff fills the window with.
 fn plines_nofill(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
-    // SAFETY: a live window and a line of its buffer.
-    unsafe { plines_win_nofill(wp.raw(), lnum, limit_winheight) }
+    // SAFETY: a line of the window's own buffer.
+    unsafe { plines_win_nofill(wp, lnum, limit_winheight) }
 }
 
 /// Columns of `wp` the text does not start in: `'number'`, signs and folds.
@@ -79,31 +79,31 @@ fn col_off(wp: Win) -> c_int {
 /// The extra indent a wrapped line gets from `'cpoptions'`'s `n` flag.
 fn col_off2(wp: Win) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_col_off2(wp.raw()) }
+    win_col_off2(wp)
 }
 
 /// Forget everything cached below the window's last drawn line.
 fn invalidate_botline(wp: Win) {
     // SAFETY: a live window.
-    unsafe { invalidate_botline_win(wp.raw()) };
+    invalidate_botline_win(wp);
 }
 
 /// Recompute the window's last drawn line.
 fn validate_botline(wp: Win) {
     // SAFETY: a live window.
-    unsafe { validate_botline_win(wp.raw()) };
+    validate_botline_win(wp);
 }
 
 /// Move the cursor `n` lines down (or up, for [`cursor_up`]) without touching
 /// the view, as `'splitkeep'` needs to measure it.
 fn cursor_down(wp: Win, n: c_int) {
     // SAFETY: a live window.
-    unsafe { cursor_down_inner(wp.raw(), n, false) };
+    cursor_down_inner(wp, n, false);
 }
 
 fn cursor_up(wp: Win, n: linenr_T) {
     // SAFETY: a live window.
-    unsafe { cursor_up_inner(wp.raw(), n, false) };
+    cursor_up_inner(wp, n, false);
 }
 
 /// The effective `'scrolloff'` for `wp`.
@@ -327,12 +327,12 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
             }
         }
         // SAFETY: a live window and a line of its buffer.
-        unsafe { set_topline(wp.raw(), lnum) };
+        set_topline(wp, lnum);
     }
 
     if wp.is_current() {
         // SAFETY: a live window; validates `w_wrow`.
-        unsafe { curs_columns(wp.raw(), 0) };
+        curs_columns(wp, 0);
     }
     if prev_height > 0 {
         wp.w_prev_fraction_row = wp.w_wrow;
@@ -388,11 +388,11 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
         wp.w_lines_valid = 0;
         if valid_cursor {
             // SAFETY: a live window.
-            unsafe { changed_line_abv_curs_win(wp.raw()) };
+            changed_line_abv_curs_win(wp);
             invalidate_botline(wp);
             if wp.is_current() && (keeps_cursor || wp.w_floating) {
                 // SAFETY: a live window.
-                unsafe { curs_columns(wp.raw(), 1) };
+                curs_columns(wp, 1);
             }
         }
         wp.redraw_later(UPD_NOT_VALID);
@@ -403,8 +403,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
     }
 
     // SAFETY: a live window; both read its border configuration.
-    let (border_height, border_width) =
-        unsafe { (win_border_height(wp.raw()), win_border_width(wp.raw())) };
+    let (border_height, border_width) = (win_border_height(wp), win_border_width(wp));
     let float_stl = if wp.w_floating && wp.w_status_height != 0 {
         STATUS_HEIGHT as c_int
     } else {

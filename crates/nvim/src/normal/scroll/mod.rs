@@ -35,9 +35,10 @@ pub(crate) use self::zet::*;
 /// buffer, which is what 'scrollbind' has to keep equal between windows: two
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
-pub(crate) unsafe fn get_vtopline(wp: *mut win_T) -> c_int {
-    // SAFETY: `wp` is a live window.
-    unsafe { plines_m_win_fill(wp, 1, (*wp).w_topline) - (*wp).w_topfill }
+pub(crate) fn get_vtopline(wp: Win) -> c_int {
+    // SAFETY: a live window, by `Win`'s contract, which is the whole of what
+    // `plines_m_win_fill` asks for.
+    unsafe { plines_m_win_fill(wp, 1, wp.w_topline) - wp.w_topfill }
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
@@ -53,7 +54,7 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
 
     // SAFETY: reads the current window and the remembered previous one.
     let mut win = cur_win();
-    let vtopline = unsafe { get_vtopline(win.raw()) };
+    let vtopline = get_vtopline(win);
     if check && win.w_onebuf_opt.wo_scb != 0 {
         if did_syncbind.get() {
             // `:syncbind` has just set every bound window itself.
@@ -106,36 +107,41 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
     // tab page's windows however it reads.
     let mut wp = firstwin.get();
     while !wp.is_null() {
+        // SAFETY: `firstwin` and every `w_next` from it is a live window;
+        // nothing in this body can free one.
+        let mut win = unsafe { Win::new(wp) };
         curwin.set(wp);
-        curbuf.set(unsafe { (*wp).w_buffer });
-        if wp != old_curwin && unsafe { (*wp).w_onebuf_opt.wo_scb } != 0 {
+        curbuf.set(win.w_buffer);
+        if wp != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
             if want_ver {
                 if unsafe { (*old_curwin).w_onebuf_opt.wo_diff } != 0
-                    && unsafe { (*wp).w_onebuf_opt.wo_diff } != 0
+                    && win.w_onebuf_opt.wo_diff != 0
                 {
-                    unsafe { diff_set_topline(old_curwin, wp) };
+                    // SAFETY: both windows are live for this walk.
+                    diff_set_topline(unsafe { Win::new(old_curwin) }, win);
                 } else {
                     // The bound position may run past the end of this
                     // window's buffer; the *position* keeps the overshoot
                     // so that scrolling back lines up again.
-                    unsafe { (*wp).w_scbind_pos += vtopline_diff as c_int };
-                    let curr_vtopline = unsafe { get_vtopline(wp) };
+                    win.w_scbind_pos += vtopline_diff as c_int;
+                    // SAFETY: a live window of the walk above.
+                    let curr_vtopline = get_vtopline(win);
                     let max_vtopline = curr_vtopline
-                        + unsafe { (*wp).w_topfill }
+                        + win.w_topfill
                         + unsafe {
-                            plines_m_win_fill(wp, (*wp).w_topline + 1, cur_buf().b_ml.ml_line_count)
+                            plines_m_win_fill(win, win.w_topline + 1, cur_buf().b_ml.ml_line_count)
                         };
-                    let new_vtopline = unsafe { (*wp).w_scbind_pos.min(max_vtopline).max(1) };
+                    let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;
                     if y > 0 {
-                        unsafe { scrollup(wp, y as linenr_T, false) };
+                        scrollup(win, y as linenr_T, false);
                     } else {
-                        unsafe { scrolldown(wp, -(y as linenr_T), false) };
+                        scrolldown(win, -(y as linenr_T), false);
                     }
                 }
                 unsafe { redraw_later(wp, UPD_VALID) };
-                unsafe { cursor_correct(wp) };
-                unsafe { (*wp).w_redr_status = true };
+                cursor_correct(win);
+                win.w_redr_status = true;
             }
             if want_hor {
                 unsafe { set_leftcol(tgt_leftcol) };

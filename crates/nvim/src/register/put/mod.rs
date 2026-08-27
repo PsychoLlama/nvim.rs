@@ -378,7 +378,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
     let orig_start = cur_buf().b_op_start;
     let orig_end = cur_buf().b_op_end;
     // SAFETY: a live window.
-    let ve_flags = unsafe { get_ve_flags(curwin.get()) };
+    let ve_flags = get_ve_flags(cur_win());
 
     // Remove any preinserted completion text (vim/vim#19329).
     // SAFETY: main thread; the completion state is its own.

@@ -29,7 +29,7 @@ mod tags;
 
 use crate::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
-use crate::buffer::{bt_help, buflist_findnr, set_buflisted, wipe_buffer};
+use crate::buffer::{bt_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
@@ -235,11 +235,11 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
             // Delete the empty buffer if we are not using it. Careful:
             // autocommands may have jumped to another window, so check that
             // the buffer is not in one.
-            if opened.empty_fnum != 0 && (*curbuf.get()).handle != opened.empty_fnum {
-                let buf = buflist_findnr(opened.empty_fnum);
-                if !buf.is_null() && (*buf).b_nwindows == 0 {
-                    wipe_buffer(buf, true);
-                }
+            if opened.empty_fnum != 0
+                && (*curbuf.get()).handle != opened.empty_fnum
+                && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
+            {
+                wipe_buffer(buf, true);
             }
             // Keep the previous alternate file.
             if opened.alt_fnum != 0

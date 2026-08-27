@@ -39,11 +39,11 @@ pub(crate) struct AltWin {
 pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
     let mut win_tp = tp.unwrap_or_else(cur_tab);
     let (wp, dir) = if win.w_floating {
-        // SAFETY: a live window and tab page.
-        let alt = unsafe { win_float_find_altwin(win.raw(), raw_tab(tp)) };
-        // SAFETY: the window that takes a float's place is live, or null when
-        // there is none.
-        (unsafe { Win::from_raw(alt) }, 'h' as c_int)
+        // SAFETY: `win` is only compared, never read.
+        (
+            unsafe { win_float_find_altwin(win.raw(), tp) },
+            'h' as c_int,
+        )
     } else {
         let frp = win.frame();
         let (wp, dir) = remove(win, tp, None);

@@ -46,6 +46,7 @@ use crate::window::{
     close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
     valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
 };
+use crate::winlayer::Buf;
 
 /// The key a command-line window sends back to close itself, with the
 /// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
@@ -344,14 +345,14 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) 
 
         let buf = (*win).w_buffer;
         // Only the last window on a changed buffer has to ask.
-        let mut need_hide = buf_is_changed(buf) && (*buf).b_nwindows <= 1;
+        let mut need_hide = buf_is_changed(Buf::new(buf)) && (*buf).b_nwindows <= 1;
         if need_hide && !buf_hide(buf) && forceit == 0 {
             if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
                 let mut bufref: bufref_T = core::mem::zeroed();
                 set_bufref(&raw mut bufref, buf);
                 dialog_changed(buf, false);
                 // The dialog may have wiped the buffer, or written it.
-                if bufref_valid(&raw mut bufref) && buf_is_changed(buf) {
+                if bufref_valid(&raw mut bufref) && buf_is_changed(Buf::new(buf)) {
                     return;
                 }
                 need_hide = false;

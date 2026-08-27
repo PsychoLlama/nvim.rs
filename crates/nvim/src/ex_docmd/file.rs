@@ -58,6 +58,7 @@ use crate::undo::{
 };
 use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
 use crate::winfloat::win_float_remove;
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 
 /// Would editing `fnum`/`ffname` mean leaving the current buffer?
@@ -210,7 +211,7 @@ pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
         );
         if !unsaved
             && (*(*eap).arg as c_int == NUL
-                || setfname(curbuf.get(), (*eap).arg, ptr::null_mut(), true) == OK)
+                || setfname(Buf::current(), (*eap).arg, ptr::null_mut(), true) == OK)
         {
             ml_recover(true);
         }
@@ -456,7 +457,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             // A `:split` with no file name: the window is already there.
             run_ecmd_cmd(eap);
             let was_invalid = (*curwin.get()).w_arg_idx_invalid;
-            check_arg_idx(curwin.get());
+            check_arg_idx(Win::current());
             if was_invalid != (*curwin.get()).w_arg_idx_invalid {
                 maketitle();
             }
@@ -568,11 +569,11 @@ pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
     unsafe {
         let mut hash: [uint8_t; 32] = [0; 32];
-        u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
+        u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
         u_write_undo(
             (*eap).arg,
             (*eap).forceit != 0,
-            curbuf.get(),
+            Buf::current(),
             &raw mut hash as *mut uint8_t,
         );
     }
@@ -582,7 +583,7 @@ pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
     unsafe {
         let mut hash: [uint8_t; 32] = [0; 32];
-        u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
+        u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
         u_read_undo((*eap).arg, &raw mut hash as *mut uint8_t, ptr::null());
     }
 }

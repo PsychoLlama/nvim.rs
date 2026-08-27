@@ -9,11 +9,32 @@
 #[allow(unused_imports)]
 use super::*;
 
+pub static keymap_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
+    type K = KeyDict_keymap;
+    [
+        key(c"desc", offset_of!(K, desc), TAG_STRING, 1),
+        key(c"expr", offset_of!(K, expr), TAG_BOOLEAN, 2),
+        key(c"script", offset_of!(K, script), TAG_BOOLEAN, 3),
+        key(c"silent", offset_of!(K, silent), TAG_BOOLEAN, 4),
+        key(c"unique", offset_of!(K, unique), TAG_BOOLEAN, 5),
+        key(c"nowait", offset_of!(K, nowait), TAG_BOOLEAN, 6),
+        key(c"noremap", offset_of!(K, noremap), TAG_BOOLEAN, 7),
+        key(c"callback", offset_of!(K, callback), TAG_LUAREF, 8),
+        key(
+            c"replace_keycodes",
+            offset_of!(K, replace_keycodes),
+            TAG_BOOLEAN,
+            9,
+        ),
+        END,
+    ]
+});
+
 /// Look a key up in [`keymap_table`].
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_keymap_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_keymap_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"desc" => 0,
@@ -25,9 +46,9 @@ pub unsafe fn key_dict_keymap_get_field(str: *const c_char, len: size_t) -> *mut
         b"noremap" => 6,
         b"callback" => 7,
         b"replace_keycodes" => 8,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = keymap_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = keymap_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -40,13 +61,13 @@ pub static ns_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_ns_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_ns_opts_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"wins" => 0,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = ns_opts_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = ns_opts_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -63,14 +84,14 @@ pub static open_term_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_open_term_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_open_term_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"on_input" => 0,
         b"force_crlf" => 1,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = open_term_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = open_term_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -89,16 +110,16 @@ pub static option_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_option_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_option_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
         b"win" => 1,
         b"scope" => 2,
         b"filetype" => 3,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = option_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = option_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -128,7 +149,7 @@ pub static redraw_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_redraw_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_redraw_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -141,9 +162,9 @@ pub unsafe fn key_dict_redraw_get_field(str: *const c_char, len: size_t) -> *mut
         b"tabline" => 7,
         b"statusline" => 8,
         b"statuscolumn" => 9,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = redraw_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = redraw_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -160,14 +181,14 @@ pub static runtime_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_runtime_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_runtime_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"is_lua" => 0,
         b"do_source" => 1,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = runtime_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = runtime_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -204,7 +225,7 @@ pub static set_decoration_provider_table: ConstTable<[KeySetLink; 10]> = ConstTa
 pub unsafe fn key_dict_set_decoration_provider_get_field(
     str: *const c_char,
     len: size_t,
-) -> *mut KeySetLink {
+) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"on_buf" => 0,
@@ -216,9 +237,9 @@ pub unsafe fn key_dict_set_decoration_provider_get_field(
         b"_on_hl_def" => 6,
         b"_on_spell_nav" => 7,
         b"_on_conceal_line" => 8,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = set_decoration_provider_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = set_decoration_provider_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -332,7 +353,7 @@ pub static set_extmark_table: ConstTable<[KeySetLink; 36]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_set_extmark_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_set_extmark_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"id" => 0,
@@ -370,9 +391,9 @@ pub unsafe fn key_dict_set_extmark_get_field(str: *const c_char, len: size_t) ->
         b"cursorline_hl_group" => 32,
         b"virt_lines_overflow" => 33,
         b"virt_text_repeat_linebreak" => 34,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = set_extmark_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = set_extmark_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -388,13 +409,13 @@ pub static tabpage_config_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
 pub unsafe fn key_dict_tabpage_config_get_field(
     str: *const c_char,
     len: size_t,
-) -> *mut KeySetLink {
+) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"after" => 0,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = tabpage_config_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = tabpage_config_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -421,7 +442,10 @@ pub static user_command_table: ConstTable<[KeySetLink; 13]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_user_command_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_user_command_get_field(
+    str: *const c_char,
+    len: size_t,
+) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"bar" => 0,
@@ -436,9 +460,9 @@ pub unsafe fn key_dict_user_command_get_field(str: *const c_char, len: size_t) -
         b"complete" => 9,
         b"register" => 10,
         b"keepscript" => 11,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = user_command_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = user_command_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -482,7 +506,7 @@ pub static win_config_table: ConstTable<[KeySetLink; 25]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_win_config_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_win_config_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"col" => 0,
@@ -509,9 +533,9 @@ pub unsafe fn key_dict_win_config_get_field(str: *const c_char, len: size_t) -> 
         b"title_pos" => 21,
         b"footer_pos" => 22,
         b"_cmdline_offset" => 23,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = win_config_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = win_config_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -534,7 +558,7 @@ pub static win_text_height_table: ConstTable<[KeySetLink; 6]> = ConstTable::new(
 pub unsafe fn key_dict_win_text_height_get_field(
     str: *const c_char,
     len: size_t,
-) -> *mut KeySetLink {
+) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"end_row" => 0,
@@ -542,9 +566,9 @@ pub unsafe fn key_dict_win_text_height_get_field(
         b"start_row" => 2,
         b"max_height" => 3,
         b"start_vcol" => 4,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = win_text_height_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = win_text_height_table.as_ptr();
     table.wrapping_add(index)
 }
 
@@ -606,7 +630,7 @@ pub static xdl_diff_table: ConstTable<[KeySetLink; 13]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"ctxlen" => 0,
@@ -621,8 +645,8 @@ pub unsafe fn key_dict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *m
         b"ignore_blank_lines" => 9,
         b"ignore_whitespace_change" => 10,
         b"ignore_whitespace_change_at_eol" => 11,
-        _ => return ptr::null_mut(),
+        _ => return ptr::null(),
     };
-    let table: *mut KeySetLink = xdl_diff_table.as_ptr().cast_mut();
+    let table: *const KeySetLink = xdl_diff_table.as_ptr();
     table.wrapping_add(index)
 }

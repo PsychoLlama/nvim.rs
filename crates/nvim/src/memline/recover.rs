@@ -20,6 +20,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint};
 use super::*;
 use crate::highlight_group::HLF_E;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
+use crate::winlayer::{Buf, Win};
 
 /// Try to recover `curbuf` from its swap file.
 ///
@@ -201,7 +202,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // from what the swap file says it belongs to.
             if directly {
                 expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL);
-                if setfname(curbuf.get(), path.as_mut_ptr(), core::ptr::null_mut(), true) == FAIL {
+                if setfname(cur_buf(), path.as_mut_ptr(), core::ptr::null_mut(), true) == FAIL {
                     break 'theend;
                 }
             }
@@ -317,7 +318,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 );
                 xfree(b0_fenc.cast());
             }
-            unchanged(curbuf.get(), true, true);
+            unchanged(cur_buf(), true, true);
 
             serious_error = false;
             let Ok((lnum, error)) = recover_lines(buf, mfp, &mut hp) else {
@@ -332,7 +333,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 // Recovering an empty file gives two lines of which the first
                 // is empty; that is not a modification.
                 if !((*curbuf.get()).b_ml.ml_line_count == 2 && *ml_get(1) as c_int == NUL) {
-                    changed_internal(curbuf.get());
+                    changed_internal(cur_buf());
                     buf_inc_changedtick(curbuf.get());
                 }
             } else {
@@ -343,7 +344,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                     let same = strcmp(p, ml_get(idx + lnum)) == 0;
                     xfree(p.cast());
                     if !same {
-                        changed_internal(curbuf.get());
+                        changed_internal(cur_buf());
                         buf_inc_changedtick(curbuf.get());
                         break;
                     }
@@ -358,7 +359,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 ml_delete((*curbuf.get()).b_ml.ml_line_count);
             }
             (*curbuf.get()).b_flags |= BufFlags::RECOVERED;
-            check_cursor(curwin.get());
+            check_cursor(Win::current());
 
             msg_ext_skip_flush.set(!got_int.get());
             recoverymode.set(false);
@@ -793,7 +794,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                 ml_flush_line(buf, false); // flush the buffered line
                 ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
 
-                if buf_is_changed(buf)
+                if buf_is_changed(Buf::new(buf))
                     && check_file != 0
                     && mf_need_trans((*buf).b_ml.ml_mfp)
                     && !(*buf).b_ffname.is_null()
@@ -821,7 +822,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                             MFS_STOP as c_int
                         } else {
                             0
-                        }) | (if do_fsync && buf_is_changed(buf) {
+                        }) | (if do_fsync && buf_is_changed(Buf::new(buf)) {
                             MFS_FLUSH as c_int
                         } else {
                             0
@@ -901,4 +902,10 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
             }
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

@@ -77,10 +77,8 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
         p_menc.get()
     };
 
-    let mut wp: *mut win_T = ptr::null_mut();
-    if unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
-        wp = curwin.get();
-    }
+    // SAFETY: a command's `cmdidx` is one of the table's.
+    let wp = unsafe { is_loclist_cmd(eap.cmdidx as c_int) }.then(cur_win);
 
     incr_quickfix_busy();
 
@@ -92,7 +90,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
     let qf_title2 = title.as_ptr();
     let res = unsafe { qf_init(wp, efile, errorformat2, newlist2, qf_title2, enc) };
 
-    if !wp.is_null() {
+    if let Some(wp) = wp {
         let Some(loclist) = qf_win_loclist(wp) else {
             qf_busy_end();
             return;
@@ -137,35 +135,36 @@ fn cbuffer_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<*mut buf_T> {
+unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let mut eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     let buf = if unsafe { *eap.arg } as c_int == NUL {
         curbuf.get()
     } else if unsafe { *skipwhite(skipdigits(eap.arg)) } as c_int == NUL {
-        buflist_findnr(unsafe { atoi(eap.arg) })
+        find_buf(unsafe { atoi(eap.arg) }).map_or(ptr::null_mut(), |mut b| b.raw())
     } else {
         ptr::null_mut()
     };
 
-    if buf.is_null() {
+    // SAFETY: `curbuf`/`find_buf` answer a live buffer or null.
+    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
         qf_emsg(&raw const e_invarg as *const c_char);
         return None;
-    }
-    if unsafe { (*buf).b_ml.ml_mfp.is_null() } {
+    };
+    if buf.b_ml.ml_mfp.is_null() {
         qf_emsg(&raw const e_buffer_is_not_loaded as *const c_char);
         return None;
     }
 
     if eap.addr_count == 0 {
         eap.line1 = 1;
-        unsafe { eap.line2 = (*buf).b_ml.ml_line_count };
+        eap.line2 = buf.b_ml.ml_line_count;
     }
     if eap.line1 < 1
-        || eap.line1 > unsafe { (*buf).b_ml.ml_line_count }
+        || eap.line1 > buf.b_ml.ml_line_count
         || eap.line2 < 1
-        || eap.line2 > unsafe { (*buf).b_ml.ml_line_count }
+        || eap.line2 > buf.b_ml.ml_line_count
     {
         qf_emsg(&raw const e_invrange as *const c_char);
         return None;
@@ -192,8 +191,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
         }
     }
 
-    let mut wp: *mut win_T = ptr::null_mut();
-    let qi = qf_cmd_stack_or_alloc(eap, &raw mut wp);
+    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
     let args = unsafe { cbuffer_process_args(eap.raw()) };
     let Some(buf) = args else {
         return;
@@ -202,10 +200,10 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
     // The title names the buffer as well as the command. `qf_init_ext`
     // copies it, so this frame can own it.
     let mut qf_title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
-    if !unsafe { (*buf).b_sfname.is_null() } {
+    if !buf.b_sfname.is_null() {
         let efile = IOSIZE as size_t;
         let fmt = c"%s (%s)".as_ptr();
-        let sfname = unsafe { (*buf).b_sfname };
+        let sfname = buf.b_sfname;
         unsafe { vim_snprintf(title.as_mut_ptr(), efile, fmt, qf_title.as_ptr(), sfname) };
         qf_title[..IOSIZE as usize].copy_from_slice(&title);
     }
@@ -226,7 +224,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
             qi2,
             curlist,
             errorformat2,
-            buf,
+            Some(buf),
             qf_title2,
             errorformat3,
             newlist,
@@ -306,8 +304,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
     // The stack is asked for first, and so allocated for the current
     // window if it had none, even when the value turns out to be
     // unusable.
-    let mut wp: *mut win_T = ptr::null_mut();
-    let qi = qf_cmd_stack_or_alloc(eap, &raw mut wp);
+    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
 
     let usable = unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() }
         || unsafe { (*tv).v_type } == VAR_LIST;
@@ -324,7 +321,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
-    let buf2 = ptr::null_mut();
+    let buf2 = None;
     let errorformat3 = p_efm.get();
     let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
     let enc2 = ptr::null_mut();

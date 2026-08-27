@@ -95,12 +95,12 @@ pub(super) fn spell_isupper(c: c_int) -> bool {
 unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
     let mut len = 0;
     let mut p = word;
-    // SAFETY: the caller guarantees a NUL-terminated string that fits.
-    unsafe {
-        while *p != 0 {
-            out[len] = mb_cptr2char_adv(&raw mut p);
-            len += 1;
-        }
+    // SAFETY: the caller guarantees a NUL-terminated string of at most
+    // `MAXWLEN - 1` characters, so the scan stops at its terminator and
+    // `len` stays inside `out`.
+    while unsafe { *p } != 0 {
+        out[len] = unsafe { mb_cptr2char_adv(&raw mut p) };
+        len += 1;
     }
     out[len] = 0;
     len + 1
@@ -123,17 +123,15 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
     let mut buf = [0 as c_char; MB_MAXCHAR + 1];
     // SAFETY: `buf` holds any single character plus a terminator, the hash
     // key is that NUL-terminated buffer, and the value stored with a key is
-    // the string just past its terminator.
-    unsafe {
-        let len = utf_char2bytes(c, buf.as_mut_ptr());
-        buf[len as usize] = 0;
-        let hi: *mut hashitem_T = hash_find(&raw const slang.sl_map_hash, buf.as_ptr());
-        let key = (*hi).hi_key;
-        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
-            0
-        } else {
-            utf_ptr2char(key.add(strlen(key) as usize + 1))
-        }
+    // the NUL-terminated string just past that key's terminator.
+    let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
+    buf[len as usize] = 0;
+    let hi: *mut hashitem_T = unsafe { hash_find(&raw const slang.sl_map_hash, buf.as_ptr()) };
+    let key = unsafe { (*hi).hi_key };
+    if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
+        0
+    } else {
+        unsafe { utf_ptr2char(key.add(strlen(key) as usize + 1)) }
     }
 }
 
@@ -153,16 +151,15 @@ pub(super) unsafe fn score_wordcount_adj(
     split: bool,
 ) -> c_int {
     // SAFETY: the caller guarantees a NUL-terminated word; the hash table
-    // stores `wordcount_T`s whose key is an inline field at `WC_KEY_OFF`.
-    let count = unsafe {
-        let hi = hash_find(&raw const slang.sl_wordcount, word);
-        let key = (*hi).hi_key;
-        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
-            return score;
-        }
-        let wc = key.sub(WC_KEY_OFF) as *mut wordcount_T;
-        (*wc).wc_count as c_int
-    };
+    // stores `wordcount_T`s whose key is an inline field at `WC_KEY_OFF`,
+    // so stepping back by that offset recovers the record.
+    let hi = unsafe { hash_find(&raw const slang.sl_wordcount, word) };
+    let key = unsafe { (*hi).hi_key };
+    if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
+        return score;
+    }
+    let wc = unsafe { key.sub(WC_KEY_OFF) } as *mut wordcount_T;
+    let count = unsafe { (*wc).wc_count } as c_int;
 
     let bonus = if count < SCORE_THRES2 {
         SCORE_COMMON1
@@ -461,12 +458,8 @@ pub(super) unsafe fn spell_edit_score(
     let mut wbadword = [0; MAXWLEN];
     let mut wgoodword = [0; MAXWLEN];
     // SAFETY: the caller guarantees NUL-terminated words that fit.
-    let (badlen, goodlen) = unsafe {
-        (
-            word_chars(badword, &mut wbadword),
-            word_chars(goodword, &mut wgoodword),
-        )
-    };
+    let badlen = unsafe { word_chars(badword, &mut wbadword) };
+    let goodlen = unsafe { word_chars(goodword, &mut wgoodword) };
 
     // `cnt` is a (badlen + 1) x (goodlen + 1) table addressed column-major,
     // so that a row of it is one character of the bad word against every
@@ -548,10 +541,8 @@ pub(super) unsafe fn spell_edit_score_limit(
     let mut wbadword = [0; MAXWLEN];
     let mut wgoodword = [0; MAXWLEN];
     // SAFETY: the caller guarantees NUL-terminated words that fit.
-    unsafe {
-        word_chars(badword, &mut wbadword);
-        word_chars(goodword, &mut wgoodword);
-    }
+    unsafe { word_chars(badword, &mut wbadword) };
+    unsafe { word_chars(goodword, &mut wgoodword) };
 
     // Room for over three times two edits, which is more than the cutoff
     // can ever leave outstanding.
@@ -718,57 +709,65 @@ pub(super) unsafe fn stp_sal_score(
 
     // SAFETY: the pointers come from the caller's suggestion list and bad
     // word; every buffer below is `MAXWLEN` and every helper is told so.
-    unsafe {
-        let pbad: &SoundBuf = if lendiff >= 0 {
-            badsound
-        } else {
-            // Sound-fold the bad word with the extra characters that the
-            // suggestion covers.
-            spell_casefold(
-                curwin.get(),
-                su.su_badptr,
-                stp.st_orglen,
-                fword.as_mut_ptr(),
-                MAXWLEN as c_int,
-            );
+    let pbad: &SoundBuf = if lendiff >= 0 {
+        badsound
+    } else {
+        // Sound-fold the bad word with the extra characters that the
+        // suggestion covers.
+        //
+        // SAFETY: `su_badptr` points into the line the bad word came from,
+        // of which the suggestion replaces `st_orglen` bytes; `fword` is
+        // `MAXWLEN` bytes, which is the bound handed over.
+        let win = curwin.get();
+        let len = MAXWLEN as c_int;
+        unsafe { spell_casefold(win, su.su_badptr, stp.st_orglen, fword.as_mut_ptr(), len) };
 
-            // Joining two words changes the sound a lot -- "t he" sounds
-            // like "t h" where "the" sounds like "@" -- so drop the space,
-            // unless the good word has one too.
-            if ascii_iswhite(*su.su_badptr.offset(su.su_badlen as isize) as c_int)
-                && *skiptowhite(stp.st_word) == NUL as c_char
-            {
-                let mut p = fword.as_mut_ptr();
-                loop {
-                    p = skiptowhite(p);
-                    if *p == NUL as c_char {
-                        break;
-                    }
-                    // Close the gap over the space in place.
-                    strcpy(p, p.add(1));
+        // Joining two words changes the sound a lot -- "t he" sounds
+        // like "t h" where "the" sounds like "@" -- so drop the space,
+        // unless the good word has one too.
+        //
+        // SAFETY: as above; `st_word` is NUL-terminated, `fword` now is
+        // too, and each `strcpy` copies a NUL-terminated tail down one
+        // byte inside `fword`.
+        if ascii_iswhite(unsafe { *su.su_badptr.offset(su.su_badlen as isize) } as c_int)
+            && unsafe { *skiptowhite(stp.st_word) } == NUL as c_char
+        {
+            let mut p = fword.as_mut_ptr();
+            loop {
+                p = unsafe { skiptowhite(p) };
+                if unsafe { *p } == NUL as c_char {
+                    break;
                 }
+                // Close the gap over the space in place.
+                unsafe { strcpy(p, p.add(1)) };
             }
+        }
 
-            spell_soundfold(slang, fword.as_mut_ptr(), true, badsound2.as_mut_ptr());
-            &badsound2
-        };
+        // SAFETY: `fword` is the NUL-terminated fold just built and
+        // `badsound2` has room for a soundfold.
+        unsafe { spell_soundfold(slang, fword.as_mut_ptr(), true, badsound2.as_mut_ptr()) };
+        &badsound2
+    };
 
-        let pgood = if lendiff > 0 && stp.st_wordlen + lendiff < MAXWLEN as c_int {
-            // Append the part of the bad word the suggestion does not
-            // reach, so that what gets folded is the whole replacement.
-            strcpy(goodword.as_mut_ptr(), stp.st_word);
-            xmemcpyz(
-                goodword.as_mut_ptr().offset(stp.st_wordlen as isize) as *mut _,
-                su.su_badptr.offset((su.su_badlen - lendiff) as isize) as *const _,
-                lendiff as size_t,
-            );
-            goodword.as_mut_ptr()
-        } else {
-            stp.st_word
-        };
+    let pgood = if lendiff > 0 && stp.st_wordlen + lendiff < MAXWLEN as c_int {
+        // Append the part of the bad word the suggestion does not
+        // reach, so that what gets folded is the whole replacement.
+        //
+        // SAFETY: the test above leaves `st_wordlen + lendiff` under
+        // `MAXWLEN`, so both the word and the tail fit in `goodword`, and
+        // the tail really is `lendiff` bytes of the line.
+        unsafe { strcpy(goodword.as_mut_ptr(), stp.st_word) };
+        let tail = unsafe { goodword.as_mut_ptr().offset(stp.st_wordlen as isize) };
+        let rest = unsafe { su.su_badptr.offset((su.su_badlen - lendiff) as isize) };
+        unsafe { xmemcpyz(tail as *mut _, rest as *const _, lendiff as size_t) };
+        goodword.as_mut_ptr()
+    } else {
+        stp.st_word
+    };
 
-        spell_soundfold(slang, pgood, false, goodsound.as_mut_ptr());
+    // SAFETY: `pgood` is one of the two NUL-terminated words above and
+    // `goodsound` has room for a soundfold.
+    unsafe { spell_soundfold(slang, pgood, false, goodsound.as_mut_ptr()) };
 
-        soundalike_score(&goodsound, pbad)
-    }
+    soundalike_score(&goodsound, pbad)
 }

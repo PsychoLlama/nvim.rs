@@ -36,6 +36,7 @@ use crate::types::{
     varnumber_T,
 };
 use crate::ui::ui_has;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -285,7 +286,7 @@ pub unsafe fn f_prompt_getprompt(
     // SAFETY: the frame is live and `rettv` owns the duplicate.
     unsafe {
         if let Some(buf) = prompt_buffer(args.ptr(0)) {
-            rettv.vval.v_string = xstrdup(buf_prompt_text(buf));
+            rettv.vval.v_string = xstrdup(buf_prompt_text(Buf::new(buf)));
         }
     }
 }

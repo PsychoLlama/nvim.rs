@@ -18,12 +18,6 @@ pub struct CmdlineColorChunk {
     pub end: ::core::ffi::c_int,
     pub hl_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-pub struct CmdlineColors {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut CmdlineColorChunk,
-}
 pub type CmdlineInfo = cmdline_info;
 
 /// The command line's text: an owned, NUL-terminated growable buffer.
@@ -146,11 +140,88 @@ impl CmdBuff {
         self.len = bytes.len();
     }
 }
-#[derive(Copy, Clone)]
-pub struct ColoredCmdline {
-    pub prompt_id: ::core::ffi::c_uint,
-    pub cmdbuff: *mut ::core::ffi::c_char,
-    pub colors: CmdlineColors,
+/// A command line's colouring, cached against the line it was computed from.
+///
+/// [`CmdBuff`]'s shape, and for the same reason. C kept a `char *` copy of
+/// the line the chunks describe and a kvec of the chunks, and released the
+/// pair by hand at each exit that had to -- including a `theend:` label
+/// reached from a dozen `goto`s. Both are `Vec`s here, so the only release
+/// is the one `Drop` does, and re-caching a line cannot leak the last one.
+#[derive(Clone, Default)]
+pub(crate) struct ColoredCmdline {
+    /// C's `prompt_id`: which command line the chunks were computed for.
+    prompt_id: ::core::ffi::c_uint,
+    /// The line they were computed from, without a terminator. Empty is C's
+    /// NULL `cmdbuff`: nothing is cached.
+    text: Vec<::core::ffi::c_char>,
+    /// C's `colors`, in the order they were pushed.
+    chunks: Vec<CmdlineColorChunk>,
+}
+
+impl ColoredCmdline {
+    /// Nothing cached: C's `(ColoredCmdline){ .cmdbuff = NULL,
+    /// .colors = KV_INITIAL_VALUE }`.
+    pub(crate) const NONE: ColoredCmdline = ColoredCmdline {
+        prompt_id: 0,
+        text: Vec::new(),
+        chunks: Vec::new(),
+    };
+
+    /// Whether the cache is the colouring of `text` under `prompt_id`.
+    ///
+    /// C spelled this a NULL check and a `strcmp`; an empty `text` is the
+    /// NULL, and comparing the whole slice rather than up to a NUL can only
+    /// turn a false hit into a miss.
+    pub(crate) fn is_current(
+        &self,
+        prompt_id: ::core::ffi::c_uint,
+        text: &[::core::ffi::c_char],
+    ) -> bool {
+        self.prompt_id == prompt_id && !self.text.is_empty() && self.text == text
+    }
+
+    /// The chunks, in order.
+    ///
+    /// Taken afresh at each use rather than held: the drawing code this
+    /// feeds re-enters the editor, which can replace the whole command line.
+    pub(crate) fn chunks(&self) -> &[CmdlineColorChunk] {
+        &self.chunks
+    }
+
+    /// Throw the chunks away, keeping the room they had: C's
+    /// `colors.size = 0`.
+    pub(crate) fn clear_chunks(&mut self) {
+        self.chunks.clear();
+    }
+
+    /// Room for `n` chunks: C's `kv_resize`. The pushes that follow may
+    /// still go past it.
+    pub(crate) fn reserve_chunks(&mut self, n: usize) {
+        self.chunks.reserve(n.saturating_sub(self.chunks.len()));
+    }
+
+    /// C's `kv_push`.
+    pub(crate) fn push(&mut self, chunk: CmdlineColorChunk) {
+        self.chunks.push(chunk);
+    }
+
+    /// Forget which line the chunks describe, so that the next colouring is
+    /// computed rather than taken from here: C's `xfree(cmdbuff)` with the
+    /// NULL that follows it.
+    pub(crate) fn forget(&mut self) {
+        self.text.clear();
+    }
+
+    /// Remember `text` as the line the chunks describe.
+    pub(crate) fn remember(
+        &mut self,
+        prompt_id: ::core::ffi::c_uint,
+        text: &[::core::ffi::c_char],
+    ) {
+        self.prompt_id = prompt_id;
+        self.text.clear();
+        self.text.extend_from_slice(text);
+    }
 }
 #[derive(Clone)]
 pub struct cmdline_info {
@@ -169,7 +240,7 @@ pub struct cmdline_info {
     pub cmdbuff_replaced: bool,
     pub prompt_id: ::core::ffi::c_uint,
     pub highlight_callback: Callback,
-    pub last_colors: ColoredCmdline,
+    pub(crate) last_colors: ColoredCmdline,
     pub level: ::core::ffi::c_int,
     pub special_char: ::core::ffi::c_char,
     pub special_shift: bool,

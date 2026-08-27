@@ -45,7 +45,7 @@ pub(crate) const fn set_key(set: OptionalKeys, idx: c_int) -> OptionalKeys {
 
 /// [`api_luarefs_free_object`] over a keydict, walking `table` to find which
 /// of its fields can hold a reference.
-pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *mut KeySetLink) {
+pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const KeySetLink) {
     // SAFETY: `table` is the generated table for `dict`'s type, so its
     // offsets and types describe `dict`'s fields; it ends with a null name.
     unsafe {
@@ -65,7 +65,7 @@ pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *mut Key
 
 /// The fields of a keydict, as its generated `KeySetLink` table lists them.
 /// The table ends with a null name.
-unsafe fn keyset_fields(table: *mut KeySetLink) -> impl Iterator<Item = *mut KeySetLink> {
+unsafe fn keyset_fields(table: *const KeySetLink) -> impl Iterator<Item = *const KeySetLink> {
     // SAFETY: `table` is one of the generated tables, which are
     // null-terminated by construction.
     let len = unsafe {
@@ -207,7 +207,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
 /// skipped — they mean nothing outside the Lua state.
 pub(crate) unsafe fn api_keydict_to_dict(
     value: *mut c_void,
-    table: *mut KeySetLink,
+    table: *const KeySetLink,
     max_size: size_t,
     arena: *mut Arena,
 ) -> Dict {

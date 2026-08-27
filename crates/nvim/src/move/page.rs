@@ -164,10 +164,10 @@ unsafe fn half_page(
         unsafe { nv_screengo(oap, dir, curscount, true) };
     } else if dir == FORWARD {
         // SAFETY: a live window.
-        unsafe { cursor_down_inner(win.raw(), curscount, true) };
+        cursor_down_inner(win, curscount, true);
     } else {
         // SAFETY: a live window.
-        unsafe { cursor_up_inner(win.raw(), curscount as linenr_T, true) };
+        cursor_up_inner(win, curscount as linenr_T, true);
     }
     did_move
 }
@@ -248,8 +248,7 @@ pub unsafe fn do_check_cursorbind() {
         // Skip the original window, and the ones with 'nocursorbind'.
         if win != old_curwin && win.w_onebuf_opt.wo_crb != 0 {
             win.w_cursor.lnum = if win.w_onebuf_opt.wo_diff != 0 {
-                // SAFETY: a live buffer.
-                unsafe { diff_get_corresponding_line(old_curbuf.raw(), cursor.lnum) }
+                diff_get_corresponding_line(old_curbuf, cursor.lnum)
             } else {
                 cursor.lnum
             };
@@ -263,7 +262,7 @@ pub unsafe fn do_check_cursorbind() {
             let restart_edit_save = restart_edit.get();
             restart_edit.set(1);
             // SAFETY: a live window.
-            unsafe { check_cursor(win.raw()) };
+            check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.
             if win.w_onebuf_opt.wo_scb == 0 {

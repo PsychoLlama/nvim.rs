@@ -135,7 +135,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         unsafe { nv_operator(cap) };
         return;
     }
-    if unsafe { virtual_active(curwin.get()) } {
+    if virtual_active(cur_win()) {
         if u_save_cursor() == 0 {
             return;
         }
@@ -248,8 +248,8 @@ pub(crate) unsafe fn nv_replace_mode(cap: *mut cmdarg_T) {
         unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
         return;
     }
-    if unsafe { virtual_active(curwin.get()) } {
-        unsafe { coladvance(curwin.get(), getviscol()) };
+    if virtual_active(cur_win()) {
+        unsafe { coladvance(Win::current(), getviscol()) };
     }
     let kind = if ca.arg != 0 {
         'V' as c_int
@@ -286,8 +286,8 @@ pub(crate) unsafe fn nv_vreplace(cap: *mut cmdarg_T) {
     }
     stuff_readbuf_char(ca.extra_char);
     stuff_readbuf_char(ESC);
-    if unsafe { virtual_active(curwin.get()) } {
-        unsafe { coladvance(curwin.get(), getviscol()) };
+    if virtual_active(cur_win()) {
+        unsafe { coladvance(Win::current(), getviscol()) };
     }
     unsafe { invoke_edit(cap, 1, 'v' as c_int, 0) };
 }
@@ -324,20 +324,20 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
             cur_win().w_cursor.col = 0;
             // Each further line needs its own undo entry.
             if n > 1 {
-                if unsafe { u_savesub(cur_win().w_cursor.lnum) } == 0 {
+                if u_savesub(cur_win().w_cursor.lnum) == 0 {
                     break;
                 }
-                unsafe { u_clearline(curbuf.get()) };
+                u_clearline(cur_buf());
             }
         }
         n -= 1;
     }
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
     cur_win().w_set_curswant = true;
     if did_change {
         let (from, col) = (startpos.lnum, startpos.col);
         let to = cur_win().w_cursor.lnum + 1;
-        unsafe { changed_lines(curbuf.get(), from, col, to, 0, true) };
+        changed_lines(cur_buf(), from, col, to, 0, true);
         cur_buf().b_op_start = startpos;
         cur_buf().b_op_end = cur_win().w_cursor;
         if cur_buf().b_op_end.col > 0 {
@@ -425,16 +425,17 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
     }
     let mut win = cur_win();
     let opening_above = ca.cmdchar == 'O' as c_int;
-    // Open outside a closed fold rather than inside it.
-    let (lnum, edge) = (win.w_cursor.lnum, &raw mut win.w_cursor.lnum);
-    let (first, last) = if opening_above {
-        (edge, ptr::null_mut())
+    // Open outside a closed fold rather than inside it: `O` stretches to the
+    // fold's first line, `o` to its last.
+    let lnum = win.w_cursor.lnum;
+    let mut edge = lnum;
+    if opening_above {
+        has_folding(win, lnum, Some(&mut edge), None);
     } else {
-        (ptr::null_mut(), edge)
-    };
-    // SAFETY: `win` is the live window and both ends are this frame's own.
-    unsafe { has_folding(win.raw(), lnum, first, last) };
-    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(curbuf.get()) };
+        has_folding(win, lnum, None, Some(&mut edge));
+    }
+    win.w_cursor.lnum = edge;
+    cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
     let undo_first = win.w_cursor.lnum - linenr_T::from(opening_above);
     let undo_last = win.w_cursor.lnum + linenr_T::from(!opening_above);
     let dir = if opening_above {
@@ -478,12 +479,12 @@ pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn set_cursor_for_append_to_line() {
     // SAFETY (throughout): reads and writes the current window's cursor.
     cur_win().w_set_curswant = true;
-    if unsafe { get_ve_flags(curwin.get()) } == kOptVeFlagAll as c_uint {
+    if get_ve_flags(cur_win()) == kOptVeFlagAll as c_uint {
         // Insert mode is what makes `coladvance` allow the position one
         // past the end.
         let save_state = State.get();
         State.set(MODE_INSERT);
-        unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
+        coladvance(unsafe { Win::current() }, MAXCOL as c_int);
         State.set(save_state);
     } else {
         cur_win().w_cursor.col += unsafe { strlen(get_cursor_pos_ptr()) } as colnr_T;
@@ -524,7 +525,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
         Ok(b'a') => {
             // `a` steps one right first. Under 'virtualedit' a position
             // inside a tab or past the end of the line moves by a cell.
-            if unsafe { virtual_active(curwin.get()) }
+            if virtual_active(cur_win())
                 && (cur_win().w_cursor.coladd > 0
                     || unsafe { *get_cursor_pos_ptr() } as c_int == NUL
                     || unsafe { *get_cursor_pos_ptr() } as c_int == TAB)
@@ -541,7 +542,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
     if cur_win().w_cursor.coladd != 0 && ca.cmdchar != 'A' as c_int {
         let save_state = State.get();
         State.set(MODE_INSERT);
-        unsafe { coladvance(curwin.get(), getviscol()) };
+        unsafe { coladvance(Win::current(), getviscol()) };
         State.set(save_state);
     }
     unsafe { invoke_edit(cap, 0, ca.cmdchar, 0) };
@@ -565,7 +566,7 @@ pub(crate) unsafe fn invoke_edit(cap: *mut cmdarg_T, repl: c_int, cmd: c_int, st
     restart_edit.set(0);
     // `o` and `O` already recorded the tick before opening the line.
     if ca.cmdchar != 'O' as c_int && ca.cmdchar != 'o' as c_int {
-        cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(curbuf.get()) };
+        cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
     }
     if unsafe { edit(cmd, startln != 0, ca.count1) } {
         ca.retval |= CA_COMMAND_BUSY as c_int;
@@ -752,7 +753,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
         unsafe { deleted_lines(cur_buf().b_ml.ml_line_count + 1, 1) };
         if win.w_cursor.lnum > cur_buf().b_ml.ml_line_count {
             win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-            unsafe { coladvance(win.raw(), MAXCOL as c_int) };
+            coladvance(win, MAXCOL as c_int);
         }
     }
     unsafe { auto_format(false, true) };

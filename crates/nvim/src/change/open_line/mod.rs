@@ -222,7 +222,7 @@ unsafe fn truncate_old_line(
         // was just split.
         unsafe {
             extmark_splice(cb, row, at, 0, off, old_b, 1, added, new_b, undo);
-            changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
+            changed_lines(Buf::new(cb), cur_lnum, cur_col, cur_lnum + 1, 1, true);
         }
         // Move marks that were after the break onto the new line.
         if flags & OPENLINE_MARKFIX != 0 {
@@ -343,7 +343,7 @@ pub unsafe fn open_line(
         unsafe { *p_extra = NUL as c_char };
     }
 
-    unsafe { u_clearline(curbuf.get()) }; // "U" cannot undo added lines
+    u_clearline(cur_buf()); // "U" cannot undo added lines
     did_si.set(false);
     ai_col.set(0);
 
@@ -570,7 +570,7 @@ pub unsafe fn open_line(
             // SAFETY: as above.
             unsafe {
                 extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
-                changed_lines(cb, at, 0, at, 1, true);
+                changed_lines(Buf::new(cb), at, 0, at, 1, true);
             }
         }
         curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);

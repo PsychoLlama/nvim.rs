@@ -96,7 +96,7 @@ unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) {
     unsafe {
         // Handle entries with a non-existing buffer number.
         let mut bufnum = (*qfp).qf_fnum;
-        if bufnum != 0 && buflist_findnr(bufnum).is_null() {
+        if bufnum != 0 && find_buf(bufnum).is_none() {
             bufnum = 0;
         }
 
@@ -132,11 +132,10 @@ unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) {
 ///
 /// # Safety
 ///
-/// `qi` must be null or a live stack, `wp` null or a live window, and
-/// `list` a live list.
+/// `qi` must be null or a live stack and `list` a live list.
 pub(crate) unsafe fn get_errorlist(
     qi_arg: *mut qf_info_T,
-    wp: *mut win_T,
+    wp: Option<Win>,
     mut qf_idx: c_int,
     eidx: c_int,
     list: *mut list_T,
@@ -145,10 +144,9 @@ pub(crate) unsafe fn get_errorlist(
     unsafe {
         let mut qi = qi_arg;
         if qi.is_null() {
-            qi = if wp.is_null() {
-                QfStack::Global.raw()
-            } else {
-                win_loclist(wp)
+            qi = match wp {
+                Some(wp) => win_loclist(wp),
+                None => QfStack::Global.raw(),
             };
             if qi.is_null() {
                 return Err(QfError::NoSuchList);
@@ -222,7 +220,7 @@ unsafe fn qf_get_list_from_lines(
             qi,
             0,
             ptr::null(),
-            ptr::null_mut(),
+            None,
             &raw mut (*di).di_tv,
             errorformat,
             true,
@@ -234,7 +232,7 @@ unsafe fn qf_get_list_from_lines(
         if parsed {
             // Whether the throwaway list had entries is not this answer:
             // parsing nothing out of the lines is still a successful read.
-            let _ = get_errorlist(qi, ptr::null_mut(), 0, 0, l);
+            let _ = get_errorlist(qi, None, 0, 0, l);
             qf_free(qf_get_list(qi, 0));
         }
         qf_free_lists(qi);
@@ -273,7 +271,7 @@ unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> Resu
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut bufnum = 0;
-        if !qi.is_null() && !buflist_findnr((*qi).qf_bufnr).is_null() {
+        if !qi.is_null() && find_buf((*qi).qf_bufnr).is_some() {
             bufnum = (*qi).qf_bufnr;
         }
         add_nr(retdict, "qfbufnr", bufnum as varnumber_T)
@@ -441,23 +439,18 @@ unsafe fn qf_getprop_defaults(
 ///
 /// # Safety
 ///
-/// `wp` must be null or a live window, `qi` a live stack, `retdict` live.
+/// `qi` must be a live stack and `retdict` live.
 unsafe fn qf_getprop_filewinid(
-    wp: *const win_T,
+    wp: Option<Win>,
     qi: *const qf_info_T,
     retdict: *mut dict_T,
 ) -> Result<(), KeyTaken> {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut winid: handle_T = 0;
-        if !wp.is_null() && is_ll_window(wp) {
-            let ll_wp = qf_find_win_with_loclist(qi);
-            if !ll_wp.is_null() {
-                winid = (*ll_wp).handle;
-            }
-        }
-        add_nr(retdict, "filewinid", winid as varnumber_T)
-    }
+    let winid = wp
+        .filter(|&wp| is_ll_window(wp))
+        .and_then(|_| qf_find_win_with_loclist(qi))
+        .map_or(0, |ll_wp| ll_wp.handle);
+    // SAFETY: forwarded from the caller -- a live dictionary.
+    unsafe { add_nr(retdict, "filewinid", winid as varnumber_T) }
 }
 
 /// The entries of the list, or of just entry `eidx`.
@@ -472,7 +465,7 @@ unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdi
     // SAFETY: forwarded from the caller.
     unsafe {
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        let _ = get_errorlist(qi, ptr::null_mut(), qf_idx, eidx, l);
+        let _ = get_errorlist(qi, None, qf_idx, eidx, l);
         let _ = add_list(retdict, "items", l);
     }
 }
@@ -550,9 +543,9 @@ unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(
 ///
 /// # Safety
 ///
-/// `wp` must be null or a live window, and `what` and `retdict` live.
+/// `what` and `retdict` must be live.
 pub(crate) unsafe fn qf_get_properties(
-    wp: *mut win_T,
+    wp: Option<Win>,
     what: *mut dict_T,
     retdict: *mut dict_T,
 ) -> Result<(), QfError> {
@@ -567,11 +560,11 @@ pub(crate) unsafe fn qf_get_properties(
             return qf_get_list_from_lines(what, lines, retdict);
         }
 
-        if !wp.is_null() {
+        if let Some(wp) = wp {
             qi = win_loclist(wp);
         }
 
-        let flags = qf_getprop_keys2flags(what, !wp.is_null());
+        let flags = qf_getprop_keys2flags(what, wp.is_some());
 
         let named = if qf_stack_empty(qi) {
             None
@@ -581,7 +574,7 @@ pub(crate) unsafe fn qf_get_properties(
         let Some(qf_idx) = named else {
             // `?` here is the `From<KeyTaken>` conversion: the defaults can
             // only fail the way the dictionary layer fails.
-            qf_getprop_defaults(qi, flags, !wp.is_null(), retdict)?;
+            qf_getprop_defaults(qi, flags, wp.is_some(), retdict)?;
             return Ok(());
         };
 
@@ -627,7 +620,7 @@ pub(crate) unsafe fn qf_get_properties(
         if wanted(QF_GETLIST_TICK) {
             add_nr(retdict, "changedtick", (*qfl).qf_changedtick as varnumber_T)?;
         }
-        if !wp.is_null() && wanted(QF_GETLIST_FILEWINID) {
+        if wp.is_some() && wanted(QF_GETLIST_FILEWINID) {
             qf_getprop_filewinid(wp, qi, retdict)?;
         }
         if wanted(QF_GETLIST_QFBUFNR) {

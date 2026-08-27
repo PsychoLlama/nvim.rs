@@ -343,8 +343,19 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // makes it look; the registry's job here is to make *identity* answerable by
 // handle, which `Win::handle` and `winlayer::window` now do.
 
-pub unsafe fn win_valid(win: *const win_T) -> bool {
-    // SAFETY: `win` is only compared, never read; `curtab` is always set.
+/// Whether `win` is a window on the **current tab page**.
+///
+/// Safe, and deliberately so: like [`win_find_tabpage`], this is asked about
+/// an *address* an autocommand may already have freed, and answers by
+/// comparing it against the list rather than reading it. See the note above
+/// for why that is not the same question as `WinId::valid`.
+// `not_unsafe_ptr_arg_deref` sees a raw pointer reaching an `unsafe` call and
+// assumes a dereference. Here the premise is false and the falseness is the
+// whole point: `tabpage_win_valid` compares the address against the list and
+// never reads it, which is what lets an autocommand have freed it already.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn win_valid(win: *const win_T) -> bool {
+    // SAFETY: `curtab` is always a live tab page, and `win` is only compared.
     unsafe { tabpage_win_valid(curtab.get(), win) }
 }
 
@@ -429,7 +440,7 @@ fn only_one_message() {
 /// Whether `win` is one of the hidden windows autocommands are executed in.
 fn is_autocmd_window(win: Option<Win>) -> bool {
     // SAFETY: a live window, or the null the callers pass for "no window".
-    unsafe { is_aucmd_win(win.map_or(ptr::null_mut(), Win::raw)) }
+    is_aucmd_win(win.map_or(ptr::null_mut(), Win::raw))
 }
 
 /// `xfree`, for the frames and click definitions the family owns.
@@ -539,7 +550,7 @@ fn is_quickfix(buf: Option<Buf>) -> bool {
 /// Clamp the cursor of `win` back into its buffer.
 fn revalidate_cursor(win: Win) {
     // SAFETY: a live window.
-    unsafe { check_cursor(win.raw()) };
+    check_cursor(win);
 }
 
 /// Tell a terminal buffer its window changed size, if `buf` has one.

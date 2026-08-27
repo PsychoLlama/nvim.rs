@@ -5,7 +5,7 @@
 use super::args::{Args, frame};
 use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
-use crate::buffer::buflist_findnr;
+use crate::buffer::find_buf;
 use crate::charset::getdigits_int;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
@@ -36,6 +36,7 @@ use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
+use crate::winlayer::Win;
 /// The zeroed position every local in this module starts from.
 const NOWHERE: pos_T = pos_T {
     lnum: 0,
@@ -183,7 +184,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
         let (region_type, block_width) = parse_type(spec)?;
 
         let findbuf = if fnum1 != 0 {
-            buflist_findnr(fnum1)
+            find_buf(fnum1).map_or(ptr::null_mut(), |mut b| b.raw())
         } else {
             curbuf.get()
         };
@@ -196,7 +197,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
 
         curbuf.set(findbuf);
         (*curwin.get()).w_buffer = curbuf.get();
-        virtual_op.set(Some(virtual_active(curwin.get())));
+        virtual_op.set(Some(virtual_active(cur_win())));
 
         // Columns are one-based on the way in and zero-based from here.
         p1.col -= 1;
@@ -209,7 +210,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
         let mut oap = NO_OPARG;
         if region_type == kMTCharWise {
             if is_select_exclusive && !equalpos(p1, p2) {
-                inclusive = !unadjust_for_sel_inner(&raw mut p2);
+                inclusive = !unadjust_for_sel_inner(&mut p2);
             }
             // An inclusive selection ending on the line terminator does not
             // actually cover a character, unless 'virtualedit' is on.
@@ -314,14 +315,14 @@ unsafe fn block_oparg(
         let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
         let lbr_saved = reset_lbr();
         getvvcol(
-            curwin.get(),
+            cur_win(),
             &raw const p1 as *mut pos_T,
             &raw mut sc1,
             ptr::null_mut(),
             &raw mut ec1,
         );
         getvvcol(
-            curwin.get(),
+            cur_win(),
             &raw const p2 as *mut pos_T,
             &raw mut sc2,
             ptr::null_mut(),
@@ -543,4 +544,10 @@ unsafe fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
             tv_list_append_number(l, p.coladd as varnumber_T);
         }
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

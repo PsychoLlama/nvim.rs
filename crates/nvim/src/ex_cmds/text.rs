@@ -304,7 +304,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     }
 
     // SAFETY: the range is still the one that was just rewritten.
-    unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, 0, true) };
+    changed_lines(cur_buf(), line1, 0, line2 + 1, 0, true);
     cur_win().w_cursor = save_curpos;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }

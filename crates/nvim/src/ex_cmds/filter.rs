@@ -32,7 +32,7 @@ use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
     Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
-    e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_col,
+    e_cant_read_file_str, e_noprev, e_notmp, global_busy, got_int, info_message, msg_col,
     msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, p_report, p_sh, p_shq,
     p_srr, p_stmp, p_warn, silent_mode,
 };
@@ -55,10 +55,10 @@ use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
+use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, buffers};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -214,7 +214,7 @@ pub unsafe fn do_bang(
             // SAFETY: `eap` is the caller's live argument and `newcmd` a live
             // string; the autocommand runs with the current buffer.
             unsafe { do_filter(line1, line2, eap, newcmd, do_in, do_out) };
-            unsafe { buf_autocmd(EVENT_SHELLFILTERPOST, curbuf.get()) };
+            buf_autocmd(EVENT_SHELLFILTERPOST, cur_buf());
         }
     }
 
@@ -313,7 +313,7 @@ unsafe fn do_filter(
     cur_win().w_cursor.lnum = line1;
     cur_win().w_cursor.col = 0;
     unsafe { changed_line_abv_curs() };
-    unsafe { invalidate_botline_win(curwin.get()) };
+    invalidate_botline_win(unsafe { Win::current() });
 
     // When using temp files:
     // 1. * Form temp file names
@@ -535,13 +535,11 @@ unsafe fn do_filter(
                 cur_buf().b_op_end.lnum -= linecount;
                 // adjust last line for next write
                 unsafe { write_lnum_adjust(-linecount) };
-                unsafe {
-                    fold_update(
-                        curwin.get(),
-                        cur_buf().b_op_start.lnum,
-                        cur_buf().b_op_end.lnum,
-                    )
-                };
+                fold_update(
+                    unsafe { Win::current() },
+                    cur_buf().b_op_start.lnum,
+                    cur_buf().b_op_end.lnum,
+                );
             } else {
                 // Put cursor on last new line for ":r !cmd".
                 // SAFETY: `curbuf`/`curwin` are live.
@@ -631,16 +629,13 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     unsafe { msg_putchar('\r' as c_int) };
     unsafe { msg_putchar('\n' as c_int) };
 
-    if p_warn.get() != 0 && !autocmd_busy.get() && msg_silent.get() == 0 {
-        let mut buf: *mut buf_T = firstbuf.get();
-        // SAFETY: the buffer list is the editor's own and is live.
-        while !buf.is_null() {
-            if unsafe { buf_is_changed(buf) } {
-                unsafe { msg_puts(gettext(c"[No write since last change]\n".as_ptr())) };
-                break;
-            }
-            buf = unsafe { (*buf).b_next };
-        }
+    if p_warn.get() != 0
+        && !autocmd_busy.get()
+        && msg_silent.get() == 0
+        && buffers().any(buf_is_changed)
+    {
+        // SAFETY: a live message string.
+        unsafe { msg_puts(gettext(c"[No write since last change]\n".as_ptr())) };
     }
 
     ui_cursor_goto(msg_row.get(), msg_col.get());
@@ -656,8 +651,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // Put the cursor back where it was: the shell wrote over the screen.
     msg_row.set(Rows.get() - 1);
     msg_col.set(0);
-    // SAFETY: the autocommand runs with the current buffer.
-    unsafe { buf_autocmd(EVENT_SHELLCMDPOST, curbuf.get()) };
+    buf_autocmd(EVENT_SHELLCMDPOST, cur_buf());
 }
 
 /// Which shell 'shell' names, as far as building a command line goes.

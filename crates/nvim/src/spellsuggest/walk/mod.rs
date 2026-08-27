@@ -311,10 +311,8 @@ pub(super) unsafe fn suggest_trie_walk(
     soundfold: bool,
 ) {
     // SAFETY: the caller guarantees the pointers and the loaded trees.
-    unsafe {
-        let mut walk = Walk::new(su, lp, fword, soundfold);
-        walk.run();
-    }
+    let mut walk = unsafe { Walk::new(su, lp, fword, soundfold) };
+    unsafe { walk.run() };
 }
 
 impl Walk {
@@ -329,66 +327,69 @@ impl Walk {
         fword: *mut c_char,
         soundfold: bool,
     ) -> Walk {
-        // SAFETY: the caller guarantees the pointers and the loaded trees.
-        unsafe {
-            let slang = (*lp).lp_slang;
-            let mut walk = Walk {
-                su,
-                lp,
-                slang,
-                soundfold,
-                fbyts: core::ptr::null_mut(),
-                fidxs: core::ptr::null_mut(),
-                pbyts: core::ptr::null_mut(),
-                pidxs: core::ptr::null_mut(),
-                time_limit: 0,
-                byts: core::ptr::null_mut(),
-                idxs: core::ptr::null_mut(),
-                fword,
-                repextra: 0,
-                tword: [0; MAXWLEN],
-                preword: [0; PREWORD_SIZE],
-                compflags: [0; MAXWLEN],
-                stack: [Frame::default(); STACK_SIZE],
-                depth: 0,
-                breakcheckcount: 1000,
-            };
-            walk.stack[0].child = 1;
+        // SAFETY: the caller guarantees the pointers, so the language
+        // beside `lp` is one of the loaded ones and its trees are the
+        // pointers read out of it below.
+        let slang = unsafe { (*lp).lp_slang };
+        let mut walk = Walk {
+            su,
+            lp,
+            slang,
+            soundfold,
+            fbyts: core::ptr::null_mut(),
+            fidxs: core::ptr::null_mut(),
+            pbyts: core::ptr::null_mut(),
+            pidxs: core::ptr::null_mut(),
+            time_limit: 0,
+            byts: core::ptr::null_mut(),
+            idxs: core::ptr::null_mut(),
+            fword,
+            repextra: 0,
+            tword: [0; MAXWLEN],
+            preword: [0; PREWORD_SIZE],
+            compflags: [0; MAXWLEN],
+            stack: [Frame::default(); STACK_SIZE],
+            depth: 0,
+            breakcheckcount: 1000,
+        };
+        walk.stack[0].child = 1;
 
-            if soundfold {
-                // The sound-fold tree has no prefixes.
-                walk.fbyts = (*slang).sl_sbyts;
-                walk.fidxs = (*slang).sl_sidxs;
+        if soundfold {
+            // The sound-fold tree has no prefixes.
+            //
+            // SAFETY: as above.
+            walk.fbyts = unsafe { (*slang).sl_sbyts };
+            walk.fidxs = unsafe { (*slang).sl_sidxs };
+            walk.byts = walk.fbyts;
+            walk.idxs = walk.fidxs;
+            walk.stack[0].prefix_depth = PFD_NOPREFIX;
+            walk.stack[0].state = State::Start;
+        } else {
+            // SAFETY: as above.
+            walk.fbyts = unsafe { (*slang).sl_fbyts };
+            walk.fidxs = unsafe { (*slang).sl_fidxs };
+            walk.pbyts = unsafe { (*slang).sl_pbyts };
+            walk.pidxs = unsafe { (*slang).sl_pidxs };
+            if walk.pbyts.is_null() {
                 walk.byts = walk.fbyts;
                 walk.idxs = walk.fidxs;
                 walk.stack[0].prefix_depth = PFD_NOPREFIX;
                 walk.stack[0].state = State::Start;
             } else {
-                walk.fbyts = (*slang).sl_fbyts;
-                walk.fidxs = (*slang).sl_fidxs;
-                walk.pbyts = (*slang).sl_pbyts;
-                walk.pidxs = (*slang).sl_pidxs;
-                if walk.pbyts.is_null() {
-                    walk.byts = walk.fbyts;
-                    walk.idxs = walk.fidxs;
-                    walk.stack[0].prefix_depth = PFD_NOPREFIX;
-                    walk.stack[0].state = State::Start;
-                } else {
-                    // Postponed prefixes have to be used first; the
-                    // case-folded tree continues at the end of the prefix.
-                    walk.byts = walk.pbyts;
-                    walk.idxs = walk.pidxs;
-                    walk.stack[0].prefix_depth = PFD_PREFIXTREE;
-                    walk.stack[0].state = State::NoPrefix; // without a prefix first
-                }
+                // Postponed prefixes have to be used first; the
+                // case-folded tree continues at the end of the prefix.
+                walk.byts = walk.pbyts;
+                walk.idxs = walk.pidxs;
+                walk.stack[0].prefix_depth = PFD_PREFIXTREE;
+                walk.stack[0].state = State::NoPrefix; // without a prefix first
             }
-
-            let timeout = spell_suggest_timeout.get();
-            if timeout > 0 {
-                walk.time_limit = profile_setlimit(timeout as int64_t);
-            }
-            walk
         }
+
+        let timeout = spell_suggest_timeout.get();
+        if timeout > 0 {
+            walk.time_limit = profile_setlimit(timeout as int64_t);
+        }
+        walk
     }
 
     /// Run every state of every level until the stack empties or the user
@@ -413,27 +414,27 @@ impl Walk {
     unsafe fn step(&mut self) {
         // SAFETY: every handler reads the language's trees at indices the
         // trees' own child counts bound, and the bad word within the
-        // buffer the caller supplied.
-        unsafe {
-            match self.stack[self.depth as usize].state {
-                State::Start | State::NoPrefix => self.node_start(),
-                State::SplitUndo => self.split_undo(),
-                State::EndNul => self.end_nul(),
-                State::Plain => self.plain(),
-                State::Del => self.delete(),
-                State::InsPrep => self.ins_prep(),
-                State::Ins => self.insert(),
-                State::Swap => self.swap(),
-                State::UnSwap => self.un_swap(),
-                State::Swap3 => self.swap3(),
-                State::UnSwap3 => self.un_swap3(),
-                State::UnRot3L => self.un_rot3l(),
-                State::UnRot3R => self.un_rot3r(),
-                State::RepIni => self.rep_ini(),
-                State::Rep => self.rep(),
-                State::RepUndo => self.rep_undo(),
-                State::Final => self.leave_level(),
-            }
+        // buffer the caller supplied. The whole match is one dispatch: a
+        // live level is what each of the arms below asks for, and the
+        // contract above is what supplies it.
+        match self.stack[self.depth as usize].state {
+            State::Start | State::NoPrefix => unsafe { self.node_start() },
+            State::SplitUndo => unsafe { self.split_undo() },
+            State::EndNul => unsafe { self.end_nul() },
+            State::Plain => unsafe { self.plain() },
+            State::Del => unsafe { self.delete() },
+            State::InsPrep => unsafe { self.ins_prep() },
+            State::Ins => unsafe { self.insert() },
+            State::Swap => unsafe { self.swap() },
+            State::UnSwap => unsafe { self.un_swap() },
+            State::Swap3 => unsafe { self.swap3() },
+            State::UnSwap3 => unsafe { self.un_swap3() },
+            State::UnRot3L => unsafe { self.un_rot3l() },
+            State::UnRot3R => unsafe { self.un_rot3r() },
+            State::RepIni => unsafe { self.rep_ini() },
+            State::Rep => unsafe { self.rep() },
+            State::RepUndo => unsafe { self.rep_undo() },
+            State::Final => unsafe { self.leave_level() },
         }
     }
 
@@ -492,10 +493,8 @@ impl Walk {
     #[inline]
     unsafe fn try_deeper(&self, score_add: c_int) -> bool {
         // SAFETY: the caller guarantees `su`.
-        unsafe {
-            self.depth < MAXWLEN as c_int - 1
-                && self.stack[self.depth as usize].score + score_add < (*self.su).su_maxscore
-        }
+        self.depth < MAXWLEN as c_int - 1
+            && self.stack[self.depth as usize].score + score_add < unsafe { (*self.su).su_maxscore }
     }
 
     /// One byte of the tree currently being walked.

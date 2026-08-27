@@ -15,8 +15,8 @@
 use super::{Ecmd, EcmdArgs};
 use crate::autocmd::EVENT_BUFLEAVE;
 use crate::buffer::{
-    buf_valid, buflist_altfpos, buflist_findfmark, buflist_findnr, buflist_new, bufref_valid,
-    close_buffer, get_winopts, set_bufref,
+    buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, bufref_valid, close_buffer,
+    find_buf, get_winopts, set_bufref,
 };
 use crate::ex_cmds::{
     BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
@@ -35,7 +35,7 @@ use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::terminal::terminal_running;
-use crate::types::{CmdModFlags, buf_T, bufref_T, linenr_T, win_T};
+use crate::types::{CmdModFlags, bufref_T, linenr_T, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use crate::winlayer::{Buf, Win};
@@ -56,7 +56,10 @@ pub(super) enum Switch {
 ///
 /// # Safety
 /// The names, `eap` and `oldwin` must be live or NULL, and `old_curbuf` must
-/// be the bufref taken on entry to [`do_ecmd`].
+/// be the bufref taken on entry to [`do_ecmd`]. `oldwin` is an out-parameter
+/// the caller re-checks with `win_valid` after the autocommands below, so it
+/// stays a raw pointer -- a [`Win`] would promise the liveness that check
+/// exists to doubt.
 pub(super) unsafe fn switch_to_other_buffer(
     args: &EcmdArgs,
     oldwin: &mut *mut win_T,
@@ -80,13 +83,13 @@ pub(super) unsafe fn switch_to_other_buffer(
             cur_win().w_alt_fnum = cur_buf().handle;
         }
         if !oldwin.is_null() {
-            unsafe { buflist_altfpos(*oldwin) };
+            unsafe { buflist_altfpos(Win::new(*oldwin)) };
         }
     }
 
     let buf;
     if fnum != 0 {
-        buf = buflist_findnr(fnum);
+        buf = find_buf(fnum).map_or(ptr::null_mut(), |mut b| b.raw());
     } else if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0 {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.
@@ -173,7 +176,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         let mut bufref = bufref_T::default();
         // SAFETY: as above.
         unsafe { set_bufref(&raw mut bufref, buf) };
-        unsafe { buf_check_timestamp(buf) };
+        unsafe { buf_check_timestamp(Buf::new(buf)) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
         if !unsafe { bufref_valid(&raw mut bufref) }
@@ -190,7 +193,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         || state.newlnum == ECMD_LAST as linenr_T
     {
         // SAFETY: `buf` is live.
-        let pos = unsafe { &raw mut (*buflist_findfmark(buf)).mark };
+        let pos = unsafe { &raw mut (*buflist_findfmark(Buf::new(buf))).mark };
         state.newlnum = unsafe { (*pos).lnum };
         state.solcol = unsafe { (*pos).col };
     }
@@ -201,7 +204,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     // buflist_new(), and there is nothing to do here.
     if buf != curbuf.get() {
         // SAFETY: the editor's own state.
-        match unsafe { leave_for_buffer(buf, args, *oldwin, old_curbuf, state) } {
+        match unsafe { leave_for_buffer(Buf::new(buf), args, *oldwin, old_curbuf, state) } {
             Switch::Abandon => return Switch::Abandon,
             Switch::Ready => {}
         }
@@ -213,10 +216,12 @@ pub(super) unsafe fn switch_to_other_buffer(
 /// wanted, and make `buf` the current window's.
 ///
 /// # Safety
-/// `buf` must be live and different from the current buffer; `eap` and
-/// `oldwin` may be NULL.
+/// `buf` must be different from the current buffer; `eap` and `oldwin` may be
+/// NULL. `oldwin` stays a raw pointer on purpose: the autocommands below may
+/// close that window, and `win_valid_any_tab` is what asks -- comparing an
+/// address that a [`Win`] would have promised was live.
 unsafe fn leave_for_buffer(
-    buf: *mut buf_T,
+    mut buf: Buf,
     args: &EcmdArgs,
     oldwin: *mut win_T,
     old_curbuf: &mut bufref_T,
@@ -244,19 +249,16 @@ unsafe fn leave_for_buffer(
     //   which then must be closed again.
     // - If we ended up in the new buffer already, need to skip a few things,
     //   set auto_buf.
-    // SAFETY: `buf` is live and `new_name` becomes ours.
-    let new_name = unsafe {
-        if (*buf).b_fname.is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup((*buf).b_fname)
-        }
+    // SAFETY: the buffer's own file name, and `new_name` becomes ours.
+    let new_name = if buf.b_fname.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { xstrdup(buf.b_fname) }
     };
     let save_au_new_curbuf = au_new_curbuf.get();
     // SAFETY: `set_bufref` only writes the record.
-    au_new_curbuf.with_mut(|r| unsafe { set_bufref(r, buf) });
-    // SAFETY: `curbuf` is live.
-    unsafe { buf_autocmd(EVENT_BUFLEAVE, curbuf.get()) };
+    au_new_curbuf.with_mut(|r| unsafe { set_bufref(r, buf.raw()) });
+    buf_autocmd(EVENT_BUFLEAVE, cur_buf());
 
     cmdwin_type.set(save_cmdwin_type);
     cmdwin_win.set(save_cmdwin_win);
@@ -277,7 +279,7 @@ unsafe fn leave_for_buffer(
         return Switch::Abandon;
     }
 
-    if buf == curbuf.get() {
+    if buf.raw() == curbuf.get() {
         // already in new buffer
         state.auto_buf = true;
         // SAFETY: `new_name` is ours.
@@ -294,18 +296,18 @@ unsafe fn leave_for_buffer(
         // Set w_locked to avoid that autocommands close the window.  Set
         // b_locked for the same reason.
         (*the_curwin).w_locked = true;
-        (*buf).b_locked += 1;
+        buf.b_locked += 1;
 
         if curbuf.get() == old_curbuf.br_buf {
-            buf_copy_options(buf, BCO_ENTER as c_int);
+            buf_copy_options(buf.raw(), BCO_ENTER as c_int);
         }
 
         // Close the link to the current buffer.  This will set
         // oldwin->w_buffer to NULL.
         u_sync(false);
         close_buffer(
-            oldwin,
-            curbuf.get(),
+            Win::from_raw(oldwin),
+            Buf::current(),
             if flags & ECMD_HIDE as c_int != 0
                 || !cur_buf().terminal.is_null() && terminal_running(cur_buf().terminal)
             {
@@ -320,10 +322,10 @@ unsafe fn leave_for_buffer(
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
     // Autocommands may have closed the window.
-    if unsafe { win_valid(the_curwin) } {
+    if win_valid(the_curwin) {
         unsafe { (*the_curwin).w_locked = false };
     }
-    unsafe { (*buf).b_locked -= 1 };
+    buf.b_locked -= 1;
 
     // autocmds may abort script processing
     // SAFETY: `curwin` is live.
@@ -343,7 +345,7 @@ unsafe fn leave_for_buffer(
     }
 
     // SAFETY: the windows and buffers are live; `eap` is the caller's.
-    if buf == curbuf.get() {
+    if buf.raw() == curbuf.get() {
         // already in new buffer -- close_buffer() has decremented the
         // window count, increment it again here and restore w_buffer.
         if did_decrement && unsafe { buf_valid(was_curbuf) } {
@@ -359,11 +361,11 @@ unsafe fn leave_for_buffer(
         if cur_win().w_buffer.is_null()
             || cur_win().w_s == unsafe { &raw mut (*cur_win().w_buffer).b_s }
         {
-            cur_win().w_s = unsafe { &raw mut (*buf).b_s };
+            cur_win().w_s = &raw mut buf.b_s;
         }
 
-        cur_win().w_buffer = buf;
-        curbuf.set(buf);
+        cur_win().w_buffer = buf.raw();
+        curbuf.set(buf.raw());
         cur_buf().b_nwindows += 1;
 
         // Set 'fileformat', 'binary' and 'fenc' when forced.
@@ -377,7 +379,7 @@ unsafe fn leave_for_buffer(
     // this window (or another window).  If not used before, reset the
     // local window options to the global values.  Also restores old
     // folding stuff.
-    unsafe { get_winopts(curbuf.get()) };
+    unsafe { get_winopts(Buf::current()) };
     state.did_get_winopts = true;
 
     unsafe { xfree(new_name.cast()) };

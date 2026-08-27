@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::types::{FAIL, OK};
+use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 
 /// Which format an external diff answered in.
@@ -102,7 +103,8 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
 /// freed), or it touches none (a new block).
 unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut diffhunk_T) {
     unsafe {
-        let tp = curtab.get();
+        // SAFETY: `curtab` is set from startup to exit.
+        let tp = TabPage::current();
         let end_orig = (*hunk).lnum_orig + (*hunk).count_orig;
 
         // Blocks entirely above the hunk: they keep whatever an earlier pass
@@ -130,7 +132,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
             (*dp).df_lnum[idx_new] = (*hunk).lnum_new;
             (*dp).df_count[idx_new] = (*hunk).count_new;
             for i in idx_orig + 1..idx_new {
-                if !(*tp).tp_diffbuf[i].is_null() {
+                if !tp.tp_diffbuf[i].is_null() {
                     diff_copy_entry(walk.dprev, dp, idx_orig, i);
                 }
             }
@@ -151,7 +153,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
             // The hunk starts above the block: every buffer up to `idx_new`
             // grows upwards by the same amount.
             for i in idx_orig..idx_new {
-                if !(*tp).tp_diffbuf[i].is_null() {
+                if !tp.tp_diffbuf[i].is_null() {
                     (*dp).df_lnum[i] -= off;
                     (*dp).df_count[i] += off;
                 }
@@ -186,7 +188,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
             off = 0;
         }
         for i in idx_orig..idx_new {
-            if !(*tp).tp_diffbuf[i].is_null() {
+            if !tp.tp_diffbuf[i].is_null() {
                 (*dp).df_count[i] = (*dpl).df_lnum[i] + (*dpl).df_count[i] - (*dp).df_lnum[i] + off;
             }
         }

@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::winlayer::Win;
 
 /// How many items the menu shows before `'pumheight'` has a say.
 const PUM_DEF_HEIGHT: c_int = 10;
@@ -126,7 +127,7 @@ pub(crate) unsafe fn pum_compute_vertical_placement(
             let context_lines = if cmdline_pum {
                 0
             } else {
-                validate_cheight(target_win);
+                validate_cheight(Win::new(target_win));
                 let cline_visible_offset =
                     (*target_win).w_cline_row + (*target_win).w_cline_height - (*target_win).w_wrow;
                 3.min(cline_visible_offset)

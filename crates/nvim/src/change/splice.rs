@@ -31,7 +31,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, foldinfo_T};
+use crate::types::CpoFlag;
 use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 
 /// Drop the cached display information one window holds about the lines a
@@ -45,28 +45,24 @@ fn changed_lines_invalidate_win(
 ) {
     if wp.w_cursor.lnum <= lnum {
         // SAFETY: a live window; the answer is an index into `w_lines` or -1.
-        let i = unsafe { find_wl_entry(wp.raw(), lnum) };
+        let i = find_wl_entry(wp, lnum);
         // SAFETY: as above, and the short circuit is what bounds it.
         let below =
             i >= 0 && wp.w_cursor.lnum > unsafe { (*wp.w_lines.offset(i as isize)).wl_lnum };
         if below {
-            // SAFETY: a live window.
-            unsafe { changed_line_abv_curs_win(wp.raw()) };
+            changed_line_abv_curs_win(wp);
         }
     }
-    // SAFETY: a live window, in all four calls.
-    unsafe {
-        if wp.w_cursor.lnum > lnum {
-            changed_line_abv_curs_win(wp.raw());
-        } else if wp.w_cursor.lnum == lnum && wp.w_cursor.col >= col {
-            changed_cline_bef_curs(wp.raw());
-        }
-        if wp.w_botline >= lnum {
-            if xtra < 0 {
-                invalidate_botline_win(wp.raw());
-            } else {
-                approximate_botline_win(wp.raw());
-            }
+    if wp.w_cursor.lnum > lnum {
+        changed_line_abv_curs_win(wp);
+    } else if wp.w_cursor.lnum == lnum && wp.w_cursor.col >= col {
+        changed_cline_bef_curs(wp);
+    }
+    if wp.w_botline >= lnum {
+        if xtra < 0 {
+            invalidate_botline_win(wp);
+        } else {
+            approximate_botline_win(wp);
         }
     }
 
@@ -74,10 +70,9 @@ fn changed_lines_invalidate_win(
     // after the change part of it as far as the display cache goes.
     // SAFETY: a live window's buffer is live, in both calls; the short
     // circuits are upstream's.
-    let widen = xtra < 0
-        && wp.w_onebuf_opt.wo_wrap != 0
-        && unsafe { buf_meta_total(wp.w_buffer, kMTMetaInline) } != 0
-        || xtra != 0 && unsafe { buf_meta_total(wp.w_buffer, kMTMetaLines) } != 0;
+    let widen =
+        xtra < 0 && wp.w_onebuf_opt.wo_wrap != 0 && buf_meta_total(wp.buffer(), kMTMetaInline) != 0
+            || xtra != 0 && buf_meta_total(wp.buffer(), kMTMetaLines) != 0;
     if widen {
         lnume += 1;
     }
@@ -109,17 +104,15 @@ fn changed_lines_invalidate_win(
 
 /// [`changed_lines_invalidate_win`] for every window displaying `buf`.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn changed_lines_invalidate_buf(
-    buf: *mut buf_T,
+pub fn changed_lines_invalidate_buf(
+    buf: Buf,
     lnum: linenr_T,
     col: colnr_T,
     lnume: linenr_T,
     xtra: linenr_T,
 ) {
     for wp in tab_windows() {
-        if wp.w_buffer == buf {
+        if wp.w_buffer == buf.raw() {
             changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
         }
     }
@@ -253,8 +246,8 @@ fn redraw_win_for_change(
         && (last < wp.w_topline
             || (wp.w_topline >= lnum
                 && wp.w_topline < lnume
-                && unsafe { linetabsize_eol(wp.raw(), wp.w_topline) }
-                    <= wp.w_skipcol + unsafe { sms_marker_overlap(wp.raw(), -1) }));
+                && unsafe { linetabsize_eol(wp, wp.w_topline) }
+                    <= wp.w_skipcol + sms_marker_overlap(wp, -1)));
     if hide_all {
         wp.w_skipcol = 0;
     }
@@ -262,23 +255,19 @@ fn redraw_win_for_change(
     // Can't postpone the fold update: a following operator might work on
     // the whole fold, as `>>dd` does.
     // SAFETY: a live window.
-    unsafe { fold_update(wp.raw(), lnum, last) };
+    fold_update(wp, lnum, last);
 
     // The change may pull the lines above or below it into a fold, so widen
     // lnum/last to what might now be displayed differently. Setting
     // w_cline_folded here is the cheap way to keep it right when inserting
     // just above a closed fold.
-    let noline = ::core::ptr::null_mut::<linenr_T>();
-    let nofold = ::core::ptr::null_mut::<foldinfo_T>();
-    let at = &raw mut lnum;
-    // SAFETY: a live window; only `firstp` is asked for, and it is a local.
-    let mut folded = unsafe { has_folding_win(wp.raw(), lnum, at, noline, false, nofold) };
+    // Only `firstp` is asked for, and it is a local.
+    let mut folded = has_folding_win(wp, lnum, Some(&mut lnum), None, false, None);
     if wp.w_cursor.lnum == lnum {
         wp.w_cline_folded = folded;
     }
-    let to = &raw mut last;
-    // SAFETY: as above, for `lastp`.
-    folded = unsafe { has_folding_win(wp.raw(), last, noline, to, false, nofold) };
+    // As above, for `lastp`.
+    folded = has_folding_win(wp, last, None, Some(&mut last), false, None);
     if wp.w_cursor.lnum == last {
         wp.w_cline_folded = folded;
     }
@@ -290,7 +279,7 @@ fn redraw_win_for_change(
     if wp.has_any_folding() {
         let top = wp.w_topline;
         // SAFETY: a live window.
-        unsafe { set_topline(wp.raw(), top) };
+        set_topline(wp, top);
     }
 
     // 'relativenumber' always needs a redraw when lines came or went, even
@@ -318,7 +307,7 @@ fn redraw_win_for_change(
 /// See [`changed_lines`] for the arguments.
 fn changed_common(buf: Buf, lnum: linenr_T, col: colnr_T, lnume: linenr_T, xtra: linenr_T) {
     // SAFETY: a live buffer.
-    unsafe { changed(buf.raw()) };
+    unsafe { changed(buf) };
 
     for win in windows() {
         // SAFETY: the editor exists; the short circuit is upstream's.
@@ -371,7 +360,7 @@ fn changed_common(buf: Buf, lnum: linenr_T, col: colnr_T, lnume: linenr_T, xtra:
 /// autocommands that reload it.
 pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
     // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe { changed_lines_redraw_buf(curbuf.get(), lnum, lnum + 1, 0) };
+    unsafe { changed_lines_redraw_buf(Buf::new(curbuf.get()), lnum, lnum + 1, 0) };
     changed_common(cur_buf(), lnum, col, lnum + 1, 0);
 
     // Changing the end of a line can add or remove SpellCap on the start of
@@ -395,11 +384,9 @@ pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
         for wp in windows() {
             if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
-                // SAFETY: a live window.
-                let wlnum = unsafe { diff_lnum_win(lnum, wp.raw()) };
+                let wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > 0 {
-                    // SAFETY: a live window's buffer is live.
-                    unsafe { changed_lines_redraw_buf(wp.w_buffer, wlnum, wlnum + 1, 0) };
+                    changed_lines_redraw_buf(wp.buffer(), wlnum, wlnum + 1, 0);
                 }
             }
         }
@@ -430,7 +417,7 @@ pub unsafe fn inserted_bytes(lnum: linenr_T, start_col: colnr_T, old_col: c_int,
 /// `buf` must be a live buffer.
 pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(buf, lnum + 1, 0, lnum + 1, count, true) };
+    unsafe { changed_lines(Buf::new(buf), lnum + 1, 0, lnum + 1, count, true) };
 }
 
 /// [`appended_lines_buf`] for the current buffer.
@@ -452,7 +439,7 @@ pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe {
         mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo);
-        changed_lines(cb, lnum + 1, 0, lnum + 1, count, true);
+        changed_lines(Buf::new(cb), lnum + 1, 0, lnum + 1, count, true);
     }
 }
 
@@ -464,7 +451,7 @@ pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
 /// `buf` must be a live buffer.
 pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(buf, lnum, 0, lnum + count, -count, true) };
+    unsafe { changed_lines(Buf::new(buf), lnum, 0, lnum + count, -count, true) };
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
@@ -494,7 +481,7 @@ pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
     unsafe {
         mark_adjust(lnum, last, max, -count, kExtmarkNOOP);
         extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo);
-        changed_lines(cb, lnum, 0, lnum + count, -count, true);
+        changed_lines(Buf::new(cb), lnum, 0, lnum + count, -count, true);
     }
 }
 
@@ -506,22 +493,12 @@ pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
 /// one *before* the change, and `xtra` the net number of lines added
 /// (negative when deleting).
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn changed_lines_redraw_buf(
-    buf: *mut buf_T,
-    lnum: linenr_T,
-    mut lnume: linenr_T,
-    xtra: linenr_T,
-) {
-    // SAFETY: the caller's buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: linenr_T, mut lnume: linenr_T, xtra: linenr_T) {
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
     if xtra != 0 && buf.b_marktree[0].n_keys > 0 {
-        // SAFETY: a live buffer.
-        let lines = unsafe { buf_meta_total(buf.raw(), kMTMetaLines) };
+        let lines = buf_meta_total(buf, kMTMetaLines);
         lnume += 1 + linenr_T::from(xtra < 0 && lines != 0);
     }
 
@@ -554,23 +531,22 @@ pub unsafe fn changed_lines_redraw_buf(
 /// `b:changedtick` *again*; those callers send the `nvim_buf_lines_event`
 /// themselves once they are done.
 ///
-/// # Safety
-/// `buf` must be a live buffer. May trigger autocommands that reload it.
-pub unsafe fn changed_lines(
-    buf: *mut buf_T,
+/// May trigger autocommands that reload `buf`, so the caller must not go on
+/// using it across this call without re-deriving it from its handle.
+pub fn changed_lines(
+    buf: Buf,
     lnum: linenr_T,
     col: colnr_T,
     lnume: linenr_T,
     xtra: linenr_T,
     do_buf_event: bool,
 ) {
-    // SAFETY: the caller's buffer.
-    unsafe { changed_lines_redraw_buf(buf, lnum, lnume, xtra) };
+    changed_lines_redraw_buf(buf, lnum, lnume, xtra);
 
     // SAFETY: the editor exists; the short circuit is upstream's.
     let diff_same_lines = xtra == 0
         && cur_win().w_onebuf_opt.wo_diff != 0
-        && cur_win().w_buffer == buf
+        && cur_win().w_buffer == buf.raw()
         && unsafe { diff_internal() } == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so
@@ -578,25 +554,23 @@ pub unsafe fn changed_lines(
         for wp in windows() {
             if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
-                // SAFETY: a live window.
-                let wlnum = unsafe { diff_lnum_win(lnum, wp.raw()) };
+                let wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > 0 {
                     let bot = lnume - lnum + wlnum;
-                    // SAFETY: a live window's buffer is live.
-                    unsafe { changed_lines_redraw_buf(wp.w_buffer, wlnum, bot, 0) };
+                    changed_lines_redraw_buf(wp.buffer(), wlnum, bot, 0);
                 }
             }
         }
     }
 
-    // SAFETY: the caller's buffer.
-    changed_common(unsafe { Buf::new(buf) }, lnum, col, lnume, xtra);
+    changed_common(buf, lnum, col, lnume, xtra);
 
     if do_buf_event {
         let num_added = int64_t::from(lnume + xtra - lnum);
         let num_removed = int64_t::from(lnume - lnum);
-        // SAFETY: the caller's buffer.
-        unsafe { buf_updates_send_changes(buf, lnum, num_added, num_removed) };
+        // SAFETY: a live buffer, and the two counts describe the splice just
+        // made to it.
+        unsafe { buf_updates_send_changes(buf.raw(), lnum, num_added, num_removed) };
     }
 }
 

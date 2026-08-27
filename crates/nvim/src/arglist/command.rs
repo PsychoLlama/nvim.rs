@@ -28,11 +28,11 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
         }
         // SAFETY: curwin always has an argument list, and dropping the
         // reference to it is what makes room for the new one.
-        unsafe { alist_unlink(win_alist(curwin.get())) };
+        unsafe { alist_unlink(win_alist(cur_win())) };
         if cmdidx == CMD_argglobal as c_int {
             cur_win().w_alist = global_arglist();
         } else {
-            unsafe { alist_new() };
+            alist_new();
         }
     }
     // ":args file ..": define a new argument list, handled like ":next".
@@ -48,19 +48,17 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
     }
     if cmdidx == CMD_args as c_int {
         // SAFETY: every entry of the current list has a name.
-        unsafe { list_args() };
+        list_args();
     } else if cmdidx == CMD_arglocal as c_int {
         // SAFETY: both lists are valid.
-        unsafe { copy_global_arglist() };
+        copy_global_arglist();
     }
 }
 
 /// `:args` with no argument: list the arguments, the current one bracketed.
 ///
-/// # Safety
-///
-/// The current window's argument list must be valid.
-unsafe fn list_args() {
+/// Safe: every window always has an argument list.
+fn list_args() {
     if argcount() <= 0 {
         // Empty argument list.
         return;
@@ -78,12 +76,11 @@ unsafe fn list_args() {
 /// `:arglocal` with no argument: copy the global list into the window's own,
 /// skipping entries that have lost their name.
 ///
-/// # Safety
-///
-/// Both the global and the current window's list must be valid.
-unsafe fn copy_global_arglist() {
+/// Safe: both lists always exist -- every window has one, and the global
+/// list lives from startup to exit.
+fn copy_global_arglist() {
     // SAFETY: `ga_grow` reserves a slot for every entry that can be copied.
-    let al = win_alist(curwin.get());
+    let al = win_alist(cur_win());
     let count = alist_count(global_arglist());
     unsafe { ga_grow(&raw mut (*al).al_ga, count) };
     for i in 0..count {
@@ -224,7 +221,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
         }
     }
     set_cur_arg_idx(argn);
-    if argn == argcount() - 1 && win_alist(curwin.get()) == global_arglist() {
+    if argn == argcount() - 1 && win_alist(cur_win()) == global_arglist() {
         arg_had_last.set(true);
     }
     // Edit the file, always at the last known line number.

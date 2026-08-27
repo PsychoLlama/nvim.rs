@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::types::{VAR_UNKNOWN, Vv, kListLenUnknown};
+use crate::winlayer::{Buf, Win};
 
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
@@ -441,7 +442,7 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
                 (*buf).b_last_cursor.mark.lnum,
                 (*buf).b_last_cursor.mark.col,
             );
-            buflist_setfpos(buf, curwin.get(), lnum, col, false);
+            buflist_setfpos(Buf::new(buf), Some(Win::current()), lnum, col, false);
             xfree((*buf).additional_data.cast());
             (*buf).additional_data = (*item).additional_data;
             (*item).additional_data = core::ptr::null_mut();

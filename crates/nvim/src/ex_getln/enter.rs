@@ -138,7 +138,7 @@ pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi
     cc.open(indent + 50);
     cc.cmdpos = 0;
 
-    cc.last_colors = COLORED_CMDLINE_INIT;
+    cc.last_colors = ColoredCmdline::NONE;
     unsafe { sb_text_start_cmdline() };
 
     // Autoindent for :insert and :append.
@@ -450,7 +450,7 @@ pub(crate) unsafe fn command_line_enter(
             // Put the line in the history buffer (":" and "=" only when
             // it was typed).
             if s.histype != HIST_INVALID
-                && cc.len() != 0
+                && !cc.is_empty()
                 && s.firstc != NUL
                 && (s.some_key_typed || s.histype == HIST_SEARCH)
             {
@@ -525,11 +525,8 @@ pub(crate) unsafe fn command_line_enter(
 
     // C's `theend:`.
     unsafe { xfree(s.save_p_icm as *mut ::core::ffi::c_void) };
-    unsafe { xfree(cc.last_colors.cmdbuff as *mut ::core::ffi::c_void) };
-    unsafe { xfree(cc.last_colors.colors.items as *mut ::core::ffi::c_void) };
-    cc.last_colors.colors.capacity = 0;
-    cc.last_colors.colors.size = 0;
-    cc.last_colors.colors.items = ::core::ptr::null_mut::<CmdlineColorChunk>();
+    // C's pair of `xfree`s and the three fields it nulled after them.
+    cc.last_colors = ColoredCmdline::NONE;
 
     if ui_has(kUICmdline) {
         // Emit cmdline_block in Ex mode unless there is no command line,

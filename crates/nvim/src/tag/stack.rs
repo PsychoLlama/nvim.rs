@@ -11,7 +11,7 @@ use super::*;
 use crate::highlight_group::HLF_D;
 use crate::pos::MAXCOL;
 use crate::types::{FAIL, IOSIZE, OK, VAR_DICT, VAR_LIST};
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::{Buf, Live, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -49,7 +49,7 @@ const NO_VIEW: fmarkv_T = fmarkv_T {
 /// pop next. This borrows the three together so the bookkeeping stays in
 /// one place.
 pub(crate) struct TagStack {
-    win: *mut win_T,
+    win: Win,
 }
 
 /// A new entry for [`TagStack::push`].
@@ -72,36 +72,28 @@ impl TagStack {
     /// Borrow the tag stack of `wp`.
     ///
     /// # Safety
-    /// `wp` must be a live window, and nothing else may be reaching into
-    /// its tag stack for as long as this lives.
-    pub(crate) unsafe fn of(wp: *mut win_T) -> Self {
+    /// Nothing else may be reaching into `wp`'s tag stack for as long as
+    /// this lives.
+    pub(crate) unsafe fn of(wp: Win) -> Self {
         TagStack { win: wp }
     }
 
     /// How many entries hold anything.
     pub(crate) fn len(&self) -> usize {
-        // SAFETY: the window is live, and upstream never lets the count
-        // past the array.
-        unsafe { ((*self.win).w_tagstacklen as usize).min(TAGSTACKSIZE) }
+        // Upstream never lets the count past the array, but clamp anyway:
+        // every index below is taken from this.
+        (self.win.w_tagstacklen as usize).min(TAGSTACKSIZE)
     }
 
     /// The entry `CTRL-T` would pop next; one past the end at the top.
     pub(crate) fn curidx(&self) -> c_int {
-        // SAFETY: the window is live.
-        unsafe { (*self.win).w_tagstackidx }
+        self.win.w_tagstackidx
     }
 
     /// The entries in use, oldest first.
     pub(crate) fn entries(&mut self) -> &mut [taggy_T] {
         let len = self.len();
-        // SAFETY: `w_tagstack` is an inline array of `TAGSTACKSIZE`
-        // entries, and `len` is clamped to it.
-        unsafe {
-            core::slice::from_raw_parts_mut(
-                (&raw mut (*self.win).w_tagstack).cast::<taggy_T>(),
-                len,
-            )
-        }
+        &mut self.win.w_tagstack[..len]
     }
 
     /// Move the current index, clamped to the entries that exist.
@@ -110,15 +102,13 @@ impl TagStack {
     /// `CTRL-T` pops the newest entry.
     pub(crate) fn set_curidx(&mut self, curidx: c_int) {
         let len = self.len() as c_int;
-        // SAFETY: the window is live.
-        unsafe { (*self.win).w_tagstackidx = curidx.clamp(0, len) };
+        self.win.w_tagstackidx = curidx.clamp(0, len);
     }
 
     /// Throw the whole stack away.
     pub(crate) fn clear(&mut self) {
         self.truncate(0);
-        // SAFETY: the window is live.
-        unsafe { (*self.win).w_tagstackidx = 0 };
+        self.win.w_tagstackidx = 0;
     }
 
     /// Drop every entry from `len` on, leaving the index alone.
@@ -127,9 +117,8 @@ impl TagStack {
             // SAFETY: an entry in use owns its name and user data.
             unsafe { tagstack_clear_entry(item) };
         }
-        // SAFETY: the window is live, and `len` is no larger than the
-        // count it replaces.
-        unsafe { (*self.win).w_tagstacklen = len as c_int };
+        // `len` is no larger than the count it replaces.
+        self.win.w_tagstacklen = len as c_int;
     }
 
     /// Drop the oldest entry, shifting the rest down to free the top.
@@ -138,8 +127,8 @@ impl TagStack {
         // SAFETY: entry 0 is in use, so it owns its name and user data.
         unsafe { tagstack_clear_entry(&mut entries[0]) };
         entries.rotate_left(1);
-        // SAFETY: the window is live, and the count was at least one.
-        unsafe { (*self.win).w_tagstacklen -= 1 };
+        // The count was at least one.
+        self.win.w_tagstacklen -= 1;
     }
 
     /// Put a new entry on top, dropping the oldest if the stack is full.
@@ -148,9 +137,8 @@ impl TagStack {
             self.shift();
         }
         let idx = self.len();
-        // SAFETY: the window is live, and `idx` is now within the array
-        // because `shift` made room for it.
-        unsafe { (*self.win).w_tagstacklen += 1 };
+        // `idx` is now within the array, because `shift` made room for it.
+        self.win.w_tagstacklen += 1;
         // Field by field, not a whole `taggy_T`: the timestamp and the
         // additional data of the slot are deliberately left as they were.
         let entry = &mut self.entries()[idx];
@@ -240,9 +228,9 @@ pub unsafe fn tagstack_clear_entry(item: &mut taggy_T) {
 /// Must be called with a live `curwin`.
 pub unsafe fn do_tags(_eap: *mut exarg_T) {
     let mut row = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `curwin` is live, and `fm_getname` answers an allocation we
-    // free again below.
-    let mut stack = unsafe { TagStack::of(curwin.get()) };
+    // SAFETY: `curwin` is live and nothing else is holding its tag stack;
+    // `fm_getname` answers an allocation we free again below.
+    let mut stack = unsafe { TagStack::of(Win::current()) };
     let curidx = stack.curidx();
     let len = stack.len();
 
@@ -337,9 +325,9 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
 /// `gettagstack()` — describe the tag stack of `wp` into `retdict`.
 ///
 /// # Safety
-/// Both pointers must be live.
-pub unsafe fn get_tagstack(wp: *mut win_T, retdict: *mut dict_T) {
-    // SAFETY: the window and the dict are live.
+/// `retdict` must be a live dict.
+pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
+    // SAFETY: the dict is live, and nothing else holds the window's stack.
     let mut stack = unsafe { TagStack::of(wp) };
     unsafe { add_nr(retdict, c"length", stack.len() as varnumber_T) };
     unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as varnumber_T) };
@@ -359,9 +347,10 @@ pub unsafe fn get_tagstack(wp: *mut win_T, retdict: *mut dict_T) {
 /// Answers `OK`, or `FAIL` with the error already reported.
 ///
 /// # Safety
-/// Both pointers must be live.
-pub unsafe fn set_tagstack(wp: *mut win_T, d: *const dict_T, action: c_int) -> c_int {
-    // SAFETY: the window and the dict are live for the whole call.
+/// `d` must be a live dict.
+pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> c_int {
+    // SAFETY: the dict is live for the whole call, and nothing else holds
+    // the window's tag stack.
     if tfu_in_use.get() {
         // 'tagfunc' is running: it is the tag stack's own contents
         // that are being computed.

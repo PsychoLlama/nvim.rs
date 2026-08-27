@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::types::FAIL;
+use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -144,16 +145,17 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut diff_T, idx1: usize, idx2: usize)
         if (*dp).df_count[idx1] != (*dp).df_count[idx2] {
             return false;
         }
-        let tp = curtab.get();
+        // SAFETY: `curtab` is set from startup to exit.
+        let tp = TabPage::current();
         if diff_check_sanity(tp, dp) == FAIL {
             return false;
         }
         for i in 0..(*dp).df_count[idx1] {
             // The copy is not optional: the second `ml_get_buf` invalidates
             // the buffer the first one answered with.
-            let line = CStr::from_ptr(ml_get_buf((*tp).tp_diffbuf[idx1], (*dp).df_lnum[idx1] + i))
-                .to_owned();
-            let other = CStr::from_ptr(ml_get_buf((*tp).tp_diffbuf[idx2], (*dp).df_lnum[idx2] + i));
+            let line =
+                CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx1], (*dp).df_lnum[idx1] + i)).to_owned();
+            let other = CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx2], (*dp).df_lnum[idx2] + i));
             if !lines_equal(&line, other) {
                 return false;
             }

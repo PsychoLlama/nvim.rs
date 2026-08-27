@@ -173,7 +173,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
         }
     } else {
         cur_win().w_cursor = oap.end;
-        unsafe { check_cursor_col(curwin.get()) };
+        check_cursor_col(unsafe { Win::current() });
         // Works just like `i` on the next character.
         if unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
             && oap.start_vcol != oap.end_vcol
@@ -298,7 +298,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
             unsafe { block_insert(oap.raw(), ins_text, n, insert, &raw mut *bd) };
         }
         cur_win().w_cursor.col = oap.start.col;
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
         unsafe { xfree(ins_text as *mut c_void) };
     }
 }
@@ -414,7 +414,9 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
                 coladd: 0,
             };
             if bd.is_short != 0 {
-                unsafe { getvpos(curwin.get(), &raw mut vpos, oap.start_vcol) };
+                // SAFETY: a live current window, and a local position in its
+                // buffer's line `linenr`.
+                unsafe { getvpos(Win::current(), Pos::new(&raw mut vpos), oap.start_vcol) };
             }
 
             // SAFETY: `newp` is sized for the old line, the pad and the
@@ -451,8 +453,8 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
     }
 
     let (first, last) = (oap.start.lnum + 1, oap.end.lnum + 1);
-    unsafe { check_cursor(curwin.get()) };
-    unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
+    check_cursor(unsafe { Win::current() });
+    changed_lines(cur_buf(), first, 0, last, 0, true);
     unsafe { xfree(ins_text as *mut c_void) };
 }
 
@@ -464,7 +466,7 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
 pub unsafe fn adjust_cursor_eol() {
     // SAFETY: the caller's promise -- the cursor is on a line of the current
     // buffer, which is all any of these reads.
-    let cur_ve_flags = unsafe { get_ve_flags(curwin.get()) };
+    let cur_ve_flags = get_ve_flags(cur_win());
     let adj_cursor = cur_win().w_cursor.col > 0
         && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0

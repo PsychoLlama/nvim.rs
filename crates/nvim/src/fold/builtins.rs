@@ -12,7 +12,6 @@ use crate::decoration::{clear_virttext, next_virt_text_chunk};
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
 use crate::global_cell::GlobalCell;
-use crate::main::curwin;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::cshim::{ngettext, snprintf};
@@ -37,9 +36,9 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut typval_T, rettv: *mut typval_
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         let mut first: linenr_T = 0;
         let mut last: linenr_T = 0;
-        let (fp, lp) = (&raw mut first, &raw mut last);
-        // SAFETY: `curwin` is live and both out-parameters are this frame's.
-        let closed = unsafe { has_folding_win(curwin.get(), lnum, fp, lp, false, ptr::null_mut()) };
+        // SAFETY: `curwin` is set from startup to exit.
+        let win = unsafe { Win::current() };
+        let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
             rv.vval.v_number = (if end { last } else { first }) as varnumber_T;
             return;
@@ -163,13 +162,14 @@ pub unsafe fn f_foldtextresult(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     entered.set(true);
     // SAFETY: the caller's promise, plus a live current window.
     let lnum = unsafe { tv_get_lnum(argvars) }.max(0);
-    // SAFETY: `curwin` is a live window.
-    let info = unsafe { fold_info(curwin.get(), lnum) };
+    // SAFETY: `curwin` is set from startup to exit.
+    let win = unsafe { Win::current() };
+    let info = fold_info(win, lnum);
     if info.fi_lines > 0 {
         let mut vt: VirtText = VIRTTEXT_EMPTY;
         let (last, out) = (lnum + info.fi_lines - 1, buf.as_mut_ptr());
         // SAFETY: `buf` holds `FOLD_TEXT_LEN` bytes and `vt` is this frame's.
-        let mut text = unsafe { get_foldtext(curwin.get(), lnum, last, info, out, &raw mut vt) };
+        let mut text = unsafe { get_foldtext(win, lnum, last, info, out, &raw mut vt) };
         if text == &raw mut buf as *mut c_char {
             text = unsafe { xstrdup(text) };
         }

@@ -17,56 +17,44 @@ use super::*;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::types::{ExpandContext, NUL};
-use core::ops::{Deref, DerefMut};
 
 // ---------------------------------------------------------------------------
 // The command line being edited.
-
-/// `ccline`, the command line the editor is on.
-///
-/// Every reader would otherwise spell `(*ccline.ptr()).field`; the two `Deref`
-/// impls state the obligation once, and the whole of `ex_getln/` plus the
-/// `cmdexpand/` entry points that used to take a `*mut CmdlineInfo` go through
-/// this handle instead. It names a *place* that does not move -- the `ccline`
-/// cell, or one boxed entry of the saved stack ([`cmdline_at`]) -- so holding
-/// one is sound; what moves is the value inside it, which is why a value is
-/// derived at the point of use and never held across a call that can re-enter
-/// command-line mode: [`save_cmdline`] moves the whole structure onto the
-/// saved stack, and [`realloc_cmdbuff`] moves the text out from under any
-/// pointer into it.
-#[derive(Clone, Copy)]
-pub(crate) struct Cc(*mut CmdlineInfo);
-
-impl Deref for Cc {
-    type Target = CmdlineInfo;
-
-    fn deref(&self) -> &CmdlineInfo {
-        // SAFETY: `ccline` is a live editor global.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Cc {
-    fn deref_mut(&mut self) -> &mut CmdlineInfo {
-        // SAFETY: `ccline` is a live editor global.
-        unsafe { &mut *self.0 }
-    }
-}
+//
+// `Cc` is `Live<CmdlineInfo>`, declared beside `Live` itself; the projections
+// the command line needs are here, which an inherent impl on a local type may
+// be in any module of the defining crate. The whole of `ex_getln/` plus the
+// `cmdexpand/` entry points that used to take a `*mut CmdlineInfo` go through
+// the handle instead.
 
 impl Cc {
     /// The command line the editor is on.
     ///
-    /// Safe, and the only constructor: `ccline` is a `&'static GlobalCell`,
-    /// which is exactly the promise a raw `*mut CmdlineInfo` would have to be
-    /// told.  The *cell* never moves; its contents do, which is why the handle
-    /// is derived afresh at each use rather than held.
+    /// Safe: `ccline` is a `&'static GlobalCell`, which is exactly the
+    /// promise [`Live::new`] has to be told. The *cell* never moves; its
+    /// contents do, which is why the handle is derived afresh at each use
+    /// rather than held across a call that can re-enter command-line mode --
+    /// [`save_cmdline`] moves the whole structure onto the saved stack, and
+    /// [`realloc_cmdbuff`] moves the text out from under any pointer into it.
     pub(crate) fn current() -> Self {
-        Cc(ccline.ptr())
+        // SAFETY: a `&'static GlobalCell`'s address is live for the whole
+        // run, which is the promise.
+        unsafe { Cc::new(ccline.ptr()) }
     }
 
-    /// The address, for the calls that still spell a raw pointer.
-    pub(crate) fn raw(self) -> *mut CmdlineInfo {
-        self.0
+    /// Whether the command line is waiting for a single key: C's `one_key`.
+    pub(crate) fn one_key(self) -> bool {
+        self.one_key
+    }
+
+    /// Whether a `:[N]` style number prompt is up: C's `mouse_used != NULL`.
+    pub(crate) fn mouse_used(self) -> bool {
+        !self.mouse_used.is_null()
+    }
+
+    /// C's `xpc`: the completion in progress, NULL when there is none.
+    pub(crate) fn xpc(self) -> *mut expand_T {
+        self.xpc
     }
 
     /// The command line's own bytes: C's `cmdbuff[..cmdlen]`.
@@ -85,6 +73,14 @@ impl Cc {
     /// C's `cmdlen`.
     pub(crate) fn len(self) -> ::core::ffi::c_int {
         self.cmdbuff.len()
+    }
+
+    /// Whether the command line holds no text: C's `cmdlen == 0`.
+    ///
+    /// Not [`Cc::in_use`], which asks whether there is a command line at
+    /// all: a line that is in use may still be empty.
+    pub(crate) fn is_empty(self) -> bool {
+        self.len() == 0
     }
 
     /// Whether a command line is in use: C's `cmdbuff != NULL`.
@@ -239,9 +235,9 @@ pub unsafe fn getexline(
 ) -> *mut ::core::ffi::c_char {
     // When executing a register, remove the ':' in front of each line.
     // SAFETY: peeks at the typeahead.
-    if exec_from_reg.get() && unsafe { vpeekc() } == ':' as ::core::ffi::c_int {
+    if exec_from_reg.get() && vpeekc() == ':' as ::core::ffi::c_int {
         // SAFETY: consumes the byte `vpeekc` just reported.
-        unsafe { vgetc() };
+        vgetc();
     }
     // SAFETY: reads a whole command line, re-entering the editor.
     unsafe { getcmdline(c, 1, indent, do_concat) }
@@ -338,7 +334,10 @@ pub(crate) fn cmdline_at(depth: usize) -> Option<Cc> {
     }
     saved_cmdlines.with_mut(|stack| {
         let i = stack.len().checked_sub(depth)?;
-        Some(Cc(&raw mut *stack[i]))
+        // SAFETY: the address of a `Box`'s target, which the `Vec` cannot
+        // move however it grows; the entry lives until it is popped, and a
+        // `Cc` is derived afresh at each use.
+        Some(unsafe { Cc::new(&raw mut *stack[i]) })
     })
 }
 

@@ -415,7 +415,7 @@ fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig, err: &mut Error) 
     win.w_hsep_height = 0;
     win.w_vsep_width = 0;
 
-    config_float(win, fconfig);
+    win_config_float(win, fconfig);
     win.redraw_later(UPD_VALID);
     Some(win)
 }
@@ -520,7 +520,7 @@ pub(crate) unsafe fn win_new_float(
 // 'style' = "minimal"
 
 /// Strip a float of everything that decorates a normal window.
-fn set_minimal_style(win: Win) {
+pub(crate) fn win_set_minimal_style(win: Win) {
     let mut win = win;
     win.w_onebuf_opt.wo_nu = 0;
     win.w_onebuf_opt.wo_rnu = 0;
@@ -576,40 +576,25 @@ fn set_minimal_style(win: Win) {
     if win.w_floating && opt_is_set(win.w_onebuf_opt.wo_stl) {
         clear_opt(&mut win.w_onebuf_opt.wo_stl);
         if win.w_status_height > 0 {
-            config_float(win, win.w_config.clone());
+            win_config_float(win, win.w_config.clone());
         }
     }
-}
-
-pub(crate) unsafe fn win_set_minimal_style(wp: *mut win_T) {
-    // SAFETY: the caller's promise -- a live window.
-    set_minimal_style(unsafe { Win::new(wp) });
 }
 
 // ---------------------------------------------------------------------------
 // Config to geometry
 
 /// Rows and columns the border adds around the text area.
-fn border_height(win: Win) -> c_int {
+pub(crate) fn win_border_height(win: Win) -> c_int {
     win.w_border_adj[0] + win.w_border_adj[2]
 }
-fn border_width(win: Win) -> c_int {
+pub(crate) fn win_border_width(win: Win) -> c_int {
     win.w_border_adj[1] + win.w_border_adj[3]
-}
-
-pub(crate) unsafe fn win_border_height(wp: *mut win_T) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
-    border_height(unsafe { Win::new(wp) })
-}
-
-pub(crate) unsafe fn win_border_width(wp: *mut win_T) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
-    border_width(unsafe { Win::new(wp) })
 }
 
 /// Apply `fconfig` to `win`: its size, its screen position and everything
 /// that has to be redrawn because they changed.
-fn config_float(win: Win, mut fconfig: WinConfig) {
+pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     let mut win = win;
     // Process statusline changes before applying new height from config
     let show_stl = opt_is_set(win.w_onebuf_opt.wo_stl) && show_statusline();
@@ -659,8 +644,10 @@ fn config_float(win: Win, mut fconfig: WinConfig) {
         } else {
             0
         };
-        win.w_height = win.w_height.min(Rows.get() - border_height(win) - above_ch);
-        win.w_width = win.w_width.min(Columns.get() - border_width(win));
+        win.w_height = win
+            .w_height
+            .min(Rows.get() - win_border_height(win) - above_ch);
+        win.w_width = win.w_width.min(Columns.get() - win_border_width(win));
     }
 
     set_inner_size(win);
@@ -721,11 +708,6 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
     (row, col)
 }
 
-pub(crate) unsafe fn win_config_float(wp: *mut win_T, fconfig: WinConfig) {
-    // SAFETY: the caller's promise -- a live window.
-    config_float(unsafe { Win::new(wp) }, fconfig);
-}
-
 // ---------------------------------------------------------------------------
 // Closing floats
 
@@ -769,9 +751,8 @@ pub(crate) unsafe fn win_float_remove(bang: bool, mut count: c_int) {
 // ---------------------------------------------------------------------------
 // Keeping floats in step with what they hang off, and finding one
 
-pub(crate) unsafe fn win_check_anchored_floats(win: *mut win_T) {
-    // SAFETY: the caller's promise -- a live window.
-    let handle = unsafe { Win::new(win) }.handle;
+pub(crate) fn win_check_anchored_floats(win: Win) {
+    let handle = win.handle;
     for mut wp in floats() {
         // float might be anchored to moved window
         if wp.w_config.relative == kFloatRelativeWindow && wp.w_config.window == handle {
@@ -785,7 +766,7 @@ pub(crate) fn win_float_update_statusline() {
         let has_status = wp.w_status_height > 0;
         let should_show = opt_is_set(wp.w_onebuf_opt.wo_stl) && show_statusline();
         if should_show != has_status {
-            config_float(wp, wp.w_config.clone());
+            win_config_float(wp, wp.w_config.clone());
         }
     }
 }
@@ -800,27 +781,29 @@ pub(crate) fn win_float_anchor_laststatus() {
 
 pub(crate) fn win_reconfig_floats() {
     for wp in floats() {
-        config_float(wp, wp.w_config.clone());
+        win_config_float(wp, wp.w_config.clone());
     }
 }
 
-pub(crate) fn win_float_find_preview() -> *mut win_T {
-    floats()
-        .find(|wp| wp.w_float_is_info)
-        .map_or(ptr::null_mut(), Win::raw)
+pub(crate) fn win_float_find_preview() -> Option<Win> {
+    floats().find(|wp| wp.w_float_is_info)
 }
 
 /// Select an alternative window to `win` (assumed floating) in tabpage `tp`,
-/// which is `win`'s original tabpage or NULL for the current one -- the window
-/// to switch to when `win` is current and is then closed or moved away.
-pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: *const tabpage_T) -> *mut win_T {
-    // `win` itself is only ever compared below, never read, so it stays raw.
-    // SAFETY: the caller's promise -- null, or a live tab page.
-    let Some(tp) = (unsafe { TabPage::from_raw(tp.cast_mut()) }) else {
-        let wp = valid_window(prevwin.get())
+/// which is `win`'s original tabpage or `None` for the current one -- the
+/// window to switch to when `win` is current and is then closed or moved
+/// away. `None` when there is no window to fall back to.
+///
+/// # Safety
+/// `win` is only ever compared below, never read, so it stays raw -- but it
+/// must be null or an address that was once a window.
+pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: Option<TabPage>) -> Option<Win> {
+    let Some(tp) = tp else {
+        return valid_window(prevwin.get())
             .filter(|wp| wp.raw() != win.cast_mut())
-            .filter(|wp| wp.w_config.focusable && !wp.w_config.hide);
-        return wp.map_or(firstwin.get(), Win::raw);
+            .filter(|wp| wp.w_config.focusable && !wp.w_config.hide)
+            // SAFETY: `firstwin` is a live window once the editor has one.
+            .or_else(|| unsafe { Win::from_raw(firstwin.get()) });
     };
 
     debug_assert!(!tp.is_current(), "tp != curtab");
@@ -829,9 +812,9 @@ pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: *const tabpage
     let first = unsafe { Win::new(tp.tp_firstwin) };
     let wp = wp.unwrap_or(first);
     if wp.w_config.focusable && !wp.w_config.hide {
-        wp.raw()
+        Some(wp)
     } else {
-        first.raw()
+        Some(first)
     }
 }
 
@@ -840,7 +823,7 @@ pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: *const tabpage
 
 /// Report and clear `err`, release a half-built float and let autocommands run
 /// again: `win_float_create_preview`'s one failure path.
-fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> *mut win_T {
+fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> Option<Win> {
     if err.type_0 != kErrorTypeNone {
         report_error(err);
         clear_error(err);
@@ -850,12 +833,12 @@ fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> *mut win_T {
         free_window(win, None);
     }
     resume_autocmds();
-    ptr::null_mut()
+    None
 }
 
 /// Create a floating preview window. `enter` makes it current; `new_buf`
 /// gives it a scratch buffer of its own.
-pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T {
+pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win> {
     let mut config = WIN_CONFIG_INIT;
     let cur = current_win();
     config.col = f64::from(cur.w_wcol);
@@ -897,5 +880,5 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T
     if enter {
         enter_window(win);
     }
-    win.raw()
+    Some(win)
 }

@@ -261,7 +261,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
         ca.op().op_type == OP_NOP && ca.opcount == 0 && ca.count0 == 0 && ca.op().regname == 0;
     if ca.arg != 0 {
         if restart_edit.get() == 0 && cmdwin_type.get() == 0 && !visual_active() && no_reason {
-            let hint = if unsafe { any_buf_is_changed() } {
+            let hint = if any_buf_is_changed() {
                 c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
             } else {
                 c"Type  :qa  and press <Enter> to exit Nvim"
@@ -285,7 +285,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
     }
     if visual_active() {
         end_visual_mode();
-        unsafe { check_cursor_col(curwin.get()) };
+        check_cursor_col(unsafe { Win::current() });
         cur_win().w_set_curswant = true;
         redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {

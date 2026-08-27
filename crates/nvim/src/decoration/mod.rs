@@ -49,7 +49,7 @@ use crate::types::{
     VirtTextChunk, VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t,
     virt_line,
 };
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 use core::ptr;
 
@@ -611,7 +611,7 @@ pub unsafe fn decor_redraw(
             // line takes, so the cached line sizes have to go as well.
             if is_lines || (*vt).pos == kVPosInline {
                 let vt_col: colnr_T = if is_lines { 0 } else { col1 };
-                changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
+                changed_lines_invalidate_buf(Buf::new(buf), vt_lnum, vt_col, vt_lnum + 1, 0);
             }
             vt = (*vt).next;
         }
@@ -645,7 +645,7 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
             let mut wp = firstwin.get();
             while !wp.is_null() {
                 if (*wp).w_buffer == buf {
-                    changed_window_setting(wp);
+                    changed_window_setting(Win::new(wp));
                 }
                 wp = (*wp).w_next;
             }

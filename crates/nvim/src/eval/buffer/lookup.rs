@@ -24,12 +24,12 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     // is `v_string`, a NUL-terminated string or NULL.
     unsafe {
         match (*avar).v_type {
-            VAR_NUMBER => buflist_findnr(number_as_int((*avar).vval.v_number)),
+            VAR_NUMBER => find_buf(number_as_int((*avar).vval.v_number))
+                .map_or(ptr::null_mut(), |mut b| b.raw()),
             VAR_STRING if !(*avar).vval.v_string.is_null() => {
                 let name = (*avar).vval.v_string;
-                let found = buflist_findname_exp(name);
-                if !found.is_null() {
-                    return found;
+                if let Some(mut found) = buflist_findname_exp(name) {
+                    return found.raw();
                 }
                 // A buffer with no file of its own — a URL, or a scratch
                 // buffer — is not in the name index, so it is matched
@@ -93,7 +93,7 @@ pub unsafe fn f_bufload(argvars: *mut typval_T, unused: *mut typval_T, _fptr: Ev
         if swap_exists_action.get() != SEA_READONLY {
             swap_exists_action.set(SEA_NONE);
         }
-        buf_ensure_loaded(buf);
+        buf_ensure_loaded(Buf::new(buf));
     }
 }
 

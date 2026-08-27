@@ -15,7 +15,7 @@ use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, VAR_LIST, VAR_UNKNOWN};
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -83,7 +83,7 @@ impl Counted {
     /// Reads the current buffer and the remembered pattern.
     unsafe fn still_holds(&self, cursor_pos: pos_T) -> bool {
         let live = last_used_pattern();
-        self.chgtick as varnumber_T == unsafe { buf_get_changedtick(curbuf.get()) }
+        self.chgtick as varnumber_T == unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
             // The null test suppresses clang's "NULL passed as
             // nonnull parameter" on `strncmp`.
             && !self.pat.is_null()
@@ -113,7 +113,7 @@ impl Counted {
         unsafe { xfree(self.pat as *mut c_void) };
         self.pat = unsafe { xstrnsave(live.pat, live.patlen) };
         self.patlen = live.patlen;
-        self.chgtick = unsafe { buf_get_changedtick(curbuf.get()) } as c_int;
+        self.chgtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } as c_int;
         self.buf = curbuf.get();
         self.at = at;
     }
@@ -265,8 +265,8 @@ unsafe fn update_search_stat(
         while !got_int.get()
             && unsafe {
                 searchit(
-                    curwin.get(),
-                    curbuf.get(),
+                    Some(Win::current()),
+                    Buf::current(),
                     &raw mut c.at,
                     &raw mut endpos,
                     FORWARD,

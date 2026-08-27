@@ -171,13 +171,13 @@ pub(crate) fn ins_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if gchar_cursor() != NUL || unsafe { virtual_active(curwin.get()) } {
+    if gchar_cursor() != NUL || virtual_active(cur_win()) {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(K_RIGHT);
         }
         cur_win().w_set_curswant = true;
-        if unsafe { virtual_active(curwin.get()) } {
+        if virtual_active(cur_win()) {
             unsafe { oneright() };
         } else {
             // SAFETY: the cursor is on a character of its line, so the
@@ -320,7 +320,7 @@ fn start_arrow_changing(pos: &mut pos_T, end_change: bool) {
 #[inline(always)]
 fn coladvance_to(vcol: c_int) {
     // SAFETY: `curwin` is live for the whole session.
-    unsafe { coladvance(curwin.get(), vcol) };
+    coladvance(unsafe { Win::current() }, vcol);
 }
 
 /// The buffer the editor is working in.

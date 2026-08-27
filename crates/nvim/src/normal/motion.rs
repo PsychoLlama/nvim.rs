@@ -5,7 +5,6 @@
 
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
 use crate::ascii::ascii_iswhite;
 use crate::buffer::{bt_prompt, bt_quickfix};
@@ -20,8 +19,8 @@ use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::main::{
-    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf, curwin, ins_at_eol, mod_mask,
-    p_sel, p_ww, restart_edit,
+    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf, ins_at_eol, mod_mask, p_sel, p_ww,
+    restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
@@ -44,7 +43,7 @@ use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{
     CpoFlag, Direction, FAIL, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T,
-    oparg_T, win_T,
+    oparg_T,
 };
 use core::ffi::{c_int, c_uint};
 
@@ -71,7 +70,7 @@ pub(crate) unsafe fn nv_screengo(
     // SAFETY (throughout): `oap` is the caller's live operator.
     let mut op = unsafe { Op::new(oap) };
     let mut win = cur_win();
-    let wp = win.raw();
+    let wp = win;
     // SAFETY: the cursor line is a line of the window's own buffer.
     let mut linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
     let mut retval = true;
@@ -83,8 +82,8 @@ pub(crate) unsafe fn nv_screengo(
 
     // The first screen row of a line can be narrower than the rest: only
     // it carries the number column and the signs.
-    let col_off1 = unsafe { win_col_off(wp) };
-    let col_off2 = col_off1 - unsafe { win_col_off2(wp) };
+    let col_off1 = unsafe { win_col_off(wp.raw()) };
+    let col_off2 = col_off1 - win_col_off2(wp);
     let width1 = win.w_view_width - col_off1;
     let mut width2 = win.w_view_width - col_off2;
     if width2 == 0 {
@@ -105,7 +104,7 @@ pub(crate) unsafe fn nv_screengo(
     if win.w_view_width != 0 {
         if win.w_curswant == MAXCOL as c_int {
             atend = true;
-            unsafe { validate_virtcol(wp) };
+            validate_virtcol(wp);
             if width1 <= 0 {
                 win.w_curswant = 0;
             } else {
@@ -122,14 +121,14 @@ pub(crate) unsafe fn nv_screengo(
         while dist != 0 {
             dist -= 1;
             if dir == BACKWARD as c_int {
-                if win.w_curswant >= width1 && !folded(wp, win.w_cursor.lnum) {
+                if win.w_curswant >= width1 && !folded(win, win.w_cursor.lnum) {
                     // Still inside this line: back one row.
                     win.w_curswant -= width2;
                 } else if win.w_cursor.lnum <= 1 {
                     retval = false;
                     break;
                 } else {
-                    unsafe { cursor_up_inner(wp, 1, skip_conceal) };
+                    cursor_up_inner(wp, 1, skip_conceal);
                     linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
                     if linelen > width1 {
                         // Land on the *last* row of the line above.
@@ -140,13 +139,13 @@ pub(crate) unsafe fn nv_screengo(
                 }
             } else {
                 let n = line_end!();
-                if win.w_curswant + width2 < n && !folded(wp, win.w_cursor.lnum) {
+                if win.w_curswant + width2 < n && !folded(win, win.w_cursor.lnum) {
                     win.w_curswant += width2;
                 } else if win.w_cursor.lnum >= win.buffer().b_ml.ml_line_count {
                     retval = false;
                     break;
                 } else {
-                    unsafe { cursor_down_inner(wp, 1, skip_conceal) };
+                    cursor_down_inner(wp, 1, skip_conceal);
                     // Land on the *first* row of the line below.
                     win.w_curswant %= width2;
                     if win.w_curswant >= width1 {
@@ -158,19 +157,19 @@ pub(crate) unsafe fn nv_screengo(
         }
     }
 
-    if unsafe { virtual_active(wp) } && atend {
-        unsafe { coladvance(wp, MAXCOL as c_int) };
+    if virtual_active(win) && atend {
+        coladvance(win, MAXCOL as c_int);
     } else {
-        unsafe { coladvance(wp, win.w_curswant) };
+        coladvance(win, win.w_curswant);
     }
 
     if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 {
-        unsafe { validate_virtcol(wp) };
+        validate_virtcol(wp);
         let mut virtcol = win.w_virtcol;
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
-        if virtcol > width1 && unsafe { *get_showbreak_value(wp) } as c_int != NUL {
-            virtcol -= unsafe { vim_strsize(get_showbreak_value(wp)) };
+        if virtcol > width1 && unsafe { *get_showbreak_value(wp.raw()) } as c_int != NUL {
+            virtcol -= unsafe { vim_strsize(get_showbreak_value(wp.raw())) };
         }
         let c = unsafe { utf_ptr2char(get_cursor_pos_ptr()) };
         // A wide unprintable character is drawn as `<xxxx>`, which is
@@ -208,22 +207,23 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
     let mut win = cur_win();
-    let wp = win.raw();
+    let wp = win;
     op.motion_type = kMTLineWise;
     setpcmark();
     if cmdchar == 'L' as c_int {
-        unsafe { validate_botline_win(wp) };
+        validate_botline_win(wp);
         win.w_cursor.lnum = win.w_botline - 1;
         if count1 as linenr_T > win.w_cursor.lnum {
             win.w_cursor.lnum = 1;
-        } else if unsafe { win_lines_concealed(wp) } {
+        } else if unsafe { win_lines_concealed(wp.raw()) } {
             // A concealed line takes no screen row, so the count has to be
             // walked rather than subtracted.
             let mut n = count1 - 1;
             while n > 0 && win.w_cursor.lnum > win.w_topline {
-                let lnum = &raw mut win.w_cursor.lnum;
-                unsafe { has_folding(wp, win.w_cursor.lnum, lnum, ptr::null_mut()) };
-                n += unsafe { decor_conceal_line(wp, win.w_cursor.lnum as c_int, true) } as c_int;
+                let lnum = win.w_cursor.lnum;
+                has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
+                n += unsafe { decor_conceal_line(wp.raw(), win.w_cursor.lnum as c_int, true) }
+                    as c_int;
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
                 }
@@ -238,7 +238,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
             // Walk down counting screen rows until half the window's are
             // used up. Filler lines above the top line count against it.
             let mut used = -(unsafe { win_get_fill(wp, win.w_topline) } - win.w_topfill);
-            unsafe { validate_botline_win(wp) };
+            validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
             while (win.w_topline + n as linenr_T) < cur_buf().b_ml.ml_line_count {
@@ -254,7 +254,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                 }
                 let mut last: linenr_T = 0;
                 let at = win.w_topline + n as linenr_T;
-                if unsafe { has_folding(wp, at, ptr::null_mut(), &raw mut last) } {
+                if has_folding(wp, at, None, Some(&mut last)) {
                     // The whole fold is one screen row.
                     n = (last - win.w_topline) as c_int;
                 }
@@ -265,17 +265,17 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
             }
         } else {
             n = count1 - 1;
-            if unsafe { win_lines_concealed(wp) } {
+            if unsafe { win_lines_concealed(wp.raw()) } {
                 let mut lnum = win.w_topline;
                 // The decrement is inside the condition, so a concealed
                 // line is stepped over without spending any of the count.
-                while (unsafe { decor_conceal_line(wp, lnum as c_int - 1, true) } || {
+                while (unsafe { decor_conceal_line(wp.raw(), lnum as c_int - 1, true) } || {
                     let before = n;
                     n -= 1;
                     before > 0
                 }) && lnum < win.w_botline - 1
                 {
-                    unsafe { has_folding(wp, lnum, ptr::null_mut(), &raw mut lnum) };
+                    has_folding(wp, lnum, None, Some(&mut lnum));
                     lnum += 1;
                 }
                 n = (lnum - win.w_topline) as c_int;
@@ -285,7 +285,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     }
     if op.op_type == OP_NOP {
         // SAFETY: `wp` is the live window.
-        unsafe { cursor_correct(wp) };
+        cursor_correct(wp);
     }
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 }
@@ -307,14 +307,13 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
     let mut win = cur_win();
-    let wp = win.raw();
     op.motion_type = kMTCharWise;
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
     // SAFETY: 'selection' is a NUL-terminated option string.
     let sel = unsafe { *p_sel.get() } as c_int;
-    let past_line = visual_active() && sel != 'o' as c_int && !unsafe { virtual_active(wp) };
+    let past_line = visual_active() && sel != 'o' as c_int && !virtual_active(win);
 
     // Which 'whichwrap' flag lets this key wrap to the next line.
     let wrap_flag = if cmdchar == ' ' as c_int {
@@ -372,7 +371,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
             }
         } else if past_line {
             win.w_set_curswant = true;
-            if unsafe { virtual_active(wp) } {
+            if virtual_active(win) {
                 // SAFETY: the cursor is in its own line.
                 unsafe { oneright() };
             } else {
@@ -423,7 +422,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                 && win.w_cursor.lnum > 1
             {
                 win.w_cursor.lnum -= 1;
-                unsafe { coladvance(win.raw(), MAXCOL as c_int) };
+                coladvance(win, MAXCOL as c_int);
                 win.w_set_curswant = true;
                 // A delete or a change that wrapped back over the line
                 // break must take the break with it, so put the cursor
@@ -532,10 +531,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     ca.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
-    if !unsafe { virtual_active(curwin.get()) }
-        || gchar_cursor() != NUL
-        || ca.op().op_type == OP_NOP
-    {
+    if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OP_NOP {
         cur_win().w_curswant = MAXCOL as colnr_T;
     }
     if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) } == 0 {
@@ -557,7 +553,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
     {
-        unsafe { unadjust_for_sel() };
+        unadjust_for_sel();
         cursor_dec = true;
     }
     // `t` and `T` stop *before* the character.
@@ -574,7 +570,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
     if gchar_cursor() == TAB
-        && unsafe { virtual_active(curwin.get()) }
+        && virtual_active(cur_win())
         && ca.arg == FORWARD as c_int
         && (t_cmd || ca.op().op_type != OP_NOP)
     {
@@ -695,7 +691,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
     ca.op().inclusive = false;
     beginline(BeginlineOpts::NONE);
     if ca.count0 > 0 {
-        unsafe { coladvance(curwin.get(), ca.count0 - 1) };
+        coladvance(unsafe { Win::current() }, ca.count0 - 1);
         cur_win().w_curswant = ca.count0 - 1;
     } else {
         cur_win().w_curswant = 0;
@@ -766,8 +762,8 @@ pub(crate) unsafe fn adjust_cursor(oap: *mut oparg_T) {
     if cur_win().w_cursor.col > 0
         && gchar_cursor() == NUL
         && (!visual_active() || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
-        && !unsafe { virtual_active(curwin.get()) }
-        && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagOnemore as c_uint == 0
+        && !virtual_active(cur_win())
+        && get_ve_flags(cur_win()) & kOptVeFlagOnemore as c_uint == 0
     {
         cur_win().w_cursor.col -= 1;
         unsafe { mb_adjust_cursor() };
@@ -816,7 +812,7 @@ fn cur_win() -> Win {
 }
 
 /// Whether `lnum` is inside a closed fold of `wp`.
-fn folded(wp: *mut win_T, lnum: linenr_T) -> bool {
-    // SAFETY: the caller's window is live; both fold ends are unwanted.
-    unsafe { has_folding(wp, lnum, ptr::null_mut(), ptr::null_mut()) }
+fn folded(wp: Win, lnum: linenr_T) -> bool {
+    // Both fold ends are unwanted.
+    has_folding(wp, lnum, None, None)
 }

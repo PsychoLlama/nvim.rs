@@ -177,14 +177,14 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
         let qfp: *mut qfline_T = xmalloc(size_of::<qfline_T>()).cast();
         let buf = if new.bufnum != 0 {
             (*qfp).qf_fnum = new.bufnum;
-            let buf = buflist_findnr(new.bufnum);
-            if !buf.is_null() {
-                (*buf).b_has_qf_entry |= has_entry_flag(qfl);
+            let buf = find_buf(new.bufnum);
+            if let Some(mut buf) = buf {
+                buf.b_has_qf_entry |= has_entry_flag(qfl);
             }
             buf
         } else {
             (*qfp).qf_fnum = qf_get_fnum(qfl, new.dir, new.fname);
-            buflist_findnr((*qfp).qf_fnum)
+            find_buf((*qfp).qf_fnum)
         };
 
         // The entry shows a shortened name only when it differs from the
@@ -195,10 +195,11 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
         } else {
             fix_fname(new.fname)
         };
-        if !buf.is_null()
-            && !(*buf).b_ffname.is_null()
+        // C's `buf != NULL && buf->b_ffname != NULL && …`, in that order.
+        let buf_ffname = buf.map(|buf| buf.b_ffname).filter(|p| !p.is_null());
+        if let Some(buf_ffname) = buf_ffname
             && !fullname.is_null()
-            && path_fnamecmp(fullname, (*buf).b_ffname) != 0
+            && path_fnamecmp(fullname, buf_ffname) != 0
         {
             let short = path_try_shorten_fname(fullname);
             if !short.is_null() {
@@ -446,16 +447,12 @@ pub(crate) unsafe fn qf_free(qfl: *mut qf_list_T) {
 /// Move the line numbers of every entry naming `buf` after an edit.
 ///
 /// `buf` is the buffer that changed; `wp` names the window whose location
-/// list to walk, or is null for the quickfix stack. Answers whether any
+/// list to walk, or is `None` for the quickfix stack. Answers whether any
 /// entry named the buffer at all — the caller clears the buffer's
 /// "has entries" flag when none did.
-///
-/// # Safety
-///
-/// `buf` must be a live buffer and `wp` null or a live window.
-pub unsafe fn qf_mark_adjust(
-    buf: *mut buf_T,
-    wp: *mut win_T,
+pub fn qf_mark_adjust(
+    buf: Buf,
+    wp: Option<Win>,
     line1: linenr_T,
     line2: linenr_T,
     amount: linenr_T,
@@ -463,20 +460,18 @@ pub unsafe fn qf_mark_adjust(
 ) -> bool {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let wanted = if wp.is_null() {
+        let wanted = if wp.is_none() {
             BUF_HAS_QF_ENTRY
         } else {
             BUF_HAS_LL_ENTRY
         };
-        if (*buf).b_has_qf_entry & wanted == 0 {
+        if buf.b_has_qf_entry & wanted == 0 {
             return false;
         }
-        let qi = if wp.is_null() {
-            QfStack::Global.raw()
-        } else if (*wp).w_llist.is_null() {
-            return false;
-        } else {
-            (*wp).w_llist
+        let qi = match wp {
+            None => QfStack::Global.raw(),
+            Some(wp) if wp.w_llist.is_null() => return false,
+            Some(wp) => wp.w_llist,
         };
 
         let mut found_one = false;
@@ -485,7 +480,7 @@ pub unsafe fn qf_mark_adjust(
             let mut i = 1;
             let mut qfp = (*qfl).qf_start;
             while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
-                if (*qfp).qf_fnum == (*buf).handle {
+                if (*qfp).qf_fnum == buf.handle {
                     found_one = true;
                     if (*qfp).qf_lnum >= line1 && (*qfp).qf_lnum <= line2 {
                         if amount == MAXLNUM as linenr_T {

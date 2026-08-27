@@ -40,12 +40,8 @@ impl Win {
 }
 
 /// [`Win::curs_columns`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn curs_columns(wp: *mut win_T, may_scroll: c_int) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.curs_columns(may_scroll != 0);
+pub fn curs_columns(wp: Win, may_scroll: c_int) {
+    wp.curs_columns(may_scroll != 0);
 }
 
 impl Win {

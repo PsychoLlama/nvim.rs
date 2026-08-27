@@ -197,7 +197,7 @@ pub(crate) unsafe fn report_written(
     let (lnum, nchars) = (written.lnum, written.nchars as off_T);
     unsafe {
         let iobuff = report.as_mut_ptr();
-        add_quoted_fname(iobuff, IOSIZE as size_t, buf, fname);
+        add_quoted_fname(iobuff, IOSIZE as size_t, Buf::new(buf), fname);
         let note = |text: &'static CStr| {
             xstrlcat(iobuff, translate(text).as_ptr(), IOSIZE as size_t);
         };

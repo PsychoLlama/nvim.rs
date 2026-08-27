@@ -327,9 +327,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     // Close the link to the buffer.
     let bufref = BufRef::of(cur_buf());
     win.w_locked = true;
-    let (w, b) = (win.raw(), buf.raw());
-    // SAFETY: a live window and its own live buffer.
-    let retval = unsafe { close_buffer(w, b, action, abort_if_last, true) };
+    let retval = close_buffer(Some(win), buf, action, abort_if_last, true);
     if valid_win_any_tab(win.raw()) {
         win.w_locked = false;
     }

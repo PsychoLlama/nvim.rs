@@ -23,16 +23,16 @@ use crate::types::NUL;
 /// clamped to the line length on the way out.
 ///
 /// # Safety
-/// `wp` and `pos` must be live; the out-parameters may each be null.
+/// `pos` must be live; the out-parameters may each be null.
 pub(crate) unsafe fn getvcol(
-    wp: *mut win_T,
+    wp: Win,
     pos: *mut pos_T,
     start: *mut colnr_T,
     cursor: *mut colnr_T,
     end: *mut colnr_T,
 ) {
     unsafe {
-        let line = ml_get_buf((*wp).w_buffer, (*pos).lnum);
+        let line = ml_get_buf(wp.w_buffer, (*pos).lnum);
         let end_col = (*pos).col;
 
         let mut csarg = CharsizeArg::default();
@@ -52,7 +52,7 @@ pub(crate) unsafe fn getvcol(
                     char_size = CharSize { width: 1, head: 0 };
                     break;
                 }
-                char_size = charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value);
+                char_size = charsize_fast_impl(wp.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value);
                 let next = utfc_next(ci);
                 if next.ptr.offset_from(line) > end_col as isize {
                     break;
@@ -99,7 +99,7 @@ pub(crate) unsafe fn getvcol(
         if !cursor.is_null() {
             let cursor_at_tab_end = ci.chr.value == TAB
                 && State.get() & MODE_NORMAL != 0
-                && (*wp).w_onebuf_opt.wo_list == 0
+                && wp.w_onebuf_opt.wo_list == 0
                 && !virtual_active(wp)
                 && !(visual_active()
                     && (*p_sel.get() == b'e' as c_char || ltoreq(*pos, visual_anchor())));
@@ -126,9 +126,9 @@ pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
 
         (*win).w_onebuf_opt.wo_list = 0;
         if (*posp).coladd != 0 {
-            getvvcol(win, posp, null, &raw mut vcol, null);
+            getvvcol(Win::new(win), posp, null, &raw mut vcol, null);
         } else {
-            getvcol(win, posp, null, &raw mut vcol, null);
+            getvcol(Win::new(win), posp, null, &raw mut vcol, null);
         }
         (*win).w_onebuf_opt.wo_list = list_save;
         vcol
@@ -141,7 +141,7 @@ pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
 /// # Safety
 /// As [`getvcol`].
 pub(crate) unsafe fn getvvcol(
-    wp: *mut win_T,
+    wp: Win,
     pos: *mut pos_T,
     start: *mut colnr_T,
     cursor: *mut colnr_T,
@@ -162,8 +162,8 @@ pub(crate) unsafe fn getvvcol(
         let mut endadd: colnr_T = 0;
 
         // The cursor cannot sit on part of a wide character.
-        let ptr = ml_get_buf((*wp).w_buffer, (*pos).lnum);
-        if (*pos).col < ml_get_buf_len((*wp).w_buffer, (*pos).lnum) {
+        let ptr = ml_get_buf(wp.w_buffer, (*pos).lnum);
+        if (*pos).col < ml_get_buf_len(wp.w_buffer, (*pos).lnum) {
             let c = utf_ptr2char(ptr.offset((*pos).col as isize));
             if c != TAB && vim_isprintc(c) {
                 endadd = ptr2cells(ptr.offset((*pos).col as isize)) - 1;
@@ -195,7 +195,7 @@ pub(crate) unsafe fn getvvcol(
 /// # Safety
 /// All pointers must be live; `left` and `right` are always written.
 pub(crate) unsafe fn getvcols(
-    wp: *mut win_T,
+    wp: Win,
     pos1: *mut pos_T,
     pos2: *mut pos_T,
     left: *mut colnr_T,

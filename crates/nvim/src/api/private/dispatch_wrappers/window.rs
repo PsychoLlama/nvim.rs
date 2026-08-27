@@ -47,8 +47,7 @@ pub unsafe fn handle_nvim_win_close(
         wrong_type(error, 2, c"nvim_win_close", c"Boolean");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -505,8 +504,7 @@ pub unsafe fn handle_nvim_win_hide(
         wrong_type(error, 1, c"nvim_win_hide", c"Window");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -596,8 +594,7 @@ pub unsafe fn handle_nvim_win_set_buf(
         wrong_type(error, 2, c"nvim_win_set_buf", c"Buffer");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }

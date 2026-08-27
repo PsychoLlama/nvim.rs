@@ -15,7 +15,7 @@ use crate::normal::{
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::{FAIL, OK};
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 use core::ptr;
 
@@ -68,8 +68,8 @@ unsafe fn search_around(
         }
         let result = unsafe {
             searchit(
-                curwin.get(),
-                curbuf.get(),
+                Some(Win::current()),
+                Buf::current(),
                 &raw mut pos,
                 &raw mut end_pos,
                 if forwards { FORWARD } else { BACKWARD },

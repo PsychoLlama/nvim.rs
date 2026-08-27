@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::buffer::buflist_findnr;
+use crate::buffer::find_buf;
 use crate::ex_docmd::cmdmod_has;
 use crate::main::{global_busy, got_int, jop_flags, listcmd_busy};
 use crate::memory::{xfree, xstrdup};
@@ -159,7 +159,7 @@ pub unsafe fn get_jumplist(win: *mut win_T, mut count: c_int) -> *mut fmark_T {
         let here = unsafe { Buf::current() }.handle;
         // An entry whose buffer no longer exists is skipped rather than
         // jumped to, and the step continues in the same direction.
-        if jump.fmark().fnum() == here || !buflist_findnr(jump.fmark().fnum()).is_null() {
+        if jump.fmark().fnum() == here || find_buf(jump.fmark().fnum()).is_some() {
             return jump.fmark().raw();
         }
         count += if count < 0 { -1 } else { 1 };

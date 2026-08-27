@@ -155,7 +155,7 @@ pub(crate) unsafe fn normal_search(
     if !equalpos(cur_win().w_cursor, prev_cursor) && current_match_is_distinct() {
         unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     }
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
     i
 }
 
@@ -256,7 +256,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
 
     let fm = unsafe { mark_get(curbuf.get(), curwin.get(), ptr::null_mut(), kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cap, flags, fm) };
-    if !unsafe { virtual_active(curwin.get()) } {
+    if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;
     }
     let moved = move_res & kMarkMoveSuccess as MarkMoveRes != 0

@@ -51,6 +51,7 @@ use crate::types::{
     typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -544,7 +545,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
                     );
                     bail!();
                 }
-                buf_close_terminal(curbuf.get());
+                buf_close_terminal(Buf::current());
             }
             // `pty && rpc` was refused above and `term` implies `pty`.
             debug_assert!(!rpc);
@@ -663,7 +664,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
                 pid,
                 cmd,
             );
-            setfname(buf, name.as_mut_ptr(), ptr::null_mut(), true);
+            setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true);
             apply_autocmds(
                 EVENT_BUFFILEPOST,
                 ptr::null_mut(),

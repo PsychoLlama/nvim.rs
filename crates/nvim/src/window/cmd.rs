@@ -17,7 +17,7 @@ use core::ptr;
 use super::*;
 use crate::api::private::helpers::api_clear_error;
 use crate::autocmd::EVENT_TABNEWENTERED;
-use crate::buffer::{buflist_findname_exp, buflist_findnr, buflist_getfile, set_pcmark};
+use crate::buffer::{buflist_findname_exp, buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
@@ -678,7 +678,7 @@ fn langmap_adjust(c: c_int) -> c_int {
 /// Read one character with no mapping applied.
 fn read_char() -> c_int {
     // SAFETY: reads from the type-ahead buffer.
-    unsafe { plain_vgetc() }
+    plain_vgetc()
 }
 
 /// Show `c` in the pending-command display.
@@ -694,14 +694,13 @@ fn do_ident(first: c_int, second: c_int) {
 
 /// Buffer `fnum`, if there is one.
 fn find_buffer(fnum: c_int) -> Option<Buf> {
-    // SAFETY: only looks `fnum` up in the buffer list.
-    unsafe { Buf::from_raw(buflist_findnr(fnum)) }
+    find_buf(fnum)
 }
 
 /// The buffer whose name `name` expands to, if there is one.
 fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
     // SAFETY: a NUL-terminated file name.
-    unsafe { Buf::from_raw(buflist_findname_exp(name)) }
+    unsafe { buflist_findname_exp(name) }
 }
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
@@ -740,7 +739,7 @@ fn edit_file(ptr: *mut c_char) -> c_int {
 /// Clamp `wp`'s cursor line into its buffer.
 fn revalidate_cursor_lnum(mut wp: Win) {
     // SAFETY: a live window.
-    unsafe { check_cursor_lnum(wp.raw()) };
+    check_cursor_lnum(wp);
 }
 
 /// Put the cursor on the first non-blank of its line.

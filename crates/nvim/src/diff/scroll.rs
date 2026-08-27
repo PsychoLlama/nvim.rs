@@ -123,17 +123,11 @@ fn calculate_topfill_and_topline(
 
 /// Set `towin`'s topline and topfill from `fromwin`'s.
 ///
-/// # Safety
-/// Both windows must be live.
-pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
-    // SAFETY: the caller's windows.
-    let fromwin = unsafe { Win::new(fromwin) };
-    // SAFETY: as above.
-    let mut towin = unsafe { Win::new(towin) };
+/// Safe: two [`Win`]s carry the whole of the promise this needs.
+pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     let tp = cur_tab();
-    // SAFETY: a live window's buffer is live.
-    let frombuf = unsafe { Buf::new(fromwin.w_buffer) };
-    let fromidx = diff_slot(frombuf.raw(), tp);
+    let frombuf = fromwin.buffer();
+    let fromidx = diff_slot(frombuf, tp);
     if fromidx == DB_COUNT {
         return;
     }
@@ -156,7 +150,7 @@ pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
             towin.w_topline = tobuf.b_ml.ml_line_count - (frombuf.b_ml.ml_line_count - lnum);
         }
         Some(dp) => {
-            let toidx = diff_slot(tobuf.raw(), tp);
+            let toidx = diff_slot(tobuf, tp);
             if toidx == DB_COUNT {
                 return;
             }
@@ -183,11 +177,8 @@ pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
         towin.w_topline = 1;
         towin.w_topfill = 0;
     }
-    // SAFETY: a live window, in both calls.
-    unsafe {
-        invalidate_botline_win(towin.raw());
-        changed_line_abv_curs_win(towin.raw());
-    }
+    invalidate_botline_win(towin);
+    changed_line_abv_curs_win(towin);
     towin.check_topfill(false);
     // `has_folding` writes the first line of the fold only when there is one.
     if let Some(first) = towin.fold_first(towin.w_topline) {
@@ -200,7 +191,7 @@ pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
 pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
     let tp = cur_tab();
     let mut lnum = cur_win().w_cursor.lnum;
-    let idx = diff_slot(curbuf.get(), tp);
+    let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT || tp.tp_first_diff.is_null() {
         return FAIL;
     }
@@ -247,10 +238,10 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
 ///
 /// `baseline` accumulates how far the two buffers have drifted apart over the
 /// blocks passed so far, which is the answer for any line outside a block.
-fn diff_get_corresponding_line_int(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T {
+fn diff_get_corresponding_line_int(buf1: Buf, lnum1: linenr_T) -> linenr_T {
     let tp = cur_tab();
     let idx1 = diff_slot(buf1, tp);
-    let idx2 = diff_slot(curbuf.get(), tp);
+    let idx2 = diff_slot(cur_buf(), tp);
     if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_first_diff.is_null() {
         return lnum1;
     }
@@ -289,7 +280,9 @@ fn diff_get_corresponding_line_int(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_
 }
 
 /// [`diff_get_corresponding_line_int`], clamped to the buffer.
-pub unsafe fn diff_get_corresponding_line(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T {
+///
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub fn diff_get_corresponding_line(buf1: Buf, lnum1: linenr_T) -> linenr_T {
     diff_get_corresponding_line_int(buf1, lnum1).min(cur_buf().b_ml.ml_line_count)
 }
 
@@ -299,13 +292,10 @@ pub unsafe fn diff_get_corresponding_line(buf1: *mut buf_T, lnum1: linenr_T) -> 
 /// buffer: it is used to decide what a window shows beside a given line, and
 /// running past the block would point at the next change.
 ///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn diff_lnum_win(lnum: linenr_T, wp: *mut win_T) -> linenr_T {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub fn diff_lnum_win(lnum: linenr_T, wp: Win) -> linenr_T {
     let tp = cur_tab();
-    let idx = diff_slot(curbuf.get(), tp);
+    let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT {
         return 0;
     }
@@ -320,7 +310,7 @@ pub unsafe fn diff_lnum_win(lnum: linenr_T, wp: *mut win_T) -> linenr_T {
     let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (cur_buf().b_ml.ml_line_count - lnum);
     };
-    let i = diff_slot(buf.raw(), tp);
+    let i = diff_slot(buf, tp);
     if i == DB_COUNT {
         return 0;
     }

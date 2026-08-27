@@ -14,7 +14,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::{null, null_mut};
 
-use crate::buffer::buflist_findnr;
+use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
     NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_len,
@@ -32,7 +32,7 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv, buf_T,
+    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv,
     kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::strlen;
@@ -299,7 +299,7 @@ pub unsafe fn save_tv_as_string(
 /// `tv` must be a `VAR_NUMBER`; `len` valid.
 unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_char {
     unsafe {
-        let buf: *mut buf_T = buflist_findnr((*tv).vval.v_number as c_int);
+        let buf = find_buf((*tv).vval.v_number as c_int).map_or(null_mut(), |mut b| b.raw());
         if buf.is_null() {
             semsg_c!(gettext(e_nobufnr.as_ptr()), (*tv).vval.v_number);
             *len = -1;

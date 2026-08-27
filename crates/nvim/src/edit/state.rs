@@ -110,7 +110,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if gchar_cursor() == TAB || unsafe { buf_meta_total(curbuf.get(), kMTMetaInline) } > 0 {
+    if gchar_cursor() == TAB || unsafe { buf_meta_total(Buf::current(), kMTMetaInline) } > 0 {
         cur_win()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -134,7 +134,7 @@ fn insert_enter(s: &mut InsertState) {
     if restart_edit.get() != 0 && stuff_empty() {
         arrow_used.set(where_paste_started.get().lnum == 0);
         restart_edit.set(0);
-        unsafe { validate_virtcol(curwin.get()) };
+        validate_virtcol(unsafe { Win::current() });
         unsafe { update_curswant() };
         restore_ctrl_o_column();
         ins_at_eol.set(false);
@@ -159,7 +159,8 @@ fn insert_enter(s: &mut InsertState) {
         s.i = unsafe { showmode() };
     }
     if did_restart_edit.get() == 0 {
-        unsafe { change_warning(curbuf.get(), if s.i == 0 { 0 } else { s.i + 1 }) };
+        // SAFETY: the current buffer is live, and survives FileChangedRO.
+        unsafe { change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 }) };
     }
 
     unsafe { ui_cursor_shape() };
@@ -202,9 +203,9 @@ fn insert_enter(s: &mut InsertState) {
     // is empty, so `b_last_changedtick` is reset here when the event was
     // not blocked by `char_avail()` (`:norm!`, say) and did fire.
     if !key_available()
-        && cur_buf().b_last_changedtick_i == unsafe { buf_get_changedtick(curbuf.get()) }
+        && cur_buf().b_last_changedtick_i == unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
     {
-        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(curbuf.get()) };
+        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
     }
 }
 
@@ -243,7 +244,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
         let save_state = State.get();
         cur_win().w_cursor = save_cursor;
         State.set(MODE_INSERT);
-        unsafe { check_cursor_col(curwin.get()) };
+        check_cursor_col(unsafe { Win::current() });
         State.set(save_state);
     }
 }
@@ -340,11 +341,11 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     may_scroll_for_wrap(s);
 
     if s.count <= 1 {
-        unsafe { update_topline(curwin.get()) };
+        update_topline(unsafe { Win::current() });
     }
     s.did_backspace = false;
     if s.count <= 1 {
-        unsafe { validate_cursor(curwin.get()) };
+        validate_cursor(unsafe { Win::current() });
     }
 
     unsafe { ins_redraw(true) };
@@ -413,7 +414,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     s.mincol = cur_win().w_wcol;
     // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all
     // these editor-wide routines ask for.
-    unsafe { validate_cursor_col(curwin.get()) };
+    validate_cursor_col(unsafe { Win::current() });
 
     let vcol = unsafe { get_nolist_virtcol() };
     let tabstop = unsafe { tabstop_at(vcol, cur_buf().b_p_ts, cur_buf().b_p_vts_array, false) };
@@ -425,17 +426,15 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     {
         if cur_win().w_topfill > 0 {
             cur_win().w_topfill -= 1;
-        } else if unsafe {
-            has_folding(
-                curwin.get(),
-                cur_win().w_topline,
-                ::core::ptr::null_mut(),
-                &raw mut s.old_topline,
-            )
-        } {
-            unsafe { set_topline(curwin.get(), s.old_topline + 1) };
+        } else if has_folding(
+            cur_win(),
+            cur_win().w_topline,
+            None,
+            Some(&mut s.old_topline),
+        ) {
+            set_topline(unsafe { Win::current() }, s.old_topline + 1);
         } else {
-            unsafe { set_topline(curwin.get(), cur_win().w_topline + 1) };
+            set_topline(unsafe { Win::current() }, cur_win().w_topline + 1);
         }
     }
 }
@@ -492,7 +491,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         unsafe { ins_redraw(false) };
         s.c = {
             let _raw_key = Keys::unmapped_with_codes();
-            unsafe { plain_vgetc() }
+            plain_vgetc()
         };
         if s.c != Ctrl_N && s.c != Ctrl_G && s.c != Ctrl_O {
             vungetc(s.c);
@@ -658,7 +657,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
         did_cursorhold.set(false);
     }
     // The completion popup belongs to the window it was started in.
-    if ins_compl_active() && !unsafe { ins_compl_win_active(curwin.get()) } {
+    if ins_compl_active() && !ins_compl_win_active(cur_win()) {
         unsafe { ins_compl_cancel() };
     }
     if arrow_used.get() {
@@ -711,7 +710,7 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
         || ins_compl_active()
         || compl_busy.get()
         || pum_visible()
-        || unsafe { expr_map_locked() }
+        || expr_map_locked()
     {
         // SAFETY: a static message, and `emsg` only needs a live editor.
         unsafe { emsg(gettext(&raw const e_textlock as *const c_char)) };
@@ -755,7 +754,7 @@ pub(crate) fn ins_need_undo_get() -> bool {
 #[inline(always)]
 fn key_available() -> bool {
     // SAFETY: the typeahead buffer is live for the whole session.
-    unsafe { char_avail() }
+    char_avail()
 }
 
 /// Did the arrow-key check leave the insert in a state that can be undone?

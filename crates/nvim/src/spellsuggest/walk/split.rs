@@ -57,94 +57,106 @@ impl Walk {
         good_word_ends: bool,
         mut newscore: c_int,
     ) {
-        // SAFETY: every buffer touched is this walk's own or the caller's
-        // bad word, and the tree is restarted at its root.
+        let level = self.depth as usize;
+
+        // Only where a change is still allowed, and never in the
+        // middle of a character.
+        if (self.stack[level].bad_idx < self.stack[level].change_from && !bad_word_ends)
+            || self.stack[level].char_len != 0
+        {
+            return;
+        }
+
+        // Past the end of the bad word there is nothing left to split
+        // off. Otherwise a split lets the *next* word be changed, as
+        // in "the the" where it is the second "the" that is wrong.
+        //
+        // SAFETY: `su` is the caller's suggestion state, valid by the
+        // contract above.
+        let try_split = (self.stack[level].bad_idx as c_int - self.repextra)
+            < unsafe { (*self.su).su_badlen }
+            && !self.soundfold;
+
+        // SAFETY: the walk's language is valid by the contract above.
+        let mut try_compound = unsafe { self.may_compound(flags) };
+        if try_compound {
+            let comp_len = self.stack[level].comp_len as usize;
+            self.compflags[comp_len] = ((flags as u32) >> 24) as u8;
+            self.compflags[comp_len + 1] = NUL as u8;
+        }
+
+        // SAFETY: `slang` is the language of the walk's own trees, and the
+        // `&&` keeps the second read to the NOBREAK case.
+        if unsafe { (*self.slang).sl_nobreak } && !unsafe { (*self.slang).sl_nocompoundsugs } {
+            // With NOBREAK a split can never make a word valid, so
+            // compounding is the only way to check what follows.
+            try_compound = true;
+        } else if !bad_word_ends && try_compound && self.stack[level].flags & FLAG_DID_SPLIT == 0 {
+            // Both are possible here: do the split now and come back
+            // for the compound, without looping between the two.
+            try_compound = false;
+            self.stack[level].flags |= FLAG_DID_SPLIT;
+            self.stack[level].child -= 1; // do the same NUL again
+            let comp_len = self.stack[level].comp_len as usize;
+            self.compflags[comp_len] = NUL as u8;
+        } else {
+            self.stack[level].flags &= !FLAG_DID_SPLIT;
+        }
+
+        if !try_split && !try_compound {
+            return;
+        }
+
+        if !try_compound && (!bad_word_ends || !good_word_ends) {
+            // SAFETY: the walk's state is valid by the contract above.
+            match unsafe { self.split_penalty(flags, newscore) } {
+                None => return,
+                Some(score) => newscore = score,
+            }
+        }
+
+        // SAFETY: `su` is the caller's, as above.
+        if !unsafe { self.try_deeper(newscore) } {
+            return;
+        }
+        self.go_deeper(newscore);
+
+        // Saved so that STATE_SPLITUNDO can put it back.
+        //
+        // SAFETY: as above.
+        self.stack[level].saved_badflags = unsafe { (*self.su).su_badflags } as u8;
+        self.stack[level].state = State::SplitUndo;
+
+        self.depth += 1;
+        let child = self.depth as usize;
+
+        if !try_compound && !bad_word_ends {
+            // SAFETY: `preword` is this walk's own NUL-terminated buffer,
+            // with room for the separator after the word it holds.
+            unsafe { strcat(self.preword.as_mut_ptr(), c" ".as_ptr()) };
+        }
+        self.stack[child].preword_len = self.preword_len() as u8;
+        self.stack[child].split_off = self.stack[child].good_len;
+        self.stack[child].split_bad_idx = self.stack[child].bad_idx;
+
+        // SAFETY: the bad word is valid by the contract above.
+        unsafe { self.skip_split_character(try_compound, bad_word_ends, good_word_ends) };
+
+        // Compounding keeps collecting flags; splitting may start
+        // compounding over from here.
+        if try_compound {
+            self.stack[child].comp_len += 1;
+        } else {
+            self.stack[child].comp_split = self.stack[child].comp_len;
+        }
+        self.stack[child].prefix_depth = PFD_NOPREFIX;
+
+        // The caps type for what is left of the bad word.
+        //
+        // SAFETY: `su` and its bad word are valid by the contract above,
+        // and `consumed` is a length `nofold_len` measured out of that
+        // word, so both offsets stay inside it.
         unsafe {
-            let level = self.depth as usize;
-
-            // Only where a change is still allowed, and never in the
-            // middle of a character.
-            if (self.stack[level].bad_idx < self.stack[level].change_from && !bad_word_ends)
-                || self.stack[level].char_len != 0
-            {
-                return;
-            }
-
-            // Past the end of the bad word there is nothing left to split
-            // off. Otherwise a split lets the *next* word be changed, as
-            // in "the the" where it is the second "the" that is wrong.
-            let try_split = (self.stack[level].bad_idx as c_int - self.repextra)
-                < (*self.su).su_badlen
-                && !self.soundfold;
-
-            let mut try_compound = self.may_compound(flags);
-            if try_compound {
-                let comp_len = self.stack[level].comp_len as usize;
-                self.compflags[comp_len] = ((flags as u32) >> 24) as u8;
-                self.compflags[comp_len + 1] = NUL as u8;
-            }
-
-            if (*self.slang).sl_nobreak && !(*self.slang).sl_nocompoundsugs {
-                // With NOBREAK a split can never make a word valid, so
-                // compounding is the only way to check what follows.
-                try_compound = true;
-            } else if !bad_word_ends
-                && try_compound
-                && self.stack[level].flags & FLAG_DID_SPLIT == 0
-            {
-                // Both are possible here: do the split now and come back
-                // for the compound, without looping between the two.
-                try_compound = false;
-                self.stack[level].flags |= FLAG_DID_SPLIT;
-                self.stack[level].child -= 1; // do the same NUL again
-                let comp_len = self.stack[level].comp_len as usize;
-                self.compflags[comp_len] = NUL as u8;
-            } else {
-                self.stack[level].flags &= !FLAG_DID_SPLIT;
-            }
-
-            if !try_split && !try_compound {
-                return;
-            }
-
-            if !try_compound && (!bad_word_ends || !good_word_ends) {
-                match self.split_penalty(flags, newscore) {
-                    None => return,
-                    Some(score) => newscore = score,
-                }
-            }
-
-            if !self.try_deeper(newscore) {
-                return;
-            }
-            self.go_deeper(newscore);
-
-            // Saved so that STATE_SPLITUNDO can put it back.
-            self.stack[level].saved_badflags = (*self.su).su_badflags as u8;
-            self.stack[level].state = State::SplitUndo;
-
-            self.depth += 1;
-            let child = self.depth as usize;
-
-            if !try_compound && !bad_word_ends {
-                strcat(self.preword.as_mut_ptr(), c" ".as_ptr());
-            }
-            self.stack[child].preword_len = self.preword_len() as u8;
-            self.stack[child].split_off = self.stack[child].good_len;
-            self.stack[child].split_bad_idx = self.stack[child].bad_idx;
-
-            self.skip_split_character(try_compound, bad_word_ends, good_word_ends);
-
-            // Compounding keeps collecting flags; splitting may start
-            // compounding over from here.
-            if try_compound {
-                self.stack[child].comp_len += 1;
-            } else {
-                self.stack[child].comp_split = self.stack[child].comp_len;
-            }
-            self.stack[child].prefix_depth = PFD_NOPREFIX;
-
-            // The caps type for what is left of the bad word.
             let consumed = nofold_len(
                 self.fword,
                 self.stack[child].bad_idx as c_int,
@@ -154,17 +166,17 @@ impl Walk {
                 (*self.su).su_badptr.offset(consumed as isize),
                 (*self.su).su_badptr.offset((*self.su).su_badlen as isize),
             );
+        }
 
-            // Restart at the top of the tree.
-            self.stack[child].node = 0;
+        // Restart at the top of the tree.
+        self.stack[child].node = 0;
 
-            // Postponed prefixes apply to the new word too.
-            if !self.pbyts.is_null() {
-                self.byts = self.pbyts;
-                self.idxs = self.pidxs;
-                self.stack[child].prefix_depth = PFD_PREFIXTREE;
-                self.stack[child].state = State::NoPrefix;
-            }
+        // Postponed prefixes apply to the new word too.
+        if !self.pbyts.is_null() {
+            self.byts = self.pbyts;
+            self.idxs = self.pidxs;
+            self.stack[child].prefix_depth = PFD_PREFIXTREE;
+            self.stack[child].state = State::NoPrefix;
         }
     }
 
@@ -175,28 +187,28 @@ impl Walk {
     ///
     /// The walk's language must be valid.
     unsafe fn may_compound(&mut self, flags: c_int) -> bool {
-        // SAFETY: the language's compound settings are plain fields, and
-        // `tword` is this walk's own NUL-terminated buffer.
-        unsafe {
-            let level = self.depth as usize;
-            let split_off = self.stack[level].split_off as usize;
-            let this_word_len =
-                self.stack[level].good_len as c_int - self.stack[level].split_off as c_int;
+        let level = self.depth as usize;
+        let split_off = self.stack[level].split_off as usize;
+        let this_word_len =
+            self.stack[level].good_len as c_int - self.stack[level].split_off as c_int;
 
-            !self.soundfold
-                && !(*self.slang).sl_nocompoundsugs
-                && !(*self.slang).sl_compprog.is_null()
-                && (flags as u32) >> 24 != 0
-                && this_word_len >= (*self.slang).sl_compminlen
-                && ((*self.slang).sl_compminlen == 0
-                    || mb_charlen(self.tword.as_ptr().add(split_off))
-                        >= (*self.slang).sl_compminlen)
-                && ((*self.slang).sl_compsylmax < MAXWLEN as c_int
-                    || (self.stack[level].comp_len as c_int + 1
-                        - self.stack[level].comp_split as c_int)
-                        < (*self.slang).sl_compmax)
-                && self.can_be_compound(((flags as u32) >> 24) as c_int)
-        }
+        // SAFETY: the language's compound settings are plain fields of the
+        // walk's own `slang`, and `tword` is its own NUL-terminated
+        // buffer; every `&&` below guards only the work to its right, not
+        // the validity of what it reads.
+        !self.soundfold
+            && !unsafe { (*self.slang).sl_nocompoundsugs }
+            && !unsafe { (*self.slang).sl_compprog }.is_null()
+            && (flags as u32) >> 24 != 0
+            && this_word_len >= unsafe { (*self.slang).sl_compminlen }
+            && (unsafe { (*self.slang).sl_compminlen } == 0
+                || unsafe { mb_charlen(self.tword.as_ptr().add(split_off)) }
+                    >= unsafe { (*self.slang).sl_compminlen })
+            && (unsafe { (*self.slang).sl_compsylmax } < MAXWLEN as c_int
+                || (self.stack[level].comp_len as c_int + 1
+                    - self.stack[level].comp_split as c_int)
+                    < unsafe { (*self.slang).sl_compmax })
+            && unsafe { self.can_be_compound(((flags as u32) >> 24) as c_int) }
     }
 
     /// What a split costs, and whether it is allowed at all.
@@ -208,47 +220,56 @@ impl Walk {
     ///
     /// The walk's state must be valid.
     unsafe fn split_penalty(&mut self, flags: c_int, mut newscore: c_int) -> Option<c_int> {
-        // SAFETY: `preword` and `compflags` are this walk's own buffers.
-        unsafe {
-            let level = self.depth as usize;
+        let level = self.depth as usize;
 
-            // Splitting means the words so far have to be valid on their
-            // own. A single word must not carry NEEDCOMPOUND.
-            if self.stack[level].comp_len == self.stack[level].comp_split
-                && flags & WF_NEEDCOMP != 0
-            {
-                return None;
-            }
-            let mut last_word = self.preword.as_mut_ptr();
-            while *skiptowhite(last_word) != NUL as c_char {
-                last_word = skipwhite(skiptowhite(last_word));
-            }
-            if self.stack[level].comp_len > self.stack[level].comp_split {
-                let comp_split = self.stack[level].comp_split as usize;
-                if !can_compound(
+        // Splitting means the words so far have to be valid on their
+        // own. A single word must not carry NEEDCOMPOUND.
+        if self.stack[level].comp_len == self.stack[level].comp_split && flags & WF_NEEDCOMP != 0 {
+            return None;
+        }
+        let mut last_word = self.preword.as_mut_ptr();
+        // SAFETY: `preword` is this walk's own NUL-terminated buffer, so
+        // `skiptowhite` stops inside it and the byte it stops at is one of
+        // the buffer's own; `skipwhite` then stops at the next word.
+        while unsafe { *skiptowhite(last_word) } != NUL as c_char {
+            last_word = unsafe { skipwhite(skiptowhite(last_word)) };
+        }
+        if self.stack[level].comp_len > self.stack[level].comp_split {
+            let comp_split = self.stack[level].comp_split as usize;
+            // SAFETY: `slang` is the walk's own language, `last_word` a
+            // NUL-terminated word of `preword`, and `comp_split` indexes
+            // `compflags`, this walk's own array.
+            let joins = unsafe {
+                can_compound(
                     self.slang,
                     last_word,
                     self.compflags.as_ptr().add(comp_split),
-                ) {
-                    return None;
-                }
-            }
-
-            newscore += if (*self.slang).sl_nosplitsugs {
-                SCORE_SPLIT_NO
-            } else {
-                SCORE_SPLIT
+                )
             };
+            if !joins {
+                return None;
+            }
+        }
 
-            // Give a bonus to words seen before.
-            let preword_len = self.stack[level].preword_len as usize;
-            Some(score_wordcount_adj(
+        // SAFETY: `slang` is the walk's own language.
+        newscore += if unsafe { (*self.slang).sl_nosplitsugs } {
+            SCORE_SPLIT_NO
+        } else {
+            SCORE_SPLIT
+        };
+
+        // Give a bonus to words seen before.
+        let preword_len = self.stack[level].preword_len as usize;
+        // SAFETY: as above, and `preword_len` is a length this walk
+        // measured out of its own buffer.
+        Some(unsafe {
+            score_wordcount_adj(
                 &*self.slang,
                 newscore,
                 self.preword.as_mut_ptr().add(preword_len),
                 true,
-            ))
-        }
+            )
+        })
     }
 
     /// Step the new level over the character the split lands on.
@@ -266,40 +287,42 @@ impl Walk {
         bad_word_ends: bool,
         good_word_ends: bool,
     ) {
-        // SAFETY: the character copied is inside the bad word and its
-        // length comes from the encoding itself.
-        unsafe {
-            let child = self.depth as usize;
-            let bad_idx = self.stack[child].bad_idx as usize;
+        let child = self.depth as usize;
+        let bad_idx = self.stack[child].bad_idx as usize;
 
-            let replacing_nonword =
-                !try_compound && !spell_iswordp_nmw(self.fword_ptr(bad_idx), curwin.get());
-            if !((replacing_nonword || bad_word_ends)
-                && self.fword_at(bad_idx) != NUL
-                && good_word_ends)
-            {
-                return;
-            }
+        // SAFETY: `bad_idx` is a position the walk reached inside the bad
+        // word, the caller's NUL-terminated buffer.
+        let replacing_nonword =
+            !try_compound && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), curwin.get()) };
+        if !((replacing_nonword || bad_word_ends)
+            && unsafe { self.fword_at(bad_idx) } != NUL
+            && good_word_ends)
+        {
+            return;
+        }
 
-            let taken = utfc_ptr2len(self.fword_ptr(bad_idx));
-            if bad_word_ends {
-                // Keep the character: copy it into `preword`.
-                let preword_len = self.stack[child].preword_len as usize;
+        // SAFETY: as above; the length comes from the encoding itself, so
+        // the character it measures is inside the bad word, and `preword`
+        // is this walk's own buffer with room for it.
+        let taken = unsafe { utfc_ptr2len(self.fword_ptr(bad_idx)) };
+        if bad_word_ends {
+            // Keep the character: copy it into `preword`.
+            let preword_len = self.stack[child].preword_len as usize;
+            unsafe {
                 ptr::copy_nonoverlapping(
                     self.fword_ptr(bad_idx),
                     self.preword.as_mut_ptr().add(preword_len),
                     taken as usize,
                 );
-                self.stack[child].preword_len =
-                    (self.stack[child].preword_len as c_int + taken) as u8;
-                self.preword[self.stack[child].preword_len as usize] = NUL as c_char;
-            } else {
-                // Replacing a non-word character with a space is a
-                // substitution, not a split.
-                self.stack[child].score -= SCORE_SPLIT - SCORE_SUBST;
             }
-            self.stack[child].bad_idx = (self.stack[child].bad_idx as c_int + taken) as u8;
+            self.stack[child].preword_len = (self.stack[child].preword_len as c_int + taken) as u8;
+            self.preword[self.stack[child].preword_len as usize] = NUL as c_char;
+        } else {
+            // Replacing a non-word character with a space is a
+            // substitution, not a split.
+            self.stack[child].score -= SCORE_SPLIT - SCORE_SUBST;
         }
+        self.stack[child].bad_idx = (self.stack[child].bad_idx as c_int + taken) as u8;
     }
 
     /// Could the compound flags collected so far, plus `flag`, still form
@@ -312,35 +335,39 @@ impl Walk {
     ///
     /// The walk's language must be valid.
     unsafe fn can_be_compound(&mut self, flag: c_int) -> bool {
-        // SAFETY: `compflags` is this walk's own buffer and the language's
-        // flag strings are NUL-terminated.
-        unsafe {
-            let level = self.depth as usize;
-            let comp_len = self.stack[level].comp_len as usize;
-            let comp_split = self.stack[level].comp_split as usize;
+        let level = self.depth as usize;
+        let comp_len = self.stack[level].comp_len as usize;
+        let comp_split = self.stack[level].comp_split as usize;
 
-            // A flag in neither the start-flag nor the all-flag set cannot
-            // possibly compound.
-            let allowed = if comp_len == comp_split {
-                (*self.slang).sl_compstartflags
-            } else {
-                (*self.slang).sl_compallflags
-            };
-            if !byte_in_str(allowed, flag) {
-                return false;
-            }
-
-            // Without wildcards the flags so far can be matched against
-            // the COMPOUNDRULE patterns, which only says anything once
-            // there are two or more words.
-            if (*self.slang).sl_comprules.is_null() || comp_len <= comp_split {
-                return true;
-            }
-            self.compflags[comp_len] = flag as u8;
-            self.compflags[comp_len + 1] = NUL as u8;
-            let matched = match_compoundrule(self.slang, self.compflags.as_ptr().add(comp_split));
-            self.compflags[comp_len] = NUL as u8;
-            matched
+        // A flag in neither the start-flag nor the all-flag set cannot
+        // possibly compound.
+        //
+        // SAFETY: `slang` is the walk's own language and its flag strings
+        // are NUL-terminated.
+        let allowed = if comp_len == comp_split {
+            unsafe { (*self.slang).sl_compstartflags }
+        } else {
+            unsafe { (*self.slang).sl_compallflags }
+        };
+        if !unsafe { byte_in_str(allowed, flag) } {
+            return false;
         }
+
+        // Without wildcards the flags so far can be matched against
+        // the COMPOUNDRULE patterns, which only says anything once
+        // there are two or more words.
+        //
+        // SAFETY: as above.
+        if unsafe { (*self.slang).sl_comprules }.is_null() || comp_len <= comp_split {
+            return true;
+        }
+        self.compflags[comp_len] = flag as u8;
+        self.compflags[comp_len + 1] = NUL as u8;
+        // SAFETY: as above, and `compflags` is this walk's own array,
+        // NUL-terminated by the two lines above.
+        let matched =
+            unsafe { match_compoundrule(self.slang, self.compflags.as_ptr().add(comp_split)) };
+        self.compflags[comp_len] = NUL as u8;
+        matched
     }
 }

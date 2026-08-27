@@ -161,7 +161,7 @@ pub fn get_digraph_for_char(val: c_int) -> Option<[u8; 3]> {
 pub fn get_digraph(cmdline: bool) -> c_int {
     let raw_key = Keys::unmapped_with_codes();
     // SAFETY: transpiled input machinery; no digraph state is borrowed.
-    let c = unsafe { plain_vgetc() };
+    let c = plain_vgetc();
     drop(raw_key);
     if c == ESC {
         // Special keys or ESC cancel CTRL-K.
@@ -181,7 +181,7 @@ pub fn get_digraph(cmdline: bool) -> c_int {
     }
     let raw_key = Keys::unmapped_with_codes();
     // SAFETY: as for the first read.
-    let cc = unsafe { plain_vgetc() };
+    let cc = plain_vgetc();
     drop(raw_key);
     if cc != ESC {
         return digraph_get(c, cc, true);

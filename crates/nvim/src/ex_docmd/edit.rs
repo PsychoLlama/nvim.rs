@@ -70,6 +70,7 @@ use crate::types::{
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::undo::store::header_chain;
 use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 
 /// `:print`, `:number` and `:list`.
@@ -117,13 +118,14 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         // reach: one of them may be shorter than the rest.
         let mut vtopline: linenr_T = 1;
         if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-            vtopline = get_vtopline(curwin.get()) as linenr_T;
+            vtopline = get_vtopline(Win::current()) as linenr_T;
             let mut wp = firstwin.get();
             while !wp.is_null() {
                 if (*wp).w_onebuf_opt.wo_scb != 0 && !(*wp).w_buffer.is_null() {
-                    let limit = plines_m_win_fill(wp, 1, (*(*wp).w_buffer).b_ml.ml_line_count)
-                        as linenr_T
-                        - get_scrolloff_value(curwin.get()) as linenr_T;
+                    let limit =
+                        plines_m_win_fill(Win::new(wp), 1, (*(*wp).w_buffer).b_ml.ml_line_count)
+                            as linenr_T
+                            - get_scrolloff_value(curwin.get()) as linenr_T;
                     vtopline = vtopline.min(limit);
                 }
                 wp = (*wp).w_next;
@@ -134,15 +136,15 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         let mut wp = firstwin.get();
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_scb != 0 {
-                let y = vtopline as c_int - get_vtopline(wp);
+                let y = vtopline as c_int - get_vtopline(Win::new(wp));
                 if y > 0 {
-                    scrollup(wp, y as linenr_T, true);
+                    scrollup(Win::new(wp), y as linenr_T, true);
                 } else {
-                    scrolldown(wp, -(y as linenr_T), true);
+                    scrolldown(Win::new(wp), -(y as linenr_T), true);
                 }
                 (*wp).w_scbind_pos = vtopline as c_int;
                 redraw_later(wp, UPD_VALID);
-                cursor_correct(wp);
+                cursor_correct(Win::new(wp));
                 (*wp).w_redr_status = true;
             }
             wp = (*wp).w_next;
@@ -182,7 +184,7 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
 pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
     unsafe {
-        if cursor_valid(curwin.get()) != 0 {
+        if cursor_valid(Win::current()) != 0 {
             setcursor_mayforce(curwin.get(), true);
         }
         let mut len = (*eap).line2 as int64_t;
@@ -297,7 +299,7 @@ unsafe fn put_lines(eap: *mut exarg_T, flags: c_int) {
             (*eap).forceit = 1;
         }
         (*curwin.get()).w_cursor.lnum = (*eap).line2;
-        check_cursor_col(curwin.get());
+        check_cursor_col(Win::current());
         do_put(
             (*eap).regname,
             ptr::null_mut(),
@@ -349,7 +351,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
         } else {
             ex_copy((*eap).line1, (*eap).line2, n);
         }
-        u_clearline(curbuf.get());
+        u_clearline(Buf::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         ex_may_print(eap);
     }
@@ -444,7 +446,7 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
     unsafe {
         let prev_len = typeahead().len();
         (*curwin.get()).w_cursor.lnum = (*eap).line2;
-        check_cursor_col(curwin.get());
+        check_cursor_col(Win::current());
 
         let mut c = *(*eap).arg as uint8_t as c_int;
         if c == NUL {
@@ -505,7 +507,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
         };
         let mut count = 0;
         let mut uhp = ::core::ptr::null_mut();
-        for header in header_chain(curbuf.get(), start, |uh| uh.uh_next) {
+        for header in header_chain(Buf::current(), start, |uh| uh.uh_next) {
             if header.uh_seq as linenr_T <= step {
                 uhp = header.raw();
                 break;
@@ -624,10 +626,10 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
 /// moved either.
 pub unsafe fn update_topline_cursor() {
     unsafe {
-        check_cursor(curwin.get());
-        update_topline(curwin.get());
+        check_cursor(Win::current());
+        update_topline(Win::current());
         if (*curwin.get()).w_onebuf_opt.wo_wrap == 0 {
-            validate_cursor(curwin.get());
+            validate_cursor(Win::current());
         }
         update_curswant();
     }
@@ -707,7 +709,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
                     (*curwin.get()).w_cursor.lnum = (*eap).line1;
                     (*eap).line1 += 1;
                     (*curwin.get()).w_cursor.col = 0 as colnr_T;
-                    check_cursor_moved(curwin.get());
+                    check_cursor_moved(Win::current());
                 }
                 exec_normal_cmd(
                     if arg.is_null() { (*eap).arg } else { arg },
@@ -863,7 +865,7 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 pub(crate) unsafe fn ex_fold(eap: *mut exarg_T) {
     unsafe {
         if fold_manual_allowed(true) != 0 {
-            fold_create(curwin.get(), range_start(eap), range_end(eap));
+            fold_create(Win::current(), range_start(eap), range_end(eap));
         }
     }
 }
@@ -906,9 +908,7 @@ pub(crate) unsafe fn ex_folddo(eap: *mut exarg_T) {
         let want_closed = ((*eap).cmdidx as c_int == CMD_folddoclosed as c_int) as c_int;
         let mut lnum = (*eap).line1;
         while lnum <= (*eap).line2 {
-            if has_folding(curwin.get(), lnum, ptr::null_mut(), ptr::null_mut()) as c_int
-                == want_closed
-            {
+            if has_folding(Win::current(), lnum, None, None) as c_int == want_closed {
                 ml_setmarked(lnum);
             }
             lnum += 1;

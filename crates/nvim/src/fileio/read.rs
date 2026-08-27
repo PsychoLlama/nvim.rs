@@ -172,7 +172,7 @@ pub(crate) unsafe fn readfile(
             && !how.stdin
             && !how.buffer
         {
-            unsafe { filemess(curbuf.get(), sfname, c"".as_ptr().cast_mut()) };
+            unsafe { filemess(Buf::current(), sfname, c"".as_ptr().cast_mut()) };
         }
 
         msg_scroll.set(false as c_int); // overwrite the file message
@@ -763,7 +763,7 @@ pub(crate) unsafe fn readfile(
 
         if set_options {
             // Remember the current file format.
-            unsafe { save_file_ff(curbuf.get()) };
+            save_file_ff(unsafe { Buf::current() });
             // When editing a new file set 'fileencoding' for this buffer.
             // Also for ":read ++edit file".
             set_option_direct(
@@ -822,10 +822,10 @@ pub(crate) unsafe fn readfile(
             if how.newfile || how.buffer {
                 redraw_curbuf_later(UPD_NOT_VALID as c_int);
                 // The diff info needs updating now that the text is in.
-                unsafe { diff_invalidate(curbuf.get()) };
+                diff_invalidate(unsafe { Buf::current() });
                 // All folds in the window are invalid now. Mark them for
                 // update before triggering autocommands.
-                unsafe { fold_update_all(curwin.get()) };
+                fold_update_all(unsafe { Win::current() });
             } else if linecnt != 0 {
                 // At least one line was appended.
                 unsafe { appended_lines_mark(from, linecnt) };
@@ -833,7 +833,7 @@ pub(crate) unsafe fn readfile(
 
             if got_int.get() {
                 if !how.dummy {
-                    unsafe { filemess(curbuf.get(), sfname, gettext(e_interr.as_ptr())) };
+                    unsafe { filemess(Buf::current(), sfname, gettext(e_interr.as_ptr())) };
                     if how.newfile {
                         cur_buf().b_p_ro = true as c_int; // must use "w!" now
                     }
@@ -875,7 +875,7 @@ pub(crate) unsafe fn readfile(
         // When reloading a buffer put the cursor on the first line that
         // differs.
         if how.keep_undo {
-            unsafe { u_find_first_changed() };
+            u_find_first_changed();
         }
 
         // When opening a new file, locate the undo info and read it.

@@ -82,12 +82,12 @@ unsafe fn has_sound_tree(slang: *mut slang_T) -> bool {
 ///
 /// The current window must have its languages loaded.
 pub(super) unsafe fn suggest_try_soundalike_prep() {
-    // SAFETY: the caller guarantees the window's spell state.
-    unsafe {
-        for lp in crate::spellsuggest::window_langs() {
-            if has_sound_tree(lp.lp_slang) {
-                hash_init(&raw mut (*lp.lp_slang).sl_sounddone);
-            }
+    // SAFETY: by the contract above, the window's languages are loaded.
+    for lp in unsafe { crate::spellsuggest::window_langs() } {
+        // SAFETY: `lp` came out of the window's language list, so
+        // `lp_slang` is a loaded language -- what both calls here need.
+        if unsafe { has_sound_tree(lp.lp_slang) } {
+            unsafe { hash_init(&raw mut (*lp.lp_slang).sl_sounddone) };
         }
     }
 }
@@ -101,23 +101,27 @@ pub(super) unsafe fn suggest_try_soundalike_prep() {
 /// `su` must be valid and the current window must have its languages
 /// loaded.
 pub(super) unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
-    // SAFETY: the caller guarantees `su` and the window's spell state.
-    unsafe {
-        for lp in crate::spellsuggest::window_langs() {
-            if !has_sound_tree(lp.lp_slang) {
-                continue;
-            }
-            let mut salword = EMPTY_SOUND;
-            spell_soundfold(
-                lp.lp_slang,
-                &raw mut (*su).su_fbadword as *mut c_char,
-                true,
-                salword.as_mut_ptr(),
-            );
-            // The same walker as the edit-distance search, told to treat
-            // the tree it walks as sounds rather than letters.
-            suggest_trie_walk(su, lp, salword.as_mut_ptr(), true);
+    // SAFETY: by the contract above, the window's languages are loaded.
+    for lp in unsafe { crate::spellsuggest::window_langs() } {
+        // SAFETY: `lp` came out of the window's language list, so
+        // `lp_slang` is a loaded language.
+        if !unsafe { has_sound_tree(lp.lp_slang) } {
+            continue;
         }
+        let mut salword = EMPTY_SOUND;
+        // SAFETY: `su` is valid by the contract above, so the address of
+        // its `su_fbadword` field is too.
+        let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;
+        // SAFETY: `fbadword` is the bad word's NUL-terminated fold and
+        // `salword` has room for `MAXWLEN` bytes, which is what
+        // `spell_soundfold` writes at most.
+        unsafe { spell_soundfold(lp.lp_slang, fbadword, true, salword.as_mut_ptr()) };
+        // The same walker as the edit-distance search, told to treat
+        // the tree it walks as sounds rather than letters.
+        //
+        // SAFETY: `su` and `lp` are valid by the contract above and
+        // `salword` is the NUL-terminated soundfold just written.
+        unsafe { suggest_trie_walk(su, lp, salword.as_mut_ptr(), true) };
     }
 }
 
@@ -127,32 +131,42 @@ pub(super) unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
 ///
 /// The current window must have its languages loaded.
 pub(super) unsafe fn suggest_try_soundalike_finish() {
-    // SAFETY: the caller guarantees the window's spell state; every key in
-    // the table is the inline word of a `sftword_T` this module allocated.
-    unsafe {
-        for lp in crate::spellsuggest::window_langs() {
-            let slang = lp.lp_slang;
-            if !has_sound_tree(slang) {
-                continue;
-            }
-
-            let done = &raw mut (*slang).sl_sounddone;
-            let mut todo = (*done).ht_used as c_int;
-            let mut hi: *mut hashitem_T = (*done).ht_array;
-            while todo > 0 {
-                let key = (*hi).hi_key;
-                if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
-                    xfree(key.sub(SFT_WORD_OFF) as *mut c_void);
-                    todo -= 1;
-                }
-                hi = hi.add(1);
-            }
-
-            // Another region may reuse the table, so leave it empty rather
-            // than freed.
-            hash_clear(done);
-            hash_init(done);
+    // SAFETY: by the contract above, the window's languages are loaded.
+    for lp in unsafe { crate::spellsuggest::window_langs() } {
+        let slang = lp.lp_slang;
+        // SAFETY: `slang` came out of the window's language list.
+        if !unsafe { has_sound_tree(slang) } {
+            continue;
         }
+
+        // SAFETY: `slang` is a loaded language, so it carries a hash table.
+        let done = unsafe { &raw mut (*slang).sl_sounddone };
+        // SAFETY: `done` is that table, so its header may be read.
+        let mut todo = unsafe { (*done).ht_used } as c_int;
+        // SAFETY: as above; `ht_array` is the table's entry array.
+        let mut hi: *mut hashitem_T = unsafe { (*done).ht_array };
+        while todo > 0 {
+            // SAFETY: `todo` counts the used entries still to be seen and
+            // the array holds at least that many beyond `hi`, so `hi` is
+            // still inside it.
+            let key = unsafe { (*hi).hi_key };
+            if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
+                // SAFETY: every key in this table is the inline word of a
+                // `sftword_T` this module allocated, so stepping back by
+                // `SFT_WORD_OFF` recovers that allocation's start.
+                unsafe { xfree(key.sub(SFT_WORD_OFF) as *mut c_void) };
+                todo -= 1;
+            }
+            // SAFETY: as above -- `hi` walks the table's entry array.
+            hi = unsafe { hi.add(1) };
+        }
+
+        // Another region may reuse the table, so leave it empty rather
+        // than freed.
+        //
+        // SAFETY: `done` is the language's hash table, now key-free.
+        unsafe { hash_clear(done) };
+        unsafe { hash_init(done) };
     }
 }
 
@@ -203,53 +217,65 @@ pub(super) unsafe fn add_sound_suggest(
     score: c_int,
     lp: *mut langp_T,
 ) {
-    // SAFETY: the caller guarantees the pointers; the tree walks below are
-    // bounded by the counts the tree itself stores, as in the C.
-    unsafe {
-        let slang = (*lp).lp_slang;
+    // SAFETY: `lp` is valid by the contract above.
+    let slang = unsafe { (*lp).lp_slang };
 
-        // The same soundfold turns up many times with different scores and
-        // what follows is slow, so only the best score for each is done.
-        let hash = hash_hash(goodword);
-        let goodword_len = libc::strlen(goodword) as usize;
-        let hi = hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
-        let key = (*hi).hi_key;
-        if key.is_null() || ptr::eq(key, &raw const hash_removed) {
-            let sft = xmalloc(SFT_WORD_OFF + goodword_len + 1) as *mut sftword_T;
-            (*sft).sft_score = score as int16_t;
-            let word = (sft as *mut u8).add(SFT_WORD_OFF);
-            ptr::copy_nonoverlapping(goodword as *const u8, word, goodword_len + 1);
-            hash_add_item(
-                &raw mut (*slang).sl_sounddone,
-                hi,
-                word as *mut c_char,
-                hash,
-            );
-        } else {
-            let sft = key.sub(SFT_WORD_OFF) as *mut sftword_T;
-            if score >= (*sft).sft_score as c_int {
-                return;
-            }
-            (*sft).sft_score = score as int16_t;
-        }
-
-        let sfwordnr = soundfold_find(slang, goodword);
-        if sfwordnr < 0 {
-            internal_error(c"add_sound_suggest()".as_ptr());
+    // The same soundfold turns up many times with different scores and
+    // what follows is slow, so only the best score for each is done.
+    //
+    // SAFETY: `goodword` is a NUL-terminated word by the contract above,
+    // and `slang` is a loaded language, so its `sl_sounddone` is a live
+    // hash table -- the table `hash_add_item` is then told to insert into,
+    // with the `hi`/`hash` pair `hash_lookup` just produced for it.
+    let sounddone = unsafe { &raw mut (*slang).sl_sounddone };
+    let hash = unsafe { hash_hash(goodword) };
+    let goodword_len = unsafe { libc::strlen(goodword) } as usize;
+    let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
+    let key = unsafe { (*hi).hi_key };
+    if key.is_null() || ptr::eq(key, &raw const hash_removed) {
+        // SAFETY: the allocation is `SFT_WORD_OFF + goodword_len + 1`
+        // bytes, so the record's header and the word after it both fit,
+        // and `goodword` really is `goodword_len + 1` bytes with its NUL.
+        let sft = unsafe { xmalloc(SFT_WORD_OFF + goodword_len + 1) } as *mut sftword_T;
+        unsafe { (*sft).sft_score = score as int16_t };
+        let word = unsafe { (sft as *mut u8).add(SFT_WORD_OFF) };
+        unsafe { ptr::copy_nonoverlapping(goodword as *const u8, word, goodword_len + 1) };
+        unsafe { hash_add_item(sounddone, hi, word as *mut c_char, hash) };
+    } else {
+        // SAFETY: the key is the inline word of a `sftword_T` allocated
+        // above, so stepping back by `SFT_WORD_OFF` recovers the record.
+        let sft = unsafe { key.sub(SFT_WORD_OFF) } as *mut sftword_T;
+        if score >= unsafe { (*sft).sft_score } as c_int {
             return;
         }
+        unsafe { (*sft).sft_score = score as int16_t };
+    }
 
-        // Walk the list of word numbers that produce this soundfold.
-        let nrline = ml_get_buf((*slang).sl_sugbuf, sfwordnr as linenr_T + 1);
-        let deltas = core::ffi::CStr::from_ptr(nrline).to_bytes();
-        let mut pos = 0;
-        let mut orgnr = 0;
+    // SAFETY: the language has a loaded `.sug` by the contract above and
+    // `goodword` is NUL-terminated.
+    let sfwordnr = unsafe { soundfold_find(slang, goodword) };
+    if sfwordnr < 0 {
+        // SAFETY: the message is a NUL-terminated literal.
+        unsafe { internal_error(c"add_sound_suggest()".as_ptr()) };
+        return;
+    }
 
-        while pos < deltas.len() {
-            orgnr += bytes2offset(deltas, &mut pos);
-            let (mut theword, n, i) = word_number_to_letters(slang, orgnr);
-            emit_word(su, lp, slang, &mut theword, n, i, score);
-        }
+    // Walk the list of word numbers that produce this soundfold.
+    //
+    // SAFETY: `sl_sugbuf` is the loaded `.sug` buffer and `soundfold_find`
+    // returned a line number inside it; the line it hands back is a
+    // NUL-terminated string owned by that buffer.
+    let nrline = unsafe { ml_get_buf((*slang).sl_sugbuf, sfwordnr as linenr_T + 1) };
+    let deltas = unsafe { core::ffi::CStr::from_ptr(nrline) }.to_bytes();
+    let mut pos = 0;
+    let mut orgnr = 0;
+
+    while pos < deltas.len() {
+        orgnr += bytes2offset(deltas, &mut pos);
+        // SAFETY: `slang` has a case-folded tree, and the `n`/`i` pair the
+        // walk returns is the tree position `emit_word` expects.
+        let (mut theword, n, i) = unsafe { word_number_to_letters(slang, orgnr) };
+        unsafe { emit_word(su, lp, slang, &mut theword, n, i, score) };
     }
 }
 
@@ -266,64 +292,73 @@ unsafe fn word_number_to_letters(
     slang: *mut slang_T,
     orgnr: c_int,
 ) -> ([c_char; MAXWLEN], usize, c_int) {
-    // SAFETY: the caller guarantees the tree; the indices below stay inside
-    // it because every node's first byte is its number of children.
-    unsafe {
-        let byts = (*slang).sl_fbyts;
-        let idxs: *mut idx_T = (*slang).sl_fidxs;
+    // SAFETY: the caller guarantees the tree.
+    let byts = unsafe { (*slang).sl_fbyts };
+    let idxs: *mut idx_T = unsafe { (*slang).sl_fidxs };
 
-        let mut theword = [0 as c_char; MAXWLEN];
-        let mut n: usize = 0;
-        let mut wordcount = 0;
-        let mut wlen = 0;
-        let mut i: c_int = 1;
+    let mut theword = [0 as c_char; MAXWLEN];
+    let mut n: usize = 0;
+    let mut wordcount = 0;
+    let mut wlen = 0;
+    let mut i: c_int = 1;
 
-        while wlen < MAXWLEN - 3 {
-            i = 1;
-            if wordcount == orgnr && *byts.add(n + 1) == 0 {
-                break; // found the end of the word
-            }
-            if *byts.add(n + 1) == 0 {
-                wordcount += 1;
-            }
+    // Every read below is at `n`, a node start the tree itself handed back,
+    // or at `n + i` with `i` held at or below that node's child count --
+    // its first byte -- so all of them stay inside the arrays.
+    while wlen < MAXWLEN - 3 {
+        i = 1;
+        // SAFETY: as above.
+        if wordcount == orgnr && unsafe { *byts.add(n + 1) } == 0 {
+            break; // found the end of the word
+        }
+        // SAFETY: as above.
+        if unsafe { *byts.add(n + 1) } == 0 {
+            wordcount += 1;
+        }
 
-            // Skip the NUL bytes; there can be several.
-            let mut bad = false;
-            while *byts.add(n + i as usize) == 0 {
-                if i > *byts.add(n) as c_int {
-                    // Safety check: the tree disagrees with the count.
-                    theword[wlen..wlen + 3].copy_from_slice(&[
-                        b'B' as c_char,
-                        b'A' as c_char,
-                        b'D' as c_char,
-                    ]);
-                    wlen += 3;
-                    bad = true;
-                    break;
-                }
-                i += 1;
-            }
-            if bad {
+        // Skip the NUL bytes; there can be several.
+        let mut bad = false;
+        // SAFETY: as above -- the bound is checked in the body, which is
+        // what stops `i` from running past the node.
+        while unsafe { *byts.add(n + i as usize) } == 0 {
+            // SAFETY: as above.
+            if i > unsafe { *byts.add(n) } as c_int {
+                // Safety check: the tree disagrees with the count.
+                theword[wlen..wlen + 3].copy_from_slice(&[
+                    b'B' as c_char,
+                    b'A' as c_char,
+                    b'D' as c_char,
+                ]);
+                wlen += 3;
+                bad = true;
                 break;
             }
-
-            // One of the siblings has the word under it.
-            while i < *byts.add(n) as c_int {
-                let wc = *idxs.offset(*idxs.add(n + i as usize) as isize) as c_int;
-                if wordcount + wc > orgnr {
-                    break;
-                }
-                wordcount += wc;
-                i += 1;
-            }
-
-            theword[wlen] = *byts.add(n + i as usize) as c_char;
-            n = *idxs.add(n + i as usize) as usize;
-            wlen += 1;
+            i += 1;
         }
-        theword[wlen] = NUL as c_char;
-        (theword, n, i)
+        if bad {
+            break;
+        }
+
+        // One of the siblings has the word under it.
+        //
+        // SAFETY: as above; the index each sibling holds is a node start,
+        // so it may be followed into `idxs` for that node's word count.
+        while i < unsafe { *byts.add(n) } as c_int {
+            let wc = unsafe { *idxs.offset(*idxs.add(n + i as usize) as isize) } as c_int;
+            if wordcount + wc > orgnr {
+                break;
+            }
+            wordcount += wc;
+            i += 1;
+        }
+
+        // SAFETY: as above.
+        theword[wlen] = unsafe { *byts.add(n + i as usize) } as c_char;
+        n = unsafe { *idxs.add(n + i as usize) } as usize;
+        wlen += 1;
     }
+    theword[wlen] = NUL as c_char;
+    (theword, n, i)
 }
 
 /// Offer the word `theword` under every flag/region combination the tree
@@ -343,113 +378,115 @@ unsafe fn emit_word(
     mut i: c_int,
     score: c_int,
 ) {
-    // SAFETY: the caller guarantees the pointers and the tree position.
-    unsafe {
-        let byts = (*slang).sl_fbyts;
-        let idxs: *mut idx_T = (*slang).sl_fidxs;
+    // SAFETY: the caller guarantees the language, so it has a case-folded
+    // tree.
+    let byts = unsafe { (*slang).sl_fbyts };
+    let idxs: *mut idx_T = unsafe { (*slang).sl_fidxs };
 
-        // The flags and regions are the NUL-byte children of this node. The
-        // bound has to be tested before the byte is read.
-        while i <= *byts.add(n) as c_int && *byts.add(n + i as usize) == 0 {
-            let mut cword = [0 as c_char; MAXWLEN];
-            let mut flags = *idxs.add(n + i as usize) as c_int;
-            i += 1;
+    // The flags and regions are the NUL-byte children of this node. The
+    // bound has to be tested before the byte is read.
+    //
+    // SAFETY: `n` is a node start and `i` is held at or below that node's
+    // child count -- its first byte -- so both reads stay inside the
+    // arrays. The `&&` keeps the second read behind the bound test.
+    while i <= unsafe { *byts.add(n) } as c_int && unsafe { *byts.add(n + i as usize) } == 0 {
+        let mut cword = [0 as c_char; MAXWLEN];
+        // SAFETY: as above.
+        let mut flags = unsafe { *idxs.add(n + i as usize) } as c_int;
+        i += 1;
 
-            if flags & WF_NOSUGGEST != 0 {
-                continue;
-            }
+        if flags & WF_NOSUGGEST != 0 {
+            continue;
+        }
 
-            let p = if flags & WF_KEEPCAP != 0 {
-                // The letters came out of the case-folded tree, so the
-                // real spelling has to be looked up in the keep-case one.
-                find_keepcap_word(slang, theword.as_mut_ptr(), cword.as_mut_ptr());
+        let p = if flags & WF_KEEPCAP != 0 {
+            // The letters came out of the case-folded tree, so the
+            // real spelling has to be looked up in the keep-case one.
+            //
+            // SAFETY: `theword` is NUL-terminated and `cword` has room for
+            // `MAXWLEN` bytes, which is the most either call writes.
+            unsafe { find_keepcap_word(slang, theword.as_mut_ptr(), cword.as_mut_ptr()) };
+            cword.as_mut_ptr()
+        } else {
+            // SAFETY: `su` is valid by the contract above.
+            flags |= unsafe { (*su).su_badflags };
+            if flags & WF_CAPMASK != 0 {
+                // SAFETY: as for `find_keepcap_word` above.
+                unsafe { make_case_word(theword.as_mut_ptr(), cword.as_mut_ptr(), flags) };
                 cword.as_mut_ptr()
             } else {
-                flags |= (*su).su_badflags;
-                if flags & WF_CAPMASK != 0 {
-                    make_case_word(theword.as_mut_ptr(), cword.as_mut_ptr(), flags);
-                    cword.as_mut_ptr()
-                } else {
-                    theword.as_mut_ptr()
-                }
-            };
-
-            if sps_flags.get() & SPS_DOUBLE != 0 {
-                if score <= (*su).su_maxscore {
-                    add_suggestion(
-                        su,
-                        &raw mut (*su).su_sga,
-                        p,
-                        (*su).su_badlen,
-                        score,
-                        0,
-                        false,
-                        slang,
-                        false,
-                    );
-                }
-                continue;
+                theword.as_mut_ptr()
             }
+        };
 
-            // A word from another region is worth less.
-            let mut goodscore =
-                if flags & WF_REGION != 0 && (flags as u32 >> 16) & (*lp).lp_region as u32 == 0 {
-                    SCORE_REGION
-                } else {
-                    0
-                };
-
-            // A small penalty for turning the first letter from lower to
-            // upper case: "tath" -> "Kath" is less likely than "tath" ->
-            // "path". Not when the letter is the same, which is counted
-            // already.
-            let gc = utf_ptr2char(p);
-            if spell_isupper(gc) {
-                let bc = utf_ptr2char(&raw const (*su).su_badword as *const c_char);
-                if !spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
-                    goodscore += SCORE_ICASE / 2;
-                }
+        if sps_flags.get() & SPS_DOUBLE != 0 {
+            // SAFETY: `su` is valid by the contract above.
+            if score <= unsafe { (*su).su_maxscore } {
+                let sga = unsafe { &raw mut (*su).su_sga };
+                let badlen = unsafe { (*su).su_badlen };
+                // SAFETY: `su` and `slang` are valid, `sga` is one of
+                // `su`'s own growarrays and `p` is a NUL-terminated word
+                // in a buffer that outlives the call.
+                unsafe { add_suggestion(su, sga, p, badlen, score, 0, false, slang, false) };
             }
+            continue;
+        }
 
-            // The edit distance for the good word. REP items are not
-            // considered, which may leave the score a little high. A
-            // ceiling makes it faster; past a high enough ceiling the
-            // depth-first search costs more than filling the table.
-            let limit = (4 * ((*su).su_sfmaxscore - goodscore) - score) / 3;
-            goodscore += if limit > SCORE_LIMITMAX {
-                spell_edit_score(
-                    Some(&*slang),
-                    &raw const (*su).su_badword as *const c_char,
-                    p,
-                )
-            } else {
-                spell_edit_score_limit(
-                    Some(&*slang),
-                    &raw const (*su).su_badword as *const c_char,
-                    p,
-                    limit,
-                )
-            };
+        // A word from another region is worth less.
+        //
+        // SAFETY: `lp` is valid by the contract above.
+        let mut goodscore = if flags & WF_REGION != 0
+            && (flags as u32 >> 16) & unsafe { (*lp).lp_region } as u32 == 0
+        {
+            SCORE_REGION
+        } else {
+            0
+        };
 
-            if goodscore >= SCORE_MAXMAX {
-                continue;
+        // A small penalty for turning the first letter from lower to
+        // upper case: "tath" -> "Kath" is less likely than "tath" ->
+        // "path". Not when the letter is the same, which is counted
+        // already.
+        //
+        // SAFETY: `p` is a NUL-terminated word and `su` is valid, so its
+        // `su_badword` is one too.
+        let gc = unsafe { utf_ptr2char(p) };
+        if spell_isupper(gc) {
+            let bc = unsafe { utf_ptr2char(&raw const (*su).su_badword as *const c_char) };
+            if !spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
+                goodscore += SCORE_ICASE / 2;
             }
+        }
 
-            goodscore = score_wordcount_adj(&*slang, goodscore, p, false);
-            goodscore = (3 * goodscore + score) / 4;
-            if goodscore <= (*su).su_sfmaxscore {
-                add_suggestion(
-                    su,
-                    &raw mut (*su).su_ga,
-                    p,
-                    (*su).su_badlen,
-                    goodscore,
-                    score,
-                    true,
-                    slang,
-                    true,
-                );
-            }
+        // The edit distance for the good word. REP items are not
+        // considered, which may leave the score a little high. A
+        // ceiling makes it faster; past a high enough ceiling the
+        // depth-first search costs more than filling the table.
+        //
+        // SAFETY: `su` is valid, so the address of its `su_badword` is a
+        // NUL-terminated word, and `slang` is a loaded language.
+        let badword = unsafe { &raw const (*su).su_badword } as *const c_char;
+        let scored_lang = Some(unsafe { &*slang });
+        let limit = (4 * (unsafe { (*su).su_sfmaxscore } - goodscore) - score) / 3;
+        goodscore += if limit > SCORE_LIMITMAX {
+            unsafe { spell_edit_score(scored_lang, badword, p) }
+        } else {
+            unsafe { spell_edit_score_limit(scored_lang, badword, p, limit) }
+        };
+
+        if goodscore >= SCORE_MAXMAX {
+            continue;
+        }
+
+        // SAFETY: as above -- `p` is a NUL-terminated word.
+        goodscore = unsafe { score_wordcount_adj(&*slang, goodscore, p, false) };
+        goodscore = (3 * goodscore + score) / 4;
+        // SAFETY: `su` is valid by the contract above.
+        if goodscore <= unsafe { (*su).su_sfmaxscore } {
+            let ga = unsafe { &raw mut (*su).su_ga };
+            let badlen = unsafe { (*su).su_badlen };
+            // SAFETY: as for the `su_sga` call above.
+            unsafe { add_suggestion(su, ga, p, badlen, goodscore, score, true, slang, true) };
         }
     }
 }
@@ -461,70 +498,85 @@ unsafe fn emit_word(
 ///
 /// `slang` must have a loaded `.sug` and `word` must be NUL-terminated.
 pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
-    // SAFETY: the caller guarantees the tree and the word; each node's
-    // first byte is its child count, which bounds every index below.
-    unsafe {
-        let byts = (*slang).sl_sbyts;
-        let idxs: *mut idx_T = (*slang).sl_sidxs;
-        let ptr = word as *mut u8;
+    // SAFETY: the caller guarantees the loaded `.sug`, so the sound-fold
+    // tree's two arrays are there.
+    let byts = unsafe { (*slang).sl_sbyts };
+    let idxs: *mut idx_T = unsafe { (*slang).sl_sidxs };
+    let ptr = word as *mut u8;
 
-        let mut arridx: idx_T = 0;
-        let mut wlen = 0;
-        let mut wordnr = 0;
+    let mut arridx: idx_T = 0;
+    let mut wlen = 0;
+    let mut wordnr = 0;
 
-        loop {
-            // The first byte of a node is how many bytes may follow.
-            let mut len = *byts.offset(arridx as isize) as c_int;
-            arridx += 1;
+    // Every `byts`/`idxs` read below sits at a node start the tree handed
+    // back, stepped forward at most `len` times -- that node's child count,
+    // read as its first byte -- so all of them stay inside the arrays. Every
+    // `ptr` read is behind a NUL test on the byte before it, so the walk
+    // stops at the word's terminator.
+    loop {
+        // The first byte of a node is how many bytes may follow.
+        //
+        // SAFETY: as above.
+        let mut len = unsafe { *byts.offset(arridx as isize) } as c_int;
+        arridx += 1;
 
-            // A leading zero byte means a word may end here.
-            let mut c = *ptr.add(wlen) as c_int;
-            if *byts.offset(arridx as isize) == 0 {
-                if c == NUL {
-                    return wordnr;
-                }
-
-                // Skip the zeros; there can be several.
-                while len > 0 && *byts.offset(arridx as isize) == 0 {
-                    arridx += 1;
-                    len -= 1;
-                }
-                if len == 0 {
-                    return -1; // no children, the word should have ended
-                }
-                wordnr += 1;
-            }
-
+        // A leading zero byte means a word may end here.
+        //
+        // SAFETY: as above.
+        let mut c = unsafe { *ptr.add(wlen) } as c_int;
+        if unsafe { *byts.offset(arridx as isize) } == 0 {
             if c == NUL {
-                return -1; // the word ends but the tree does not
+                return wordnr;
             }
 
-            // Linear search over the accepted bytes, counting the words
-            // hanging below the ones passed over.
-            if c == TAB {
-                c = ' ' as c_int; // a tab counts as a space
-            }
-            while (*byts.offset(arridx as isize) as c_int) < c {
-                wordnr += *idxs.offset(*idxs.offset(arridx as isize) as isize) as c_int;
+            // Skip the zeros; there can be several.
+            //
+            // SAFETY: as above; `len` keeps the step inside the node.
+            while len > 0 && unsafe { *byts.offset(arridx as isize) } == 0 {
                 arridx += 1;
                 len -= 1;
-                if len == 0 {
-                    return -1; // ran out of bytes without finding it
-                }
             }
-            if *byts.offset(arridx as isize) as c_int != c {
-                return -1;
+            if len == 0 {
+                return -1; // no children, the word should have ended
             }
+            wordnr += 1;
+        }
 
-            arridx = *idxs.offset(arridx as isize);
-            wlen += 1;
+        if c == NUL {
+            return -1; // the word ends but the tree does not
+        }
 
-            // One space in the good word may stand for several in the
-            // word being checked.
-            if c == ' ' as c_int {
-                while *ptr.add(wlen) as c_int == ' ' as c_int || *ptr.add(wlen) as c_int == TAB {
-                    wlen += 1;
-                }
+        // Linear search over the accepted bytes, counting the words
+        // hanging below the ones passed over.
+        if c == TAB {
+            c = ' ' as c_int; // a tab counts as a space
+        }
+        // SAFETY: as above; the index a sibling holds is itself a node
+        // start, so it may be followed into `idxs` for its word count.
+        while (unsafe { *byts.offset(arridx as isize) } as c_int) < c {
+            wordnr += unsafe { *idxs.offset(*idxs.offset(arridx as isize) as isize) } as c_int;
+            arridx += 1;
+            len -= 1;
+            if len == 0 {
+                return -1; // ran out of bytes without finding it
+            }
+        }
+        // SAFETY: as above.
+        if unsafe { *byts.offset(arridx as isize) } as c_int != c {
+            return -1;
+        }
+
+        arridx = unsafe { *idxs.offset(arridx as isize) };
+        wlen += 1;
+
+        // One space in the good word may stand for several in the
+        // word being checked.
+        if c == ' ' as c_int {
+            // SAFETY: as above -- the scan stops at the word's NUL.
+            while unsafe { *ptr.add(wlen) } as c_int == ' ' as c_int
+                || unsafe { *ptr.add(wlen) } as c_int == TAB
+            {
+                wlen += 1;
             }
         }
     }
@@ -560,108 +612,136 @@ pub(super) unsafe fn find_keepcap_word(
     fword: *mut c_char,
     kword: *mut c_char,
 ) {
-    // SAFETY: the caller guarantees the words; the tree indices are bounded
-    // by each node's child count.
-    unsafe {
-        let byts = (*slang).sl_kbyts;
-        let idxs: *mut idx_T = (*slang).sl_kidxs;
-        if byts.is_null() {
-            // The tree is empty: cannot happen.
-            *kword = NUL as c_char;
-            return;
+    // SAFETY: the caller guarantees the language, so the keep-case tree's
+    // two arrays are either both there or the byte array is null.
+    let byts = unsafe { (*slang).sl_kbyts };
+    let idxs: *mut idx_T = unsafe { (*slang).sl_kidxs };
+    if byts.is_null() {
+        // The tree is empty: cannot happen.
+        //
+        // SAFETY: `kword` has room for `MAXWLEN` bytes by the contract.
+        unsafe { *kword = NUL as c_char };
+        return;
+    }
+
+    let mut uword = [0 as c_char; MAXWLEN];
+    // SAFETY: `fword` is NUL-terminated and `uword` has room for `MAXWLEN`
+    // bytes, which bounds what the upper-cased copy can grow to.
+    unsafe { allcap_copy(fword, uword.as_mut_ptr()) };
+
+    let mut stack = [KeepCapLevel::default(); MAXWLEN];
+    let mut depth: isize = 0;
+
+    // Every level's offsets are byte counts already matched inside `fword`
+    // and `uword`, which are both NUL-terminated; every `byts`/`idxs` index
+    // is a node start the tree handed back, stepped forward at most that
+    // node's child count. So all the reads below stay in bounds.
+    while depth >= 0 {
+        let level = stack[depth as usize];
+        // SAFETY: as above.
+        if unsafe { *fword.add(level.fwordidx) } == NUL as c_char {
+            // At the end of the folded word: if the tree lets a word
+            // end here, this is the answer.
+            //
+            // SAFETY: as above; `kwordlen` is what has been written into
+            // `kword` so far, which is under `MAXWLEN`.
+            if unsafe { *byts.offset(level.arridx as isize + 1) } == 0 {
+                unsafe { *kword.add(level.kwordlen) = NUL as c_char };
+                return;
+            }
+            // Otherwise the answer would be too long; back up.
+            depth -= 1;
+            continue;
         }
 
-        let mut uword = [0 as c_char; MAXWLEN];
-        allcap_copy(fword, uword.as_mut_ptr());
+        stack[depth as usize].round += 1;
+        let round = stack[depth as usize].round;
+        if round > 2 {
+            // Both cases tried; back up.
+            depth -= 1;
+            continue;
+        }
 
-        let mut stack = [KeepCapLevel::default(); MAXWLEN];
-        let mut depth: isize = 0;
+        // SAFETY: as above -- both words are NUL-terminated and neither
+        // offset has reached their terminator.
+        let flen = unsafe { utf_ptr2len(fword.add(level.fwordidx)) } as usize;
+        let ulen = unsafe { utf_ptr2len(uword.as_ptr().add(level.uwordidx)) } as usize;
+        let (mut p, mut l) = if round == 1 {
+            (unsafe { fword.add(level.fwordidx) } as *const u8, flen)
+        } else {
+            (
+                unsafe { uword.as_ptr().add(level.uwordidx) } as *const u8,
+                ulen,
+            )
+        };
 
-        while depth >= 0 {
-            let level = stack[depth as usize];
-            if *fword.add(level.fwordidx) == NUL as c_char {
-                // At the end of the folded word: if the tree lets a word
-                // end here, this is the answer.
-                if *byts.offset(level.arridx as isize + 1) == 0 {
-                    *kword.add(level.kwordlen) = NUL as c_char;
-                    return;
-                }
-                // Otherwise the answer would be too long; back up.
-                depth -= 1;
-                continue;
-            }
+        // Match the character's bytes one node at a time.
+        let mut tryidx = level.arridx;
+        while l > 0 {
+            // SAFETY: as above.
+            let len = unsafe { *byts.offset(tryidx as isize) } as idx_T;
+            tryidx += 1;
+            // SAFETY: `l` bytes of the character are left, so `p` has that
+            // many to read before it reaches the word's end.
+            let c = unsafe { *p } as c_int;
+            p = unsafe { p.add(1) };
 
-            stack[depth as usize].round += 1;
-            let round = stack[depth as usize].round;
-            if round > 2 {
-                // Both cases tried; back up.
-                depth -= 1;
-                continue;
-            }
-
-            let flen = utf_ptr2len(fword.add(level.fwordidx)) as usize;
-            let ulen = utf_ptr2len(uword.as_ptr().add(level.uwordidx)) as usize;
-            let (mut p, mut l) = if round == 1 {
-                (fword.add(level.fwordidx) as *const u8, flen)
-            } else {
-                (uword.as_ptr().add(level.uwordidx) as *const u8, ulen)
-            };
-
-            // Match the character's bytes one node at a time.
-            let mut tryidx = level.arridx;
-            while l > 0 {
-                let len = *byts.offset(tryidx as isize) as idx_T;
-                tryidx += 1;
-                let c = *p as c_int;
-                p = p.add(1);
-
-                let mut lo = tryidx;
-                let mut hi = tryidx + len - 1;
-                while lo < hi {
-                    let m = (lo + hi) / 2;
-                    let b = *byts.offset(m as isize) as c_int;
-                    if b > c {
-                        hi = m - 1;
-                    } else if b < c {
-                        lo = m + 1;
-                    } else {
-                        lo = m;
-                        hi = m;
-                        break;
-                    }
-                }
-
-                if hi < lo || *byts.offset(lo as isize) as c_int != c {
+            let mut lo = tryidx;
+            let mut hi = tryidx + len - 1;
+            while lo < hi {
+                let m = (lo + hi) / 2;
+                // SAFETY: `m` lies between `lo` and `hi`, both inside the
+                // node's `len` children.
+                let b = unsafe { *byts.offset(m as isize) } as c_int;
+                if b > c {
+                    hi = m - 1;
+                } else if b < c {
+                    lo = m + 1;
+                } else {
+                    lo = m;
+                    hi = m;
                     break;
                 }
-
-                tryidx = *idxs.offset(lo as isize);
-                l -= 1;
             }
 
-            if l != 0 {
-                continue;
+            // SAFETY: as above; the `||` keeps the read behind the test
+            // that `lo` is still a child of this node.
+            if hi < lo || unsafe { *byts.offset(lo as isize) } as c_int != c {
+                break;
             }
 
-            // The whole character matched: keep it and go a level deeper.
-            let (src, taken) = if round == 1 {
-                (fword.add(level.fwordidx) as *const c_char, flen)
-            } else {
-                (uword.as_ptr().add(level.uwordidx), ulen)
-            };
-            ptr::copy_nonoverlapping(src, kword.add(level.kwordlen), taken);
-
-            depth += 1;
-            stack[depth as usize] = KeepCapLevel {
-                arridx: tryidx,
-                round: 0,
-                fwordidx: level.fwordidx + flen,
-                uwordidx: level.uwordidx + ulen,
-                kwordlen: level.kwordlen + taken,
-            };
+            // SAFETY: as above -- `lo` is a child of this node.
+            tryidx = unsafe { *idxs.offset(lo as isize) };
+            l -= 1;
         }
 
-        // Not found: cannot happen.
-        *kword = NUL as c_char;
+        if l != 0 {
+            continue;
+        }
+
+        // The whole character matched: keep it and go a level deeper.
+        //
+        // SAFETY: as above; `taken` is the character's length in whichever
+        // word it came from, and `kword` has `MAXWLEN` bytes.
+        let (src, taken) = if round == 1 {
+            (unsafe { fword.add(level.fwordidx) } as *const c_char, flen)
+        } else {
+            (unsafe { uword.as_ptr().add(level.uwordidx) }, ulen)
+        };
+        unsafe { ptr::copy_nonoverlapping(src, kword.add(level.kwordlen), taken) };
+
+        depth += 1;
+        stack[depth as usize] = KeepCapLevel {
+            arridx: tryidx,
+            round: 0,
+            fwordidx: level.fwordidx + flen,
+            uwordidx: level.uwordidx + ulen,
+            kwordlen: level.kwordlen + taken,
+        };
     }
+
+    // Not found: cannot happen.
+    //
+    // SAFETY: `kword` has room for `MAXWLEN` bytes by the contract.
+    unsafe { *kword = NUL as c_char };
 }

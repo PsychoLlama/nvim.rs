@@ -272,7 +272,7 @@ pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
 
 pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
-    unsafe { buf_set_changedtick(buf, buf_get_changedtick(buf) + 1 as varnumber_T) };
+    unsafe { buf_set_changedtick(buf, buf_get_changedtick(Buf::new(buf)) + 1 as varnumber_T) };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.

@@ -19,6 +19,7 @@ use neovim::buffer::{
     close_buffer,
 };
 use neovim::types::buf_T;
+use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
 
@@ -87,7 +88,7 @@ impl Buffers {
     fn close(&self, buf: *mut buf_T, action: c_int) {
         // SAFETY: a buffer this case opened and has not yet wiped, and a
         // null window -- the spec's own call.
-        unsafe { close_buffer(std::ptr::null_mut(), buf, action, false, false) };
+        unsafe { close_buffer(None, Buf::new(buf), action, false, false) };
         if action == DOBUF_WIPE as c_int {
             self.opened.borrow_mut().retain(|&b| b != buf);
         }
@@ -121,7 +122,7 @@ impl Drop for Buffers {
         for buf in self.opened.borrow_mut().drain(..) {
             // SAFETY: a buffer this case opened; wiping it is what the spec
             // did at the end of every case that could.
-            unsafe { close_buffer(std::ptr::null_mut(), buf, DOBUF_WIPE as c_int, false, false) };
+            unsafe { close_buffer(None, Buf::new(buf), DOBUF_WIPE as c_int, false, false) };
         }
     }
 }

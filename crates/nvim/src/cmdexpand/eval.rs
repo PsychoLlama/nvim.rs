@@ -197,13 +197,12 @@ pub unsafe fn f_cmdcomplete_info(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        let ccline: *mut CmdlineInfo = get_cmdline_info();
+        let xpc = Cc::current().xpc();
 
         tv_dict_alloc_ret(rettv);
-        if ccline.is_null() || (*ccline).xpc.is_null() || (*(*ccline).xpc).xp_files.is_null() {
+        if xpc.is_null() || (*xpc).xp_files.is_null() {
             return;
         }
-        let xpc = (*ccline).xpc;
         let retdict: *mut dict_T = (*rettv).vval.v_dict;
 
         // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the

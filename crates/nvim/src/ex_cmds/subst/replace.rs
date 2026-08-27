@@ -82,7 +82,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
         } else if here == CAR {
             // Prepare for undo of the line about to be split.
             // SAFETY: `lnum` is a line of the buffer.
-            if unsafe { u_inssub(st.lnum) } == OK {
+            if u_inssub(st.lnum) == OK {
                 // SAFETY: the pieces are all live; the appended line is the
                 // text up to the CR, which is then removed from the buffer.
                 unsafe { *p1 = NUL as c_char }; // truncate up to the CR
@@ -329,7 +329,7 @@ pub(super) unsafe fn build_replacement(
 unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
     st.lnum += 1;
     // SAFETY: the lines below `lnum` are the ones the match spanned.
-    if unsafe { u_savedel(st.lnum, st.nmatch_tl) } != OK {
+    if u_savedel(st.lnum, st.nmatch_tl) != OK {
         return false;
     }
     let mut i = 0 as linenr_T;
@@ -380,7 +380,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.prev_matchcol = old_len - st.prev_matchcol;
 
     // SAFETY: `lnum` is a line of the buffer.
-    if unsafe { u_savesub(st.lnum) } != OK {
+    if u_savesub(st.lnum) != OK {
         return false;
     }
     // SAFETY: `ml_replace` takes ownership of the rebuilt line.

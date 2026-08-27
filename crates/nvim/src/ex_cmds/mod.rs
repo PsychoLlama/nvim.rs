@@ -34,8 +34,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
 use crate::main::{
-    cmdmod, curtab, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox, firstwin,
-    g_do_tagpreview, got_int, msg_scroll, quit_more, sandbox, secure,
+    cmdmod, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox, g_do_tagpreview,
+    got_int, msg_scroll, quit_more, sandbox, secure,
 };
 use crate::memory::xfree;
 use crate::message::{
@@ -52,11 +52,11 @@ use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp,
     FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
-    bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T, getf_retvalues,
+    bcount_t, bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues,
     linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -188,11 +188,11 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Fire `event` for `buf`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub(super) unsafe fn buf_autocmd(event: event_T, buf: *mut buf_T) -> bool {
-    // SAFETY: caller's contract.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf) }
+/// Safe: [`Buf`] is the live buffer `apply_autocmds` asks for, and the two
+/// file names it also wants are null here.
+pub(super) fn buf_autocmd(event: event_T, buf: Buf) -> bool {
+    // SAFETY: a live buffer and no file names.
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
 }
 /// Refuse anything that reaches outside the editor while 'secure' is on or a
 /// sandbox is open -- shell commands, `:write`, `:cd` and friends.
@@ -222,17 +222,12 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     if cur_win().w_onebuf_opt.wo_pvw != 0 {
         return false;
     }
-    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        unsafe { (*curtab.get()).tp_firstwin }
-    };
-    while !wp.is_null() {
-        if unsafe { (*wp).w_onebuf_opt.wo_pvw } != 0 {
-            unsafe { win_enter(wp, undo_sync) };
+    for wp in windows() {
+        if wp.w_onebuf_opt.wo_pvw != 0 {
+            // SAFETY: a window of the editor's own list.
+            unsafe { win_enter(wp.raw(), undo_sync) };
             return false;
         }
-        wp = unsafe { (*wp).w_next };
     }
     if win_split(
         if g_do_tagpreview.get() > 0 as ::core::ffi::c_int {

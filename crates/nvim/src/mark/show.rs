@@ -17,7 +17,7 @@
 )]
 
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
-use crate::buffer::{bt_prompt, buflist_findnr, buflist_nr2name};
+use crate::buffer::{bt_prompt, buflist_nr2name, find_buf};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::global_cell::GlobalCell;
 use crate::main::{Columns, e_argreq, e_invarg, e_invarg2, got_int};
@@ -315,8 +315,8 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
                     // The event is announced against the mark's OWN buffer
                     // where it still exists, so an autocommand sees the file
                     // the mark was in.
-                    let owner = buflist_findnr(slot.fmark().fnum());
-                    let owner = if owner.is_null() { buf.raw() } else { owner };
+                    let owner =
+                        find_buf(slot.fmark().fnum()).map_or(buf.raw(), |mut owner| owner.raw());
                     // SAFETY: `gone` is on this stack and `owner` is a live
                     // buffer.
                     unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, owner) };

@@ -26,6 +26,7 @@ use crate::pos::lt;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
+use crate::winlayer::Win;
 use ::libc::strcmp;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
@@ -73,7 +74,7 @@ pub unsafe fn get_expr_indent() -> c_int {
         (*win).w_cursor = save_pos;
         (*win).w_curswant = save_curswant;
         (*win).w_set_curswant = save_set_curswant;
-        check_cursor(win);
+        check_cursor(Win::new(win));
     }
     State.set(save_state);
 
@@ -228,7 +229,7 @@ unsafe fn indent_after_open(open: &pos_T) -> c_int {
         (*win).w_cursor.col = open.col;
         let line = get_cursor_line_ptr();
         let mut csarg = CharsizeArg::default();
-        let cstype = init_charsize_arg(&mut csarg, win, open.lnum, line);
+        let cstype = init_charsize_arg(&mut csarg, Win::new(win), open.lnum, line);
 
         // Walk to `open`'s column, measuring what is before it.
         let mut sci: StrCharInfo = utf_ptr2str_char_info(line);

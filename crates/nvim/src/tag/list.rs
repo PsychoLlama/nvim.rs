@@ -12,6 +12,7 @@ use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
 use crate::types::{IOSIZE, MAXPATHL, OK};
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -416,7 +417,7 @@ pub(crate) unsafe fn add_llist_tags(
         );
         // Answers `Ok` for a plain entry list; upstream discarded it too.
         let _ = set_errorlist(
-            curwin.get(),
+            Win::from_raw(curwin.get()),
             list,
             ' ' as c_int,
             title.as_mut_ptr(),

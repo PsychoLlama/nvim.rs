@@ -24,6 +24,7 @@ use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
 use crate::types::{CpoFlag, MAXPATHL, NUL, Vv};
+use crate::winlayer::Win;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///
@@ -395,7 +396,7 @@ unsafe fn line_number_str(wp: *mut win_T, lnum: linenr_T, buf: &mut [::core::ffi
         let (num, fmt) = if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu == 0 {
             (lnum, c"%*d ")
         } else {
-            let rel = abs(get_cursor_rel_lnum(wp, lnum)) as linenr_T;
+            let rel = abs(get_cursor_rel_lnum(Win::new(wp), lnum)) as linenr_T;
             if rel == 0 && (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
                 (lnum, c"%-*d ")
             } else {
@@ -588,7 +589,7 @@ impl WinLineVars {
                 || virtnum == 0
                 || virtnum == self.n_virt_below - self.filler_lines
             {
-                abs(get_cursor_rel_lnum(wp, lnum)) as linenr_T
+                abs(get_cursor_rel_lnum(Win::new(wp), lnum)) as linenr_T
             } else {
                 -1
             };
@@ -734,7 +735,7 @@ impl WinLineVars {
                 if self.row == self.startrow {
                     // The first row of a line whose top is scrolled off: the
                     // indent is measured from the second row's left edge.
-                    num -= win_col_off2(wp);
+                    num -= win_col_off2(Win::new(wp));
                     if self.extra_todo < 0 {
                         num = 0;
                     }

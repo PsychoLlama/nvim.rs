@@ -707,8 +707,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_current_line(lstate: *mut lua_
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
         let Call { arena, err, .. } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }

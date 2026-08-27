@@ -86,7 +86,7 @@ impl Df {
     /// [`diff_check_sanity`].
     pub(crate) fn is_sane(self, tp: TabPage) -> bool {
         // SAFETY: a live block and a live tab page.
-        unsafe { diff_check_sanity(tp.raw(), self.raw()) != 0 }
+        unsafe { diff_check_sanity(tp, self.raw()) != 0 }
     }
 }
 
@@ -106,9 +106,8 @@ pub(crate) fn diff_blocks(tp: TabPage) -> impl Iterator<Item = Df> {
 /// so a live tab page is the whole precondition -- which is what a [`TabPage`]
 /// argument says. That matters because half the callers ask about a buffer
 /// they are not otherwise sure of.
-pub(crate) fn diff_slot(buf: *mut buf_T, tp: TabPage) -> c_int {
-    // SAFETY: a live tab page; `buf` is compared, never read.
-    unsafe { diff_buf_idx(buf, tp.raw()) }
+pub(crate) fn diff_slot(buf: Buf, tp: TabPage) -> c_int {
+    diff_buf_idx(buf, tp)
 }
 
 /// Whether `dp` is still in the current tab page's block list.
@@ -166,15 +165,13 @@ pub(crate) unsafe fn clear_diffout(dout: *mut diffout_T) {
 /// flag for it.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `m` a writable `mmfile_t`.
+/// `m` must be a writable `mmfile_t`.
 pub(crate) unsafe fn diff_write_buffer(
-    buf: *mut buf_T,
+    buf: Buf,
     m: *mut mmfile_t,
     start: linenr_T,
     mut end: linenr_T,
 ) -> c_int {
-    // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buf) };
     if end < 0 {
         end = buf.b_ml.ml_line_count;
     }
@@ -271,9 +268,9 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
 /// NULL selects; otherwise the lines go through a temp file.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `din` a live input side.
+/// `din` must be a live input side.
 unsafe fn diff_write(
-    buf: *mut buf_T,
+    mut buf: Buf,
     din: *mut diffin_T,
     start: linenr_T,
     mut end: linenr_T,
@@ -291,8 +288,6 @@ unsafe fn diff_write(
     if frames_locked() {
         return FAIL;
     }
-    // SAFETY: the caller's buffer.
-    let mut buf = unsafe { Buf::new(buf) };
     if end < 0 {
         end = buf.b_ml.ml_line_count;
     }
@@ -382,7 +377,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 // and a valid buffer is what `buf_check_timestamp` wants.
                 unsafe {
                     if buf_valid(buf) {
-                        buf_check_timestamp(buf);
+                        buf_check_timestamp(Buf::new(buf));
                     }
                 }
             }
@@ -403,7 +398,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 let buf = tp.tp_diffbuf[idx];
                 // SAFETY: a live buffer, and two locals of this frame with
                 // room for `MAX_DIFF_ANCHORS` line numbers.
-                let ok = unsafe { parse_diffanchors(false, buf, into, count) };
+                let ok = unsafe { parse_diffanchors(false, Buf::new(buf), into, count) };
                 if ok != OK {
                     let msg = &raw const e_failed_to_find_all_diff_anchors as *const c_char;
                     // SAFETY: a static message string.
@@ -450,12 +445,13 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
 
             let (start, end) = segment(idx_orig);
             // SAFETY: a live buffer of the diff, and `dio`'s own input side.
-            let wrote = unsafe { diff_write(tp.tp_diffbuf[idx_orig], orig_in, start, end) };
+            let wrote =
+                unsafe { diff_write(Buf::new(tp.tp_diffbuf[idx_orig]), orig_in, start, end) };
             if wrote == FAIL {
                 if !orig_diff.is_null() {
                     tp.tp_first_diff = orig_diff;
                     // SAFETY: the current tab page is live.
-                    unsafe { diff_clear(tp.raw()) };
+                    diff_clear(tp);
                 }
                 break 'theend;
             }
@@ -468,7 +464,9 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 let (start, end) = segment(idx_new);
                 // SAFETY: a live buffer, and `dio`'s own sides.
                 unsafe {
-                    if diff_write(buf, new_in, start, end) != FAIL && diff_file(dio.raw()) != FAIL {
+                    if diff_write(Buf::new(buf), new_in, start, end) != FAIL
+                        && diff_file(dio.raw()) != FAIL
+                    {
                         diff_read(idx_orig as c_int, idx_new as c_int, dio.raw());
                         clear_diffin(new_in);
                         clear_diffout(diff_out);
@@ -537,7 +535,7 @@ pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
     let mut tp = cur_tab();
     let had_diffs = !tp.tp_first_diff.is_null();
     // SAFETY: the current tab page is live.
-    unsafe { diff_clear(tp.raw()) };
+    diff_clear(tp);
     tp.tp_diff_invalid = 0;
 
     // The first two buffers in the tabpage: everything is diffed against

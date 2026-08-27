@@ -60,6 +60,7 @@ use crate::types::{
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
+use crate::winlayer::Buf;
 use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -288,6 +289,8 @@ pub unsafe fn buf_write(
     eap: *mut exarg_T,
     req: WriteRequest,
 ) -> ::core::ffi::c_int {
+    // SAFETY: the caller's promise, taken once for the whole body.
+    let b = unsafe { Buf::new(buf) };
     // The quoted file name the failure path reports against.
     let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     unsafe {
@@ -392,7 +395,7 @@ pub unsafe fn buf_write(
             1
         });
         if !req.filtering {
-            filemess(buf, fname, c"".as_ptr().cast_mut()); // show that we are busy
+            filemess(b, fname, c"".as_ptr().cast_mut()); // show that we are busy
         }
         msg_scroll.set(0); // always overwrite the file message now
 
@@ -758,15 +761,15 @@ pub unsafe fn buf_write(
                         && !writer.conv_error
                         && (overwriting || cpo_has(CpoFlag::PLUS))
                     {
-                        unchanged(buf, true, false);
-                        let changedtick = buf_get_changedtick(buf);
+                        unchanged(b, true, false);
+                        let changedtick = buf_get_changedtick(b);
                         if (*buf).b_last_changedtick + 1 == changedtick {
                             // b:changedtick may have been incremented in
                             // unchanged(), but that must not fire TextChanged.
                             (*buf).b_last_changedtick = changedtick;
                         }
-                        u_unchanged(buf);
-                        u_update_save_nr(buf);
+                        u_unchanged(b);
+                        u_update_save_nr(b);
                     }
 
                     // Written to the current file: update the swap file's
@@ -821,7 +824,7 @@ pub unsafe fn buf_write(
 
         if let Some(err) = &err {
             // -100 to save some space for a further error message.
-            add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, buf, fname);
+            add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, b, fname);
             err.emit(&quoted);
             retval = FAIL;
             if end == 0 {
@@ -840,7 +843,7 @@ pub unsafe fn buf_write(
                 // Update the timestamp to avoid an "overwrite changed file"
                 // prompt when writing again.
                 if os_fileinfo(fname, &raw mut file_info_old) {
-                    buf_store_file_info(buf, &raw mut file_info_old);
+                    buf_store_file_info(b, &raw mut file_info_old);
                     (*buf).b_mtime_read = (*buf).b_mtime;
                     (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
                 }
@@ -851,7 +854,7 @@ pub unsafe fn buf_write(
         // Writing the whole file with 'undofile' set writes the undo file too.
         if retval == OK && write_undo_file {
             let mut hash = sha_ctx.finish();
-            u_write_undo(core::ptr::null(), false, buf, hash.as_mut_ptr());
+            u_write_undo(core::ptr::null(), false, b, hash.as_mut_ptr());
         }
 
         if !should_abort(retval) {

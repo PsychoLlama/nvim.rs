@@ -47,6 +47,7 @@ use super::{
 };
 use crate::decoration::SCL_NUM;
 
+use crate::winlayer::Buf;
 /// The options whose bitmask is derived from a value the startup sequence
 /// may have installed without going through `:set`.
 pub unsafe fn didset_string_options() {
@@ -161,7 +162,7 @@ pub unsafe fn check_buf_options(buf: *mut buf_T) {
         ] {
             check_string_option(field);
         }
-        parse_cino(buf);
+        parse_cino(Buf::new(buf));
         for field in [
             &raw mut (*buf).b_p_lop,
             &raw mut (*buf).b_p_ft,

@@ -22,6 +22,7 @@ use crate::regexp::{
 use crate::semsg;
 use crate::types::{MB_MAXBYTES, NUL, colnr_T};
 
+use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
 pub(crate) fn z_atom(rex: Rex) -> Parsed {
     let c = unmagic(getchr());
@@ -275,7 +276,7 @@ fn cursor_vcol() -> i64 {
     unsafe {
         let mut vcol: colnr_T = 0;
         getvvcol(
-            curwin.get(),
+            Win::new(curwin.get()),
             &raw mut (*curwin.get()).w_cursor,
             core::ptr::null_mut(),
             core::ptr::null_mut(),

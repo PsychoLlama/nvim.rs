@@ -12,6 +12,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::winlayer::Buf;
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -345,17 +346,25 @@ pub(crate) unsafe fn ins_compl_files(
 ///
 /// `curbuf` is special: called with `buf == curbuf` this has to be the first
 /// call for a given flag/expansion. -- Acevedo
-pub(crate) unsafe fn ins_compl_next_buf(mut buf: *mut buf_T, flag: c_int) -> *mut buf_T {
-    unsafe {
-        static wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+///
+/// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
+/// remembers between calls is vetted below rather than trusted.
+pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
+    // This outlives the call, and a completion runs user functions and Lua in
+    // between, so it stays a raw pointer that `win_valid` vets -- a `Win`
+    // would be promising a liveness nothing here can keep.
+    static wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
 
-        if flag == 'w' as c_int {
-            // Just windows.
-            if buf == curbuf.get() || !win_valid(wp.get()) {
-                // First call for this flag/expansion, or the window was closed.
-                wp.set(curwin.get());
-            }
-            debug_assert!(!wp.get().is_null());
+    if flag == 'w' as c_int {
+        // Just windows.
+        if buf.raw() == curbuf.get() || !win_valid(wp.get()) {
+            // First call for this flag/expansion, or the window was closed.
+            wp.set(curwin.get());
+        }
+        debug_assert!(!wp.get().is_null());
+        // SAFETY: `wp` is `curwin` or a window `win_valid` just vouched for,
+        // and from there the editor's own window list, which is live.
+        unsafe {
             loop {
                 // Move to the next window, wrapping to the first at the end.
                 wp.set(if !(*wp.get()).w_next.is_null() {
@@ -371,42 +380,42 @@ pub(crate) unsafe fn ins_compl_next_buf(mut buf: *mut buf_T, flag: c_int) -> *mu
                     break;
                 }
             }
-            buf = (*wp.get()).w_buffer;
-        } else {
-            // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
-            // (unlisted buffers).  When completing whole lines skip unloaded
-            // buffers.
-            loop {
-                // Move to the next buffer, wrapping to the first at the end.
-                buf = if !(*buf).b_next.is_null() {
-                    (*buf).b_next
-                } else {
-                    firstbuf.get()
-                };
-                // Stop if we're back at the start buffer.
-                if buf == curbuf.get() {
-                    break;
-                }
-                let skip_buffer = if flag == 'U' as c_int {
-                    (*buf).b_p_bl != 0
-                } else {
-                    (*buf).b_p_bl == 0 || (*buf).b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
-                };
-                // Stop if we found a buffer that matches our criteria.
-                if !skip_buffer && !(*buf).b_scanned {
-                    break;
-                }
+            buf = Buf::new((*wp.get()).w_buffer);
+        }
+    } else {
+        // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
+        // (unlisted buffers).  When completing whole lines skip unloaded
+        // buffers.
+        loop {
+            // Move to the next buffer, wrapping to the first at the end.
+            buf = match buf.next() {
+                Some(next) => next,
+                // SAFETY: the editor's buffer list is live, so its head is.
+                None => unsafe { Buf::new(firstbuf.get()) },
+            };
+            // Stop if we're back at the start buffer.
+            if buf.raw() == curbuf.get() {
+                break;
+            }
+            let skip_buffer = if flag == 'U' as c_int {
+                buf.b_p_bl != 0
+            } else {
+                buf.b_p_bl == 0 || buf.b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
+            };
+            // Stop if we found a buffer that matches our criteria.
+            if !skip_buffer && !buf.b_scanned {
+                break;
             }
         }
-        buf
     }
+    buf
 }
 
 /// The next word or line from `ins_buf` at `cur_match_pos`, with its length in
 /// `match_len`; `cont_s_ipos` says the next `CTRL-X <>` sets the initial
 /// position.
 pub(crate) unsafe fn ins_compl_get_next_word_or_line(
-    ins_buf: *mut buf_T,
+    ins_buf: Buf,
     cur_match_pos: *mut pos_T,
     match_len: *mut c_int,
     cont_s_ipos: *mut bool,
@@ -415,17 +424,17 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     unsafe {
         *match_len = 0;
         let mut ptr =
-            ml_get_buf(ins_buf, (*cur_match_pos).lnum).offset((*cur_match_pos).col as isize);
-        let mut len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum) - (*cur_match_pos).col;
+            ml_get_buf(ins_buf.raw(), (*cur_match_pos).lnum).offset((*cur_match_pos).col as isize);
+        let mut len = ml_get_buf_len(ins_buf.raw(), (*cur_match_pos).lnum) - (*cur_match_pos).col;
         let iobuff = out.as_mut_ptr();
 
         if ctrl_x_mode_line_or_eval() {
             if compl_status_adding() {
-                if (*cur_match_pos).lnum >= (*ins_buf).b_ml.ml_line_count {
+                if (*cur_match_pos).lnum >= ins_buf.b_ml.ml_line_count {
                     return ptr::null_mut();
                 }
-                ptr = ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1);
-                len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum + 1);
+                ptr = ml_get_buf(ins_buf.raw(), (*cur_match_pos).lnum + 1);
+                len = ml_get_buf_len(ins_buf.raw(), (*cur_match_pos).lnum + 1);
                 if p_paste.get() == 0 {
                     let tmp_ptr = ptr;
                     ptr = skipwhite(tmp_ptr);
@@ -448,13 +457,13 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
             len = tmp_ptr.offset_from(ptr) as c_int;
 
             if compl_status_adding() && len == compl_length.get() {
-                if (*cur_match_pos).lnum < (*ins_buf).b_ml.ml_line_count {
+                if (*cur_match_pos).lnum < ins_buf.b_ml.ml_line_count {
                     // Try the next line, if any: the new word will be "joined"
                     // as if the normal command "J" was used.  IOSIZE is always
                     // greater than compl_length, so the strncpy always works
                     // -- Acevedo
                     strncpy(iobuff, ptr, len as size_t);
-                    ptr = skipwhite(ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1));
+                    ptr = skipwhite(ml_get_buf(ins_buf.raw(), (*cur_match_pos).lnum + 1));
                     // Find the start and then the end of the next word.
                     tmp_ptr = find_word_end(find_word_start(ptr));
                     if tmp_ptr > ptr {
@@ -565,15 +574,15 @@ pub(crate) unsafe fn get_next_default_completion(
                 // ctrl_x_mode_line_or_eval(), or a word-wise search that has
                 // added a word that was at the beginning of the line.
                 found_new_match = search_for_exact_line(
-                    (*st).ins_buf,
+                    Buf::new((*st).ins_buf),
                     (*st).cur_match_pos,
                     compl_direction.get(),
                     compl_pattern().data(),
                 );
             } else {
                 found_new_match = searchit(
-                    ptr::null_mut(),
-                    (*st).ins_buf,
+                    None,
+                    Buf::new((*st).ins_buf),
                     (*st).cur_match_pos,
                     ptr::null_mut(),
                     compl_direction.get(),
@@ -634,7 +643,7 @@ pub(crate) unsafe fn get_next_default_completion(
 
             if !in_fuzzy_collect {
                 ptr = ins_compl_get_next_word_or_line(
-                    (*st).ins_buf,
+                    Buf::new((*st).ins_buf),
                     (*st).cur_match_pos,
                     &raw mut len,
                     &raw mut cont_s_ipos,

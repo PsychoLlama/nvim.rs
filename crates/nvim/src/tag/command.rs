@@ -428,7 +428,7 @@ impl DoTag {
         if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
             unsafe { mark_view_restore(&raw mut self.saved_fmark) };
         }
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
         if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
             unsafe { fold_open_cursor() };
         }
@@ -534,9 +534,8 @@ impl DoTag {
         if self.cur_fnum == cur_buf().handle {
             return;
         }
-        let buf = buflist_findnr(self.cur_fnum);
-        if !buf.is_null() {
-            self.buf_ffname = unsafe { (*buf).b_ffname };
+        if let Some(buf) = find_buf(self.cur_fnum) {
+            self.buf_ffname = buf.b_ffname;
         }
     }
 

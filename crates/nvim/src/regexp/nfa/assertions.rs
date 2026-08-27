@@ -20,6 +20,7 @@ use crate::regexp::{
 };
 use crate::types::{MB_MAXBYTES, colnr_T, fmark_T, linenr_T, uint8_t, win_T};
 
+use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
 fn col(rex: Rex) -> colnr_T {
     // SAFETY: `input` and `line` bound the same line.
@@ -97,7 +98,7 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
         if rex.multi() && (lnum <= 0 || lnum > (*(*wp).w_buffer).b_ml.ml_line_count) {
             lnum = 1;
         }
-        let vcol = win_linetabsize(wp, lnum, rex.line() as *mut c_char, col);
+        let vcol = win_linetabsize(Win::new(wp), lnum, rex.line() as *mut c_char, col);
         assert!(want >= 0, "virtual column assertion out of range");
         nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
     }

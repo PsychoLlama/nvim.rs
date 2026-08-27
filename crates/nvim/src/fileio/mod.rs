@@ -28,10 +28,10 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    State, allbuf_lock, autocmd_busy, curbuf, curtab, curwin, did_check_timestamps, e_interr,
-    e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage, firstbuf,
-    firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite,
-    msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
+    State, allbuf_lock, autocmd_busy, curbuf, curtab, did_check_timestamps, e_interr, e_notopen,
+    emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage, firstbuf, firstwin,
+    global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
+    msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
     need_wait_return, no_check_timestamps, no_wait_return, p_ar, p_ccv, p_enc, p_fencs, p_ffs,
     p_fic, p_ur, p_verbose, readonlymode, recoverymode, redraw_cmdline, redraw_tabline,
     restart_edit, stdin_fd, swap_exists_action, vim_ignored,
@@ -169,7 +169,7 @@ pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
 ///
 /// `s` is the note to append; an empty one means the message is progress on
 /// a write that is still running.
-pub unsafe fn filemess(buf: *mut buf_T, name: *mut c_char, s: *mut c_char) {
+pub unsafe fn filemess(buf: Buf, name: *mut c_char, s: *mut c_char) {
     // The report. Upstream builds it in `IObuff` and then calls
     // `msg_progress`/`msg_outtrans`, which write it again.
     let mut report = [0 as c_char; IOSIZE as usize];
@@ -255,7 +255,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
         return FAIL;
     }
 
-    if unsafe { setfname(curbuf.get(), fname, sfname, false) } == OK {
+    if unsafe { setfname(cur_buf(), fname, sfname, false) } == OK {
         cur_buf().b_flags |= BufFlags::NOTEDITED;
     }
 
@@ -285,7 +285,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
 pub unsafe fn add_quoted_fname(
     ret_buf: *mut c_char,
     buf_len: size_t,
-    buf: *const buf_T,
+    buf: Buf,
     fname: *const c_char,
 ) {
     let fname = if fname.is_null() {
@@ -294,7 +294,7 @@ pub unsafe fn add_quoted_fname(
         fname
     };
     unsafe { *ret_buf = b'"' as c_char };
-    unsafe { home_replace(buf, fname, ret_buf.add(1), buf_len - 4, true) };
+    unsafe { home_replace(buf.raw(), fname, ret_buf.add(1), buf_len - 4, true) };
     unsafe { xstrlcat(ret_buf, c"\" ".as_ptr(), buf_len) };
 }
 
@@ -557,16 +557,19 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 /// Fill `eap` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buf` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
-pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: *const buf_T) {
-    let cmd_len = 15 + unsafe { strlen((*buf).b_p_fenc) };
+pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: Buf) {
+    // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
+    let cmd_len = 15 + unsafe { strlen(buf.b_p_fenc) };
     unsafe { (*eap).cmd = xmalloc(cmd_len).cast() };
-    unsafe { snprintf((*eap).cmd, cmd_len, c"e ++enc=%s".as_ptr(), (*buf).b_p_fenc) };
+    unsafe { snprintf((*eap).cmd, cmd_len, c"e ++enc=%s".as_ptr(), buf.b_p_fenc) };
     // Where the encoding name starts in that command.
     unsafe { (*eap).force_enc = 8 };
-    unsafe { (*eap).bad_char = (*buf).b_bad_char };
-    unsafe { (*eap).force_ff = *(*buf).b_p_ff as u8 as c_int };
-    // SAFETY: the caller's buffer.
-    let binary = unsafe { (*buf).b_p_bin } != 0;
+    unsafe { (*eap).bad_char = buf.b_bad_char };
+    // SAFETY: 'fileformat' is the buffer's own one-character option string.
+    let fileformat = unsafe { *buf.b_p_ff } as u8 as c_int;
+    // SAFETY: the caller's command.
+    unsafe { (*eap).force_ff = fileformat };
+    let binary = buf.b_p_bin != 0;
     // SAFETY: the caller's command.
     unsafe { (*eap).force_bin = if binary { FORCE_BIN } else { FORCE_NOBIN } };
     unsafe { (*eap).read_edit = false as c_int };

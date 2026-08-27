@@ -13,6 +13,7 @@ use crate::getchar::typeahead;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::semsg_multiline_c;
 use crate::types::{MB_MAXBYTES, NUL, kErrorTypeNone};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -104,7 +105,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
         let len = col - scol;
         // Buffer-local abbreviations first, then the global ones.
         let mut found = ptr::null_mut();
-        for table in [MapTable::Buffer(curbuf.get()), MapTable::Global] {
+        for table in [MapTable::Buffer(Buf::current()), MapTable::Global] {
             if let Some(mp) = map_walk(table, true, |mp| abbr_matches(mp, word, len).then_some(mp))
             {
                 found = mp;

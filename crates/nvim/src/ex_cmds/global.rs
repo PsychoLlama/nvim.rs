@@ -354,7 +354,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
         // SAFETY: as above -- the cursor may be beyond the end of the line.
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
     }
 
     // The cursor may not have moved in the text but a change in a previous

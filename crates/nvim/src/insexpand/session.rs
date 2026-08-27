@@ -14,6 +14,7 @@ use crate::semsg_c;
 use crate::types::{
     ExpandContext, FAIL, IOSIZE, NUL, OK, ShmFlag, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
+use crate::winlayer::Win;
 
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
 /// — the completion's anchor moved to `col` on the cursor's line.
@@ -312,8 +313,8 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
         State.set(save_State);
         (*curwin.get()).w_cursor = pos; // restore the cursor position
-        check_cursor(curwin.get()); // make sure the position is valid, just in case
-        validate_cursor(curwin.get());
+        check_cursor(Win::current()); // make sure the position is valid, just in case
+        validate_cursor(Win::current());
         if !equalpos((*curwin.get()).w_cursor, pos) {
             emsg(gettext(E_COMPLDEL.as_ptr()));
             return FAIL;
@@ -715,7 +716,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> c_int {
             ui_flush();
             loop {
                 if char_avail() {
-                    if ins_compl_preinsert_effect() && ins_compl_win_active(curwin.get()) {
+                    if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
                         ins_compl_delete(false); // Remove pre-inserted text
                         compl_ins_end_col.set(compl_col.get());
                     }

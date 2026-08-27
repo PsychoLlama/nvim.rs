@@ -16,6 +16,7 @@ use crate::grid::{SLF_INC_VCOL, SLF_WRAP, linebuf};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
+use crate::winlayer::Win;
 
 impl Cells {
     /// Draw everything left of the text on this screen row: the fold, sign and
@@ -299,7 +300,7 @@ impl Cells {
                     (*wp).w_view_height,
                     HLF_AT,
                 );
-                set_empty_rows(wp, wlv.row);
+                set_empty_rows(Win::new(wp), wlv.row);
                 wlv.row = f.endrow;
             }
             // The line got too long for the screen.

@@ -50,6 +50,7 @@ pub mod tabstop;
 // and it calls them as `indent::*`.
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::state::MODE_INSERT;
+use crate::winlayer::Win;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{
     change_indent, copy_indent, ex_retab, inindent, ins_try_si, may_do_si, op_reindent,
@@ -90,7 +91,7 @@ pub(crate) unsafe fn line_vcol(lnum: linenr_T, col: colnr_T) -> c_int {
         };
         let mut vcol: colnr_T = 0;
         getvcol(
-            curwin.get(),
+            Win::new(curwin.get()),
             &raw mut fp,
             &raw mut vcol,
             ::core::ptr::null_mut::<colnr_T>(),

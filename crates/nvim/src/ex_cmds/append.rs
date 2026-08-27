@@ -18,7 +18,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::main::{
-    Columns, Rows, State, curwin, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
+    Columns, Rows, State, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
     need_wait_return, p_window,
 };
 use crate::memline::MlFlags;
@@ -177,7 +177,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
     // SAFETY: `curwin` is the live current window.
     cur_win().w_cursor.lnum = lnum;
-    unsafe { check_cursor_lnum(curwin.get()) };
+    check_cursor_lnum(unsafe { Win::current() });
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
     // Don't use wait_return() now.
@@ -289,7 +289,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
 
     // Make sure the cursor is not beyond the end of the file now.
     // SAFETY: `curwin` is the live current window.
-    unsafe { check_cursor_lnum(curwin.get()) };
+    check_cursor_lnum(unsafe { Win::current() });
     unsafe { deleted_lines_mark(line1, line2 - lnum) };
     // ":append" on the line above the deleted lines.
     unsafe { (*eap).line2 = line1 };

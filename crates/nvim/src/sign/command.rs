@@ -20,6 +20,7 @@
 use super::*;
 use crate::types::FAIL;
 use crate::{semsg_c, smsg_c};
+use core::ptr;
 
 /// The `"*"` group's only byte, and the leading zero a sign name may carry.
 const STAR: c_char = b'*'.cast_signed();
@@ -467,12 +468,13 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
                 arg = skiptowhite(v);
             } else if let Some(v) = after(c"file=") {
                 filename = v;
-                out.buf = buflist_findname_exp(v);
+                out.buf = buflist_findname_exp(v).map_or(ptr::null_mut(), Buf::raw);
                 break;
             } else if let Some(v) = after(c"buffer=") {
                 filename = v;
                 let mut p = v;
-                out.buf = buflist_findnr(getdigits_int(&raw mut p, true, 0));
+                out.buf =
+                    find_buf(getdigits_int(&raw mut p, true, 0)).map_or(ptr::null_mut(), Buf::raw);
                 // Diagnosed but not fatal, which is why this still breaks
                 // out with whatever buffer it found.
                 if *skipwhite(p) != 0 {

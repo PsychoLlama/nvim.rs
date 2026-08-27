@@ -49,7 +49,7 @@ pub(crate) unsafe fn report_and_place(
     }
 
     // SAFETY: the current buffer and window are live.
-    unsafe { u_clearline(curbuf.get()) }; // "U" cannot be used after adding lines
+    u_clearline(cur_buf()); // "U" cannot be used after adding lines
 
     // In Ex mode the cursor goes on the last new line, otherwise on the
     // first one.
@@ -60,7 +60,7 @@ pub(crate) unsafe fn report_and_place(
     };
     // SAFETY: the current window is live, in both calls.
     unsafe {
-        check_cursor_lnum(curwin.get());
+        check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // first non-blank
     }
 
@@ -95,7 +95,7 @@ pub(crate) unsafe fn run_read_autocmds(
     // because the format or encoding was auto-detected.
     if set_options {
         // SAFETY: the current buffer is live.
-        unsafe { save_file_ff(curbuf.get()) };
+        save_file_ff(unsafe { Buf::current() });
     }
 
     // The output from the autocommands should neither overwrite anything nor

@@ -6,7 +6,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
 
 use crate::ascii::ascii_isdigit;
-use crate::buffer::buflist_findnr;
+use crate::buffer::find_buf;
 use crate::eval::kMarkAll;
 use crate::eval::typval::{NumBuf, tv_list_find, tv_list_find_nr, tv_list_len};
 use crate::main::{curbuf, curwin};
@@ -19,6 +19,7 @@ use crate::types::{
     FAIL, NUL, OK, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
     pos_T, typval_T, uint8_t, win_T,
 };
+use crate::winlayer::Win;
 use ::libc::strcmp;
 
 /// The character index of byte index `byteidx` in a buffer line.
@@ -181,15 +182,15 @@ pub unsafe fn var2fpos(
 
         pos.coladd = 0;
         if *name.add(0) == b'w' as c_char && dollar_lnum {
-            check_cursor_moved(wp);
+            check_cursor_moved(Win::new(wp));
             pos.col = 0;
             if *name.add(1) == b'0' as c_char {
-                update_topline(wp);
+                update_topline(Win::new(wp));
                 pos.lnum = (*wp).w_topline.max(1);
                 return Some(pos);
             }
             if *name.add(1) == b'$' as c_char {
-                validate_botline_win(wp);
+                validate_botline_win(Win::new(wp));
                 pos.lnum = if (*wp).w_botline > 0 {
                     (*wp).w_botline - 1
                 } else {
@@ -270,20 +271,20 @@ pub unsafe fn list2fpos(
             return FAIL;
         }
         if charcol {
-            let buf = buflist_findnr(if fnump.is_null() {
+            let buf = find_buf(if fnump.is_null() {
                 (*curbuf.get()).handle as c_int
             } else {
                 *fnump
             });
-            if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
+            let Some(mut buf) = buf.filter(|b| !b.b_ml.ml_mfp.is_null()) else {
                 return FAIL;
-            }
+            };
             let lnum = if (*posp).lnum == 0 {
                 (*curwin.get()).w_cursor.lnum
             } else {
                 (*posp).lnum
             };
-            n = buf_charidx_to_byteidx(buf, lnum, n) + 1;
+            n = buf_charidx_to_byteidx(buf.raw(), lnum, n) + 1;
         }
         (*posp).col = n as colnr_T;
 

@@ -26,7 +26,7 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
         // "botline" is one past the last displayed line, hence the -1; the
         // row and column counts are zero-based inside and one-based to
         // vimscript.
-        validate_botline_win(wp.raw());
+        validate_botline_win(wp);
         let b = buf.raw();
         (
             tv_dict_alloc(),

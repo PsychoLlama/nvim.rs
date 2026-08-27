@@ -54,7 +54,7 @@ pub(crate) fn ins_reg() {
     // SAFETY: every `unsafe` call in this function is an editor-wide routine
     // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
     // with.
-    if unsafe { redrawing() } && !unsafe { char_avail() } {
+    if unsafe { redrawing() } && !char_avail() {
         // May need to redraw now that no more characters are available.
         unsafe { ins_redraw(false) };
         unsafe { edit_putchar('"' as c_int, true) };
@@ -108,7 +108,7 @@ pub(crate) fn ins_reg() {
         regname = unsafe { get_expr_register() };
         // The cursor may have been moved back a column.
         cur_win().w_cursor = curpos;
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
     }
 
     if regname == NUL || !unsafe { valid_yank_reg(regname, false) } {
@@ -185,7 +185,7 @@ pub(crate) fn ins_ctrl_g() {
         K_DOWN | Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
         // CTRL-G u: start a new undoable edit.
         CTRL_G_UNDO => {
-            unsafe { u_sync(true) };
+            u_sync(true);
             ins_need_undo.set(true);
             // Insstart has to be reset too, because a BS that joins this
             // line to the previous one must save for undo.
@@ -308,7 +308,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         && !revins_on.get()
     {
         if cur_win().w_cursor.coladd > 0
-            || unsafe { get_ve_flags(curwin.get()) } == kOptVeFlagAll as ::core::ffi::c_uint
+            || get_ve_flags(cur_win()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
             unsafe { oneleft() };
             if restart_edit.get() != NUL {
@@ -326,7 +326,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     unsafe { may_trigger_modechanged() };
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if char_at_cursor() == TAB || unsafe { buf_meta_total(curbuf.get(), kMTMetaInline) } > 0 {
+    if char_at_cursor() == TAB || unsafe { buf_meta_total(Buf::current(), kMTMetaInline) } > 0 {
         cur_win()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -426,7 +426,7 @@ pub(crate) fn ins_ctrl_o() {
     } else {
         'I' as c_int
     });
-    ins_at_eol.set(if unsafe { virtual_active(curwin.get()) } {
+    ins_at_eol.set(if virtual_active(cur_win()) {
         false
     } else {
         char_at_cursor() == NUL
@@ -461,7 +461,7 @@ fn char_at_cursor() -> c_int {
 #[inline(always)]
 fn get_key() -> c_int {
     // SAFETY: the typeahead buffer is live for the whole session.
-    unsafe { plain_vgetc() }
+    plain_vgetc()
 }
 
 /// Beep, or flash, for the 'belloff' reason `flag`.

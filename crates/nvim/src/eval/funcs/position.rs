@@ -109,7 +109,7 @@ unsafe fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
             return Some(curwin.get());
         }
         let (wp, _) = win_and_tab_by_id(tv_get_number(args.ptr(idx)) as c_int)?;
-        check_cursor(wp.raw());
+        check_cursor(wp);
         Some(wp.raw())
     }
 }
@@ -165,14 +165,16 @@ unsafe fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
 /// # Safety
 /// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
 unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> colnr_T {
+    // SAFETY: the caller's promise, taken once for the whole body.
+    let mut win = unsafe { Win::new(wp) };
     // SAFETY: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
     unsafe {
-        if !virtual_active(wp) || fp != &raw mut (*wp).w_cursor {
+        if !virtual_active(win) || fp != &raw mut win.w_cursor {
             return 0;
         }
-        let p = ml_get_buf(bp, (*wp).w_cursor.lnum).offset((*wp).w_cursor.col as isize);
-        if (*wp).w_cursor.coladd < win_chartabsize(wp, p, (*wp).w_virtcol - (*wp).w_cursor.coladd) {
+        let p = ml_get_buf(bp, win.w_cursor.lnum).offset(win.w_cursor.col as isize);
+        if win.w_cursor.coladd < win_chartabsize(win, p, win.w_virtcol - win.w_cursor.coladd) {
             return 0;
         }
         // Only the last character of the line counts: the test is that the
@@ -225,7 +227,7 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
                     }
                 }
                 getvvcol(
-                    wp,
+                    Win::new(wp),
                     &raw mut fp,
                     &raw mut vcol_start,
                     ptr::null_mut(),
@@ -268,7 +270,7 @@ pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
                     {
                         skip_update_topline.set(true);
                     }
-                    check_cursor(wp);
+                    check_cursor(Win::new(wp));
                     let fp = var2fpos(args.ptr(0), true, &raw mut fnum, false, wp);
                     skip_update_topline.set(false);
                     fp
@@ -490,7 +492,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         }
         (*curwin.get()).w_cursor.col = col;
         (*curwin.get()).w_cursor.coladd = coladd;
-        check_cursor(curwin.get());
+        check_cursor(Win::current());
         mb_adjust_cursor();
         (*curwin.get()).w_set_curswant = set_curswant;
         rettv.vval.v_number = 0;
@@ -546,7 +548,7 @@ unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
                     (*curwin.get()).w_curswant = curswant - 1;
                     (*curwin.get()).w_set_curswant = false;
                 }
-                check_cursor(curwin.get());
+                check_cursor(Win::current());
                 rettv.vval.v_number = 0;
             }
             // A mark name is exactly one byte after the quote.

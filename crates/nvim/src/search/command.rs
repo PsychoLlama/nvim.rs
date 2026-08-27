@@ -502,10 +502,10 @@ pub unsafe fn do_search(
     // If the cursor is in a closed fold, don't find another match in
     // the same fold.
     if cmd.dirc == '/' as c_int {
-        if unsafe { has_folding(curwin.get(), pos.lnum, ptr::null_mut(), &raw mut pos.lnum) } {
+        if unsafe { has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) } {
             pos.col = (MAXCOL - 2) as colnr_T; // avoid overflow when adding 1
         }
-    } else if unsafe { has_folding(curwin.get(), pos.lnum, &raw mut pos.lnum, ptr::null_mut()) } {
+    } else if unsafe { has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) } {
         pos.col = 0;
     }
 
@@ -595,7 +595,8 @@ pub unsafe fn do_search(
             } else {
                 SEARCH_NOOF
             };
-            let (w, b) = (curwin.get(), curbuf.get());
+            // SAFETY: `curwin` and `curbuf` are the live window and buffer.
+            let (w, b) = unsafe { (Some(Win::current()), Buf::current()) };
             let (at, end) = (&raw mut pos, ptr::null_mut());
             let dir = if cmd.dirc == '/' as c_int {
                 FORWARD
@@ -646,7 +647,7 @@ pub unsafe fn do_search(
                     || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
                         let (w, lnum) = (curwin.get(), cur_win().w_cursor.lnum);
                         // SAFETY: `curwin` is live and no bounds are asked for.
-                        unsafe { has_folding(w, lnum, ptr::null_mut(), ptr::null_mut()) }
+                        unsafe { has_folding(Win::new(w), lnum, None, None) }
                     });
                 let (at, cursor) = (&raw mut pos, cur_win().cursor().raw());
                 let (msg, msglen) = (echo.buf.as_ptr(), echo.len);
@@ -753,7 +754,7 @@ pub unsafe fn showmatch(c: c_int) {
     if cur_win().w_onebuf_opt.wo_wrap == 0 {
         let (w, at, col) = (curwin.get(), &raw mut lpos, &raw mut vcol);
         // SAFETY: `lpos` is this frame's position in the live window.
-        unsafe { getvcol(w, at, ptr::null_mut(), col, ptr::null_mut()) };
+        unsafe { getvcol(Win::new(w), at, ptr::null_mut(), col, ptr::null_mut()) };
         if !(vcol >= cur_win().w_leftcol && vcol < cur_win().w_leftcol + cur_win().w_view_width) {
             return;
         }
@@ -797,7 +798,7 @@ pub unsafe fn showmatch(c: c_int) {
     // available.
     if cpo_has(CpoFlag::SHOWMATCH) {
         os_delay(p_mat.get() as u64 * 100 + 8, true);
-    } else if !unsafe { char_avail() } {
+    } else if !char_avail() {
         os_delay(p_mat.get() as u64 * 100 + 9, false);
     }
 

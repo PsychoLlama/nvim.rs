@@ -43,7 +43,7 @@ pub use prompt::{
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{
     bt_nofilename, bt_prompt, buf_ensure_loaded, buflist_add, buflist_findlnum,
-    buflist_findname_exp, buflist_findnr, buflist_new,
+    buflist_findname_exp, buflist_new, find_buf,
 };
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;

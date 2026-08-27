@@ -18,7 +18,7 @@ use crate::cursor::{
     get_cursor_line_ptr, inc_cursor,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{State, curwin, saved_cursor};
+use crate::main::{State, saved_cursor};
 use crate::memline::ml_replace;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
@@ -124,9 +124,9 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     if cur_win().w_cursor.lnum > cur_buf().b_ml.ml_line_count {
         // "cannot happen"
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-        unsafe { coladvance(curwin.get(), MAXCOL) };
+        coladvance(unsafe { Win::current() }, MAXCOL);
     } else {
-        unsafe { check_cursor_col(curwin.get()) };
+        check_cursor_col(unsafe { Win::current() });
     }
 
     // Insert mode: the cursor being past the end of the line when it was
@@ -149,7 +149,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         }
     }
 
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
 }
 
 /// Delete the space [`auto_format`] added to continue a paragraph, if it is

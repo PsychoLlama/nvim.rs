@@ -47,7 +47,6 @@ use crate::strings::vim_snprintf;
 use crate::types::{
     IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, Vv, aentry_T,
     bufref_T, exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
-    win_T,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -58,6 +57,7 @@ use crate::window::{
 use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
+use crate::winlayer::Buf;
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
@@ -135,7 +135,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
             p_ef.get(),
         );
         if qf_init(
-            ptr::null_mut::<win_T>(),
+            None,
             p_ef.get(),
             p_efm.get(),
             1,
@@ -194,7 +194,7 @@ pub(crate) unsafe fn read_stdin() {
                 return;
             }
             let initial_buf_handle: handle_T = (*curbuf.get()).handle;
-            set_curbuf(stdin_buf, 0, false);
+            set_curbuf(Buf::new(stdin_buf), 0, false);
             readfile(
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -341,7 +341,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                     // The window cannot be closed here without disturbing
                     // what comes next: clear the name and mark the argument
                     // index so it is deleted later.
-                    setfname(curbuf.get(), ptr::null_mut(), ptr::null_mut(), false);
+                    setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false);
                     (*curwin.get()).w_arg_idx = -1;
                     swap_exists_action.set(SEA_NONE);
                 } else {

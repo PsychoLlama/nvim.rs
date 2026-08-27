@@ -10,6 +10,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{FAIL, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -148,14 +149,14 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
             &raw mut unmap_args,
             mode,
             is_abbr,
-            curbuf.get(),
+            Buf::current(),
         );
         xfree(unmap_args.rhs.cast());
         xfree(unmap_args.orig_rhs.cast());
 
         let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
         mp_result[0] = map_add(
-            curbuf.get(),
+            Buf::current(),
             map_table,
             abbr_table,
             lhsraw,
@@ -169,7 +170,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         );
         if !lhsrawalt.is_null() {
             mp_result[1] = map_add(
-                curbuf.get(),
+                Buf::current(),
                 map_table,
                 abbr_table,
                 lhsrawalt,
@@ -336,7 +337,7 @@ pub unsafe fn modify_keymap(
                 &raw mut parsed_args,
                 mode_val,
                 is_abbrev,
-                target_buf,
+                Buf::new(target_buf),
             ) {
                 1 => api_set_error(
                     err,

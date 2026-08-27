@@ -152,7 +152,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     // A floating window's status line is part of its frame.
     if is_stl && !wp.is_null() && unsafe { (*wp).w_floating } {
         // SAFETY: the frame's window and its own configuration.
-        unsafe { win_config_float(wp, (*wp).w_config.clone()) };
+        unsafe { win_config_float(crate::winlayer::Win::new(wp), (*wp).w_config.clone()) };
     }
 
     let mut errmsg = None;

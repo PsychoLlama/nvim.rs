@@ -51,7 +51,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
         }
         if did_change {
             let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
-            unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
+            changed_lines(cur_buf(), first, 0, last, 0, true);
         }
     } else {
         if oap.motion_type == kMTLineWise {
@@ -85,7 +85,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
         }
         if did_change {
             let (first, col, last) = (oap.start.lnum, oap.start.col, oap.end.lnum + 1);
-            unsafe { changed_lines(curbuf.get(), first, col, last, 0, true) };
+            changed_lines(cur_buf(), first, col, last, 0, true);
         }
     }
 

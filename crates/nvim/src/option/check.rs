@@ -40,6 +40,7 @@ use crate::types::{
     DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
     size_t, uint32_t, win_T,
 };
+use crate::winlayer::Win;
 
 use super::{
     HLATTRS_INIT, NO_SCREEN, didset_options_sctx, didset_window_options, get_option, get_varp,
@@ -445,7 +446,7 @@ pub(crate) unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: u
             if flags & kOptFlagHLOnly != 0 {
                 redraw_later(win, UPD_NOT_VALID);
             } else {
-                changed_window_setting(win);
+                changed_window_setting(Win::new(win));
             }
         }
         if flags & kOptFlagRedrBuf != 0 {

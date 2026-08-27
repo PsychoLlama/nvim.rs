@@ -24,8 +24,8 @@ mod eval;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{
-    buf_hide, buf_is_empty, buf_set_name, buflist_add, buflist_findnr, bufref_valid,
-    curbuf_reusable, maketitle, otherfile, set_bufref,
+    buf_hide, buf_is_empty, buf_set_name, buflist_add, bufref_valid, curbuf_reusable, find_buf,
+    maketitle, otherfile, set_bufref,
 };
 use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_string,
@@ -60,7 +60,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
-use crate::winlayer::{Buf, Ea, Live, Win};
+use crate::winlayer::{Buf, Ea, Live, Win, tab_windows};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -148,34 +148,33 @@ fn alist_count(al: *mut alist_T) -> c_int {
 }
 
 /// `WARGLIST(wp)[n]` and `WARGCOUNT(wp)`: a window's argument list.
-fn win_alist(wp: *mut win_T) -> *mut alist_T {
-    // SAFETY: the caller's promise -- a live `win_T`.
-    let wp = unsafe { Win::new(wp) };
-    // SAFETY: every window always has an argument list.
+///
+/// Every window always has one, so this is total.
+fn win_alist(wp: Win) -> *mut alist_T {
     wp.w_alist
 }
 
-fn warg(wp: *mut win_T, n: c_int) -> *mut aentry_T {
+fn warg(wp: Win, n: c_int) -> *mut aentry_T {
     alist_arg(win_alist(wp), n)
 }
 
-fn wargcount(wp: *mut win_T) -> c_int {
+fn wargcount(wp: Win) -> c_int {
     alist_count(win_alist(wp))
 }
 
 /// `ARGLIST[n]` and `ARGCOUNT`: the current window's argument list.
 fn arg(n: c_int) -> *mut aentry_T {
-    warg(curwin.get(), n)
+    warg(cur_win(), n)
 }
 
 fn argcount() -> c_int {
-    wargcount(curwin.get())
+    wargcount(cur_win())
 }
 
 /// `ARGCOUNT` as an assignable place.
 fn set_argcount(count: c_int) {
     // SAFETY: the current window always has an argument list.
-    unsafe { (*win_alist(curwin.get())).al_ga.ga_len = count };
+    unsafe { (*win_alist(cur_win())).al_ga.ga_len = count };
 }
 
 /// `curwin->w_arg_idx`: which argument the current window is on. It is not
@@ -282,7 +281,10 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
 }
 
 /// Give the current window a fresh, empty argument list of its own.
-unsafe fn alist_new() {
+///
+/// Safe: `curwin` is set from startup to exit, and the new list starts out
+/// owned by it alone.
+fn alist_new() {
     max_alist_id.set(max_alist_id.get() + 1);
     // SAFETY: curwin is valid; the new list starts out owned by it alone.
     let al = unsafe { xmalloc(size_of::<alist_T>()) } as *mut alist_T;
@@ -364,11 +366,11 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
     if arglist_is_locked() {
         return;
     }
-    let wp = curwin.get();
+    let mut wp = cur_win();
     ARGLIST_LOCKED.set(true);
     // SAFETY: caller contract; the slot at `ga_len` is the room the caller
     // grew, and `buflist_add` cannot move the list while it is locked.
-    unsafe { (*wp).w_locked = true };
+    wp.w_locked = true;
     let at = al.al_ga.ga_len;
     unsafe { (*alist_arg(al.raw(), at)).ae_fname = fname };
     if set_fnum > 0 {
@@ -376,7 +378,7 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
         unsafe { (*alist_arg(al.raw(), at)).ae_fnum = buflist_add(fname, flags) };
     }
     al.al_ga.ga_len += 1;
-    unsafe { (*wp).w_locked = false };
+    wp.w_locked = false;
     ARGLIST_LOCKED.set(false);
 }
 
@@ -488,26 +490,13 @@ pub unsafe fn get_arglist_exp(
 }
 
 /// Re-check `w_arg_idx` in every window sharing the current window's list.
-unsafe fn alist_check_arg_idx() {
-    let alist = win_alist(curwin.get());
-    let mut tp = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        // SAFETY: the tab page and window lists are well formed, and
-        // `check_arg_idx` does not change them.
-        // SAFETY: `tp` is a live tab page, and its window chain is live for
-        // the walk -- `check_arg_idx` only reads and writes `w_arg_idx`.
-        let mut win = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            unsafe { (*tp).tp_firstwin }
-        };
-        while !win.is_null() {
-            if unsafe { (*win).w_alist } == alist {
-                unsafe { check_arg_idx(win) };
-            }
-            win = unsafe { (*win).w_next };
-        }
-        tp = unsafe { (*tp).tp_next };
+///
+/// Safe: the tab page and window lists are the editor's own, and
+/// `check_arg_idx` only reads and writes `w_arg_idx`.
+fn alist_check_arg_idx() {
+    let alist = win_alist(cur_win());
+    for win in tab_windows().filter(|win| win.w_alist == alist) {
+        check_arg_idx(win);
     }
 }
 
@@ -523,7 +512,7 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
     if arglist_is_locked() {
         return;
     }
-    let wp = curwin.get();
+    let mut wp = cur_win();
     let flags = BLN_LISTED as c_int | flag_if(will_edit, BLN_CURBUF);
     // SAFETY: `after` is clamped into the list, the `memmove` opens exactly
     // the `count` slots `ga_grow` reserved, and the list cannot move while it
@@ -537,17 +526,17 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
         unsafe { memmove(al2, fname2, set_fnum2) };
     }
     ARGLIST_LOCKED.set(true);
-    unsafe { (*wp).w_locked = true };
+    wp.w_locked = true;
     for i in 0..count {
         let name = unsafe { *files.offset(i as isize) };
         unsafe { (*arg(after + i)).ae_fname = name };
         unsafe { (*arg(after + i)).ae_fnum = buflist_add(name, flags) };
     }
     ARGLIST_LOCKED.set(false);
-    unsafe { (*wp).w_locked = false };
+    wp.w_locked = false;
     unsafe { (*win_alist(wp)).al_ga.ga_len += count };
-    if old_argcount > 0 && unsafe { (*wp).w_arg_idx } >= after {
-        unsafe { (*wp).w_arg_idx += count };
+    if old_argcount > 0 && wp.w_arg_idx >= after {
+        wp.w_arg_idx += count;
     }
 }
 
@@ -711,13 +700,12 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
             unsafe { alist_add_list(exp_count, exp_files, after, will_edit) };
             unsafe { xfree(exp_files as *mut c_void) };
         } else {
-            let al2 = win_alist(curwin.get());
+            let al2 = win_alist(cur_win());
             let fnum_list2 = ptr::null_mut();
             unsafe { alist_set(al2, exp_count, exp_files, will_edit, fnum_list2, 0) };
         }
     }
-    // SAFETY: walks the tab page and window lists.
-    unsafe { alist_check_arg_idx() };
+    alist_check_arg_idx();
     true
 }
 
@@ -738,19 +726,18 @@ pub unsafe fn set_arglist(str: *mut c_char) {
 ///
 /// # Safety
 ///
-/// `win` must be a valid window.
-pub unsafe fn editing_arg_idx(win: *mut win_T) -> bool {
-    // SAFETY: the caller's promise -- a live `win_T`.
-    let win = unsafe { Win::new(win) };
-    // SAFETY: caller contract; the window is valid.
+/// Safe: the index is checked against the window's own argument list before
+/// anything reads an entry.
+pub fn editing_arg_idx(win: Win) -> bool {
     let idx = win.w_arg_idx;
-    if idx >= wargcount(win.raw()) {
+    if idx >= wargcount(win) {
         return false;
     }
-    let entry = warg(win.raw(), idx);
-    // SAFETY: `entry` is in range and the window's buffer is valid.
-    let buf = win.w_buffer;
-    unsafe { (*buf).handle == (*entry).ae_fnum || same_file(alist_name(entry), (*buf).b_ffname) }
+    let entry = warg(win, idx);
+    let buf = win.buffer();
+    // SAFETY: `entry` is in range of the window's list, so it is one of its
+    // own entries, and `b_ffname` is that buffer's name or NULL.
+    unsafe { buf.handle == (*entry).ae_fnum || same_file(alist_name(entry), buf.b_ffname) }
 }
 
 /// Refresh `win`'s "am I on the argument I think I am" state, and remember
@@ -759,41 +746,35 @@ pub unsafe fn editing_arg_idx(win: *mut win_T) -> bool {
 ///
 /// # Safety
 ///
-/// `win` must be a valid window.
-pub unsafe fn check_arg_idx(win: *mut win_T) {
-    // SAFETY: the caller's promise -- a live `win_T`.
-    let mut win = unsafe { Win::new(win) };
-    // SAFETY: caller contract; the window's buffer and list are valid.
-    let (editing, idx) = unsafe { (editing_arg_idx(win.raw()), win.w_arg_idx) };
-    if wargcount(win.raw()) <= 1 || editing {
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub fn check_arg_idx(mut win: Win) {
+    let (editing, idx) = (editing_arg_idx(win), win.w_arg_idx);
+    if wargcount(win) <= 1 || editing {
         // Editing the current entry: `arg_had_last` if it is the last.
-        // SAFETY: caller contract.
         win.w_arg_idx_invalid = false;
-        if idx == wargcount(win.raw()) - 1 && win_alist(win.raw()) == global_arglist() {
+        if idx == wargcount(win) - 1 && win_alist(win) == global_arglist() {
             arg_had_last.set(true);
         }
         return;
     }
     // Not editing the current entry, so `arg_had_last` only if this buffer
     // is the *last* global argument.
-    // SAFETY: caller contract.
     win.w_arg_idx_invalid = true;
     let gcount = alist_count(global_arglist());
-    if idx == wargcount(win.raw()) - 1
+    if idx == wargcount(win) - 1
         || arg_had_last.get()
-        || win_alist(win.raw()) != global_arglist()
+        || win_alist(win) != global_arglist()
         || gcount <= 0
         || idx >= gcount
     {
         return;
     }
     let last = alist_arg(global_arglist(), gcount - 1);
-    // SAFETY: `last` is the final entry of the global list, and the window's
-    // buffer is valid.
-    let holds_last = unsafe {
-        let buf = win.w_buffer;
-        (*buf).handle == (*last).ae_fnum || same_file(alist_name(last), (*buf).b_ffname)
-    };
+    let buf = win.buffer();
+    // SAFETY: `last` is the final entry of the global list, and `b_ffname`
+    // is the window's buffer's name or NULL.
+    let holds_last =
+        unsafe { buf.handle == (*last).ae_fnum || same_file(alist_name(last), buf.b_ffname) };
     if holds_last {
         arg_had_last.set(true);
     }
@@ -807,11 +788,10 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
 /// `aep` must be a valid argument list entry.
 pub unsafe fn alist_name(aep: *mut aentry_T) -> *mut c_char {
     // SAFETY: caller contract; a found buffer outlives this call.
-    let bp = buflist_findnr(unsafe { (*aep).ae_fnum });
-    if bp.is_null() || unsafe { (*bp).b_fname.is_null() } {
-        unsafe { (*aep).ae_fname }
-    } else {
-        unsafe { (*bp).b_fname }
+    let bp = find_buf(unsafe { (*aep).ae_fnum });
+    match bp.filter(|bp| !bp.b_fname.is_null()) {
+        None => unsafe { (*aep).ae_fname },
+        Some(bp) => bp.b_fname,
     }
 }
 

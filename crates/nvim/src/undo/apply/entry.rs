@@ -59,23 +59,27 @@ impl CursorPick {
         // Otherwise the first line that really differs, so that undoing an
         // auto-format does not land on the line before it.
         let mut same: linenr_T = 0;
-        // SAFETY: a live entry with `newsize` lines, and every line compared
-        // is one the buffer still holds, by the contract above.
-        unsafe {
-            while same < newsize && same < oldsize {
-                let was = *(*uep).ue_array.offset(same as isize);
-                if strcmp(was, ml_get(top + 1 + same)) != 0 {
-                    break;
-                }
-                same += 1;
+        while same < newsize && same < oldsize {
+            // SAFETY: a live entry with `newsize` lines, by the contract
+            // above.
+            let was = unsafe { *(*uep).ue_array.offset(same as isize) };
+            // SAFETY: as above, and every line compared is one the buffer
+            // still holds.
+            if unsafe { strcmp(was, ml_get(top + 1 + same)) } != 0 {
+                break;
             }
-            if same == newsize && self.line == MAXLNUM as linenr_T && (*uep).ue_next.is_null() {
-                self.line = top;
-            } else if same < newsize {
-                self.line = top + same;
-            } else {
-                return;
-            }
+            same += 1;
+        }
+        if same == newsize
+            && self.line == MAXLNUM as linenr_T
+            // SAFETY: a live entry, by the contract above.
+            && unsafe { (*uep).ue_next }.is_null()
+        {
+            self.line = top;
+        } else if same < newsize {
+            self.line = top + same;
+        } else {
+            return;
         }
         self.pos.lnum = self.line + 1;
     }
@@ -138,17 +142,16 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
             unsafe {
                 unblock_autocmds();
                 iemsg(gettext(c"E438: u_undo: line numbers wrong".as_ptr()));
-                changed(buf.raw()); // don't want UNCHANGED now
+                changed(buf); // don't want UNCHANGED now
             }
             return;
         }
         // SAFETY: a live entry, and `newlist` is one or NULL.
-        unsafe {
-            let next = (*uep).ue_next;
-            (*uep).ue_next = newlist;
-            newlist = uep;
-            uep = next;
-        }
+        let next = unsafe { (*uep).ue_next };
+        // SAFETY: as above.
+        unsafe { (*uep).ue_next = newlist };
+        newlist = uep;
+        uep = next;
     }
 
     // Keep the '[ and '] marks inside the buffer.
@@ -177,7 +180,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     let mut win = unsafe { Win::current() };
     win.w_cursor = pick.pos;
     // SAFETY: a live window.
-    unsafe { check_cursor_lnum(win.raw()) };
+    check_cursor_lnum(win);
 
     curhead.uh_entry = newlist;
     curhead.uh_flags = new_flags;
@@ -185,18 +188,17 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     if old_flags & UH_EMPTYBUF != 0 && unsafe { buf_is_empty(buf.raw()) } {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
-    // SAFETY: a live buffer.
-    unsafe {
-        if old_flags & UH_CHANGED != 0 {
-            changed(buf.raw());
-        } else {
-            unchanged(buf.raw(), false, true);
-        }
-        // Those two bumped changedtick again, so the watchers need an event
-        // carrying just its new value.
-        if do_buf_event {
-            buf_updates_changedtick(buf.raw());
-        }
+    if old_flags & UH_CHANGED != 0 {
+        // SAFETY: a live buffer, which survives the autocommands it may fire.
+        unsafe { changed(buf) };
+    } else {
+        unchanged(buf, false, true);
+    }
+    // Those two bumped changedtick again, so the watchers need an event
+    // carrying just its new value.
+    if do_buf_event {
+        // SAFETY: a live buffer.
+        unsafe { buf_updates_changedtick(buf.raw()) };
     }
 
     // SAFETY: a live buffer and a live header.
@@ -267,70 +269,67 @@ unsafe fn apply_entry(
     let mut emptied = false;
     let mut taken: *mut *mut c_char = ptr::null_mut();
     if oldsize > 0 {
-        // SAFETY: `taken` is `oldsize` pointers long and every line between
-        // `top + 1` and `bot - 1` exists, by the bounds check above.
-        unsafe {
-            taken = xmalloc(size_of::<*mut c_char>() * oldsize as size_t) as *mut *mut c_char;
-            for i in (0..oldsize).rev() {
-                *taken.offset(i as isize) = u_save_line(top + 1 + i);
-                // Deleting the buffer's last line leaves a dummy empty one
-                // behind, which the insert below has to replace.
-                if buf.b_ml.ml_line_count == 1 {
-                    emptied = true;
-                }
-                ml_delete(top + 1 + i);
+        let bytes = size_of::<*mut c_char>() * oldsize as size_t;
+        // SAFETY: an allocation of `oldsize` pointers.
+        taken = unsafe { xmalloc(bytes) } as *mut *mut c_char;
+        for i in (0..oldsize).rev() {
+            // SAFETY: `taken` is `oldsize` slots long, and every line between
+            // `top + 1` and `bot - 1` exists, by the bounds check above.
+            unsafe { *taken.offset(i as isize) = u_save_line(top + 1 + i) };
+            // Deleting the buffer's last line leaves a dummy empty one
+            // behind, which the insert below has to replace.
+            if buf.b_ml.ml_line_count == 1 {
+                emptied = true;
             }
+            // SAFETY: that same line, which is still there.
+            unsafe { ml_delete(top + 1 + i) };
         }
     }
     // Make sure the cursor is on a line that still exists.
     // SAFETY: a live current window.
-    unsafe { check_cursor_lnum(curwin.get()) };
+    check_cursor_lnum(unsafe { Win::current() });
 
     // Put the entry's saved lines in between top and bot.
     if newsize != 0 {
-        // SAFETY: `ue_array` is `newsize` lines long, and each is a
-        // NUL-terminated allocation the entry owns and hands over here.
-        unsafe {
-            for i in 0..newsize {
-                let line = *(*uep).ue_array.offset(i as isize);
-                if emptied && top + i == 0 {
-                    ml_replace(1, line, true);
-                } else {
-                    ml_append_flags(top + i, line, 0, 0);
-                }
-                xfree(line as *mut c_void);
+        for i in 0..newsize {
+            // SAFETY: `ue_array` is `newsize` lines long, and each is a
+            // NUL-terminated allocation the entry owns and hands over here.
+            let line = unsafe { *(*uep).ue_array.offset(i as isize) };
+            if emptied && top + i == 0 {
+                // SAFETY: the dummy line the delete above left behind.
+                unsafe { ml_replace(1, line, true) };
+            } else {
+                // SAFETY: a line of the buffer, or 0 for "before the first".
+                unsafe { ml_append_flags(top + i, line, 0, 0) };
             }
-            xfree((*uep).ue_array as *mut c_void);
+            // SAFETY: the entry's own allocation, which the buffer copied.
+            unsafe { xfree(line as *mut c_void) };
         }
+        // SAFETY: the array the entry is giving up here.
+        unsafe { xfree((*uep).ue_array as *mut c_void) };
     }
 
     if oldsize != newsize {
+        let delta = newsize - oldsize;
+        let maxlnum = MAXLNUM as linenr_T;
         // SAFETY: a live current buffer.
-        unsafe {
-            mark_adjust(
-                top + 1,
-                top + oldsize,
-                MAXLNUM as linenr_T,
-                newsize - oldsize,
-                kExtmarkNOOP,
-            );
-        }
+        unsafe { mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP) };
         if buf.b_op_start.lnum > top + oldsize {
-            buf.b_op_start.lnum += newsize - oldsize;
+            buf.b_op_start.lnum += delta;
         }
         if buf.b_op_end.lnum > top + oldsize {
-            buf.b_op_end.lnum += newsize - oldsize;
+            buf.b_op_end.lnum += delta;
         }
     }
     if oldsize > 0 || newsize > 0 {
         // SAFETY: a live buffer and window.
-        unsafe {
-            changed_lines(buf.raw(), top + 1, 0, bot, newsize - oldsize, do_buf_event);
-            // The next line's start may have gained or lost a SpellCap, so
-            // schedule it for redrawing just in case.
-            if spell_check_window(curwin.get()) && bot <= buf.b_ml.ml_line_count {
-                redraw_win_line(curwin.get(), bot);
-            }
+        changed_lines(buf, top + 1, 0, bot, newsize - oldsize, do_buf_event);
+        // The next line's start may have gained or lost a SpellCap, so
+        // schedule it for redrawing just in case.
+        // SAFETY: a live current window.
+        if unsafe { spell_check_window(curwin.get()) } && bot <= buf.b_ml.ml_line_count {
+            // SAFETY: as above.
+            unsafe { redraw_win_line(curwin.get(), bot) };
         }
     }
 
@@ -398,9 +397,9 @@ unsafe fn place_cursor(buf: Buf, mut win: Win, curhead: Header) {
     } else if curhead.uh_cursor.lnum == win.w_cursor.lnum {
         win.w_cursor.col = curhead.uh_cursor.col;
         // SAFETY: a live window, by the contract above.
-        if unsafe { virtual_active(win.raw()) } && curhead.uh_cursor_vcol >= 0 {
+        if virtual_active(win) && curhead.uh_cursor_vcol >= 0 {
             // SAFETY: as above.
-            unsafe { coladvance(win.raw(), curhead.uh_cursor_vcol) };
+            coladvance(win, curhead.uh_cursor_vcol);
         } else {
             win.w_cursor.coladd = 0;
         }
@@ -410,5 +409,5 @@ unsafe fn place_cursor(buf: Buf, mut win: Win, curhead: Header) {
     }
     // Make sure the cursor is on an existing line and column.
     // SAFETY: a live window.
-    unsafe { check_cursor(win.raw()) };
+    check_cursor(win);
 }

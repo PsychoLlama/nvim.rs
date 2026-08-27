@@ -573,7 +573,7 @@ pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
     for wp in tab_windows() {
         // The autocommand window is a fiction with a nominal size.
         // SAFETY: a window of the current tab page's own list.
-        if unsafe { is_aucmd_win(wp.raw()) } {
+        if is_aucmd_win(wp.raw()) {
             continue;
         }
         if wp

@@ -585,7 +585,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         let added = cur_buf().b_ml.ml_line_count - args.old_line_count;
         unsafe {
             changed_lines(
-                curbuf.get(),
+                Buf::new(curbuf.get()),
                 st.first_line,
                 0 as colnr_T,
                 st.last_line - added,
@@ -623,7 +623,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             if !subflags.with(|flags| flags.do_ask) {
                 // SAFETY: the current window is live.
                 if args.endcolumn {
-                    unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
+                    coladvance(unsafe { Win::current() }, MAXCOL as c_int);
                 } else {
                     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
@@ -679,10 +679,10 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     // SAFETY: the current window is live.
-    if subflags.with(|flags| flags.do_ask) && unsafe { has_any_folding(curwin.get()) } != 0 {
+    if subflags.with(|flags| flags.do_ask) && unsafe { has_any_folding(Win::current()) } != 0 {
         // The cursor position may require updating.
         // SAFETY: as above.
-        unsafe { changed_window_setting(curwin.get()) };
+        changed_window_setting(unsafe { Win::current() });
     }
 
     // SAFETY: the compiled program and the replacement text are ours.

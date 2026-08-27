@@ -31,21 +31,13 @@ const HELP_FILES: &[u8] = br"doc/*.\(txt\|??x\)";
 /// There must be a current window.
 unsafe fn hgr_get_ll(new_ll: &mut bool) -> Qi {
     // SAFETY: the caller's promise -- a current window.
-    let wp = if unsafe { bt_help(cur_win().w_buffer) } {
-        curwin.get()
+    let wp = if is_help_buffer(cur_win()) {
+        Some(cur_win())
     } else {
-        unsafe { qf_find_help_win() }
+        qf_find_help_win()
     };
-    // SAFETY: `wp` is a live window when it is not null, and its location
-    // list stack outlives it.
-    let existing = unsafe {
-        qf_opt(if wp.is_null() {
-            ptr::null_mut()
-        } else {
-            (*wp).w_llist
-        })
-    };
-    if let Some(qi) = existing {
+    let existing = wp.map_or(ptr::null_mut(), |wp| wp.w_llist);
+    if let Some(qi) = qf_opt(existing) {
         return qi;
     }
     *new_ll = true;
@@ -281,7 +273,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         // nothing left to jump to.
         if !new_qi
             && qi.qfl_type == QFLT_LOCATION as qfltype_T
-            && unsafe { qf_find_win_with_loclist(qi.raw().cast_const()) }.is_null()
+            && qf_find_win_with_loclist(qi.raw().cast_const()).is_none()
         {
             qf_busy_end();
             return;

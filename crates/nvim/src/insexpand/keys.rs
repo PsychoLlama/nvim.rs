@@ -12,6 +12,7 @@ use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
 use crate::types::{BsFlag, FAIL, NUL, ShmFlag};
+use crate::winlayer::Win;
 
 /// Delete one character before the cursor and show the subset of the matches
 /// that match the word now before it.
@@ -253,7 +254,7 @@ pub unsafe fn ins_compl_addfrommatch() {
 pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
     unsafe {
         // Remove pre-inserted text when present.
-        if ins_compl_preinsert_effect() && ins_compl_win_active(curwin.get()) {
+        if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
             ins_compl_delete(false);
         }
 

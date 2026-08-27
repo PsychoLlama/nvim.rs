@@ -47,11 +47,11 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
             );
             push(&mut item, Object::integer(0));
             push(&mut content, Object::array(item));
-        } else if line.last_colors.colors.size != 0 {
-            content = arena_array(&raw mut arena, line.last_colors.colors.size);
+        } else if !line.last_colors.chunks().is_empty() {
+            content = arena_array(&raw mut arena, line.last_colors.chunks().len());
             let mut i: size_t = 0;
-            while i < line.last_colors.colors.size {
-                let chunk: CmdlineColorChunk = *line.last_colors.colors.items.add(i);
+            while i < line.last_colors.chunks().len() {
+                let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
                 let mut item = arena_array(&raw mut arena, 3);
                 push(
                     &mut item,

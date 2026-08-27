@@ -191,7 +191,9 @@ enum Target {
 ///
 /// # Safety
 /// The names, `eap` and `oldwin` must be live, or NULL where that is allowed
-/// above.
+/// above. `oldwin` stays a raw pointer: an autocommand may close that window,
+/// and `win_valid` below is what asks -- the one case `winlayer`'s docs
+/// reserve for an address rather than a [`Win`].
 pub unsafe fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
@@ -258,7 +260,7 @@ pub unsafe fn do_ecmd(
         if !other_file && !cur_buf().terminal.is_null() {
             // Needed when called from do_argfile(); the title may show the
             // arg index, e.g. "(2 of 5)".
-            unsafe { check_arg_idx(curwin.get()) };
+            check_arg_idx(cur_win());
             unsafe { maketitle() };
             retval = OK;
             break 'theend;
@@ -315,7 +317,7 @@ pub unsafe fn do_ecmd(
         // autocommands freed window :(
         // SAFETY: `oldwin` is the caller's, and `win_valid` tolerates a stale
         // pointer -- that is what it is for.
-        if !oldwin.is_null() && !unsafe { win_valid(oldwin) } {
+        if !oldwin.is_null() && !win_valid(oldwin) {
             oldwin = ptr::null_mut();
         }
 
@@ -393,7 +395,7 @@ pub unsafe fn do_ecmd(
 
         // Check if we are editing the w_arg_idx file in the argument list.
         // SAFETY: `curwin` is live.
-        unsafe { check_arg_idx(curwin.get()) };
+        check_arg_idx(cur_win());
 
         if !state.auto_buf {
             // SAFETY: the editor's own state; `eap` is the caller's.
@@ -405,8 +407,8 @@ pub unsafe fn do_ecmd(
         // have removed it as a diff buffer.
         // SAFETY: `curwin`/`curbuf` are live.
         if cur_win().w_onebuf_opt.wo_diff != 0 {
-            unsafe { diff_buf_add(curbuf.get()) };
-            unsafe { diff_invalidate(curbuf.get()) };
+            diff_buf_add(cur_buf());
+            diff_invalidate(cur_buf());
         }
         // If the window options were changed we may need to set the spell
         // language.  Can only be done once the buffer is properly set up.
@@ -559,20 +561,18 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         && (p_ur.get() < 0 || cur_buf().b_ml.ml_line_count as OptInt <= p_ur.get())
     {
         // Sync first so that this is a separate undo-able action.
-        unsafe { u_sync(false) };
-        if unsafe { u_savecommon(curbuf.get(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true) }
-            == FAIL
-        {
+        u_sync(false);
+        if u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true) == FAIL {
             unsafe { xfree(new_name.cast()) };
             return false;
         }
-        unsafe { u_unchanged(curbuf.get()) };
-        unsafe { buf_freeall(curbuf.get(), BFA_KEEP_UNDO as c_int) };
+        u_unchanged(cur_buf());
+        unsafe { buf_freeall(Buf::current(), BFA_KEEP_UNDO as c_int) };
         // Tell readfile() not to clear or reload undo info.
         state.readfile_flags = READ_KEEP_UNDO as c_int;
     } else {
         // Free all things for buffer.
-        unsafe { buf_freeall(curbuf.get(), 0) };
+        unsafe { buf_freeall(Buf::current(), 0) };
     }
 
     // If autocommands deleted the buffer we were going to re-edit, give up
@@ -590,7 +590,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     if buf != curbuf.get() || aborting() {
         return false;
     }
-    unsafe { buf_clear_file(curbuf.get()) };
+    buf_clear_file(cur_buf());
     // clear '[ and '] marks
     cur_buf().b_op_start.lnum = 0;
     cur_buf().b_op_end.lnum = 0;
@@ -619,7 +619,7 @@ unsafe fn enter_new_buffer(
     for win in tab_windows() {
         if win.w_buffer == curbuf.get() {
             // SAFETY: `win` is a live window.
-            unsafe { fold_update_all(win.raw()) };
+            fold_update_all(win);
         }
     }
 
@@ -678,7 +678,7 @@ unsafe fn enter_new_buffer(
         }
     }
     // SAFETY: `curwin` is live.
-    unsafe { check_arg_idx(curwin.get()) };
+    check_arg_idx(cur_win());
 
     // If autocommands change the cursor position or topline, we should keep
     // it.  Also when it moves within a line.  But not when it moves to the
@@ -713,15 +713,15 @@ unsafe fn place_cursor(state: &Ecmd) {
         // position set by autocommands
         cur_win().w_cursor.lnum = state.newlnum;
         cur_win().w_cursor.col = state.newcol;
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
     } else if state.newlnum > 0 {
         // line number from caller or old position
         cur_win().w_cursor.lnum = state.newlnum;
-        unsafe { check_cursor_lnum(curwin.get()) };
+        check_cursor_lnum(unsafe { Win::current() });
         if state.solcol >= 0 && p_sol.get() == 0 {
             // 'sol' is off: use the last known column.
             cur_win().w_cursor.col = state.solcol;
-            unsafe { check_cursor_col(curwin.get()) };
+            check_cursor_col(unsafe { Win::current() });
             cur_win().w_cursor.coladd = 0;
             cur_win().w_set_curswant = true;
         } else {
@@ -780,8 +780,8 @@ unsafe fn recenter(so: ScrollOff, topline: linenr_T, command: *mut c_char) {
         so.set(999);
     }
     // SAFETY: caller's contract; `curwin` is live.
-    unsafe { update_topline(curwin.get()) };
-    cur_win().w_scbind_pos = unsafe { plines_m_win_fill(curwin.get(), 1, cur_win().w_topline) };
+    update_topline(unsafe { Win::current() });
+    cur_win().w_scbind_pos = unsafe { plines_m_win_fill(Win::current(), 1, cur_win().w_topline) };
     so.set(n);
     // redraw this buffer later
     // SAFETY: no argument beyond the redraw type.

@@ -440,7 +440,7 @@ impl Writing {
                 debug_assert!(!fm.fname.is_null(), "shada: a mark with no buffer or file");
                 return (!shada_removable(fm.fname)).then_some(fm.fname);
             }
-            let buf = buflist_findnr(fm.fmark.fnum);
+            let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
             if buf.is_null()
                 || (*buf).b_ffname.is_null()
                 || set_has_ptr_t(&raw mut self.removable_bufs, buf.cast::<c_void>())

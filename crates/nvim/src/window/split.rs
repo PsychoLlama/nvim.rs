@@ -241,7 +241,7 @@ fn split_ins(
     opt.set(saved as OptInt);
     // An autocommand may have closed `oldwin`.
     // SAFETY: only compares the pointer against the window list.
-    if unsafe { win_valid(oldwin.raw()) } {
+    if win_valid(oldwin.raw()) {
         oldwin.w_pos_changed = true;
     }
     Some(wp)
@@ -792,8 +792,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
         newp.w_llist = ptr::null_mut::<qf_info_T>();
         newp.w_llist_ref = ptr::null_mut::<qf_info_T>();
     } else {
-        // SAFETY: two live windows.
-        unsafe { copy_loclist_stack(oldp.raw(), newp.raw()) };
+        copy_loclist_stack(oldp, newp);
     }
     newp.w_localdir = dup(oldp.w_localdir);
     newp.w_prevdir = dup(oldp.w_prevdir);
@@ -819,8 +818,8 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_tagstackidx = oldp.w_tagstackidx;
     newp.w_tagstacklen = oldp.w_tagstacklen;
     newp.w_changelistidx = oldp.w_changelistidx;
-    // SAFETY: two live windows.
-    unsafe { copy_folding_state(oldp.raw(), newp.raw()) };
+    // SAFETY: `newp` is freshly allocated, so its fold list is still empty.
+    unsafe { copy_folding_state(oldp, newp) };
     // The options and the argument list, which `win_new_tabpage` also copies
     // on its own (upstream's `win_init_some`).
     newp.w_alist = oldp.w_alist;

@@ -74,8 +74,8 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
         // A wrapped line's first screen row can be narrower than the rest,
         // so the row the cursor is on decides where its start is.
         let width1 = win.w_view_width - unsafe { win_col_off(win.raw()) };
-        let width2 = width1 + unsafe { win_col_off2(win.raw()) };
-        unsafe { validate_virtcol(win.raw()) };
+        let width2 = width1 + win_col_off2(win);
+        validate_virtcol(win);
         i = 0;
         if win.w_virtcol >= width1 && width2 > 0 {
             i = (win.w_virtcol - width1) / width2 * width2 + width1;
@@ -83,7 +83,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
         if win.w_skipcol > 0 && win.w_cursor.lnum == win.w_topline {
             // 'smoothscroll' hides part of the top row behind its marker;
             // the text starts after it.
-            let overlap = unsafe { sms_marker_overlap(win.raw(), win.w_view_width - width2) };
+            let overlap = sms_marker_overlap(win, win.w_view_width - width2);
             if overlap > 0 && i == win.w_skipcol {
                 i += overlap;
             }
@@ -94,13 +94,13 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     if ca.nchar == 'm' as c_int {
         i += (win.w_view_width - unsafe { win_col_off(win.raw()) }
             + if win.w_onebuf_opt.wo_wrap != 0 && i > 0 {
-                unsafe { win_col_off2(win.raw()) }
+                win_col_off2(win)
             } else {
                 0
             })
             / 2;
     }
-    unsafe { coladvance(win.raw(), i) };
+    coladvance(win, i);
     if to_first_non_blank {
         while ascii_iswhite(gchar_cursor()) && unsafe { oneright() } == OK {}
         win.w_valid.clear(WinValid::WCOL);
@@ -108,8 +108,8 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     win.w_set_curswant = true;
     // Inside a closed fold the wanted column is the one that was asked
     // for, not the one the fold's single displayed line has.
-    if unsafe { has_any_folding(win.raw()) } != 0 {
-        unsafe { validate_cheight(win.raw()) };
+    if has_any_folding(win) != 0 {
+        validate_cheight(win);
         if win.w_cline_folded {
             unsafe { update_curswant_force() };
         }
@@ -158,13 +158,13 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
         win.w_curswant = MAXCOL as colnr_T;
         if ca.count1 == 1 {
             let width1 = win.w_view_width - col_off;
-            let width2 = width1 + unsafe { win_col_off2(win.raw()) };
-            unsafe { validate_virtcol(win.raw()) };
+            let width2 = width1 + win_col_off2(win);
+            validate_virtcol(win);
             let mut i = width1 - 1;
             if win.w_virtcol >= width1 {
                 i += ((win.w_virtcol - width1) / width2 + 1) * width2;
             }
-            unsafe { coladvance(win.raw(), i) };
+            coladvance(win, i);
             unsafe { update_curswant_force() };
             // A character wider than one cell straddles the edge; step
             // back onto the last one that fits.
@@ -180,7 +180,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
             unsafe { cursor_down(ca.count1 - 1, false) };
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
-        unsafe { coladvance(win.raw(), i) };
+        coladvance(win, i);
         if win.w_cursor.col > 0 && unsafe { utf_ptr2cells(get_cursor_pos_ptr()) } > 1 {
             let vcol = win.virtual_vcol_span(win.cursor()).1;
             if vcol >= win.w_leftcol + win.w_view_width - col_off {
@@ -203,10 +203,10 @@ pub(crate) unsafe fn nv_gi_cmd(cap: *mut cmdarg_T) {
     let mut win = cur_win();
     if cur_buf().b_last_insert.mark.lnum != 0 {
         win.w_cursor = cur_buf().b_last_insert.mark;
-        unsafe { check_cursor_lnum(win.raw()) };
+        check_cursor_lnum(win);
         let len = get_cursor_line_len();
         if win.w_cursor.col > len {
-            if unsafe { virtual_active(win.raw()) } {
+            if virtual_active(win) {
                 // Past the end is a real position under 'virtualedit'.
                 win.w_cursor.coladd += win.w_cursor.col - len;
             }
@@ -337,11 +337,11 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
         Ok(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
-            let width = unsafe { linetabsize(curwin.get(), cur_win().w_cursor.lnum) };
+            let width = unsafe { linetabsize(Win::new(curwin.get()), cur_win().w_cursor.lnum) };
             if ca.count0 > 0 && ca.count0 <= 100 {
-                unsafe { coladvance(curwin.get(), width * ca.count0 / 100) };
+                coladvance(unsafe { Win::current() }, width * ca.count0 / 100);
             } else {
-                unsafe { coladvance(curwin.get(), width / 2) };
+                coladvance(unsafe { Win::current() }, width / 2);
             }
             cur_win().w_set_curswant = true;
         }

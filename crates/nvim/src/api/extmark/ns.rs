@@ -14,6 +14,7 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
 };
+use crate::winlayer::Win;
 
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -264,7 +265,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                                 .set,
                             ns_id as uint32_t,
                         ) {
-                            changed_window_setting(wp_0);
+                            changed_window_setting(Win::new(wp_0));
                         }
                     }
                     if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
@@ -279,7 +280,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                                 .set,
                             ns_id as uint32_t,
                         ) {
-                            changed_window_setting(wp_0);
+                            changed_window_setting(Win::new(wp_0));
                         }
                     }
                     wp_0 = (*wp_0).w_next;
@@ -309,7 +310,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                             .set,
                         ns_id as uint32_t,
                     ) {
-                        changed_window_setting(wp_1);
+                        changed_window_setting(Win::new(wp_1));
                     }
                     wp_1 = (*wp_1).w_next;
                 }
@@ -331,7 +332,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
                             .set,
                         ns_id as uint32_t,
                     ) {
-                        changed_window_setting(wp_2);
+                        changed_window_setting(Win::new(wp_2));
                     }
                     wp_2 = (*wp_2).w_next;
                 }

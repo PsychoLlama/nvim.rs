@@ -11,6 +11,7 @@
 use super::*;
 use crate::guard::{Allow, Lock};
 use crate::types::{IOSIZE, NUL, ShmFlag};
+use crate::winlayer::Win;
 
 /// The popup menu's view of the match list.
 ///
@@ -708,7 +709,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
                     edit_submode_extra.set(msg);
                     edit_submode_highl.set(HLF_R);
                     if dollar_vcol.get() >= 0 {
-                        curs_columns(curwin.get(), 0);
+                        curs_columns(Win::current(), 0);
                     }
                 }
             }

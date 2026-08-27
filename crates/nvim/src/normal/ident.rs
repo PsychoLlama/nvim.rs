@@ -47,8 +47,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    NUL, OK, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t,
-    uint8_t, win_T,
+    NUL, OK, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -119,7 +118,8 @@ pub(crate) unsafe fn find_ident_under_cursor(
     let win = curwin.get();
     let pos = cur_win().w_cursor;
     // SAFETY: `win` is live; `text`/`textcolp` have room for one value each.
-    let len = unsafe { find_ident_at_pos(win, pos.lnum, pos.col, text, textcolp, find_type) };
+    let len =
+        unsafe { find_ident_at_pos(Win::new(win), pos.lnum, pos.col, text, textcolp, find_type) };
     if !offset.is_null() {
         // SAFETY: `offset` is the caller's own out-parameter.
         unsafe { *offset = cur_win().w_cursor.col - textcol };
@@ -171,7 +171,7 @@ impl ScanLine {
 /// accepts anything that is not white space. Each pass scans forward from the
 /// position for a character it will take, then backs up to that run's start.
 pub(crate) unsafe fn find_ident_at_pos(
-    wp: *mut win_T,
+    wp: Win,
     lnum: linenr_T,
     mut startcol: colnr_T,
     text: *mut *mut c_char,
@@ -180,7 +180,7 @@ pub(crate) unsafe fn find_ident_at_pos(
 ) -> size_t {
     let eval = find_type & FIND_EVAL as c_int != 0;
     // SAFETY: `wp` is a live window, so its buffer is live too.
-    let mut line = ScanLine(unsafe { ml_get_buf((*wp).w_buffer, lnum) });
+    let mut line = ScanLine(unsafe { ml_get_buf(wp.w_buffer, lnum) });
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
@@ -405,10 +405,11 @@ pub(crate) unsafe fn find_decl(
     };
     let mut found;
     loop {
-        let win = curwin.get();
-        let buf = curbuf.get();
-        // SAFETY: `win` is the live window, so its cursor is live too.
-        let pos = unsafe { &raw mut (*win).w_cursor };
+        let wp = curwin.get();
+        // SAFETY: `wp` is the live window, so its cursor is live too.
+        let pos = unsafe { &raw mut (*wp).w_cursor };
+        // SAFETY: `curwin` and `curbuf` are the live window and buffer.
+        let (win, buf) = unsafe { (Some(Win::new(wp)), Buf::current()) };
         let end = ptr::null_mut();
         let arg = ptr::null_mut();
         let opts = searchflags;
@@ -958,9 +959,8 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     }
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
-    let must_write = unsafe { curbuf_is_changed() }
-        && cur_buf().b_nwindows <= 1
-        && !unsafe { buf_hide(curbuf.get()) };
+    let must_write =
+        curbuf_is_changed() && cur_buf().b_nwindows <= 1 && !unsafe { buf_hide(curbuf.get()) };
     if must_write {
         unsafe { autowrite(curbuf.get(), false) };
     }
@@ -973,7 +973,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
     if opened == OK && unsafe { (*cap).nchar } == 'F' as c_int && lnum >= 0 {
         cur_win().w_cursor.lnum = lnum;
-        unsafe { check_cursor_lnum(curwin.get()) };
+        check_cursor_lnum(unsafe { Win::current() });
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // SAFETY: `name` came from `grab_file_name`.

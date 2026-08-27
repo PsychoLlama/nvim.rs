@@ -242,8 +242,8 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_allbuf_opt.wo_siso = new_wp.w_onebuf_opt.wo_siso;
     new_wp.w_fraction = 0;
     new_wp.w_prev_fraction_row = -1;
-    // SAFETY: a live window.
-    unsafe { fold_init_win(new_wp.raw()) };
+    // SAFETY: a freshly allocated window, whose `w_folds` is still zeroed.
+    unsafe { fold_init_win(new_wp) };
     // SAFETY: matches the `block_autocmds` above.
     unsafe { unblock_autocmds() };
     // Up to 1000 can be picked by the user.
@@ -278,7 +278,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     let mut wp = wp;
     forget_window(wp.handle());
     // SAFETY: a live window; reduces the reference count to its argument list.
-    unsafe { clear_folding(wp.raw()) };
+    clear_folding(wp);
     // SAFETY: the window's own argument list.
     unsafe { alist_unlink(wp.w_alist) };
     // Don't execute autocommands while the window is halfway deleted.
@@ -332,8 +332,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     unsafe { clear_matches(wp.raw()) };
     // SAFETY: as above.
     unsafe { free_jumplist(wp.raw()) };
-    // SAFETY: as above.
-    unsafe { qf_free_all(wp.raw()) };
+    qf_free_all(Some(wp));
     free(wp.w_p_cc_cols);
     free_grid(wp, false);
     if win_valid_any_tab(wp.raw()) {

@@ -28,7 +28,7 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
     let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
-        buflist_findnr(cmdpreview_bufnr.get())
+        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |mut b| b.raw())
     } else {
         ::core::ptr::null_mut::<buf_T>()
     };
@@ -40,7 +40,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
         let Ok(bufnr) = created else {
             return ::core::ptr::null_mut::<buf_T>();
         };
-        cmdpreview_buf = buflist_findnr(bufnr);
+        cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |mut b| b.raw());
     }
 
     // The preview buffer cannot preview itself.
@@ -116,7 +116,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
 /// Close any open command preview windows.
 pub(crate) unsafe fn cmdpreview_close_win() {
     let buf = if cmdpreview_bufnr.get() != 0 {
-        buflist_findnr(cmdpreview_bufnr.get())
+        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |mut b| b.raw())
     } else {
         ::core::ptr::null_mut::<buf_T>()
     };
@@ -217,7 +217,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             cp_bufinfo.save_b_changed = buf.b_changed;
             cp_bufinfo.save_b_op_start = buf.b_op_start;
             cp_bufinfo.save_b_op_end = buf.b_op_end;
-            cp_bufinfo.save_changedtick = unsafe { buf_get_changedtick(buf.raw()) };
+            cp_bufinfo.save_changedtick = buf_get_changedtick(buf);
             cmdpreview_save_undo(&mut cp_bufinfo.undo_info, buf);
             kv_push!(cpinfo.buf_info, cp_bufinfo);
             // SAFETY: as the `set_has_ptr_t` above.
@@ -230,7 +230,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             };
 
             // SAFETY: `buf` is a live buffer of the current tab page.
-            unsafe { u_clearall(buf.raw()) };
+            u_clearall(buf);
             // Make sure every change can be undone.
             buf.b_p_ul = INT_MAX as OptInt;
         }
@@ -272,7 +272,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
     cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
     // SAFETY: syncing undo needs only a live editor.
-    unsafe { u_sync(true) };
+    u_sync(true);
 }
 
 /// Put back everything [`cmdpreview_prepare`] saved, undoing the preview's
@@ -308,7 +308,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
                 buf.b_u_newhead
             };
             // SAFETY: `start` is a header of `buf`'s own undo chain.
-            let chain = unsafe { header_chain(buf.raw(), start, |uh| uh.uh_next) };
+            let chain = unsafe { header_chain(buf, start, |uh| uh.uh_next) };
             let count = chain.count() as ::core::ffi::c_int;
 
             let mut aco = aco_save_T::default();
@@ -317,7 +317,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
             if cur_buf().b_u_synced as ::core::ffi::c_int == 0 {
                 // SAFETY: syncing undo needs only a live editor.
-                unsafe { u_sync(true) };
+                u_sync(true);
             }
             // SAFETY: undoing `count` states of the buffer just entered.
             if !unsafe { u_undo_and_forget(count, false) } {
@@ -329,14 +329,14 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         }
 
         // SAFETY: `buf` is live, and its undo state is its own.
-        unsafe { u_blockfree(buf.raw()) };
+        u_blockfree(buf);
         cmdpreview_restore_undo(&cp_bufinfo.undo_info, buf);
 
         buf.b_op_start = cp_bufinfo.save_b_op_start;
         buf.b_op_end = cp_bufinfo.save_b_op_end;
 
         // SAFETY: the changed-tick lives in `buf`'s own variable dictionary.
-        let tick = unsafe { buf_get_changedtick(buf.raw()) };
+        let tick = buf_get_changedtick(buf);
         if cp_bufinfo.save_changedtick != tick {
             // SAFETY: as above.
             unsafe { buf_set_changedtick(buf.raw(), cp_bufinfo.save_changedtick) };
@@ -359,7 +359,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         win.w_onebuf_opt.wo_cul = cp_wininfo.save_w_p_cul;
         win.w_onebuf_opt.wo_cuc = cp_wininfo.save_w_p_cuc;
         // SAFETY: `win` is live.
-        unsafe { update_topline(win.raw()) };
+        update_topline(win);
         i += 1;
     }
 

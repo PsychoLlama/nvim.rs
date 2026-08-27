@@ -19,6 +19,7 @@ use crate::ex_docmd::cmdmod_tab;
 use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
 use crate::types::{FAIL, IOSIZE, OK, ShmFlag};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
 
@@ -56,7 +57,8 @@ unsafe fn list_still_current(
     // SAFETY: forwarded from the caller.
     if old_curlist == qi.qf_curlist
         && old_changedtick == qfl.qf_changedtick
-        && unsafe { is_qf_entry_present(qfl.raw(), qf_ptr) }
+        // SAFETY: the caller's promise -- an entry of that list.
+        && is_qf_entry_present(qfl, unsafe { Qfe::new(qf_ptr) })
     {
         return true;
     }
@@ -133,7 +135,7 @@ unsafe fn qf_jump_edit_buffer(
         *opened_window = false;
         return Jumped::Aborted;
     }
-    if qfl_type == QFLT_QUICKFIX && !unsafe { qflist_valid(ptr::null_mut(), save_qfid) } {
+    if qfl_type == QFLT_QUICKFIX && !qflist_valid(None, save_qfid) {
         unsafe { emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr())) };
         return Jumped::Aborted;
     }
@@ -177,7 +179,7 @@ unsafe fn escape_winfixbuf(
         return None;
     }
     // Try the previously used window, if it can take another buffer.
-    if unsafe { win_valid(prevwin.get()) }
+    if win_valid(prevwin.get())
         && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
         && !unsafe { bt_quickfix((*prevwin.get()).w_buffer) }
     {
@@ -252,12 +254,12 @@ unsafe fn qf_jump_goto_line(
     }
     cur_win().w_cursor.coladd = 0;
     if qf_viscol as c_int == 1 {
-        unsafe { coladvance(curwin.get(), qf_col as colnr_T - 1) };
+        coladvance(unsafe { Win::current() }, qf_col as colnr_T - 1);
     } else {
         cur_win().w_cursor.col = (qf_col - 1) as colnr_T;
     }
     cur_win().w_set_curswant = true;
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
 }
 
 /// Say which entry of how many the jump landed on, and what it said.
@@ -281,7 +283,7 @@ unsafe fn qf_jump_print_msg(
     // Update the screen before showing the message, unless messages
     // have scrolled.
     if msg_scrolled.get() == 0 {
-        unsafe { update_topline(curwin.get()) };
+        update_topline(unsafe { Win::current() });
         if must_redraw.get() != 0 {
             unsafe { update_screen() };
         }
@@ -466,12 +468,13 @@ pub(crate) unsafe fn qf_jump_newwin(
     let old_qf_ptr = qfl.qf_ptr;
     let old_qf_index = qfl.qf_index;
     let mut qf_index = old_qf_index;
-    let qf_ptr = unsafe { qf_get_entry(qfl.raw(), errornr, dir, &mut qf_index) };
+    let qf_ptr = qf_get_entry(qfl, errornr, dir, &mut qf_index);
 
     // Which entry the list should be left pointing at. `None` means the
     // list is not ours to write to any more.
     let mut settle = Some((old_qf_ptr, old_qf_index));
-    if !qf_ptr.is_null() {
+    if let Some(qf_ptr) = qf_ptr {
+        let qf_ptr = qf_ptr.raw();
         qfl.qf_index = qf_index;
         qfl.qf_ptr = qf_ptr;
         settle = Some((qf_ptr, qf_index));

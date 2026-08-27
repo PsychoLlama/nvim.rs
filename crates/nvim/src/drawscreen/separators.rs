@@ -18,6 +18,7 @@ use super::*;
 use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
+use crate::winlayer::Buf;
 
 /// Which corner of a window a separator connector is being drawn in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -85,7 +86,7 @@ pub(crate) unsafe fn win_redraw_signcols(wp: *mut win_T) -> bool {
         } else if (*wp).w_minscwidth == 0 && (*wp).w_maxscwidth == 1 {
             // Plain `'signcolumn'` "auto": one column iff the buffer has any
             // sign text at all, which is cheaper than the per-line counts.
-            width = c_int::from(buf_meta_total(buf, kMTMetaSignText) > 0);
+            width = c_int::from(buf_meta_total(Buf::new(buf), kMTMetaSignText) > 0);
         }
 
         let was = (*wp).w_scwidth;

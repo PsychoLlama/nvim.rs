@@ -87,7 +87,7 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
         unsafe { vim_snprintf(heading, size, fmt, qf_idx, module) };
     } else {
         let buf = if qfp.qf_fnum != 0 {
-            buflist_findnr(qfp.qf_fnum)
+            find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |mut b| b.raw())
         } else {
             ptr::null_mut()
         };
@@ -491,7 +491,7 @@ fn numbered(name: &[u8], nr: c_int) -> CString {
 ///
 /// Must be called from a quickfix or location list window.
 pub unsafe fn qf_view_result(split: bool) {
-    let in_ll_window = unsafe { is_ll_window(curwin.get()) };
+    let in_ll_window = is_ll_window(cur_win());
     // SAFETY: a location list window always references a live stack, which
     // is what `is_ll_window` just established.
     let qi = if in_ll_window {

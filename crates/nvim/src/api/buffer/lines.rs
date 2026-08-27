@@ -13,6 +13,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
+use crate::winlayer::Buf;
 
 pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
@@ -164,6 +165,7 @@ pub unsafe fn nvim_buf_set_lines(
             did_emsg: 0,
         };
         try_enter(&raw mut tstate);
+        let buf = Buf::new(b);
         's_382: {
             if (*b).b_p_ma == 0 {
                 api_set_error(
@@ -171,7 +173,7 @@ pub unsafe fn nvim_buf_set_lines(
                     kErrorTypeException,
                     c"Buffer is not 'modifiable'".as_ptr(),
                 );
-            } else if u_save_buf(b, (start - 1 as Integer) as linenr_T, end as linenr_T)
+            } else if u_save_buf(buf, (start - 1 as Integer) as linenr_T, end as linenr_T)
                 == 0 as ::core::ffi::c_int
             {
                 api_set_error(
@@ -181,7 +183,7 @@ pub unsafe fn nvim_buf_set_lines(
                 );
             } else {
                 let mut deleted_bytes: bcount_t = get_region_bytecount(
-                    b,
+                    buf,
                     start as linenr_T,
                     end as linenr_T,
                     0 as colnr_T,
@@ -291,7 +293,7 @@ pub unsafe fn nvim_buf_set_lines(
                     kExtmarkUndo,
                 );
                 changed_lines(
-                    b,
+                    Buf::new(b),
                     start as linenr_T,
                     0 as colnr_T,
                     end as linenr_T,

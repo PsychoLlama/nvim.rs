@@ -245,7 +245,7 @@ impl Buf {
     #[inline(always)]
     pub fn meta_total(self, kind: MetaIndex) -> uint32_t {
         // SAFETY: a live buffer.
-        unsafe { buf_meta_total(self.raw(), kind) }
+        unsafe { buf_meta_total(Buf::new(self.raw()), kind) }
     }
 }
 

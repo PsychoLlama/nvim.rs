@@ -742,7 +742,7 @@ pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
     let (win, varp, idx, flags, errbuf, errbuflen) = unsafe {
         (
             (*args).os_win.cast::<win_T>(),
-            (*args).os_varp.cast::<*mut c_char>(),
+            (*args).os_varp.string_var(),
             (*args).os_idx,
             (*args).os_flags,
             (*args).os_errbuf,

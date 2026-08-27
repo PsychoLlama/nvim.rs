@@ -83,19 +83,20 @@ fn may_hide(mut buf: Buf) -> bool {
 /// Sync the undo state, so that what follows starts a new change.
 fn sync_undo() {
     // SAFETY: reads the current buffer's undo tree.
-    unsafe { u_sync(false) };
+    u_sync(false);
 }
 
 /// Remember `win`'s cursor position for the alternate file.
-fn remember_altfpos(mut win: Win) {
-    // SAFETY: a live window.
-    unsafe { buflist_altfpos(win.raw()) };
+fn remember_altfpos(win: Win) {
+    // SAFETY: records the window's position in the current buffer's own
+    // entry list.
+    unsafe { buflist_altfpos(win) };
 }
 
 /// Restore the window-local options `win` last used with this buffer.
-fn restore_winopts(mut buf: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { get_winopts(buf.raw()) };
+fn restore_winopts(buf: Buf) {
+    // SAFETY: reads the option tables and the window's own saved entry.
+    unsafe { get_winopts(buf) };
 }
 
 /// Copy the buffer-local option values into `buf`.
@@ -106,7 +107,7 @@ fn copy_options_into(mut buf: Buf, flags: c_int) {
 
 fn diff_add(mut buf: Buf) {
     // SAFETY: a live buffer.
-    unsafe { diff_buf_add(buf.raw()) };
+    diff_buf_add(buf);
 }
 
 /// Load the buffer that has just been made current.
@@ -116,9 +117,9 @@ fn load_current_buffer() {
 }
 
 /// Warn if the file changed on disk since the buffer was read.
-fn check_timestamp(mut buf: Buf) {
-    // SAFETY: a live buffer; `false` is upstream's `focus` flag.
-    unsafe { buf_check_timestamp(buf.raw()) };
+fn check_timestamp(buf: Buf) {
+    // SAFETY: a live buffer, which survives the autocommands it fires.
+    unsafe { buf_check_timestamp(buf) };
 }
 
 /// Whether the cursor is in the indent of its line.
@@ -136,7 +137,7 @@ fn restore_position() {
 /// Re-check the argument-list index after the buffer changed.
 fn recheck_arg_idx(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { check_arg_idx(win.raw()) };
+    check_arg_idx(win);
 }
 
 /// Rebuild `'title'` and `'icon'`.
@@ -148,7 +149,7 @@ fn rebuild_title() {
 /// Scroll so that the cursor line sits in the middle of the window.
 fn scroll_halfway(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { scroll_cursor_halfway(win.raw(), false, false) };
+    scroll_cursor_halfway(win, false, false);
 }
 
 /// Load the keymap `'keymap'` names.
@@ -216,10 +217,8 @@ fn add_changedtick(mut buf: Buf) {
 /// With `update_jumplist` the position being left joins the jump list.
 ///
 /// # Safety
-/// `buf` must be a live buffer, and `curbuf`/`curwin` be set.
-pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+/// `curbuf`/`curwin` must be set.
+pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD as c_int
         || action == DOBUF_DEL as c_int
         || action == DOBUF_WIPE as c_int;
@@ -336,7 +335,7 @@ fn leave_prevbuf(
         0
     };
     // SAFETY: `prevbuf` is still live, the guard above having said so.
-    unsafe { close_buffer(win, prevraw, how, false, false) };
+    unsafe { close_buffer(Win::from_raw(win), Buf::new(prevraw), how, false, false) };
     if curwin.get() != previouswin && valid_win(previouswin).is_some() {
         // autocommands changed curwin, Grr!
         curwin.set(previouswin);
@@ -465,11 +464,7 @@ fn do_autochdir_now() {
 // ---------------------------------------------------------------------------
 // "No write since last change"
 
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn no_write_message_buf(buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub fn no_write_message_buf(mut buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
     } else {
@@ -487,11 +482,7 @@ pub fn no_write_message() {
     }
 }
 
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn no_write_message_nobang(buf: *const buf_T) {
-    // SAFETY: the caller's promise -- a live buffer, which is only read.
-    let buf = unsafe { Buf::new(buf.cast_mut()) };
+pub fn no_write_message_nobang(buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(&raw const e_job_still_running);
     } else {
@@ -530,7 +521,7 @@ pub(crate) fn buf_init_changedtick(mut buf: Buf) {
             v_lock: VAR_FIXED,
             vval: typval_vval_union {
                 // SAFETY: a live buffer.
-                v_number: unsafe { buf_get_changedtick(buf.raw()) },
+                v_number: buf_get_changedtick(buf),
             },
         },
         // Must not include DI_FLAGS_ALLOC.

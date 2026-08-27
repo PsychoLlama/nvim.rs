@@ -15,6 +15,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::types::{FAIL, NUL, OK};
+use crate::winlayer::Win;
 
 /// Split off a `:syntax` command's group-name argument.
 ///
@@ -215,8 +216,8 @@ pub(crate) unsafe fn get_syn_options(
                         if arg.is_null() {
                             return ::core::ptr::null_mut();
                         }
-                    } else if f.flags == SynFlags::FOLD && foldmethod_is_syntax(curwin.get()) {
-                        fold_update_all(curwin.get()); // Need to update folds later.
+                    } else if f.flags == SynFlags::FOLD && foldmethod_is_syntax(Win::current()) {
+                        fold_update_all(Win::current()); // Need to update folds later.
                     }
                 }
             }

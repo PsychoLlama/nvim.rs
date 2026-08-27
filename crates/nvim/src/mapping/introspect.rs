@@ -12,6 +12,7 @@ use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -311,7 +312,8 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t);
 
         // Do it twice: once for global maps and once for local maps.
-        for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(curbuf.get()))] {
+        for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(Buf::current()))]
+        {
             map_walk::<()>(table, abbr, |mp| {
                 if (*mp).m_simplified != 0 {
                     return None;
@@ -404,23 +406,18 @@ pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut 
 
 /// Every mapping in `mode`, as `maparg()`-like dicts: `nvim_get_keymap`.
 ///
-/// `buf` is the buffer whose local mappings to report, or null for the
+/// `buf` is the buffer whose local mappings to report, or `None` for the
 /// global ones.
 ///
 /// # Safety
-/// `arena` must be live and `buf` null or a live buffer.
-pub unsafe fn keymap_array(mode: String_0, buf: *mut buf_T, arena: *mut Arena) -> Array {
+/// `arena` must be live.
+pub unsafe fn keymap_array(mode: String_0, buf: Option<Buf>, arena: *mut Arena) -> Array {
     unsafe {
         let (int_mode, is_abbrev, _) = parse_shortname_mode(mode);
-        let buffer_value = if buf.is_null() {
-            0
-        } else {
-            (*buf).handle as c_int
-        };
-        let table = if buf.is_null() {
-            MapTable::Global
-        } else {
-            MapTable::Buffer(buf)
+        let buffer_value = buf.map_or(0, |buf| buf.handle as c_int);
+        let table = match buf {
+            Some(buf) => MapTable::Buffer(buf),
+            None => MapTable::Global,
         };
 
         let mut mappings = ArrayBuilder {

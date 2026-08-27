@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::types::OptionSetFlags;
 
+use crate::winlayer::Buf;
 pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
     unsafe {
         let mut n: size_t = 0 as size_t;
@@ -159,9 +160,9 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
         if buf.is_null() || ml_open(buf) == 0 as ::core::ffi::c_int {
             unblock_autocmds();
         } else {
-            (*buf).b_last_changedtick = buf_get_changedtick(buf);
-            (*buf).b_last_changedtick_i = buf_get_changedtick(buf);
-            (*buf).b_last_changedtick_pum = buf_get_changedtick(buf);
+            (*buf).b_last_changedtick = buf_get_changedtick(Buf::new(buf));
+            (*buf).b_last_changedtick_i = buf_get_changedtick(Buf::new(buf));
+            (*buf).b_last_changedtick_pum = buf_get_changedtick(Buf::new(buf));
             buf_copy_options(
                 buf,
                 BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,

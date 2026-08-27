@@ -268,12 +268,8 @@ pub(crate) unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
 /// so a window can spell out that it overrides the global value with
 /// nothing, so they never reach a caller.
 ///
-/// # Safety
-///
-/// `wp` must be live.
-pub(crate) unsafe fn get_ve_flags(wp: *mut win_T) -> c_uint {
-    // SAFETY: the caller's window is live.
-    let flags = match unsafe { (*wp).w_onebuf_opt.wo_ve_flags } {
+pub(crate) fn get_ve_flags(wp: Win) -> c_uint {
+    let flags = match wp.w_onebuf_opt.wo_ve_flags {
         0 => ve_flags.get(),
         local => local,
     };

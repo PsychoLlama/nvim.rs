@@ -61,7 +61,7 @@
 
 use core::ops::{Deref, DerefMut};
 
-use crate::types::exarg_T;
+use crate::types::{CmdlineInfo, exarg_T};
 
 /// A `*mut T` the caller has promised is live, with checked field access.
 ///
@@ -84,6 +84,20 @@ impl<T> Clone for Live<T> {
 }
 
 impl<T> Copy for Live<T> {}
+
+// Two handles are equal when they name the same object, which is what
+// [`Win`](crate::winlayer::Win) and [`Buf`](crate::winlayer::Buf) derive for
+// themselves. Hand-written for `Clone`'s reason: `derive` would demand
+// `T: PartialEq`, and the pointee need not be comparable for its *address*
+// to be.
+impl<T> PartialEq for Live<T> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        core::ptr::eq(self.0, other.0)
+    }
+}
+
+impl<T> Eq for Live<T> {}
 
 impl<T> Live<T> {
     /// # Safety
@@ -147,3 +161,13 @@ impl<T> DerefMut for Live<T> {
 /// step, once per entry point; every `(*eap).field` after it is ordinary
 /// checked code.
 pub(crate) type Ea = Live<exarg_T>;
+
+/// The command line being edited, whose caller has promised it outlives the
+/// value.
+///
+/// The promise is discharged by the *place* it names not moving: either the
+/// `ccline` global cell or one boxed entry of the saved stack. What moves is
+/// the value inside it, which is why `ex_getln/` derives a `Cc` at each use
+/// rather than holding one across a call that can re-enter command-line
+/// mode. Its projections are in [`crate::ex_getln`].
+pub(crate) type Cc = Live<CmdlineInfo>;

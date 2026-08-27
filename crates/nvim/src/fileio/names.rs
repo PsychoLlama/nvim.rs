@@ -24,26 +24,32 @@ use crate::types::{FAIL, MAXPATHL, OK};
 const S_IFLNK: u64 = 0o120000;
 
 /// Shorten `buf`'s displayed file name to be relative to `dirname`.
-pub unsafe fn shorten_buf_fname(buf: *mut buf_T, dirname: *mut c_char, force: c_int) {
-    unsafe {
-        if (*buf).b_fname.is_null()
-            || bt_nofilename(buf)
-            || path_with_url((*buf).b_fname) != 0
-            || !(force != 0 || (*buf).b_sfname.is_null() || path_is_absolute((*buf).b_sfname))
-        {
-            return;
-        }
-        if (*buf).b_sfname != (*buf).b_ffname {
-            xfree((*buf).b_sfname.cast());
-            (*buf).b_sfname = ptr::null_mut();
-        }
-        let p = path_shorten_fname((*buf).b_ffname, dirname);
-        if p.is_null() {
-            (*buf).b_fname = (*buf).b_ffname;
-        } else {
-            (*buf).b_sfname = xstrdup(p);
-            (*buf).b_fname = (*buf).b_sfname;
-        }
+///
+/// # Safety
+/// `dirname` must be a NUL-terminated directory name.
+pub unsafe fn shorten_buf_fname(mut buf: Buf, dirname: *mut c_char, force: c_int) {
+    // SAFETY: a live buffer, and each name it holds is NUL-terminated; the
+    // null check ahead of `path_is_absolute` guards the name it reads.
+    if buf.b_fname.is_null()
+        || unsafe { bt_nofilename(buf.raw()) }
+        || unsafe { path_with_url(buf.b_fname) } != 0
+        || !(force != 0 || buf.b_sfname.is_null() || unsafe { path_is_absolute(buf.b_sfname) })
+    {
+        return;
+    }
+    if buf.b_sfname != buf.b_ffname {
+        // SAFETY: the buffer's own allocation, which it no longer names.
+        unsafe { xfree(buf.b_sfname.cast()) };
+        buf.b_sfname = ptr::null_mut();
+    }
+    // SAFETY: the buffer's own file name and the caller's directory name.
+    let p = unsafe { path_shorten_fname(buf.b_ffname, dirname) };
+    if p.is_null() {
+        buf.b_fname = buf.b_ffname;
+    } else {
+        // SAFETY: `p` points into the buffer's NUL-terminated full name.
+        buf.b_sfname = unsafe { xstrdup(p) };
+        buf.b_fname = buf.b_sfname;
     }
 }
 
@@ -54,7 +60,7 @@ pub unsafe fn shorten_fnames(force: c_int) {
         os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t);
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            shorten_buf_fname(buf, dirname.as_mut_ptr(), force);
+            shorten_buf_fname(Buf::new(buf), dirname.as_mut_ptr(), force);
             // Always make the swap file name a full path; a "nofile" buffer
             // may also have a swap file.
             mf_fullname((*buf).b_ml.ml_mfp);

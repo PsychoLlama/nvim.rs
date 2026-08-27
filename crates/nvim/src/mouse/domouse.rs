@@ -396,14 +396,14 @@ fn coalesce_drags(c: c_int) -> (c_int, bool, bool) {
         let which_button =
             unsafe { get_mouse_button(key_extra(c), &raw mut is_click, &raw mut is_drag) };
         // SAFETY: `vpeekc` only looks at the typeahead.
-        if !is_drag || KeyStuffed.get() != 0 || unsafe { vpeekc() } == NUL {
+        if !is_drag || KeyStuffed.get() != 0 || vpeekc() == NUL {
             return (which_button, is_click, is_drag);
         }
 
         let saved = MousePos::current();
         // Need to get the character, peeking doesn't get the actual one.
         // SAFETY: takes one key from the typeahead.
-        let nc = unsafe { safe_vgetc() };
+        let nc = safe_vgetc();
         if c == nc {
             // The next character is the same mouse event: use that one.
             continue;

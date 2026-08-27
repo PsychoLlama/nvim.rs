@@ -45,7 +45,7 @@ use core::ptr::NonNull;
 use std::collections::HashMap;
 
 use crate::memory::xfree;
-use crate::types::{UndoLink, buf_T, u_header_T};
+use crate::types::{UndoLink, u_header_T};
 use crate::winlayer::Buf;
 
 use super::lastmark;
@@ -204,7 +204,7 @@ impl Buf {
     pub(crate) fn header(self, link: UndoLink) -> Option<Header> {
         // SAFETY: a live buffer, by `Buf`'s own contract, and the store hands
         // back only headers it still holds.
-        unsafe { Header::new(header_at(self.raw(), link)) }
+        unsafe { Header::new(header_at(self, link)) }
     }
 
     /// A depth-first walk of this buffer's whole undo tree, from the header
@@ -223,12 +223,12 @@ impl Buf {
 
 /// The header `link` names in `buf`'s store, or NULL.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-unsafe fn header_at(buf: *mut buf_T, link: UndoLink) -> *mut u_header_T {
-    // SAFETY: a live buffer; `b_u_store` is NULL or a store this module
-    // allocated and nothing else writes it.
+/// Safe: a [`Buf`] already carries the promise the lookup needs, and a link
+/// that names nothing — or a header that has been freed — resolves to NULL.
+fn header_at(buf: Buf, link: UndoLink) -> *mut u_header_T {
+    // SAFETY: a live buffer, by `Buf`'s own contract; `b_u_store` is NULL or
+    // a store this module allocated and nothing else writes it, and the
+    // borrow does not leave this statement.
     match unsafe { store_of(buf) } {
         Some(store) => store.at(link),
         None => core::ptr::null_mut(),
@@ -394,27 +394,28 @@ impl Iterator for TreeWalk {
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer, and the borrow must not outlive the
-/// statement that takes it — every caller here keeps it to one expression.
-unsafe fn store_of<'a>(buf: *mut buf_T) -> Option<&'a mut UndoStore> {
-    // SAFETY: a live buffer, so the field read is in bounds; the pointer it
-    // holds is NULL or a leaked `Box<UndoStore>` from `store_for`.
-    unsafe { (*buf).b_u_store.as_mut() }
+/// The borrow must not outlive the statement that takes it — every caller
+/// here keeps it to one expression.
+unsafe fn store_of<'a>(buf: Buf) -> Option<&'a mut UndoStore> {
+    // SAFETY: a live buffer, by `Buf`'s contract, so the field read is in
+    // bounds; the pointer it holds is NULL or a leaked `Box<UndoStore>` from
+    // `store_for`.
+    unsafe { (*buf.raw()).b_u_store.as_mut() }
 }
 
 /// `buf`'s store, created if this is the buffer's first header.
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer.
-unsafe fn store_for<'a>(buf: *mut buf_T) -> &'a mut UndoStore {
-    // SAFETY: a live buffer.
-    unsafe {
-        if (*buf).b_u_store.is_null() {
-            (*buf).b_u_store = Box::into_raw(Box::new(UndoStore::new()));
-        }
-        &mut *(*buf).b_u_store
+/// The borrow must not outlive the statement that takes it, as for
+/// [`store_of`].
+unsafe fn store_for<'a>(mut buf: Buf) -> &'a mut UndoStore {
+    if buf.b_u_store.is_null() {
+        buf.b_u_store = Box::into_raw(Box::new(UndoStore::new()));
     }
+    // SAFETY: non-null now, and what it points at is a `Box` this module
+    // leaked; the borrow does not leave the caller's statement.
+    unsafe { &mut *buf.b_u_store }
 }
 
 /// Hands `uhp` to `buf`'s store and returns the link that now names it.
@@ -423,9 +424,8 @@ unsafe fn store_for<'a>(buf: *mut buf_T) -> &'a mut UndoStore {
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer and `uhp` at a live header the store does
-/// not already own.
-pub(crate) unsafe fn header_adopt(buf: *mut buf_T, uhp: *mut u_header_T) -> UndoLink {
+/// `uhp` points at a live header the store does not already own.
+pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut u_header_T) -> UndoLink {
     // SAFETY: a live header by the contract above.
     let seq = unsafe { (*uhp).uh_seq };
     debug_assert!(seq > 0, "an undo header's sequence number is positive");
@@ -434,7 +434,7 @@ pub(crate) unsafe fn header_adopt(buf: *mut buf_T, uhp: *mut u_header_T) -> Undo
         // out, so it would be unreachable in the store as well as leaked.
         return UndoLink::NONE;
     };
-    // SAFETY: a live buffer by the contract above.
+    // SAFETY: the borrow does not leave this statement.
     let displaced = unsafe { store_for(buf) }.insert(seq, uhp);
     debug_assert!(
         displaced.is_none(),
@@ -451,12 +451,12 @@ pub(crate) unsafe fn header_adopt(buf: *mut buf_T, uhp: *mut u_header_T) -> Undo
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer, `uhp` at a live header allocated by
-/// `xmalloc`, and nothing else holds a pointer to that header.
-pub(crate) unsafe fn header_free(buf: *mut buf_T, uhp: *mut u_header_T) {
+/// `uhp` points at a live header allocated by `xmalloc`, and nothing else
+/// holds a pointer to that header.
+pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut u_header_T) {
     // SAFETY: a live header by the contract above.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
-    // SAFETY: a live buffer.
+    // SAFETY: the borrow does not leave this statement.
     if let Some(store) = unsafe { store_of(buf) } {
         let dropped = store.take(link);
         debug_assert!(
@@ -480,10 +480,9 @@ pub(crate) unsafe fn header_free(buf: *mut buf_T, uhp: *mut u_header_T) {
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer for as long as the iterator is used, and
-/// nothing frees a header the walk has already visited.
+/// Nothing frees a header the walk has already visited.
 pub(crate) unsafe fn header_chain(
-    buf: *mut buf_T,
+    buf: Buf,
     start: UndoLink,
     step: fn(&u_header_T) -> UndoLink,
 ) -> HeaderChain {
@@ -496,7 +495,7 @@ pub(crate) unsafe fn header_chain(
 
 /// The iterator [`header_chain`] returns.
 pub(crate) struct HeaderChain {
-    buf: *mut buf_T,
+    buf: Buf,
     state: ChainState,
     step: fn(&u_header_T) -> UndoLink,
 }
@@ -516,7 +515,8 @@ impl Iterator for HeaderChain {
             ChainState::Start(link) => link,
             ChainState::At(uh) => (self.step)(&uh),
         };
-        // SAFETY: a live buffer, per `header_chain`'s contract.
+        // SAFETY: nothing has freed an already-visited header, per
+        // `header_chain`'s contract.
         let Some(uh) = (unsafe { Header::new(header_at(self.buf, link)) }) else {
             self.state = ChainState::Done;
             return None;
@@ -534,16 +534,16 @@ impl Iterator for HeaderChain {
 /// `b_u_*head` with `u_clearall` and restores it afterwards, and those
 /// headers are only reachable through the store in between.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub(crate) unsafe fn store_release(buf: *mut buf_T) {
-    // SAFETY: a live buffer.
-    unsafe {
-        if !(*buf).b_u_store.is_null() && (*(*buf).b_u_store).is_empty() {
-            drop(Box::from_raw((*buf).b_u_store));
-            (*buf).b_u_store = core::ptr::null_mut();
-        }
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub(crate) fn store_release(mut buf: Buf) {
+    if buf.b_u_store.is_null() {
+        return;
+    }
+    // SAFETY: non-null, and what it points at is a `Box` this module leaked
+    // and nothing else points at.
+    if unsafe { (*buf.b_u_store).is_empty() } {
+        unsafe { drop(Box::from_raw(buf.b_u_store)) };
+        buf.b_u_store = core::ptr::null_mut();
     }
 }
 

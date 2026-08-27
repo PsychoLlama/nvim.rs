@@ -45,8 +45,8 @@ mod listdo;
 
 use crate::arglist::{ex_all, ex_rewind, set_arglist};
 use crate::buffer::{
-    bt_dontwrite, buf_hide, buf_set_name, buf_spname, buflist_findnr, bufref_valid,
-    no_write_message, no_write_message_nobang, set_bufref, set_curbuf,
+    bt_dontwrite, buf_hide, buf_set_name, buf_spname, bufref_valid, find_buf, no_write_message,
+    no_write_message_nobang, set_bufref, set_curbuf,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
@@ -290,7 +290,7 @@ pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
 
         // The write can succeed and still leave the buffer changed, e.g. on
         // a conversion error. That is a failure.
-        if bufref_valid(&raw mut bufref) && buf_is_changed(buf) {
+        if bufref_valid(&raw mut bufref) && buf_is_changed(Buf::new(buf)) {
             return FAIL;
         }
         r
@@ -311,7 +311,7 @@ pub(crate) unsafe fn autowrite_all() {
     unsafe {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if buf_is_changed(buf) && (*buf).b_p_ro == 0 && !bt_dontwrite(buf) {
+            if buf_is_changed(Buf::new(buf)) && (*buf).b_p_ro == 0 && !bt_dontwrite(buf) {
                 let mut bufref = bufref_T::default();
                 set_bufref(&raw mut bufref, buf);
                 buf_write_all(buf, false);
@@ -337,7 +337,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
 
     let blocked = unsafe {
         !forceit
-            && buf_is_changed(buf)
+            && buf_is_changed(Buf::new(buf))
             && (flags & CCGD_MULTWIN != 0 || (*buf).b_nwindows <= 1)
             && (flags & CCGD_AW == 0 || autowrite(buf, forceit) == FAIL)
     };
@@ -351,7 +351,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
             if flags & CCGD_EXCMD != 0 {
                 no_write_message();
             } else {
-                no_write_message_nobang(curbuf.get());
+                no_write_message_nobang(Buf::current());
             }
         }
         return true;
@@ -362,7 +362,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
     let mut count = 0;
     if flags & CCGD_ALLBUF != 0 {
         for buf2 in buffers() {
-            if unsafe { buf_is_changed(buf2) && !(*buf2).b_ffname.is_null() } {
+            if unsafe { buf_is_changed(Buf::new(buf2)) && !(*buf2).b_ffname.is_null() } {
                 count += 1;
             }
         }
@@ -375,7 +375,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
     if !unsafe { bufref_valid(&raw mut bufref) } {
         return false;
     }
-    unsafe { buf_is_changed(buf) }
+    buf_is_changed(unsafe { Buf::new(buf) })
 }
 
 /// Ask what to do about abandoning the changed buffer `buf`. The caller must
@@ -408,7 +408,8 @@ pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
             if empty_bufname {
                 buf_set_name((*buf).handle as c_int, c"Untitled".as_ptr().cast_mut());
             }
-            if check_overwrite(&raw mut ea, buf, (*buf).b_fname, (*buf).b_ffname, false) == OK
+            let target = Buf::new(buf);
+            if check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) == OK
                 // didn't hit Cancel
                 && buf_write_all(buf, false) == OK
             {
@@ -423,11 +424,11 @@ pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
                 (*buf).b_sfname = ptr::null_mut();
             }
         } else if ret == VIM_NO as c_int {
-            unchanged(buf, true, false);
+            unchanged(Buf::new(buf), true, false);
         } else if ret == VIM_ALL as c_int {
             write_all_writable();
         } else if ret == VIM_DISCARDALL as c_int {
-            for buf2 in buffers() {
+            for buf2 in all_buffers() {
                 unchanged(buf2, true, false);
             }
         }
@@ -446,11 +447,12 @@ unsafe fn write_all_writable() {
     unsafe {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if buf_is_changed(buf) && !(*buf).b_ffname.is_null() && (*buf).b_p_ro == 0 {
+            let target = Buf::new(buf);
+            if buf_is_changed(target) && !(*buf).b_ffname.is_null() && (*buf).b_p_ro == 0 {
                 let mut bufref = bufref_T::default();
                 set_bufref(&raw mut bufref, buf);
                 if !(*buf).b_fname.is_null()
-                    && check_overwrite(&raw mut ea, buf, (*buf).b_fname, (*buf).b_ffname, false)
+                    && check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false)
                         == OK
                 {
                     // didn't hit Cancel
@@ -497,7 +499,7 @@ pub(crate) unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
     // SAFETY: module contract.
     unsafe {
         buf_hide(buf)
-            || !buf_is_changed(buf)
+            || !buf_is_changed(Buf::new(buf))
             || (*buf).b_nwindows > 1
             || autowrite(buf, forceit) == OK
             || forceit
@@ -554,8 +556,8 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     unsafe {
         let mut culprit = ptr::null_mut::<buf_T>();
         for nr in changed_check_order() {
-            let buf = buflist_findnr(nr);
-            if buf.is_null() || (hidden && (*buf).b_nwindows != 0) || !buf_is_changed(buf) {
+            let buf = find_buf(nr).map_or(ptr::null_mut(), |mut b| b.raw());
+            if buf.is_null() || hidden && (*buf).b_nwindows != 0 || !buf_is_changed(Buf::new(buf)) {
                 continue;
             }
             let mut bufref = bufref_T::default();
@@ -599,7 +601,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
         // Otherwise open the changed buffer in the current window.
         if culprit != curbuf.get() {
             set_curbuf(
-                culprit,
+                Buf::new(culprit),
                 if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,
                 true,
             );
@@ -794,8 +796,7 @@ pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
             // The default is all buffers.
             check_timestamps(0);
         } else {
-            let buf = buflist_findnr((*eap).line2 as c_int);
-            if !buf.is_null() {
+            if let Some(buf) = find_buf((*eap).line2 as c_int) {
                 // Cannot happen?
                 buf_check_timestamp(buf);
             }
@@ -838,19 +839,19 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
         // ":drop file ...": edit the first argument, jumping to an existing
         // window if there is one, editing in the current window if its
         // buffer can be abandoned, and otherwise opening a new window.
-        let buf =
-            buflist_findnr((*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)).ae_fnum);
+        let buf = find_buf((*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)).ae_fnum)
+            .map_or(ptr::null_mut(), |mut b| b.raw());
         for (tp, wp) in tab_windows() {
             if (*wp).w_buffer != buf {
                 continue;
             }
             goto_tabpage_win(tp, wp);
             (*curwin.get()).w_arg_idx = 0;
-            if !buf_is_changed(curbuf.get()) {
+            if !buf_is_changed(Buf::current()) {
                 // Reload the file if it is newer.
                 let save_ar = (*curbuf.get()).b_p_ar;
                 (*curbuf.get()).b_p_ar = 1;
-                buf_check_timestamp(curbuf.get());
+                buf_check_timestamp(Buf::current());
                 (*curbuf.get()).b_p_ar = save_ar;
             }
             if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {

@@ -640,11 +640,12 @@ pub(crate) unsafe fn is_zero_width(
     let (w, b) = (curwin.get(), curbuf.get());
     let (at, end) = (&raw mut pos, ptr::null_mut());
     let (opts, none) = (SEARCH_KEEP as c_int + flag, ptr::null_mut());
-    // SAFETY: `pos` is this frame's, `pattern` a live pattern of
-    // `patternlen` bytes, and the window and buffer are the current ones.
+    let (win, buf) = (Some(cur_win()), cur_buf());
+    // SAFETY: `pos` is this frame's and `pattern` a live pattern of
+    // `patternlen` bytes.
     let found = unsafe {
         searchit(
-            w, b, at, end, direction, pattern, patternlen, 1, opts, RE_SEARCH, none,
+            win, buf, at, end, direction, pattern, patternlen, 1, opts, RE_SEARCH, none,
         )
     };
     if found != FAIL {

@@ -23,7 +23,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{fline_T, fold_T};
-use crate::types::{garray_T, linenr_T, win_T};
+use crate::types::{garray_T, linenr_T};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 /// One fold list: a `garray_T` whose items are [`fold_T`].
@@ -268,10 +269,17 @@ impl FLine {
         Self { flp }
     }
 
+    /// The `fline_T` behind the handle, for the two calls that still speak
+    /// in pointers: the recursion's own re-entry and the C struct field.
+    pub(super) fn raw(self) -> *mut fline_T {
+        self.flp
+    }
+
     /// The window whose folds are being computed.
-    pub(super) fn win(self) -> *mut win_T {
-        // SAFETY: `new`'s caller promised a live `fline_T`.
-        unsafe { (*self.flp).wp }
+    pub(super) fn win(self) -> Win {
+        // SAFETY: `new`'s caller promised a live `fline_T` naming a live
+        // window.
+        unsafe { Win::new((*self.flp).wp) }
     }
 
     /// Current line number, relative to the start of the enclosing fold.

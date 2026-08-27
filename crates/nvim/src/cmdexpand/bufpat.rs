@@ -9,6 +9,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::types::{FAIL, NUL, OK};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -253,8 +254,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
             loop {
                 let quiet = Suppress::output();
                 let found_new_match = searchit(
-                    ptr::null_mut(),
-                    curbuf.get(),
+                    None,
+                    Buf::current(),
                     &raw mut cur_match_pos,
                     &raw mut end_match_pos,
                     dir,

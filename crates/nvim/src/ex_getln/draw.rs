@@ -108,10 +108,13 @@ pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c
                 msg_putchar('*' as ::core::ffi::c_int);
                 i += utfc_ptr2len(cc.at(start + i));
             }
-        } else if cc.last_colors.colors.size != 0 {
+        } else if !cc.last_colors.chunks().is_empty() {
+            // Indexed rather than iterated: `msg_outtrans_len` re-enters the
+            // editor, which can replace the whole command line, so no borrow
+            // of it may outlive one access.
             let mut i: size_t = 0;
-            while i < cc.last_colors.colors.size {
-                let chunk: CmdlineColorChunk = *cc.last_colors.colors.items.add(i);
+            while i < cc.last_colors.chunks().len() {
+                let chunk: CmdlineColorChunk = cc.last_colors.chunks()[i];
                 if chunk.end > start {
                     let chunk_start = chunk.start.max(start);
                     msg_outtrans_len(

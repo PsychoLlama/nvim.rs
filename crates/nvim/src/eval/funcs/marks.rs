@@ -148,14 +148,14 @@ pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // yields an empty dict rather than nothing.
     unsafe {
         tv_dict_alloc_ret(rettv);
-        let wp = if !args.has(0) {
-            curwin.get()
+        let found = if !args.has(0) {
+            Win::from_raw(curwin.get())
         } else {
-            find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw)
+            find_win_by_nr_or_id(args.ptr(0))
         };
-        if wp.is_null() {
+        let Some(wp) = found else {
             return;
-        }
+        };
         get_tagstack(wp, rettv.vval.v_dict);
     }
 }
@@ -168,10 +168,10 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the arguments are live typvals; after the check argument 1's
     // union holds a Dict pointer, which may still be null.
     unsafe {
-        let wp = find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw);
-        if wp.is_null() || tv_check_for_dict_arg(args.ptr(0), 1) == FAIL {
+        let found = find_win_by_nr_or_id(args.ptr(0));
+        let Some(wp) = found.filter(|_| tv_check_for_dict_arg(args.ptr(0), 1) != FAIL) else {
             return;
-        }
+        };
         let d = args.get(1).vval.v_dict;
         if d.is_null() {
             return;

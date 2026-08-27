@@ -17,9 +17,9 @@ use super::*;
 /// Returns FAIL if writing fails.
 ///
 /// # Safety
-/// `fd` must be an open stream and `wp` a live window.
-pub unsafe fn put_folds(fd: *mut FILE, wp: *mut win_T) -> c_int {
-    // SAFETY: the caller's promise.
+/// `fd` must be an open stream.
+pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> c_int {
+    // SAFETY: the caller's promise -- an open stream.
     unsafe {
         if foldmethod_is_manual(wp)
             && (put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
@@ -28,7 +28,7 @@ pub unsafe fn put_folds(fd: *mut FILE, wp: *mut win_T) -> c_int {
         {
             return FAIL;
         }
-        if (*wp).w_fold_manual {
+        if wp.w_fold_manual {
             return put_foldopen_recurse(fd, wp, window_folds(wp), 0);
         }
     }
@@ -72,10 +72,10 @@ pub(super) unsafe fn put_folds_recurse(fd: *mut FILE, folds: FoldList, off: line
 /// Returns FAIL when writing failed.
 ///
 /// # Safety
-/// `fd` must be an open stream and `wp` a live window.
+/// `fd` must be an open stream.
 pub(super) unsafe fn put_foldopen_recurse(
     fd: *mut FILE,
-    wp: *mut win_T,
+    wp: Win,
     folds: FoldList,
     off: linenr_T,
 ) -> c_int {
@@ -107,10 +107,8 @@ pub(super) unsafe fn put_foldopen_recurse(
         }
         // A leaf: only write the command when its state differs from what
         // 'foldlevel' would give it anyway.
-        // SAFETY: the caller's promise.
-        let level = unsafe { fold_level_win(wp, off + fold.top()) };
-        // SAFETY: the caller's promise.
-        let foldlevel = unsafe { (*wp).w_onebuf_opt.wo_fdl };
+        let level = fold_level_win(wp, off + fold.top());
+        let foldlevel = wp.w_onebuf_opt.wo_fdl;
         let differs = if fold.is(FD_CLOSED) {
             foldlevel >= level as OptInt
         } else {

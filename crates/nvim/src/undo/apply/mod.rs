@@ -45,15 +45,14 @@ pub use time::undo_time;
 /// A live current buffer and window.
 pub unsafe fn u_undo(count: c_int) {
     // SAFETY: a live current buffer and window, by the contract above.
-    unsafe {
-        let count = count_after_sync(count);
-        if cpo_has(CpoFlag::UNDO) {
-            undo_undoes.set(!undo_undoes.get());
-        } else {
-            undo_undoes.set(true);
-        }
-        u_doit(count, false, true);
+    let count = unsafe { count_after_sync(count) };
+    if cpo_has(CpoFlag::UNDO) {
+        undo_undoes.set(!undo_undoes.get());
+    } else {
+        undo_undoes.set(true);
     }
+    // SAFETY: as above.
+    unsafe { u_doit(count, false, true) };
 }
 
 /// CTRL-R — redo, or, with `'cpoptions'` containing `u`, repeat the previous
@@ -110,8 +109,8 @@ pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     if buf.b_u_seq_last == forgotten.uh_seq {
         buf.b_u_seq_last -= 1;
     }
-    // SAFETY: a live buffer and a header it owns, and no link still names it.
-    unsafe { u_freebranch(buf.raw(), forgotten.raw(), ptr::null_mut()) };
+    // SAFETY: a header the buffer owns, and no link still names it.
+    unsafe { u_freebranch(buf, forgotten.raw(), ptr::null_mut()) };
     true
 }
 
@@ -129,7 +128,7 @@ unsafe fn count_after_sync(count: c_int) -> c_int {
         return count;
     }
     // SAFETY: as above.
-    unsafe { u_sync(true) };
+    u_sync(true);
     1
 }
 
@@ -140,7 +139,7 @@ unsafe fn count_after_sync(count: c_int) -> c_int {
 /// A live current buffer and window.
 pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
     // SAFETY: a live current buffer, by the contract above.
-    if !unsafe { undo_allowed(curbuf.get()) } {
+    if !undo_allowed(unsafe { Buf::current() }) {
         return;
     }
     u_newcount.set(0);
@@ -158,14 +157,13 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
         // anything else: it may reload the file, and that moves
         // `b_u_curhead` and more.
         // SAFETY: a live current buffer.
-        unsafe { change_warning(curbuf.get(), 0) };
+        unsafe { change_warning(Buf::current(), 0) };
         // SAFETY: as above — and the reload may have replaced it.
         let mut buf = unsafe { Buf::current() };
         if undo_undoes.get() {
             if buf.b_u_curhead.is_none() {
                 buf.b_u_curhead = buf.b_u_newhead; // the first undo
-            // SAFETY: a live buffer.
-            } else if unsafe { get_undolevel(buf.raw()) } > 0 {
+            } else if get_undolevel(buf) > 0 {
                 // Multi-level undo: on to the next one.
                 let next = buf
                     .header(buf.b_u_curhead)
@@ -188,8 +186,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
             // names a header.
             unsafe { u_undoredo(true, do_buf_event) };
         } else {
-            // SAFETY: a live buffer.
-            if buf.b_u_curhead.is_none() || unsafe { get_undolevel(buf.raw()) } <= 0 {
+            if buf.b_u_curhead.is_none() || get_undolevel(buf) <= 0 {
                 // SAFETY: nothing here holds a borrow of editor state.
                 beep_flush();
                 if first {
@@ -284,28 +281,22 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         }
     }
     if visual_active() {
-        // SAFETY: a live current buffer, and the cell lends the position for
-        // the length of the call.
-        with_visual_anchor(|visual| unsafe { check_pos(buf.raw(), visual) });
+        with_visual_anchor(|visual| check_pos(buf, visual));
     }
 
+    // SAFETY: NUL-terminated literals, and `what` is one of this module's
+    // own.
+    let fmt = unsafe { gettext(c"%ld %s; %s #%ld  %s".as_ptr()) };
+    let amount = int64_t::from(count).abs();
+    // SAFETY: as above.
+    let what = unsafe { gettext(what.as_ptr()) };
+    let which = if did_undo { c"before" } else { c"after" };
+    // SAFETY: as above.
+    let side = unsafe { gettext(which.as_ptr()) };
+    let seq = target.map_or(0, |uhp| int64_t::from(uhp.uh_seq));
     // SAFETY: a format string and the arguments it names, and `when` is
     // NUL-terminated.
-    unsafe {
-        smsg_keep_c!(
-            0,
-            gettext(c"%ld %s; %s #%ld  %s".as_ptr()),
-            int64_t::from(count).abs(),
-            gettext(what.as_ptr()),
-            if did_undo {
-                gettext(c"before".as_ptr())
-            } else {
-                gettext(c"after".as_ptr())
-            },
-            target.map_or(0, |uhp| int64_t::from(uhp.uh_seq)),
-            when.as_mut_ptr(),
-        );
-    }
+    unsafe { smsg_keep_c!(0, fmt, amount, what, side, seq, when.as_mut_ptr()) };
 }
 
 #[cfg(test)]

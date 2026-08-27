@@ -12,6 +12,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
+use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -80,15 +81,15 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
 /// which runs before the buffer is necessarily in a window.
 pub(crate) unsafe fn parse_diffanchors(
     check_only: bool,
-    buf: *mut buf_T,
+    buf: Buf,
     anchors: *mut linenr_T,
     num_anchors: *mut c_int,
 ) -> c_int {
     unsafe {
-        let mut dia = if *(*buf).b_p_dia == 0 {
+        let mut dia = if *buf.b_p_dia == 0 {
             p_dia.get()
         } else {
-            (*buf).b_p_dia
+            buf.b_p_dia
         };
         let orig_curbuf = curbuf.get();
         let orig_curwin = curwin.get();
@@ -96,17 +97,14 @@ pub(crate) unsafe fn parse_diffanchors(
         let bufwin = if check_only {
             curwin.get()
         } else {
-            let mut wp = firstwin.get();
-            while !wp.is_null() && !((*wp).w_buffer == buf && (*wp).w_onebuf_opt.wo_diff != 0) {
-                wp = (*wp).w_next;
-            }
-            if wp.is_null() && *dia != 0 {
+            let shown = windows().find(|w| w.w_buffer == buf.raw() && w.w_onebuf_opt.wo_diff != 0);
+            if shown.is_none() && *dia != 0 {
                 emsg(gettext(
                     &raw const e_diff_anchors_with_hidden_windows as *const c_char,
                 ));
                 return FAIL;
             }
-            wp
+            shown.map_or(::core::ptr::null_mut(), Win::raw)
         };
 
         let mut i = 0;
@@ -116,7 +114,7 @@ pub(crate) unsafe fn parse_diffanchors(
             if *dia == b',' as c_char {
                 return FAIL;
             }
-            curbuf.set(buf);
+            curbuf.set(buf.raw());
             curwin.set(bufwin);
             let mut errormsg = None;
             let lnum = get_address(
@@ -143,9 +141,7 @@ pub(crate) unsafe fn parse_diffanchors(
             // The validator accepts an address it cannot resolve yet; only
             // the real parse insists the line exists.
             if !check_only
-                && (lnum == MAXLNUM as linenr_T
-                    || lnum <= 0
-                    || lnum > (*buf).b_ml.ml_line_count + 1)
+                && (lnum == MAXLNUM as linenr_T || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
             {
                 emsg(gettext(&raw const e_invrange as *const c_char));
                 return FAIL;
@@ -180,7 +176,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
     unsafe {
         let result = parse_diffanchors(
             true,
-            curbuf.get(),
+            Buf::current(),
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
         );

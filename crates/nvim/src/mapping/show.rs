@@ -9,6 +9,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
 use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, FAIL, NUL, OK};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -312,7 +313,7 @@ pub unsafe fn expand_mappings(
         // abbreviation list either way.
         let abbr = EXPAND_ISABBREV.get();
         let table = if !abbr && EXPAND_BUFFER.get() {
-            MapTable::Buffer(curbuf.get())
+            MapTable::Buffer(Buf::current())
         } else {
             MapTable::Global
         };

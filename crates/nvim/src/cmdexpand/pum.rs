@@ -101,7 +101,7 @@ pub(crate) unsafe fn cmdline_pum_cleanup(cclp: Cc) {
 /// The current cmdline completion pattern.
 pub unsafe fn cmdline_compl_pattern() -> *mut c_char {
     unsafe {
-        let xp = (*get_cmdline_info()).xpc;
+        let xp = Cc::current().xpc();
         if xp.is_null() {
             ptr::null_mut()
         } else {
@@ -113,7 +113,7 @@ pub unsafe fn cmdline_compl_pattern() -> *mut c_char {
 /// True if fuzzy cmdline completion is active.
 pub unsafe fn cmdline_compl_is_fuzzy() -> bool {
     unsafe {
-        let xp = (*get_cmdline_info()).xpc;
+        let xp = Cc::current().xpc();
         !xp.is_null() && cmdline_fuzzy_completion_supported(xp)
     }
 }

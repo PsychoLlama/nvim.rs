@@ -24,15 +24,13 @@ use crate::types::NUL;
 
 /// The effective prompt for `buf`: 'b:prompt_text', or `"% "`.
 ///
-/// # Safety
-/// `buf` must point to a live buffer.
-pub(crate) unsafe fn buf_prompt_text(buf: *const buf_T) -> *mut c_char {
-    // SAFETY: the caller promises `buf` is a live buffer, and 'b:prompt_text'
-    // is either null or a NUL-terminated string it owns.
-    if unsafe { (*buf).b_prompt_text.is_null() } {
+/// Safe: `b:prompt_text` is either null or a NUL-terminated string the
+/// buffer owns.
+pub(crate) fn buf_prompt_text(buf: Buf) -> *mut c_char {
+    if buf.b_prompt_text.is_null() {
         return c"% ".as_ptr().cast_mut();
     }
-    unsafe { (*buf).b_prompt_text }
+    buf.b_prompt_text
 }
 
 /// The effective prompt for the current buffer.
@@ -41,7 +39,7 @@ pub(crate) unsafe fn buf_prompt_text(buf: *const buf_T) -> *mut c_char {
 /// Must run with a live `curbuf`.
 pub(crate) unsafe fn prompt_text() -> *mut c_char {
     // SAFETY: `curbuf` is live for the whole session.
-    unsafe { buf_prompt_text(curbuf.get()) }
+    buf_prompt_text(unsafe { Buf::current() })
 }
 
 /// Prepare for prompt mode: make sure the prompt line carries the prompt
@@ -100,7 +98,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
             cur_buf().b_prompt_append_new_line = true;
             // Like submitting: the undo history belonged to the old
             // prompt.
-            unsafe { u_clearallandblockfree(curbuf.get()) };
+            u_clearallandblockfree(cur_buf());
         }
         set_start_col(prompt_len);
         win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;
@@ -127,7 +125,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         win.w_cursor.col = win.w_cursor.col.max(start().col);
     }
     // Make sure the cursor is in a valid position.
-    unsafe { check_cursor(win.raw()) };
+    check_cursor(win);
 }
 
 /// Where the prompt's editable part begins.
@@ -152,7 +150,7 @@ fn set_start_col(col: colnr_T) {
 #[inline(always)]
 fn coladvance_win(win: Win, vcol: c_int) {
     // SAFETY: a live window, whose cursor line exists.
-    unsafe { coladvance(win.raw(), vcol) };
+    coladvance(win, vcol);
 }
 
 /// Is the cursor in the editable part of the prompt line?

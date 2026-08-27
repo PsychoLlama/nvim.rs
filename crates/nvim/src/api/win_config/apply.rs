@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::winlayer::{TabPage, Win};
 
 unsafe fn win_config_split(
     mut win: *mut win_T,
@@ -207,14 +208,9 @@ unsafe fn win_config_split(
                             );
                         }
                     } else {
-                        altwin_0 = win_float_find_altwin(
-                            win,
-                            if win_tp == curtab.get() {
-                                ::core::ptr::null_mut::<tabpage_T>()
-                            } else {
-                                win_tp
-                            },
-                        );
+                        let at = (win_tp != curtab.get()).then(|| TabPage::new(win_tp));
+                        altwin_0 = win_float_find_altwin(win, at)
+                            .map_or(::core::ptr::null_mut(), Win::raw);
                     }
                     win_remove(
                         win,
@@ -411,7 +407,7 @@ unsafe fn win_config_float_tp(
                 redraw_later(win, UPD_NOT_VALID);
                 set_must_redraw(UPD_NOT_VALID);
             }
-            win_config_float(win, (*fconfig).clone());
+            win_config_float(Win::new(win), (*fconfig).clone());
             return true;
         }
         if curwin_moving_tp as ::core::ffi::c_int != 0 && win_valid(win) as ::core::ffi::c_int != 0
@@ -472,9 +468,9 @@ pub unsafe fn nvim_win_set_config(
             == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
             && old_style as ::core::ffi::c_uint != fconfig.style as ::core::ffi::c_uint
         {
-            win_set_minimal_style(w);
+            win_set_minimal_style(Win::new(w));
             didset_window_options(w, true);
-            changed_window_setting(w);
+            changed_window_setting(Win::new(w));
         }
         if fconfig._cmdline_offset < INT_MAX {
             cmdline_win.set(w);

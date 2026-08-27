@@ -51,6 +51,7 @@ use crate::types::{
     size_t, uint8_t,
 };
 use crate::undo::buf_is_changed;
+use crate::winlayer::Buf;
 use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror, strlen};
 
 use super::wordtree::valid_spell_word;
@@ -135,11 +136,11 @@ pub unsafe fn spell_add_word(
 
             // Refuse to write the file behind the user's back if they are
             // editing it and have unsaved changes.
-            buf = buflist_findname_exp(fnamebuf);
+            buf = buflist_findname_exp(fnamebuf).map_or(core::ptr::null_mut(), |mut b| b.raw());
             if !buf.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                 buf = core::ptr::null_mut();
             }
-            if !buf.is_null() && buf_is_changed(buf) {
+            if !buf.is_null() && buf_is_changed(Buf::new(buf)) {
                 emsg(gettext(&raw const e_bufloaded as *const c_char));
                 xfree(fnamebuf as *mut c_void);
                 return;
@@ -212,7 +213,7 @@ pub unsafe fn spell_add_word(
             let mut fname = fname;
             mkspell(1, &raw mut fname, false, true, true);
             if !buf.is_null() {
-                buf_reload(buf, (*buf).b_orig_mode, false);
+                buf_reload(Buf::new(buf), (*buf).b_orig_mode, false);
             }
             redraw_all_later(UPD_SOME_VALID);
         }

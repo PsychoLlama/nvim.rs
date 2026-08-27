@@ -16,9 +16,9 @@ use crate::winlayer::Win;
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer.
-pub(crate) unsafe fn u_unch_branch(buf: *mut buf_T, start: UndoLink) {
-    // SAFETY: a live buffer, and nothing here frees a header.
+/// Nothing frees a header this walk has already visited.
+pub(crate) unsafe fn u_unch_branch(buf: Buf, start: UndoLink) {
+    // SAFETY: nothing here frees a header.
     for mut uh in unsafe { header_chain(buf, start, |uh| uh.uh_prev) } {
         uh.uh_flags |= UH_CHANGED;
         if uh.uh_alt_next.is_some() {
@@ -29,14 +29,10 @@ pub(crate) unsafe fn u_unch_branch(buf: *mut buf_T, start: UndoLink) {
 
 /// The newest header's entry list, complaining if the tree has come apart.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub(crate) unsafe fn u_get_headentry(buf: *mut buf_T) -> *mut u_entry_T {
-    // SAFETY: a live buffer; `b_u_newhead` is resolved through the store, so
-    // it is either a live header or nothing.
-    // SAFETY: a live buffer, by the contract above.
-    let newhead = unsafe { Buf::new(buf) }.header(unsafe { (*buf).b_u_newhead });
+/// Safe: `b_u_newhead` is resolved through the store, so it names either a
+/// live header or nothing.
+pub(crate) fn u_get_headentry(buf: Buf) -> *mut u_entry_T {
+    let newhead = buf.header(buf.b_u_newhead);
     match newhead.filter(|uh| !uh.uh_entry.is_null()) {
         Some(uh) => uh.uh_entry,
         None => {
@@ -50,31 +46,28 @@ pub(crate) unsafe fn u_get_headentry(buf: *mut buf_T) -> *mut u_entry_T {
 /// Fills in the `ue_bot` the newest header deferred, and marks the buffer
 /// synced.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub(crate) unsafe fn u_getbot(buf: *mut buf_T) {
-    // SAFETY: a live buffer, and `u_get_headentry` proved the newest header
-    // and its entry list are there.
-    if unsafe { u_get_headentry(buf) }.is_null() {
+/// Safe: `u_get_headentry` proves the newest header and its entry list are
+/// there before anything reads them.
+pub(crate) fn u_getbot(mut buf: Buf) {
+    if u_get_headentry(buf).is_null() {
         return;
     }
-    let mut newhead = unsafe { Buf::new(buf) }
-        .header(unsafe { (*buf).b_u_newhead })
+    let mut newhead = buf
+        .header(buf.b_u_newhead)
         .expect("u_get_headentry proved it is there");
     let uep = newhead.uh_getbot_entry;
     if !uep.is_null() {
-        let extra: linenr_T = unsafe { (*buf).b_ml.ml_line_count } - unsafe { (*uep).ue_lcount };
+        // SAFETY: the newest header's own deferred entry, proved live above.
+        let extra: linenr_T = buf.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
         unsafe { (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra };
-        if unsafe { (*uep).ue_bot } < 1
-            || unsafe { (*uep).ue_bot } > unsafe { (*buf).b_ml.ml_line_count }
-        {
+        if unsafe { (*uep).ue_bot } < 1 || unsafe { (*uep).ue_bot } > buf.b_ml.ml_line_count {
+            // SAFETY: a NUL-terminated literal.
             unsafe { iemsg(gettext(c"E440: Undo line missing".as_ptr())) };
             unsafe { (*uep).ue_bot = (*uep).ue_top + 1 };
         }
         newhead.uh_getbot_entry = ptr::null_mut();
     }
-    unsafe { (*buf).b_u_synced = true };
+    buf.b_u_synced = true;
 }
 
 /// Unlinks one header from the tree and frees it, along with the alternate
@@ -85,12 +78,12 @@ pub(crate) unsafe fn u_getbot(buf: *mut buf_T) {
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer, `uhp` at a header it owns, and `uhpp` is
-/// NULL or points at a link the caller owns.
-pub(crate) unsafe fn u_freeheader(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
-    // SAFETY: a live buffer and a header it owns; every link below is
-    // resolved through the store, so a stale one reads as "nothing".
-    let b = unsafe { Buf::new(buf) };
+/// `uhp` points at a header `buf` owns, and `uhpp` is NULL or points at a
+/// link the caller owns.
+pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+    // SAFETY: a header the buffer owns; every link below is resolved through
+    // the store, so a stale one reads as "nothing".
+    let b = buf;
     if let Some(alt) = b.header(unsafe { (*uhp).uh_alt_next }) {
         unsafe { u_freebranch(buf, alt.raw(), uhpp) };
     }
@@ -99,10 +92,10 @@ pub(crate) unsafe fn u_freeheader(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
     }
     match b.header(unsafe { (*uhp).uh_next }) {
         Some(mut next) => next.uh_prev = unsafe { (*uhp).uh_prev },
-        None => unsafe { (*buf).b_u_oldhead = (*uhp).uh_prev },
+        None => buf.b_u_oldhead = unsafe { (*uhp).uh_prev },
     }
     if unsafe { (*uhp).uh_prev.is_none() } {
-        unsafe { (*buf).b_u_newhead = (*uhp).uh_next };
+        buf.b_u_newhead = unsafe { (*uhp).uh_next };
     } else {
         // The alternate headers at `uh_prev` all claim this header's
         // successor.
@@ -118,17 +111,17 @@ pub(crate) unsafe fn u_freeheader(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freebranch(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
-    // SAFETY: a live buffer and a header it owns.
+pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+    // SAFETY: a header the buffer owns.
     // Freeing the oldest header takes the whole tree with it, so let
     // `u_freeheader` do the unlinking rather than walking here.
-    let b = unsafe { Buf::new(buf) };
+    let b = buf;
     if unsafe { Header::new(uhp) }
         .map(Header::link)
         .unwrap_or_default()
-        == unsafe { (*buf).b_u_oldhead }
+        == buf.b_u_oldhead
     {
-        while let Some(oldhead) = b.header(unsafe { (*buf).b_u_oldhead }) {
+        while let Some(oldhead) = b.header(buf.b_u_oldhead) {
             unsafe { u_freeheader(buf, oldhead.raw(), uhpp) };
         }
         return;
@@ -153,15 +146,15 @@ pub(crate) unsafe fn u_freebranch(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freeentries(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
-    // SAFETY: a live buffer and a header it owns; the entry list is that
-    // header's and is walked one node ahead of the free.
+pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+    // SAFETY: a header the buffer owns; the entry list is that header's and
+    // is walked one node ahead of the free.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
-    if unsafe { (*buf).b_u_curhead } == link {
-        unsafe { (*buf).b_u_curhead = UndoLink::NONE };
+    if buf.b_u_curhead == link {
+        buf.b_u_curhead = UndoLink::NONE;
     }
-    if unsafe { (*buf).b_u_newhead } == link {
-        unsafe { (*buf).b_u_newhead = UndoLink::NONE };
+    if buf.b_u_newhead == link {
+        buf.b_u_newhead = UndoLink::NONE;
     }
     if !uhpp.is_null() && unsafe { *uhpp } == link {
         unsafe { *uhpp = UndoLink::NONE };
@@ -177,7 +170,7 @@ pub(crate) unsafe fn u_freeentries(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: 
     unsafe { (*uhp).uh_extmark.size = 0 };
     unsafe { (*uhp).uh_extmark.items = ptr::null_mut() };
     unsafe { header_free(buf, uhp) };
-    unsafe { (*buf).b_u_numhead -= 1 };
+    buf.b_u_numhead -= 1;
 }
 
 /// Frees one entry and the `n` saved lines it holds.
@@ -199,86 +192,76 @@ pub(crate) unsafe fn u_freeentry(uep: *mut u_entry_T, mut n: c_int) {
 ///
 /// The headers stay in the store; a command preview puts them back.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_clearall(buf: *mut buf_T) {
-    // SAFETY: a live buffer.
-    unsafe { (*buf).b_u_curhead = UndoLink::NONE };
-    unsafe { (*buf).b_u_oldhead = UndoLink::NONE };
-    unsafe { (*buf).b_u_newhead = UndoLink::NONE };
-    unsafe { (*buf).b_u_synced = true };
-    unsafe { (*buf).b_u_numhead = 0 };
-    unsafe { (*buf).b_u_line_ptr = ptr::null_mut() };
-    unsafe { (*buf).b_u_line_lnum = 0 };
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub fn u_clearall(mut buf: Buf) {
+    buf.b_u_curhead = UndoLink::NONE;
+    buf.b_u_oldhead = UndoLink::NONE;
+    buf.b_u_newhead = UndoLink::NONE;
+    buf.b_u_synced = true;
+    buf.b_u_numhead = 0;
+    buf.b_u_line_ptr = ptr::null_mut();
+    buf.b_u_line_lnum = 0;
 }
 
 /// Frees every header the buffer's tree still reaches, and the shadow line.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_blockfree(buf: *mut buf_T) {
-    // SAFETY: a live buffer; each pass frees the oldest header, and the
-    // assert is the transpiled loop's own guard against not making progress.
-    let b = unsafe { Buf::new(buf) };
-    while let Some(oldhead) = b.header(unsafe { (*buf).b_u_oldhead }) {
-        let previous_oldhead = unsafe { (*buf).b_u_oldhead };
+/// Safe: every header freed here is one the buffer's own tree still holds.
+pub fn u_blockfree(buf: Buf) {
+    let b = buf;
+    while let Some(oldhead) = b.header(buf.b_u_oldhead) {
+        let previous_oldhead = buf.b_u_oldhead;
+        // SAFETY: a header the tree still holds, and no link the caller owns.
+        // Each pass frees the oldest header, and the assert is the transpiled
+        // loop's own guard against not making progress.
         unsafe { u_freeheader(buf, oldhead.raw(), ptr::null_mut()) };
         debug_assert!(
-            unsafe { (*buf).b_u_oldhead } != previous_oldhead,
+            buf.b_u_oldhead != previous_oldhead,
             "buf->b_u_oldhead != previous_oldhead"
         );
     }
-    unsafe { xfree((*buf).b_u_line_ptr as *mut c_void) };
-    unsafe { store_release(buf) };
+    // SAFETY: `b_u_line_ptr` is this module's own allocation.
+    unsafe { xfree(buf.b_u_line_ptr as *mut c_void) };
+    store_release(buf);
 }
 
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_clearallandblockfree(buf: *mut buf_T) {
-    // SAFETY: a live buffer.
-    unsafe { u_blockfree(buf) };
-    unsafe { u_clearall(buf) };
+/// Safe: as [`u_blockfree`] and [`u_clearall`], which are the whole of it.
+pub fn u_clearallandblockfree(buf: Buf) {
+    u_blockfree(buf);
+    u_clearall(buf);
 }
 
 /// Remembers one line so `U` can put it back.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub(crate) unsafe fn u_saveline(buf: *mut buf_T, lnum: linenr_T) {
-    // SAFETY: a live buffer, and `lnum` is checked against its line count.
-    if lnum == unsafe { (*buf).b_u_line_lnum } {
+/// Safe: `lnum` is checked against the buffer's own line count.
+pub(crate) fn u_saveline(mut buf: Buf, lnum: linenr_T) {
+    if lnum == buf.b_u_line_lnum {
         return;
     }
-    if lnum < 1 || lnum > unsafe { (*buf).b_ml.ml_line_count } {
+    if lnum < 1 || lnum > buf.b_ml.ml_line_count {
         return;
     }
-    unsafe { u_clearline(buf) };
-    unsafe { (*buf).b_u_line_lnum = lnum };
-    if cur_win().w_buffer == buf && cur_win().w_cursor.lnum == lnum {
-        unsafe { (*buf).b_u_line_colnr = cur_win().w_cursor.col };
+    u_clearline(buf);
+    buf.b_u_line_lnum = lnum;
+    if cur_win().w_buffer == buf.raw() && cur_win().w_cursor.lnum == lnum {
+        buf.b_u_line_colnr = cur_win().w_cursor.col;
     } else {
-        unsafe { (*buf).b_u_line_colnr = 0 };
+        buf.b_u_line_colnr = 0;
     }
-    unsafe { (*buf).b_u_line_ptr = u_save_line_buf(buf, lnum) };
+    // SAFETY: `lnum` was checked against the buffer's line count above.
+    buf.b_u_line_ptr = unsafe { u_save_line_buf(buf, lnum) };
 }
 
 /// Forgets the line `U` would have put back.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_clearline(buf: *mut buf_T) {
-    // SAFETY: a live buffer; `b_u_line_ptr` is this module's own allocation.
-    if unsafe { (*buf).b_u_line_ptr.is_null() } {
+/// Safe: `b_u_line_ptr` is this module's own allocation.
+pub fn u_clearline(mut buf: Buf) {
+    if buf.b_u_line_ptr.is_null() {
         return;
     }
-    unsafe { xfree((*buf).b_u_line_ptr.cast()) };
-    unsafe { (*buf).b_u_line_ptr = ptr::null_mut() };
-    unsafe { (*buf).b_u_line_lnum = 0 };
+    // SAFETY: this module allocated it and nothing else holds it.
+    unsafe { xfree(buf.b_u_line_ptr.cast()) };
+    buf.b_u_line_ptr = ptr::null_mut();
+    buf.b_u_line_lnum = 0;
 }
 
 /// `U`: swap the current line against the one `u_saveline` kept.
@@ -295,7 +278,7 @@ pub unsafe fn u_undoline() {
     // Bound first: rustfmt puts a call wider than 60 columns on one line per
     // argument, and every one of those lines is inside the region.
     let lnum = cur_buf().b_u_line_lnum;
-    if unsafe { u_savecommon(curbuf.get(), lnum - 1, lnum + 1, 0, false) } == FAIL {
+    if u_savecommon(cur_buf(), lnum - 1, lnum + 1, 0, false) == FAIL {
         return;
     }
     let oldp: *mut c_char = unsafe { u_save_line(cur_buf().b_u_line_lnum) };
@@ -319,7 +302,7 @@ pub unsafe fn u_undoline() {
     }
     cur_win().w_cursor.col = t;
     cur_win().w_cursor.lnum = cur_buf().b_u_line_lnum;
-    unsafe { check_cursor_col(curwin.get()) };
+    check_cursor_col(unsafe { Win::current() });
 }
 
 /// A fresh copy of line `lnum` of the current buffer.
@@ -328,18 +311,18 @@ pub unsafe fn u_undoline() {
 ///
 /// A live current buffer holding line `lnum`.
 pub(crate) unsafe fn u_save_line(lnum: linenr_T) -> *mut c_char {
-    // SAFETY: a live current buffer, by the contract above.
-    unsafe { u_save_line_buf(curbuf.get(), lnum) }
+    // SAFETY: a live current buffer holding that line, by the contract above.
+    unsafe { u_save_line_buf(cur_buf(), lnum) }
 }
 
 /// A fresh copy of line `lnum` of `buf`.
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer holding line `lnum`.
-pub(crate) unsafe fn u_save_line_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut c_char {
-    // SAFETY: a live buffer holding that line, by the contract above.
-    unsafe { xstrdup(ml_get_buf(buf, lnum)) }
+/// `buf` holds line `lnum`.
+pub(crate) unsafe fn u_save_line_buf(buf: Buf, lnum: linenr_T) -> *mut c_char {
+    // SAFETY: the buffer holds that line, by the contract above.
+    unsafe { xstrdup(ml_get_buf(buf.raw(), lnum)) }
 }
 
 /// The buffer the editor is working in.

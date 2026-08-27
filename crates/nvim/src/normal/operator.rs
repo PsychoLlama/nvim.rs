@@ -167,7 +167,7 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
     if visual_select() && visual_active() {
         // SAFETY: reads one key with mappings suppressed.
         let unmapped = Keys::unmapped();
-        let mut reg = unsafe { plain_vgetc() };
+        let mut reg = plain_vgetc();
         langmap_adjust(&mut reg, true);
         drop(unmapped);
         // `"` names the unnamed register, which is spelled 0 here.

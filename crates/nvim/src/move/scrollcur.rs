@@ -20,7 +20,7 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::main::mouse_dragging;
 use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{Direction, colnr_T, int64_t, linenr_T, win_T};
+use crate::types::{Direction, colnr_T, int64_t, linenr_T};
 
 /// The 'scrolloff' the `scroll_cursor_*` family works with: a mouse drag
 /// slows scrolling down by standing in for the option.
@@ -42,12 +42,8 @@ fn lineoff_at(lnum: linenr_T) -> lineoff_T {
 }
 
 /// [`Win::scroll_cursor_top`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn scroll_cursor_top(wp: *mut win_T, min_scroll: c_int, always: c_int) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.scroll_cursor_top(min_scroll, always != 0);
+pub fn scroll_cursor_top(wp: Win, min_scroll: c_int, always: c_int) {
+    wp.scroll_cursor_top(min_scroll, always != 0);
 }
 
 impl Win {
@@ -157,12 +153,8 @@ impl Win {
 }
 
 /// [`Win::set_empty_rows`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn set_empty_rows(wp: *mut win_T, used: c_int) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.set_empty_rows(used);
+pub fn set_empty_rows(wp: Win, used: c_int) {
+    wp.set_empty_rows(used);
 }
 
 impl Win {
@@ -190,12 +182,8 @@ impl Win {
 }
 
 /// [`Win::scroll_cursor_bot`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn scroll_cursor_bot(wp: *mut win_T, min_scroll: c_int, set_topbot: bool) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.scroll_cursor_bot(min_scroll, set_topbot);
+pub fn scroll_cursor_bot(wp: Win, min_scroll: c_int, set_topbot: bool) {
+    wp.scroll_cursor_bot(min_scroll, set_topbot);
 }
 
 impl Win {
@@ -432,12 +420,8 @@ impl Win {
 }
 
 /// [`Win::scroll_cursor_halfway`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn scroll_cursor_halfway(wp: *mut win_T, atend: bool, prefer_above: bool) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.scroll_cursor_halfway(atend, prefer_above);
+pub fn scroll_cursor_halfway(wp: Win, atend: bool, prefer_above: bool) {
+    wp.scroll_cursor_halfway(atend, prefer_above);
 }
 
 impl Win {
@@ -585,12 +569,8 @@ impl Win {
 }
 
 /// [`Win::cursor_correct`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn cursor_correct(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.cursor_correct();
+pub fn cursor_correct(wp: Win) {
+    wp.cursor_correct();
 }
 
 impl Win {

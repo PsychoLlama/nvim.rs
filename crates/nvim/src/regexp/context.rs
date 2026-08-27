@@ -43,6 +43,7 @@ use crate::types::{
 };
 use ::libc::{strcpy, strlen};
 
+use crate::winlayer::{Buf, Win};
 /// Let the user interrupt a long match, unless the caller asked for an
 /// uninterruptible one (`RE_NOBREAK`, for matches run where input cannot
 /// be read).
@@ -199,42 +200,43 @@ pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
 
 /// Is the position being matched inside the Visual area? Backs `\%V`.
 pub(crate) fn reg_match_visual(rex: Rex) -> bool {
-    let wp = match rex.reg_win() {
+    let raw = match rex.reg_win() {
         w if w.is_null() => curwin.get(),
         w => w,
     };
+    // SAFETY: `reg_win` is the window the match is running for, or `curwin`
+    // when it has none; both stay live for the length of the match.
+    let wp = unsafe { Win::new(raw) };
     // `\%V` is a buffer-position test, so it only applies to a multi-line
     // match in the current buffer.
     if rex.reg_buf() != curbuf.get() || !visual_ever_started() || !rex.multi() {
         return false;
     }
 
-    // SAFETY: `wp` is a live window and `curbuf` the current buffer, whose
-    // `b_visual` records the area the last Visual mode left behind.
-    let (top, bot, mode, curswant) = unsafe {
-        if let Some(sel) = visual_selection() {
-            let (top, bot) = if lt(sel.anchor, (*wp).w_cursor) {
-                (sel.anchor, (*wp).w_cursor)
-            } else {
-                ((*wp).w_cursor, sel.anchor)
-            };
-            (top, bot, sel.mode, (*wp).w_curswant)
+    let (top, bot, mode, curswant) = if let Some(sel) = visual_selection() {
+        let (top, bot) = if lt(sel.anchor, wp.w_cursor) {
+            (sel.anchor, wp.w_cursor)
         } else {
-            let buf = curbuf.get();
-            let (start, end) = ((*buf).b_visual.vi_start, (*buf).b_visual.vi_end);
-            let (top, mut bot) = if lt(start, end) {
-                (start, end)
-            } else {
-                (end, start)
-            };
-            bot.lnum = bot.lnum.min((*buf).b_ml.ml_line_count);
-            (
-                top,
-                bot,
-                VisualMode::from_raw((*buf).b_visual.vi_mode),
-                (*buf).b_visual.vi_curswant,
-            )
-        }
+            (wp.w_cursor, sel.anchor)
+        };
+        (top, bot, sel.mode, wp.w_curswant)
+    } else {
+        // SAFETY: `curbuf` is set from startup to exit; its `b_visual`
+        // records the area the last Visual mode left behind.
+        let buf = unsafe { Buf::current() };
+        let (start, end) = (buf.b_visual.vi_start, buf.b_visual.vi_end);
+        let (top, mut bot) = if lt(start, end) {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        bot.lnum = bot.lnum.min(buf.b_ml.ml_line_count);
+        (
+            top,
+            bot,
+            VisualMode::from_raw(buf.b_visual.vi_mode),
+            buf.b_visual.vi_curswant,
+        )
     };
 
     let lnum = rex.buf_lnum();

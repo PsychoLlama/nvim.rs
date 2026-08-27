@@ -44,6 +44,7 @@ use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
 
+use crate::winlayer::Buf;
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -154,7 +155,8 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                 while !wp.is_null() {
                     // An autocommand may already have closed the buffer.
                     let buf = (*wp).w_buffer;
-                    if !buf.is_null() && buf_valid(buf) && buf_get_changedtick(buf) != -1 {
+                    // `buf_valid` does the null test itself.
+                    if buf_valid(buf) && buf_get_changedtick(Buf::new(buf)) != -1 {
                         let mut bufref = bufref_T::default();
                         set_bufref(&raw mut bufref, buf);
                         apply_autocmds(

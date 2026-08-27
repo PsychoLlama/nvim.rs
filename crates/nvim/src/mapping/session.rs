@@ -11,6 +11,7 @@ use super::*;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
 use crate::types::MB_MAXCHAR;
 use crate::types::{FAIL, NUL, OK};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 
 /// The command-name prefix letters that reproduce each mode set a `:map`
@@ -81,18 +82,17 @@ unsafe fn is_writable_map(mp: *mut mapblock_T) -> bool {
 
 /// Write map commands for the current mappings to an `.exrc` file.
 ///
-/// `buf` names the buffer whose local mappings to write, or is null for the
-/// global ones.  Answers `FAIL` on a write error, `OK` otherwise.
+/// `buf` names the buffer whose local mappings to write, or is `None` for
+/// the global ones.  Answers `FAIL` on a write error, `OK` otherwise.
 ///
 /// # Safety
-/// `fd` must be an open stream and `buf` null or a live buffer.
-pub unsafe fn makemap(fd: *mut FILE, buf: *mut buf_T) -> c_int {
+/// `fd` must be an open stream.
+pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
     unsafe {
         let mut did_cpo = false;
-        let table = if buf.is_null() {
-            MapTable::Global
-        } else {
-            MapTable::Buffer(buf)
+        let table = match buf {
+            Some(buf) => MapTable::Buffer(buf),
+            None => MapTable::Global,
         };
 
         // Do the loop twice: once for mappings, once for abbreviations.
@@ -153,7 +153,7 @@ pub unsafe fn makemap(fd: *mut FILE, buf: *mut buf_T) -> c_int {
                     if !put(cmd) {
                         return Some(FAIL);
                     }
-                    if !buf.is_null() && !put(c" <buffer>") {
+                    if buf.is_some() && !put(c" <buffer>") {
                         return Some(FAIL);
                     }
                     if (*mp).m_nowait != 0 && !put(c" <nowait>") {

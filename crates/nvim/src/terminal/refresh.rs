@@ -177,7 +177,7 @@ pub(crate) fn refresh_terminal(mut term: Term) {
             if wp.w_leftcol != 0 {
                 wp.w_leftcol = 0 as colnr_T;
                 // SAFETY: a window of the current tab page's own list.
-                unsafe { curs_columns(wp.raw(), 1) };
+                curs_columns(wp, 1);
             }
         }
     }
@@ -257,10 +257,9 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
     let change_start = row_to_linenr(term, term.invalid_start) as linenr_T;
     let change_end = change_start + changed as linenr_T;
     clear_invalid(term);
-    let (buf, added) = (buf.raw(), added as linenr_T);
-    // SAFETY: a live buffer, reporting the lines replaced and appended
-    // above.
-    unsafe { changed_lines(buf, change_start, 0 as colnr_T, change_end, added, true) };
+    // Reports the lines replaced and appended above.
+    let added = added as linenr_T;
+    changed_lines(buf, change_start, 0 as colnr_T, change_end, added, true);
 }
 
 /// Reset the damaged-row range to "nothing damaged" — an empty range that
@@ -291,7 +290,7 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
             wp.w_cursor.lnum = ml_end;
             let topline = (wp.w_cursor.lnum - wp.w_view_height as linenr_T + 1).max(1);
             // SAFETY: a window of the current tab page's own list.
-            unsafe { set_topline(wp.raw(), topline) };
+            set_topline(wp, topline);
         } else {
             wp.w_cursor.lnum = wp.w_cursor.lnum.min(ml_end);
         }

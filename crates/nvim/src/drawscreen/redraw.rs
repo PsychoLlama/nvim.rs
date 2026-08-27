@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::winlayer::Win;
 
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
@@ -44,7 +45,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
         let empty_line =
             State.get() & MODE_INSERT == 0 && *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) == 0;
 
-        validate_virtcol(wp);
+        validate_virtcol(Win::new(wp));
 
         let visual_moved = visual_active()
             && (visual_mode().raw() != (*wp).w_stl_visual_mode

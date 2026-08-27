@@ -198,7 +198,7 @@ pub unsafe fn f_wincol(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
     unsafe {
         let win = Win::current();
-        validate_cursor(win.raw());
+        validate_cursor(win);
         (*rettv).vval.v_number = varnumber_T::from(win.w_wcol + 1);
     }
 }
@@ -208,7 +208,7 @@ pub unsafe fn f_winline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
     unsafe {
         let win = Win::current();
-        validate_cursor(win.raw());
+        validate_cursor(win);
         (*rettv).vval.v_number = varnumber_T::from(win.w_wrow + 1);
     }
 }
@@ -315,7 +315,7 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
         // Not a plain assignment: 'scrolloff' and folds decide where the
         // window can actually start.
         // SAFETY: a live window.
-        unsafe { set_topline(win.raw(), number_as_int(v)) };
+        set_topline(win, number_as_int(v));
     }
     if let Some(v) = entry(c"topfill") {
         win.w_topfill = number_as_int(v);
@@ -329,16 +329,16 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
 
     // SAFETY: a live window, and `curbuf` is set.
     unsafe {
-        check_cursor(win.raw());
+        check_cursor(win);
         win_new_height(win.raw(), win.w_height);
         win_new_width(win.raw(), win.w_width);
-        changed_window_setting(win.raw());
+        changed_window_setting(win);
     }
     // SAFETY: `curbuf` is set from startup to exit.
     let line_count = unsafe { Buf::current() }.line_count();
     win.w_topline = restored_topline(win.w_topline, line_count);
     // SAFETY: a live window.
-    unsafe { check_topfill(win.raw(), true) };
+    check_topfill(win, true);
 }
 
 /// The line `winrestview()` leaves `w_topline` at: a saved view from a buffer

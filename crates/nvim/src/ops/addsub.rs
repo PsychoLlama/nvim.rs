@@ -114,7 +114,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         let changed = unsafe { do_addsub(oap.op_type, &raw mut pos, 0, prenum1) };
         disable_fold_update.set(disable_fold_update.get() - 1);
         if changed {
-            unsafe { changed_lines(curbuf.get(), pos.lnum, 0, pos.lnum + 1, 0, true) };
+            changed_lines(cur_buf(), pos.lnum, 0, pos.lnum + 1, 0, true);
         }
         return;
     }
@@ -153,7 +153,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     disable_fold_update.set(disable_fold_update.get() - 1);
     if change_cnt != 0 {
         let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
-        unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
+        changed_lines(cur_buf(), first, 0, last, 0, true);
     } else if oap.is_VIsual {
         // Nothing changed, so the selection has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
@@ -233,7 +233,7 @@ pub unsafe fn do_addsub(
     let save_cursor = cur_win().w_cursor;
 
     let mut save_coladd: colnr_T = 0;
-    if unsafe { virtual_active(curwin.get()) } {
+    if virtual_active(cur_win()) {
         save_coladd = pos.coladd;
         pos.coladd = 0;
     }
@@ -312,7 +312,7 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: pos_T, save_coladd
     } else if did_change {
         cur_win().w_set_curswant = true;
     // SAFETY: a live window.
-    } else if unsafe { virtual_active(curwin.get()) } {
+    } else if virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = save_coladd;
     }
     did_change

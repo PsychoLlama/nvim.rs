@@ -106,8 +106,8 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
 
     cur_win().w_cursor = oap.start;
     let (lnum, col, last) = (oap.start.lnum, oap.start.col, oap.end.lnum + 1);
-    unsafe { check_cursor(curwin.get()) };
-    unsafe { changed_lines(curbuf.get(), lnum, col, last, 0, true) };
+    check_cursor(unsafe { Win::current() });
+    changed_lines(cur_buf(), lnum, col, last, 0, true);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         cur_buf().b_op_start = oap.start;
@@ -158,7 +158,9 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
             col: 0,
             coladd: 0,
         };
-        unsafe { getvpos(curwin.get(), &raw mut vpos, oap.start_vcol) };
+        // SAFETY: a live current window, and a local position in the cursor's
+        // own line.
+        unsafe { getvpos(Win::current(), Pos::new(&raw mut vpos), oap.start_vcol) };
         bd.startspaces += vpos.coladd;
     }
 
@@ -312,7 +314,9 @@ fn replace_chars(mut oap: Op, c: c_int) {
                     }
                     unsafe { coladvance_force(getviscol()) };
                     if cur_win().w_cursor.lnum == oap.end.lnum {
-                        unsafe { getvpos(curwin.get(), oap.end().raw(), end_vcol) };
+                        // SAFETY: a live current window, and the operator's
+                        // end position in the cursor's own line.
+                        unsafe { getvpos(Win::current(), oap.end(), end_vcol) };
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.

@@ -229,7 +229,7 @@ unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
     }
     // `g` reads its own second character first, and only some of them
     // take a third.
-    ns.ca.nchar = unsafe { plain_vgetc() };
+    ns.ca.nchar = plain_vgetc();
     langmap_adjust(&mut ns.ca.nchar, true);
     ns.need_flushbuf |= add_to_showcmd(ns.ca.nchar);
     match ns.ca.nchar {
@@ -252,7 +252,7 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
         p_tm.get() as c_int
     };
     loop {
-        ns.c = unsafe { vpeekc() };
+        ns.c = vpeekc();
         if !(ns.c <= 0 && towait > 0) {
             break;
         }
@@ -260,7 +260,7 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
         towait -= 50;
     }
     if ns.c > 0 {
-        ns.c = unsafe { plain_vgetc() };
+        ns.c = plain_vgetc();
         if ns.c != Ctrl_N && ns.c != Ctrl_G {
             vungetc(ns.c);
         } else {
@@ -284,12 +284,11 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
     let mut prev_code = ns.ca.nchar;
     loop {
-        ns.c = unsafe { vpeekc() };
-        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[unsafe { vpeekc() } as usize] as c_int > 1))
-        {
+        ns.c = vpeekc();
+        if !(ns.c > 0 && (ns.c >= 0x100 || utf8len_tab[vpeekc() as usize] as c_int > 1)) {
             break;
         }
-        ns.c = unsafe { plain_vgetc() };
+        ns.c = plain_vgetc();
         if !unsafe { utf_iscomposing(prev_code, ns.c, &raw mut state) } {
             vungetc(ns.c);
             break;
@@ -451,7 +450,7 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
         // A '0' here is a count digit, not the "go to column 0" command,
         // so it must not be mapped.
         no_zero_mapping.set(no_zero_mapping.get() + 1);
-        ns.c = unsafe { plain_vgetc() };
+        ns.c = plain_vgetc();
         langmap_adjust(&mut ns.c, true);
         no_zero_mapping.set(no_zero_mapping.get() - 1);
         drop(raw_key);
@@ -465,7 +464,7 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
         ns.ca.opcount = ns.ca.count0;
         ns.ca.count0 = 0;
         let raw_key = Keys::unmapped_with_codes();
-        ns.c = unsafe { plain_vgetc() };
+        ns.c = plain_vgetc();
         langmap_adjust(&mut ns.c, true);
         drop(raw_key);
         ns.need_flushbuf |= add_to_showcmd(ns.c);
@@ -531,11 +530,11 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     unsafe { mb_check_adjust_col(curwin.get().cast::<c_void>()) };
 
     if cur_win().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
-        unsafe { validate_cursor(curwin.get()) };
+        validate_cursor(unsafe { Win::current() });
         unsafe { do_check_scrollbind(true) };
     }
     if cur_win().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
-        unsafe { validate_cursor(curwin.get()) };
+        validate_cursor(unsafe { Win::current() });
         unsafe { do_check_cursorbind() };
     }
 
@@ -846,7 +845,7 @@ pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
 pub(crate) unsafe fn read_command_char() -> c_int {
     let raw_key = Keys::unmapped_with_codes();
     // SAFETY: transpiled input machinery, plain value arguments.
-    let mut c = unsafe { plain_vgetc() };
+    let mut c = plain_vgetc();
     langmap_adjust(&mut c, true);
     drop(raw_key);
     add_to_showcmd(c);

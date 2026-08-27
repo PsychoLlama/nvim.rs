@@ -516,7 +516,7 @@ fn msg_line(line: &[c_char; IOSIZE as usize], hl_id: c_int) {
 
 fn is_changed(buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_changed(buf.raw()) }
+    buf_is_changed(buf)
 }
 
 // ---------------------------------------------------------------------------

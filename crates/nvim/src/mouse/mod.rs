@@ -197,7 +197,7 @@ fn vcols_between(win: Win, mut first: pos_T, mut second: pos_T) -> (colnr_T, col
     let (a, b) = (&raw mut first, &raw mut second);
     // SAFETY: a live window and two local copies of positions in its buffer,
     // which `getvcols` only reads.
-    unsafe { getvcols(win.raw(), a, b, &raw mut left, &raw mut right) };
+    unsafe { getvcols(win, a, b, &raw mut left, &raw mut right) };
     (left, right)
 }
 
@@ -234,7 +234,7 @@ impl Win {
     /// Whether the window is still in a tab page's list.
     fn is_valid(self) -> bool {
         // SAFETY: `win_valid` only compares the pointer against the lists.
-        unsafe { win_valid(self.raw()) }
+        win_valid(self.raw())
     }
 
     /// Move this window's status line down by `count` rows.
@@ -462,7 +462,7 @@ fn scroll_line_len(win: Win, lnum: linenr_T) -> colnr_T {
         let mut p = win.buffer().line(lnum).raw();
         let mut col: colnr_T = 0;
         while *p != NUL as c_char {
-            let numchar = win_chartabsize(win.raw(), p, col);
+            let numchar = win_chartabsize(win, p, col);
             p = p.offset(utfc_ptr2len(p) as isize);
             if *p == NUL as c_char {
                 break; // don't count the last character
@@ -512,7 +512,7 @@ fn do_mousescroll_horiz(mut win: Win, leftcol: colnr_T) -> bool {
     // When the line of the cursor is too short, move the cursor to the
     // longest visible line.
     // SAFETY: a live window.
-    if !unsafe { virtual_active(win.raw()) } && leftcol > scroll_line_len(win, win.w_cursor.lnum) {
+    if !virtual_active(win) && leftcol > scroll_line_len(win, win.w_cursor.lnum) {
         win.w_cursor.lnum = find_longest_lnum(win);
         win.w_cursor.col = 0;
     }

@@ -12,6 +12,7 @@
 use super::*;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
+use crate::winlayer::Win;
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot
 /// overflow.
@@ -128,13 +129,8 @@ pub unsafe fn screenclear() {
 /// Unlike a cmdline "one_key" prompt, the message half of such a prompt is not
 /// stored to be re-emitted, so it must not be cleared from the message grid --
 /// which is why redrawing is refused entirely while one is up.
-pub(crate) unsafe fn cmdline_number_prompt() -> bool {
-    // SAFETY: the cmdline state is the editor's, on the main thread.
-    unsafe {
-        !ui_has(kUIMessages)
-            && State.get() & MODE_CMDLINE != 0
-            && !(*get_cmdline_info()).mouse_used.is_null()
-    }
+pub(crate) fn cmdline_number_prompt() -> bool {
+    !ui_has(kUIMessages) && State.get() & MODE_CMDLINE != 0 && Cc::current().mouse_used()
 }
 
 /// Set the dimensions of the Nvim application "screen".
@@ -230,7 +226,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             maketitle();
 
             changed_line_abv_curs();
-            invalidate_botline_win(curwin.get());
+            invalidate_botline_win(Win::current());
 
             // At a more prompt, running an external command, in Ex mode or at a
             // one-key cmdline prompt, only the cursor is repositioned; anywhere
@@ -238,7 +234,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             let deferred = State.get() == MODE_ASKMORE
                 || State.get() == MODE_EXTERNCMD
                 || exmode_active.get()
-                || (State.get() & MODE_CMDLINE != 0 && (*get_cmdline_info()).one_key);
+                || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
             if deferred {
                 if State.get() & MODE_CMDLINE != 0 {
                     update_screen();
@@ -263,7 +259,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                         cmdline_pum_display(false);
                     }
                 } else {
-                    update_topline(curwin.get());
+                    update_topline(Win::current());
                     if pum_drawn() {
                         // Same again: `ins_compl_show_pum` wants the screen
                         // redrawn first, and the nested `update_screen` inside

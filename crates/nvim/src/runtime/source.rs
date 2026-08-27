@@ -454,7 +454,7 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
     // SAFETY: the caller's contract; the handlers may run arbitrary script,
     // which is why nothing is borrowed across them.
     unsafe {
-        if has_autocmd(EVENT_SOURCECMD, fname_exp, ptr::null_mut())
+        if has_autocmd(EVENT_SOURCECMD, fname_exp, None)
             && apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp, false, buf)
         {
             let retval = if aborting() { FAIL } else { OK };

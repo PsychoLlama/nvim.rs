@@ -88,6 +88,29 @@
 //! — nothing an autocommand or Lua callback re-enters holds a `&mut` — is
 //! therefore a property of the API rather than of review.
 //!
+//! # On [`DerefMut`] and raw pointers into the same object
+//!
+//! **A `&mut` reached through [`DerefMut`] borrows the *whole struct*, not
+//! the field.** `win.w_cursor.lnum = 1` asks for `&mut win_T` and projects;
+//! under Stacked and Tree Borrows that borrow pops every raw pointer
+//! previously derived from the same object off the tag stack, so a
+//! `*mut pos_T` taken earlier from `&raw mut (*wp).w_cursor` — or any other
+//! interior pointer the transpiled code is still carrying — is **invalidated
+//! by the next write through the handle**, and using it afterwards is UB.
+//!
+//! Nothing warns. `cargo check`, clippy and a release build are all silent;
+//! only Miri sees it, and only if a test happens to walk that path. p23-5
+//! found the same edge from the other side: `scripts/root-deref.py` refuses
+//! `&raw mut (*curwin.get()).field` precisely because the address would take
+//! its provenance from a transient `&mut win_T`.
+//!
+//! So when a body holds an interior raw pointer across writes through a
+//! `Win`/`Buf`, one of the two has to go: derive the address with
+//! [`Win::cursor`] or [`Live::field_ptr`], which compute it from the base
+//! *without* forming a `&mut` and so read nothing, or re-derive the interior
+//! pointer after each write. Converting a `*mut win_T` parameter to `Win` is
+//! not by itself enough — check what else in the body still points inside.
+//!
 //! The walks at the bottom — [`windows`], [`windows_in_tab`], [`tab_windows`],
 //! [`buffers`] and [`frames`], plus [`tabs`] and [`frames_back`] under them —
 //! are the C's `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`,
@@ -100,7 +123,7 @@
 mod handles;
 mod live;
 
-pub(crate) use live::{Ea, Live};
+pub(crate) use live::{Cc, Ea, Live};
 
 pub(crate) use handles::{
     buffer, defer_free_buffer, defer_free_window, forget_buffer, forget_tabpage, forget_window,
@@ -363,9 +386,9 @@ impl Win {
     #[inline(always)]
     pub fn fold_first(self, lnum: linenr_T) -> Option<linenr_T> {
         let mut first = lnum;
-        // SAFETY: a live window. `firstp` is written only when the answer is
-        // true, so the seed survives a line that is in no fold.
-        let folded = unsafe { has_folding(self.0, lnum, &raw mut first, ptr::null_mut()) };
+        // `firstp` is written only when the answer is true, so the seed
+        // survives a line that is in no fold.
+        let folded = has_folding(self, lnum, Some(&mut first), None);
         folded.then_some(first)
     }
 
@@ -373,8 +396,8 @@ impl Win {
     #[inline(always)]
     pub fn fold_last(self, lnum: linenr_T) -> linenr_T {
         let mut last = lnum;
-        // SAFETY: a live window; `lastp` is written only when folded.
-        unsafe { has_folding(self.0, lnum, ptr::null_mut(), &raw mut last) };
+        // `lastp` is written only when folded.
+        has_folding(self, lnum, None, Some(&mut last));
         last
     }
 
@@ -391,15 +414,14 @@ impl Win {
     #[inline(always)]
     pub fn fold_span(self, lnum: linenr_T) -> (bool, linenr_T, linenr_T) {
         let (mut first, mut last) = (lnum, lnum);
-        // SAFETY: a live window; both out-params are written only when folded.
-        let folded = unsafe { has_folding(self.0, lnum, &raw mut first, &raw mut last) };
+        // Both out-params are written only when folded.
+        let folded = has_folding(self, lnum, Some(&mut first), Some(&mut last));
         (folded, first, last)
     }
 
     #[inline(always)]
     pub fn has_any_folding(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { has_any_folding(self.0) != 0 }
+        has_any_folding(self) != 0
     }
 
     /// First and last virtual column of the character at `pos`.
@@ -407,7 +429,7 @@ impl Win {
     pub fn vcol_span(self, pos: Pos) -> (colnr_T, colnr_T) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvcol(self.0, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
+        unsafe { getvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
         (start, end)
     }
 
@@ -416,7 +438,7 @@ impl Win {
     pub fn vcol_triple(self, pos: Pos) -> (colnr_T, colnr_T, colnr_T) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvcol(self.0, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
+        unsafe { getvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
         (start, cursor, end)
     }
 
@@ -431,7 +453,7 @@ impl Win {
     pub fn virtual_vcol_span(self, pos: Pos) -> (colnr_T, colnr_T) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self.0, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
+        unsafe { getvvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
         (start, end)
     }
 
@@ -440,7 +462,7 @@ impl Win {
     pub fn virtual_vcol_triple(self, pos: Pos) -> (colnr_T, colnr_T, colnr_T) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self.0, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
+        unsafe { getvvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
         (start, cursor, end)
     }
 
@@ -458,7 +480,7 @@ impl Win {
         let mut cursor = 0;
         let (none, c) = (ptr::null_mut(), &raw mut cursor);
         // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self.0, pos.0, none, c, none) };
+        unsafe { getvvcol(self, pos.0, none, c, none) };
         cursor
     }
 

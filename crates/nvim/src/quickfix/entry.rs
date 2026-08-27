@@ -36,7 +36,7 @@ pub(crate) fn forget_last_buffer() {
 /// # Safety
 ///
 /// `bufname` must be NUL-terminated.
-unsafe fn buffer_for(bufname: *mut c_char) -> *mut buf_T {
+unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
     // SAFETY: forwarded from the caller; `bufref_valid` only reads.
     unsafe {
         let cached = last_bufname.with(|name| match name {
@@ -44,12 +44,13 @@ unsafe fn buffer_for(bufname: *mut c_char) -> *mut buf_T {
             None => false,
         });
         if cached && last_bufref.get().valid() {
-            return last_bufref.get().raw();
+            return Buf::from_raw(last_bufref.get().raw());
         }
         let buf = buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int);
         let name = Name::from_ptr(bufname);
         last_bufname.with_mut(|slot| *slot = Some(name));
-        last_bufref.set(BufRef::of_raw(buf));
+        let buf = Buf::from_raw(buf);
+        last_bufref.set(BufRef::of_opt(buf));
         buf
     }
 }
@@ -80,7 +81,7 @@ pub(crate) unsafe fn qf_get_fnum(
             // directory stack has to be re-guessed.
             if !os_path_exists(joined) {
                 xfree(joined.cast());
-                let guess = qf_guess_filepath(qfl, fname);
+                let guess = qf_guess_filepath(Qfl::new(qfl), fname);
                 joined = if guess.is_null() {
                     xstrdup(fname)
                 } else {
@@ -94,11 +95,11 @@ pub(crate) unsafe fn qf_get_fnum(
 
         let buf = buffer_for(bufname);
         xfree(joined.cast());
-        if buf.is_null() {
+        let Some(mut buf) = buf else {
             return 0;
-        }
-        (*buf).b_has_qf_entry = has_entry_flag(qfl);
-        (*buf).handle as c_int
+        };
+        buf.b_has_qf_entry = has_entry_flag(qfl);
+        buf.handle as c_int
     }
 }
 
@@ -216,14 +217,15 @@ pub(crate) unsafe fn qf_clean_dir_stack(slot: *mut *mut DirStack) {
 ///
 /// # Safety
 ///
-/// `qfl` must be a live list and `filename` NUL-terminated.
-pub(crate) unsafe fn qf_guess_filepath(qfl: *mut qf_list_T, filename: *mut c_char) -> *mut c_char {
-    // SAFETY: forwarded from the caller.
+/// `filename` must be NUL-terminated.
+pub(crate) unsafe fn qf_guess_filepath(mut qfl: Qfl, filename: *mut c_char) -> *mut c_char {
+    if qfl.qf_dir_stack.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the list's own directory stack, just tested for null, and the
+    // caller's NUL-terminated file name.
     unsafe {
-        if (*qfl).qf_dir_stack.is_null() {
-            return ptr::null_mut();
-        }
-        let stack = &mut *(*qfl).qf_dir_stack;
+        let stack = &mut *qfl.qf_dir_stack;
         if stack.dirs.is_empty() {
             return ptr::null_mut();
         }
@@ -244,21 +246,15 @@ pub(crate) unsafe fn qf_guess_filepath(qfl: *mut qf_list_T, filename: *mut c_cha
 /// Whether a list with the given id is still on the window's stack — or,
 /// for a null window, on the quickfix stack.
 ///
-/// # Safety
-///
-/// `wp` must be null or a window that was live; it is checked.
-pub(crate) unsafe fn qflist_valid(wp: *mut win_T, qf_id: c_uint) -> bool {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let qi = if wp.is_null() {
-            QfStack::Global.raw()
-        } else if win_valid(wp) {
-            win_loclist(wp)
-        } else {
-            return false;
-        };
-        !qi.is_null() && qf_id2nr(qi, qf_id) != INVALID_QFIDX
-    }
+/// `wp` may name a window that has since been closed; it is checked.
+pub(crate) fn qflist_valid(wp: Option<Win>, qf_id: c_uint) -> bool {
+    let qi = match wp {
+        None => QfStack::Global.raw(),
+        Some(wp) if win_valid(wp.raw()) => win_loclist(wp),
+        Some(_) => return false,
+    };
+    // SAFETY: a live stack, tested for null.
+    !qi.is_null() && unsafe { qf_id2nr(qi, qf_id) } != INVALID_QFIDX
 }
 
 /// Whether an entry is still in the list.
@@ -266,23 +262,25 @@ pub(crate) unsafe fn qflist_valid(wp: *mut win_T, qf_id: c_uint) -> bool {
 /// Loading a file from the quickfix list runs autocommands, which may have
 /// replaced the list under the command that was walking it.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list.
-pub(crate) unsafe fn is_qf_entry_present(qfl: *mut qf_list_T, qf_ptr: *mut qfline_T) -> bool {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut i = 1;
-        let mut qfp = (*qfl).qf_start;
-        while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
-            if qfp == qf_ptr {
-                break;
-            }
-            i += 1;
-            qfp = (*qfp).qf_next;
+pub(crate) fn is_qf_entry_present(qfl: Qfl, qf_ptr: Qfe) -> bool {
+    let mut i = 1;
+    let mut qfp = entry_opt(qfl.qf_start);
+    while !got_int.get() && i <= qfl.qf_count {
+        let Some(this) = qfp else { break };
+        if this == qf_ptr {
+            break;
         }
-        i <= (*qfl).qf_count
+        i += 1;
+        qfp = entry_opt(this.qf_next);
     }
+    i <= qfl.qf_count
+}
+
+/// An entry link as a handle: the list's `qf_start`/`qf_next`/`qf_prev`
+/// chain ends at a null, which is the `None`.
+fn entry_opt(qfp: *mut qfline_T) -> Option<Qfe> {
+    // SAFETY: a link of a live list's own chain, tested for null.
+    (!qfp.is_null()).then(|| unsafe { Qfe::new(qfp) })
 }
 
 /// The next entry worth jumping to, searching forward from `qf_ptr`.
@@ -290,85 +288,64 @@ pub(crate) unsafe fn is_qf_entry_present(qfl: *mut qf_list_T, qf_ptr: *mut qflin
 /// With `FORWARD_FILE` that means the next entry in a *different* file.
 /// Answers null at the end of the list, leaving `qf_index` alone.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list and `qf_ptr` an entry in it.
-unsafe fn get_next_valid_entry(
-    qfl: *mut qf_list_T,
-    mut qf_ptr: *mut qfline_T,
+/// `qf_ptr` must be an entry in `qfl`.
+fn get_next_valid_entry(
+    qfl: Qfl,
+    mut qf_ptr: Qfe,
     qf_index: &mut c_int,
     dir: c_int,
-) -> *mut qfline_T {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut idx = *qf_index;
-        let old_fnum = (*qf_ptr).qf_fnum;
-        loop {
-            if idx == (*qfl).qf_count || (*qf_ptr).qf_next.is_null() {
-                return ptr::null_mut();
-            }
-            idx += 1;
-            qf_ptr = (*qf_ptr).qf_next;
-            if wanted_entry(qfl, qf_ptr, old_fnum, dir, FORWARD_FILE as c_int) {
-                break;
-            }
+) -> Option<Qfe> {
+    let mut idx = *qf_index;
+    let old_fnum = qf_ptr.qf_fnum;
+    loop {
+        if idx == qfl.qf_count {
+            return None;
         }
-        *qf_index = idx;
-        qf_ptr
+        idx += 1;
+        qf_ptr = entry_opt(qf_ptr.qf_next)?;
+        if wanted_entry(qfl, qf_ptr, old_fnum, dir, FORWARD_FILE as c_int) {
+            break;
+        }
     }
+    *qf_index = idx;
+    Some(qf_ptr)
 }
 
 /// The next entry worth jumping to, searching backward from `qf_ptr`.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list and `qf_ptr` an entry in it.
-unsafe fn get_prev_valid_entry(
-    qfl: *mut qf_list_T,
-    mut qf_ptr: *mut qfline_T,
+/// `qf_ptr` must be an entry in `qfl`.
+fn get_prev_valid_entry(
+    qfl: Qfl,
+    mut qf_ptr: Qfe,
     qf_index: &mut c_int,
     dir: c_int,
-) -> *mut qfline_T {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut idx = *qf_index;
-        let old_fnum = (*qf_ptr).qf_fnum;
-        loop {
-            if idx == 1 || (*qf_ptr).qf_prev.is_null() {
-                return ptr::null_mut();
-            }
-            idx -= 1;
-            qf_ptr = (*qf_ptr).qf_prev;
-            if wanted_entry(qfl, qf_ptr, old_fnum, dir, BACKWARD_FILE as c_int) {
-                break;
-            }
+) -> Option<Qfe> {
+    let mut idx = *qf_index;
+    let old_fnum = qf_ptr.qf_fnum;
+    loop {
+        if idx == 1 {
+            return None;
         }
-        *qf_index = idx;
-        qf_ptr
+        idx -= 1;
+        qf_ptr = entry_opt(qf_ptr.qf_prev)?;
+        if wanted_entry(qfl, qf_ptr, old_fnum, dir, BACKWARD_FILE as c_int) {
+            break;
+        }
     }
+    *qf_index = idx;
+    Some(qf_ptr)
 }
 
 /// Whether the walk should stop at this entry: it names a real position (or
 /// the list has none that do), and — when the walk is per file — it is not
 /// in the file it started from.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list and `qf_ptr` an entry in it.
-unsafe fn wanted_entry(
-    qfl: *mut qf_list_T,
-    qf_ptr: *mut qfline_T,
-    old_fnum: c_int,
-    dir: c_int,
-    per_file: c_int,
-) -> bool {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        if !(*qfl).qf_nonevalid && (*qf_ptr).qf_valid == 0 {
-            return false;
-        }
-        !(dir == per_file && (*qf_ptr).qf_fnum == old_fnum)
+/// `qf_ptr` must be an entry in `qfl`.
+fn wanted_entry(qfl: Qfl, qf_ptr: Qfe, old_fnum: c_int, dir: c_int, per_file: c_int) -> bool {
+    if !qfl.qf_nonevalid && qf_ptr.qf_valid == 0 {
+        return false;
     }
+    !(dir == per_file && qf_ptr.qf_fnum == old_fnum)
 }
 
 /// The `errornr`th entry worth jumping to from the current one, in `dir`.
@@ -376,95 +353,84 @@ unsafe fn wanted_entry(
 /// Reports E553 and answers null when there is not even one; running out
 /// part way is not an error, and stops on the last one found.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list holding entries.
-unsafe fn get_nth_valid_entry(
-    qfl: *mut qf_list_T,
+/// `qfl` must hold entries.
+fn get_nth_valid_entry(
+    qfl: Qfl,
     mut errornr: c_int,
     dir: c_int,
     new_qfidx: &mut c_int,
-) -> *mut qfline_T {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut qf_ptr = (*qfl).qf_ptr;
-        let mut qf_idx = (*qfl).qf_index;
-        let mut first = true;
-        while errornr != 0 {
-            errornr -= 1;
-            let prev_ptr = qf_ptr;
-            let prev_idx = qf_idx;
-            qf_ptr = if dir == FORWARD as c_int || dir == FORWARD_FILE as c_int {
-                get_next_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
-            } else {
-                get_prev_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
-            };
-            if qf_ptr.is_null() {
-                qf_ptr = prev_ptr;
-                qf_idx = prev_idx;
-                if first {
-                    emsg(gettext(E_NO_MORE_ITEMS.as_ptr()));
-                    return ptr::null_mut();
-                }
-                break;
+) -> Option<Qfe> {
+    let mut qf_ptr = entry_opt(qfl.qf_ptr)?;
+    let mut qf_idx = qfl.qf_index;
+    let mut first = true;
+    while errornr != 0 {
+        errornr -= 1;
+        let prev_ptr = qf_ptr;
+        let prev_idx = qf_idx;
+        let next = if dir == FORWARD as c_int || dir == FORWARD_FILE as c_int {
+            get_next_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
+        } else {
+            get_prev_valid_entry(qfl, qf_ptr, &mut qf_idx, dir)
+        };
+        let Some(next) = next else {
+            qf_ptr = prev_ptr;
+            qf_idx = prev_idx;
+            if first {
+                // SAFETY: the message machinery, over a literal.
+                unsafe { emsg(gettext(E_NO_MORE_ITEMS.as_ptr())) };
+                return None;
             }
-            first = false;
-        }
-        *new_qfidx = qf_idx;
-        qf_ptr
+            break;
+        };
+        qf_ptr = next;
+        first = false;
     }
+    *new_qfidx = qf_idx;
+    Some(qf_ptr)
 }
 
 /// The entry numbered `errornr`, or the nearest one the list has.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list holding entries.
-pub(crate) unsafe fn get_nth_entry(
-    qfl: *mut qf_list_T,
-    errornr: c_int,
-    new_qfidx: &mut c_int,
-) -> *mut qfline_T {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut qf_ptr = (*qfl).qf_ptr;
-        let mut qf_idx = (*qfl).qf_index;
-        while errornr < qf_idx && qf_idx > 1 && !(*qf_ptr).qf_prev.is_null() {
-            qf_idx -= 1;
-            qf_ptr = (*qf_ptr).qf_prev;
-        }
-        while errornr > qf_idx && qf_idx < (*qfl).qf_count && !(*qf_ptr).qf_next.is_null() {
-            qf_idx += 1;
-            qf_ptr = (*qf_ptr).qf_next;
-        }
-        *new_qfidx = qf_idx;
-        qf_ptr
+/// `qfl` must hold entries.
+pub(crate) fn get_nth_entry(qfl: Qfl, errornr: c_int, new_qfidx: &mut c_int) -> Option<Qfe> {
+    let mut qf_ptr = entry_opt(qfl.qf_ptr)?;
+    let mut qf_idx = qfl.qf_index;
+    while errornr < qf_idx
+        && qf_idx > 1
+        && let Some(prev) = entry_opt(qf_ptr.qf_prev)
+    {
+        qf_idx -= 1;
+        qf_ptr = prev;
     }
+    while errornr > qf_idx
+        && qf_idx < qfl.qf_count
+        && let Some(next) = entry_opt(qf_ptr.qf_next)
+    {
+        qf_idx += 1;
+        qf_ptr = next;
+    }
+    *new_qfidx = qf_idx;
+    Some(qf_ptr)
 }
 
 /// The entry a jump command asked for: the `errornr`th in `dir` when there
 /// is a direction, the entry numbered `errornr` when there is not, and the
 /// current one when neither was given.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list holding entries.
-pub(crate) unsafe fn qf_get_entry(
-    qfl: *mut qf_list_T,
+/// `qfl` must hold entries.
+pub(crate) fn qf_get_entry(
+    qfl: Qfl,
     errornr: c_int,
     dir: c_int,
     new_qfidx: &mut c_int,
-) -> *mut qfline_T {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        *new_qfidx = (*qfl).qf_index;
-        if dir != 0 {
-            get_nth_valid_entry(qfl, errornr, dir, new_qfidx)
-        } else if errornr != 0 {
-            get_nth_entry(qfl, errornr, new_qfidx)
-        } else {
-            (*qfl).qf_ptr
-        }
+) -> Option<Qfe> {
+    *new_qfidx = qfl.qf_index;
+    if dir != 0 {
+        get_nth_valid_entry(qfl, errornr, dir, new_qfidx)
+    } else if errornr != 0 {
+        get_nth_entry(qfl, errornr, new_qfidx)
+    } else {
+        entry_opt(qfl.qf_ptr)
     }
 }
 
@@ -579,34 +545,30 @@ pub unsafe fn qf_get_cur_valid_idx(eap: *mut exarg_T) -> c_int {
 /// entries for `:cdo`/`:ldo` and files for `:cfdo`/`:lfdo`. One when the
 /// list runs out first.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list.
-pub(crate) unsafe fn qf_get_nth_valid_entry(qfl: *mut qf_list_T, n: size_t, fdo: bool) -> size_t {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        if !qf_list_has_valid_entries(qfl) {
-            return 1;
-        }
-        let mut prev_fnum = 0;
-        let mut eidx: size_t = 0;
-        let mut i = 1;
-        let mut qfp = (*qfl).qf_start;
-        while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
-            if (*qfp).qf_valid != 0 {
-                if !fdo {
-                    eidx += 1;
-                } else if (*qfp).qf_fnum > 0 && (*qfp).qf_fnum != prev_fnum {
-                    eidx += 1;
-                    prev_fnum = (*qfp).qf_fnum;
-                }
-            }
-            if eidx == n {
-                break;
-            }
-            i += 1;
-            qfp = (*qfp).qf_next;
-        }
-        if i <= (*qfl).qf_count { i as size_t } else { 1 }
+pub(crate) fn qf_get_nth_valid_entry(qfl: Qfl, n: size_t, fdo: bool) -> size_t {
+    // SAFETY: a live list.
+    if !unsafe { qf_list_has_valid_entries(qfl.raw()) } {
+        return 1;
     }
+    let mut prev_fnum = 0;
+    let mut eidx: size_t = 0;
+    let mut i = 1;
+    let mut qfp = entry_opt(qfl.qf_start);
+    while !got_int.get() && i <= qfl.qf_count {
+        let Some(this) = qfp else { break };
+        if this.qf_valid != 0 {
+            if !fdo {
+                eidx += 1;
+            } else if this.qf_fnum > 0 && this.qf_fnum != prev_fnum {
+                eidx += 1;
+                prev_fnum = this.qf_fnum;
+            }
+        }
+        if eidx == n {
+            break;
+        }
+        i += 1;
+        qfp = entry_opt(this.qf_next);
+    }
+    if i <= qfl.qf_count { i as size_t } else { 1 }
 }

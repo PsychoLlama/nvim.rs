@@ -22,9 +22,7 @@ use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execut
 use crate::ex_docmd::ex_win_close;
 
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
-use crate::main::{
-    cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, curwin, e_autocmd_close, e_cmdwin,
-};
+use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_close, e_cmdwin};
 use crate::message::emsg;
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
@@ -40,6 +38,7 @@ use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
+use crate::winlayer::Win;
 use core::ptr;
 
 /// The buffer `win` is showing.
@@ -142,7 +141,7 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
     // SAFETY: `w` is live, and `switchwin` is this frame's own -- nothing the
     // callees run can reach it.
     unsafe {
-        check_cursor_col(w.raw());
+        check_cursor_col(w);
         w.w_set_curswant = true;
         let mut switchwin = switchwin_T::default();
         switch_win(
@@ -151,8 +150,8 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
             ptr::null_mut::<tabpage_T>(),
             true,
         );
-        update_topline(curwin.get());
-        validate_cursor(curwin.get());
+        update_topline(Win::current());
+        validate_cursor(Win::current());
         restore_win(&raw mut switchwin, true);
     }
     w.redraw_later(UPD_VALID);
@@ -502,7 +501,7 @@ pub unsafe fn nvim_win_text_height(
     // SAFETY: `w` is live and the three counters are this frame's own.
     let mut all: int64_t = unsafe {
         win_text_height(
-            w.raw(),
+            w,
             start_lnum,
             start_vcol,
             &raw mut end_lnum,
@@ -516,7 +515,7 @@ pub unsafe fn nvim_win_text_height(
         // lines below its last line count too.
         //
         // SAFETY: `w` is live.
-        let end_fill = int64_t::from(unsafe { win_get_fill(w.raw(), line_count + 1) });
+        let end_fill = int64_t::from(unsafe { win_get_fill(w, line_count + 1) });
         fill += end_fill;
         all += end_fill;
     }

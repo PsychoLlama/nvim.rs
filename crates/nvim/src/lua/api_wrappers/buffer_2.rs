@@ -104,8 +104,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_lines(lstate: *mut lua_Sta
             err,
             err_param,
         } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }
@@ -297,8 +296,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_text(lstate: *mut lua_Stat
             err,
             err_param,
         } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }

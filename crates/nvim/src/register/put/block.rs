@@ -41,8 +41,7 @@ unsafe fn land_block(oldp: *mut c_char, col: colnr_T) -> Landing {
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window whose cursor is on `oldp`'s line, and `oldp` is
     // that line's NUL-terminated text.
-    let cstype =
-        unsafe { init_charsize_arg(&mut csarg, curwin.get(), cur_win().w_cursor.lnum, oldp) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), cur_win().w_cursor.lnum, oldp) };
 
     // Walk to the block's screen column, or to the end of the line.
     //
@@ -100,7 +99,7 @@ unsafe fn land_block(oldp: *mut c_char, col: colnr_T) -> Landing {
 unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window, and `line` is NUL-terminated.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), 0, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, line) };
     // SAFETY (all four): `ci` starts at `line` and `utfc_next` steps over one
     // whole character at a time, so it stays inside it; the `!= NUL` test in
     // front of the walk is what stops it at the end.
@@ -322,7 +321,7 @@ impl Put {
 
         let to = cur_buf().b_op_start.lnum + self.y_size as linenr_T - self.nr_lines;
         // SAFETY: a live buffer; the range is the lines the put rewrote.
-        unsafe { changed_lines(curbuf.get(), lnum, 0, to, self.nr_lines, true) };
+        changed_lines(cur_buf(), lnum, 0, to, self.nr_lines, true);
 
         cur_buf().b_op_start = cur_win().w_cursor;
         cur_buf().b_op_start.lnum = lnum;

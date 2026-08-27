@@ -120,13 +120,12 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     };
 
     // Should the replacement start with a capital?
-    let need_cap = unsafe {
-        check_need_cap(
-            curwin.get(),
-            cur_win().w_cursor.lnum,
-            cur_win().w_cursor.col,
-        )
-    };
+    //
+    // SAFETY: `curwin` is the window whose cursor position is passed with
+    // it, and the caller guarantees its spell state.
+    let lnum = cur_win().w_cursor.lnum;
+    let col = cur_win().w_cursor.col;
+    let need_cap = unsafe { check_need_cap(curwin.get(), lnum, col) };
 
     // Autocommands may free the line, so work from a copy.
     let line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize) };
@@ -138,17 +137,10 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     let mut sug: suginfo_T = unsafe { mem::zeroed() };
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
-    unsafe {
-        spell_find_suggest(
-            line.offset(cur_win().w_cursor.col as isize),
-            badlen,
-            su,
-            limit,
-            true,
-            need_cap,
-            true,
-        )
-    };
+    // SAFETY: `line` is the copy of the cursor line taken above, so the
+    // cursor's column is inside it, and `su` is the live `sug`.
+    let badword = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+    unsafe { spell_find_suggest(badword, badlen, su, limit, true, need_cap, true) };
 
     let mut selected = count;
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
@@ -158,13 +150,9 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
         if count > sug.su_ga.ga_len {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Only %ld suggestions".as_ptr()),
-                    sug.su_ga.ga_len as int64_t,
-                )
-            };
+            let fmt = unsafe { gettext(c"Only %ld suggestions".as_ptr()) };
+            let found = sug.su_ga.ga_len as int64_t;
+            unsafe { smsg_c!(0, fmt, found) };
         }
     } else {
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };
@@ -212,17 +200,11 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
         return Some(badlen.min(get_cursor_line_len() - cur_win().w_cursor.col));
     }
 
-    if unsafe {
-        spell_move_to(
-            curwin.get(),
-            FORWARD as c_int,
-            SMT_ALL,
-            true,
-            ptr::null_mut(),
-        )
-    } != 0
-        && cur_win().w_cursor.col <= prev_cursor.col
-    {
+    // SAFETY: `curwin` is set from startup to exit and the caller
+    // guarantees its spell state; a null `attrp` asks for no attribute.
+    let win = curwin.get();
+    let moved = unsafe { spell_move_to(win, FORWARD as c_int, SMT_ALL, true, ptr::null_mut()) };
+    if moved != 0 && cur_win().w_cursor.col <= prev_cursor.col {
         return Some(0);
     }
 
@@ -331,13 +313,12 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
     let extra = badlen - stp.st_orglen;
     if extra > 0 && stp.st_wordlen + extra <= MAXWLEN as c_int {
         debug_assert!(!badptr.is_null());
-        unsafe {
-            xmemcpyz(
-                wcopyp.offset(stp.st_wordlen as isize) as *mut c_void,
-                badptr.offset(stp.st_orglen as isize) as *const c_void,
-                extra as usize,
-            )
-        };
+        // SAFETY: the test above leaves `st_wordlen + extra` under
+        // `MAXWLEN`, so the copy fits in `wcopy`, and `extra` bytes of the
+        // bad word really do follow what the suggestion replaces.
+        let tail = unsafe { wcopyp.offset(stp.st_wordlen as isize) };
+        let rest = unsafe { badptr.offset(stp.st_orglen as isize) };
+        unsafe { xmemcpyz(tail as *mut c_void, rest as *const c_void, extra as usize) };
     }
 
     unsafe { vim_snprintf(out, IOSIZE as usize, c"%2d".as_ptr(), i + 1) };
@@ -351,15 +332,8 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
 
     // The word may replace more than the bad word does.
     if badlen < stp.st_orglen {
-        unsafe {
-            vim_snprintf(
-                out,
-                IOSIZE as usize,
-                gettext(c" < \"%.*s\"".as_ptr()),
-                stp.st_orglen,
-                badptr,
-            )
-        };
+        let fmt = unsafe { gettext(c" < \"%.*s\"".as_ptr()) };
+        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.st_orglen, badptr) };
         unsafe { msg_puts(out) };
     }
 
@@ -381,20 +355,14 @@ unsafe fn show_score(stp: &suggest_T) {
     // SAFETY: the caller guarantees the suggestion; the format strings and
     // `IObuff`'s size match.
     if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
-        unsafe {
-            vim_snprintf(
-                out,
-                IOSIZE as usize,
-                c" (%s%d - %d)".as_ptr(),
-                if stp.st_salscore {
-                    c"s ".as_ptr()
-                } else {
-                    c"".as_ptr()
-                },
-                stp.st_score,
-                stp.st_altscore,
-            )
+        let salscore = if stp.st_salscore {
+            c"s ".as_ptr()
+        } else {
+            c"".as_ptr()
         };
+        let fmt = c" (%s%d - %d)".as_ptr();
+        let (score, altscore) = (stp.st_score, stp.st_altscore);
+        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, salscore, score, altscore) };
     } else {
         unsafe { vim_snprintf(out, IOSIZE as usize, c" (%d)".as_ptr(), stp.st_score) };
     }
@@ -431,16 +399,14 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
         // Replacing less than the bad word: what is left of it goes on
         // the end of the replacement.
         repl_from.set(unsafe { xstrnsave(sug.su_badptr, sug.su_badlen as usize) });
-        unsafe {
-            vim_snprintf(
-                repl.as_mut_ptr(),
-                IOSIZE as usize,
-                c"%s%.*s".as_ptr(),
-                stp.st_word,
-                sug.su_badlen - stp.st_orglen,
-                sug.su_badptr.offset(stp.st_orglen as isize),
-            )
-        };
+        // SAFETY: `su_badptr` points into the line and the suggestion
+        // replaces `st_orglen` of its bytes, so what is left of the bad
+        // word starts there; `repl` is `IOSIZE`, which is the bound given.
+        let rest = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
+        let restlen = sug.su_badlen - stp.st_orglen;
+        let fmt = c"%s%.*s".as_ptr();
+        let out = repl.as_mut_ptr();
+        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.st_word, restlen, rest) };
         repl_to.set(unsafe { xstrdup(repl.as_ptr()) });
     } else {
         // Replacing the whole bad word, or more of the line than it
@@ -451,9 +417,8 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
 
     // Build the new line: what came before the bad word, the
     // suggestion, and what came after what it replaces.
-    let newline = unsafe {
-        xmalloc(strlen(line) as usize - stp.st_orglen as usize + stp.st_wordlen as usize + 1)
-    } as *mut c_char;
+    let size = unsafe { strlen(line) } as usize - stp.st_orglen as usize + stp.st_wordlen as usize;
+    let newline = unsafe { xmalloc(size + 1) } as *mut c_char;
     let col = unsafe { sug.su_badptr.offset_from(line) } as c_int;
     unsafe { memmove(newline as *mut c_void, line as *const c_void, col as usize) };
     unsafe { strcpy(newline.offset(col as isize), stp.st_word) };
@@ -462,25 +427,19 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
     // Redo is a change-word command.
     unsafe { reset_redobuff() };
     unsafe { append_to_redobuff(c"ciw".as_ptr()) };
-    unsafe {
-        append_to_redobuff_literally(
-            newline.offset(col as isize),
-            stp.st_wordlen + sug.su_badlen - stp.st_orglen,
-        )
-    };
+    // SAFETY: the replacement starts at `col` in `newline` and is that many
+    // bytes long, all of them inside the buffer sized above.
+    let replaced = unsafe { newline.offset(col as isize) };
+    let replaced_len = stp.st_wordlen + sug.su_badlen - stp.st_orglen;
+    unsafe { append_to_redobuff_literally(replaced, replaced_len) };
     append_to_redobuff_char(ESC);
 
     // `newline` may be freed here.
     unsafe { ml_replace(cur_win().w_cursor.lnum, newline, false) };
     cur_win().w_cursor.col = col as colnr_T;
-    unsafe {
-        inserted_bytes(
-            cur_win().w_cursor.lnum,
-            col as colnr_T,
-            stp.st_orglen,
-            stp.st_wordlen,
-        )
-    };
+    // SAFETY: the cursor is on the line just replaced.
+    let lnum = cur_win().w_cursor.lnum;
+    unsafe { inserted_bytes(lnum, col as colnr_T, stp.st_orglen, stp.st_wordlen) };
 }
 
 /// The window the editor is working in.

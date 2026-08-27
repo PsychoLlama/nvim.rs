@@ -203,7 +203,7 @@ fn clone_folds(from: *mut garray_T, to: *mut garray_T) {
 
 fn clear_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { clear_folding(win.raw()) };
+    clear_folding(win);
 }
 
 fn didset_options(mut win: Win) {
@@ -211,15 +211,14 @@ fn didset_options(mut win: Win) {
     unsafe { didset_window_options(win.raw(), false) };
 }
 
-fn set_minimal_style(mut win: Win) {
-    // SAFETY: a live window.
-    unsafe { win_set_minimal_style(win.raw()) };
+fn set_minimal_style(win: Win) {
+    win_set_minimal_style(win);
 }
 
 /// The view (topline offset and skipcol) `win` would restore `pos` with.
-fn view_of(win: *mut win_T, pos: pos_T) -> fmarkv_T {
+fn view_of(win: Win, pos: pos_T) -> fmarkv_T {
     // SAFETY: a live window.
-    unsafe { mark_view_make(win, pos) }
+    unsafe { mark_view_make(win.raw(), pos) }
 }
 
 fn current_win() -> Win {
@@ -233,23 +232,23 @@ fn current_win() -> Win {
 /// Remember `lnum`/`col` (and, with `copy_options`, the window-local options
 /// and folds) as where `win` was in `buf`.
 ///
-/// `win` may be null: `:badd` records a position for no window at all.
+/// `win` is `None` for `:badd`, which records a position for no window at
+/// all.
 pub unsafe fn buflist_setfpos(
-    buf: *mut buf_T,
-    win: *mut win_T,
+    mut buf: Buf,
+    win: Option<Win>,
     mut lnum: linenr_T,
     col: colnr_T,
     copy_options: bool,
 ) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let raw_win = win.map_or(ptr::null_mut(), Win::raw);
     let mut list = WinInfos::of(&mut buf);
 
-    let found = list.entries().iter().position(|e| e.window() == win);
+    let found = list.entries().iter().position(|e| e.window() == raw_win);
     let mut entry = match found {
         None => {
             let mut entry = Entry::new();
-            entry.wi_win = win;
+            entry.wi_win = raw_win;
             if lnum == 0 as linenr_T {
                 // Set lnum even when it is 0.
                 lnum = 1 as linenr_T;
@@ -270,19 +269,16 @@ pub unsafe fn buflist_setfpos(
     if lnum != 0 as linenr_T {
         entry.wi_mark.mark.lnum = lnum;
         entry.wi_mark.mark.col = col;
-        if !win.is_null() {
+        if let Some(win) = win {
             entry.wi_mark.view = view_of(win, entry.wi_mark.mark);
         }
     }
-    if !win.is_null() {
-        // SAFETY: a live window, the caller having ruled out null.
-        entry.wi_changelistidx = unsafe { Win::new(win) }.w_changelistidx;
+    if let Some(win) = win {
+        entry.wi_changelistidx = win.w_changelistidx;
     }
-    if copy_options && !win.is_null() {
+    if copy_options && let Some(mut win) = win {
         // Save the window-specific option values.
-        // SAFETY: a live window.
-        let mut w = unsafe { Win::new(win) };
-        copy_options_from(&mut w, &mut entry);
+        copy_options_from(&mut win, &mut entry);
     }
 
     list.push_front(entry);
@@ -350,9 +346,7 @@ fn find_wininfo(buf: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Op
 /// Reset the current window's buffer-local options to the values last used
 /// in this window; failing that, to the most recently used window's; failing
 /// that, to the window's own global values.
-pub unsafe fn get_winopts(buf: *mut buf_T) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub unsafe fn get_winopts(mut buf: Buf) {
     let mut cur = current_win();
     clear_options(&raw mut cur.w_onebuf_opt);
     clear_window_folds(cur);
@@ -405,7 +399,7 @@ pub unsafe fn get_winopts(buf: *mut buf_T) {
 
 /// The mark for `buf` in the current window, or a pointer to `no_position`
 /// when there is none.
-pub unsafe fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
+pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
     static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
             lnum: 1 as linenr_T,
@@ -420,8 +414,6 @@ pub unsafe fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
         },
         additional_data: ptr::null_mut::<AdditionalData>(),
     });
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
     match find_wininfo(&mut buf, false, false) {
         // The one place the shared "no position" is handed out: callers get
         // a pointer to it exactly as they do to an entry's own mark, which
@@ -431,8 +423,8 @@ pub unsafe fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
     }
 }
 
-pub unsafe fn buflist_findlnum(buf: *mut buf_T) -> linenr_T {
-    // SAFETY: the caller's promise -- a live buffer; the answer is a live
-    // mark.
+pub unsafe fn buflist_findlnum(buf: Buf) -> linenr_T {
+    // SAFETY: the answer is a live mark -- an entry's own, or the shared
+    // "no position".
     unsafe { (*buflist_findfmark(buf)).mark.lnum }
 }

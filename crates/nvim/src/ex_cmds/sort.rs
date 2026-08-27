@@ -43,7 +43,7 @@ use crate::types::{
     ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 use ::libc::{memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_void};
@@ -629,7 +629,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
                     kExtmarkUndo,
                 )
             };
-            unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true) };
+            unsafe { changed_lines(Buf::new(curbuf.get()), line1, 0, line2 + 1, -deleted, true) };
         }
 
         cur_win().w_cursor.lnum = line1;
@@ -907,7 +907,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
         };
         unsafe { msgmore(-deleted) };
         if change_occurred {
-            unsafe { changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true) };
+            unsafe { changed_lines(Buf::new(curbuf.get()), line1, 0, line2 + 1, -deleted, true) };
         }
         cur_win().w_cursor.lnum = line1;
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

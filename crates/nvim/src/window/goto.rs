@@ -299,13 +299,13 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     // sync undo before leaving the current buffer
     if flags & WEE_UNDO_SYNC as c_int != 0 && curbuf.get() != wp.w_buffer {
         // SAFETY: reads the current buffer's undo state.
-        unsafe { u_sync(false) };
+        u_sync(false);
     }
     // Might need to scroll the old window before switching, e.g. when the
     // cursor was moved.
     if split_keep_cursor() && !curwin_invalid {
         // SAFETY: a live window.
-        unsafe { update_topline(curwin.get()) };
+        update_topline(unsafe { Win::current() });
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
     if wp.w_buffer != curbuf.get() {
@@ -322,7 +322,7 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
 
     revalidate_cursor(cur_win());
     // SAFETY: a live window.
-    if !unsafe { virtual_active(curwin.get()) } {
+    if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;
     }
     if split_keep_cursor() {

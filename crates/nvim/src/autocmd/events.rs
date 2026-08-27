@@ -32,21 +32,23 @@ pub unsafe fn event_name2nr(
     start: *const ::core::ffi::c_char,
     end: *mut *mut ::core::ffi::c_char,
 ) -> event_T {
-    unsafe {
-        let rest = CStr::from_ptr(start).to_bytes();
-        let len = rest
-            .iter()
-            .position(|&c| ascii_iswhite(c as ::core::ffi::c_int) || c == b',' || c == b'|')
-            .unwrap_or(rest.len());
-        let found = event_name_index(&rest[..len]);
-        // A separating comma belongs to the name just measured, not to the
-        // next one; anything else the caller has to step over itself.
-        let consumed = len + usize::from(rest.get(len) == Some(&b','));
-        *end = start.add(consumed).cast_mut();
-        match found {
-            Some(at) => EVENT_NAMES[at].event.unsigned_abs(),
-            None => NUM_EVENTS,
-        }
+    // SAFETY: the caller's `start` is a NUL-terminated string, so the name
+    // and its terminator are one allocation the borrow below stays inside.
+    let rest = unsafe { CStr::from_ptr(start) }.to_bytes();
+    let len = rest
+        .iter()
+        .position(|&c| ascii_iswhite(c as ::core::ffi::c_int) || c == b',' || c == b'|')
+        .unwrap_or(rest.len());
+    let found = event_name_index(&rest[..len]);
+    // A separating comma belongs to the name just measured, not to the
+    // next one; anything else the caller has to step over itself.
+    let consumed = len + usize::from(rest.get(len) == Some(&b','));
+    // SAFETY: `consumed` is at most `rest.len()`, so the offset lands on or
+    // before the NUL, and `end` is the caller's out-parameter.
+    unsafe { *end = start.add(consumed).cast_mut() };
+    match found {
+        Some(at) => EVENT_NAMES[at].event.unsigned_abs(),
+        None => NUM_EVENTS,
     }
 }
 
@@ -86,23 +88,24 @@ pub fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
 /// covers only the window-local events, which is what the sign of a row's
 /// `event` records.
 pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) -> bool {
-    unsafe {
-        let mut ignored = false;
-        while *ei != 0 {
-            let unignore = *ei == b'-' as ::core::ffi::c_char;
-            ei = ei.add(usize::from(unignore));
-            if let Some(after_all) = skip_all(ei) {
-                ignored = ei == p_ei.get() || event_row(event).event <= 0;
-                ei = after_all;
-            } else if event_name2nr(ei, &raw mut ei) == event {
-                if unignore {
-                    return false;
-                }
-                ignored = true;
+    let mut ignored = false;
+    // SAFETY: `ei` is a NUL-terminated option value, so the walk stops at
+    // its end.  `skip_all` and `event_name2nr` take the same contract, and
+    // only ever hand back a position inside the same string.
+    while unsafe { *ei } != 0 {
+        let unignore = unsafe { *ei } == b'-' as ::core::ffi::c_char;
+        ei = unsafe { ei.add(usize::from(unignore)) };
+        if let Some(after_all) = unsafe { skip_all(ei) } {
+            ignored = ei == p_ei.get() || event_row(event).event <= 0;
+            ei = after_all;
+        } else if unsafe { event_name2nr(ei, &raw mut ei) } == event {
+            if unignore {
+                return false;
             }
+            ignored = true;
         }
-        ignored
     }
+    ignored
 }
 
 /// `OK` when `ei` -- a value of 'eventignore' or 'eventignorewin' -- is a
@@ -111,21 +114,21 @@ pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) ->
 /// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
 /// the window-local events.
 pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    unsafe {
-        let win = ei != p_ei.get();
-        while *ei != 0 {
-            if let Some(after_all) = skip_all(ei) {
-                ei = after_all;
-            } else {
-                ei = ei.add(usize::from(*ei == b'-' as ::core::ffi::c_char));
-                let event = event_name2nr(ei, &raw mut ei);
-                if event == NUM_EVENTS || (win && event_row(event).event > 0) {
-                    return FAIL;
-                }
+    let win = ei != p_ei.get();
+    // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
+    // value, and every step below stays within it.
+    while unsafe { *ei } != 0 {
+        if let Some(after_all) = unsafe { skip_all(ei) } {
+            ei = after_all;
+        } else {
+            ei = unsafe { ei.add(usize::from(*ei == b'-' as ::core::ffi::c_char)) };
+            let event = unsafe { event_name2nr(ei, &raw mut ei) };
+            if event == NUM_EVENTS || (win && event_row(event).event > 0) {
+                return FAIL;
             }
         }
-        OK
     }
+    OK
 }
 
 /// The rest of `ei` past a leading `all` item, or `None` when there is not
@@ -135,62 +138,74 @@ pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
 /// locale's, and it stops at the first mismatch -- so a string shorter than
 /// `all` is rejected without `ei[3]` ever being read.
 unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_char> {
-    unsafe {
-        if strncasecmp(ei, c"all".as_ptr(), 3) != 0 {
-            return None;
-        }
-        let after = *ei.add(3);
-        if after != 0 && after != b',' as ::core::ffi::c_char {
-            return None;
-        }
-        Some(ei.add(3 + usize::from(after == b',' as ::core::ffi::c_char)))
+    // SAFETY: `ei` is NUL-terminated, so the comparison reads at most three
+    // bytes of it and stops at the first mismatch -- a shorter string
+    // mismatches on its NUL rather than reading past it.
+    if unsafe { strncasecmp(ei, c"all".as_ptr(), 3) } != 0 {
+        return None;
     }
+    // SAFETY: the three bytes matched, so `ei[3]` is in bounds: it is the
+    // NUL, or the byte that follows `all`.
+    let after = unsafe { *ei.add(3) };
+    if after != 0 && after != b',' as ::core::ffi::c_char {
+        return None;
+    }
+    // SAFETY: as above, and a comma at `ei[3]` is followed by a byte too.
+    Some(unsafe { ei.add(3 + usize::from(after == b',' as ::core::ffi::c_char)) })
 }
 
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
 /// the old value in allocated memory for [`au_event_restore`].
 pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let p_ei_len = strlen(p_ei.get());
-        let save_ei = xmemdupz(p_ei.get().cast::<::core::ffi::c_void>(), p_ei_len)
-            .cast::<::core::ffi::c_char>();
-        let new_ei = xstrnsave(p_ei.get(), p_ei_len.wrapping_add(strlen(what)));
-        if *what == b',' as ::core::ffi::c_char && *p_ei.get() == 0 {
-            strcpy(new_ei, what.add(1));
-        } else {
-            strcpy(new_ei.add(p_ei_len), what);
-        }
-        set_option_eventignore(new_ei);
-        xfree(new_ei.cast::<::core::ffi::c_void>());
-        save_ei
+    // SAFETY: 'eventignore' holds a NUL-terminated value and `what` is the
+    // caller's NUL-terminated string, so both lengths are the strings' own.
+    let p_ei_len = unsafe { strlen(p_ei.get()) };
+    // SAFETY: `p_ei_len` bytes of the option value, copied out.
+    let save_ei = unsafe { xmemdupz(p_ei.get().cast::<::core::ffi::c_void>(), p_ei_len) }
+        .cast::<::core::ffi::c_char>();
+    // SAFETY: room for the old value and `what`, whichever way they are
+    // joined below.
+    let new_ei = unsafe { xstrnsave(p_ei.get(), p_ei_len.wrapping_add(strlen(what))) };
+    if unsafe { *what } == b',' as ::core::ffi::c_char && unsafe { *p_ei.get() } == 0 {
+        // SAFETY: `what` without its leading comma is shorter still.
+        unsafe { strcpy(new_ei, what.add(1)) };
+    } else {
+        // SAFETY: `new_ei` opens with the old value, so `what` fits after
+        // its `p_ei_len` bytes.
+        unsafe { strcpy(new_ei.add(p_ei_len), what) };
     }
+    // SAFETY: `new_ei` is NUL-terminated, and the option copies it rather
+    // than taking it, so it can be freed right after.
+    unsafe { set_option_eventignore(new_ei) };
+    unsafe { xfree(new_ei.cast::<::core::ffi::c_void>()) };
+    save_ei
 }
 
 /// Put back what [`au_event_disable`] saved, and free it.
 pub unsafe fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
-    unsafe {
-        if !old_ei.is_null() {
-            set_option_eventignore(old_ei);
-            xfree(old_ei.cast::<::core::ffi::c_void>());
-        }
+    if !old_ei.is_null() {
+        // SAFETY: by the contract this is what `au_event_disable` answered:
+        // a NUL-terminated string it allocated and nobody else owns.
+        unsafe { set_option_eventignore(old_ei) };
+        unsafe { xfree(old_ei.cast::<::core::ffi::c_void>()) };
     }
 }
 
 /// Set 'eventignore' to a NUL-terminated string, without an owner.
 unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
-    unsafe {
-        set_option_direct(
-            kOptEventignore,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(value),
-                },
-            },
-            OptionSetFlags::NONE,
-            SID_NONE,
-        );
-    }
+    // SAFETY: `value` is the caller's NUL-terminated string.  The `String_0`
+    // borrows it rather than owning it, and only for the call below, which
+    // copies what it is given.
+    let string = unsafe { cstr_as_string(value) };
+    set_option_direct(
+        kOptEventignore,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData { string },
+        },
+        OptionSetFlags::NONE,
+        SID_NONE,
+    );
 }
 
 /// Whether any autocommand is defined for `event`.
@@ -202,7 +217,10 @@ pub fn has_event(event: event_T) -> bool {
 }
 
 /// Whether a `CursorHold` autocommand exists for the mode we are in.
-unsafe fn has_cursorhold() -> bool {
+///
+/// Safe: it only asks the event table and the editor's mode, both of which
+/// are live for as long as the editor is.
+fn has_cursorhold() -> bool {
     has_event(if get_real_state() == MODE_NORMAL_BUSY {
         EVENT_CURSORHOLD
     } else {
@@ -212,19 +230,21 @@ unsafe fn has_cursorhold() -> bool {
 
 /// Whether `CursorHold` should fire now: one is defined, nothing else is
 /// pending, and we are in a mode that has one.
-pub unsafe fn trigger_cursorhold() -> bool {
-    unsafe {
-        if did_cursorhold.get()
-            || !has_cursorhold()
-            || reg_recording.get() != 0
-            || !typeahead().is_empty()
-            || ins_compl_active()
-        {
-            return false;
-        }
-        let state = get_real_state();
-        state == MODE_NORMAL_BUSY || state & MODE_INSERT != 0
+///
+/// Safe: every question it asks is of the editor's own state -- the event
+/// table, the typeahead, the recording register -- and takes no pointer
+/// from the caller.
+pub fn trigger_cursorhold() -> bool {
+    if did_cursorhold.get()
+        || !has_cursorhold()
+        || reg_recording.get() != 0
+        || !typeahead().is_empty()
+        || ins_compl_active()
+    {
+        return false;
     }
+    let state = get_real_state();
+    state == MODE_NORMAL_BUSY || state & MODE_INSERT != 0
 }
 
 /// Completion source for `:autocmd`'s event argument: the augroup names
@@ -233,20 +253,19 @@ pub unsafe fn expand_get_event_name(
     _xp: *mut expand_T,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let name = augroup_name(idx + 1);
-        if !name.is_null() {
-            // Skip the group, but keep it in the numbering: the caller
-            // walks `idx` up until this answers null.
-            if !autocmd_include_groups.get() || name.cast_const() == get_deleted_augroup() {
-                return c"".as_ptr().cast_mut();
-            }
-            return name;
+    // `augroup_name` answers null once `idx` walks past the last group.
+    let name = augroup_name(idx + 1);
+    if !name.is_null() {
+        // Skip the group, but keep it in the numbering: the caller
+        // walks `idx` up until this answers null.
+        if !autocmd_include_groups.get() || name.cast_const() == get_deleted_augroup() {
+            return c"".as_ptr().cast_mut();
         }
-        match usize::try_from(idx - next_augroup_id.get()) {
-            Ok(i) if i < EVENT_NAMES.len() => EVENT_NAMES[i].name.as_ptr().cast_mut(),
-            _ => ::core::ptr::null_mut(),
-        }
+        return name;
+    }
+    match usize::try_from(idx - next_augroup_id.get()) {
+        Ok(i) if i < EVENT_NAMES.len() => EVENT_NAMES[i].name.as_ptr().cast_mut(),
+        _ => ::core::ptr::null_mut(),
     }
 }
 
@@ -274,10 +293,10 @@ pub fn get_event_name_no_group(
 
 /// Whether `event` -- a NUL-terminated name -- is an event nvim has.
 pub unsafe fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
-    unsafe {
-        let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        event_name2nr(event, &raw mut end) != NUM_EVENTS
-    }
+    let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    // SAFETY: `event` is a NUL-terminated name by the contract, and `end` is
+    // a local for the position `event_name2nr` reports back.
+    unsafe { event_name2nr(event, &raw mut end) != NUM_EVENTS }
 }
 
 /// ASCII-case-folded comparison, the order [`EVENT_NAMES`] is in.

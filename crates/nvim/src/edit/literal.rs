@@ -36,7 +36,7 @@ pub(crate) fn ins_ctrl_v() {
     unsafe { ins_redraw(false) };
 
     let mut did_putchar = false;
-    if unsafe { redrawing() } && !unsafe { char_avail() } {
+    if unsafe { redrawing() } && !char_avail() {
         unsafe { edit_putchar('^' as c_int, true) };
         did_putchar = true;
     }
@@ -90,7 +90,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
     let mut i = 0;
     let mut nc;
     loop {
-        nc = unsafe { plain_vgetc() };
+        nc = plain_vgetc();
         if !no_simplify {
             nc = merge_mod_mask(nc);
         }
@@ -242,7 +242,7 @@ pub(crate) fn ins_digraph() -> c_int {
     // every step stops at the NUL.
     let mut did_putchar = false;
     pc_status.set(PutChar::Unset);
-    if unsafe { redrawing() } && !unsafe { char_avail() } {
+    if unsafe { redrawing() } && !char_avail() {
         unsafe { ins_redraw(false) };
         unsafe { edit_putchar('?' as c_int, true) };
         did_putchar = true;
@@ -251,7 +251,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
     let mut c = {
         let _raw_key = Keys::unmapped_with_codes();
-        unsafe { plain_vgetc() }
+        plain_vgetc()
     };
     if did_putchar {
         // If the line fits in 'columns' the `?` is at the start of the
@@ -267,7 +267,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
     if c != ESC {
         did_putchar = false;
-        if unsafe { redrawing() } && !unsafe { char_avail() } {
+        if unsafe { redrawing() } && !char_avail() {
             unsafe { ins_redraw(false) };
             if unsafe { char2cells(c) } == 1 {
                 unsafe { ins_redraw(false) };
@@ -279,7 +279,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
         let cc = {
             let _raw_key = Keys::unmapped_with_codes();
-            unsafe { plain_vgetc() }
+            plain_vgetc()
         };
         if did_putchar {
             unsafe { edit_unputchar() };
@@ -317,12 +317,12 @@ pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
     }
 
     // Try to advance to the cursor column.
-    unsafe { validate_virtcol(curwin.get()) };
+    validate_virtcol(unsafe { Win::current() });
     let end_vcol = cur_win().w_virtcol;
     let line = ml_get(lnum);
 
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = 0;
     while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {

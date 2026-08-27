@@ -44,7 +44,6 @@ use crate::pos::MAXLNUM;
 use crate::types::{
     CpoFlag, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, ShmFlag, String_0,
     StringBuilder, aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
-    win_T,
 };
 use crate::winlayer::buffers;
 use ::libc::strcmp;
@@ -84,15 +83,14 @@ fn permissions_of(fname: *mut c_char) -> c_int {
     unsafe { os_getperm(fname) as c_int }
 }
 
-fn set_changed(mut buf: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { changed(buf.raw()) };
+fn set_changed(buf: Buf) {
+    // SAFETY: a live buffer, which survives the autocommands it may fire.
+    unsafe { changed(buf) };
 }
 
 /// Remember the file format the buffer was read with.
-fn save_fileformat(mut buf: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { save_file_ff(buf.raw()) };
+fn save_fileformat(buf: Buf) {
+    save_file_ff(buf);
 }
 
 fn init_chartab(mut buf: Buf) {
@@ -102,7 +100,7 @@ fn init_chartab(mut buf: Buf) {
 
 fn parse_cindent_options(mut buf: Buf) {
     // SAFETY: a live buffer.
-    unsafe { parse_cino(buf.raw()) };
+    unsafe { parse_cino(buf) };
 }
 
 /// Whether this buffer has no readable file behind its name.
@@ -130,7 +128,7 @@ fn empty_buffer(mut buf: Buf) -> bool {
 /// `b:changedtick`.
 fn changedtick(mut buf: Buf) -> varnumber_T {
     // SAFETY: a live buffer.
-    unsafe { buf_get_changedtick(buf.raw()) }
+    buf_get_changedtick(buf)
 }
 
 /// Leave the editor with exit code `n` -- never returns.
@@ -141,9 +139,9 @@ fn bail_out(n: c_int) {
 
 /// Fill in `eap` with the file format and encoding of `buf`, as the reload
 /// paths need.
-fn prepare_exarg(eap: &mut exarg_T, mut buf: Buf) {
-    // SAFETY: a local to fill in, and a live buffer.
-    unsafe { prep_exarg(eap, buf.raw()) };
+fn prepare_exarg(eap: &mut exarg_T, buf: Buf) {
+    // SAFETY: a local to fill in.
+    unsafe { prep_exarg(eap, buf) };
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
@@ -271,11 +269,7 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> c_int {
 
 /// Ensure buffer `buf` is loaded.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_ensure_loaded(buf: *mut buf_T) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+pub fn buf_ensure_loaded(buf: Buf) -> bool {
     if !buf.b_ml.ml_mfp.is_null() {
         // already open (common case)
         return true;
@@ -461,8 +455,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 /// There MUST be a memfile, otherwise we can't do anything.  If we can't
 /// create one for the current buffer, take another buffer.
 fn no_memfile(old_tw: OptInt) -> c_int {
-    // SAFETY: the current buffer, which has not been freed yet.
-    unsafe { close_buffer(ptr::null_mut::<win_T>(), curbuf.get(), 0, false, false) };
+    close_buffer(None, cur_buf(), 0, false, false);
 
     curbuf.set(ptr::null_mut::<buf_T>());
     if let Some(buf) = buffers().find(|b| !b.b_ml.ml_mfp.is_null()) {
@@ -509,11 +502,7 @@ fn set_dirty(mut buf: Buf, state: MfDirty) {
 ///
 /// The file is read into a hidden dummy buffer and compared line by line.
 ///
-/// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_contents_changed(buf: *mut buf_T) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+pub fn buf_contents_changed(buf: Buf) -> bool {
     let mut differ = true;
 
     // SAFETY: two null names ask for a nameless buffer.
@@ -541,7 +530,7 @@ pub unsafe fn buf_contents_changed(buf: *mut buf_T) -> bool {
     if cur_buf() != newbuf {
         // SAFETY: `buflist_new` answered it and nothing has freed it: the
         // dummy is not in any window, so `close_buffer` cannot have run.
-        unsafe { wipe_buffer(newbuf.raw(), false) };
+        wipe_buffer(newbuf, false);
     }
     unblock_autocmds_now();
     differ
@@ -565,7 +554,7 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> c_int {
     if !bufname.is_null() {
         fire(EVENT_BUFFILEPRE, cur_buf());
         // SAFETY: the current buffer, and the caller's NUL-terminated name.
-        unsafe { setfname(curbuf.get(), bufname, ptr::null_mut(), true) };
+        unsafe { setfname(cur_buf(), bufname, ptr::null_mut(), true) };
         fire(EVENT_BUFFILEPOST, cur_buf());
     }
     set_option_string(kOptBufhidden, c"hide");
@@ -581,18 +570,12 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> c_int {
 /// buffer's embedded NULs translated back from newlines.
 ///
 /// # Safety
-/// `buf` must be a live buffer, `sb` a live `StringBuilder`, and `start` and
-/// `end` lines of the buffer.
-pub unsafe fn read_buffer_into(
-    buf: *mut buf_T,
-    start: linenr_T,
-    end: linenr_T,
-    sb: *mut StringBuilder,
-) {
-    debug_assert!(!buf.is_null(), "buf");
+/// `sb` must be a live `StringBuilder`, and `start` and `end` lines of the
+/// buffer.
+pub unsafe fn read_buffer_into(buf: Buf, start: linenr_T, end: linenr_T, sb: *mut StringBuilder) {
     debug_assert!(!sb.is_null(), "sb");
-    // SAFETY: the caller's promise -- a live buffer and a live builder.
-    let (buf, mut out) = unsafe { (Buf::new(buf), Builder::of(&mut *sb)) };
+    // SAFETY: the caller's promise -- a live builder.
+    let mut out = unsafe { Builder::of(&mut *sb) };
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         return;
     }

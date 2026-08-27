@@ -59,14 +59,14 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
         let tail = (cc.len() - j).max(0) as usize;
         unsafe { ::core::ptr::copy(cc.at(j), cc.at(cc.cmdpos), tail) };
         cc.set_len(cc.len() - (j - cc.cmdpos));
-        if cc.len() == 0 {
+        if cc.is_empty() {
             s.is_state.search_start = s.is_state.save_cursor;
             // Save the view settings, so that the screen won't be
             // restored at the wrong position.
             s.is_state.old_viewstate = s.is_state.init_viewstate;
         }
         unsafe { redrawcmd() };
-    } else if cc.len() == 0 && s.c != Ctrl_W && cc.cmdprompt.is_null() && s.indent == 0 {
+    } else if cc.is_empty() && s.c != Ctrl_W && cc.cmdprompt.is_null() && s.indent == 0 {
         // In ex and debug mode it doesn't make sense to return.
         if exmode_active.get() || cc.cmdfirstc == '>' as ::core::ffi::c_int {
             return KeyOutcome::NotChanged;
@@ -126,13 +126,13 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
 
     unsafe { putcmdline('"' as ::core::ffi::c_char, true) };
     let raw_key = Keys::unmapped_with_codes();
-    s.c = unsafe { plain_vgetc() }; // CTRL-R <char>
+    s.c = plain_vgetc(); // CTRL-R <char>
     let mut i = s.c;
     if i == Ctrl_O {
         i = Ctrl_R; // CTRL-R CTRL-O == CTRL-R CTRL-R
     }
     if i == Ctrl_R {
-        s.c = unsafe { plain_vgetc() }; // CTRL-R CTRL-R <char>
+        s.c = plain_vgetc(); // CTRL-R CTRL-R <char>
     }
     drop(raw_key);
 
@@ -245,7 +245,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             unsafe { ::core::ptr::copy(cc.at(j), cc.at(0), tail) };
             cc.cmdpos = 0;
             cc.set_len(cc.len() - j);
-            if cc.len() == 0 {
+            if cc.is_empty() {
                 s.is_state.search_start = s.is_state.save_cursor;
             }
             unsafe { redrawcmd() };

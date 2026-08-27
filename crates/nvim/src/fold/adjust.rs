@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{State, curwin, p_sel};
+use crate::main::{State, p_sel};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
@@ -34,15 +34,12 @@ use crate::state::MODE_INSERT;
 /// The current window must be live.
 pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval: c_int = FAIL;
-    // SAFETY: the caller's promise.
-    unsafe { checkupdate(curwin.get()) };
+    checkupdate(cur_win());
     for _ in 0..count {
-        // SAFETY: the caller's promise.
-        let mut folds = unsafe { window_folds(curwin.get()) };
+        let mut folds = window_folds(cur_win());
         if folds.is_empty() {
             break;
         }
-        // SAFETY: the caller's promise.
         let cursor = cur_win().w_cursor.lnum;
         let mut lnum_off: linenr_T = 0;
         let mut use_level = false;
@@ -80,7 +77,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
                 // SAFETY: the current window is live, and `fold` is one of
                 // its own folds, `lnum_off` lines down the tree.
                 let (ul, ms) = (&mut use_level, &mut maybe_small);
-                let closed = unsafe { check_closed(curwin.get(), fold, ul, level, ms, lnum_off) };
+                let closed = unsafe { check_closed(cur_win(), fold, ul, level, ms, lnum_off) };
                 if closed {
                     last = true;
                 }
@@ -141,36 +138,44 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
 /// The current window must be live.
 pub unsafe fn fold_adjust_visual() {
     // SAFETY: the caller's promise.
-    if !visual_active() || unsafe { has_any_folding(curwin.get()) } == 0 {
+    let win = unsafe { Win::current() };
+    if !visual_active() || has_any_folding(win) == 0 {
         return;
     }
     // The anchor is adjusted as a *copy* and put back: `has_folding` may
     // evaluate 'foldexpr', which is user code that reads the same global, so
     // it must not be held open across the call.
     let stretched = with_visual_anchor(|anchor| {
-        let visual = &raw mut *anchor;
-        // SAFETY: the caller's promise; both ends name live `pos_T`s.
-        let cursor = cur_win().cursor().raw();
-        let (start, end) = if ltoreq(unsafe { *visual }, unsafe { *cursor }) {
-            (visual, cursor)
+        let mut cursor = win.cursor();
+        // Which end of the selection is the earlier one; each end is read and
+        // written back where it came from, in the order the C writes them.
+        let anchor_first = ltoreq(*anchor, *cursor);
+
+        // The earlier end stretches back to the first line of its fold.
+        let mut start = if anchor_first { *anchor } else { *cursor };
+        if has_folding(win, start.lnum, Some(&mut start.lnum), None) {
+            start.col = 0;
+        }
+        if anchor_first {
+            *anchor = start;
         } else {
-            (cursor, visual)
-        };
-        // SAFETY: both ends name live `pos_T`s of this frame or the window,
-        // and `curwin` is live.
-        unsafe {
-            let w = curwin.get();
-            let (sl, el) = (&raw mut (*start).lnum, &raw mut (*end).lnum);
-            if has_folding(w, (*start).lnum, sl, ptr::null_mut()) {
-                (*start).col = 0;
-            }
-            if !has_folding(w, (*end).lnum, ptr::null_mut(), el) {
-                return false;
-            }
-            (*end).col = ml_get_len((*end).lnum);
-            if (*end).col > 0 && *p_sel.get() as c_int == 'o' as c_int {
-                (*end).col -= 1;
-            }
+            *cursor = start;
+        }
+
+        // The later end stretches forward to the last line of its own.
+        let mut end = if anchor_first { *cursor } else { *anchor };
+        if !has_folding(win, end.lnum, None, Some(&mut end.lnum)) {
+            return false;
+        }
+        end.col = ml_get_len(end.lnum);
+        // SAFETY: 'selection' is a NUL-terminated option string.
+        if end.col > 0 && unsafe { *p_sel.get() } as c_int == 'o' as c_int {
+            end.col -= 1;
+        }
+        if anchor_first {
+            *cursor = end;
+        } else {
+            *anchor = end;
         }
         true
     });
@@ -181,15 +186,11 @@ pub unsafe fn fold_adjust_visual() {
 }
 
 /// Move the cursor to the first line of a closed fold.
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn fold_adjust_cursor(wp: *mut win_T) {
-    // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
-    let (lnum, at) = (win.w_cursor.lnum, win.cursor().raw());
-    // SAFETY: the cursor's line number lives inside the window.
-    unsafe { has_folding(wp, lnum, &raw mut (*at).lnum, ptr::null_mut()) };
+pub fn fold_adjust_cursor(wp: Win) {
+    let mut cursor = wp.cursor();
+    if let Some(first) = wp.fold_first(cursor.lnum) {
+        cursor.lnum = first;
+    }
 }
 
 /// Update line numbers of folds for inserted/deleted lines.
@@ -197,10 +198,8 @@ pub unsafe fn fold_adjust_cursor(wp: *mut win_T) {
 /// We are adjusting the folds in the range from line1 til line2,
 /// make sure that line2 does not get smaller than line1
 ///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn fold_mark_adjust(
-    wp: *mut win_T,
+pub fn fold_mark_adjust(
+    wp: Win,
     mut line1: linenr_T,
     mut line2: linenr_T,
     amount: linenr_T,
@@ -215,9 +214,7 @@ pub unsafe fn fold_mark_adjust(
     if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as linenr_T {
         line1 -= 1;
     }
-    // SAFETY: `wp` is a live window, so `w_folds` is a live fold list.
-    let folds = unsafe { window_folds(wp) };
-    adjust_fold_list(folds, line1, line2, amount, amount_after);
+    adjust_fold_list(window_folds(wp), line1, line2, amount, amount_after);
 }
 
 /// Shift and truncate the folds of `gap` for a change to lines

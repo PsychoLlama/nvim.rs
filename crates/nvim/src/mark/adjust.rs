@@ -37,7 +37,6 @@ use crate::main::{curbuf, saved_cursor};
 use crate::pos::{MAXLNUM, equalpos};
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
-use core::ptr;
 
 use super::store::{Fmark, GlobalMarks};
 use super::*;
@@ -305,24 +304,12 @@ pub unsafe fn mark_adjust_buf(
         // The quickfix list is asked once for the buffer and then once per
         // window for that window's location list; a buffer with no surviving
         // entry in either loses the corresponding flag.
-        // SAFETY: `buf` is live and the window list is the editor's own.
-        if !unsafe {
-            qf_mark_adjust(
-                buf.raw(),
-                ptr::null_mut(),
-                line1,
-                line2,
-                amount,
-                amount_after,
-            )
-        } {
+        if !qf_mark_adjust(buf, None, line1, line2, amount, amount_after) {
             buf.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
         }
         let mut found_one = false;
         for win in tab_windows() {
-            // SAFETY: as above; `win` came out of the editor's own list.
-            found_one |=
-                unsafe { qf_mark_adjust(buf.raw(), win.raw(), line1, line2, amount, amount_after) };
+            found_one |= qf_mark_adjust(buf, Some(win), line1, line2, amount, amount_after);
         }
         if !found_one {
             buf.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
@@ -408,12 +395,12 @@ pub unsafe fn mark_adjust_buf(
         }
         if adjust_folds {
             // SAFETY: `win` came out of the editor's own window list.
-            unsafe { fold_mark_adjust(win.raw(), line1, line2, amount, amount_after) };
+            fold_mark_adjust(win, line1, line2, amount, amount_after);
         }
     }
 
     // SAFETY: `buf` is live and the tab page list is the editor's own.
-    unsafe { diff_mark_adjust(buf.raw(), line1, line2, amount, amount_after) };
+    diff_mark_adjust(buf, line1, line2, amount, amount_after);
 
     // The per-window remembered cursor of every window that has ever shown
     // this buffer, including ones that no longer exist.

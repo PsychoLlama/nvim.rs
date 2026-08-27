@@ -56,6 +56,7 @@ use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, buf_T, colnr_T, int16_t, win_T, winopt_T};
 use crate::window::{check_colorcolumn, set_winbar_win};
+use crate::winlayer::Buf;
 
 use super::{
     BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, boolean_optval,
@@ -388,9 +389,9 @@ pub(crate) unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
             };
 
             if (*buf).b_p_initialized {
-                free_buf_options(buf, false);
+                free_buf_options(Buf::new(buf), false);
             } else {
-                free_buf_options(buf, true);
+                free_buf_options(Buf::new(buf), true);
                 (*buf).b_p_ro = 0;
                 (*buf).b_p_fenc = xstrdup(p_fenc.get());
                 // A new buffer takes the *first* of 'fileformats' rather
@@ -447,16 +448,16 @@ pub(crate) unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
 
             (*buf).b_p_cpt = xstrdup(p_cpt.get());
             copy_sctx(buf, kBufOptComplete);
-            set_buflocal_cpt_callbacks(buf);
+            set_buflocal_cpt_callbacks(Buf::new(buf));
             (*buf).b_p_cfu = xstrdup(p_cfu.get());
             copy_sctx(buf, kBufOptCompletefunc);
-            set_buflocal_cfu_callback(buf);
+            set_buflocal_cfu_callback(Buf::new(buf));
             (*buf).b_p_ofu = xstrdup(p_ofu.get());
             copy_sctx(buf, kBufOptOmnifunc);
-            set_buflocal_ofu_callback(buf);
+            set_buflocal_ofu_callback(Buf::new(buf));
             (*buf).b_p_tfu = xstrdup(p_tfu.get());
             copy_sctx(buf, kBufOptTagfunc);
-            set_buflocal_tfu_callback(buf);
+            set_buflocal_tfu_callback(Buf::new(buf));
 
             (*buf).b_p_sts = p_sts.get();
             copy_sctx(buf, kBufOptSofttabstop);

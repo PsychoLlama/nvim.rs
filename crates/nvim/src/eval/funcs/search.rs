@@ -15,7 +15,7 @@ use crate::eval::typval::{
     NumBuf, tv_get_number_chk, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
-use crate::main::{curbuf, curwin, e_invarg2, p_cpo, p_ws};
+use crate::main::{curwin, e_invarg2, p_cpo, p_ws};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
 use crate::normal::find_decl;
@@ -34,6 +34,7 @@ use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, OptionSetFlags, VAR_UNKNOWN, int64_t,
     linenr_T, pos_T, searchit_arg_T, typval_T, varnumber_T,
 };
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -220,8 +221,8 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         let mut subpatnum;
         loop {
             subpatnum = searchit(
-                curwin.get(),
-                curbuf.get(),
+                Some(Win::current()),
+                Buf::current(),
                 &raw mut pos,
                 ptr::null_mut(),
                 dir as Direction,
@@ -276,7 +277,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
                 match_pos.col = pos.col + 1;
             }
             // A `/$` match leaves the cursor past the end of the line.
-            check_cursor(curwin.get());
+            check_cursor(Win::current());
         }
 
         if flags & SP_NOMOVE != 0 {
@@ -607,8 +608,8 @@ pub unsafe fn do_searchpair(
                 sa_wrapped: 0,
             };
             let n = searchit(
-                curwin.get(),
-                curbuf.get(),
+                Some(Win::current()),
+                Buf::current(),
                 &raw mut pos,
                 ptr::null_mut(),
                 dir as Direction,

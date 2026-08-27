@@ -427,7 +427,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     }
     if res & (kMarkSwitchedBuf | kMarkChangedCursor) != 0 {
         // SAFETY: as above.
-        unsafe { check_cursor(win.raw()) };
+        check_cursor(win);
     }
     res
 }

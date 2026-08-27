@@ -567,7 +567,7 @@ fn cursor_char_class() -> c_int {
 #[inline(always)]
 fn charsize_at(use_ts: bool, vcol: colnr_T, sci: StrCharInfo) -> c_int {
     // SAFETY: `sci` names a character of a live line of `curbuf`.
-    unsafe { charsize_nowrap(curbuf.get(), sci.ptr, use_ts, vcol, sci.chr.value) }
+    unsafe { charsize_nowrap(Buf::new(curbuf.get()), sci.ptr, use_ts, vcol, sci.chr.value) }
 }
 
 /// The buffer the editor is working in.

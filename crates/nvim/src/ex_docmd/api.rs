@@ -55,6 +55,7 @@ use crate::types::{
     exarg_T, linenr_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
+use crate::winlayer::Win;
 use ::libc::{memset, strlen};
 
 /// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
@@ -393,8 +394,8 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 && global_busy.get() == 0
                 && ea.addr_type == CmdAddr::Lines
             {
-                has_folding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
-                has_folding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
+                has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
+                has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
             }
 
             if parse_count(eap, &mut errormsg, true) == FAIL {

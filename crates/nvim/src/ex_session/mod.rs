@@ -575,9 +575,8 @@ unsafe fn write_rc(
             flags |= OptionSetFlags::SKIPRTP;
         }
         // SAFETY: both writers take the open handle and nothing else.
-        failed |= unsafe {
-            makemap(out.raw(), ptr::null_mut()) == FAIL || makeset(out.raw(), flags, 0) == FAIL
-        };
+        failed |=
+            unsafe { makemap(out.raw(), None) == FAIL || makeset(out.raw(), flags, 0) == FAIL };
     }
 
     if !failed && view_session {

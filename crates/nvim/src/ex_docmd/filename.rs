@@ -13,7 +13,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::arglist::arg_all;
-use crate::buffer::buflist_findnr;
+use crate::buffer::find_buf;
 use crate::charset::{backslash_halve, getdigits_int, skipwhite};
 use crate::cmdexpand::{expand_init, expand_one};
 use crate::eval::fs::modify_fname;
@@ -491,21 +491,20 @@ pub unsafe fn eval_vars(
                             if i == 0 && *src.add(1) as c_int == '<' as c_int && *usedlen > 1 {
                                 *usedlen = 1;
                             }
-                            let buf = buflist_findnr(i);
-                            if buf.is_null() {
+                            let Some(buf) = find_buf(i) else {
                                 *errormsg = gettext(
                                     c"E194: No alternate file name to substitute for '#'".as_ptr(),
                                 );
                                 return ptr::null_mut();
-                            }
+                            };
                             if !lnump.is_null() {
                                 *lnump = ECMD_LAST as linenr_T;
                             }
-                            if (*buf).b_fname.is_null() {
+                            if buf.b_fname.is_null() {
                                 result = c"".as_ptr() as *mut c_char;
                                 valid = 0;
                             } else {
-                                result = (*buf).b_fname;
+                                result = buf.b_fname;
                                 tilde_file = strcmp(result, c"~".as_ptr()) == 0;
                             }
                         }

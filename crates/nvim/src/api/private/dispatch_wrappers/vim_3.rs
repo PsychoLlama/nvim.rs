@@ -615,8 +615,7 @@ pub unsafe fn handle_nvim_open_term(
                 return NIL;
             }
         };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -673,8 +672,7 @@ pub unsafe fn handle_nvim_paste(
         wrong_type(error, 3, c"nvim_paste", c"Integer");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -735,8 +733,7 @@ pub unsafe fn handle_nvim_put(
         wrong_type(error, 4, c"nvim_put", c"Boolean");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }

@@ -24,9 +24,10 @@ use std::ptr;
 
 use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
-use neovim::main::{curbuf, curwin};
+use neovim::main::curwin;
 use neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
 use neovim::types::schar_T;
+use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
 
@@ -103,7 +104,7 @@ impl Statusline {
         };
         // SAFETY: `curbuf` is the editor's own buffer under the editor
         // lock, and `name` outlives the call, which copies what it keeps.
-        unsafe { setfname(curbuf.get(), ptr, ptr::null_mut(), true) };
+        unsafe { setfname(Buf::current(), ptr, ptr::null_mut(), true) };
     }
 
     /// Render one row and check both halves of the answer: the bytes

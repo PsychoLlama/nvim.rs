@@ -750,7 +750,7 @@ unsafe fn goto_match(
         if walk.files.depth() == -1 {
             // The match is in the current file.
             if tagpreview != 0 {
-                if !unsafe { win_valid(curwin_save) } {
+                if !win_valid(curwin_save) {
                     return After::Stop;
                 }
                 // GETFILE_SUCCESS: anything but a positive answer.
@@ -766,7 +766,7 @@ unsafe fn goto_match(
                 setpcmark();
             }
             cur_win().w_cursor.lnum = walk.lnum;
-            unsafe { check_cursor(curwin.get()) };
+            check_cursor(unsafe { Win::current() });
         } else {
             let file = walk.files.innermost();
             let (name, flnum) = (file.name.as_ptr(), file.lnum);
@@ -783,9 +783,9 @@ unsafe fn goto_match(
         cur_win().w_set_curswant = true;
     }
 
-    if tagpreview != 0 && curwin.get() != curwin_save && unsafe { win_valid(curwin_save) } {
+    if tagpreview != 0 && curwin.get() != curwin_save && win_valid(curwin_save) {
         // Return the cursor to where it was.
-        unsafe { validate_cursor(curwin.get()) };
+        validate_cursor(unsafe { Win::current() });
         unsafe { redraw_later(curwin.get(), UPD_VALID) };
         unsafe { win_enter(curwin_save, true) };
     }

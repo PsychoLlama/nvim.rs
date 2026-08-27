@@ -111,15 +111,15 @@ unsafe fn vreplace_extent(
     let novcol = ::core::ptr::null_mut::<colnr_T>();
     // SAFETY: the current window and its own cursor; only the middle column
     // is asked for, and it is a local.
-    unsafe { getvcol(win, cursor, novcol, &raw mut vcol, novcol) };
+    unsafe { getvcol(Win::new(win), cursor, novcol, &raw mut vcol, novcol) };
     // SAFETY: the current window is live and `buf` holds the character.
-    let new_vcol = vcol + unsafe { win_chartabsize(win, buf, vcol) };
+    let new_vcol = vcol + unsafe { win_chartabsize(Win::new(win), buf, vcol) };
     // The byte `n` past the insertion point; `oldp` is NUL-terminated and the
     // walk stops at that NUL.
     let at = |n: size_t| oldp.wrapping_add(col).wrapping_add(n);
     // SAFETY: `at(oldlen)` is inside the current line, in all three calls.
     while c_int::from(unsafe { *at(oldlen) }) != NUL && vcol < new_vcol {
-        vcol += unsafe { win_chartabsize(win, at(oldlen), vcol) };
+        vcol += unsafe { win_chartabsize(Win::new(win), at(oldlen), vcol) };
         // A TAB that lands exactly where the new character ends does not
         // need removing.
         if vcol > new_vcol && c_int::from(unsafe { *at(oldlen) }) == TAB {
@@ -147,7 +147,7 @@ unsafe fn vreplace_extent(
 /// prepared for undo.
 pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
     // Break tabs if needed.
-    if unsafe { virtual_active(curwin.get()) } && cur_win().w_cursor.coladd > 0 {
+    if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
         unsafe { coladvance_force(getviscol()) };
     }
 
@@ -227,7 +227,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
     let lnum = cur_win().w_cursor.lnum;
 
-    if unsafe { virtual_active(curwin.get()) } && cur_win().w_cursor.coladd > 0 {
+    if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
         unsafe { coladvance_force(getviscol()) };
     }
 
@@ -360,7 +360,7 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
         if col > 0
             && fixpos
             && restart_edit.get() == 0
-            && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagOnemore as ::core::ffi::c_uint == 0
+            && get_ve_flags(cur_win()) & kOptVeFlagOnemore as ::core::ffi::c_uint == 0
         {
             cur_win().w_cursor.col -= 1;
             cur_win().w_cursor.coladd = 0;
@@ -442,7 +442,7 @@ pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
     if nlines <= 0 {
         return;
     }
-    if undo && unsafe { u_savedel(first, nlines) } == FAIL {
+    if undo && u_savedel(first, nlines) == FAIL {
         return;
     }
 
@@ -460,7 +460,7 @@ pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
     }
 
     cur_win().w_cursor.col = 0;
-    unsafe { check_cursor_lnum(curwin.get()) };
+    check_cursor_lnum(unsafe { Win::current() });
     unsafe { deleted_lines_mark(first, n) };
 }
 

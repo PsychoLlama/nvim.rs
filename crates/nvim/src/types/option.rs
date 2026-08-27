@@ -12,7 +12,7 @@
 use super::*;
 
 use crate::global_cell::GlobalCell;
-use crate::option::{kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
+use crate::option::{OptSlot, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
 
 crate::flag_set! {
     /// `option.h`'s `OptionSetFlags`: which scope an option-setting call
@@ -69,7 +69,12 @@ pub type opt_expand_cb_T = Option<
 >;
 #[derive(Copy, Clone)]
 pub struct optexpand_T {
-    pub oe_varp: *mut ::core::ffi::c_char,
+    // Upstream carries an `oe_varp` here, and its two readers -- the
+    // 'listchars'/'fillchars' and 'eventignore'/'eventignorewin' expansions
+    // -- used it to tell one of a callback's two options from the other by
+    // comparing addresses. Both ask `oe_idx` instead, which is what the
+    // option *is* rather than where it happens to live, so nothing reads a
+    // variable here at all.
     pub oe_idx: OptIndex,
     pub oe_opt_value: *mut ::core::ffi::c_char,
     pub oe_append: bool,
@@ -80,7 +85,11 @@ pub struct optexpand_T {
 }
 #[derive(Copy, Clone)]
 pub struct optset_T {
-    pub os_varp: *mut ::core::ffi::c_void,
+    /// The option's storage in the scope being set, with the type its row
+    /// declares. `pub(crate)` because [`OptSlot`] is: every `did_set_*`
+    /// callback that reads one lives in this crate, and the frame is opaque
+    /// to everything outside it.
+    pub(crate) os_varp: OptSlot,
     pub os_idx: OptIndex,
     pub os_flags: OptionSetFlags,
     pub os_oldval: OptValData,

@@ -20,7 +20,7 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    State, cmdpreview, curwin, e_invarg2, msg_col, msg_didout, need_maketitle, need_wait_return,
+    State, cmdpreview, e_invarg2, msg_col, msg_didout, need_maketitle, need_wait_return,
     no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
 };
 use crate::memory::{xfree, xstrdup};
@@ -34,6 +34,7 @@ use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
 use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::ui::ui_flush;
+use crate::winlayer::Win;
 use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
@@ -155,8 +156,8 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
             return;
         }
         let lazyredraw_off = suspend_lazyredraw();
-        validate_cursor(curwin.get());
-        update_topline(curwin.get());
+        validate_cursor(Win::current());
+        update_topline(Win::current());
         if (*eap).forceit != 0 {
             redraw_all_later(UPD_NOT_VALID);
             redraw_cmdline.set(true);

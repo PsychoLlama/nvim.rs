@@ -50,7 +50,10 @@ pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
 }
 
 /// Delete every autocommand `group` defined for `event`.
-pub unsafe fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int) {
+///
+/// Safe: it takes an event and a group id, not a pointer, and reaches the
+/// rows only through the event's own vector.
+pub fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int) {
     let acs = au_event_vec(event);
     let mut i: usize = 0;
     while i < unsafe { (*acs).size } {
@@ -60,16 +63,18 @@ pub unsafe fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::
         }
         i = i.wrapping_add(1);
     }
-    unsafe { au_cleanup() };
+    au_cleanup();
 }
 
 /// Compact the marked-deleted rows out of every event's list.
 ///
-/// This is the deferred half of [`aucmd_del`] and it is *only* safe while
-/// no walk is live: `autocmd_busy` says one is, and then the rows have to
-/// stay where a walk's index can still reach them.  Every call site is
-/// therefore a point where the editor is between autocommands.
-pub(crate) unsafe fn au_cleanup() {
+/// This is the deferred half of [`aucmd_del`] and it may only run while no
+/// walk is live: `autocmd_busy` says one is, and then the rows have to stay
+/// where a walk's index can still reach them.  Safe to call anywhere,
+/// because that is the first thing it checks -- a call made during a walk
+/// returns having done nothing, and the compaction waits for the point
+/// where the editor is between autocommands.
+pub(crate) fn au_cleanup() {
     if autocmd_busy.get() || !au_need_clean.get() {
         return;
     }
@@ -113,12 +118,12 @@ pub fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
 }
 
 /// Drop every `<buffer=N>` autocommand naming `buf`, which is being freed.
-pub unsafe fn aubuflocal_remove(buf: *mut buf_T) {
+pub unsafe fn aubuflocal_remove(buf: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
     let mut apc = active_apc_list.get();
     while !apc.is_null() {
-        if unsafe { (*buf).handle } == unsafe { (*apc).arg_bufnr } {
+        if buf.handle == unsafe { (*apc).arg_bufnr } {
             unsafe { (*apc).arg_bufnr = 0 };
         }
         apc = unsafe { (*apc).next };
@@ -129,8 +134,7 @@ pub unsafe fn aubuflocal_remove(buf: *mut buf_T) {
         let mut i: usize = 0;
         while i < unsafe { (*acs).size } {
             let ac = unsafe { (*acs).items.add(i) };
-            if !unsafe { (*ac).pat.is_null() }
-                && unsafe { (*(*ac).pat).buflocal_nr } == unsafe { (*buf).handle }
+            if !unsafe { (*ac).pat.is_null() } && unsafe { (*(*ac).pat).buflocal_nr } == buf.handle
             {
                 unsafe { aucmd_del(ac) };
                 if p_verbose.get() >= 6 {
@@ -142,7 +146,7 @@ pub unsafe fn aubuflocal_remove(buf: *mut buf_T) {
                             0,
                             gettext(c"auto-removing autocommand: %s <buffer=%d>".as_ptr()),
                             event_nr2name(event),
-                            (*buf).handle,
+                            buf.handle,
                         )
                     };
                     unsafe { verbose_leave() };
@@ -151,7 +155,7 @@ pub unsafe fn aubuflocal_remove(buf: *mut buf_T) {
             i = i.wrapping_add(1);
         }
     }
-    unsafe { au_cleanup() };
+    au_cleanup();
 }
 
 /// Whether `pat` is one of the buffer-local pattern spellings:

@@ -17,13 +17,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
+use crate::drawscreen::UPD_NOT_VALID;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::{State, curwin, disable_fold_update, got_int, need_diff_redraw};
+use crate::main::{State, disable_fold_update, got_int, need_diff_redraw};
 use crate::memory::xfree;
 use crate::plines::plines_win_nofold;
 use crate::types::*;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::{ptr, slice};
 
@@ -84,7 +85,7 @@ pub const DONE_FOLD: c_int = 2;
 const LINES_DELETED: linenr_T = MAXLNUM as linenr_T;
 
 /// One of the six per-'foldmethod' level computations in [`level`].
-pub type LevelGetter = Option<unsafe fn(*mut fline_T) -> ()>;
+pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
 
 #[derive(Copy, Clone)]
 pub struct fold_T {
@@ -148,58 +149,46 @@ static foldendmarker: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut())
 static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 
 /// A window's toplevel fold list.
-///
-/// # Safety
-/// `wp` must be a live window.
-unsafe fn window_folds(wp: *mut win_T) -> FoldList {
+fn window_folds(mut wp: Win) -> FoldList {
     // SAFETY: `w_folds` is initialised by `fold_init_win` when the window is
     // allocated and lives as long as the window does.
-    unsafe { FoldList::new(&raw mut (*wp).w_folds) }
+    unsafe { FoldList::new(&raw mut wp.w_folds) }
 }
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
 ///
 /// # Safety
-/// Both must be live windows, and `wp_to`'s fold list must be empty or
-/// uninitialised — `clone_fold_list` re-initialises it.
-pub unsafe fn copy_folding_state(wp_from: *mut win_T, wp_to: *mut win_T) {
-    // SAFETY: two live windows.
-    unsafe {
-        (*wp_to).w_fold_manual = (*wp_from).w_fold_manual;
-        (*wp_to).w_foldinvalid = (*wp_from).w_foldinvalid;
-        clone_fold_list(&raw mut (*wp_from).w_folds, &raw mut (*wp_to).w_folds);
-    }
+/// `wp_to`'s fold list must be empty or uninitialised — `clone_fold_list`
+/// re-initialises it.
+pub unsafe fn copy_folding_state(mut wp_from: Win, mut wp_to: Win) {
+    wp_to.w_fold_manual = wp_from.w_fold_manual;
+    wp_to.w_foldinvalid = wp_from.w_foldinvalid;
+    // SAFETY: the caller's promise about `wp_to`; both fold lists live inside
+    // their own window.
+    unsafe { clone_fold_list(&raw mut wp_from.w_folds, &raw mut wp_to.w_folds) };
 }
 
 /// Returns true if there may be folded lines in window "win".
 ///
-/// # Safety
-/// `win` must be a live window with a live buffer.
-pub unsafe fn has_any_folding(win: *mut win_T) -> c_int {
-    // SAFETY: the caller's promise.
-    unsafe {
-        ((*(*win).w_buffer).terminal.is_null()
-            && (*win).w_onebuf_opt.wo_fen != 0
-            && (!foldmethod_is_manual(win) || (*win).w_folds.ga_len > 0)) as c_int
-    }
+/// A window on screen always shows a buffer, which is what reading
+/// `terminal` through [`Win::buffer`] leans on -- as the C does.
+pub fn has_any_folding(win: Win) -> c_int {
+    (win.buffer().terminal.is_null()
+        && win.w_onebuf_opt.wo_fen != 0
+        && (!foldmethod_is_manual(win) || win.w_folds.ga_len > 0)) as c_int
 }
 
-/// When returning true, *firstp and *lastp are set to the first and last
-/// lnum of the sequence of folded lines (skipped when NULL).
+/// When returning true, `firstp` and `lastp` are set to the first and last
+/// lnum of the sequence of folded lines (each skipped when `None`).
 ///
 /// Returns true if line "lnum" in window "win" is part of a closed fold.
-///
-/// # Safety
-/// `win` must be a live window; `firstp` and `lastp` must be null or
-/// writable.
-pub unsafe fn has_folding(
-    win: *mut win_T,
+pub fn has_folding(
+    win: Win,
     lnum: linenr_T,
-    firstp: *mut linenr_T,
-    lastp: *mut linenr_T,
+    firstp: Option<&mut linenr_T>,
+    lastp: Option<&mut linenr_T>,
 ) -> bool {
-    // SAFETY: the caller's promise, forwarded.
-    unsafe { has_folding_win(win, lnum, firstp, lastp, true, ptr::null_mut()) }
+    has_folding_win(win, lnum, firstp, lastp, true, None)
 }
 
 /// Search folds starting at lnum
@@ -211,24 +200,18 @@ pub unsafe fn has_folding(
 ///
 /// Returns true if range contains folds
 ///
-/// # Safety
-/// `win` must be a live window; `firstp`, `lastp` and `infop` must each be
-/// null or writable.
-pub unsafe fn has_folding_win(
-    win: *mut win_T,
+pub fn has_folding_win(
+    win: Win,
     lnum: linenr_T,
-    firstp: *mut linenr_T,
-    lastp: *mut linenr_T,
+    firstp: Option<&mut linenr_T>,
+    lastp: Option<&mut linenr_T>,
     cache: bool,
-    infop: *mut foldinfo_T,
+    mut infop: Option<&mut foldinfo_T>,
 ) -> bool {
-    // SAFETY: a live window.
-    unsafe { checkupdate(win) };
-    // SAFETY: a live window.
-    if unsafe { has_any_folding(win) } == 0 {
-        if !infop.is_null() {
-            // SAFETY: the caller's out parameter.
-            unsafe { (*infop).fi_level = 0 };
+    checkupdate(win);
+    if has_any_folding(win) == 0 {
+        if let Some(info) = infop.as_mut() {
+            info.fi_level = 0;
         }
         return false;
     }
@@ -236,12 +219,11 @@ pub unsafe fn has_folding_win(
     let mut first: linenr_T = 0;
     let mut last: linenr_T = 0;
     if cache {
-        // SAFETY: a live window.
-        let x = unsafe { find_wl_entry(win, lnum) };
+        let x = find_wl_entry(win, lnum);
         if x >= 0 {
             // SAFETY: `find_wl_entry` only ever answers with an index of a
             // valid `w_lines` entry.
-            let entry = unsafe { &*(*win).w_lines.offset(x as isize) };
+            let entry = unsafe { &*win.w_lines.offset(x as isize) };
             first = entry.wl_lnum;
             last = entry.wl_foldend;
             had_folded = entry.wl_folded;
@@ -253,8 +235,7 @@ pub unsafe fn has_folding_win(
     let mut maybe_small = false;
     let mut use_level = false;
     if first == 0 {
-        // SAFETY: a live window.
-        let mut folds = unsafe { window_folds(win) };
+        let mut folds = window_folds(win);
         // Walk down the tree until a level says "closed here", accumulating
         // each fold's `fd_top` — which is relative to its parent — into the
         // absolute `first`.
@@ -265,7 +246,7 @@ pub unsafe fn has_folding_win(
             }
             first += fold.top();
             last += fold.top();
-            // SAFETY: a live window, and a fold of its own tree.
+            // SAFETY: a fold of the window's own tree.
             had_folded = unsafe {
                 check_closed(
                     win,
@@ -286,33 +267,24 @@ pub unsafe fn has_folding_win(
         }
     }
     if !had_folded {
-        if !infop.is_null() {
-            // SAFETY: the caller's out parameter.
-            unsafe {
-                (*infop).fi_level = level;
-                (*infop).fi_lnum = lnum - lnum_rel;
-                (*infop).fi_low_level = if low_level == 0 { level } else { low_level };
-            }
+        if let Some(info) = infop.as_mut() {
+            info.fi_level = level;
+            info.fi_lnum = lnum - lnum_rel;
+            info.fi_low_level = if low_level == 0 { level } else { low_level };
         }
         return false;
     }
-    // SAFETY: a live window with a live buffer.
-    last = last.min(unsafe { (*(*win).w_buffer).b_ml.ml_line_count });
-    if !lastp.is_null() {
-        // SAFETY: the caller's out parameter.
-        unsafe { *lastp = last };
+    last = last.min(win.buffer().b_ml.ml_line_count);
+    if let Some(lastp) = lastp {
+        *lastp = last;
     }
-    if !firstp.is_null() {
-        // SAFETY: the caller's out parameter.
-        unsafe { *firstp = first };
+    if let Some(firstp) = firstp {
+        *firstp = first;
     }
-    if !infop.is_null() {
-        // SAFETY: the caller's out parameter.
-        unsafe {
-            (*infop).fi_level = level + 1;
-            (*infop).fi_lnum = first;
-            (*infop).fi_low_level = if low_level == 0 { level + 1 } else { low_level };
-        }
+    if let Some(info) = infop.as_mut() {
+        info.fi_level = level + 1;
+        info.fi_lnum = first;
+        info.fi_low_level = if low_level == 0 { level + 1 } else { low_level };
     }
     true
 }
@@ -322,21 +294,19 @@ pub unsafe fn has_folding_win(
 /// # Safety
 /// The current window must be live.
 unsafe fn fold_level(lnum: linenr_T) -> c_int {
+    // SAFETY: the caller's promise.
+    let win = unsafe { Win::current() };
     if invalid_top.get() == 0 {
-        // SAFETY: the caller's promise.
-        unsafe { checkupdate(curwin.get()) };
+        checkupdate(win);
     } else if lnum == prev_lnum.get() && prev_lnum_lvl.get() >= 0 {
         return prev_lnum_lvl.get();
     } else if lnum >= invalid_top.get() && lnum <= invalid_bot.get() {
         return -1;
     }
-    // SAFETY: the caller's promise.
-    unsafe {
-        if has_any_folding(curwin.get()) == 0 {
-            return 0;
-        }
-        fold_level_win(curwin.get(), lnum)
+    if has_any_folding(win) == 0 {
+        return 0;
     }
+    fold_level_win(win, lnum)
 }
 
 /// Low level function to check if a line is folded.  Doesn't use any caching.
@@ -344,11 +314,8 @@ unsafe fn fold_level(lnum: linenr_T) -> c_int {
 /// Returns true if line is folded or,
 ///          false if line is not folded.
 ///
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn line_folded(win: *mut win_T, lnum: linenr_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { fold_info(win, lnum) }.fi_lines != 0
+pub fn line_folded(win: Win, lnum: linenr_T) -> bool {
+    fold_info(win, lnum).fi_lines != 0
 }
 
 /// Count the number of lines that are folded at line number "lnum".
@@ -360,9 +327,7 @@ pub unsafe fn line_folded(win: *mut win_T, lnum: linenr_T) -> bool {
 ///         fi_lines = number of folded lines from "lnum",
 ///                    or 0 if line is not folded.
 ///
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn fold_info(win: *mut win_T, lnum: linenr_T) -> foldinfo_T {
+pub fn fold_info(win: Win, lnum: linenr_T) -> foldinfo_T {
     let mut info = foldinfo_T {
         fi_lnum: 0,
         fi_level: 0,
@@ -370,17 +335,7 @@ pub unsafe fn fold_info(win: *mut win_T, lnum: linenr_T) -> foldinfo_T {
         fi_lines: 0,
     };
     let mut last: linenr_T = 0;
-    // SAFETY: a live window; `last` and `info` are ours.
-    let folded = unsafe {
-        has_folding_win(
-            win,
-            lnum,
-            ptr::null_mut(),
-            &raw mut last,
-            false,
-            &raw mut info,
-        )
-    };
+    let folded = has_folding_win(win, lnum, None, Some(&mut last), false, Some(&mut info));
     info.fi_lines = if folded { last - lnum + 1 } else { 0 };
     info
 }
@@ -391,82 +346,50 @@ pub unsafe fn fold_info(win: *mut win_T, lnum: linenr_T) -> foldinfo_T {
 /// ("manual", "indent", "expr", "marker", "syntax", "diff") are told apart by
 /// a single byte in the first three, which is what upstream leans on too.
 ///
-/// # Safety
-/// `wp` must be a live window.
-unsafe fn foldmethod_byte_is(wp: *mut win_T, at: usize, c: u8) -> bool {
+fn foldmethod_byte_is(wp: Win, at: usize, c: u8) -> bool {
+    let fdm = wp.w_onebuf_opt.wo_fdm;
     // SAFETY: 'foldmethod' is a NUL-terminated option string, and the empty
     // check short-circuits before `at` is reached. Every legal value is at
     // least four bytes long, so `at <= 3` stays inside the string.
-    unsafe {
-        let fdm = (*wp).w_onebuf_opt.wo_fdm;
-        *fdm as c_int != NUL && *fdm.add(at) as u8 == c
-    }
+    unsafe { *fdm as c_int != NUL && *fdm.add(at) as u8 == c }
 }
 
 /// Returns true if 'foldmethod' is "manual"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_manual(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 3, b'u') }
+pub fn foldmethod_is_manual(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 3, b'u')
 }
 
 /// Returns true if 'foldmethod' is "indent"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_indent(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 0, b'i') }
+pub fn foldmethod_is_indent(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 0, b'i')
 }
 
 /// Returns true if 'foldmethod' is "expr"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_expr(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 1, b'x') }
+pub fn foldmethod_is_expr(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 1, b'x')
 }
 
 /// Returns true if 'foldmethod' is "marker"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_marker(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 2, b'r') }
+pub fn foldmethod_is_marker(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 2, b'r')
 }
 
 /// Returns true if 'foldmethod' is "syntax"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_syntax(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 0, b's') }
+pub fn foldmethod_is_syntax(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 0, b's')
 }
 
 /// Returns true if 'foldmethod' is "diff"
-///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn foldmethod_is_diff(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { foldmethod_byte_is(wp, 0, b'd') }
+pub fn foldmethod_is_diff(wp: Win) -> bool {
+    foldmethod_byte_is(wp, 0, b'd')
 }
 
 /// Remove all folding for window "win".
 ///
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn clear_folding(win: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe {
-        delete_fold_recurse(&raw mut (*win).w_folds);
-        (*win).w_foldinvalid = false;
-    }
+pub fn clear_folding(mut win: Win) {
+    // SAFETY: a live window's `w_folds` is a live fold list.
+    unsafe { delete_fold_recurse(&raw mut win.w_folds) };
+    win.w_foldinvalid = false;
 }
 
 /// Update folds for changes in the buffer of a window.
@@ -474,20 +397,15 @@ pub unsafe fn clear_folding(win: *mut win_T) {
 /// calling fold_mark_adjust().
 /// The changes in lines from top to bot (inclusive).
 ///
-/// # Safety
-/// `wp` must be a live window with a live buffer.
-pub unsafe fn fold_update(wp: *mut win_T, top: linenr_T, bot: linenr_T) {
-    // SAFETY: a live window.
-    if disable_fold_update.get() != 0
-        || State.get() & MODE_INSERT != 0 && !unsafe { foldmethod_is_indent(wp) }
+pub fn fold_update(wp: Win, top: linenr_T, bot: linenr_T) {
+    if disable_fold_update.get() != 0 || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(wp)
     {
         return;
     }
     if need_diff_redraw.get() {
         return;
     }
-    // SAFETY: a live window.
-    let folds = unsafe { window_folds(wp) };
+    let folds = window_folds(wp);
     if !folds.is_empty() {
         // Every fold that starts inside the changed range may have changed
         // size, so its 'foldminlines' answer has to be worked out again.
@@ -502,22 +420,20 @@ pub unsafe fn fold_update(wp: *mut win_T, top: linenr_T, bot: linenr_T) {
             fold.set_small(None);
         }
     }
-    // SAFETY: a live window.
-    unsafe {
-        if foldmethod_is_indent(wp)
-            || foldmethod_is_expr(wp)
-            || foldmethod_is_marker(wp)
-            || foldmethod_is_diff(wp)
-            || foldmethod_is_syntax(wp)
-        {
-            // `fold_update_computed` runs 'foldexpr', which the user can
-            // interrupt; a CTRL-C there must not leak out into whatever the
-            // caller was doing.
-            let save_got_int = got_int.get();
-            got_int.set(false);
-            fold_update_computed(wp, top, bot);
-            got_int.set(got_int.get() | save_got_int);
-        }
+    if foldmethod_is_indent(wp)
+        || foldmethod_is_expr(wp)
+        || foldmethod_is_marker(wp)
+        || foldmethod_is_diff(wp)
+        || foldmethod_is_syntax(wp)
+    {
+        // `fold_update_computed` runs 'foldexpr', which the user can
+        // interrupt; a CTRL-C there must not leak out into whatever the
+        // caller was doing.
+        let save_got_int = got_int.get();
+        got_int.set(false);
+        // SAFETY: a live window with a live buffer.
+        unsafe { fold_update_computed(wp, top, bot) };
+        got_int.set(got_int.get() | save_got_int);
     }
 }
 
@@ -527,16 +443,13 @@ pub unsafe fn fold_update(wp: *mut win_T, top: linenr_T, bot: linenr_T) {
 /// The current window must be live.
 pub unsafe fn fold_update_after_insert() {
     // SAFETY: the caller's promise.
-    unsafe {
-        if foldmethod_is_manual(curwin.get())
-            || foldmethod_is_syntax(curwin.get())
-            || foldmethod_is_expr(curwin.get())
-        {
-            return;
-        }
-        fold_update_all(curwin.get());
-        fold_open_cursor();
+    let win = unsafe { Win::current() };
+    if foldmethod_is_manual(win) || foldmethod_is_syntax(win) || foldmethod_is_expr(win) {
+        return;
     }
+    fold_update_all(win);
+    // SAFETY: the caller's promise.
+    unsafe { fold_open_cursor() };
 }
 
 /// Update all lines in a window for folding.
@@ -544,30 +457,19 @@ pub unsafe fn fold_update_after_insert() {
 /// The actual updating is postponed until fold info is used, to avoid doing
 /// every time a setting is changed or a syntax item is added.
 ///
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn fold_update_all(win: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe {
-        (*win).w_foldinvalid = true;
-        redraw_later(win, UPD_NOT_VALID);
-    }
+pub fn fold_update_all(mut win: Win) {
+    win.w_foldinvalid = true;
+    win.redraw_later(UPD_NOT_VALID);
 }
 
 /// Init the fold info in a new window.
 ///
 /// # Safety
 /// `new_win` must be a live window whose `w_folds` has not been initialised.
-pub unsafe fn fold_init_win(new_win: *mut win_T) {
+pub unsafe fn fold_init_win(mut new_win: Win) {
     // SAFETY: the caller's promise. This is the call that makes `w_folds` a
     // fold list, i.e. the one every `FoldList::new` leans on.
-    unsafe {
-        ga_init(
-            &raw mut (*new_win).w_folds,
-            size_of::<fold_T>() as c_int,
-            10,
-        )
-    };
+    unsafe { ga_init(&raw mut new_win.w_folds, size_of::<fold_T>() as c_int, 10) };
 }
 
 /// Find an entry in the win->w_lines[] array for buffer line "lnum".
@@ -576,17 +478,15 @@ pub unsafe fn fold_init_win(new_win: *mut win_T) {
 ///
 /// Returns index of entry or -1 if not found.
 ///
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn find_wl_entry(win: *mut win_T, lnum: linenr_T) -> c_int {
+pub fn find_wl_entry(win: Win, lnum: linenr_T) -> c_int {
+    let valid = win.w_lines_valid;
     // SAFETY: a live window's `w_lines` holds at least `w_lines_valid`
     // initialised entries, and is only null while that count is zero.
     let lines = unsafe {
-        let valid = (*win).w_lines_valid;
         if valid <= 0 {
             &[][..]
         } else {
-            slice::from_raw_parts((*win).w_lines, valid as usize)
+            slice::from_raw_parts(win.w_lines, valid as usize)
         }
     };
     for (i, entry) in lines.iter().enumerate() {
@@ -634,11 +534,8 @@ pub unsafe fn clone_fold_list(from: *mut garray_T, to: *mut garray_T) {
 
 /// Returns fold level at line number "lnum" in window "wp".
 ///
-/// # Safety
-/// `wp` must be a live window.
-unsafe fn fold_level_win(wp: *mut win_T, lnum: linenr_T) -> c_int {
-    // SAFETY: the caller's promise.
-    let mut folds = unsafe { window_folds(wp) };
+fn fold_level_win(wp: Win, lnum: linenr_T) -> c_int {
+    let mut folds = window_folds(wp);
     let mut lnum_rel = lnum;
     let mut level = 0;
     while let Ok(i) = folds.find(lnum_rel) {
@@ -652,17 +549,12 @@ unsafe fn fold_level_win(wp: *mut win_T, lnum: linenr_T) -> c_int {
 
 /// Check if the folds in window "wp" are invalid and update them if needed.
 ///
-/// # Safety
-/// `wp` must be a live window with a live buffer.
-unsafe fn checkupdate(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe {
-        if !(*wp).w_foldinvalid {
-            return;
-        }
-        fold_update(wp, 1, MAXLNUM as linenr_T);
-        (*wp).w_foldinvalid = false;
+fn checkupdate(mut wp: Win) {
+    if !wp.w_foldinvalid {
+        return;
     }
+    fold_update(wp, 1, MAXLNUM as linenr_T);
+    wp.w_foldinvalid = false;
 }
 
 /// Delete fold "idx" from fold list "folds".
@@ -747,14 +639,9 @@ pub unsafe fn delete_fold_recurse(gap: *mut garray_T) {
 /// Get the lowest 'foldlevel' value that makes the deepest nested fold in
 /// window `wp`.
 ///
-/// # Safety
-/// `wp` must be a live window with a live buffer.
-pub unsafe fn deepest_fold_nesting(wp: *mut win_T) -> c_int {
-    // SAFETY: the caller's promise.
-    unsafe {
-        checkupdate(wp);
-        deepest_nesting_of(window_folds(wp))
-    }
+pub fn deepest_fold_nesting(wp: Win) -> c_int {
+    checkupdate(wp);
+    deepest_nesting_of(window_folds(wp))
 }
 
 /// How many levels of fold `folds` holds, counting itself.
@@ -776,22 +663,20 @@ fn deepest_nesting_of(folds: FoldList) -> c_int {
 /// `lnum_off` — offset for fold->top()
 ///
 /// # Safety
-/// `wp` must be a live window, and `fold` a fold of its tree at `lnum_off`.
-unsafe fn check_small(wp: *mut win_T, fold: Fold, lnum_off: linenr_T) {
+/// `fold` must be a fold of `wp`'s tree at `lnum_off`.
+unsafe fn check_small(wp: Win, fold: Fold, lnum_off: linenr_T) {
     if fold.small().is_some() {
         return;
     }
     forget_small_flags(fold.nested());
-    // SAFETY: a live window.
-    let foldminlines = unsafe { (*wp).w_onebuf_opt.wo_fml };
+    let foldminlines = wp.w_onebuf_opt.wo_fml;
     if fold.len() as OptInt > foldminlines {
         fold.set_small(Some(false));
         return;
     }
     let mut count = 0;
     for n in 0..fold.len() {
-        // SAFETY: a live window; the line is inside the fold, hence inside
-        // the buffer.
+        // SAFETY: the line is inside the fold, hence inside the buffer.
         count += unsafe { plines_win_nofold(wp, fold.top() + lnum_off + n) };
         if count as OptInt > foldminlines {
             fold.set_small(Some(false));

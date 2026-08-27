@@ -44,6 +44,7 @@ use crate::types::{
     ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, linenr_T, pos_T,
     size_t,
 };
+use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.
@@ -352,9 +353,9 @@ pub unsafe fn parse_cmd_address(
                         // A zero line number is not a position, so only the
                         // column is worth correcting there.
                         if ea.line2 > 0 {
-                            check_cursor(curwin.get());
+                            check_cursor(Win::current());
                         } else {
-                            check_cursor_col(curwin.get());
+                            check_cursor_col(Win::current());
                         }
                         need_check_cursor = true;
                     }
@@ -376,7 +377,7 @@ pub unsafe fn parse_cmd_address(
         // about to delete; putting it back is the caller's problem, so this
         // only re-clamps it.
         if need_check_cursor {
-            check_cursor(curwin.get());
+            check_cursor(Win::current());
         }
         ret
     }
@@ -677,8 +678,8 @@ pub unsafe fn get_address(
                             FORWARD as c_int
                         } as Direction;
                         if searchit(
-                            curwin.get(),
-                            curbuf.get(),
+                            Some(Win::current()),
+                            Buf::current(),
                             &raw mut pos,
                             ptr::null_mut(),
                             dir,
@@ -752,7 +753,7 @@ pub unsafe fn get_address(
                         && (i == '-' as c_int || i == '+' as c_int)
                         && address_count >= 2
                     {
-                        has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum);
+                        has_folding(Win::current(), lnum, None, Some(&mut lnum));
                     }
                     if i == '-' as c_int {
                         lnum -= n;

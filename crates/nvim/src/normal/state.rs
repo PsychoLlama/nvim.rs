@@ -421,7 +421,7 @@ unsafe fn normal_check_interrupt(s: *mut NormalState) {
         State.set(MODE_NORMAL);
     } else if global_busy.get() == 0 || !exmode_active.get() {
         if !quit_more.get() {
-            unsafe { vgetc() };
+            vgetc();
         }
         got_int.set(false);
     }
@@ -452,10 +452,10 @@ fn normal_check_text_changed() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
         && has_event(EVENT_TEXTCHANGED)
-        && cur_buf().b_last_changedtick != unsafe { buf_get_changedtick(curbuf.get()) }
+        && cur_buf().b_last_changedtick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
     {
         fire_on_curbuf(EVENT_TEXTCHANGED);
-        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(curbuf.get()) };
+        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
     }
 }
 
@@ -478,7 +478,7 @@ fn normal_check_safe_state() {
 fn normal_check_folds() {
     // SAFETY (throughout): reads and adjusts the current window's folds.
     unsafe { fold_adjust_visual() };
-    if unsafe { has_any_folding(curwin.get()) } != 0 && !unsafe { char_avail() } {
+    if unsafe { has_any_folding(Win::current()) } != 0 && !char_avail() {
         unsafe { fold_check_close() };
         if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
             unsafe { fold_open_cursor() };
@@ -490,8 +490,8 @@ fn normal_check_folds() {
 /// back the message the last command left to be shown.
 fn normal_redraw() {
     // SAFETY (throughout): all of this is the current window's and buffer's own state.
-    unsafe { update_topline(curwin.get()) };
-    unsafe { validate_cursor(curwin.get()) };
+    update_topline(unsafe { Win::current() });
+    validate_cursor(unsafe { Win::current() });
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {
         unsafe { update_screen() };
@@ -551,8 +551,8 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         unsafe { setcursor() };
     } else if do_redraw.get() || stuff_empty() {
         unsafe { terminal_check_refresh() };
-        unsafe { update_topline(curwin.get()) };
-        unsafe { validate_cursor(curwin.get()) };
+        update_topline(unsafe { Win::current() });
+        validate_cursor(unsafe { Win::current() });
         normal_check_cursor_moved();
         normal_check_text_changed();
         normal_check_window_scrolled();

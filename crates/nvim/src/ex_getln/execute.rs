@@ -49,7 +49,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
     let mut cc = Cc::current();
     s.c = {
         let _raw = Keys::unmapped_with_codes();
-        unsafe { plain_vgetc() }
+        plain_vgetc()
     };
 
     // CTRL-\ e doesn't work when obtaining an expression, unless it is
@@ -439,7 +439,7 @@ pub(crate) unsafe fn command_line_execute(
         if s.is_state.winid != cur_win().handle {
             unsafe { init_incsearch_state(s.is_state()) };
         }
-        if KeyTyped.get() || unsafe { vpeekc() } == NUL {
+        if KeyTyped.get() || vpeekc() == NUL {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
         }
         return unsafe { command_line_not_changed(s) };
@@ -508,7 +508,7 @@ pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
         && unsafe { *p_icm.get() } as ::core::ffi::c_int != NUL // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
-        && unsafe { vpeekc_any() } == 0
+        && vpeekc_any() == 0
         && unsafe { cmdpreview_may_show(s.raw()) };
     if !preview_shown {
         cmdpreview.set(false);
@@ -517,9 +517,7 @@ pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
             // which will trigger at the next wait-for-input.
             unsafe { update_screen() }; // clear the 'inccommand' preview
         }
-        if s.xpc.xp_context == ExpandContext::Nothing
-            && (KeyTyped.get() || unsafe { vpeekc() } == NUL)
-        {
+        if s.xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
         }
     }
@@ -545,7 +543,7 @@ pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
         // there are no characters left to read, to avoid useless
         // intermediate redraws. If the cmdline is external the UI handles
         // shaping and no redraw is needed.
-        if !ui_has(kUICmdline) && unsafe { vpeekc() } == NUL {
+        if !ui_has(kUICmdline) && vpeekc() == NUL {
             unsafe { redrawcmd() };
         }
     }

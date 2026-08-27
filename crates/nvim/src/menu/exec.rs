@@ -27,6 +27,7 @@ use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{buf_T, colnr_T, exarg_T, linenr_T, pos_T, save_state_T, win_T};
+use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
 type Range = Option<(linenr_T, linenr_T)>;
@@ -327,7 +328,7 @@ fn real_state() -> c_int {
 
 fn check_cursor_now() {
     // SAFETY: `curwin` names a live window.
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
 }
 
 fn char_at_cursor() -> c_int {

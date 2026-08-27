@@ -202,7 +202,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
         if retval == FAIL {
             return &raw const e_invarg as *const c_char;
         }
-        let varp = (*args).os_varp as *mut *mut c_char;
+        let varp = (*args).os_varp.string_var();
         let name = get_scriptlocal_funcname(*varp);
         if !name.is_null() {
             free_string_option(*varp);

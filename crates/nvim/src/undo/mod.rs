@@ -36,8 +36,8 @@ use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    KeyTyped, curbuf, curwin, e_modifiable, e_sandbox, e_textlock, fdo_flags, firstbuf,
-    global_busy, got_int, no_u_sync, p_fs, p_udir, p_ul, p_verbose, sandbox, textlock,
+    KeyTyped, curbuf, curwin, e_modifiable, e_sandbox, e_textlock, fdo_flags, global_busy, got_int,
+    no_u_sync, p_fs, p_udir, p_ul, p_verbose, sandbox, textlock,
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -107,7 +107,7 @@ pub mod store;
 mod tree;
 mod write;
 
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers};
 use store::{Header, header_adopt, header_chain};
 use tree::*;
 
@@ -129,8 +129,8 @@ pub const UNDO_HASH_SIZE: c_int = 32;
 ///
 /// # Safety
 ///
-/// `say` emits messages, so there must be a live message state.
-pub(crate) unsafe fn verbosely(automatic: bool, say: impl FnOnce()) {
+/// Safe: the editor's message state is live from startup to exit.
+pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
     if automatic && p_verbose.get() <= 0 {
         return;
     }
@@ -147,7 +147,7 @@ pub(crate) unsafe fn verbosely(automatic: bool, say: impl FnOnce()) {
 
 #[derive(Copy, Clone)]
 pub struct bufinfo_T {
-    pub bi_buf: *mut buf_T,
+    pub bi_buf: Buf,
     pub bi_fp: *mut FILE,
 }
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;
@@ -194,78 +194,60 @@ pub fn u_save_cursor() -> c_int {
 /// Safe: the only promise is that the editor exists; `u_save_buf` validates
 /// the line range itself and answers `FAIL` when it is out of range.
 pub fn u_save(top: linenr_T, bot: linenr_T) -> c_int {
-    // SAFETY: a live current buffer, by the contract above.
-    unsafe { u_save_buf(curbuf.get(), top, bot) }
+    u_save_buf(cur_buf(), top, bot)
 }
 
 /// Saves the lines strictly between `top` and `bot` — the lines a change
 /// about to be made would destroy.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer, and there is a live current window.
-pub unsafe fn u_save_buf(buf: *mut buf_T, top: linenr_T, bot: linenr_T) -> c_int {
-    // SAFETY: a live buffer, by the contract above.
-    let b = unsafe { Buf::new(buf) };
-    if top >= bot || bot > b.line_count() + 1 {
+/// Safe: the line range is validated here, and `FAIL` is the answer for one
+/// that is out of range.
+pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> c_int {
+    if top >= bot || bot > buf.line_count() + 1 {
         return FAIL;
     }
-    // SAFETY: a live buffer and window, by the contract above.
     if top + 2 == bot {
         // A single line: `U` can put it back.
-        unsafe { u_saveline(buf, top + 1) };
+        u_saveline(buf, top + 1);
     }
-    unsafe { u_savecommon(buf, top, bot, 0, false) }
+    u_savecommon(buf, top, bot, 0, false)
 }
 
 /// Saves the line a `:substitute` is about to replace.
 ///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_savesub(lnum: linenr_T) -> c_int {
-    // SAFETY: a live current buffer and window, by the contract above.
-    unsafe { u_savecommon(curbuf.get(), lnum - 1, lnum + 1, lnum + 1, false) }
+/// Safe: as [`u_save`].
+pub fn u_savesub(lnum: linenr_T) -> c_int {
+    u_savecommon(cur_buf(), lnum - 1, lnum + 1, lnum + 1, false)
 }
 
 /// Saves the position a `:substitute` is about to insert a line at.
 ///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_inssub(lnum: linenr_T) -> c_int {
-    // SAFETY: as [`u_savesub`].
-    unsafe { u_savecommon(curbuf.get(), lnum - 1, lnum, lnum + 1, false) }
+/// Safe: as [`u_savesub`].
+pub fn u_inssub(lnum: linenr_T) -> c_int {
+    u_savecommon(cur_buf(), lnum - 1, lnum, lnum + 1, false)
 }
 
 /// Saves the `nlines` lines from `lnum` that are about to be deleted.
 ///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
-    // SAFETY: a live current buffer and window, by the contract above.
+/// Safe: as [`u_save`].
+pub fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
     let whole_buffer = nlines == cur_buf().b_ml.ml_line_count;
-    unsafe {
-        u_savecommon(
-            curbuf.get(),
-            lnum - 1,
-            lnum + nlines,
-            if whole_buffer { 2 } else { lnum },
-            false,
-        )
-    }
+    u_savecommon(
+        cur_buf(),
+        lnum - 1,
+        lnum + nlines,
+        if whole_buffer { 2 } else { lnum },
+        false,
+    )
 }
 
 /// Whether `buf` may be changed at all, saying why not when it may not.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn undo_allowed(buf: *mut buf_T) -> bool {
-    // SAFETY: a live buffer, by the contract above, and three NUL-terminated
-    // message literals.
-    if unsafe { (*buf).b_p_ma } == 0 {
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub fn undo_allowed(buf: Buf) -> bool {
+    // SAFETY: three NUL-terminated message literals, and `expr_map_locked`
+    // only reads the editor's own mapping state.
+    if buf.b_p_ma == 0 {
         unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
         return false;
     }
@@ -273,7 +255,7 @@ pub unsafe fn undo_allowed(buf: *mut buf_T) -> bool {
         unsafe { emsg(gettext(&raw const e_sandbox as *const c_char)) };
         return false;
     }
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         unsafe { emsg(gettext(&raw const e_textlock as *const c_char)) };
         return false;
     }
@@ -282,12 +264,9 @@ pub unsafe fn undo_allowed(buf: *mut buf_T) -> bool {
 
 /// `'undolevels'` for `buf`: its own, or the global one when it has none.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-unsafe fn get_undolevel(buf: *mut buf_T) -> OptInt {
-    // SAFETY: a live buffer, by the contract above.
-    let local = unsafe { (*buf).b_p_ul };
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+fn get_undolevel(buf: Buf) -> OptInt {
+    let local = buf.b_p_ul;
     if local == OptInt::from(NO_LOCAL_UNDOLEVEL) {
         return p_ul.get();
     }
@@ -323,24 +302,25 @@ unsafe fn zero_fmark_additional_data(fmarks: &mut [fmark_T; NMARKS as usize]) {
 /// # Safety
 ///
 /// `buf` points at a live buffer, and there is a live current window.
-pub unsafe fn u_savecommon(
-    buf: *mut buf_T,
+pub fn u_savecommon(
+    buf: Buf,
     top: linenr_T,
     bot: linenr_T,
     newbot: linenr_T,
     reload: bool,
 ) -> c_int {
-    // SAFETY: a live buffer, by the contract above.
-    let b = unsafe { Buf::new(buf) };
+    let b = buf;
     if !reload {
-        // SAFETY: a live buffer and window, by the contract above.
-        if !unsafe { undo_allowed(buf) } {
+        if !undo_allowed(buf) {
             return FAIL;
         }
-        if ptr::eq(buf, curbuf.get()) {
+        if ptr::eq(buf.raw(), curbuf.get()) {
+            // SAFETY: the current buffer, which is live and survives
+            // FileChangedRO.
             unsafe { change_warning(buf, 0) };
         }
         if bot > b.line_count() + 1 {
+            // SAFETY: a NUL-terminated message literal.
             unsafe { emsg(gettext(c"E881: Line count changed unexpectedly".as_ptr())) };
             return FAIL;
         }
@@ -348,23 +328,22 @@ pub unsafe fn u_savecommon(
     let size: linenr_T = bot - top - 1;
     if b.b_u_synced {
         // A boundary: this change starts an undo header of its own.
-        // SAFETY: a live buffer and window.
+        // SAFETY: a live current window.
         if !unsafe { start_new_header(b) } {
             return OK;
         }
     } else {
-        // SAFETY: a live buffer.
-        if unsafe { get_undolevel(buf) } < 0 {
+        if get_undolevel(buf) < 0 {
             return OK;
         }
-        // SAFETY: a live buffer.
+        // SAFETY: a live current window.
         if size == 1 && unsafe { extend_last_entry(b, top, bot, newbot) } {
             return OK;
         }
-        unsafe { u_getbot(buf) };
+        u_getbot(buf);
     }
-    // SAFETY: a live buffer and window, and a newest header to record
-    // against — either the one just started or the one being extended.
+    // SAFETY: a live current window, and a newest header to record against —
+    // either the one just started or the one being extended.
     unsafe { record_entry(b, top, size, bot, newbot, reload) }
 }
 
@@ -378,15 +357,14 @@ pub unsafe fn u_savecommon(
 ///
 /// `b` is a live buffer, and there is a live current window.
 unsafe fn start_new_header(mut b: Buf) -> bool {
-    let buf = b.raw();
+    let buf = b;
     b.b_new_change = true;
 
     // The sequence number is the header's name, so it has to be handed out
     // and the header handed to the store *before* anything can link to it.
     // The transpiled code did this at the end, when a link was a pointer and
     // the number was only for the undo file.
-    // SAFETY: a live buffer, by the contract above.
-    let fresh = if unsafe { get_undolevel(buf) } >= 0 {
+    let fresh = if get_undolevel(buf) >= 0 {
         // `.max(0)`: a sequence number is a header's name and 0 means "no
         // link", so it has to be positive. `b_u_seq_last` comes out of the
         // undo file unvalidated and a corrupt one can make it negative.
@@ -412,9 +390,9 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
         b.b_u_newhead = old_cur.uh_next;
         b.b_u_curhead = UndoLink::NONE;
     }
-    // SAFETY: a live buffer, and every header freed here is one the tree
-    // still holds; `old_curhead` is cleared for us if it goes.
-    while OptInt::from(b.b_u_numhead) > unsafe { get_undolevel(buf) } {
+    // SAFETY: every header freed here is one the tree still holds;
+    // `old_curhead` is cleared for us if it goes.
+    while OptInt::from(b.b_u_numhead) > get_undolevel(buf) {
         let Some(oldest) = b.header(b.b_u_oldhead) else {
             break;
         };
@@ -461,8 +439,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     // SAFETY: the C clock, and a live current window.
     uhp.uh_time = unsafe { time(ptr::null_mut()) };
     uhp.uh_cursor = cur_win().w_cursor;
-    uhp.uh_cursor_vcol = if unsafe { virtual_active(curwin.get()) } && cur_win().w_cursor.coladd > 0
-    {
+    uhp.uh_cursor_vcol = if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
         unsafe { getviscol() }
     } else {
         -1
@@ -497,7 +474,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
 /// `b` is a live buffer, and there is a live current window.
 unsafe fn extend_last_entry(mut b: Buf, top: linenr_T, bot: linenr_T, newbot: linenr_T) -> bool {
     // SAFETY: a live buffer, by the contract above.
-    let mut uep = unsafe { u_get_headentry(b.raw()) };
+    let mut uep = u_get_headentry(b);
     let Some(mut newhead) = b.header(b.b_u_newhead) else {
         return false;
     };
@@ -530,7 +507,7 @@ unsafe fn extend_last_entry(mut b: Buf, top: linenr_T, bot: linenr_T, newbot: li
             if i > 0 {
                 // Move it to the front of the list, so the next change to
                 // the same line finds it first.
-                unsafe { u_getbot(b.raw()) };
+                u_getbot(b);
                 b.b_u_synced = false;
                 unsafe { (*prev_uep).ue_next = (*uep).ue_next };
                 unsafe { (*uep).ue_next = newhead.uh_entry };
@@ -613,7 +590,7 @@ unsafe fn record_entry(
                 unsafe { u_freeentry(uep, i) };
                 return FAIL;
             }
-            unsafe { *array.add(i as size_t) = u_save_line_buf(b.raw(), top + 1 + i) };
+            unsafe { *array.add(i as size_t) = u_save_line_buf(b, top + 1 + i) };
         }
     }
     unsafe { (*uep).ue_next = newhead.uh_entry };
@@ -669,22 +646,17 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
 /// `force` overrides the `no_u_sync` block that a mapping or a script sets
 /// while it is running.
 ///
-/// # Safety
-///
-/// A live current buffer.
-pub unsafe fn u_sync(force: bool) {
-    // SAFETY: a live current buffer, by the contract above.
-    let mut b = unsafe { Buf::current() };
+/// Safe: `curbuf` is set from startup to exit.
+pub fn u_sync(force: bool) {
+    let mut b = cur_buf();
     if b.b_u_synced || (!force && no_u_sync.get() > 0) {
         return;
     }
-    // SAFETY: a live current buffer.
-    if unsafe { get_undolevel(b.raw()) } < 0 {
+    if get_undolevel(b) < 0 {
         b.b_u_synced = true;
         return;
     }
-    // SAFETY: as above.
-    unsafe { u_getbot(b.raw()) };
+    u_getbot(b);
     b.b_u_curhead = UndoLink::NONE;
 }
 
@@ -692,10 +664,9 @@ pub unsafe fn u_sync(force: bool) {
 ///
 /// # Safety
 ///
-/// A live current buffer.
+/// The ex-command contract: `_eap` is a live command block.
 pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
-    // SAFETY: a live current buffer, by the contract above.
-    let mut b = unsafe { Buf::current() };
+    let mut b = cur_buf();
     if b.b_u_newhead.is_none() {
         return;
     }
@@ -708,8 +679,7 @@ pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
         };
         return;
     }
-    // SAFETY: a live current buffer.
-    if !b.b_u_synced || unsafe { get_undolevel(b.raw()) } < 0 {
+    if !b.b_u_synced || get_undolevel(b) < 0 {
         return;
     }
     b.b_u_synced = false;
@@ -718,25 +688,19 @@ pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
 /// Marks the whole tree as describing an unchanged buffer, which is what
 /// writing the file out makes true.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_unchanged(buf: *mut buf_T) {
-    // SAFETY: a live buffer, by the contract above.
-    let mut b = unsafe { Buf::new(buf) };
-    unsafe { u_unch_branch(buf, b.b_u_oldhead) };
-    b.b_did_warn = false;
+/// Safe: nothing in the walk frees a header.
+pub fn u_unchanged(mut buf: Buf) {
+    // SAFETY: nothing here frees a header the walk has visited.
+    unsafe { u_unch_branch(buf, buf.b_u_oldhead) };
+    buf.b_did_warn = false;
 }
 
 /// Moves the newest header's cursor to the first line that actually differs
 /// from what it saved, so that undoing lands where the change was.
 ///
-/// # Safety
-///
-/// A live current buffer.
-pub unsafe fn u_find_first_changed() {
-    // SAFETY: a live current buffer, by the contract above.
-    let b = unsafe { Buf::current() };
+/// Safe: `curbuf` is set from startup to exit.
+pub fn u_find_first_changed() {
+    let b = cur_buf();
     let Some(mut uhp) = b.header(b.b_u_newhead).filter(|_| b.b_u_curhead.is_none()) else {
         return;
     };
@@ -770,12 +734,9 @@ pub unsafe fn u_find_first_changed() {
 /// Numbers the change the buffer currently sits on as the Nth file write, so
 /// that `:earlier 1f` can find it again.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn u_update_save_nr(buf: *mut buf_T) {
-    // SAFETY: a live buffer, by the contract above.
-    let mut b = unsafe { Buf::new(buf) };
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub fn u_update_save_nr(buf: Buf) {
+    let mut b = buf;
     b.b_u_save_nr_last += 1;
     b.b_u_save_nr_cur = b.b_u_save_nr_last;
     let above = match b.header(b.b_u_curhead) {
@@ -789,43 +750,28 @@ pub unsafe fn u_update_save_nr(buf: *mut buf_T) {
 
 /// Whether `buf` holds changes that writing it out would save.
 ///
-/// # Safety
-///
-/// `buf` points at a live buffer.
-pub unsafe fn buf_is_changed(buf: *mut buf_T) -> bool {
-    // SAFETY: a live buffer, by the contract above.
-    if unsafe { bt_prompt(buf) } {
-        return unsafe { (*buf).b_modified_was_set };
+/// Safe: a [`Buf`] carries the whole of the promise this needs.
+pub fn buf_is_changed(buf: Buf) -> bool {
+    // SAFETY: a live buffer, by `Buf`'s contract — the whole of what the
+    // three `*mut buf_T` callees ask for.
+    if unsafe { bt_prompt(buf.raw()) } {
+        return buf.b_modified_was_set;
     }
-    !unsafe { bt_dontwrite(buf) }
-        && (unsafe { (*buf).b_changed } != 0 || unsafe { file_ff_differs(buf, true) })
+    !unsafe { bt_dontwrite(buf.raw()) } && (buf.b_changed != 0 || file_ff_differs(buf, true))
 }
 
 /// Whether any buffer at all holds unsaved changes.
 ///
-/// # Safety
-///
-/// A live buffer list.
-pub unsafe fn any_buf_is_changed() -> bool {
-    // SAFETY: the buffer list, walked to its NULL end.
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        if unsafe { buf_is_changed(buf) } {
-            return true;
-        }
-        buf = unsafe { (*buf).b_next };
-    }
-    false
+/// Safe: the buffer list is the editor's own and lives from startup to exit.
+pub fn any_buf_is_changed() -> bool {
+    buffers().any(buf_is_changed)
 }
 
 /// [`buf_is_changed`] for the current buffer.
 ///
-/// # Safety
-///
-/// A live current buffer.
-pub unsafe fn curbuf_is_changed() -> bool {
-    // SAFETY: a live current buffer, by the contract above.
-    unsafe { buf_is_changed(curbuf.get()) }
+/// Safe: as [`buf_is_changed`], over the current buffer.
+pub fn curbuf_is_changed() -> bool {
+    buf_is_changed(cur_buf())
 }
 
 /// The buffer the editor is working in.

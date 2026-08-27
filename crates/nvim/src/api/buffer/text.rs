@@ -12,6 +12,7 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
+use crate::winlayer::{Buf, Win};
 
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
@@ -242,7 +243,7 @@ pub unsafe fn nvim_buf_set_text(
                     c"Buffer is not 'modifiable'".as_ptr(),
                 );
             } else if u_save_buf(
-                b,
+                Buf::new(b),
                 start_row as linenr_T - 1 as linenr_T,
                 end_row as linenr_T + 1 as linenr_T,
             ) == 0 as ::core::ffi::c_int
@@ -369,7 +370,7 @@ pub unsafe fn nvim_buf_set_text(
                     kExtmarkUndo,
                 );
                 changed_lines(
-                    b,
+                    Buf::new(b),
                     start_row as linenr_T,
                     start_col as colnr_T,
                     end_row as linenr_T + 1 as linenr_T,
@@ -428,14 +429,14 @@ pub(crate) unsafe fn fix_cursor(
             if (*win).w_cursor.lnum >= hi {
                 (*win).w_cursor.lnum += extra;
             } else if extra < 0 as linenr_T {
-                check_cursor_lnum(win);
+                check_cursor_lnum(Win::new(win));
             }
-            check_cursor_col(win);
-            changed_cline_bef_curs(win);
+            check_cursor_col(Win::new(win));
+            changed_cline_bef_curs(Win::new(win));
             (*win).w_valid.clear(WinValid::BOTLINE_AP);
-            update_topline(win);
+            update_topline(Win::new(win));
         } else {
-            invalidate_botline_win(win);
+            invalidate_botline_win(Win::new(win));
         };
     }
 }
@@ -521,8 +522,8 @@ unsafe fn fix_cursor_cols(
             new_cols_at_end_row,
             mode_col_adj,
         );
-        check_cursor_col(win);
-        changed_cline_bef_curs(win);
-        invalidate_botline_win(win);
+        check_cursor_col(Win::new(win));
+        changed_cline_bef_curs(Win::new(win));
+        invalidate_botline_win(Win::new(win));
     }
 }

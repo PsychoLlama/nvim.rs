@@ -572,7 +572,7 @@ pub unsafe fn redraw_ruler() {
     // SAFETY: `curwin` is live from startup to exit.
     let cur = unsafe { Win::current() };
     // SAFETY: a live window.
-    let use_cur = unsafe { !is_aucmd_win(cur.raw()) } && cur.w_status_height == 0;
+    let use_cur = !is_aucmd_win(cur.raw()) && cur.w_status_height == 0;
     // SAFETY: `lastwin_nofloating` answers a live window of this tab page.
     let mut win = if use_cur {
         cur
@@ -661,7 +661,7 @@ pub unsafe fn redraw_ruler() {
     let mut rel_pos = [0 as c_char; RULER_BUF_LEN as usize];
     // SAFETY: `rel_pos` is `RULER_BUF_LEN` bytes of this frame, which
     // `get_rel_pos` fills and NUL-terminates.
-    let rel_poslen = unsafe { get_rel_pos(win.raw(), rel_pos.as_mut_ptr(), RULER_BUF_LEN) };
+    let rel_poslen = unsafe { get_rel_pos(win, rel_pos.as_mut_ptr(), RULER_BUF_LEN) };
     // SAFETY: as above.
     let mut n1 = bufferlen + unsafe { vim_strsize(rel_pos.as_ptr()) };
     if win.w_status_height == 0 && !is_stl_global {

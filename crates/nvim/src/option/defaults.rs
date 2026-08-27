@@ -53,6 +53,7 @@ use crate::types::{
     size_t, tabpage_T, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
+use crate::winlayer::Buf;
 use ::libc::{getuid, strlen};
 
 use super::{
@@ -357,7 +358,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
         if os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) {
             set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
         }
-        save_file_ff(curbuf.get());
+        save_file_ff(Buf::current());
         if os_env_exists(c"MLTERM".as_ptr(), false) {
             set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
         }
@@ -469,7 +470,7 @@ pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
             }
             tp = (*tp).tp_next;
         }
-        parse_cino(curbuf.get());
+        parse_cino(Buf::current());
     }
 }
 

@@ -30,6 +30,7 @@ use crate::regexp::{
 use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
 use ::libc::strlen;
 
+use crate::winlayer::Win;
 const BACKREF_1: c_int = BACKREF + 1;
 const BACKREF_9: c_int = BACKREF + 9;
 const ZREF_1: c_int = ZREF + 1;
@@ -222,7 +223,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
     }
     // SAFETY: `rex.line` is the line being matched, NUL-terminated, and the
     // cursor is a byte offset into it.
-    unsafe { win_linetabsize(wp, lnum, rex.line().cast(), rex.col()) as uint32_t }
+    unsafe { win_linetabsize(Win::new(wp), lnum, rex.line().cast(), rex.col()) as uint32_t }
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?

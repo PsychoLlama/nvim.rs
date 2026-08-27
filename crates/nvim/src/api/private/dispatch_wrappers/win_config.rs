@@ -56,8 +56,7 @@ pub unsafe fn handle_nvim_open_win(
                 return NIL;
             }
         };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -122,7 +121,7 @@ pub unsafe fn handle_nvim_win_get_config(
     let dict = unsafe {
         api_keydict_to_dict(
             (&raw mut rv).cast(),
-            win_config_table.as_ptr().cast_mut(),
+            win_config_table.as_ptr(),
             25 as size_t,
             arena,
         )

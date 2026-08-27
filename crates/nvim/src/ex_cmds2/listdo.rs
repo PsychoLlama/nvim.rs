@@ -45,6 +45,7 @@ use crate::types::{
     cmdidx_T, exarg_T, linenr_T, size_t,
 };
 use crate::window::{goto_tabpage_tp, valid_tabpage, win_goto, win_split, win_valid};
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -262,7 +263,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                     }
                     // Don't call `do_argfile` when already there, it would
                     // try reloading the file.
-                    if (*curwin.get()).w_arg_idx != i || !editing_arg_idx(curwin.get()) {
+                    if (*curwin.get()).w_arg_idx != i || !editing_arg_idx(Win::current()) {
                         do_argfile(eap, i);
                     }
                     if (*curwin.get()).w_arg_idx != i {
@@ -350,7 +351,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                 ListDo::Windows => {
                     if execute {
                         // The cursor may have moved.
-                        validate_cursor(curwin.get());
+                        validate_cursor(Win::current());
                         // Required when 'scrollbind' has been set.
                         if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
                             do_check_scrollbind(true);

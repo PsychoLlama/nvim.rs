@@ -26,6 +26,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_C, key_escape};
 use crate::types::NUL;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 
@@ -66,69 +67,69 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
         if deleted {
             unshowmode(true);
         }
-        validate_cursor(curwin.get());
-        let win = curwin.get();
-        let old_wcol = (*win).w_wcol;
-        let old_wrow = (*win).w_wrow;
+        validate_cursor(Win::current());
+        let mut win = Win::current();
+        let old_wcol = win.w_wcol;
+        let old_wrow = win.w_wrow;
 
         // Move the cursor left, if that is possible.
-        if (*win).w_cursor.col != 0 {
+        if win.w_cursor.col != 0 {
             let mut col: colnr_T = 0;
-            if (*win).w_wcol > 0 {
+            if win.w_wcol > 0 {
                 if did_ai.get()
                     && c_int::from(*skipwhite(
-                        get_cursor_line_ptr().offset((*win).w_cursor.col as isize),
+                        get_cursor_line_ptr().offset(win.w_cursor.col as isize),
                     )) == NUL
                 {
                     // After auto-indenting with no text following, the
                     // trailing white space is about to be truncated, so the
                     // cursor belongs after the last non-white character.
-                    (*win).w_wcol = 0;
+                    win.w_wcol = 0;
                     let ptr = get_cursor_line_ptr();
-                    let endptr = ptr.offset((*win).w_cursor.col as isize);
+                    let endptr = ptr.offset(win.w_cursor.col as isize);
 
                     let mut csarg = CharsizeArg::default();
-                    let cstype = init_charsize_arg(&mut csarg, win, (*win).w_cursor.lnum, ptr);
+                    let cstype = init_charsize_arg(&mut csarg, win, win.w_cursor.lnum, ptr);
                     let mut ci = utf_ptr2str_char_info(ptr);
                     let mut vcol = 0;
                     while ci.ptr < endptr {
                         if !ascii_iswhite(ci.chr.value as c_int) {
-                            (*win).w_wcol = vcol;
+                            win.w_wcol = vcol;
                         }
                         vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
                         ci = utfc_next(ci);
                     }
 
-                    (*win).w_wrow = (*win).w_cline_row + (*win).w_wcol / (*win).w_view_width;
-                    (*win).w_wcol %= (*win).w_view_width;
-                    (*win).w_wcol += win_col_off(win);
+                    win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;
+                    win.w_wcol %= win.w_view_width;
+                    win.w_wcol += win_col_off(win.raw());
                     col = 0; // no correction needed
                 } else {
-                    (*win).w_wcol -= 1;
-                    col = (*win).w_cursor.col - 1;
+                    win.w_wcol -= 1;
+                    col = win.w_cursor.col - 1;
                 }
-            } else if (*win).w_onebuf_opt.wo_wrap != 0 && (*win).w_wrow != 0 {
-                (*win).w_wrow -= 1;
-                (*win).w_wcol = (*win).w_view_width - 1;
-                col = (*win).w_cursor.col - 1;
+            } else if win.w_onebuf_opt.wo_wrap != 0 && win.w_wrow != 0 {
+                win.w_wrow -= 1;
+                win.w_wcol = win.w_view_width - 1;
+                col = win.w_cursor.col - 1;
             }
-            if col > 0 && (*win).w_wcol > 0 {
+            if col > 0 && win.w_wcol > 0 {
                 // Correct for the cursor sitting on the right half of a
                 // double-width character.
                 let ptr = get_cursor_line_ptr();
                 col -= utf_head_off(ptr, ptr.offset(col as isize));
                 if utf_ptr2cells(ptr.offset(col as isize)) > 1 {
-                    (*win).w_wcol -= 1;
+                    win.w_wcol -= 1;
                 }
             }
         }
         setcursor();
         ui_flush();
 
-        at.wcol = (*win).w_wcol;
-        at.wrow = (*win).w_wrow;
-        (*win).w_wcol = old_wcol;
-        (*win).w_wrow = old_wrow;
+        at.wcol = win.w_wcol;
+        at.wrow = win.w_wrow;
+        win.w_wcol = old_wcol;
+        win.w_wrow = old_wrow;
         deleted
     }
 }

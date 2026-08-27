@@ -24,7 +24,7 @@ use super::{
     ses_put_fname,
 };
 use crate::arglist::global_arglist;
-use crate::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, buflist_findnr};
+use crate::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, find_buf};
 use crate::fold::put_folds;
 use crate::main::{curbuf, curwin, ssop_flags};
 use crate::mapping::makemap;
@@ -36,6 +36,7 @@ use crate::options::{
 };
 use crate::pos::MAXCOL;
 use crate::types::{FAIL, NUL, OK, OptionSetFlags, int64_t, tabpage_T, win_T};
+use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -110,7 +111,7 @@ pub(crate) unsafe fn put_view(
 
         // Local mappings and abbreviations.
         if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-            && makemap(out.raw(), (*wp).w_buffer) == FAIL
+            && makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) == FAIL
         {
             return false;
         }
@@ -123,7 +124,7 @@ pub(crate) unsafe fn put_view(
         if opts.has(kOptSsopFlagFolds)
             && !(*(*wp).w_buffer).b_ffname.is_null()
             && (bt_normal((*wp).w_buffer) || bt_help((*wp).w_buffer))
-            && put_folds(out.raw(), wp) == FAIL
+            && put_folds(out.raw(), Win::new(wp)) == FAIL
         {
             return false;
         }
@@ -211,10 +212,10 @@ unsafe fn put_help_edit(out: SessionFile, wp: *mut win_T) -> bool {
 /// # Safety
 /// `wp` is live.
 unsafe fn put_alternate(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> bool {
-    // SAFETY: caller contract; `buflist_findnr` answers a live buffer or
+    // SAFETY: caller contract; `find_buf` answers a live buffer or
     // null.
     unsafe {
-        let alt = buflist_findnr((*wp).w_alt_fnum);
+        let alt = find_buf((*wp).w_alt_fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
         let wanted = opts.is_session()
             && !alt.is_null()
             && !(*alt).b_fname.is_null()

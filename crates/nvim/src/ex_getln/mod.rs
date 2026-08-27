@@ -12,8 +12,8 @@ use crate::autocmd::{
     aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
 use crate::buffer::{
-    buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid,
-    buflist_findnr, bufref_valid, close_buffer, do_buffer, set_bufref,
+    buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, bufref_valid,
+    close_buffer, do_buffer, find_buf, set_bufref,
 };
 use crate::charset::{
     ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
@@ -141,18 +141,18 @@ use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr, CmdBuff,
-    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineColors, CmdlineInfo,
-    ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
-    OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, Set_ptr_t, String_0, TryState, UndoLink,
-    UndoObjectType, VimState, aco_save_T, buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T,
-    disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T,
-    garray_T, handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T,
-    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
-    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
-    uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline,
+    Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
+    OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
+    RemapValues, Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T,
+    buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
+    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
+    hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
+    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
+    searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t, uint32_t,
+    uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -168,6 +168,7 @@ use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
+use crate::winlayer::Cc;
 use ::libc::{abort, memcpy, memset, strcmp, strcpy, strlen, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
@@ -490,33 +491,13 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
         },
         type_0: kCallbackNone,
     },
-    last_colors: ColoredCmdline {
-        prompt_id: 0,
-        cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        colors: CmdlineColors {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<CmdlineColorChunk>(),
-        },
-    },
+    last_colors: ColoredCmdline::NONE,
     level: 0,
     special_char: 0,
     special_shift: false,
     redraw_state: kCmdRedrawNone,
     one_key: false,
     mouse_used: ::core::ptr::null_mut::<bool>(),
-};
-
-/// An all-zero [`ColoredCmdline`], C's `(ColoredCmdline){ .cmdbuff = NULL,
-/// .colors = KV_INITIAL_VALUE }`.
-pub(crate) const COLORED_CMDLINE_INIT: ColoredCmdline = ColoredCmdline {
-    prompt_id: 0,
-    cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    colors: CmdlineColors {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<CmdlineColorChunk>(),
-    },
 };
 
 /// An all-zero [`Error`], C's `ERROR_INIT`.

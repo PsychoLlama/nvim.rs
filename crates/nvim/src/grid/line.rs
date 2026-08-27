@@ -53,11 +53,11 @@ pub(crate) fn linebuf() -> LineBufRef {
     LineBufRef(LINEBUF.ptr())
 }
 
-/// The line batch in progress. Only one exists at a time; `grid` being null
-/// means there is none.
+/// The line batch in progress. Only one exists at a time; `grid` being
+/// `None` means there is none.
 #[derive(Clone, Copy)]
 struct LineBatch {
-    grid: GridRef,
+    grid: Option<GridRef>,
     row: c_int,
     /// Column on the grid that batch column 0 maps to.
     coloff: c_int,
@@ -76,7 +76,7 @@ struct LineBatch {
 impl LineBatch {
     const fn new() -> Self {
         LineBatch {
-            grid: GridRef::NONE,
+            grid: None,
             row: -1,
             coloff: 0,
             maxcol: 0,
@@ -185,7 +185,7 @@ pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
     let mut b = batch();
     debug_assert!(b.grid.is_none(), "grid_line_grid == NULL");
     *b = LineBatch {
-        grid,
+        grid: Some(grid),
         row,
         coloff: col,
         maxcol: grid.cols.min(grid.cols - col),
@@ -223,18 +223,19 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
             return schar_from_ascii(b' ');
         }
         col += b.coloff;
-        let off = b.grid.cell_offset(b.row, col);
+        let grid = b.grid.expect("a batch is in progress");
+        let off = grid.cell_offset(b.row, col);
         if !attr.is_null() {
-            *attr = b.grid.attr_at(off);
+            *attr = grid.attr_at(off);
         }
-        b.grid.char_at(off)
+        grid.char_at(off)
     }
 }
 
 /// Put one glyph at `col`. A no-op when no batch is open.
 pub fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
     let mut b = batch();
-    debug_assert!(!b.grid.is_none(), "grid_line_grid");
+    debug_assert!(b.grid.is_some(), "grid_line_grid");
     if col >= b.maxcol {
         return;
     }
@@ -265,7 +266,7 @@ pub unsafe fn grid_line_puts(
     let mut b = batch();
     // SAFETY: the caller's promise, for the batch and for `text`.
     unsafe {
-        debug_assert!(!b.grid.is_none(), "grid_line_grid");
+        debug_assert!(b.grid.is_some(), "grid_line_grid");
 
         let max_col = b.maxcol;
         let start_col = col;
@@ -372,7 +373,8 @@ pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, cle
 /// A batch must be in progress.
 pub unsafe fn grid_line_cursor_goto(col: c_int) {
     let b = *batch();
-    ui_grid_cursor_goto(b.grid.handle, b.row, col);
+    let grid = b.grid.expect("a batch is in progress");
+    ui_grid_cursor_goto(grid.handle, b.row, col);
 }
 
 /// Reverse the batch for a 'rightleft' window.
@@ -408,8 +410,8 @@ pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int,
 pub unsafe fn grid_line_flush() {
     unsafe {
         let mut b = batch();
-        let grid = b.grid;
-        b.grid = GridRef::NONE;
+        // Ended here, whether or not there turns out to be anything to send.
+        let grid = b.grid.take();
         b.clear_to = b.last.max(b.clear_to);
         debug_assert!(
             b.clear_to <= b.maxcol,
@@ -420,7 +422,7 @@ pub unsafe fn grid_line_flush() {
         }
 
         grid_put_linebuf(
-            grid,
+            grid.expect("a batch is in progress"),
             b.row,
             b.coloff,
             LineSpan {
@@ -447,11 +449,11 @@ pub unsafe fn grid_line_flush() {
 pub unsafe fn grid_line_flush_if_valid_row() {
     unsafe {
         let mut b = batch();
-        if b.row < 0 || b.row >= { b.grid }.rows {
+        if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
             if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
                 abort();
             }
-            b.grid = GridRef::NONE;
+            b.grid = None;
             return;
         }
         grid_line_flush();
@@ -476,9 +478,9 @@ pub unsafe fn grid_clear(
             grid_line_start(view, row);
             let mut b = batch();
             end_col = end_col.min(b.maxcol);
-            if b.row >= { b.grid }.rows || start_col >= end_col {
+            if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
                 // TODO(bfredl): make callers behave instead.
-                b.grid = GridRef::NONE;
+                b.grid = None;
                 return;
             }
             grid_line_clear_end(start_col, end_col, attr, 0);

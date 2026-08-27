@@ -173,7 +173,7 @@ fn regcomp(pat: &[u8], flags: c_int) -> *mut regprog_T {
 
 fn is_diff_mode(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { diff_mode_buf(buf.raw()) }
+    diff_mode_buf(buf)
 }
 
 /// The current buffer, which is null only before the first one is created.
@@ -220,12 +220,12 @@ fn copy_options_into(mut buf: Buf, flags: c_int) {
 
 fn check_cursor_column(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { check_cursor_col(win.raw()) };
+    check_cursor_col(win);
 }
 
 fn check_cursor_line(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { check_cursor_lnum(win.raw()) };
+    check_cursor_lnum(win);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ pub unsafe fn buflist_new(
 
     // Will allocate ffname.
     // SAFETY: two locals holding a name each, and the current buffer.
-    unsafe { fname_expand(curbuf.get(), &raw mut ffname, &raw mut sfname) };
+    unsafe { fname_expand(cur_buf(), &raw mut ffname, &raw mut sfname) };
 
     // The file id works better than the name for hard links, when the file
     // exists.
@@ -273,8 +273,7 @@ pub unsafe fn buflist_new(
         trigger_undo_ftplugin(cur, current_win());
         // It is as if this buffer were deleted. Watch out for autocommands
         // that change curbuf: if that happens, allocate a new buffer anyway.
-        // SAFETY: a live buffer.
-        unsafe { buf_freeall(cur.raw(), BFA_WIPE as c_int | BFA_DEL as c_int) };
+        buf_freeall(cur, BFA_WIPE as c_int | BFA_DEL as c_int);
         if aborting() {
             // Autocommands may abort script processing.
             free(ffname);
@@ -332,7 +331,7 @@ pub unsafe fn buflist_new(
         buf.b_flags |= BufFlags::DUMMY;
     }
     // SAFETY: a live buffer.
-    unsafe { buf_clear_file(buf.raw()) };
+    buf_clear_file(buf);
     // SAFETY: a live buffer; clear its marks.
     unsafe { clrallmarks(buf.raw(), 0 as Timestamp) };
     // SAFETY: a live buffer; check the file marks for this file.
@@ -364,13 +363,9 @@ pub unsafe fn buflist_new(
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
 fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
     if lnum != 0 as linenr_T {
-        let win = if flags & BLN_NOCURWIN as c_int != 0 {
-            ptr::null_mut()
-        } else {
-            current_win().raw()
-        };
-        // SAFETY: a live buffer, and a live window or null.
-        unsafe { buflist_setfpos(buf.raw(), win, lnum, 0 as colnr_T, false) };
+        let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
+        // SAFETY: records a position in the buffer's own entry list.
+        unsafe { buflist_setfpos(buf, win, lnum, 0 as colnr_T, false) };
     }
     if flags & BLN_NOOPT as c_int == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
@@ -409,7 +404,7 @@ fn new_buffer() -> Buf {
 /// `ml_recover`'s, which holds the memline of the swap file being read, and
 /// `open_spellbuf`'s, which backs a `.sug` word list with a swap file so it
 /// need not stay in memory. Neither is given a handle, neither is registered
-/// (so `buflist_findnr`, `nvim_list_bufs` and every `FOR_ALL_BUFFERS` walk
+/// (so `find_buf`, `nvim_list_bufs` and every `FOR_ALL_BUFFERS` walk
 /// are blind to them, which is the point), and neither goes through
 /// `close_buffer`/`free_buffer` — each is freed by the code that made it.
 ///
@@ -508,7 +503,7 @@ pub unsafe fn curbuf_reusable() -> bool {
         && buf.terminal.is_null()
         && empty
         && !unsafe { bt_quickfix(buf.raw()) }
-        && !unsafe { curbuf_is_changed() }
+        && !curbuf_is_changed()
 }
 
 // ---------------------------------------------------------------------------
@@ -516,9 +511,7 @@ pub unsafe fn curbuf_reusable() -> bool {
 
 /// Free the memory for a buffer's options. `free_p_ff` frees `'fileformat'`,
 /// `'buftype'` and `'fileencoding'` too.
-pub unsafe fn free_buf_options(buf: *mut buf_T, free_p_ff: bool) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+pub unsafe fn free_buf_options(mut buf: Buf, free_p_ff: bool) {
     if free_p_ff {
         clear_opt(&mut buf.b_p_fenc);
         clear_opt(&mut buf.b_p_ff);
@@ -634,7 +627,7 @@ pub unsafe fn buflist_getfile(
     if lnum == 0 as linenr_T {
         // Default line number: where the cursor was left last time.
         // SAFETY: a live buffer; the answer is a live mark.
-        fm = unsafe { buflist_findfmark(buf.raw()) };
+        fm = unsafe { buflist_findfmark(buf) };
         // SAFETY: as above.
         (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
         restore_view = true;
@@ -701,7 +694,7 @@ fn goto_existing_window(mut buf: Buf) -> bool {
 /// Put the cursor where it was left in the current buffer.
 pub(crate) unsafe fn buflist_getfpos() {
     // SAFETY: the current buffer; the answer is a live mark.
-    let fm = unsafe { buflist_findfmark(curbuf.get()) };
+    let fm = unsafe { buflist_findfmark(cur_buf()) };
     // SAFETY: a live mark.
     let (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
 
@@ -726,11 +719,11 @@ pub(crate) unsafe fn buflist_getfpos() {
 // Finding one by name
 
 /// The buffer for `fname`, resolved to a full path first.
-pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T {
+pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
     // SAFETY: a NUL-terminated name; the answer is an allocation or null.
     let ffname = unsafe { full_name_save(fname, true) };
     if ffname.is_null() {
-        return ptr::null_mut();
+        return None;
     }
     // SAFETY: the full name just built.
     let buf = unsafe { buflist_findname(ffname) };
@@ -739,12 +732,11 @@ pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T {
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.
-pub unsafe fn buflist_findname(ffname: *mut c_char) -> *mut buf_T {
+pub unsafe fn buflist_findname(ffname: *mut c_char) -> Option<Buf> {
     let mut file_id = NO_FILE_ID;
     // SAFETY: the caller's promise -- a NUL-terminated name -- and a local.
     let file_id_valid = unsafe { os_fileid(ffname, &raw mut file_id) };
     buflist_findname_file_id(ffname, &file_id, file_id_valid)
-        .map_or(ptr::null_mut(), |mut buf| buf.raw())
 }
 
 /// [`buflist_findname`] with the file id already looked up. Dummy buffers do
@@ -758,7 +750,7 @@ pub(crate) fn buflist_findname_file_id(
     buffers_backwards().find(|buf| {
         // SAFETY: a live buffer, a NUL-terminated name and a live file id.
         !buf.b_flags.has(BufFlags::DUMMY)
-            && !unsafe { otherfile_buf(buf.raw(), ffname, file_id, file_id_valid) }
+            && !unsafe { otherfile_buf(*buf, ffname, file_id, file_id_valid) }
     })
 }
 

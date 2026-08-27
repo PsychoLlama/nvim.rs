@@ -21,6 +21,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::winlayer::Win;
 
 /// The state stack of one cached entry, whether it is short enough to live
 /// inline in the entry or long enough to need a growarray.
@@ -66,8 +67,8 @@ pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
         // With 'foldmethod' "syntax", every fold has to be recomputed too.
         let mut wp = firstwin.get();
         while !wp.is_null() {
-            if (*wp).w_s == block && foldmethod_is_syntax(wp) {
-                fold_update_all(wp);
+            if (*wp).w_s == block && foldmethod_is_syntax(Win::new(wp)) {
+                fold_update_all(Win::new(wp));
             }
             wp = (*wp).w_next;
         }

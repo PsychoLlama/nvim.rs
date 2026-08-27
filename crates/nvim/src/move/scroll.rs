@@ -20,14 +20,14 @@ use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, colnr_T, int64_t, linenr_T, win_T};
+use crate::types::{FAIL, colnr_T, int64_t, linenr_T};
 
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line
     /// allows. Answers whether it got there.
     pub(crate) fn coladvance(self, wcol: colnr_T) -> bool {
         // SAFETY: a live window.
-        unsafe { coladvance(self.raw(), wcol) }
+        coladvance(self, wcol)
     }
 }
 
@@ -184,21 +184,13 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
 }
 
 /// [`Win::scrolldown`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn scrolldown(wp: *mut win_T, line_count: linenr_T, byfold: bool) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.scrolldown(line_count, byfold)
+pub fn scrolldown(wp: Win, line_count: linenr_T, byfold: bool) -> bool {
+    wp.scrolldown(line_count, byfold)
 }
 
 /// [`Win::scrollup`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn scrollup(wp: *mut win_T, line_count: linenr_T, byfold: bool) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.scrollup(line_count, byfold)
+pub fn scrollup(wp: Win, line_count: linenr_T, byfold: bool) -> bool {
+    wp.scrollup(line_count, byfold)
 }
 
 impl Win {
@@ -499,12 +491,8 @@ pub unsafe fn adjust_skipcol() {
 }
 
 /// [`Win::check_topfill`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn check_topfill(wp: *mut win_T, down: bool) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.check_topfill(down);
+pub fn check_topfill(wp: Win, down: bool) {
+    wp.check_topfill(down);
 }
 
 impl Win {

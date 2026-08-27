@@ -24,7 +24,7 @@ pub unsafe fn diff_update_line(lnum: linenr_T) {
         return;
     }
     let tp = cur_tab();
-    let idx = diff_slot(curbuf.get(), tp);
+    let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT {
         return;
     }
@@ -220,12 +220,10 @@ fn diff_find_change_simple(
 /// [`diff_find_change_inline_diff`].
 ///
 /// # Safety
-/// `wp` must be a live window and `diffline` a writable `diffline_T`.
-pub unsafe fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut diffline_T) -> bool {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+/// `diffline` must be a writable `diffline_T`.
+pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_T) -> bool {
     let tp = cur_tab();
-    let idx = diff_slot(wp.w_buffer, tp);
+    let idx = diff_slot(wp.buffer(), tp);
     if idx == DB_COUNT {
         return false;
     }
@@ -347,21 +345,21 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let stale = !cache_results
         || lnum != prev_lnum.get()
         // SAFETY: the current buffer is live.
-        || changedtick.get() != unsafe { buf_get_changedtick(curbuf.get()) }
+        || changedtick.get() != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
         || fnum.get() != cur_buf().handle
         || diff_flags.get() != prev_diff_flags.get();
     if stale {
         let mut linestatus = 0;
         let status = &raw mut linestatus;
         // SAFETY: the current window is live; `linestatus` is a local.
-        unsafe { diff_check_with_linestatus(cur_win().raw(), lnum, status) };
+        unsafe { diff_check_with_linestatus(cur_win(), lnum, status) };
         hlID.set(match linestatus {
             LINE_CHANGED => {
                 change_start.set(MAXCOL as c_int);
                 change_end.set(-1);
                 let out = &raw mut diffline;
                 // SAFETY: the current window is live; `diffline` is a local.
-                let added = unsafe { diff_find_change(cur_win().raw(), lnum, out) };
+                let added = unsafe { diff_find_change(cur_win(), lnum, out) };
                 if added {
                     HLF_ADD
                 } else {
@@ -383,7 +381,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         if cache_results {
             prev_lnum.set(lnum);
             // SAFETY: the current buffer is live.
-            changedtick.set(unsafe { buf_get_changedtick(curbuf.get()) });
+            changedtick.set(unsafe { buf_get_changedtick(Buf::new(curbuf.get())) });
             fnum.set(cur_buf().handle);
             prev_diff_flags.set(diff_flags.get());
         }

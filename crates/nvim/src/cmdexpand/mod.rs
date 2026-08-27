@@ -26,9 +26,8 @@ use crate::ex_docmd::{
     get_command_name, set_no_hlsearch, skip_cmd_arg, skip_range,
 };
 use crate::ex_getln::{
-    Cc, cmd_screencol, cursorcmd, escape_fname, get_cmdline_info, get_cmdline_last_prompt_id,
-    parse_pattern_and_range, put_on_cmdline, realloc_cmdbuff, redrawcmd, tilde_replace,
-    vim_strsave_fnameescape,
+    cmd_screencol, cursorcmd, escape_fname, get_cmdline_last_prompt_id, parse_pattern_and_range,
+    put_on_cmdline, realloc_cmdbuff, redrawcmd, tilde_replace, vim_strsave_fnameescape,
 };
 use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init};
@@ -103,11 +102,10 @@ use crate::syntax::{
 use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    Arena, Array, CmdAddr, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData,
-    LuaRetMode, Object, OptInt, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
-    fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
-    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t, ssize_t, typval_T,
-    typval_vval_union, varnumber_T, xp_prefix_T,
+    Arena, Array, CmdAddr, CompleteListItemGetter, Direction, Error, EvalFuncData, LuaRetMode,
+    Object, OptInt, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
+    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T, listitem_T, pos_T, ptrdiff_t,
+    pumitem_T, regmatch_T, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{
@@ -116,6 +114,7 @@ use crate::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::window::{global_stl_height, last_status};
+use crate::winlayer::Cc;
 use ::libc::{qsort, strcmp, strcpy, strlen, strncpy};
 use core::ffi::CStr;
 

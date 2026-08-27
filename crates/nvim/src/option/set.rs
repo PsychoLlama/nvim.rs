@@ -65,6 +65,7 @@ use super::{
     validate_option_value,
 };
 use crate::pos::MAXCOL;
+use crate::winlayer::Buf;
 
 /// Record where the option was just set, in every scope the flags name.
 pub(crate) fn set_option_sctx(
@@ -403,7 +404,7 @@ pub(crate) unsafe fn did_set_option(
     // the table, and `errbuf` writable for `errbuflen` bytes.
     unsafe {
         let mut args = optset_T {
-            os_varp: varp.addr(),
+            os_varp: varp,
             os_idx: opt_idx,
             os_flags: opt_flags,
             os_oldval: old_value.data,
@@ -492,7 +493,7 @@ pub(crate) unsafe fn did_set_option(
             // A modeline only forces the FileType autocommand when the
             // filetype really changed.
             kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
-                do_filetype_autocmd(curbuf.get(), value_changed);
+                do_filetype_autocmd(Buf::current(), value_changed);
             }
             kOptSpelllang => do_spelllang_source(curwin.get()),
             _ => {}

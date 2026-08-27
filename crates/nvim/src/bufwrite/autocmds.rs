@@ -21,6 +21,7 @@ use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, event_T};
 
 use super::*;
 use crate::option::cpo_has;
+use crate::winlayer::Buf;
 
 /// How a write was asked for. Chooses which autocommand events fire, and is
 /// carried through `buf_write` because most of its decisions turn on these.
@@ -151,8 +152,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                     // BufWriteCmd wrote everything correctly and reset
                     // 'modified': correct the undo information so that an
                     // undo now sets it again.
-                    u_unchanged(curbuf.get());
-                    u_update_save_nr(curbuf.get());
+                    u_unchanged(Buf::current());
+                    u_update_save_nr(Buf::current());
                 }
             } else {
                 nofile_err = apply_pre(EVENT_BUFWRITEPRE, sfname, eap, mode.overwriting);

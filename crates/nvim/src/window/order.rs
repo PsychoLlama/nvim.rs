@@ -291,11 +291,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
 
     // Keep the window's height when it was moved horizontally.
     // SAFETY: only compares the pointer against the window list.
-    if size == 0
-        && flags & WSP_VERT as c_int == 0
-        && unsafe { win_valid(wp.raw()) }
-        && !wp.w_floating
-    {
+    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(wp.raw()) && !wp.w_floating {
         setheight_win(height, wp);
         if p_ea.get() != 0 {
             let cur = cur_win();

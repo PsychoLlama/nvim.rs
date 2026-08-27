@@ -219,7 +219,7 @@ pub unsafe fn do_autocmd_event(
 
     // `:autocmd! {event}`: every pattern goes.
     if unsafe { *pat } == 0 && del {
-        unsafe { aucmd_del_for_event_and_group(event, findgroup) };
+        aucmd_del_for_event_and_group(event, findgroup);
         return OK;
     }
 
@@ -284,7 +284,7 @@ pub unsafe fn do_autocmd_event(
     }
 
     // The patterns and commands marked above can really go now.
-    unsafe { au_cleanup() };
+    au_cleanup();
     OK
 }
 
@@ -351,7 +351,7 @@ pub unsafe fn autocmd_register(
 
     if ap.is_null() {
         // A buffer-local pattern needs a buffer that exists.
-        if is_buflocal && (buflocal_nr == 0 || buflist_findnr(buflocal_nr).is_null()) {
+        if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
             unsafe {
@@ -531,7 +531,10 @@ pub unsafe fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
 /// Delete the autocommand with this id, wherever it is.
 ///
 /// Only autocommands created through the API have one.
-pub unsafe fn autocmd_delete_id(id: int64_t) -> bool {
+///
+/// Safe: it takes an id, not a pointer, and reaches the rows only through
+/// the events' own vectors.
+pub fn autocmd_delete_id(id: int64_t) -> bool {
     debug_assert!(id > 0);
 
     let mut success = false;

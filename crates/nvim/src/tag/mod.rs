@@ -2,7 +2,7 @@
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{EVENT_BUFREADCMD, has_autocmd};
-use crate::buffer::{bt_help, buflist_findname_exp, buflist_findnr, buflist_getfile};
+use crate::buffer::{bt_help, buflist_findname_exp, buflist_getfile, find_buf};
 use crate::charset::{ptr2cells, skipdigits, vim_isblankline};
 use crate::cmdexpand::{expand_init, expand_one};
 use crate::cursor::check_cursor;
@@ -64,10 +64,10 @@ use crate::state::MODE_INSERT;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, Callback_data, FILE, OptInt, Timestamp, buf_T, colnr_T, dict_T,
-    dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values,
-    int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t,
-    taggy_T, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    AdditionalData, Callback, Callback_data, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T,
+    exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t,
+    linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T,
+    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{

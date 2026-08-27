@@ -11,6 +11,7 @@ use super::*;
 use crate::cmdexpand::Expanded;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::winlayer::Buf;
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -94,7 +95,8 @@ pub(crate) unsafe fn process_next_cpt_value(
                 && !compl_time_slice_expired.get()
                 && !vim_strchr(c"buwU".as_ptr(), *(*st).e_cpt as uint8_t as c_int).is_null()
                 && {
-                    (*st).ins_buf = ins_compl_next_buf((*st).ins_buf, *(*st).e_cpt as c_int);
+                    (*st).ins_buf =
+                        ins_compl_next_buf(Buf::new((*st).ins_buf), *(*st).e_cpt as c_int).raw();
                     (*st).ins_buf != curbuf.get()
                 }
             {

@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::types::{FAIL, NUL, OK, VAR_FIXED};
+use crate::winlayer::Win;
 
 /// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
 pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
@@ -200,7 +201,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
 
         // TODO(vim): is this sufficient for redrawing?  Redrawing everything
         // causes flicker, thus we can't do that.
-        changed_cline_bef_curs(curwin.get());
+        changed_cline_bef_curs(Win::current());
         // Clear v:completed_item.
         set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
     }

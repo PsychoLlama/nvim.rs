@@ -139,7 +139,7 @@ impl Cells {
                     FOLD_TEXT_LEN as size_t,
                 );
                 wlv.extra_text = get_foldtext(
-                    wp,
+                    Win::new(wp),
                     wlv.lnum,
                     lnume,
                     wlv.foldinfo,
@@ -257,7 +257,7 @@ impl Cells {
                 self.escaped(wlv, wp);
             } else if visual_active()
                 && (visual_mode().is_block() || visual_mode().is_char())
-                && virtual_active(wp)
+                && virtual_active(Win::new(wp))
                 && wlv.tocol != MAXCOL as ::core::ffi::c_int
                 && wlv.vcol < wlv.tocol
                 && wlv.col < self.view_width
@@ -496,7 +496,7 @@ impl Cells {
             // For a diff line the highlighting continues after the "$".
             if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
                 if !(self.area_highlighting
-                    && virtual_active(wp)
+                    && virtual_active(Win::new(wp))
                     && wlv.tocol != MAXCOL as ::core::ffi::c_int
                     && wlv.vcol < wlv.tocol)
                 {

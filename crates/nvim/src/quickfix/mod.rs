@@ -25,9 +25,9 @@ use crate::autocmd::{
     aucmd_restbuf, block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    bt_help, bt_normal, bt_quickfix, buf_valid, buflist_findname_exp, buflist_findnr,
-    buflist_getfile, buflist_new, bufref_valid, close_buffer, do_modelines, no_write_message,
-    set_bufref, setfname, wipe_buffer,
+    bt_help, bt_normal, bt_quickfix, buf_valid, buflist_findname_exp, buflist_getfile, buflist_new,
+    bufref_valid, close_buffer, do_modelines, find_buf, no_write_message, set_bufref, setfname,
+    wipe_buffer,
 };
 use crate::change::changed_lines;
 use crate::charset::{skipdigits, skipwhite, vim_isprintc};
@@ -65,10 +65,10 @@ use crate::main::{
     Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, e_au_recursive,
     e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invarg2, e_invrange, e_listreq,
     e_loclist, e_no_errors, e_nomatch, e_nomatch2, e_noprevre, e_notmp, e_openerrf, e_readerrf,
-    e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer, fdo_flags, first_tabpage,
-    firstwin, got_int, lastwin, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled,
-    must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc,
-    p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin, restart_edit, swb_flags,
+    e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer, fdo_flags, firstwin,
+    got_int, lastwin, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled, must_redraw, p_ch,
+    p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc, p_mls, p_qftf,
+    p_rtp, p_shq, p_sp, p_swb, prevwin, restart_edit, swb_flags,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
@@ -115,9 +115,9 @@ use crate::types::{
     Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt,
     OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType,
     aco_save_T, bln_values, buf_T, bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
-    dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T,
-    pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
-    regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    dobuf_action_values, exarg_T, getf_values, linenr_T, list_T, listitem_T, optset_T, pos_T,
+    ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T,
+    scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
@@ -139,7 +139,7 @@ mod read;
 pub use self::read::*;
 mod stack;
 pub use self::stack::*;
-pub(crate) use crate::winlayer::Ea;
+pub(crate) use crate::winlayer::{Buf, Ea, Win};
 mod list;
 pub use self::list::*;
 mod entry;

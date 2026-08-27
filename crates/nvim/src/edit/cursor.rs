@@ -106,8 +106,7 @@ pub(crate) unsafe fn oneright() -> c_int {
     // 'virtualedit' contains "onemore".
     let l = unsafe { utfc_ptr2len(ptr) };
     if unsafe { *ptr.offset(l as isize) } as c_int == NUL
-        && unsafe { get_ve_flags(win.raw()) } & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint
-            == 0
+        && get_ve_flags(win) & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint == 0
     {
         return FAIL;
     }
@@ -182,11 +181,8 @@ pub(crate) unsafe fn oneleft() -> c_int {
 /// not count either -- which is spelled by giving `n` its step back, so the
 /// loop runs one more time.
 ///
-/// # Safety
-/// `wp` must point to a live window.
-pub(crate) unsafe fn cursor_up_inner(wp: *mut win_T, mut n: linenr_T, skip_conceal: bool) {
-    // SAFETY: the caller promises `wp` is a live window.
-    let mut win = unsafe { Win::new(wp) };
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool) {
     let mut lnum = win.w_cursor.lnum;
 
     if n >= lnum {
@@ -231,15 +227,14 @@ pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> c_int {
     if n > 0 && win.w_cursor.lnum <= 1 {
         return FAIL;
     }
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { cursor_up_inner(win.raw(), n, false) };
+    cursor_up_inner(win, n, false);
 
     // Try to advance to the column we want to be at.
     let want = win.w_curswant;
     coladvance_win(win, want);
 
     if upd_topline {
-        unsafe { update_topline(win.raw()) }; // make sure w_topline is valid
+        update_topline(win); // make sure w_topline is valid
     }
     OK
 }
@@ -248,11 +243,8 @@ pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> c_int {
 ///
 /// The mirror of [`cursor_up_inner`], including the `skip_conceal` step-back.
 ///
-/// # Safety
-/// `wp` must point to a live window.
-pub(crate) unsafe fn cursor_down_inner(wp: *mut win_T, mut n: c_int, skip_conceal: bool) {
-    // SAFETY: the caller promises `wp` is a live window.
-    let mut win = unsafe { Win::new(wp) };
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) {
     let mut lnum = win.w_cursor.lnum;
     let line_count = win.buffer().b_ml.ml_line_count;
 
@@ -294,15 +286,14 @@ pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> c_int {
     if n > 0 && lnum >= win.buffer().b_ml.ml_line_count {
         return FAIL;
     }
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { cursor_down_inner(win.raw(), n, false) };
+    cursor_down_inner(win, n, false);
 
     // Try to advance to the column we want to be at.
     let want = win.w_curswant;
     coladvance_win(win, want);
 
     if upd_topline {
-        unsafe { update_topline(win.raw()) }; // make sure w_topline is valid
+        update_topline(win); // make sure w_topline is valid
     }
     OK
 }
@@ -318,7 +309,7 @@ fn adjust_skipcol_now() {
 #[inline(always)]
 fn coladvance_win(win: Win, vcol: colnr_T) {
     // SAFETY: a live window, whose cursor line exists.
-    unsafe { coladvance(win.raw(), vcol) };
+    coladvance(win, vcol);
 }
 
 /// The cursor's line, from the cursor's own column on.
@@ -339,7 +330,7 @@ fn viscol() -> colnr_T {
 #[inline(always)]
 fn virtual_edit(win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { virtual_active(win.raw()) }
+    virtual_active(win)
 }
 
 /// Does `win` hide any of its lines, by a fold or a decoration?
@@ -360,24 +351,13 @@ fn line_concealed(win: Win, lnum: linenr_T) -> bool {
 /// fold's first line when it is.
 #[inline(always)]
 fn fold_start(win: Win, lnum: linenr_T, first: &mut linenr_T) -> bool {
-    // SAFETY: a live window and a line number of its buffer.
-    unsafe { has_folding(win.raw(), lnum, first, ::core::ptr::null_mut()) }
+    has_folding(win, lnum, Some(first), None)
 }
 
 /// [`fold_start`], leaving the fold's *last* line in `last` instead.
 #[inline(always)]
 fn fold_end(win: Win, lnum: linenr_T, last: &mut linenr_T) -> bool {
-    // SAFETY: a live window and a line number of its buffer.
-    unsafe {
-        has_folding_win(
-            win.raw(),
-            lnum,
-            ::core::ptr::null_mut(),
-            last,
-            true,
-            ::core::ptr::null_mut(),
-        )
-    }
+    has_folding_win(win, lnum, None, Some(last), true, None)
 }
 
 /// The window the editor is working in.

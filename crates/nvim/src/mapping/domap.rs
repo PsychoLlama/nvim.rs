@@ -12,6 +12,7 @@ use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
 use crate::semsg_c;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -79,9 +80,9 @@ unsafe fn global_map_exists(mode: c_int, lhs: *const c_char, len: c_int, is_abbr
 /// whose LHS and `lhs` agree as far as the shorter of the two.
 ///
 /// # Safety
-/// `buf` must be live and `lhs` readable for `len` bytes.
+/// `lhs` must be readable for `len` bytes.
 unsafe fn show_buffer_local(
-    buf: *mut buf_T,
+    buf: Buf,
     mode: c_int,
     lhs: *const c_char,
     len: c_int,
@@ -165,27 +166,31 @@ unsafe fn reuse_mapblock(
 /// global one.
 ///
 /// # Safety
-/// `args` and `buf` must be live.
+/// `args` must be live.
 pub(crate) unsafe fn buf_do_map(
     mut maptype: c_int,
     args: *mut MapArguments,
     mode: c_int,
     is_abbrev: bool,
-    buf: *mut buf_T,
+    buf: Buf,
 ) -> c_int {
+    // The buffer's own tables are reached through the one raw pointer, not
+    // through `Buf`'s `DerefMut`: `buf_table` points into `b_maphash`, and a
+    // fresh `&mut buf_T` taken later would invalidate it.
+    let bufp = buf.raw();
     unsafe {
         let mut retval = 0;
 
         // If <buffer> was given we search the buffer's mappings, not the
         // global ones.
-        let buf_table: *mut *mut mapblock_T = (&raw mut (*buf).b_maphash).cast();
+        let buf_table: *mut *mut mapblock_T = (&raw mut (*bufp).b_maphash).cast();
         let map_table: *mut *mut mapblock_T = if (*args).buffer {
             buf_table
         } else {
             global_map_heads()
         };
         let abbr_table: *mut *mut mapblock_T = if (*args).buffer {
-            &raw mut (*buf).b_first_abbr
+            &raw mut (*bufp).b_first_abbr
         } else {
             global_abbr_head()
         };
@@ -436,7 +441,7 @@ pub(crate) unsafe fn buf_do_map(
                     } else if c_int::from(*lhs) == Ctrl_C {
                         // CTRL-C has been unmapped, reuse it for Interrupting.
                         if map_table == buf_table {
-                            (*buf).b_mapped_ctrl_c &= !mode;
+                            (*bufp).b_mapped_ctrl_c &= !mode;
                         } else {
                             mapped_ctrl_c.set(mapped_ctrl_c.get() & !mode);
                         }
@@ -525,7 +530,7 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
         let mut result =
             str_to_mapargs(arg, maptype == MAPTYPE_UNMAP as c_int, &raw mut parsed_args);
         if result == 0 {
-            result = buf_do_map(maptype, &raw mut parsed_args, mode, is_abbrev, curbuf.get());
+            result = buf_do_map(maptype, &raw mut parsed_args, mode, is_abbrev, cur_buf());
         }
         xfree(parsed_args.rhs.cast());
         xfree(parsed_args.orig_rhs.cast());
@@ -545,7 +550,7 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
             return;
         }
         let mode = get_map_mode(&raw mut cmdp, forceit);
-        map_clear_mode(curbuf.get(), mode, local, abbr);
+        map_clear_mode(cur_buf(), mode, local, abbr);
     }
 }
 
@@ -572,7 +577,7 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
             &raw mut args,
             mode,
             false,
-            curbuf.get(),
+            cur_buf(),
         );
         xfree(args.rhs.cast());
         xfree(args.orig_rhs.cast());
@@ -605,7 +610,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
             emsg(gettext((&raw const e_invarg).cast())); // invalid arguments
         } else {
             let lhs = (&raw mut parsed_args.lhs).cast::<c_char>();
-            match buf_do_map(maptype, &raw mut parsed_args, mode, isabbrev, curbuf.get()) {
+            match buf_do_map(maptype, &raw mut parsed_args, mode, isabbrev, cur_buf()) {
                 1 => {
                     emsg(gettext((&raw const e_invarg).cast()));
                 }
@@ -690,4 +695,10 @@ pub unsafe fn ex_mapclear(eap: *mut exarg_T) {
 /// `eap` must be a live `exarg_T`.
 pub unsafe fn ex_abclear(eap: *mut exarg_T) {
     unsafe { do_mapclear((*eap).cmd, (*eap).arg, true, true) }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

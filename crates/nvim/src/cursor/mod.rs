@@ -1,17 +1,17 @@
 //! Moving and validating a window's cursor position.
 //!
-//! Everything here works through raw `*mut win_T` / `*mut buf_T` pointers
-//! rather than references. Callers interleave these calls with reads of the
+//! Everything here speaks in [`Win`], [`Buf`], [`Pos`] and [`Line`] rather
+//! than in references. Callers interleave these calls with reads of the
 //! `curwin`/`curbuf` globals — which alias the same windows — and several of
 //! them re-enter through `ml_replace` and the extmark bookkeeping, so a
 //! `&mut` here would invalidate a pointer the caller still holds.
 //!
-//! The pointers stay raw, but the dereferences do not spread through the
-//! module: [`Win`], [`Buf`], [`Pos`] and [`Line`] each wrap one of them and
-//! make its *construction* the unsafe step. Every accessor, and every call
-//! into a neighbouring module, then rests on that single promise — which each
-//! `pub unsafe fn` here restates in its own `# Safety` section, so the bodies
-//! below do not repeat it line by line. The four wrappers themselves live in
+//! The pointers therefore stay raw, but the dereferences do not spread
+//! through the module: each of the four wraps one of them and makes its
+//! *construction* the unsafe step, which happens at the caller. Every
+//! accessor, and every call into a neighbouring module, then rests on that
+//! single promise, so the bodies below do not repeat it line by line and most
+//! of them are safe functions. The four wrappers themselves live in
 //! [`winlayer`](crate::winlayer), shared with the viewport code,
 //! and `Win::text_width`, `Win::sidescrolloff` and `Win::validate_virtcol`
 //! come from
@@ -46,8 +46,7 @@ use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsiz
 use crate::pos::MAXCOL;
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, NUL, StrCharInfo, buf_T, colnr_T, int64_t, linenr_T,
-    pos_T, win_T,
+    CharSize, CharsizeArg, CharsizeKind, NUL, StrCharInfo, colnr_T, int64_t, linenr_T, pos_T,
 };
 use crate::winlayer::{Buf, Line, Pos, Win};
 
@@ -107,32 +106,32 @@ impl Win {
     #[inline(always)]
     fn note_virtcol(self, vcol: colnr_T) {
         // SAFETY: a live window.
-        unsafe { set_valid_virtcol(self.raw(), vcol) };
+        set_valid_virtcol(self, vcol);
     }
 
     #[inline(always)]
     fn cursor_line_changed(self) {
         // SAFETY: a live window.
-        unsafe { changed_cline_bef_curs(self.raw()) };
+        changed_cline_bef_curs(self);
     }
 
     #[inline(always)]
     fn ve_flags(self) -> c_uint {
         // SAFETY: a live window.
-        unsafe { get_ve_flags(self.raw()) }
+        get_ve_flags(self)
     }
 
     #[inline(always)]
     fn virtual_active(self) -> bool {
         // SAFETY: a live window.
-        unsafe { virtual_active(self.raw()) }
+        virtual_active(self)
     }
 
     /// Virtual columns line `lnum` occupies.
     #[inline(always)]
     fn linetabsize(self, lnum: linenr_T) -> c_int {
         // SAFETY: a live window and a line of its buffer.
-        unsafe { linetabsize(self.raw(), lnum) }
+        unsafe { linetabsize(self, lnum) }
     }
 
     /// As [`Win::linetabsize`], but counting the room 'list' mode's `eol`
@@ -140,7 +139,7 @@ impl Win {
     #[inline(always)]
     fn linetabsize_eol(self, lnum: linenr_T) -> c_int {
         // SAFETY: a live window and a line of its buffer.
-        unsafe { linetabsize_eol(self.raw(), lnum) }
+        unsafe { linetabsize_eol(self, lnum) }
     }
 
     /// Prepare to measure the characters of `line`, which must be line `lnum`
@@ -149,7 +148,7 @@ impl Win {
     fn measure(self, lnum: linenr_T, line: Line) -> Measure {
         let mut arg = CharsizeArg::default();
         // SAFETY: a live window, and `line` is its line `lnum`.
-        let kind = unsafe { init_charsize_arg(&mut arg, self.raw(), lnum, line.raw()) };
+        let kind = unsafe { init_charsize_arg(&mut arg, self, lnum, line.raw()) };
         Measure { arg, kind }
     }
 }
@@ -249,21 +248,22 @@ pub unsafe fn coladvance_force(wcol: colnr_T) -> bool {
     reached
 }
 
-/// Move `wp`'s cursor to virtual column `wcol`, or as close as the line
+/// Move `win`'s cursor to virtual column `wcol`, or as close as the line
 /// allows. Answers whether the column was reached.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn coladvance(wp: *mut win_T, wcol: colnr_T) -> bool {
-    let win = unsafe { Win::new(wp) };
+pub fn coladvance(win: Win, wcol: colnr_T) -> bool {
     let cursor = win.cursor();
+    // SAFETY: a window's cursor names a line of its own buffer -- the
+    // invariant `check_cursor` maintains and every caller here leans on.
     let reached = unsafe { coladvance2(win, cursor, false, win.virtual_active(), wcol) };
     // The cached virtual column is only good if the cursor did not land on a
     // tab, whose width depends on where it starts rather than on `wcol`.
     if wcol == MAXCOL || !reached {
         win.invalidate_virtcol();
+    // SAFETY: the cursor's line, and a column `coladvance2` just clamped to
+    // it.
     } else if unsafe { win.buffer().line(cursor.lnum()).byte(cursor.col()) } as c_int != TAB {
-        // The current window, not `wp` — which is what the C does.
+        // The current window, not `win` — which is what the C does.
+        // SAFETY: `curwin` is set from startup to exit.
         unsafe { Win::current() }.note_virtcol(wcol);
     }
     reached
@@ -430,9 +430,9 @@ unsafe fn pad_line(
 /// without editing the buffer. Answers whether the column was reached.
 ///
 /// # Safety
-/// `wp` must be a valid window and `pos` a position in its buffer.
-pub unsafe fn getvpos(wp: *mut win_T, pos: *mut pos_T, wcol: colnr_T) -> bool {
-    let (win, pos) = unsafe { (Win::new(wp), Pos::new(pos)) };
+/// `pos` must name a line of `win`'s buffer.
+pub unsafe fn getvpos(win: Win, pos: Pos, wcol: colnr_T) -> bool {
+    // SAFETY: the caller's promise, forwarded.
     unsafe { coladvance2(win, pos, false, win.virtual_active(), wcol) }
 }
 
@@ -454,10 +454,7 @@ pub fn dec_cursor() -> c_int {
 /// How far `lnum` is from the cursor, counting each closed fold in between
 /// as a single line.
 ///
-/// # Safety
-/// `wp` must be a valid window and `lnum` a line in its buffer.
-pub unsafe fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T {
-    let win = unsafe { Win::new(wp) };
+pub fn get_cursor_rel_lnum(win: Win, lnum: linenr_T) -> linenr_T {
     let cursor = win.cursor().lnum();
     if lnum == cursor || !win.has_any_folding() {
         return lnum - cursor;
@@ -469,12 +466,7 @@ pub unsafe fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T {
 }
 
 /// Clamp `pos` to a line and column that exist in `buf`.
-///
-/// # Safety
-/// `buf` must be a valid buffer.
-pub unsafe fn check_pos(buf: *mut buf_T, pos: &mut pos_T) {
-    // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+pub fn check_pos(buf: Buf, pos: &mut pos_T) {
     pos.lnum = pos.lnum.min(buf.line_count());
     if pos.col > 0 {
         // SAFETY: `lnum` was just clamped to a line the buffer has.
@@ -485,10 +477,7 @@ pub unsafe fn check_pos(buf: *mut buf_T, pos: &mut pos_T) {
 /// Clamp the cursor's line number to the buffer, preferring the start of a
 /// closed fold over a line inside it.
 ///
-/// # Safety
-/// `win` must be a valid window.
-pub unsafe fn check_cursor_lnum(win: *mut win_T) {
-    let win = unsafe { Win::new(win) };
+pub fn check_cursor_lnum(win: Win) {
     let cursor = win.cursor();
     let last = win.buffer().line_count();
     if cursor.lnum() > last {
@@ -504,15 +493,14 @@ pub unsafe fn check_cursor_lnum(win: *mut win_T) {
 /// Clamp the cursor's column to the current line, honouring the modes and
 /// 'virtualedit' settings that allow it one position past the last character.
 ///
-/// # Safety
-/// `win` must be a valid window.
-pub unsafe fn check_cursor_col(win: *mut win_T) {
-    let win = unsafe { Win::new(win) };
+pub fn check_cursor_col(win: Win) {
     let buf = win.buffer();
     let cursor = win.cursor();
     let oldcol = cursor.col();
     let oldcoladd = cursor.col() + cursor.coladd();
     let cur_ve_flags = win.ve_flags();
+    // SAFETY: a window's cursor names a line of its own buffer, which is what
+    // `check_cursor_lnum` -- the other half of `check_cursor` -- maintains.
     let len = unsafe { buf.line_len(cursor.lnum()) };
 
     let (col, snap) = checked_col(oldcol, len, || {
@@ -549,14 +537,9 @@ pub unsafe fn check_cursor_col(win: *mut win_T) {
 }
 
 /// Clamp the cursor to a position that exists in `wp`'s buffer.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn check_cursor(wp: *mut win_T) {
-    unsafe {
-        check_cursor_lnum(wp);
-        check_cursor_col(wp);
-    }
+pub fn check_cursor(wp: Win) {
+    check_cursor_lnum(wp);
+    check_cursor_col(wp);
 }
 
 /// Clamp the start of the Visual area to the current buffer.
@@ -615,10 +598,10 @@ pub unsafe fn set_leftcol(leftcol: colnr_T) -> bool {
     let siso = win.sidescrolloff();
     if win.virtcol() > (lastcol - siso) as colnr_T {
         moved = true;
-        unsafe { coladvance(win.raw(), (lastcol - siso) as colnr_T) };
+        coladvance(win, (lastcol - siso) as colnr_T);
     } else if (win.virtcol() as int64_t) < win.leftcol() as int64_t + siso {
         moved = true;
-        unsafe { coladvance(win.raw(), (win.leftcol() as int64_t + siso) as colnr_T) };
+        coladvance(win, (win.leftcol() as int64_t + siso) as colnr_T);
     }
 
     // A wide character straddling either edge is not fully visible; step the
@@ -626,10 +609,10 @@ pub unsafe fn set_leftcol(leftcol: colnr_T) -> bool {
     let (start, end) = win.virtual_vcol_span(win.cursor());
     if end > lastcol as colnr_T {
         moved = true;
-        unsafe { coladvance(win.raw(), start - 1) };
+        coladvance(win, start - 1);
     } else if start < win.leftcol() {
         moved = true;
-        if !unsafe { coladvance(win.raw(), end + 1) } {
+        if !coladvance(win, end + 1) {
             // There is nothing to move onto; keep the character visible by
             // scrolling to it instead.
             win.set_leftcol(start);

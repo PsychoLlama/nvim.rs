@@ -14,7 +14,7 @@ use super::{
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, api_free_object};
-use crate::buffer::{buflist_findnr, buflist_findpat};
+use crate::buffer::{buflist_findpat, find_buf};
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{NumBuf, tv_check_str_or_nr};
 use crate::eval::userfunc::get_user_func_name;
@@ -393,7 +393,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     // owns and outlives the match.
     unsafe {
         if (*tv).v_type == VAR_NUMBER {
-            return buflist_findnr((*tv).vval.v_number as c_int);
+            return find_buf((*tv).vval.v_number as c_int).map_or(ptr::null_mut(), |mut b| b.raw());
         }
         if (*tv).v_type != VAR_STRING {
             return ptr::null_mut();
@@ -413,7 +413,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
         let save_cpo = p_cpo.get();
         p_magic.set(1);
         p_cpo.set(empty_option());
-        let mut buf = buflist_findnr(buflist_findpat(
+        let found = find_buf(buflist_findpat(
             name,
             name.add(strlen(name)),
             true,
@@ -424,10 +424,10 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
         p_cpo.set(save_cpo);
 
         // A name no buffer matches may still be a *file* name we know.
-        if buf.is_null() {
-            buf = find_buffer(tv);
+        match found {
+            Some(mut buf) => buf.raw(),
+            None => find_buffer(tv),
         }
-        buf
     }
 }
 

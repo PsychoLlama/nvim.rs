@@ -17,6 +17,7 @@ use crate::decoration::{DecorStateRef, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
+use crate::winlayer::Win;
 
 /// What the previous line of the walk was.
 ///
@@ -163,7 +164,7 @@ pub(crate) unsafe fn draw_window_lines(
                     // Filler text below the last line. `win_line` recognises
                     // `ml_line_count + 1` and draws only the filler.
                     (*wp).w_botline = (*buf).b_ml.ml_line_count + 1;
-                    let fill = win_get_fill(wp, (*wp).w_botline);
+                    let fill = win_get_fill(Win::new(wp), (*wp).w_botline);
                     if fill > 0 && !(*wp).w_botfill && w.row < (*wp).w_view_height {
                         let mut zero_spv = spellvars_T::default();
                         w.row = win_line(
@@ -233,7 +234,7 @@ unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
                         || w.did_update == DidUpdate::Fold
                         || (w.did_update == DidUpdate::Line
                             && syntax_present(wp)
-                            && ((foldmethod_is_syntax(wp) && has_any_folding(wp) != 0)
+                            && ((foldmethod_is_syntax(Win::new(wp)) && has_any_folding(Win::new(wp)) != 0)
                                 || syntax_check_changed(w.lnum)))
                         // A match at a fixed position may need redrawing when
                         // lines were inserted or deleted.
@@ -275,12 +276,12 @@ unsafe fn draw_one_line(
         let foldinfo = if (*wp).w_onebuf_opt.wo_cul != 0 && w.lnum == (*wp).w_cursor.lnum {
             cursorline_fi
         } else {
-            fold_info(wp, w.lnum)
+            fold_info(Win::new(wp), w.lnum)
         };
 
         // A concealed line with no filler lines takes no rows at all.
         let concealed = decor_conceal_line(wp, w.lnum - 1, false);
-        if concealed && win_get_fill(wp, w.lnum) == 0 {
+        if concealed && win_get_fill(Win::new(wp), w.lnum) == 0 {
             let step = if foldinfo.fi_lines != 0 {
                 foldinfo.fi_lines
             } else {
@@ -304,7 +305,7 @@ unsafe fn draw_one_line(
             && w.lnum > (*wp).w_topline
             && dy_flags.get() & (kOptDyFlagLastline | kOptDyFlagTruncate) == 0
             && w.srow + (*wl).wl_size as c_int > (*wp).w_view_height
-            && win_get_fill(wp, w.lnum) == 0
+            && win_get_fill(Win::new(wp), w.lnum) == 0
         {
             // This line is not going to fit. Draw nothing here; the "@" lines
             // below take the rest.
@@ -375,10 +376,10 @@ unsafe fn draw_one_line(
                 virt_below = false;
                 (*wl).wl_lastlnum += 1;
                 has_folding(
-                    wp,
+                    Win::new(wp),
                     (*wl).wl_lastlnum,
-                    ::core::ptr::null_mut(),
-                    &raw mut (*wl).wl_lastlnum,
+                    None,
+                    Some(&mut (*wl).wl_lastlnum),
                 );
             }
         }
@@ -393,7 +394,7 @@ unsafe fn draw_one_line(
         if w.row > (*wp).w_view_height {
             // Past the end of the grid. The height may still be needed later.
             if dollar_vcol.get() == -1 || !is_curline {
-                (*wl).wl_size = plines_win(wp, w.lnum, true) as uint16_t;
+                (*wl).wl_size = plines_win(Win::new(wp), w.lnum, true) as uint16_t;
             }
             w.idx += 1;
             return false;
@@ -616,7 +617,7 @@ unsafe fn skip_one_line(
             let info = if (*wp).w_onebuf_opt.wo_cul != 0 && w.lnum == (*wp).w_cursor.lnum {
                 cursorline_fi
             } else {
-                fold_info(wp, w.lnum)
+                fold_info(Win::new(wp), w.lnum)
             };
             // A non-zero `col_rows` tells `win_line` to draw only the columns.
             win_line(
@@ -674,7 +675,7 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
             return;
         }
 
-        if win_get_fill(wp, w.lnum) >= (*wp).w_view_height - w.srow {
+        if win_get_fill(Win::new(wp), w.lnum) >= (*wp).w_view_height - w.srow {
             // The window ends in filler lines.
             (*wp).w_botline = w.lnum;
             (*wp).w_filler_rows = (*wp).w_view_height - w.srow;
@@ -721,7 +722,7 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
                 HLF_AT,
             );
         }
-        set_empty_rows(wp, w.srow);
+        set_empty_rows(Win::new(wp), w.srow);
         (*wp).w_botline = w.lnum;
     }
 }
@@ -755,7 +756,7 @@ unsafe fn draw_end_of_buffer(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
             (*wp).w_view_height,
             HLF_EOB,
         );
-        set_empty_rows(wp, w.row);
+        set_empty_rows(Win::new(wp), w.row);
     }
 }
 

@@ -45,6 +45,7 @@ use crate::types::{
     FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
 };
 
+use crate::winlayer::Buf;
 /// Take the whole exception environment out of the way, and answer it.
 ///
 /// Used only by the debugger: a `>quit` at a breakpoint must not be
@@ -129,7 +130,7 @@ pub unsafe fn do_exmode() {
             need_wait_return.set(false);
             ex_pressedreturn.set(false);
             ex_no_reprint.set(false);
-            let changedtick = buf_get_changedtick(curbuf.get());
+            let changedtick = buf_get_changedtick(Buf::new(curbuf.get()));
             let prev_msg_row = msg_row.get();
             let prev_line = (*curwin.get()).w_cursor.lnum;
             cmdline_row.set(msg_row.get());
@@ -139,7 +140,7 @@ pub unsafe fn do_exmode() {
             lines_left.set(Rows.get() - 1);
 
             let moved = prev_line != (*curwin.get()).w_cursor.lnum
-                || changedtick != buf_get_changedtick(curbuf.get());
+                || changedtick != buf_get_changedtick(Buf::new(curbuf.get()));
             if moved && !ex_no_reprint.get() {
                 if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                     emsg(gettext(&raw const e_empty_buffer as *const c_char));

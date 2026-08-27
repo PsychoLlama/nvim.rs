@@ -19,13 +19,13 @@ use crate::winlayer::Win;
 unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
     if unsafe { (*arg).v_type } == VAR_UNKNOWN {
-        return Some(win_alist(curwin.get()));
+        return Some(win_alist(cur_win()));
     }
     if unsafe { (*arg).v_type } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as varnumber_T
     {
         return Some(global_arglist());
     }
-    unsafe { find_win_by_nr_or_id(arg) }.map(|wp| win_alist(wp.raw()))
+    unsafe { find_win_by_nr_or_id(arg) }.map(win_alist)
 }
 
 /// "argc()" function
@@ -63,7 +63,7 @@ pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         Some(wp) => {
             // SAFETY: a window the registry answered with, so it is live,
             // and every window has an argument list.
-            let id = unsafe { (*win_alist(wp.raw())).id };
+            let id = unsafe { (*win_alist(wp)).id };
             id as varnumber_T
         }
         None => -1 as varnumber_T,
@@ -105,7 +105,7 @@ pub unsafe fn f_argv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // only read once their type says they are present.
     if unsafe { (*argvars.offset(0)).v_type } == VAR_UNKNOWN {
         // No index: the whole current argument list.
-        let (entries, count) = alist_entries(win_alist(curwin.get()));
+        let (entries, count) = alist_entries(win_alist(cur_win()));
         unsafe { arglist_as_rettv(entries, count, rettv) };
         return;
     }

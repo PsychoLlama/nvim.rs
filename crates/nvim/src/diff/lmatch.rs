@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::winlayer::{Buf, TabPage};
 use core::ffi::c_int;
 
 /// Whether `dp` is short enough for the line-matching pass.
@@ -41,12 +42,13 @@ pub unsafe fn diff_linematch(dp: *mut diff_T) -> bool {
 /// every time the set changes.
 unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
     unsafe {
-        let tp = curtab.get();
+        // SAFETY: `curtab` is set from startup to exit.
+        let tp = TabPage::current();
         let mut line_numbers = [0 as linenr_T; DB_COUNT as usize];
         let mut outputmap = [0usize; DB_COUNT as usize];
         let mut ndiffs = 0;
         for (i, lnum) in line_numbers.iter_mut().enumerate() {
-            if !(*tp).tp_diffbuf[i].is_null() {
+            if !tp.tp_diffbuf[i].is_null() {
                 *lnum = (*dp).df_lnum[i];
                 (*dp).df_count[i] = 0;
                 outputmap[ndiffs] = i;
@@ -59,7 +61,7 @@ unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
                 cur = diff_alloc_new(tp, cur, (*cur).df_next);
                 (*cur).is_linematched = true;
                 for (i, &lnum) in line_numbers.iter().enumerate() {
-                    if !(*tp).tp_diffbuf[i].is_null() {
+                    if !tp.tp_diffbuf[i].is_null() {
                         (*cur).df_lnum[i] = lnum;
                         (*cur).df_count[i] = 0;
                     }
@@ -83,17 +85,18 @@ unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
 /// the block.
 pub(crate) unsafe fn run_linematch_algorithm(dp: *mut diff_T) {
     unsafe {
-        let tp = curtab.get();
+        // SAFETY: `curtab` is set from startup to exit.
+        let tp = TabPage::current();
         let mut images = [MMFILE_INIT; DB_COUNT as usize];
         let mut lengths = [0 as c_int; DB_COUNT as usize];
         let mut ndiffs = 0;
         for i in 0..DB_COUNT as usize {
-            if (*tp).tp_diffbuf[i].is_null() {
+            if tp.tp_diffbuf[i].is_null() {
                 continue;
             }
             if (*dp).df_count[i] > 0 {
                 diff_write_buffer(
-                    (*tp).tp_diffbuf[i],
+                    Buf::new(tp.tp_diffbuf[i]),
                     &raw mut images[ndiffs],
                     (*dp).df_lnum[i],
                     (*dp).df_lnum[i] + (*dp).df_count[i] - 1,

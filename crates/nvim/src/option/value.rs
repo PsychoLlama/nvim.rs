@@ -152,7 +152,7 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
     if slot == OptSlot::Boolean(unsafe { &raw mut (*curbuf.get()).b_changed }) {
         // SAFETY: reading the current buffer's change state.
-        return boolean_optval(Some(unsafe { curbuf_is_changed() }));
+        return boolean_optval(Some(curbuf_is_changed()));
     }
     let data = match slot {
         OptSlot::None => return NIL_OPTVAL,

@@ -235,7 +235,7 @@ pub unsafe fn unpack_keydict(
                 return false;
             }
 
-            let field: *mut KeySetLink =
+            let field: *const KeySetLink =
                 hashy.expect("keyset has no hash function")(key.data(), key.len());
             if field.is_null() {
                 if unpack_skip(data, size) != 0 {

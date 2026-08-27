@@ -577,8 +577,8 @@ pub unsafe fn write_reg_contents_ex(
         let buf = unsafe {
             if ascii_isdigit(c_int::from(*str)) {
                 let num = atoi(str);
-                let buf = buflist_findnr(num);
-                if buf.is_null() {
+                let buf = find_buf(num);
+                if buf.is_none() {
                     semsg_c!(
                         gettext(&raw const e_nobufnr as *const c_char),
                         int64_t::from(num),
@@ -587,12 +587,11 @@ pub unsafe fn write_reg_contents_ex(
                 buf
             } else {
                 let end = str.offset(len as isize);
-                buflist_findnr(buflist_findpat(str, end, true, false, false))
+                find_buf(buflist_findpat(str, end, true, false, false))
             }
         };
-        if !buf.is_null() {
-            // SAFETY: `buflist_findnr` answered a live buffer.
-            cur_win().w_alt_fnum = unsafe { (*buf).handle };
+        if let Some(buf) = buf {
+            cur_win().w_alt_fnum = buf.handle;
         }
         return;
     }

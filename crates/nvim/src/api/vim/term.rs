@@ -11,6 +11,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
 use crate::guard::Lock;
+use crate::winlayer::Buf;
 
 pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
     let mut slot = ERROR_INIT;
@@ -40,7 +41,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
                 );
                 return (0 as Integer).reported(slot);
             }
-            buf_close_terminal(b);
+            buf_close_terminal(Buf::new(b));
             may_read_buffer = false;
         }
         let mut cb: LuaRef = LUA_NOREF;
@@ -93,7 +94,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
             items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
         if may_read_buffer {
-            read_buffer_into(b, 1 as linenr_T, (*b).b_ml.ml_line_count, &raw mut contents);
+            read_buffer_into(Buf::new(b), 1, (*b).b_ml.ml_line_count, &raw mut contents);
         }
         channel_incref(chan);
         (*chan).term = terminal_alloc(b, topts);

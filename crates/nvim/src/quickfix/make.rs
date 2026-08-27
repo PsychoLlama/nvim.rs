@@ -11,7 +11,6 @@ use super::*;
 use crate::os::shell::ShellOpts;
 use crate::types::{CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, NUL};
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
 /// set to `internal` asks for. Only the `:grep` family can say it; `:make`
@@ -116,11 +115,8 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         }
     }
 
-    let wp = if unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
-        curwin.get()
-    } else {
-        ptr::null_mut()
-    };
+    // SAFETY: a command's `cmdidx` is one of the table's.
+    let wp = unsafe { is_loclist_cmd(eap.cmdidx as c_int) }.then(cur_win);
 
     unsafe { autowrite_all() };
     let fname = unsafe { get_mef_name() };
@@ -155,10 +151,9 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
 
     // A location list command may have found no list to add to, in
     // which case there is nothing left to do but clean up.
-    let stack = if wp.is_null() {
-        Some(qf_global())
-    } else {
-        qf_win_loclist(wp)
+    let stack = match wp {
+        Some(wp) => qf_win_loclist(wp),
+        None => Some(qf_global()),
     };
     if let Some(qi) = stack {
         if res >= 0 {

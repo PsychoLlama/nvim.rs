@@ -174,7 +174,7 @@ impl Buf {
 /// `b:changedtick`, as `buf_get_changedtick`.
 fn changedtick(buf: Buf) -> Integer {
     // SAFETY: a live buffer, which is [`Buf`]'s promise.
-    unsafe { buf_get_changedtick(buf.raw()) }
+    buf_get_changedtick(buf)
 }
 
 /// `rpc_send_event`, which only ever reads `args`.

@@ -104,6 +104,8 @@ pub unsafe fn apply_autocmds(
     force: bool,
     buf: *mut buf_T,
 ) -> bool {
+    // SAFETY: every pointer is the caller's, handed straight on;
+    // `apply_autocmds_group` asks of them exactly what this does.
     unsafe {
         apply_autocmds_group(
             event,
@@ -128,6 +130,9 @@ pub unsafe fn apply_autocmds_exarg(
     buf: *mut buf_T,
     eap: *mut exarg_T,
 ) -> bool {
+    // SAFETY: every pointer is the caller's, handed straight on;
+    // `apply_autocmds_group` asks of them exactly what this does, `eap`
+    // included -- it only reads its `forceit` and its command argument.
     unsafe {
         apply_autocmds_group(
             event,
@@ -531,13 +536,14 @@ pub unsafe fn apply_autocmds_group(
         }
 
         // The patterns and commands marked deleted can really go now.
-        unsafe { au_cleanup() };
+        au_cleanup();
     }
 
     // Wiping a buffer takes its buffer-local autocommands with it,
     // whether or not anything fired.
     if event == EVENT_BUFWIPEOUT && !buf.is_null() {
-        unsafe { aubuflocal_remove(buf) };
+        // SAFETY: non-null and live, by this function's own contract.
+        unsafe { aubuflocal_remove(Buf::new(buf)) };
     }
     if retval as ::core::ffi::c_int == OK && event == EVENT_FILETYPE {
         cur_buf().b_au_did_filetype = true;

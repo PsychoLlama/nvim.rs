@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Pos, Win};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
@@ -52,9 +52,10 @@ impl Put {
                     coladd: 0,
                 };
                 let none = ::core::ptr::null_mut();
-                // SAFETY: a live window and a writable local position; only
-                // the cursor column of the three is asked for.
-                unsafe { getvcol(curwin.get(), &raw mut pos, none, &raw mut vcol, none) };
+                let win = cur_win();
+                // SAFETY: a writable local position; only the cursor column
+                // of the three is asked for.
+                unsafe { getvcol(win, &raw mut pos, none, &raw mut vcol, none) };
             }
         }
 
@@ -84,7 +85,7 @@ impl Put {
                         coladd: 0,
                     };
                     // SAFETY: a live window and a writable local position.
-                    let found = unsafe { getvpos(curwin.get(), &raw mut pos, vcol) };
+                    let found = unsafe { getvpos(Win::current(), Pos::new(&raw mut pos), vcol) };
                     col = if found { pos.col } else { MAXCOL };
                 }
                 // A Visual line too short to reach the column is skipped
@@ -135,8 +136,8 @@ impl Put {
                     //
                     // SAFETY (both): a live window, whose cursor line is the
                     // one that just changed.
-                    unsafe { changed_cline_bef_curs(curwin.get()) };
-                    unsafe { invalidate_botline_win(curwin.get()) };
+                    changed_cline_bef_curs(unsafe { Win::current() });
+                    invalidate_botline_win(unsafe { Win::current() });
                     cur_win().w_cursor.col += (totlen - 1) as colnr_T;
                 }
                 // SAFETY: `lnum`/`col` is where the line changed.
@@ -284,10 +285,10 @@ impl Put {
         // just rewrote.
         if self.y_type == kMTCharWise {
             let at = cur_win().w_cursor.lnum;
-            unsafe { changed_lines(curbuf.get(), at, col, at + 1, self.nr_lines, true) };
+            changed_lines(cur_buf(), at, col, at + 1, self.nr_lines, true);
         } else {
             let at = cur_buf().b_op_start.lnum;
-            unsafe { changed_lines(curbuf.get(), at, 0, at, self.nr_lines, true) };
+            changed_lines(cur_buf(), at, 0, at, self.nr_lines, true);
         }
 
         // `']` goes on the first byte of the last character put, its

@@ -64,7 +64,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     // `set_keep_msg` reach the message machinery through.
     let mut report = [0 as c_char; IOSIZE as usize];
     let io = report.as_mut_ptr();
-    unsafe { add_quoted_fname(io, IOSIZE as size_t, curbuf.get(), sfname) };
+    unsafe { add_quoted_fname(io, IOSIZE as size_t, Buf::current(), sfname) };
     let mut noted = false;
     let mut buflen = unsafe { strlen(io) } as c_int;
     let mut note = |text: *const c_char| {

@@ -402,7 +402,7 @@ impl Jump {
         // name a BufReadCmd autocommand claims (say "http://sys/file")
         // counts as existing.
         if !unsafe { os_path_exists(self.fname()) }
-            && !unsafe { has_autocmd(EVENT_BUFREADCMD, self.fname(), ptr::null_mut()) }
+            && !unsafe { has_autocmd(EVENT_BUFREADCMD, self.fname(), None) }
         {
             unsafe { xfree(nofile_fname.get().cast()) };
             nofile_fname.set(unsafe { xstrdup(self.fname()) });
@@ -456,15 +456,15 @@ impl Jump {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
             if cur_buf().b_help {
-                unsafe { set_topline(curwin.get(), cur_win().w_cursor.lnum) };
+                set_topline(unsafe { Win::current() }, cur_win().w_cursor.lnum);
             }
             if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
                 unsafe { fold_open_cursor() };
             }
         }
-        if self.preview && curwin.get() != self.saved_win && unsafe { win_valid(self.saved_win) } {
+        if self.preview && curwin.get() != self.saved_win && win_valid(self.saved_win) {
             // Put the cursor back where it was.
-            unsafe { validate_cursor(curwin.get()) };
+            validate_cursor(unsafe { Win::current() });
             unsafe { redraw_later(curwin.get(), UPD_VALID) };
             unsafe { win_enter(self.saved_win, true) };
         }
@@ -501,7 +501,9 @@ impl Jump {
             && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
         {
             let existing = unsafe { buflist_findname_exp(self.fname()) };
-            if !existing.is_null() && !unsafe { swbuf_goto_win_with_buf(existing) }.is_null() {
+            if let Some(mut existing) = existing
+                && !unsafe { swbuf_goto_win_with_buf(existing.raw()) }.is_null()
+            {
                 self.reused_window = true;
             }
         }
@@ -615,7 +617,7 @@ impl Jump {
         p_scs.set(save_p_scs);
         // A search command may have put the cursor beyond the end of
         // the line; correct that here.
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
         retval
     }
 

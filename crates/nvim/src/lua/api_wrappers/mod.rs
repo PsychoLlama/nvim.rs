@@ -255,12 +255,12 @@ type Convert = unsafe fn(*mut lua_State, &mut Call);
 unsafe trait KeySet: Sized {
     const GET_FIELD: FieldHashfn;
 
-    fn table() -> *mut KeySetLink;
+    fn table() -> *const KeySetLink;
 }
 
 /// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *mut KeySetLink {
-    table.as_ptr().cast_mut()
+fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const KeySetLink {
+    table.as_ptr()
 }
 
 /// A keyset argument, with its release armed from the moment it exists: the
@@ -537,7 +537,7 @@ fn expr_map_locked_error(err: &mut Error) {
 unsafe impl KeySet for KeyDict_buf_attach {
     const GET_FIELD: FieldHashfn = Some(key_dict_buf_attach_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&buf_attach_table)
     }
 }
@@ -548,7 +548,7 @@ unsafe impl KeySet for KeyDict_buf_attach {
 unsafe impl KeySet for KeyDict_buf_delete {
     const GET_FIELD: FieldHashfn = Some(key_dict_buf_delete_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&buf_delete_table)
     }
 }
@@ -559,7 +559,7 @@ unsafe impl KeySet for KeyDict_buf_delete {
 unsafe impl KeySet for KeyDict_clear_autocmds {
     const GET_FIELD: FieldHashfn = Some(key_dict_clear_autocmds_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&clear_autocmds_table)
     }
 }
@@ -570,7 +570,7 @@ unsafe impl KeySet for KeyDict_clear_autocmds {
 unsafe impl KeySet for KeyDict_cmd {
     const GET_FIELD: FieldHashfn = Some(key_dict_cmd_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&cmd_table)
     }
 }
@@ -581,7 +581,7 @@ unsafe impl KeySet for KeyDict_cmd {
 unsafe impl KeySet for KeyDict_cmd_opts {
     const GET_FIELD: FieldHashfn = Some(key_dict_cmd_opts_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&cmd_opts_table)
     }
 }
@@ -592,7 +592,7 @@ unsafe impl KeySet for KeyDict_cmd_opts {
 unsafe impl KeySet for KeyDict_complete_set {
     const GET_FIELD: FieldHashfn = Some(key_dict_complete_set_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&complete_set_table)
     }
 }
@@ -603,7 +603,7 @@ unsafe impl KeySet for KeyDict_complete_set {
 unsafe impl KeySet for KeyDict_context {
     const GET_FIELD: FieldHashfn = Some(key_dict_context_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&context_table)
     }
 }
@@ -614,7 +614,7 @@ unsafe impl KeySet for KeyDict_context {
 unsafe impl KeySet for KeyDict_create_augroup {
     const GET_FIELD: FieldHashfn = Some(key_dict_create_augroup_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&create_augroup_table)
     }
 }
@@ -625,7 +625,7 @@ unsafe impl KeySet for KeyDict_create_augroup {
 unsafe impl KeySet for KeyDict_create_autocmd {
     const GET_FIELD: FieldHashfn = Some(key_dict_create_autocmd_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&create_autocmd_table)
     }
 }
@@ -636,7 +636,7 @@ unsafe impl KeySet for KeyDict_create_autocmd {
 unsafe impl KeySet for KeyDict_echo_opts {
     const GET_FIELD: FieldHashfn = Some(key_dict_echo_opts_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&echo_opts_table)
     }
 }
@@ -647,7 +647,7 @@ unsafe impl KeySet for KeyDict_echo_opts {
 unsafe impl KeySet for KeyDict_empty {
     const GET_FIELD: FieldHashfn = Some(key_dict_empty_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&empty_table)
     }
 }
@@ -658,7 +658,7 @@ unsafe impl KeySet for KeyDict_empty {
 unsafe impl KeySet for KeyDict_eval_statusline {
     const GET_FIELD: FieldHashfn = Some(key_dict_eval_statusline_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&eval_statusline_table)
     }
 }
@@ -669,7 +669,7 @@ unsafe impl KeySet for KeyDict_eval_statusline {
 unsafe impl KeySet for KeyDict_exec_autocmds {
     const GET_FIELD: FieldHashfn = Some(key_dict_exec_autocmds_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&exec_autocmds_table)
     }
 }
@@ -680,7 +680,7 @@ unsafe impl KeySet for KeyDict_exec_autocmds {
 unsafe impl KeySet for KeyDict_exec_opts {
     const GET_FIELD: FieldHashfn = Some(key_dict_exec_opts_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&exec_opts_table)
     }
 }
@@ -691,7 +691,7 @@ unsafe impl KeySet for KeyDict_exec_opts {
 unsafe impl KeySet for KeyDict_get_autocmds {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_autocmds_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_autocmds_table)
     }
 }
@@ -702,7 +702,7 @@ unsafe impl KeySet for KeyDict_get_autocmds {
 unsafe impl KeySet for KeyDict_get_commands {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_commands_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_commands_table)
     }
 }
@@ -713,7 +713,7 @@ unsafe impl KeySet for KeyDict_get_commands {
 unsafe impl KeySet for KeyDict_get_extmark {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_extmark_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_extmark_table)
     }
 }
@@ -724,7 +724,7 @@ unsafe impl KeySet for KeyDict_get_extmark {
 unsafe impl KeySet for KeyDict_get_extmarks {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_extmarks_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_extmarks_table)
     }
 }
@@ -735,7 +735,7 @@ unsafe impl KeySet for KeyDict_get_extmarks {
 unsafe impl KeySet for KeyDict_get_highlight {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_highlight_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_highlight_table)
     }
 }
@@ -746,7 +746,7 @@ unsafe impl KeySet for KeyDict_get_highlight {
 unsafe impl KeySet for KeyDict_get_ns {
     const GET_FIELD: FieldHashfn = Some(key_dict_get_ns_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&get_ns_table)
     }
 }
@@ -757,7 +757,7 @@ unsafe impl KeySet for KeyDict_get_ns {
 unsafe impl KeySet for KeyDict_highlight {
     const GET_FIELD: FieldHashfn = Some(key_dict_highlight_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&highlight_table)
     }
 }
@@ -768,7 +768,7 @@ unsafe impl KeySet for KeyDict_highlight {
 unsafe impl KeySet for KeyDict_keymap {
     const GET_FIELD: FieldHashfn = Some(key_dict_keymap_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&keymap_table)
     }
 }
@@ -779,7 +779,7 @@ unsafe impl KeySet for KeyDict_keymap {
 unsafe impl KeySet for KeyDict_ns_opts {
     const GET_FIELD: FieldHashfn = Some(key_dict_ns_opts_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&ns_opts_table)
     }
 }
@@ -790,7 +790,7 @@ unsafe impl KeySet for KeyDict_ns_opts {
 unsafe impl KeySet for KeyDict_open_term {
     const GET_FIELD: FieldHashfn = Some(key_dict_open_term_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&open_term_table)
     }
 }
@@ -801,7 +801,7 @@ unsafe impl KeySet for KeyDict_open_term {
 unsafe impl KeySet for KeyDict_option {
     const GET_FIELD: FieldHashfn = Some(key_dict_option_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&option_table)
     }
 }
@@ -812,7 +812,7 @@ unsafe impl KeySet for KeyDict_option {
 unsafe impl KeySet for KeyDict_redraw {
     const GET_FIELD: FieldHashfn = Some(key_dict_redraw_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&redraw_table)
     }
 }
@@ -823,7 +823,7 @@ unsafe impl KeySet for KeyDict_redraw {
 unsafe impl KeySet for KeyDict_runtime {
     const GET_FIELD: FieldHashfn = Some(key_dict_runtime_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&runtime_table)
     }
 }
@@ -834,7 +834,7 @@ unsafe impl KeySet for KeyDict_runtime {
 unsafe impl KeySet for KeyDict_set_decoration_provider {
     const GET_FIELD: FieldHashfn = Some(key_dict_set_decoration_provider_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&set_decoration_provider_table)
     }
 }
@@ -845,7 +845,7 @@ unsafe impl KeySet for KeyDict_set_decoration_provider {
 unsafe impl KeySet for KeyDict_set_extmark {
     const GET_FIELD: FieldHashfn = Some(key_dict_set_extmark_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&set_extmark_table)
     }
 }
@@ -856,7 +856,7 @@ unsafe impl KeySet for KeyDict_set_extmark {
 unsafe impl KeySet for KeyDict_tabpage_config {
     const GET_FIELD: FieldHashfn = Some(key_dict_tabpage_config_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&tabpage_config_table)
     }
 }
@@ -867,7 +867,7 @@ unsafe impl KeySet for KeyDict_tabpage_config {
 unsafe impl KeySet for KeyDict_user_command {
     const GET_FIELD: FieldHashfn = Some(key_dict_user_command_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&user_command_table)
     }
 }
@@ -878,7 +878,7 @@ unsafe impl KeySet for KeyDict_user_command {
 unsafe impl KeySet for KeyDict_win_config {
     const GET_FIELD: FieldHashfn = Some(key_dict_win_config_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&win_config_table)
     }
 }
@@ -889,7 +889,7 @@ unsafe impl KeySet for KeyDict_win_config {
 unsafe impl KeySet for KeyDict_win_text_height {
     const GET_FIELD: FieldHashfn = Some(key_dict_win_text_height_get_field);
 
-    fn table() -> *mut KeySetLink {
+    fn table() -> *const KeySetLink {
         keyset_table(&win_text_height_table)
     }
 }

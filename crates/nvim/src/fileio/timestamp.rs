@@ -154,7 +154,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
             // SAFETY: a live buffer, and `bufref` is a local.
             let n = unsafe {
                 set_bufref(at, buf.raw());
-                buf_check_timestamp(buf.raw())
+                buf_check_timestamp(buf)
             };
             didit = didit.max(n);
             // SAFETY: `bufref` is a local.
@@ -185,17 +185,20 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
 ///
 /// @return  OK or FAIL. On FAIL `tobuf` is incomplete and/or `frombuf` is not
 ///          empty.
-unsafe fn move_lines(frombuf: *mut buf_T, tobuf: *mut buf_T) -> c_int {
+///
+/// Safe: both [`Buf`]s carry the whole of the promise this needs.
+fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     let tbuf = curbuf.get();
     let mut retval = OK;
 
     // Copy the lines in "frombuf" to "tobuf".
-    curbuf.set(tobuf);
+    curbuf.set(tobuf.raw());
     let mut lnum = 1;
-    while lnum <= unsafe { (*frombuf).b_ml.ml_line_count } {
+    while lnum <= frombuf.b_ml.ml_line_count {
         let p = {
+            let from = frombuf.raw();
             // SAFETY: a live buffer and a line number inside it.
-            let (at, len) = unsafe { (ml_get_buf(frombuf, lnum), ml_get_buf_len(frombuf, lnum)) };
+            let (at, len) = unsafe { (ml_get_buf(from, lnum), ml_get_buf_len(from, lnum)) };
             // SAFETY: `len` bytes of the line just named.
             unsafe { xmemdupz(at.cast(), len as size_t) }
         }
@@ -211,7 +214,7 @@ unsafe fn move_lines(frombuf: *mut buf_T, tobuf: *mut buf_T) -> c_int {
 
     // Delete all the lines in "frombuf".
     if retval != FAIL {
-        curbuf.set(frombuf);
+        curbuf.set(frombuf.raw());
         let mut lnum = cur_buf().b_ml.ml_line_count;
         while lnum > 0 {
             if unsafe { ml_delete(lnum) } == FAIL {
@@ -232,9 +235,11 @@ unsafe fn move_lines(frombuf: *mut buf_T, tobuf: *mut buf_T) -> c_int {
 ///
 /// Sets `v:fcs_reason` and clears `v:fcs_choice` first, and reads the latter
 /// back afterwards.
-unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Reason) -> Fcs {
-    // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buf) };
+///
+/// # Safety
+/// `bufref` must be a `bufref_T` that was set for `buf`; the autocommands
+/// this fires may wipe the buffer, which is what it answers.
+unsafe fn file_changed_shell(buf: Buf, bufref: *mut bufref_T, reason: Reason) -> Fcs {
     let name = reason.name();
     BUSY.set(true);
     let len = name.count_bytes() as ptrdiff_t;
@@ -271,14 +276,9 @@ unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Rea
 /// `:help`" note the warnings carry, appended to it. Returns what the user
 /// chose, and whether a message was displayed (which is `buf_check_timestamp`
 /// returning 2).
-unsafe fn warn_changed(
-    buf: *mut buf_T,
-    mesg: &CStr,
-    mesg2: &CStr,
-    can_reload: bool,
-) -> (Reload, bool) {
-    // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buf) };
+///
+/// Safe: [`Buf`] carries the whole of the promise this needs.
+fn warn_changed(buf: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
     let path = unsafe { home_replace_save(buf.raw(), buf.b_fname) };
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = unsafe { strlen(path) } + mesg.count_bytes() + mesg2.count_bytes() + 3;
@@ -346,9 +346,12 @@ unsafe fn warn_changed(
 ///
 /// @return  1 if a changed buffer was found, 2 if a message has been
 ///          displayed, 0 otherwise.
-pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
-    // SAFETY: the caller's buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+///
+/// # Safety
+/// The autocommands this fires may wipe `buf`, which must survive them: the
+/// `bufref` it takes guards the calls it makes afterwards, but not the fields
+/// it reads.
+pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
     let orig_size = buf.b_orig_size;
     let orig_mode = buf.b_orig_mode;
 
@@ -392,7 +395,8 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
         // Set b_mtime to stop further warnings, e.g. while executing a
         // FileChangedShell autocommand.
         if file_info_ok {
-            unsafe { buf_store_file_info(buf.raw(), &raw mut file_info) };
+            // SAFETY: `file_info` is this frame's, filled in above.
+            unsafe { buf_store_file_info(buf, &raw mut file_info) };
         } else {
             // Check the file again later to see if it re-appears.
             buf.b_mtime = -1;
@@ -409,7 +413,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
         } else {
             p_ar.get()
         }) != 0
-            && !unsafe { buf_is_changed(buf.raw()) }
+            && !buf_is_changed(buf)
             && file_info_ok
         {
             // If 'autoread' is set, the buffer has no changes and the file
@@ -419,9 +423,9 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
         } else {
             let reason = if !file_info_ok {
                 Reason::Deleted
-            } else if unsafe { buf_is_changed(buf.raw()) } {
+            } else if buf_is_changed(buf) {
                 Reason::Conflict
-            } else if orig_size != buf.b_orig_size || unsafe { buf_contents_changed(buf.raw()) } {
+            } else if orig_size != buf.b_orig_size || buf_contents_changed(buf) {
                 Reason::Changed
             } else if orig_mode != buf.b_orig_mode {
                 Reason::Mode
@@ -430,7 +434,8 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
             };
 
             // Only warn if no FileChangedShell autocommand handled it.
-            match unsafe { file_changed_shell(buf.raw(), &raw mut bufref, reason) } {
+            // SAFETY: `bufref` was set for `buf` above.
+            match unsafe { file_changed_shell(buf, &raw mut bufref, reason) } {
                 Fcs::Handled => return 2,
                 Fcs::Reload(what) => reload = what,
                 Fcs::Ask => {
@@ -485,7 +490,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
     }
 
     if let Some(mesg) = mesg {
-        let (chose, displayed) = unsafe { warn_changed(buf.raw(), mesg, mesg2, can_reload) };
+        let (chose, displayed) = warn_changed(buf, mesg, mesg2, can_reload);
         if chose != Reload::No {
             reload = chose;
         }
@@ -495,12 +500,13 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
     }
 
     if reload != Reload::No {
-        unsafe { buf_reload(buf.raw(), orig_mode, reload == Reload::Detect) };
+        // SAFETY: the caller's promise -- `buf` survives the reload.
+        unsafe { buf_reload(buf, orig_mode, reload == Reload::Detect) };
         if unsafe { bufref_valid(&raw mut bufref) } && buf.b_p_udf != 0 && !buf.b_ffname.is_null() {
             // Any existing undo file is unusable, write it now.
             let mut hash = [0u8; UNDO_HASH_SIZE as usize];
-            unsafe { u_compute_hash(buf.raw(), hash.as_mut_ptr()) };
-            unsafe { u_write_undo(ptr::null(), false, buf.raw(), hash.as_mut_ptr()) };
+            unsafe { u_compute_hash(buf, hash.as_mut_ptr()) };
+            unsafe { u_write_undo(ptr::null(), false, buf, hash.as_mut_ptr()) };
         }
     }
 
@@ -522,9 +528,11 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
 /// @param reload_options  re-detect `'fileformat'`, `'fileencoding'` and
 ///                        `'filetype'`, rather than forcing the ones the
 ///                        buffer already has.
-pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool) {
-    // SAFETY: the caller's buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+///
+/// # Safety
+/// Reading the file fires autocommands, which may wipe `buf`; it must survive
+/// them, as upstream's own comment at the end of this function warns.
+pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     let old_ro = buf.b_p_ro;
     let mut saved = OK;
     let mut flags = READ_NEW as c_int;
@@ -538,7 +546,8 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
     // and so on. Force the fileformat and encoding to be the same.
     let mut ea = exarg_T::default();
     if !reload_options {
-        unsafe { prep_exarg(&raw mut ea, buf.raw()) };
+        // SAFETY: `ea` is this frame's.
+        unsafe { prep_exarg(&raw mut ea, buf) };
     }
 
     let old_cursor = cur_win().w_cursor;
@@ -547,8 +556,8 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
     if p_ur.get() < 0 || cur_buf().b_ml.ml_line_count as OptInt <= p_ur.get() {
         // Save all the text, so that the reload can be undone. Sync first
         // so that this is a separate undo-able action.
-        unsafe { u_sync(false) };
-        saved = unsafe { u_savecommon(curbuf.get(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true) };
+        u_sync(false);
+        saved = u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true);
         flags |= READ_KEEP_UNDO as c_int;
     }
 
@@ -574,7 +583,8 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
         if savebuf.is_null()
             || saved == FAIL
             || buf.raw() != curbuf.get()
-            || unsafe { move_lines(buf.raw(), savebuf) } == FAIL
+            // SAFETY: the null check above guards this one.
+            || move_lines(buf, unsafe { Buf::new(savebuf) }) == FAIL
         {
             let fmt = c"E462: Could not prepare for reloading \"%s\"".as_ptr();
             let fname = buf.b_fname;
@@ -612,17 +622,18 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
                         break;
                     }
                 }
-                unsafe { move_lines(savebuf, buf.raw()) };
+                // SAFETY: `savebuf` is non-null here, and still valid.
+                move_lines(unsafe { Buf::new(savebuf) }, buf);
             }
         } else if buf.raw() == curbuf.get() {
             // "buf" is still valid. Mark the buffer as unmodified and free
             // the undo info.
-            unsafe { unchanged(buf.raw(), true, true) };
+            unchanged(buf, true, true);
             if flags & READ_KEEP_UNDO as c_int == 0 {
-                unsafe { u_clearallandblockfree(buf.raw()) };
+                u_clearallandblockfree(buf);
             } else {
                 // Mark all undo states as changed.
-                unsafe { u_unchanged(curbuf.get()) };
+                u_unchanged(cur_buf());
             }
             unsafe { buf_updates_unload(curbuf.get(), true) };
             cur_buf().b_mod_set = true;
@@ -631,18 +642,18 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
     unsafe { xfree(ea.cmd.cast()) };
 
     if !savebuf.is_null() && unsafe { bufref_valid(&raw mut bufref) } {
-        unsafe { wipe_buffer(savebuf, false) };
+        unsafe { wipe_buffer(Buf::new(savebuf), false) };
     }
 
     // Invalidate diff info if necessary.
-    unsafe { diff_invalidate(curbuf.get()) };
+    diff_invalidate(cur_buf());
 
     // Restore the topline and cursor position and check them; lines may
     // have been removed.
     cur_win().w_topline = old_topline.min(cur_buf().b_ml.ml_line_count);
     cur_win().w_cursor = old_cursor;
-    unsafe { check_cursor(curwin.get()) };
-    unsafe { update_topline(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
+    update_topline(unsafe { Win::current() });
     cur_buf().b_keep_filetype = false;
 
     // Update folds unless they are defined manually.
@@ -655,9 +666,9 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
         };
         while !wp.is_null() {
             if unsafe { (*wp).w_buffer } == cur_win().w_buffer
-                && !unsafe { foldmethod_is_manual(wp) }
+                && !unsafe { foldmethod_is_manual(Win::new(wp)) }
             {
-                unsafe { fold_update_all(wp) };
+                unsafe { fold_update_all(Win::new(wp)) };
             }
             wp = unsafe { (*wp).w_next };
         }
@@ -681,9 +692,10 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
 
 /// Record the file's size, mode and modification time on the buffer, so that
 /// a later change to any of them can be noticed.
-pub unsafe fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo) {
-    // SAFETY: the caller's buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+///
+/// # Safety
+/// `file_info` must point at a `FileInfo` the caller filled in.
+pub unsafe fn buf_store_file_info(mut buf: Buf, file_info: *mut FileInfo) {
     unsafe { buf.b_mtime = (*file_info).stat.st_mtim.tv_sec as int64_t };
     unsafe { buf.b_mtime_ns = (*file_info).stat.st_mtim.tv_nsec as int64_t };
     unsafe { buf.b_orig_size = os_fileinfo_size(file_info) };

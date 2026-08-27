@@ -28,7 +28,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{
     EVENT_RECORDINGENTER, EVENT_RECORDINGLEAVE, EVENT_TEXTYANKPOST, apply_autocmds, has_event,
 };
-use crate::buffer::{buf_is_empty, buflist_findnr, buflist_findpat, buflist_name_nr, getaltfname};
+use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf, getaltfname};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{changed_bytes, changed_lines, del_chars};
 use crate::charset::{getdigits_int, ptr2cells, skipwhite, transchar};
@@ -62,7 +62,7 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, c_bytes, curbuf, curwin, e_nobufnr, e_noinstext, e_nolastcmd, e_noprevre,
+    Columns, State, c_bytes, curbuf, e_nobufnr, e_noinstext, e_nolastcmd, e_noprevre,
     e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush, must_redraw,
     new_last_cmdline, p_ch, p_report, p_sel, pending_end_reg_executing, redir_reg, reg_executing,
     reg_recorded, reg_recording, restart_edit,

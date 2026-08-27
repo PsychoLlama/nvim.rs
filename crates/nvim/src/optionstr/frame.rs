@@ -28,7 +28,7 @@ pub(crate) fn invalid() -> *const c_char {
 /// `args` points at the option table's call frame.
 pub(crate) unsafe fn varp(args: *mut optset_T) -> *mut *mut c_char {
     // SAFETY: the caller's frame.
-    unsafe { (*args).os_varp }.cast::<*mut c_char>()
+    unsafe { (*args).os_varp }.string_var()
 }
 
 /// The window the set is happening in. Not necessarily the window whose

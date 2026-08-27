@@ -107,11 +107,6 @@ const DEFAULT_GRID_HANDLE: c_int = 1;
 pub struct GridRef(*mut ScreenGrid);
 
 impl GridRef {
-    /// No grid at all: what [`line::BATCH`] holds when no batch is running.
-    ///
-    /// [`line::BATCH`]: line
-    pub const NONE: GridRef = GridRef(::core::ptr::null_mut());
-
     /// # Safety
     /// `grid` must name a live `ScreenGrid` that outlives every use of the
     /// handle -- a window's own grid, or a local the caller keeps alive.
@@ -135,8 +130,15 @@ impl GridRef {
         self.0
     }
 
-    /// Whether this is [`GridRef::NONE`].
-    pub fn is_none(self) -> bool {
+    /// Whether the handle names no grid at all.
+    ///
+    /// The one caller that has to ask is [`grid_adjust`]'s: a window's
+    /// `w_grid` view is a transpiled struct whose target is null until the
+    /// window has one. Nothing else may produce such a handle -- the batch
+    /// in progress and the compositor's selected layer are `Option<GridRef>`
+    /// rather than a null one, so that no absent grid is ever a value whose
+    /// `Deref` claims a promise it cannot keep.
+    pub fn is_unresolved(self) -> bool {
         self.0.is_null()
     }
 

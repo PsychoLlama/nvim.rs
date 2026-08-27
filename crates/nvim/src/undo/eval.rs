@@ -67,34 +67,36 @@ pub unsafe fn ex_undolist(_eap: *mut exarg_T) {
         .map(|visit| undolist_row(&visit.header, visit.depth))
         .collect();
 
-    // SAFETY: NUL-terminated literals and strings this function owns.
-    unsafe {
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        if rows.is_empty() {
-            msg(gettext(c"Nothing to undo".as_ptr()), 0);
-            return;
-        }
-        let mut rows = rows;
-        // The walk reaches the branches in tree order, not in sequence order.
-        rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-        msg_start();
-        msg_puts_hl(
-            gettext(c"number changes  when               saved".as_ptr()),
-            HLF_T,
-            false,
-        );
-        for row in &rows {
-            if got_int.get() {
-                break;
-            }
-            msg_putchar('\n' as c_int);
-            if got_int.get() {
-                break;
-            }
-            msg_puts(row.as_ptr());
-        }
-        msg_end();
+    // SAFETY: a NUL-terminated literal.
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    if rows.is_empty() {
+        // SAFETY: a NUL-terminated literal.
+        unsafe { msg(gettext(c"Nothing to undo".as_ptr()), 0) };
+        return;
     }
+    let mut rows = rows;
+    // The walk reaches the branches in tree order, not in sequence order.
+    rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+    // SAFETY: the editor's own message state.
+    unsafe { msg_start() };
+    // SAFETY: a NUL-terminated literal.
+    let heading = unsafe { gettext(c"number changes  when               saved".as_ptr()) };
+    // SAFETY: the string `gettext` just answered, NUL-terminated.
+    unsafe { msg_puts_hl(heading, HLF_T, false) };
+    for row in &rows {
+        if got_int.get() {
+            break;
+        }
+        // SAFETY: the editor's own message state.
+        unsafe { msg_putchar('\n' as c_int) };
+        if got_int.get() {
+            break;
+        }
+        // SAFETY: a NUL-terminated string this function owns.
+        unsafe { msg_puts(row.as_ptr()) };
+    }
+    // SAFETY: the editor's own message state.
+    unsafe { msg_end() };
 }
 
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,
@@ -135,19 +137,23 @@ fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
 pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        let fname: *const c_char = numbuf.string(argvars);
-        if *fname == NUL as c_char {
-            (*rettv).vval.v_string = ptr::null_mut();
-            return;
-        }
-        let ffname: *mut c_char = full_name_save(fname, true);
-        if !ffname.is_null() {
-            (*rettv).vval.v_string = u_get_undo_file_name(ffname, false);
-        }
-        xfree(ffname.cast());
+    unsafe { (*rettv).v_type = VAR_STRING };
+    // SAFETY: as above.
+    let fname: *const c_char = unsafe { numbuf.string(argvars) };
+    // SAFETY: a NUL-terminated name.
+    if unsafe { *fname } == NUL as c_char {
+        // SAFETY: the return value to fill in.
+        unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+        return;
     }
+    // SAFETY: a NUL-terminated name.
+    let ffname: *mut c_char = unsafe { full_name_save(fname, true) };
+    if !ffname.is_null() {
+        // SAFETY: a NUL-terminated absolute path, and the return value.
+        unsafe { (*rettv).vval.v_string = u_get_undo_file_name(ffname, false) };
+    }
+    // SAFETY: NULL, or `full_name_save`'s allocation.
+    unsafe { xfree(ffname.cast()) };
 }
 
 /// `undotree([{buf}])` — the whole tree, plus where in it the buffer sits.
@@ -157,21 +163,19 @@ pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// The eval-function contract, and a live current buffer.
 pub unsafe fn f_undotree(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
-    let (dict, buf) = unsafe {
-        tv_dict_alloc_ret(rettv);
-        let tv: *mut typval_T = argvars;
-        let raw = if (*tv).v_type == VAR_UNKNOWN {
-            curbuf.get()
-        } else {
-            get_buf_arg(tv)
-        };
-        (
-            (*rettv).vval.v_dict,
-            // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or
-            // NULL.
-            Buf::from_raw(raw),
-        )
+    unsafe { tv_dict_alloc_ret(rettv) };
+    let tv: *mut typval_T = argvars;
+    // SAFETY: as above.
+    let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
+        curbuf.get()
+    } else {
+        // SAFETY: as above.
+        unsafe { get_buf_arg(tv) }
     };
+    // SAFETY: the return value the contract gives us.
+    let dict = unsafe { (*rettv).vval.v_dict };
+    // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or NULL.
+    let buf = unsafe { Buf::from_raw(raw) };
     let Some(buf) = buf else { return };
 
     dict_add_nr(dict, c"synced", varnumber_T::from(buf.b_u_synced));
@@ -200,16 +204,14 @@ pub unsafe fn u_force_get_undo_header(buf: *mut buf_T) -> *mut u_header_T {
         return uh.raw();
     }
     // Nothing to hang it on: force an undo header, even for an empty change.
-    // SAFETY: a live buffer and window, by the contract above.
-    unsafe { u_savecommon(buf, 0, 1, 1, true) };
+    u_savecommon(b, 0, 1, 1, true);
     // SAFETY: `u_savecommon` may have reloaded the buffer under us.
     b = unsafe { Buf::new(buf) };
     match b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         Some(uh) => uh.raw(),
         None => {
-            // SAFETY: a live buffer.
             assert!(
-                unsafe { get_undolevel(buf) } <= 0,
+                get_undolevel(b) <= 0,
                 "u_savecommon made no undo header while undo was enabled"
             );
             ptr::null_mut()

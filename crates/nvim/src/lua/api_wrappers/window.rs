@@ -84,8 +84,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_close(lstate: *mut lua_State) 
             err,
             err_param,
         } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }
@@ -561,8 +560,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_hide(lstate: *mut lua_State) -
             err,
             err_param,
         } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }
@@ -646,8 +644,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_buf(lstate: *mut lua_State
             err,
             err_param,
         } = call;
-        // SAFETY: as above.
-        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        if textlock.get() != 0 || expr_map_locked() {
             expr_map_locked_error(err);
             return;
         }

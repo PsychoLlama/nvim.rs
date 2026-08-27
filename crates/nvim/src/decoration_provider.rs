@@ -40,6 +40,7 @@ use crate::types::{
     buf_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T,
     win_T,
 };
+use crate::winlayer::Win;
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -344,7 +345,7 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T, state: DecorStat
         debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
 
         if provider_count() > 0 {
-            validate_botline_win(wp);
+            validate_botline_win(Win::new(wp));
         }
         let botline: linenr_T = (*wp).w_botline.min((*(*wp).w_buffer).b_ml.ml_line_count);
 

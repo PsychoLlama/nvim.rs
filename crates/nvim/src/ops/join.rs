@@ -415,7 +415,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     // Only the first line's change is reported here; `del_lines` reports
     // the lines it deletes.
     let (lnum, next) = (cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
-    unsafe { changed_lines(curbuf.get(), lnum, plan.currsize, next, 0, true) };
+    changed_lines(cur_buf(), lnum, plan.currsize, next, 0, true);
 
     // Delete the following lines with the cursor moved there briefly.
     // `del_lines` may move it up again if the last line went, so the line
@@ -434,7 +434,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     } else {
         col
     };
-    unsafe { check_cursor_col(curwin.get()) };
+    check_cursor_col(unsafe { Win::current() });
     cur_win().w_cursor.coladd = 0;
     cur_win().w_set_curswant = true;
 }

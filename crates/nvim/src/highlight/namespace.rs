@@ -44,11 +44,11 @@ use crate::option::check_blending;
 use crate::popupmenu::pum_drawn;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ColorItem, ColorKey, DecorProvider, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink,
-    LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, size_t, win_T,
+    ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
+    LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, win_T,
 };
 use ::libc::strlen;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
@@ -253,10 +253,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             if ret.type_0 == kObjectTypeDict {
                 fallback = false;
                 let mut dict = KeyDict_highlight::default();
-                let field = Some(
-                    key_dict_highlight_get_field
-                        as unsafe fn(*const c_char, size_t) -> *mut KeySetLink,
-                );
+                let field: FieldHashfn = Some(key_dict_highlight_get_field);
                 let target = (&raw mut dict).cast();
                 if api_dict_to_keydict(target, field, ret.data.dict, &raw mut err) {
                     let link_id = &mut item.link_id;

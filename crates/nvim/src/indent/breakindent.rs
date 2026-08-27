@@ -16,6 +16,7 @@ use crate::r#move::{win_col_off, win_col_off2};
 use crate::option::{get_flp_value, get_showbreak_value};
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
+use crate::winlayer::Win;
 use ::libc::strcmp;
 
 /// 'breakindentopt', parsed: the five values [`briopt_check`] writes onto a
@@ -286,7 +287,7 @@ impl BreakindentCache {
                     let mut ptr = regmatch.startp[0];
                     let mut indent = 0;
                     while ptr < end {
-                        indent += win_chartabsize(wp, ptr, indent as colnr_T);
+                        indent += win_chartabsize(Win::new(wp), ptr, indent as colnr_T);
                         ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
                     }
                     self.indent = indent;
@@ -305,28 +306,29 @@ impl BreakindentCache {
 /// `wp` must be a window and `line` a NUL-terminated string.
 pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
     // SAFETY: the caller's window and its buffer.
-    let (key, opt, eff_wwidth, col_off2, flp) = unsafe {
-        let buf = (*wp).w_buffer;
-        let key = BreakindentKey {
-            fnum: (*buf).handle,
-            ts: (*buf).b_p_ts,
-            vts: (*buf).b_p_vts_array,
-            tick: buf_get_changedtick(buf),
-            listopt: (*wp).w_briopt_list,
-            no_ts: (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T,
-            dy_uhex: dy_flags.get() & kOptDyFlagUhex as c_uint,
-        };
-        let opt = Briopt {
-            shift: (*wp).w_briopt_shift,
-            min: (*wp).w_briopt_min,
-            sbr: (*wp).w_briopt_sbr,
-            list: (*wp).w_briopt_list,
-            vcol: (*wp).w_briopt_vcol,
-        };
-        // The window width minus its margins: what is left for text.
-        let eff_wwidth = (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
-        (key, opt, eff_wwidth, win_col_off2(wp), get_flp_value(buf))
+    // SAFETY: the caller's window; a live window has a live buffer.
+    let win = unsafe { Win::new(wp) };
+    let buf = win.buffer();
+    let key = BreakindentKey {
+        fnum: buf.handle,
+        ts: buf.b_p_ts,
+        vts: buf.b_p_vts_array,
+        tick: buf_get_changedtick(buf),
+        listopt: win.w_briopt_list,
+        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as schar_T,
+        dy_uhex: dy_flags.get() & kOptDyFlagUhex as c_uint,
     };
+    let opt = Briopt {
+        shift: win.w_briopt_shift,
+        min: win.w_briopt_min,
+        sbr: win.w_briopt_sbr,
+        list: win.w_briopt_list,
+        vcol: win.w_briopt_vcol,
+    };
+    // SAFETY: a live window, and its buffer's 'formatlistpat'.
+    let (col_off2, flp) = unsafe { (win_col_off2(win), get_flp_value(buf.raw())) };
+    // The window width minus its margins: what is left for text.
+    let eff_wwidth = win.w_view_width - unsafe { win_col_off(wp) } + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.

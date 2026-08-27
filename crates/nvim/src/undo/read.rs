@@ -48,24 +48,20 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
     };
 
     // Always under 'verbose', even when the user named the file.
-    unsafe {
-        verbosely(true, || {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            smsg_c!(0, gettext(c"Reading undo file: %s".as_ptr()), file_name);
-        })
-    };
+    verbosely(true, || {
+        // SAFETY: the message macros expand to a `vim_snprintf` over
+        // the format literal above and the editor's message buffers.
+        unsafe { smsg_c!(0, gettext(c"Reading undo file: %s".as_ptr()), file_name) };
+    });
     let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
     if fp.is_null() {
         if !name.is_null() || p_verbose.get() > 0 {
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
             unsafe {
-                semsg_c!(
-                    gettext(c"E822: Cannot open undo file for reading: %s".as_ptr()),
-                    file_name,
-                )
-            };
+                let fmt = gettext(c"E822: Cannot open undo file for reading: %s".as_ptr());
+                semsg_c!(fmt, file_name);
+            }
         }
     } else {
         unsafe { read_undo_file(fp, file_name, name.is_null(), hash) };
@@ -95,17 +91,14 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
     {
         return true;
     }
-    unsafe {
-        verbosely(true, || {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            smsg_c!(
-                0,
-                gettext(c"Not reading undo file, owner differs: %s".as_ptr()),
-                file_name,
-            );
-        })
-    };
+    verbosely(true, || {
+        // SAFETY: the message macros expand to a `vim_snprintf` over
+        // the format literal above and the editor's message buffers.
+        unsafe {
+            let fmt = gettext(c"Not reading undo file, owner differs: %s".as_ptr());
+            smsg_c!(0, fmt, file_name);
+        }
+    });
     false
 }
 
@@ -124,7 +117,7 @@ unsafe fn read_undo_file(
 ) {
     // SAFETY: an open file and a live current buffer, by the contract above.
     let mut bi = bufinfo_T {
-        bi_buf: curbuf.get(),
+        bi_buf: unsafe { Buf::current() },
         bi_fp: fp,
     };
     let bi = &raw mut bi;
@@ -142,11 +135,9 @@ unsafe fn read_undo_file(
         // SAFETY: the message macros expand to a `vim_snprintf` over
         // the format literal above and the editor's message buffers.
         unsafe {
-            semsg_c!(
-                gettext(c"E824: Incompatible undo file: %s".as_ptr()),
-                file_name,
-            )
-        };
+            let fmt = gettext(c"E824: Incompatible undo file: %s".as_ptr());
+            semsg_c!(fmt, file_name);
+        }
         return;
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
@@ -160,15 +151,13 @@ unsafe fn read_undo_file(
     if unsafe { core::slice::from_raw_parts(hash, read_hash.len()) } != read_hash
         || line_count != cur_buf().b_ml.ml_line_count
     {
-        unsafe {
-            verbosely(automatic, || {
-                give_warning(
-                    gettext(c"File contents changed, cannot use undo info".as_ptr()),
-                    true,
-                    true,
-                );
-            })
-        };
+        verbosely(automatic, || {
+            // SAFETY: a NUL-terminated literal.
+            unsafe {
+                let mesg = gettext(c"File contents changed, cannot use undo info".as_ptr());
+                give_warning(mesg, true, true);
+            }
+        });
         return;
     }
 
@@ -188,12 +177,9 @@ unsafe fn read_undo_file(
         // SAFETY: the message macros expand to a `vim_snprintf` over
         // the format literal above and the editor's message buffers.
         unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Finished reading undo file %s".as_ptr()),
-                file_name,
-            )
-        };
+            let fmt = gettext(c"Finished reading undo file %s".as_ptr());
+            smsg_c!(0, fmt, file_name);
+        }
     }
 }
 
@@ -367,8 +353,9 @@ unsafe fn graft(
         unsafe { (*uhp).uh_alt_prev = resolve(seq, (*uhp).uh_alt_prev) };
     }
 
-    let buf = curbuf.get();
-    unsafe { u_blockfree(buf) };
+    // SAFETY: a live current buffer, by the contract above.
+    let mut buf = unsafe { Buf::current() };
+    u_blockfree(buf);
     // The links already name these headers; the store is what turns a
     // name back into one.
     for &uhp in headers {
@@ -383,23 +370,23 @@ unsafe fn graft(
             UndoLink::NONE
         }
     };
-    unsafe { (*buf).b_u_oldhead = head(header.old_head) };
-    unsafe { (*buf).b_u_newhead = head(header.new_head) };
-    unsafe { (*buf).b_u_curhead = head(header.cur_head) };
-    unsafe { (*buf).b_u_line_ptr = header.line_ptr };
-    unsafe { (*buf).b_u_line_lnum = header.line_lnum };
-    unsafe { (*buf).b_u_line_colnr = header.line_colnr };
-    unsafe { (*buf).b_u_numhead = header.num_head };
+    buf.b_u_oldhead = head(header.old_head);
+    buf.b_u_newhead = head(header.new_head);
+    buf.b_u_curhead = head(header.cur_head);
+    buf.b_u_line_ptr = header.line_ptr;
+    buf.b_u_line_lnum = header.line_lnum;
+    buf.b_u_line_colnr = header.line_colnr;
+    buf.b_u_numhead = header.num_head;
     // Every header the file carried has already been handed out, so the
     // next sequence number must come after them all. A well-formed file
     // says so itself; a corrupt one would otherwise hand out a number
     // some header already has.
-    unsafe { (*buf).b_u_seq_last = header.seq_last.max(seqs.iter().copied().max().unwrap_or(0)) };
-    unsafe { (*buf).b_u_seq_cur = header.seq_cur };
-    unsafe { (*buf).b_u_time_cur = header.seq_time };
-    unsafe { (*buf).b_u_save_nr_last = header.last_save_nr };
-    unsafe { (*buf).b_u_save_nr_cur = header.last_save_nr };
-    unsafe { (*buf).b_u_synced = true };
+    buf.b_u_seq_last = header.seq_last.max(seqs.iter().copied().max().unwrap_or(0));
+    buf.b_u_seq_cur = header.seq_cur;
+    buf.b_u_time_cur = header.seq_time;
+    buf.b_u_save_nr_last = header.last_save_nr;
+    buf.b_u_save_nr_cur = header.last_save_nr;
+    buf.b_u_synced = true;
     true
 }
 

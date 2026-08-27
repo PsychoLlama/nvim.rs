@@ -155,11 +155,11 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 unsafe { do_exedit(eap.raw(), old_curwin) };
                 // SAFETY: `win_valid` takes any pointer and compares it
                 // against the live window list.
-                if curwin.get() != old_curwin && unsafe { win_valid(old_curwin) } {
+                if curwin.get() != old_curwin && win_valid(old_curwin) {
                     // SAFETY: both windows are live, as just checked.
                     unsafe {
-                        diff_win_options(curwin.get(), true);
-                        diff_win_options(old_curwin, true);
+                        diff_win_options(cur_win(), true);
+                        diff_win_options(Win::new(old_curwin), true);
                     }
                     if !newname.is_null() {
                         eap.arg = newname;
@@ -236,7 +236,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     unsafe { set_bufref(&raw mut old_curbuf, curbuf.get()) };
     // SAFETY: the current window is live, in both calls.
     unsafe {
-        validate_cursor(old_curwin);
+        validate_cursor(Win::new(old_curwin));
         set_fraction(old_curwin);
     }
     cmdmod_set_tab(0);
@@ -253,16 +253,19 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: the current window is live.
-    unsafe { diff_win_options(curwin.get(), true) };
+    diff_win_options(cur_win(), true);
     // SAFETY: `win_valid` compares against the live window list.
-    if unsafe { win_valid(old_curwin) } {
+    if win_valid(old_curwin) {
         // SAFETY: the window is live, as just checked.
-        unsafe { diff_win_options(old_curwin, true) };
+        diff_win_options(unsafe { Win::new(old_curwin) }, true);
         // SAFETY: `old_curbuf` is a local `bufref_T`.
         if unsafe { bufref_valid(&raw mut old_curbuf) } {
             // SAFETY: the old window is live and its buffer reference valid.
             let lnum = unsafe {
-                diff_get_corresponding_line(old_curbuf.br_buf, (*old_curwin).w_cursor.lnum)
+                diff_get_corresponding_line(
+                    Buf::new(old_curbuf.br_buf),
+                    (*old_curwin).w_cursor.lnum,
+                )
             };
             cur_win().w_cursor.lnum = lnum;
         }
@@ -278,7 +281,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
 /// The editor must be running.
 pub unsafe fn ex_diffthis(_eap: *mut exarg_T) {
     // SAFETY: the current window is live.
-    unsafe { diff_win_options(curwin.get(), true) };
+    diff_win_options(cur_win(), true);
 }
 
 /// Set `'diff'` in `wp` without letting the option's side effects run.
@@ -307,11 +310,8 @@ fn set_diff_option(wp: Win, value: bool) {
 /// second `:diffthis` from saving the diff-mode values as the ones to
 /// restore.
 ///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
-    // SAFETY: the caller's window.
-    let mut wp = unsafe { Win::new(wp) };
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub fn diff_win_options(mut wp: Win, addbuf: bool) {
     let old_curwin = curwin.get();
     curwin.set(wp.raw());
     // SAFETY: `curwin` is `wp`, which is live.
@@ -383,8 +383,8 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
     wp.w_onebuf_opt.wo_fdl = 0 as OptInt;
     // SAFETY: a live window, in all three calls.
     unsafe {
-        fold_update_all(wp.raw());
-        changed_window_setting(wp.raw());
+        fold_update_all(wp);
+        changed_window_setting(wp);
         if vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
             do_cmdline_cmd(c"set sbo+=hor".as_ptr());
         }
@@ -393,7 +393,7 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
     set_diff_option(wp, true);
     if addbuf {
         // SAFETY: a live window's buffer is live.
-        unsafe { diff_buf_add(wp.w_buffer) };
+        diff_buf_add(wp.buffer());
     }
     wp.redraw_later(UPD_NOT_VALID);
 }
@@ -457,7 +457,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                 }
                 if wp.w_onebuf_opt.wo_fen != 0 {
                     // SAFETY: a live window.
-                    let manual = unsafe { foldmethod_is_manual(wp.raw()) };
+                    let manual = foldmethod_is_manual(wp);
                     wp.w_onebuf_opt.wo_fen = if manual {
                         0
                     } else {
@@ -465,20 +465,16 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                     };
                 }
                 // SAFETY: a live window.
-                unsafe { fold_update_all(wp.raw()) };
+                fold_update_all(wp);
             }
             wp.w_topfill = 0;
-            // SAFETY: a live window, in both calls.
-            unsafe {
-                changed_window_setting(wp.raw());
-                diff_buf_adjust(wp.raw());
-            }
+            changed_window_setting(wp);
+            diff_buf_adjust(wp);
         }
         diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
     }
     if eap.forceit != 0 {
-        // SAFETY: the editor exists.
-        unsafe { diff_buf_clear() };
+        diff_buf_clear();
     }
     let mut tp = cur_tab();
     if !diffwin {
@@ -486,7 +482,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
         tp.tp_diff_invalid = 0;
         tp.tp_diff_update = 0;
         // SAFETY: the current tab page is live.
-        unsafe { diff_clear(tp.raw()) };
+        diff_clear(tp);
     }
     // SAFETY: `p_sbo` is the `'scrollopt'` option string.
     if !diffwin && !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {

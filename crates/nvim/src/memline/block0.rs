@@ -186,7 +186,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
                     os_fileinfo_inode(&raw mut file_info) as c_long,
                     &mut (*b0p).b0_ino,
                 );
-                buf_store_file_info(buf, &raw mut file_info);
+                buf_store_file_info(Buf::new(buf), &raw mut file_info);
                 (*buf).b_mtime_read = (*buf).b_mtime;
                 (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
             } else {

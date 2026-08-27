@@ -76,6 +76,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
+use crate::winlayer::Win;
 use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
@@ -413,7 +414,7 @@ pub unsafe fn pum_display(
             // not set `must_redraw` under us.
             pum_is_visible.set(true);
             pum_is_drawn.set(true);
-            validate_cursor_col(curwin.get());
+            validate_cursor_col(Win::current());
 
             let anchor = pum_compute_anchor(cmd_startcol);
 
@@ -522,9 +523,8 @@ pub unsafe fn pum_check_clear() {
         pum_is_drawn.set(false);
         pum_external.set(false);
 
-        let wp = win_float_find_preview();
-        if !wp.is_null() {
-            win_close(wp, false, false);
+        if let Some(wp) = win_float_find_preview() {
+            win_close(wp.raw(), false, false);
         }
     }
 }

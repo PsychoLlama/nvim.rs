@@ -271,7 +271,7 @@ unsafe fn draw_default_tabline() {
             if !win.w_config.focusable || win.w_config.hide {
                 wincount -= 1;
             // SAFETY: a live window's buffer.
-            } else if unsafe { buf_is_changed(win.buffer().raw()) } {
+            } else if buf_is_changed(win.buffer()) {
                 modified = true;
             }
             wincount += 1;

@@ -28,6 +28,7 @@ use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
 use crate::types::{handle_T, linenr_T, lua_State};
+use crate::winlayer::Win;
 
 unsafe extern "C-unwind" {
     /// lpeg's own `luaopen_*`, linked in from the vendored library.
@@ -56,7 +57,7 @@ unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"invalid bot".as_ptr());
         }
 
-        fold_update(win, top, bot);
+        fold_update(Win::new(win), top, bot);
         0
     }
 }

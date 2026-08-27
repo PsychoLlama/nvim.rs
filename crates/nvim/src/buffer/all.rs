@@ -118,12 +118,12 @@ fn is_locked(mut win: Win) -> bool {
 fn is_valid(win: *mut win_T) -> bool {
     // SAFETY: `win_valid` walks the window list and does not dereference its
     // argument.
-    unsafe { win_valid(win) }
+    win_valid(win)
 }
 
 fn is_aucmd(mut win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { is_aucmd_win(win.raw()) }
+    is_aucmd_win(win.raw())
 }
 
 fn tab_index() -> c_int {
@@ -140,7 +140,7 @@ fn global_stl_rows() -> c_int {
 
 fn buf_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_changed(buf.raw()) }
+    buf_is_changed(buf)
 }
 
 fn buf_hidden(mut buf: Buf) -> bool {
@@ -155,14 +155,14 @@ fn auto_write(mut buf: Buf) -> c_int {
 
 fn get_key() {
     // SAFETY: reads one key through the main input machinery.
-    unsafe { vgetc() };
+    vgetc();
 }
 
 /// Make `buf` the current buffer, as `:buffer` does.
 fn goto_buf(mut buf: Buf) {
     let update_jumplist = jop_flags.get() & kOptJopFlagClean as c_int as u32 == 0;
     // SAFETY: a live buffer.
-    unsafe { set_curbuf(buf.raw(), DOBUF_GOTO as c_int, update_jumplist) };
+    unsafe { set_curbuf(buf, DOBUF_GOTO as c_int, update_jumplist) };
 }
 
 /// A `bufref_T` for `buf`, the record that survives an autocommand.

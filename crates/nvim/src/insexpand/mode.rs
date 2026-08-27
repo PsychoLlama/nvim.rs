@@ -14,6 +14,7 @@ use crate::keycodes::{
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
 use crate::types::NUL;
+use crate::winlayer::Win;
 
 /// The `'s'` of C's `case 's': case Ctrl_S:` in [`set_ctrl_x_mode`].  A cast
 /// is not a pattern, so the literal needs a name to be matched on.
@@ -363,10 +364,11 @@ pub fn ins_compl_active() -> bool {
 }
 
 /// A completion is running, and `wp` is the window it started in.
-pub unsafe fn ins_compl_win_active(wp: *mut win_T) -> bool {
-    ins_compl_active()
-        && wp == compl_curr_win.get()
-        && unsafe { (*wp).w_buffer == compl_curr_buf.get() }
+///
+/// Safe: [`Win`] is a live window, and the two globals are only compared
+/// against it.
+pub fn ins_compl_win_active(wp: Win) -> bool {
+    ins_compl_active() && wp.raw() == compl_curr_win.get() && wp.w_buffer == compl_curr_buf.get()
 }
 
 pub fn ins_compl_used_match() -> bool {

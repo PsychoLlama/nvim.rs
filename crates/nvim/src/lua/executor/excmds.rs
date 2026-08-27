@@ -19,7 +19,7 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::main::{curbuf, curwin, e_argreq, got_int};
+use crate::main::{curbuf, e_argreq, got_int};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::emsg;
@@ -178,7 +178,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
             l += 1;
         }
         lua_pop(lstate, 1);
-        check_cursor(curwin.get());
+        check_cursor(Win::current());
         redraw_curbuf_later(UPD_NOT_VALID);
     }
 }
@@ -364,3 +364,4 @@ impl StringBuf {
 
 use crate::os::fileio::file_read;
 use crate::types::StringBuilder;
+use crate::winlayer::Win;

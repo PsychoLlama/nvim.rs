@@ -25,7 +25,7 @@
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
-use crate::buffer::{bt_prompt, buflist_findnr, buflist_new};
+use crate::buffer::{bt_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells, vim_isprintc};
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
@@ -240,7 +240,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
             mark_str.as_mut_ptr(),
             ptr::null_mut(),
             AUGROUP_ALL,
-            buf,
+            Buf::new(buf),
             ptr::null_mut(),
             &raw mut payload,
         );
@@ -275,8 +275,7 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
         }
         return OK;
     }
-    // SAFETY: `buflist_findnr` answers a live buffer or null.
-    let Some(mut buf) = (unsafe { Buf::from_raw(buflist_findnr(fnum)) }) else {
+    let Some(mut buf) = find_buf(fnum) else {
         return FAIL;
     };
     let handle = buf.handle as c_int;
@@ -410,7 +409,7 @@ pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
     // SAFETY: `curwin` is live from startup to exit.
     let mut win = unsafe { Win::current() };
     // SAFETY: as above.
-    unsafe { set_topline(win.raw(), topline) };
+    set_topline(win, topline);
     // A remembered `skipcol` is dropped when the line it names is now folded
     // away or has become too short to reach — restoring it would scroll the
     // window sideways past the end of the line.
@@ -422,8 +421,8 @@ pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
     // SAFETY: as above.
     let keep = unsafe {
         skipcol > 0
-            && !has_folding(win.raw(), topline, ptr::null_mut(), ptr::null_mut())
-            && skipcol < linetabsize_eol(win.raw(), topline)
+            && !has_folding(win, topline, None, None)
+            && skipcol < linetabsize_eol(win, topline)
     };
     win.w_skipcol = if keep { skipcol } else { 0 };
 }

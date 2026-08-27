@@ -238,7 +238,7 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
             Buf::current().b_prompt_append_new_line = true;
         }
         let prompt_lno = buf.b_prompt_start.mark.lnum;
-        let old_prompt = buf_prompt_text(buf.raw());
+        let old_prompt = buf_prompt_text(buf);
         let old_line = buf.line(prompt_lno).raw();
         let old_line_len = buf.line_len(prompt_lno);
         let old_prompt_len = len_as_int(strlen(old_prompt));
@@ -294,9 +294,9 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
         let mut win = Win::current();
         if win.w_buffer == buf.raw() && win.w_cursor.lnum == prompt_lno {
             win.w_cursor.col = cursor_col;
-            check_cursor_col(win.raw());
+            check_cursor_col(win);
         }
-        changed_lines(buf.raw(), prompt_lno, 0, prompt_lno + 1, 0, true);
-        u_clearallandblockfree(buf.raw());
+        changed_lines(buf, prompt_lno, 0, prompt_lno + 1, 0, true);
+        u_clearallandblockfree(buf);
     }
 }

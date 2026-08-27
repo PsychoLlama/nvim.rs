@@ -239,7 +239,7 @@ fn snapshot_matches(sn: Frame, fr: Frame) -> bool {
         return false;
     }
     // SAFETY: `win_valid` only compares the saved pointer against the list.
-    !(!sn.fr_win.is_null() && !unsafe { win_valid(sn.fr_win) })
+    !(!sn.fr_win.is_null() && !win_valid(sn.fr_win))
 }
 
 /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`

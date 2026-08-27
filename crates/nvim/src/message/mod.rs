@@ -805,10 +805,7 @@ pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
 /// # Safety
 /// Only that the typeahead is in a consistent state.
 pub unsafe fn messaging() -> bool {
-    unsafe {
-        !(p_lz.get() != 0 && char_avail() && !KeyTyped.get())
-            && (p_ch.get() > 0 || ui_has(kUIMessages))
-    }
+    !(p_lz.get() != 0 && char_avail() && !KeyTyped.get()) && (p_ch.get() > 0 || ui_has(kUIMessages))
 }
 
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`

@@ -17,6 +17,7 @@ use crate::guard::{Allow, Suppress};
 use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::{OK, OptionSetFlags};
+use crate::winlayer::Win;
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
@@ -85,7 +86,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
             // inflate the answer in a narrow window.
             let save_wrap = (*win).w_onebuf_opt.wo_wrap;
             (*win).w_onebuf_opt.wo_wrap = 0;
-            max_width = max_width.max(win_linetabsize(win, 0, curr, MAXCOL as c_int));
+            max_width = max_width.max(win_linetabsize(Win::new(win), 0, curr, MAXCOL as c_int));
             (*win).w_onebuf_opt.wo_wrap = save_wrap;
 
             lines.push(Object {
@@ -187,10 +188,10 @@ unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
         (*wp).w_config.anchor = 0; // NW: align its top with the menu's top
         let count = (*(*wp).w_buffer).b_ml.ml_line_count;
         (*wp).w_view_width = (*wp).w_config.width;
-        (*wp).w_config.height = plines_m_win(wp, (*wp).w_topline, count, Rows.get());
+        (*wp).w_config.height = plines_m_win(Win::new(wp), (*wp).w_topline, count, Rows.get());
         (*wp).w_config.row = f64::from(pum_row.get());
         (*wp).w_config.hide = false;
-        win_config_float(wp, (*wp).w_config.clone());
+        win_config_float(Win::new(wp), (*wp).w_config.clone());
         true
     }
 }
@@ -212,28 +213,28 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
         RedrawingDisabled.set(RedrawingDisabled.get() + 1);
         no_u_sync.set(no_u_sync.get() + 1);
 
-        let mut wp = win_float_find_preview();
-        if wp.is_null() {
-            wp = win_float_create_preview(false, true);
-            if wp.is_null() {
-                // NOTE: leaves autocmds blocked and the two counters raised,
-                // as upstream does.
-                return ::core::ptr::null_mut();
-            }
-            (*wp).w_topline = 1;
-            (*wp).w_onebuf_opt.wo_wfb = 1;
-        }
+        let mut wp = if let Some(wp) = win_float_find_preview() {
+            wp
+        } else if let Some(mut fresh) = win_float_create_preview(false, true) {
+            fresh.w_topline = 1;
+            fresh.w_onebuf_opt.wo_wfb = 1;
+            fresh
+        } else {
+            // NOTE: leaves autocmds blocked and the two counters raised, as
+            // upstream does.
+            return ::core::ptr::null_mut();
+        };
 
-        let (_lnum, max_info_width) = pum_preview_set_text(wp, info);
+        let (_lnum, max_info_width) = pum_preview_set_text(wp.raw(), info);
         no_u_sync.set(no_u_sync.get() - 1);
         RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-        redraw_later(wp, UPD_NOT_VALID);
+        redraw_later(wp.raw(), UPD_NOT_VALID);
 
-        if !pum_adjust_info_position(wp, max_info_width) {
-            wp = ::core::ptr::null_mut();
+        if pum_adjust_info_position(wp.raw(), max_info_width) {
+            wp.raw()
+        } else {
+            ::core::ptr::null_mut()
         }
-        unblock_autocmds();
-        wp
     }
 }
 
@@ -325,10 +326,9 @@ unsafe fn pum_show_info(
         if !use_float {
             resized = prepare_tagpreview(false);
         } else {
-            let wp = win_float_find_preview();
-            if !wp.is_null() {
-                win_enter(wp, false);
-            } else if !win_float_create_preview(true, true).is_null() {
+            if let Some(wp) = win_float_find_preview() {
+                win_enter(wp.raw(), false);
+            } else if win_float_create_preview(true, true).is_some() {
                 resized = true;
             }
         }
@@ -463,7 +463,7 @@ unsafe fn pum_restore_window(
             (*curwin.get()).w_redr_status = false;
         }
 
-        validate_cursor(curwin.get());
+        validate_cursor(Win::current());
         redraw_later(curwin.get(), UPD_SOME_VALID);
 
         // A resized preview window needs the buffer view updated, which only
@@ -472,7 +472,7 @@ unsafe fn pum_restore_window(
             no_u_sync.set(no_u_sync.get() + 1);
             win_enter(curwin_save, true);
             no_u_sync.set(no_u_sync.get() - 1);
-            update_topline(curwin.get());
+            update_topline(Win::current());
         }
 
         // Draw the screen before the menu goes back on top of it, with the
@@ -519,12 +519,12 @@ pub(crate) unsafe fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
 
         // Back to no selection, or to one with nothing to show: hide the
         // float rather than closing it, so the next item can reuse it.
-        if use_float && info.is_none() {
-            let wp = win_float_find_preview();
-            if !wp.is_null() {
-                (*wp).w_config.hide = true;
-                win_config_float(wp, (*wp).w_config.clone());
-            }
+        if use_float
+            && info.is_none()
+            && let Some(mut wp) = win_float_find_preview()
+        {
+            wp.w_config.hide = true;
+            win_config_float(wp, wp.w_config.clone());
         }
 
         if pum_selected.get() < 0 || pum_selected.get() >= pum_size.get() {

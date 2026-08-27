@@ -16,6 +16,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
+use crate::winlayer::{Buf, TabPage, Win, tabs, windows};
 use core::ffi::c_int;
 use std::ffi::CStr;
 
@@ -28,20 +29,17 @@ pub(crate) unsafe fn clear_diffblock(dp: *mut diff_T) {
 }
 
 /// Take `buf` out of every tabpage's diff.
-pub unsafe fn diff_buf_delete(buf: *mut buf_T) {
-    unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            let i = diff_buf_idx(buf, tp);
-            if i != DB_COUNT {
-                (*tp).tp_diffbuf[i as usize] = ::core::ptr::null_mut();
-                (*tp).tp_diff_invalid = 1;
-                if tp == curtab.get() {
-                    need_diff_redraw.set(true);
-                    redraw_later(curwin.get(), UPD_VALID);
-                }
+pub fn diff_buf_delete(buf: Buf) {
+    for mut tp in tabs() {
+        let i = diff_buf_idx(buf, tp);
+        if i != DB_COUNT {
+            tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
+            tp.tp_diff_invalid = 1;
+            if tp.is_current() {
+                need_diff_redraw.set(true);
+                // SAFETY: `curwin` is set from startup to exit.
+                unsafe { redraw_later(curwin.get(), UPD_VALID) };
             }
-            tp = (*tp).tp_next;
         }
     }
 }
@@ -50,85 +48,78 @@ pub unsafe fn diff_buf_delete(buf: *mut buf_T) {
 /// the window's `'diff'`.
 ///
 /// A buffer stays in the diff while *any* window still shows it in diff mode.
-pub unsafe fn diff_buf_adjust(win: *mut win_T) {
-    unsafe {
-        if (*win).w_onebuf_opt.wo_diff != 0 {
-            diff_buf_add((*win).w_buffer);
-            return;
-        }
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_buffer == (*win).w_buffer && (*wp).w_onebuf_opt.wo_diff != 0 {
-                return;
-            }
-            wp = (*wp).w_next;
-        }
-        let i = diff_buf_idx((*win).w_buffer, curtab.get());
-        if i != DB_COUNT {
-            (*curtab.get()).tp_diffbuf[i as usize] = ::core::ptr::null_mut();
-            (*curtab.get()).tp_diff_invalid = 1;
-            diff_redraw(true);
-        }
+pub fn diff_buf_adjust(win: Win) {
+    if win.w_onebuf_opt.wo_diff != 0 {
+        diff_buf_add(win.buffer());
+        return;
+    }
+    if windows().any(|wp| wp.w_buffer == win.w_buffer && wp.w_onebuf_opt.wo_diff != 0) {
+        return;
+    }
+    let mut tp = cur_tab();
+    let i = diff_buf_idx(win.buffer(), tp);
+    if i != DB_COUNT {
+        tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
+        tp.tp_diff_invalid = 1;
+        // SAFETY: nothing here holds a borrow of the tab page's block list.
+        unsafe { diff_redraw(true) };
     }
 }
 
 /// Put `buf` in the current tabpage's diff, if there is a slot free.
-pub unsafe fn diff_buf_add(buf: *mut buf_T) {
-    unsafe {
-        let tp = curtab.get();
-        if diff_buf_idx(buf, tp) != DB_COUNT {
+pub fn diff_buf_add(buf: Buf) {
+    let mut tp = cur_tab();
+    if diff_buf_idx(buf, tp) != DB_COUNT {
+        return;
+    }
+    for i in 0..DB_COUNT as usize {
+        if tp.tp_diffbuf[i].is_null() {
+            tp.tp_diffbuf[i] = buf.raw();
+            tp.tp_diff_invalid = 1;
+            // SAFETY: nothing here holds a borrow of the tab page's block list.
+            unsafe { diff_redraw(true) };
             return;
         }
-        for i in 0..DB_COUNT as usize {
-            if (*tp).tp_diffbuf[i].is_null() {
-                (*tp).tp_diffbuf[i] = buf;
-                (*tp).tp_diff_invalid = 1;
-                diff_redraw(true);
-                return;
-            }
-        }
+    }
+    // SAFETY: the message macros expand to a `vim_snprintf` over the format
+    // literal above and the editor's message buffers.
+    unsafe {
         semsg_c!(
             gettext(c"E96: Cannot diff more than %d buffers".as_ptr()),
             DB_COUNT,
-        );
-    }
+        )
+    };
 }
 
 /// Empty the current tabpage's diff.
-pub(crate) unsafe fn diff_buf_clear() {
-    unsafe {
-        let tp = curtab.get();
-        for i in 0..DB_COUNT as usize {
-            if !(*tp).tp_diffbuf[i].is_null() {
-                (*tp).tp_diffbuf[i] = ::core::ptr::null_mut();
-                (*tp).tp_diff_invalid = 1;
-                diff_redraw(true);
-            }
+pub(crate) fn diff_buf_clear() {
+    let mut tp = cur_tab();
+    for i in 0..DB_COUNT as usize {
+        if !tp.tp_diffbuf[i].is_null() {
+            tp.tp_diffbuf[i] = ::core::ptr::null_mut();
+            tp.tp_diff_invalid = 1;
+            // SAFETY: nothing here holds a borrow of the tab page's block list.
+            unsafe { diff_redraw(true) };
         }
     }
 }
 
 /// `buf`'s slot in `tp`'s diff, or `DB_COUNT` if it has none.
-pub(crate) unsafe fn diff_buf_idx(buf: *mut buf_T, tp: *mut tabpage_T) -> c_int {
-    unsafe {
-        (0..DB_COUNT)
-            .find(|&i| (*tp).tp_diffbuf[i as usize] == buf)
-            .unwrap_or(DB_COUNT)
-    }
+pub(crate) fn diff_buf_idx(buf: Buf, tp: TabPage) -> c_int {
+    (0..DB_COUNT)
+        .find(|&i| tp.tp_diffbuf[i as usize] == buf.raw())
+        .unwrap_or(DB_COUNT)
 }
 
 /// Mark every tabpage `buf` is diffed in as needing a recompute.
-pub unsafe fn diff_invalidate(buf: *mut buf_T) {
-    unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            if diff_buf_idx(buf, tp) != DB_COUNT {
-                (*tp).tp_diff_invalid = 1;
-                if tp == curtab.get() {
-                    diff_redraw(true);
-                }
+pub fn diff_invalidate(buf: Buf) {
+    for mut tp in tabs() {
+        if diff_buf_idx(buf, tp) != DB_COUNT {
+            tp.tp_diff_invalid = 1;
+            if tp.is_current() {
+                // SAFETY: nothing here holds a borrow of the block list.
+                unsafe { diff_redraw(true) };
             }
-            tp = (*tp).tp_next;
         }
     }
 }
@@ -137,21 +128,19 @@ pub unsafe fn diff_invalidate(buf: *mut buf_T) {
 ///
 /// The parameters are `mark_adjust`'s: lines `line1`..`line2` moved by
 /// `amount`, everything below by `amount_after`.
-pub unsafe fn diff_mark_adjust(
-    buf: *mut buf_T,
+pub fn diff_mark_adjust(
+    buf: Buf,
     line1: linenr_T,
     line2: linenr_T,
     amount: linenr_T,
     amount_after: linenr_T,
 ) {
-    unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            let idx = diff_buf_idx(buf, tp);
-            if idx != DB_COUNT {
-                diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
-            }
-            tp = (*tp).tp_next;
+    for tp in tabs() {
+        let idx = diff_buf_idx(buf, tp);
+        if idx != DB_COUNT {
+            // SAFETY: `idx` is a slot the tab page holds, and the block list
+            // walked below is that tab page's own.
+            unsafe { diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after) };
         }
     }
 }
@@ -180,7 +169,7 @@ fn inserted_deleted(
 /// cases in a diagram; the numbers are kept in the comments below because the
 /// arms are otherwise indistinguishable.
 unsafe fn diff_mark_adjust_tp(
-    tp: *mut tabpage_T,
+    mut tp: TabPage,
     idx: c_int,
     line1: linenr_T,
     line2: linenr_T,
@@ -192,8 +181,8 @@ unsafe fn diff_mark_adjust_tp(
             // The blocks will be recomputed before the next redraw, so
             // nothing below survives; `_update` also gets the folds redone.
             // The *marks* are still adjusted here, which `:%diffput` needs.
-            (*tp).tp_diff_invalid = 1;
-            (*tp).tp_diff_update = 1;
+            tp.tp_diff_invalid = 1;
+            tp.tp_diff_update = 1;
         }
         let idx = idx as usize;
         let (inserted, mut deleted) = inserted_deleted(line2, amount, amount_after);
@@ -207,7 +196,7 @@ unsafe fn diff_mark_adjust_tp(
         // which is how a deletion in one buffer becomes a change in the rest.
         let adjust_others = |dp: *mut diff_T, off: linenr_T, n: linenr_T| {
             for i in 0..DB_COUNT as usize {
-                if (*tp).tp_diffbuf[i].is_null() || i == idx {
+                if tp.tp_diffbuf[i].is_null() || i == idx {
                     continue;
                 }
                 (*dp).df_lnum[i] = ((*dp).df_lnum[i] - off).max(1);
@@ -223,7 +212,7 @@ unsafe fn diff_mark_adjust_tp(
                 && (*dprev).df_lnum[idx] + (*dprev).df_count[idx] == (*dp).df_lnum[idx]
             {
                 for i in 0..DB_COUNT as usize {
-                    if !(*tp).tp_diffbuf[i].is_null() {
+                    if !tp.tp_diffbuf[i].is_null() {
                         (*dprev).df_count[i] += (*dp).df_count[i];
                     }
                 }
@@ -234,7 +223,7 @@ unsafe fn diff_mark_adjust_tp(
         };
 
         let mut dprev = ::core::ptr::null_mut::<diff_T>();
-        let mut dp = (*tp).tp_first_diff;
+        let mut dp = tp.tp_first_diff;
         let mut lnum_deleted = line1; // lnum of the remaining deletion
         loop {
             // The edit falls between two blocks, touching neither: it is a
@@ -250,7 +239,7 @@ unsafe fn diff_mark_adjust_tp(
                 (*dnext).df_lnum[idx] = line1;
                 (*dnext).df_count[idx] = inserted;
                 for i in 0..DB_COUNT as usize {
-                    if (*tp).tp_diffbuf[i].is_null() || i == idx {
+                    if tp.tp_diffbuf[i].is_null() || i == idx {
                         continue;
                     }
                     // The other buffers' line numbers carry the drift the
@@ -357,10 +346,10 @@ unsafe fn diff_mark_adjust_tp(
 
         // A block every buffer now has nothing in is not a change any more.
         let mut dprev = ::core::ptr::null_mut::<diff_T>();
-        let mut dp = (*tp).tp_first_diff;
+        let mut dp = tp.tp_first_diff;
         while !dp.is_null() {
             let empty = (0..DB_COUNT as usize)
-                .all(|i| (*tp).tp_diffbuf[i].is_null() || (*dp).df_count[i] == 0);
+                .all(|i| tp.tp_diffbuf[i].is_null() || (*dp).df_count[i] == 0);
             if empty {
                 dp = diff_free(tp, dprev, dp);
             } else {
@@ -369,7 +358,7 @@ unsafe fn diff_mark_adjust_tp(
             }
         }
 
-        if tp == curtab.get() {
+        if tp.is_current() {
             // Not right away: this runs per edit, and redrawing is slow.
             need_diff_redraw.set(true);
             // The filler lines may have moved, so the scroll binding has to
@@ -381,7 +370,7 @@ unsafe fn diff_mark_adjust_tp(
 
 /// Insert a fresh, empty block between `dprev` and `dp`.
 pub(crate) unsafe fn diff_alloc_new(
-    tp: *mut tabpage_T,
+    mut tp: TabPage,
     dprev: *mut diff_T,
     dp: *mut diff_T,
 ) -> *mut diff_T {
@@ -391,7 +380,7 @@ pub(crate) unsafe fn diff_alloc_new(
         (*dnew).has_changes = false;
         (*dnew).df_next = dp;
         if dprev.is_null() {
-            (*tp).tp_first_diff = dnew;
+            tp.tp_first_diff = dnew;
         } else {
             (*dprev).df_next = dnew;
         }
@@ -406,7 +395,7 @@ pub(crate) unsafe fn diff_alloc_new(
 
 /// Unlink and free `dp`, answering the block that follows it.
 pub(crate) unsafe fn diff_free(
-    tp: *mut tabpage_T,
+    mut tp: TabPage,
     dprev: *mut diff_T,
     dp: *mut diff_T,
 ) -> *mut diff_T {
@@ -414,7 +403,7 @@ pub(crate) unsafe fn diff_free(
         let next = (*dp).df_next;
         clear_diffblock(dp);
         if dprev.is_null() {
-            (*tp).tp_first_diff = next;
+            tp.tp_first_diff = next;
         } else {
             (*dprev).df_next = next;
         }
@@ -427,9 +416,9 @@ pub(crate) unsafe fn diff_free(
 ///
 /// An edit can leave a block claiming lines that did not actually change; the
 /// diff is not recomputed for that, so the block is trimmed instead.
-unsafe fn diff_check_unchanged(tp: *mut tabpage_T, dp: *mut diff_T) {
+unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut diff_T) {
     unsafe {
-        let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !(*tp).tp_diffbuf[i].is_null()) else {
+        let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tp.tp_diffbuf[i].is_null()) else {
             return;
         };
         if diff_check_sanity(tp, dp) == FAIL {
@@ -445,13 +434,13 @@ unsafe fn diff_check_unchanged(tp: *mut tabpage_T, dp: *mut diff_T) {
                 // A copy: the `ml_get_buf` below invalidates the buffer this
                 // one answers with.
                 let line_org = CStr::from_ptr(ml_get_buf(
-                    (*tp).tp_diffbuf[i_org],
+                    tp.tp_diffbuf[i_org],
                     (*dp).df_lnum[i_org] + off_org,
                 ))
                 .to_owned();
                 let mut i_new = i_org + 1;
                 while i_new < DB_COUNT as usize {
-                    if !(*tp).tp_diffbuf[i_new].is_null() {
+                    if !tp.tp_diffbuf[i_new].is_null() {
                         let off_new = if dir == BACKWARD as c_int {
                             (*dp).df_count[i_new] - 1
                         } else {
@@ -461,7 +450,7 @@ unsafe fn diff_check_unchanged(tp: *mut tabpage_T, dp: *mut diff_T) {
                             break;
                         }
                         let other = CStr::from_ptr(ml_get_buf(
-                            (*tp).tp_diffbuf[i_new],
+                            tp.tp_diffbuf[i_new],
                             (*dp).df_lnum[i_new] + off_new,
                         ));
                         if !lines_equal(&line_org, other) {
@@ -474,7 +463,7 @@ unsafe fn diff_check_unchanged(tp: *mut tabpage_T, dp: *mut diff_T) {
                     break; // some buffer differs here; the block starts (or ends) for real
                 }
                 for i in i_org..DB_COUNT as usize {
-                    if !(*tp).tp_diffbuf[i].is_null() {
+                    if !tp.tp_diffbuf[i].is_null() {
                         if dir == FORWARD as c_int {
                             (*dp).df_lnum[i] += 1;
                         }
@@ -490,10 +479,10 @@ unsafe fn diff_check_unchanged(tp: *mut tabpage_T, dp: *mut diff_T) {
 ///
 /// An edit can leave a block naming lines that no longer exist, and every
 /// reader of a block has to check first.
-pub(crate) unsafe fn diff_check_sanity(tp: *mut tabpage_T, dp: *mut diff_T) -> c_int {
+pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut diff_T) -> c_int {
     unsafe {
         for i in 0..DB_COUNT as usize {
-            let buf = (*tp).tp_diffbuf[i];
+            let buf = tp.tp_diffbuf[i];
             if !buf.is_null()
                 && (*dp).df_lnum[i] + (*dp).df_count[i] - 1 > (*buf).b_ml.ml_line_count
             {
@@ -525,16 +514,16 @@ pub(crate) unsafe fn diff_copy_entry(
 }
 
 /// Free `tp`'s whole block list.
-pub unsafe fn diff_clear(tp: *mut tabpage_T) {
-    unsafe {
-        let mut dp = (*tp).tp_first_diff;
-        while !dp.is_null() {
-            let next = (*dp).df_next;
-            clear_diffblock(dp);
-            dp = next;
-        }
-        (*tp).tp_first_diff = ::core::ptr::null_mut();
+pub fn diff_clear(mut tp: TabPage) {
+    let mut dp = tp.tp_first_diff;
+    // SAFETY: the tab page's own block list, walked one node ahead of the
+    // free, and nothing else points at these blocks.
+    while !dp.is_null() {
+        let next = unsafe { (*dp).df_next };
+        unsafe { clear_diffblock(dp) };
+        dp = next;
     }
+    tp.tp_first_diff = ::core::ptr::null_mut();
 }
 
 /// The longest of `dp`'s ranges, which is how many screen rows it occupies in
@@ -567,15 +556,12 @@ pub(crate) unsafe fn valid_diff(diff: *mut diff_T) -> bool {
 }
 
 /// Whether `buf` is in any tabpage's diff.
-pub unsafe fn diff_mode_buf(buf: *mut buf_T) -> bool {
-    unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
-            if diff_buf_idx(buf, tp) != DB_COUNT {
-                return true;
-            }
-            tp = (*tp).tp_next;
-        }
-        false
-    }
+pub fn diff_mode_buf(buf: Buf) -> bool {
+    tabs().any(|tp| diff_buf_idx(buf, tp) != DB_COUNT)
+}
+
+/// The tab page the editor is working in.
+fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
 }

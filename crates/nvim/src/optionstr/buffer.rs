@@ -58,6 +58,7 @@ use super::{
     opt_strings_mask, opt_strings_ok, valid_filetype,
 };
 use crate::pos::MAXLNUM;
+use crate::winlayer::{Buf, Win};
 
 /// 'backspace' is a word list, except that the number 2 is also accepted
 /// and means everything but "nostop".
@@ -228,7 +229,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_cinoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer; `parse_cino` re-derives its cache.
-    unsafe { parse_cino((*args).os_buf.cast::<buf_T>()) };
+    unsafe { parse_cino(Buf::new((*args).os_buf.cast::<buf_T>())) };
     ptr::null()
 }
 
@@ -437,8 +438,8 @@ pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
     unsafe {
         did_set_optexpr(args);
         let wp = win(args);
-        if foldmethod_is_expr(wp) {
-            fold_update_all(wp);
+        if foldmethod_is_expr(Win::new(wp)) {
+            fold_update_all(Win::new(wp));
         }
     }
     ptr::null()
@@ -450,8 +451,8 @@ pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
     unsafe {
         let wp = win(args);
-        if foldmethod_is_indent(wp) {
-            fold_update_all(wp);
+        if foldmethod_is_indent(Win::new(wp)) {
+            fold_update_all(Win::new(wp));
         }
     }
     ptr::null()
@@ -472,8 +473,8 @@ pub unsafe fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
             return invalid();
         }
         let wp = win(args);
-        if foldmethod_is_marker(wp) {
-            fold_update_all(wp);
+        if foldmethod_is_marker(Win::new(wp)) {
+            fold_update_all(Win::new(wp));
         }
     }
     ptr::null()
@@ -489,10 +490,10 @@ pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
     unsafe {
         let wp = win(args);
-        fold_update_all(wp);
+        fold_update_all(Win::new(wp));
         // Diff folds are closed to whatever 'foldlevel' says as soon as
         // they exist.
-        if foldmethod_is_diff(wp) {
+        if foldmethod_is_diff(Win::new(wp)) {
             new_fold_level();
         }
     }
@@ -670,8 +671,8 @@ pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
         if errmsg.is_null() {
             // Indent folds are computed from the tab stops.
             let wp = win(args);
-            if foldmethod_is_indent(wp) {
-                fold_update_all(wp);
+            if foldmethod_is_indent(Win::new(wp)) {
+                fold_update_all(Win::new(wp));
             }
         }
         errmsg

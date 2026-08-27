@@ -18,7 +18,7 @@ use crate::diff::diff_redraw;
 use crate::digraph::keymap_str;
 use crate::drawline::win_line;
 use crate::eval::vars::set_vim_var_nr;
-use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, get_cmdline_info, redrawcmdline};
+use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
@@ -105,6 +105,7 @@ use crate::window::{
     frame2win, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
     win_fdccol_count, win_new_screensize, win_ui_flush,
 };
+use crate::winlayer::{Cc, Win};
 
 // The carve of the transpiled module; see each child's docs.
 mod resize;
@@ -204,11 +205,11 @@ pub unsafe fn conceal_check_cursor_line() {
 
         // Whether the line is displayed at all may have changed with it.
         if decor_conceal_line(wp, (*wp).w_cursor.lnum - 1, true) {
-            changed_window_setting(wp);
+            changed_window_setting(Win::new(wp));
         }
         // The cursor column has to be recomputed, e.g. when entering Visual
         // mode stops the line being concealed.
-        curs_columns(wp, c_int::from(true)); // may_scroll
+        curs_columns(Win::new(wp), c_int::from(true)); // may_scroll
     }
 }
 
@@ -218,11 +219,8 @@ pub unsafe fn conceal_check_cursor_line() {
 /// -- i.e. inside a mapping or a script -- unless something asked for a redraw
 /// explicitly.
 pub unsafe fn redrawing() -> bool {
-    // SAFETY: `char_avail` pumps the input layer on the main thread.
-    unsafe {
-        RedrawingDisabled.get() == 0
-            && !(p_lz.get() != 0 && char_avail() && !KeyTyped.get() && !do_redraw.get())
-    }
+    RedrawingDisabled.get() == 0
+        && !(p_lz.get() != 0 && char_avail() && !KeyTyped.get() && !do_redraw.get())
 }
 
 /// Put the screen back together after messages scrolled it up.
@@ -665,7 +663,7 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
         if !force && !redrawing() {
             return;
         }
-        validate_cursor(wp);
+        validate_cursor(Win::new(wp));
 
         let mut row = (*wp).w_wrow;
         let mut col = (*wp).w_wcol;
@@ -683,7 +681,7 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
         }
 
         let grid = grid_adjust((*wp).w_grid, &mut row, &mut col);
-        if !grid.is_none() {
+        if !grid.is_unresolved() {
             ui_grid_cursor_goto(grid.handle, row, col);
         }
     }
@@ -758,7 +756,7 @@ pub unsafe fn number_width(wp: *mut win_T) -> c_int {
         // With `'signcolumn'` "number" and a sign to show, the number column
         // needs room for the two-cell sign text.
         if n < 2
-            && buf_meta_total((*wp).w_buffer, kMTMetaSignText) != 0
+            && buf_meta_total(Win::new(wp).buffer(), kMTMetaSignText) != 0
             && (*wp).w_minscwidth == SCL_NUM
         {
             n = 2;
@@ -819,7 +817,7 @@ pub unsafe fn win_update_cursorline(wp: *mut win_T, foldinfo: *mut foldinfo_T) {
             0
         };
         if (*wp).w_onebuf_opt.wo_cul != 0 {
-            *foldinfo = fold_info(wp, (*wp).w_cursor.lnum);
+            *foldinfo = fold_info(Win::new(wp), (*wp).w_cursor.lnum);
             if (*foldinfo).fi_level != 0 && (*foldinfo).fi_lines > 0 {
                 (*wp).w_cursorline = (*foldinfo).fi_lnum;
             }

@@ -640,15 +640,12 @@ pub fn ungetchars(len: c_int) {
 /// Not in Insert or Cmdline mode unless a cursor key was used, and not while
 /// reading a script file — in both cases the keys are one edit, not several.
 ///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn may_sync_undo() {
-    unsafe {
-        if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get())
-            && curscript.get() < 0
-        {
-            u_sync(false);
-        }
+/// Safe: callable at any time; it only reads the editor's own mode and
+/// script state, and `u_sync` is itself safe.
+pub fn may_sync_undo() {
+    if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && curscript.get() < 0
+    {
+        u_sync(false);
     }
 }
 

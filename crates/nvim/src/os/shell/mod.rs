@@ -56,6 +56,7 @@ use crate::types::{
     NUL, READBIN, StringBuilder, Vv, linenr_T, proftime_T, size_t, stream_read_cb, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
+use crate::winlayer::Buf;
 use ::libc::{fclose, fopen, fread, fseek, ftell, strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -464,7 +465,7 @@ unsafe fn read_input(buf: *mut StringBuilder) {
     // SAFETY: the caller's contract; `curbuf` is always live.
     unsafe {
         read_buffer_into(
-            curbuf.get(),
+            Buf::current(),
             (*curbuf.get()).b_op_start.lnum,
             (*curbuf.get()).b_op_end.lnum,
             buf,

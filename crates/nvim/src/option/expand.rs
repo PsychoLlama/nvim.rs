@@ -42,9 +42,9 @@ use ::libc::{strcmp, strlen};
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
-    get_varp_scope, get_varp_scope_from, is_option_hidden, kOptFlagColon, kOptFlagComma,
-    kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
-    option_value2string, option_var,
+    get_varp_scope_from, is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand,
+    kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string,
+    option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
@@ -645,7 +645,6 @@ pub(crate) unsafe fn expand_string_setting(
 
         let set_arg = (*xp).xp_line.offset(START_COL.get() as isize);
         let mut args = optexpand_T {
-            oe_varp: get_varp_scope(opt_idx, FLAGS.get()).addr().cast::<c_char>(),
             oe_idx: opt_idx,
             oe_opt_value: escaped,
             oe_append: APPEND.get(),

@@ -83,7 +83,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && utf_char2len(c) == 1
         && !has_event(EVENT_INSERTCHARPRE)
         && !test_disable_char_avail.get()
-        && unsafe { vpeekc() } != NUL
+        && vpeekc() != NUL
         && State.get() & REPLACE_FLAG == 0
         && !unsafe { cindent_on() }
         && p_ri.get() == 0
@@ -101,7 +101,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         // 'textwidth' boundary, or where an abbreviation may need
         // checking -- a non-word character after a word character.
         loop {
-            let next = unsafe { vpeekc() };
+            let next = vpeekc();
             let take = next != NUL
                 && !is_special(next)
                 && utf8len_tab[next as usize] as c_int == 1
@@ -116,7 +116,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
             if !take {
                 break;
             }
-            buf[i as usize] = unsafe { vgetc() } as c_char;
+            buf[i as usize] = vgetc() as c_char;
             i += 1;
         }
 

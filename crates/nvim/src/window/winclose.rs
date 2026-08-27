@@ -110,7 +110,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         return OK;
     }
 
-    let bufref = BufRef::of_raw(win.w_buffer);
+    let bufref = BufRef::of_opt(win.buffer_or_none());
     let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
     let did_decrement = close_win_buffer(win, action, true);
 
@@ -177,7 +177,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // About to free the window: remember its final buffer for
     // `terminal_check_size`, which may have changed since the last `BufRef`
     // (`close_buffer` autocommands, say).
-    let bufref = BufRef::of_raw(win.w_buffer);
+    let bufref = BufRef::of_opt(win.buffer_or_none());
     let had_cmdline_ruler = p_ru.get() != 0 && win.is_current() && win.w_status_height == 0;
     let was_current = win.is_current();
 
@@ -333,8 +333,10 @@ fn leave_closing_window(win: Win) -> Leave {
     // Guess which window is going to be the new current one. This may change
     // because of the autocommands (sigh).
     let wp = if win.w_floating {
-        // SAFETY: a live window; a null tab page means the current one.
-        unsafe { Win::new(win_float_find_altwin(win.raw(), ptr::null())) }
+        // SAFETY: `win` is only compared, never read; `None` means the
+        // current tab page.
+        unsafe { win_float_find_altwin(win.raw(), None) }
+            .expect("a float being closed always has a window to fall back to")
     } else {
         frame2window(alt_frame(win, None))
     };
@@ -465,7 +467,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
     let mut tp = tp;
     debug_assert!(!tp.is_current(), "tp != curtab");
     let mut did_decrement = false;
-    let mut bufref = BufRef::of_raw(ptr::null_mut());
+    let mut bufref = BufRef::of_opt(None);
 
     // Commands that may call this already check the lock, but check again just
     // in case.
@@ -521,13 +523,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
             }
         }
 
-        bufref = BufRef::of_raw(win.w_buffer);
+        bufref = BufRef::of_opt(win.buffer_or_none());
         if let Some(mut buf) = win.buffer_or_none() {
             // Close the link to the buffer.
             let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
-            let (w, b) = (win.raw(), buf.raw());
-            // SAFETY: a live window and its own live buffer.
-            did_decrement = unsafe { close_buffer(w, b, action, false, true) };
+            did_decrement = close_buffer(Some(win), buf, action, false, true);
         }
 
         // Careful: autocommands may have closed the tab page, or made it the
@@ -571,7 +571,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
         // About to free the window: remember its final buffer for
         // `terminal_check_size` and TabClosed, which may have changed since the
         // last `BufRef` (`close_buffer` autocommands, say).
-        bufref = BufRef::of_raw(win.w_buffer);
+        bufref = BufRef::of_opt(win.buffer_or_none());
         free_mem(win, Some(tp));
         if let Some(buf) = bufref.get() {
             resize_terminal(buf);

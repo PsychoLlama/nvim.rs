@@ -77,6 +77,7 @@ use crate::types::{
     uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::ui::ui_rgb_attached;
+use crate::winlayer::Win;
 use ::libc::{abs, memcpy, memset, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -366,7 +367,7 @@ unsafe fn decor_providers_setup(
     unsafe {
         let rem_vcols = if (*wp).w_onebuf_opt.wo_wrap != 0 {
             let width = (*wp).w_view_width - win_col_off(wp);
-            let width2 = width + win_col_off2(wp);
+            let width2 = width + win_col_off2(Win::new(wp));
             let first_row_width = if draw_from_line_start { width } else { width2 };
             first_row_width + (rows_to_draw - 1) * width2
         } else {
@@ -375,7 +376,7 @@ unsafe fn decor_providers_setup(
 
         // Called here because the line pointer has to be invalidated anyway.
         decor_providers_invoke_line(wp, lnum - 1);
-        validate_virtcol(wp);
+        validate_virtcol(Win::new(wp));
 
         invoke_range_next(wp, lnum, col, rem_vcols + 1)
     }
@@ -405,11 +406,11 @@ unsafe fn invoke_range_next(
             // Do not cut a character in half.
             end_col += mb_off_next(line, line.offset(end_col as isize));
             decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col);
-            validate_virtcol(wp);
+            validate_virtcol(Win::new(wp));
             end_col
         } else {
             decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0);
-            validate_virtcol(wp);
+            validate_virtcol(Win::new(wp));
             ::core::ffi::c_int::MAX
         }
     }

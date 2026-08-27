@@ -20,7 +20,7 @@ pub unsafe fn text_locked() -> bool {
     if cmdwin_type.get() != 0 {
         return true;
     }
-    if unsafe { expr_map_locked() } {
+    if expr_map_locked() {
         return true;
     }
     textlock.get() != 0
@@ -147,7 +147,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     }
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
-    if !unsafe { win_valid(old_curwin) }
+    if !win_valid(old_curwin)
         || curwin.get() == old_curwin
         || !unsafe { bufref_valid(&raw mut old_curbuf) }
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
@@ -171,11 +171,11 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // not apply to them.
     let newbuf_status =
         unsafe { buf_open_scratch(0, ::core::ptr::null_mut::<::core::ffi::c_char>()) };
-    let cmdwin_valid = unsafe { win_valid(cmdwin_win.get()) };
+    let cmdwin_valid = win_valid(cmdwin_win.get());
     if newbuf_status == FAIL
         || !cmdwin_valid
         || curwin.get() != cmdwin_win.get()
-        || !unsafe { win_valid(old_curwin) }
+        || !win_valid(old_curwin)
         || !unsafe { bufref_valid(&raw mut old_curbuf) }
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
     {
@@ -269,7 +269,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     cur_win().w_cursor.col = Cc::current().cmdpos as colnr_T;
     unsafe { changed_line_abv_curs() };
-    unsafe { invalidate_botline_win(curwin.get()) };
+    invalidate_botline_win(unsafe { Win::current() });
     ui_ext_cmdline_hide(false);
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
 
@@ -313,7 +313,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Safety check: the old window or buffer was changed or deleted.
     // It is a bug when this happens.
-    if !unsafe { win_valid(old_curwin) }
+    if !win_valid(old_curwin)
         || !unsafe { bufref_valid(&raw mut old_curbuf) }
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.br_buf
     {
@@ -389,7 +389,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         // win_goto() may trigger an autocommand that already closes the
         // cmdline window.
-        if unsafe { win_valid(wp) } && wp != curwin.get() {
+        if win_valid(wp) && wp != curwin.get() {
             unsafe { win_close(wp, true, false) };
         }
 
@@ -424,10 +424,9 @@ pub fn is_in_cmdwin() -> bool {
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
 fn wipe_buffer(buf: *mut buf_T) {
-    let no_win = ::core::ptr::null_mut::<win_T>();
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
     // SAFETY: the callers have just asked `bufref_valid` about `buf`.
-    unsafe { close_buffer(no_win, buf, wipe, false, false) };
+    unsafe { close_buffer(None, Buf::new(buf), wipe, false, false) };
 }
 
 /// The buffer the editor is working in.

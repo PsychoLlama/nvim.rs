@@ -284,14 +284,14 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // SAFETY: a live window and its own cursor.
             unsafe {
                 getvcol(
-                    curwin.get(),
+                    cur_win(),
                     &mut cur_win().w_cursor,
                     none,
                     &raw mut start_vcol,
                     none,
                 )
             };
-            orig_vcols = unsafe { win_chartabsize(curwin.get(), get_cursor_pos_ptr(), start_vcol) };
+            orig_vcols = unsafe { win_chartabsize(cur_win(), get_cursor_pos_ptr(), start_vcol) };
         }
         del_char_after_col(limit_col);
         let orig_len = if l_state & VREPLACE_FLAG != 0 {
@@ -308,7 +308,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             let mut vcol = start_vcol;
             let mut i = 0;
             while i < ins_len {
-                vcol += unsafe { win_chartabsize(curwin.get(), p.offset(i as isize), vcol) };
+                vcol += unsafe { win_chartabsize(cur_win(), p.offset(i as isize), vcol) };
                 // O-B15-22: upstream steps by the length of the *first*
                 // character every time (`utfc_ptr2len(p)`, not
                 // `p + i`), so a restored run of differently-sized

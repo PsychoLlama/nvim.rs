@@ -98,7 +98,7 @@ unsafe fn arg_index_for_window(
     // SAFETY: `wp` is the window being considered, live for this walk.
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect and the chain has no bounds check in it.
-    let aucmd_win = unsafe { is_aucmd_win(wp.raw()) };
+    let aucmd_win = is_aucmd_win(wp.raw());
     let unwanted = buf.b_ffname.is_null()
         || !aall.keep_tabs
             && (buf.b_nwindows > 1 || wp.w_width != Columns.get() || wp.w_floating && !aucmd_win);
@@ -183,7 +183,7 @@ unsafe fn close_unused_window(
     // SAFETY: `buf` is the window's buffer, live for the call.
     let hide = unsafe { buf_hide(buf.raw().cast_const()) };
     // SAFETY: as above.
-    let changed = unsafe { buf_is_changed(buf.raw()) };
+    let changed = buf_is_changed(buf);
     let nwindows = buf.b_nwindows;
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
         return wpnext;
@@ -221,10 +221,10 @@ unsafe fn close_unused_window(
     // asked again here rather than reused from above: a successful
     // `autowrite` leaves it unchanged, and then it is the close's to free.
     // SAFETY: `buf` is `wp`'s buffer; a hidden or changed one is kept.
-    let free_buf = unsafe { !buf_hide(buf.raw().cast_const()) && !buf_is_changed(buf.raw()) };
+    let free_buf = unsafe { !buf_hide(buf.raw().cast_const()) } && !buf_is_changed(buf);
     // SAFETY: `wp` is a live window, and not the last one (checked above).
     unsafe { win_close(wp, free_buf, false) };
-    if unsafe { win_valid(wpnext) } {
+    if win_valid(wpnext) {
         return wpnext;
     }
     // Autocommands removed the next window; start all over.
@@ -383,9 +383,9 @@ unsafe fn open_window_for_arg(
         aall.new_curtab = curtab.get();
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
-    let buf = cur_win().w_buffer;
+    let buf = cur_win().buffer();
     let flags = flag_if(
-        unsafe { buf_hide(buf) } || unsafe { buf_is_changed(buf) },
+        unsafe { buf_hide(buf.raw()) } || buf_is_changed(buf),
         ECMD_HIDE,
     ) | ECMD_OLDBUF as c_int;
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
@@ -475,7 +475,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // SAFETY: curwin always has an argument list, and the reference taken
     // here keeps it alive across every autocommand below.
     setpcmark();
-    let alist = win_alist(curwin.get());
+    let alist = win_alist(cur_win());
     unsafe { (*alist).al_refcount += 1 };
     let opened = unsafe { xcalloc(argcount() as size_t, 1) }.cast::<uint8_t>();
     let mut aall = ArgAllState {
@@ -523,7 +523,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
         if valid_tabpage(last_curtab) {
             unsafe { goto_tabpage_tp(last_curtab, true, true) };
         }
-        if unsafe { win_valid(last_curwin) } {
+        if win_valid(last_curwin) {
             unsafe { win_enter(last_curwin, false) };
         }
     }
@@ -535,7 +535,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     if valid_tabpage(new_lu_tp) {
         lastused_tabpage.set(new_lu_tp);
     }
-    if unsafe { win_valid(aall.new_curwin) } {
+    if win_valid(aall.new_curwin) {
         unsafe { win_enter(aall.new_curwin, false) };
     }
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);

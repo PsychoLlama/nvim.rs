@@ -267,10 +267,10 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
         }
         // `zE`: delete every fold.
         Ok(b'E') => {
-            if unsafe { foldmethod_is_manual(win.raw()) } {
-                unsafe { clear_folding(win.raw()) };
-                unsafe { changed_window_setting(win.raw()) };
-            } else if unsafe { foldmethod_is_marker(win.raw()) } {
+            if foldmethod_is_manual(win) {
+                clear_folding(win);
+                changed_window_setting(win);
+            } else if foldmethod_is_marker(win) {
                 unsafe { delete_fold(win.raw(), 1, cur_buf().b_ml.ml_line_count, 1, false) };
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
@@ -363,11 +363,11 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
         // `zr`/`zR`: reduce the folding, or open everything.
         Ok(b'r') => {
             win.w_onebuf_opt.wo_fdl += ca.count1 as OptInt;
-            let deepest = unsafe { deepest_fold_nesting(win.raw()) };
+            let deepest = deepest_fold_nesting(win);
             win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.min(deepest as OptInt);
         }
         Ok(b'R') => {
-            unsafe { win.w_onebuf_opt.wo_fdl = deepest_fold_nesting(win.raw()) as OptInt };
+            win.w_onebuf_opt.wo_fdl = deepest_fold_nesting(win) as OptInt;
             *old_fdl = -1;
         }
         // `zj`/`zk`: to the next or previous fold's edge.
@@ -420,7 +420,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
         setpcmark();
         let count0 = ca.count0 as linenr_T;
         win.w_cursor.lnum = count0.min(cur_buf().b_ml.ml_line_count);
-        unsafe { check_cursor_col(win.raw()) };
+        check_cursor_col(win);
     }
 
     // Where the cursor line ends up, and whether the cursor also moves to
@@ -442,7 +442,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
                 // Without a count, `z+` starts from the line below the
                 // window rather than from the cursor.
                 if ca.count0 == 0 {
-                    unsafe { validate_botline_win(win.raw()) };
+                    validate_botline_win(win);
                     win.w_cursor.lnum = win.w_botline.min(cur_buf().b_ml.ml_line_count);
                 }
                 Some((Place::Top, true))
@@ -454,7 +454,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
                 // `z^` positions the line *above* the window, so with no
                 // count it first scrolls the current top out of sight.
                 if ca.count0 != 0 {
-                    unsafe { scroll_cursor_bot(win.raw(), 0, true) };
+                    scroll_cursor_bot(win, 0, true);
                     win.w_cursor.lnum = win.w_topline;
                 } else if win.w_topline == 1 {
                     win.w_cursor.lnum = 1;
@@ -533,9 +533,9 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
         match place {
-            Place::Top => unsafe { scroll_cursor_top(win.raw(), 0, 1) },
-            Place::Middle => unsafe { scroll_cursor_halfway(win.raw(), true, false) },
-            Place::Bottom => unsafe { scroll_cursor_bot(win.raw(), 0, true) },
+            Place::Top => scroll_cursor_top(win, 0, 1),
+            Place::Middle => scroll_cursor_halfway(win, true, false),
+            Place::Bottom => scroll_cursor_bot(win, 0, true),
         }
         unsafe { redraw_later(win.raw(), UPD_VALID) };
         unsafe { set_fraction(win.raw()) };
@@ -544,20 +544,20 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
     if old_fen != win.w_onebuf_opt.wo_fen {
         // Windows bound by 'scrollbind' in diff mode have to fold alike,
         // or the same line is at a different height in each.
-        if unsafe { foldmethod_is_diff(win.raw()) } && win.w_onebuf_opt.wo_scb != 0 {
+        if foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
             let mut wp = firstwin.get();
             while !wp.is_null() {
                 if wp != win.raw()
-                    && unsafe { foldmethod_is_diff(wp) }
+                    && unsafe { foldmethod_is_diff(Win::new(wp)) }
                     && unsafe { (*wp).w_onebuf_opt.wo_scb } != 0
                 {
                     unsafe { (*wp).w_onebuf_opt.wo_fen = win.w_onebuf_opt.wo_fen };
-                    unsafe { changed_window_setting(wp) };
+                    unsafe { changed_window_setting(Win::new(wp)) };
                 }
                 wp = unsafe { (*wp).w_next };
             }
         }
-        unsafe { changed_window_setting(win.raw()) };
+        changed_window_setting(win);
     }
     if old_fdl as OptInt != win.w_onebuf_opt.wo_fdl {
         unsafe { new_fold_level() };
@@ -579,5 +579,5 @@ fn cur_win() -> Win {
 /// Whether `lnum` is inside a closed fold of the current window.
 fn folded(lnum: linenr_T) -> bool {
     // SAFETY: `cur_win()` is the live window.
-    unsafe { has_folding(cur_win().raw(), lnum, ptr::null_mut(), ptr::null_mut()) }
+    has_folding(cur_win(), lnum, None, None)
 }

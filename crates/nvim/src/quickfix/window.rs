@@ -89,16 +89,12 @@ fn buf_is_valid(buf: *mut buf_T) -> bool {
     unsafe { buf_valid(buf) }
 }
 
-fn is_quickfix_buf(buf: *mut buf_T) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_quickfix(buf) }
-}
-
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
-/// when it is zero, without entering the window. `oldwin` may be null.
-fn load_buffer(fnum: c_int, flags: c_int, oldwin: *mut win_T) -> c_int {
+/// when it is zero, without entering the window.
+fn load_buffer(fnum: c_int, flags: c_int, oldwin: Option<Win>) -> c_int {
     let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
     let one = ECMD_ONE as linenr_T;
+    let oldwin = oldwin.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: a buffer number the caller has just looked up, and a live
     // window or null.
     unsafe { do_ecmd(fnum, no_name, no_name, no_cmd, one, flags, oldwin) }
@@ -116,19 +112,17 @@ fn busy_end() {
 
 /// `qf_fill_buffer()`: rewrite `buf` from `qfl`.
 fn fill_buffer(qfl: Qfl, buf: Buf, win: Win) {
-    let (list, raw, id) = (qfl.raw(), buf.raw(), win.handle);
     // SAFETY: a live list, buffer and window handle.
-    unsafe { qf_fill_buffer(list, raw, ptr::null_mut(), id) };
+    unsafe { qf_fill_buffer(qfl.raw(), buf, ptr::null_mut(), win.handle) };
 }
 
 fn is_location_list_window(wp: Win) -> bool {
-    // SAFETY: a live window.
-    unsafe { is_ll_window(wp.raw()) }
+    is_ll_window(wp)
 }
 
 fn clamp_cursor(wp: Win) {
     // SAFETY: a live window.
-    unsafe { check_cursor(wp.raw()) };
+    check_cursor(wp);
 }
 
 /// The stack `eap`'s command names, or none when there is not one.
@@ -143,16 +137,14 @@ unsafe fn stack_of(eap: *mut exarg_T, print_emsg: bool) -> Option<Qi> {
 }
 
 /// Call `wanted` on every window of every tab page, answering the first one
-/// it accepts, or null.
+/// it accepts.
 ///
 /// # Safety
 ///
-/// `wanted` must not close or reorder windows.
-pub(crate) unsafe fn find_tab_win(mut wanted: impl FnMut(*mut win_T) -> bool) -> *mut win_T {
-    tab_windows()
-        .map(Win::raw)
-        .find(|&wp| wanted(wp))
-        .unwrap_or(ptr::null_mut())
+/// `wanted` must not close or reorder windows: the walk is over the live
+/// tab page and window lists.
+pub(crate) unsafe fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
+    tab_windows().find(|&wp| wanted(wp))
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +156,7 @@ pub(crate) unsafe fn find_tab_win(mut wanted: impl FnMut(*mut win_T) -> bool) ->
 /// location list buffer points at the list it shows.
 fn is_qf_win(win: Win, qi: Qi) -> bool {
     buf_is_valid(win.w_buffer)
-        && is_quickfix_buf(win.w_buffer)
+        && is_qf_buffer(win)
         && (qi.is_quickfix_stack() && win.w_llist_ref.is_null()
             || qi.qfl_type == QFLT_LOCATION && ptr::eq(win.w_llist_ref, qi.raw()))
 }
@@ -235,7 +227,7 @@ fn set_cwindow_options() {
 /// Open a new quickfix or location list window, load the quickfix buffer
 /// and set the window's options. Answers false when there was no room.
 fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
-    let mut oldwin = curwin.get();
+    let oldwin = cur_win();
     let prevtab = curtab.get();
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
@@ -258,9 +250,8 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         qi.qf_refcount += 1;
     }
 
-    if oldwin != curwin.get() {
-        oldwin = ptr::null_mut(); // don't store info when in another window
-    }
+    // Don't store info when the split above left us in another window.
+    let oldwin = (oldwin == cur_win()).then_some(oldwin);
     let hide = ECMD_HIDE as c_int + ECMD_NOWINENTER as c_int;
     match qf_buf {
         // Use the existing quickfix buffer.
@@ -281,7 +272,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 
     // Set the options for the quickfix buffer/window even if the buffer
     // was already present: an autocommand may have :bdeleted it since.
-    if !is_quickfix_buf(curbuf.get()) {
+    if !is_qf_buffer(cur_win()) {
         set_cwindow_options();
     }
 
@@ -469,15 +460,8 @@ pub unsafe fn ex_cbottom(eap: *mut exarg_T) {
 /// The line of the quickfix window holding the current entry, which is what
 /// the display code highlights.
 ///
-/// # Safety
-///
-/// `wp` must be a live window showing a quickfix buffer.
-pub unsafe fn qf_current_entry(wp: *mut win_T) -> linenr_T {
-    // SAFETY: the caller's promise -- a live window.
-    current_entry(unsafe { Win::new(wp) })
-}
-
-fn current_entry(wp: Win) -> linenr_T {
+/// `wp` must be showing a quickfix buffer.
+pub fn qf_current_entry(wp: Win) -> linenr_T {
     let mut qi = QfStack::Global.qi();
     if is_location_list_window(wp) {
         // In the location list window, the referenced list is the one.

@@ -30,7 +30,7 @@ use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
-    au_new_curbuf, cmdline_row, curbuf, curwin, e_cannot_switch_to_a_closing_buffer,
+    au_new_curbuf, cmdline_row, curbuf, e_cannot_switch_to_a_closing_buffer,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, e_nobufnr, e_trailing_arg,
     got_int, jop_flags, lastwin, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
     swap_exists_action, swap_exists_did_quit,
@@ -103,7 +103,7 @@ fn is_last_window(mut win: Win) -> bool {
 }
 fn is_autocmd_window(win: *mut win_T) -> bool {
     // SAFETY: the pointer is only compared against the autocommand windows.
-    unsafe { is_aucmd_win(win) }
+    is_aucmd_win(win)
 }
 fn split_window() -> c_int {
     win_split(0, 0)
@@ -280,9 +280,9 @@ fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
         // empty buffer.
         swap_exists_action.set(SEA_NONE); // don't want it again
         swap_exists_did_quit.set(true);
-        let (win, cur, unload) = (curwin.get(), curbuf.get(), DOBUF_UNLOAD as c_int);
+        let unload = DOBUF_UNLOAD as c_int;
         // SAFETY: the current window and the current buffer.
-        unsafe { close_buffer(win, cur, unload, false, false) };
+        unsafe { close_buffer(Some(Win::current()), Buf::current(), unload, false, false) };
 
         let kept = old_curbuf
             .and_then(BufRef::get)
@@ -480,8 +480,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> c_int {
         .get()
         .filter(|b| b.raw() != curbuf.get() && b.b_nwindows == 0)
     {
-        // SAFETY: the buffer `bufref` has just re-validated.
-        unsafe { close_buffer(ptr::null_mut::<win_T>(), old.raw(), action, false, false) };
+        close_buffer(None, old, action, false, false);
     }
 
     if !close_others {
@@ -578,7 +577,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     // SAFETY: upstream's own assumption, recorded rather than fixed --
     // `swbuf_goto_win_with_buf`, `win_split` and the `:confirm` dialog above
     // all re-enter, and only the dialog re-validates `buf` afterwards.
-    unsafe { set_curbuf(buf.raw(), action, update_jumplist) };
+    unsafe { set_curbuf(buf, action, update_jumplist) };
 
     if action == DOBUF_SPLIT as c_int {
         let mut win = cur_win(); // reset 'scrollbind' and 'cursorbind'
@@ -788,8 +787,7 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
             .get()
             .filter(|b| b.raw() != curbuf.get() && b.b_nwindows <= 0)
         {
-            // SAFETY: the buffer `bufref` has just re-validated.
-            unsafe { close_buffer(ptr::null_mut::<win_T>(), gone.raw(), action, false, false) };
+            close_buffer(None, gone, action, false, false);
         }
         return Unloaded::Done(OK);
     }

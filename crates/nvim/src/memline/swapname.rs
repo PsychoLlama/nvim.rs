@@ -395,7 +395,7 @@ unsafe fn resolve_swapfile_clash(
         // the question to the user.
         if choice == SEA_CHOICE_NONE
             && swap_exists_action.get() != SEA_NONE
-            && has_autocmd(EVENT_SWAPEXISTS, buf_fname, buf)
+            && has_autocmd(EVENT_SWAPEXISTS, buf_fname, Buf::from_raw(buf))
         {
             choice = do_swapexists(buf, fname);
         }

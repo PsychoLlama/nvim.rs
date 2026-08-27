@@ -36,7 +36,7 @@ enum Source {
     File(*mut FILE),
     /// A range of lines in a buffer.
     Buffer {
-        buf: *mut buf_T,
+        buf: Buf,
         lnum: linenr_T,
         last: linenr_T,
     },
@@ -101,15 +101,21 @@ impl Reader {
         enc: *mut c_char,
         efile: *const c_char,
         tv: *mut typval_T,
-        buf: *mut buf_T,
+        buf: Option<Buf>,
         lnumfirst: linenr_T,
         lnumlast: linenr_T,
     ) -> Option<Reader> {
         let mut reader = Reader {
-            source: Source::Buffer {
-                buf,
-                lnum: lnumfirst,
-                last: lnumlast,
+            // Without a buffer the source is one of the two set below; a
+            // caller that named none of the three gets the read failure
+            // `Unusable` is, rather than a walk off a null buffer.
+            source: match buf {
+                Some(buf) => Source::Buffer {
+                    buf,
+                    lnum: lnumfirst,
+                    last: lnumlast,
+                },
+                None => Source::Unusable,
             },
             line: vec![0; READ_CHUNK],
             len: 0,
@@ -284,8 +290,8 @@ impl Reader {
         }
         // SAFETY: the caller's buffer is loaded and `lnum` is within it.
         unsafe {
-            let text = ml_get_buf(buf, lnum);
-            self.len = self.fit(ml_get_buf_len(buf, lnum) as usize);
+            let text = ml_get_buf(buf.raw(), lnum);
+            self.len = self.fit(ml_get_buf_len(buf.raw(), lnum) as usize);
             xstrlcpy(self.line(), text, self.len + 1);
         }
         self.source = Source::Buffer {
@@ -417,12 +423,13 @@ impl Reader {
 /// Read the error file `efile` into memory line by line, building the error
 /// list, and set its title to `qf_title`.
 ///
+/// `wp` is `None` for the quickfix stack, which belongs to no window.
+///
 /// # Safety
 ///
-/// `wp`, when given, must be a live window; the strings must be
-/// NUL-terminated.
+/// The strings must be NUL-terminated.
 pub unsafe fn qf_init(
-    wp: *mut win_T,
+    wp: Option<Win>,
     efile: *const c_char,
     errorformat: *mut c_char,
     newlist: c_int,
@@ -431,17 +438,16 @@ pub unsafe fn qf_init(
 ) -> c_int {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let qi = if wp.is_null() {
-            QfStack::Global.raw()
-        } else {
-            ll_get_or_alloc_list(wp)
+        let qi = match wp {
+            Some(wp) => ll_get_or_alloc_list(wp),
+            None => QfStack::Global.raw(),
         };
         debug_assert!(!qi.is_null());
         qf_init_ext(
             qi,
             (*qi).qf_curlist,
             efile,
-            curbuf.get(),
+            Some(cur_buf()),
             ptr::null_mut(),
             errorformat,
             newlist != 0,
@@ -475,7 +481,7 @@ pub(crate) unsafe fn qf_init_ext(
     qi: *mut qf_info_T,
     mut qf_idx: c_int,
     efile: *const c_char,
-    buf: *mut buf_T,
+    buf: Option<Buf>,
     tv: *mut typval_T,
     errorformat: *mut c_char,
     newlist: bool,
@@ -511,15 +517,14 @@ pub(crate) unsafe fn qf_init_ext(
             };
 
             // Use the buffer-local 'errorformat' when it has one.
-            let efm = if errorformat == p_efm.get()
-                && tv.is_null()
-                && !buf.is_null()
-                && *(*buf).b_p_efm != 0
-            {
-                (*buf).b_p_efm
+            // The two cheap tests stay in front of the buffer's option, as
+            // C's `&&` chain had them.
+            let local_efm = if errorformat == p_efm.get() && tv.is_null() {
+                buf.map(|buf| buf.b_p_efm).filter(|&efm| *efm != 0)
             } else {
-                errorformat
+                None
             };
+            let efm = local_efm.unwrap_or(errorformat);
 
             // Take the compiled option out of the cache for the length of
             // this read and put it back at the end. Adding an entry can

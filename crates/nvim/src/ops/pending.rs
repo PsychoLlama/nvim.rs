@@ -148,12 +148,11 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
     order_region(oap);
 
     // Just in case lines were deleted that make the position invalid.
-    // SAFETY: a live buffer and a live position.
-    unsafe { check_pos(cur_win().w_buffer, &mut oap.end) };
+    check_pos(cur_win().buffer(), &mut oap.end);
     oap.line_count = oap.end.lnum - oap.start.lnum + 1;
     // Set before `VIsual_active` is reset below.
     // SAFETY: a live window.
-    let virt = unsafe { virtual_active(curwin.get()) };
+    let virt = virtual_active(cur_win());
     virtual_op.set(Some(virt));
 
     if visual_active() || redo_VIsual_busy.get() {
@@ -328,7 +327,7 @@ fn resume_redo_visual(mut cap: Cmd, mut oap: Op) {
             // A one-line charwise region is that many columns *from the
             // cursor*, not to a fixed column.
             // SAFETY: a live window.
-            unsafe { validate_virtcol(curwin.get()) };
+            validate_virtcol(unsafe { Win::current() });
             cur_win().w_curswant = cur_win().w_virtcol + redo.rv_vcol - 1;
         } else {
             cur_win().w_curswant = redo.rv_vcol;
@@ -374,7 +373,7 @@ fn start_visual_region(mut oap: Op, gui_yank: bool) -> bool {
         set_visual_mode(VisualMode::CHAR);
     } else if visual_mode().is_char() {
         // 'selection' "exclusive": back off one character.
-        include_line_break = unsafe { unadjust_for_sel() };
+        include_line_break = unadjust_for_sel();
     }
 
     oap.start = visual_anchor();
@@ -700,7 +699,7 @@ fn run_operator(
                 oap.excl_tr_ws = cap.cmdchar == 'z' as c_int;
                 unsafe { op_yank(oap.raw(), !gui_yank) };
             }
-            unsafe { check_cursor_col(curwin.get()) };
+            check_cursor_col(unsafe { Win::current() });
         }
 
         OP_CHANGE => {
@@ -731,7 +730,7 @@ fn run_operator(
             } else {
                 unsafe { op_tilde(oap.raw()) };
             }
-            unsafe { check_cursor_col(curwin.get()) };
+            check_cursor_col(unsafe { Win::current() });
         }
 
         OP_FORMAT => {
@@ -778,7 +777,8 @@ fn run_operator(
 
         OP_FOLD => {
             VIsual_reselect.set(0);
-            unsafe { fold_create(curwin.get(), oap.start, oap.end) };
+            // SAFETY: a live current window, and the operator's own range.
+            unsafe { fold_create(Win::current(), oap.start, oap.end) };
         }
         OP_FOLDOPEN | OP_FOLDOPENREC | OP_FOLDCLOSE | OP_FOLDCLOSEREC => {
             VIsual_reselect.set(0);
@@ -808,7 +808,7 @@ fn run_operator(
                 unsafe { op_addsub(oap.raw(), count, g) };
                 set_visual_active(false);
             }
-            unsafe { check_cursor_col(curwin.get()) };
+            check_cursor_col(unsafe { Win::current() });
         }
 
         _ => unsafe { clearopbeep(oap.raw()) },
@@ -859,7 +859,7 @@ fn run_change(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
     restore_lbr(lbr_saved != 0);
     // Trigger TextChangedI.
     // SAFETY: a live buffer, and a live `oparg_T` whose region is set up.
-    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(curbuf.get()) };
+    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
     if unsafe { op_change(oap.raw()) } != 0 {
         // `edit()` returned because of a CTRL-O command.
@@ -877,7 +877,7 @@ fn run_block_insert(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
 
     restore_lbr(lbr_saved != 0);
     // SAFETY: a live buffer, and a live `oparg_T` whose region is set up.
-    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(curbuf.get()) };
+    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
     unsafe { op_insert(oap.raw(), cap.count1) };
 

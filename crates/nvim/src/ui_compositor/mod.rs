@@ -78,8 +78,17 @@ static LAYERS: GlobalCell<Vec<GridRef>> = GlobalCell::new(Vec::new());
 static BUFS: GlobalCell<Bufs> = GlobalCell::new(Bufs::EMPTY);
 
 /// The grid the last [`ui_comp_set_grid`] selected: every coordinate the
-/// entry points take is relative to it.
-static curgrid: GlobalCell<GridRef> = GlobalCell::new(GridRef::NONE);
+/// entry points take is relative to it. `None` until [`ui_comp_init`], and
+/// only then: nothing clears it once it is set.
+static curgrid: GlobalCell<Option<GridRef>> = GlobalCell::new(None);
+
+/// [`curgrid`], for the callers that have already established there is one.
+///
+/// Every one of them reached here through an [`ui_comp_set_grid`] that
+/// answered `true`, which is what selects a layer.
+fn cur_layer() -> GridRef {
+    curgrid.get().expect("a layer is selected")
+}
 
 /// The size the default grid was last resized to, for the assertions that
 /// composing stays inside the scratch line. C keeps both under `NDEBUG`.
@@ -126,7 +135,7 @@ fn topmost_at(row: c_int, col: c_int, accept: impl Fn(GridRef) -> bool) -> Optio
 
 pub fn ui_comp_init() {
     LAYERS.with_mut(|stack| stack.push(default_layer()));
-    curgrid.set(default_layer());
+    curgrid.set(Some(default_layer()));
 }
 
 /// # Safety
@@ -287,8 +296,8 @@ pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
     if grid.comp_index == 0 {
         return; // The grid was not a layer.
     }
-    if curgrid.get().same(grid) {
-        curgrid.set(default_layer());
+    if curgrid.get().is_some_and(|cur| cur.same(grid)) {
+        curgrid.set(Some(default_layer()));
     }
 
     let removed_at = grid.comp_index;
@@ -310,11 +319,11 @@ pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
 
 /// Selects the layer `handle` names as the one coordinates are relative to.
 pub fn ui_comp_set_grid(handle: handle_T) -> bool {
-    if curgrid.get().handle == handle {
+    if curgrid.get().is_some_and(|cur| cur.handle == handle) {
         return true;
     }
     let found = LAYERS.with(|stack| stack.iter().find(|layer| layer.handle == handle).copied());
-    found.inspect(|&grid| curgrid.set(grid)).is_some()
+    found.inspect(|&grid| curgrid.set(Some(grid))).is_some()
 }
 
 /// Moves `grid` up to `new_index`, sliding everything it passes down one,
@@ -343,18 +352,18 @@ pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
     if !ui_comp_set_grid(grid_handle as handle_T) {
         return;
     }
-    let cursor_row = curgrid.get().comp_row + r as c_int;
-    let cursor_col = curgrid.get().comp_col + c as c_int;
+    let cursor_row = cur_layer().comp_row + r as c_int;
+    let cursor_col = cur_layer().comp_col + c as c_int;
 
     // Upstream's TODO: for efficiency all grids should be configured before
     // `win_update` runs, rather than here.
-    if !curgrid.get().same(default_layer()) {
+    if !cur_layer().same(default_layer()) {
         let mut new_index = layer_count() - 1;
-        while new_index > 1 && layer_at(new_index).zindex > curgrid.get().zindex {
+        while new_index > 1 && layer_at(new_index).zindex > cur_layer().zindex {
             new_index -= 1;
         }
-        if curgrid.get().comp_index < new_index {
-            raise_grid(curgrid.get(), new_index);
+        if cur_layer().comp_index < new_index {
+            raise_grid(cur_layer(), new_index);
         }
     }
 
@@ -446,7 +455,7 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
     debug_assert!(row < chk_height.get().into(), "row < chk_height");
 
     // A line keeps its wrap flag only if it came from a full-width layer.
-    if !(!top.is_none() && (top.same(default) || (top.comp_col == 0 && top.cols == Columns.get())))
+    if !top.is_some_and(|top| top.same(default) || (top.comp_col == 0 && top.cols == Columns.get()))
     {
         flags &= !kLineFlagWrap;
     }
@@ -470,10 +479,10 @@ fn compose_into(
     startcol: Integer,
     endcol: Integer,
     skips: (usize, usize),
-) -> (GridRef, usize, usize) {
+) -> (Option<GridRef>, usize, usize) {
     let default = default_layer();
     let (mut skipstart, mut skipend) = skips;
-    let mut top = GridRef::NONE;
+    let mut top = None;
     let width = (endcol - startcol) as usize;
     let line = &mut bufs.chars[..width];
     let attrbuf = &mut bufs.attrs[..width];
@@ -500,7 +509,7 @@ fn compose_into(
                     continue;
                 }
                 if g.comp_col <= col && col < g.comp_col + grid_width {
-                    top = g;
+                    top = Some(g);
                     until = g.comp_col + grid_width;
                 } else if g.comp_col > col {
                     until = until.min(g.comp_col);
@@ -509,13 +518,14 @@ fn compose_into(
         });
         until = until.min(endcol as c_int);
 
-        debug_assert!(!top.is_none(), "grid != NULL");
         debug_assert!(until > col, "until > col");
         debug_assert!(until <= default.cols, "until <= default_grid.cols");
         let at = (Integer::from(col) - startcol) as usize;
         let n = (until - col) as usize;
 
-        let mut grid = top;
+        // The default grid covers every column of every row it has, and is
+        // the bottom layer, so some layer always won the column above.
+        let mut grid = top.expect("a layer covers the column");
         if Integer::from(msg_sep_row.get()) == row && grid.comp_index <= msg_layer().comp_index {
             // Upstream's TODO: once floats have borders, the separator can
             // just be one around the message grid.
@@ -679,7 +689,7 @@ pub unsafe fn ui_comp_raw_line(
     if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
         return;
     }
-    let cur = curgrid.get();
+    let cur = cur_layer();
     let row = row + Integer::from(cur.comp_row);
     let startcol = startcol + Integer::from(cur.comp_col);
     let mut endcol = endcol + Integer::from(cur.comp_col);
@@ -811,7 +821,7 @@ pub unsafe fn ui_comp_msg_set_pos(
 fn curgrid_covered_above(row: c_int) -> bool {
     let above_msg = layer_at(layer_count() - 1).same(msg_layer())
         && row < msg_current_row.get() - c_int::from(msg_was_scrolled.get());
-    layer_count() - usize::from(above_msg) > curgrid.get().comp_index + 1
+    layer_count() - usize::from(above_msg) > cur_layer().comp_index + 1
 }
 
 pub fn ui_comp_grid_scroll(
@@ -826,7 +836,7 @@ pub fn ui_comp_grid_scroll(
     if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
         return;
     }
-    let cur = curgrid.get();
+    let cur = cur_layer();
     let top = top + Integer::from(cur.comp_row);
     let bot = bot + Integer::from(cur.comp_row);
     let left = left + Integer::from(cur.comp_col);

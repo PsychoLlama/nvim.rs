@@ -329,7 +329,7 @@ impl Fields {
                 1 => {
                     // %b: a buffer number, which must name a live buffer.
                     let bnr = number() as c_int;
-                    if buflist_findnr(bnr).is_null() {
+                    if find_buf(bnr).is_none() {
                         return Status::Fail;
                     }
                     self.bnr = bnr;

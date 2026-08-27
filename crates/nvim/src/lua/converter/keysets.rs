@@ -104,7 +104,7 @@ pub unsafe fn nlua_pop_keydict(
         while lua_next(lstate, -2) != 0 {
             let mut len: size_t = 0;
             let s = lua_tolstring(lstate, -2, &raw mut len);
-            let field: *mut KeySetLink = hashy.expect("non-null function pointer")(s, len);
+            let field: *const KeySetLink = hashy.expect("non-null function pointer")(s, len);
             if field.is_null() {
                 api_set_error(
                     err,
@@ -169,7 +169,7 @@ pub unsafe fn nlua_pop_keydict(
 pub unsafe fn nlua_push_keydict(
     lstate: *mut lua_State,
     value: *mut c_void,
-    table: *mut KeySetLink,
+    table: *const KeySetLink,
 ) {
     unsafe {
         lua_createtable(lstate, 0, 0);

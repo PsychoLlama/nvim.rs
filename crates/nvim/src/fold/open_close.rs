@@ -14,11 +14,11 @@ use crate::cursor::check_cursor_col;
 use crate::diff::diff_lnum_win;
 use crate::drawscreen::{UPD_INVERTED, redraw_buf_later, redraw_curbuf_later};
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{curwin, p_fcl};
+use crate::main::p_fcl;
 use crate::message::emsg;
 use crate::r#move::changed_window_setting;
 use crate::os::cshim::gettext;
-use crate::winlayer::{TabPage, Win, windows_in_tab};
+use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
 use core::ffi::c_int;
 use core::ptr;
 
@@ -75,11 +75,11 @@ pub unsafe fn op_fold_range(
         // range shorter and closing one makes it longer, and the walk has to
         // step past whichever range the command leaves behind.
         if opening != 0 && recurse == 0 {
-            unsafe { has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next) };
+            has_folding(cur_win(), lnum, None, Some(&mut lnum_next));
         }
         set_manual_fold(at, opening != 0, recurse != 0, Some(&mut done));
         if opening == 0 && recurse == 0 {
-            unsafe { has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next) };
+            has_folding(cur_win(), lnum, None, Some(&mut lnum_next));
         }
         lnum = lnum_next + 1;
     }
@@ -117,9 +117,8 @@ pub unsafe fn open_fold_recurse(pos: pos_T) {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn fold_open_cursor() {
-    // SAFETY: the caller's promise.
-    check_update(cur_win());
-    if unsafe { has_any_folding(curwin.get()) } == 0 {
+    checkupdate(cur_win());
+    if has_any_folding(cur_win()) == 0 {
         return;
     }
     loop {
@@ -140,12 +139,12 @@ pub unsafe fn fold_open_cursor() {
 /// The current window must be live.
 pub unsafe fn new_fold_level() {
     new_fold_level_win(cur_win());
-    if !(is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0) {
+    if !(foldmethod_is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0) {
         return;
     }
     // 'scrollbind' in a diff: the other diffed windows follow.
     for mut win in windows_in_tab(cur_tab()) {
-        if !win.is_current() && is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
+        if !win.is_current() && foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
             win.w_onebuf_opt.wo_fdl = cur_win().w_onebuf_opt.wo_fdl;
             new_fold_level_win(win);
         }
@@ -154,14 +153,14 @@ pub unsafe fn new_fold_level() {
 
 /// Hand `win`'s toplevel folds back to 'foldlevel'.
 pub(super) fn new_fold_level_win(mut win: Win) {
-    check_update(win);
+    checkupdate(win);
     if win.w_fold_manual {
-        for fold in folds_of(win).folds() {
+        for fold in window_folds(win).folds() {
             fold.set_flags(FD_LEVEL);
         }
         win.w_fold_manual = false;
     }
-    window_changed(win);
+    changed_window_setting(win);
 }
 
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
@@ -174,14 +173,14 @@ pub unsafe fn fold_check_close() {
         return;
     }
     // SAFETY: the caller's promise.
-    check_update(cur_win());
+    checkupdate(cur_win());
     let changed = close_folds_off_cursor(
-        folds_of(cur_win()),
+        window_folds(cur_win()),
         cur_win().w_cursor.lnum,
         cur_win().w_onebuf_opt.wo_fdl as c_int,
     );
     if changed {
-        window_changed(cur_win());
+        changed_window_setting(cur_win());
     }
 }
 
@@ -212,7 +211,7 @@ pub(super) fn close_folds_off_cursor(folds: FoldList, lnum: linenr_T, level: c_i
 /// The current window must be live.
 pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
     // SAFETY: the caller's promise.
-    if is_manual(cur_win()) || is_marker(cur_win()) {
+    if foldmethod_is_manual(cur_win()) || foldmethod_is_marker(cur_win()) {
         return 1;
     }
     let msg = if create {
@@ -229,23 +228,21 @@ pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
 ///
 /// # Safety
 /// `wp` must be a live window with a live buffer.
-pub unsafe fn fold_create(wp: *mut win_T, start_pos: pos_T, end_pos: pos_T) {
+pub unsafe fn fold_create(wp: Win, start_pos: pos_T, end_pos: pos_T) {
     // SAFETY: the caller's promise -- a live window.
-    let mut win = unsafe { Win::new(wp) };
+    let mut win = wp;
     let (start, end) = if start_pos.lnum > end_pos.lnum {
         (end_pos, start_pos)
     } else {
         (start_pos, end_pos)
     };
-    // SAFETY: the caller's promise.
-    if is_marker(win) {
+    if foldmethod_is_marker(win) {
         // With 'foldmethod' = "marker" the fold lives in the buffer text.
         // SAFETY: the caller's promise.
         unsafe { fold_create_markers(wp, start, end) };
         return;
     }
-    // SAFETY: the caller's promise.
-    check_update(win);
+    checkupdate(win);
 
     // Descend to the innermost list the new fold fits inside, tracking
     // whether it will inherit a closed state from the folds above it. `top`
@@ -255,8 +252,7 @@ pub unsafe fn fold_create(wp: *mut win_T, start_pos: pos_T, end_pos: pos_T) {
     let mut level = 0;
     let mut top = start.lnum;
     let mut bot = end.lnum;
-    // SAFETY: the caller's promise.
-    let mut folds = folds_of(win);
+    let mut folds = window_folds(win);
     let mut i = 0;
     if !folds.is_empty() {
         loop {
@@ -273,7 +269,6 @@ pub unsafe fn fold_create(wp: *mut win_T, start_pos: pos_T, end_pos: pos_T) {
                     bot -= fold.top();
                     if use_level || fold.is(FD_LEVEL) {
                         use_level = true;
-                        // SAFETY: the caller's promise.
                         if level as OptInt >= win.w_onebuf_opt.wo_fdl {
                             closed = true;
                         }
@@ -340,19 +335,16 @@ pub unsafe fn fold_create(wp: *mut win_T, start_pos: pos_T, end_pos: pos_T) {
     unsafe { (*fold.entry()).fd_nested = nested };
     fold.set_top(top);
     fold.set_len(bot - top + 1);
-    // SAFETY: the caller's promise.
     if use_level && !closed && (level as OptInt) < win.w_onebuf_opt.wo_fdl {
         // SAFETY: the caller's promise.
         unsafe { close_fold(start, 1) };
     }
     if !use_level {
-        // SAFETY: the caller's promise.
         win.w_fold_manual = true;
     }
     fold.set_flags(FD_CLOSED);
     fold.set_small(None);
-    // SAFETY: the caller's promise.
-    window_changed(win);
+    changed_window_setting(win);
 }
 
 /// `start` — delete all folds from start to end when not 0
@@ -377,9 +369,9 @@ pub unsafe fn delete_fold(
     let mut last_lnum: linenr_T = 0;
     // SAFETY: the caller's promise -- a live window.
     let win = unsafe { Win::new(wp) };
-    check_update(win);
+    checkupdate(win);
     while lnum <= end {
-        let mut folds = folds_of(win);
+        let mut folds = window_folds(win);
         let mut found: Option<(FoldList, c_int, linenr_T)> = None;
         let mut lnum_off: linenr_T = 0;
         let mut use_level = false;
@@ -389,7 +381,7 @@ pub unsafe fn delete_fold(
             let fold = folds.at(i);
             found = Some((folds, i, lnum_off));
             // SAFETY: a live window, and one of its own folds.
-            if unsafe { check_closed(wp, fold, &mut use_level, level, &mut maybe_small, lnum_off) }
+            if unsafe { check_closed(win, fold, &mut use_level, level, &mut maybe_small, lnum_off) }
             {
                 break;
             }
@@ -404,7 +396,7 @@ pub unsafe fn delete_fold(
         let fold = found_folds.at(found_i);
         lnum = fold.top() + fold.len() + found_off;
         // SAFETY: the caller's promise.
-        if is_manual(win) {
+        if foldmethod_is_manual(win) {
             // SAFETY: `found_i` names an entry of `found_folds`.
             unsafe { delete_fold_entry(found_folds, found_i, recursive != 0) };
         } else {
@@ -414,13 +406,13 @@ pub unsafe fn delete_fold(
             last_lnum = last_lnum.max(lnum);
             // SAFETY: the caller's promise, and one of `wp`'s own folds.
             if !did_one {
-                unsafe { parse_marker(wp) };
+                parse_marker(win);
             }
-            unsafe { delete_fold_markers(wp, fold, recursive != 0, found_off) };
+            unsafe { delete_fold_markers(win, fold, recursive != 0, found_off) };
         }
         did_one = true;
         // SAFETY: the caller's promise.
-        window_changed(win);
+        changed_window_setting(win);
     }
     if !did_one {
         // SAFETY: a static message, and a live buffer.
@@ -431,13 +423,13 @@ pub unsafe fn delete_fold(
         }
     } else {
         // SAFETY: the caller's promise.
-        unsafe { check_cursor_col(wp) };
+        check_cursor_col(unsafe { Win::new(wp) });
     }
     if last_lnum > 0 {
         let num_changed = (last_lnum - first_lnum) as int64_t;
         // SAFETY: the caller's promise; the range is inside the buffer.
         let buf = win.w_buffer;
-        unsafe { changed_lines(buf, first_lnum, 0, last_lnum, 0, false) };
+        unsafe { changed_lines(Buf::new(buf), first_lnum, 0, last_lnum, 0, false) };
         unsafe { buf_updates_send_changes(buf, first_lnum, num_changed, num_changed) };
     }
 }
@@ -472,14 +464,13 @@ pub(super) fn set_manual_fold(
     recurse: bool,
     donep: Option<&mut c_int>,
 ) -> linenr_T {
-    if is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0 {
+    if foldmethod_is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0 {
         // 'scrollbind' in a diff: the matching fold in the other windows.
         for win in windows_in_tab(cur_tab()) {
-            if win.is_current() || !is_diff(win) || win.w_onebuf_opt.wo_scb == 0 {
+            if win.is_current() || !foldmethod_is_diff(win) || win.w_onebuf_opt.wo_scb == 0 {
                 continue;
             }
-            // SAFETY: the cursor line of the live current window.
-            let dlnum = unsafe { diff_lnum_win(cur_win().w_cursor.lnum, win.raw()) };
+            let dlnum = diff_lnum_win(cur_win().w_cursor.lnum, win);
             if dlnum != 0 {
                 set_manual_fold_win(win, dlnum, opening, recurse, None);
             }
@@ -514,8 +505,8 @@ pub(super) fn set_manual_fold_win(
     let mut next = MAXLNUM as linenr_T;
     let mut off: linenr_T = 0;
     let mut done: c_int = 0;
-    check_update(win);
-    let mut folds = folds_of(win);
+    checkupdate(win);
+    let mut folds = window_folds(win);
     loop {
         let i = match folds.find(lnum) {
             Ok(i) => i,
@@ -573,7 +564,7 @@ pub(super) fn set_manual_fold_win(
         }
         win.w_fold_manual = true;
         if done & DONE_ACTION != 0 {
-            window_changed(win);
+            changed_window_setting(win);
         }
         done |= DONE_FOLD;
     } else if donep.is_none() && win.is_current() {
@@ -605,15 +596,13 @@ pub(super) fn fold_open_nested(fold: Fold) {
 /// # Safety
 /// `wp` must be a live window, and `fold` one of its folds at `lnum_off`.
 pub(super) unsafe fn check_closed(
-    wp: *mut win_T,
+    win: Win,
     fold: Fold,
     use_levelp: &mut bool,
     level: c_int,
     maybe_smallp: &mut bool,
     lnum_off: linenr_T,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
     let mut closed = false;
     if *use_levelp || fold.is(FD_LEVEL) {
         *use_levelp = true;
@@ -631,7 +620,7 @@ pub(super) unsafe fn check_closed(
             fold.set_small(None);
         }
         // SAFETY: the caller's promise.
-        unsafe { check_small(wp, fold, lnum_off) };
+        unsafe { check_small(win, fold, lnum_off) };
         if fold.small() == Some(true) {
             // 'foldminlines' vetoes it: too short to be worth drawing closed.
             closed = false;
@@ -644,42 +633,6 @@ pub(super) unsafe fn check_closed(
 fn cur_tab() -> TabPage {
     // SAFETY: `curtab` is set from startup to exit.
     unsafe { TabPage::current() }
-}
-
-/// C's `checkupdate(wp)`: bring `wp`'s fold list up to date.
-fn check_update(wp: Win) {
-    // SAFETY: a `Win` is a live window.
-    unsafe { checkupdate(wp.raw()) };
-}
-
-/// `wp`'s toplevel fold list.
-fn folds_of(wp: Win) -> FoldList {
-    // SAFETY: a live window's `w_folds` is a live fold list.
-    unsafe { window_folds(wp.raw()) }
-}
-
-/// C's `changed_window_setting(wp)`.
-fn window_changed(wp: Win) {
-    // SAFETY: a `Win` is a live window.
-    unsafe { changed_window_setting(wp.raw()) };
-}
-
-/// Whether `wp` folds by marker.
-fn is_marker(wp: Win) -> bool {
-    // SAFETY: a `Win` is a live window.
-    unsafe { foldmethod_is_marker(wp.raw()) }
-}
-
-/// Whether `wp` folds by hand.
-fn is_manual(wp: Win) -> bool {
-    // SAFETY: a `Win` is a live window.
-    unsafe { foldmethod_is_manual(wp.raw()) }
-}
-
-/// Whether `wp` takes its fold levels from the diff.
-fn is_diff(wp: Win) -> bool {
-    // SAFETY: a `Win` is a live window.
-    unsafe { foldmethod_is_diff(wp.raw()) }
 }
 
 /// C's `emsg(_(e_nofold))`, which every command that found no fold gives.

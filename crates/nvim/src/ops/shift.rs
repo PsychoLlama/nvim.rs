@@ -127,7 +127,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
     }
 
     let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
-    unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
+    changed_lines(cur_buf(), first, 0, last, 0, true);
 }
 
 /// Width of the `index`-th 'vartabstop' stop, the last one repeating forever.
@@ -395,7 +395,8 @@ fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
     // Add the width of the white space that follows the block's edge.
     let mut csarg = CharsizeArg::default();
     let lnum = cur_win().w_cursor.lnum;
-    let cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, bd.textstart) };
+    let cstype =
+        unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     let mut vcol = bd.start_vcol as c_int;
     while ascii_iswhite(ci.chr.value) {
@@ -482,7 +483,8 @@ fn shift_block_left(oap: Op, bd: &mut block_def, total: c_int) -> ShiftedLine {
     let mut non_white_col = bd.start_vcol;
     let mut csarg = CharsizeArg::default();
     let lnum = cur_win().w_cursor.lnum;
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, bd.textstart) };
+    let mut cstype =
+        unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, bd.textstart) };
     while ascii_iswhite(unsafe { *non_white } as c_int) {
         let c = unsafe { *non_white } as u8 as int32_t;
         let at = non_white;
@@ -501,7 +503,7 @@ fn shift_block_left(oap: Op, bd: &mut block_def, total: c_int) -> ShiftedLine {
     if bd.startspaces != 0 {
         verbatim_copy_width -= bd.start_char_vcols;
     }
-    cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), 0, bd.textstart) };
+    cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), 0, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;

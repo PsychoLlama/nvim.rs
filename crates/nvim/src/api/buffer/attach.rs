@@ -19,7 +19,7 @@ pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mu
         if b.is_null() {
             return ::core::ptr::null_mut::<buf_T>();
         }
-        if (*b).b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
+        if (*b).b_ml.ml_mfp.is_null() && !buf_ensure_loaded(Buf::new(b)) {
             api_set_error(err, kErrorTypeException, c"Failed to load buffer".as_ptr());
             return ::core::ptr::null_mut::<buf_T>();
         }
@@ -179,7 +179,7 @@ pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Er
         dict_put(
             &mut rv,
             c"virt_blocks",
-            Object::integer(buf_meta_total(b, kMTMetaLines) as Integer),
+            Object::integer(buf_meta_total(Buf::new(b), kMTMetaLines) as Integer),
         );
         // SAFETY: a live buffer, as above.
         let tip = Buf::new(b);

@@ -18,6 +18,7 @@ use crate::search::{
 };
 use crate::semsg_c;
 use crate::types::{CpoFlag, FAIL, NUL, OK, ShmFlag};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -47,8 +48,9 @@ struct StartPos {
 /// Everything a [`searchit`] line walk needs that does not change while it
 /// runs.
 struct Searcher {
-    win: *mut win_T,
-    buf: *mut buf_T,
+    /// The window the search runs in, `None` for a buffer with no window.
+    win: Option<Win>,
+    buf: Buf,
     /// The compiled pattern. `vim_regexec_multi` may clear `regprog`,
     /// which is how a pattern that turned out to be too expensive stops
     /// the whole search.
@@ -82,8 +84,8 @@ impl Searcher {
         unsafe {
             vim_regexec_multi(
                 &raw mut self.regmatch,
-                self.win,
-                self.buf,
+                self.win.map_or(ptr::null_mut(), Win::raw),
+                self.buf.raw(),
                 lnum,
                 col,
                 self.tm,
@@ -109,7 +111,7 @@ impl Searcher {
     /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
     unsafe fn line(&self, lnum: linenr_T) -> *mut c_char {
-        unsafe { ml_get_buf(self.buf, lnum) }
+        unsafe { ml_get_buf(self.buf.raw(), lnum) }
     }
 
     /// Whether an error was reported or the timeout was passed — either
@@ -317,11 +319,11 @@ impl Searcher {
                     // line before.
                     if (*pos).lnum > 1 {
                         (*pos).lnum -= 1;
-                        (*pos).col = ml_get_buf_len(self.buf, (*pos).lnum);
+                        (*pos).col = ml_get_buf_len(self.buf.raw(), (*pos).lnum);
                     }
                 } else {
                     (*pos).col -= 1;
-                    if (*pos).lnum <= (*self.buf).b_ml.ml_line_count {
+                    if (*pos).lnum <= self.buf.b_ml.ml_line_count {
                         let line = self.line((*pos).lnum);
                         (*pos).col -= utf_head_off(line, line.offset((*pos).col as isize));
                     }
@@ -362,7 +364,7 @@ impl Searcher {
 /// `pos` must be writable, `end_pos` writable or null, `pat` a readable
 /// string of `patlen` bytes or null, and `extra_arg` writable or null.
 ///
-/// @param win        window to search in; can be NULL for a buffer without a window!
+/// @param win        window to search in; can be None for a buffer without a window!
 /// @param end_pos    set to end of the match, unless NULL
 /// @param pat_use    which pattern to use when `pat` is empty
 /// @param extra_arg  optional extra arguments, can be NULL
@@ -370,8 +372,8 @@ impl Searcher {
 /// @return  FAIL (zero) for failure, otherwise the index of the first
 ///          matching sub-pattern plus one; one if there was none.
 pub unsafe fn searchit(
-    win: *mut win_T,
-    buf: *mut buf_T,
+    win: Option<Win>,
+    buf: Buf,
     pos: *mut pos_T,
     end_pos: *mut pos_T,
     dir: Direction,
@@ -436,12 +438,12 @@ pub unsafe fn searchit(
             let start_char_len = if (*pos).col == MAXCOL as c_int {
                 0
             } else if (*pos).lnum >= 1
-                && (*pos).lnum <= (*buf).b_ml.ml_line_count
+                && (*pos).lnum <= buf.b_ml.ml_line_count
                 && (*pos).col < MAXCOL as c_int - 2
             {
                 // Watch out for "col" being MAXCOL - 2, used in a closed fold.
                 let line = s.line((*pos).lnum);
-                if ml_get_buf_len(buf, (*pos).lnum) <= (*pos).col {
+                if ml_get_buf_len(buf.raw(), (*pos).lnum) <= (*pos).col {
                     1
                 } else {
                     utfc_ptr2len(line.offset((*pos).col as isize))
@@ -483,7 +485,7 @@ pub unsafe fn searchit(
 
             // Loop twice if 'wrapscan' is set.
             for wrapped in [false, true] {
-                'lines: while lnum > 0 && lnum <= (*buf).b_ml.ml_line_count {
+                'lines: while lnum > 0 && lnum <= buf.b_ml.ml_line_count {
                     // Stop after checking "stop_lnum", if it is set.
                     if stop_lnum != 0
                         && if dir == FORWARD {
@@ -541,7 +543,7 @@ pub unsafe fn searchit(
                         // The match may be in another line, with `\zs`.
                         let mut m = s.found();
                         // "lnum" may be past the end of the buffer for "\n\zs".
-                        let line = if lnum + m.start.lnum > (*buf).b_ml.ml_line_count {
+                        let line = if lnum + m.start.lnum > buf.b_ml.ml_line_count {
                             c"".as_ptr() as *mut c_char
                         } else {
                             s.line(lnum + m.start.lnum)
@@ -613,7 +615,7 @@ pub unsafe fn searchit(
                 // to be shown anyway (so SEARCH_COUNT must be absent).
                 // The message is remembered in keep_msg for a redraw.
                 lnum = if dir == BACKWARD {
-                    (*buf).b_ml.ml_line_count
+                    buf.b_ml.ml_line_count
                 } else {
                     1
                 };
@@ -662,9 +664,9 @@ pub unsafe fn searchit(
         }
 
         // A pattern like "\n\zs" may go past the last line.
-        if (*pos).lnum > (*buf).b_ml.ml_line_count {
-            (*pos).lnum = (*buf).b_ml.ml_line_count;
-            (*pos).col = ml_get_buf_len(buf, (*pos).lnum);
+        if (*pos).lnum > buf.b_ml.ml_line_count {
+            (*pos).lnum = buf.b_ml.ml_line_count;
+            (*pos).col = ml_get_buf_len(buf.raw(), (*pos).lnum);
             if (*pos).col > 0 {
                 (*pos).col -= 1;
             }
@@ -704,7 +706,7 @@ unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
 ///
 /// @return  OK for success, FAIL if no line was found.
 pub unsafe fn search_for_exact_line(
-    buf: *mut buf_T,
+    buf: Buf,
     pos: *mut pos_T,
     dir: Direction,
     pat: *mut c_char,
@@ -712,7 +714,7 @@ pub unsafe fn search_for_exact_line(
     unsafe {
         let mut start: linenr_T = 0;
         let compl_len = ins_compl_len();
-        if (*buf).b_ml.ml_line_count == 0 {
+        if buf.b_ml.ml_line_count == 0 {
             return FAIL;
         }
         loop {
@@ -722,11 +724,11 @@ pub unsafe fn search_for_exact_line(
                     (*pos).lnum = 1;
                     break;
                 }
-                (*pos).lnum = (*buf).b_ml.ml_line_count;
+                (*pos).lnum = buf.b_ml.ml_line_count;
                 if !shortmess(ShmFlag::SEARCH) {
                     give_warning(gettext(top_bot_msg.as_ptr()), true, false);
                 }
-            } else if (*pos).lnum > (*buf).b_ml.ml_line_count {
+            } else if (*pos).lnum > buf.b_ml.ml_line_count {
                 (*pos).lnum = 1;
                 if p_ws.get() == 0 {
                     break;
@@ -742,7 +744,7 @@ pub unsafe fn search_for_exact_line(
                 start = (*pos).lnum;
             }
 
-            let line = ml_get_buf(buf, (*pos).lnum);
+            let line = ml_get_buf(buf.raw(), (*pos).lnum);
             let text = skipwhite(line);
             (*pos).col = text.offset_from(line) as colnr_T;
 

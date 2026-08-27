@@ -90,6 +90,7 @@ use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
+use crate::winlayer::Win;
 use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
@@ -320,7 +321,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
         win_init_size();
         if params.diff_mode != 0 {
-            diff_win_options(firstwin.get(), false);
+            diff_win_options(Win::new(firstwin.get()), false);
         }
 
         debug_assert!(
@@ -498,7 +499,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             };
             while !wp.is_null() {
                 if !(*wp).w_arg_idx_invalid {
-                    diff_win_options(wp, true);
+                    diff_win_options(Win::new(wp), true);
                 }
                 wp = (*wp).w_next;
             }
@@ -533,7 +534,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         set_reg_var(get_default_register_name());
 
         if (*curwin.get()).w_onebuf_opt.wo_diff != 0 && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-            update_topline(curwin.get());
+            update_topline(Win::current());
             check_scrollbind(0 as linenr_T, 0);
             time_msg_at(c"diff scrollbinding");
         }

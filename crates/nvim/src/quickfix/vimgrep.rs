@@ -23,7 +23,7 @@ use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
     CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
 };
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Win};
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -213,7 +213,7 @@ unsafe fn load_quietly(
     fname: *mut c_char,
     dirname_start: *const c_char,
     dirname_now: *mut c_char,
-) -> *mut buf_T {
+) -> Option<Buf> {
     // SAFETY: forwarded from the caller.
     let save_ei = unsafe { au_event_disable(c",Filetype".as_ptr().cast_mut()) };
     let save_mls = p_mls.get();
@@ -232,14 +232,14 @@ unsafe fn load_quietly(
 ///
 /// `qi` must be a live stack and `title` NUL-terminated.
 unsafe fn list_still_usable(
-    wp: *mut win_T,
+    wp: Option<Win>,
     qi: *mut qf_info_T,
     qfid: c_uint,
     title: *const c_char,
 ) -> bool {
     // SAFETY: forwarded from the caller.
     if !qf_list_still_valid(wp, qfid) {
-        if !wp.is_null() {
+        if wp.is_some() {
             qf_emsg(E_LOCATION_LIST_CHANGED.as_ptr());
             return false;
         }
@@ -262,12 +262,10 @@ unsafe fn list_still_usable(
 unsafe fn match_buflines(
     qfl: *mut qf_list_T,
     fname: *mut c_char,
-    buf: *mut buf_T,
+    buf: Buf,
     search: &mut Search,
     duplicate_name: bool,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live `buf_T`.
-    let buf = unsafe { Buf::new(buf) };
     // SAFETY: forwarded from the caller.
     let bufnum = if duplicate_name {
         0
@@ -391,25 +389,16 @@ unsafe fn match_buflines(
 }
 
 /// What searching the files left behind for [`ex_vimgrep`]'s tail.
+#[derive(Default)]
 struct Outcome {
     /// A dummy buffer was loaded, so folds have to be rebuilt afterwards.
     redraw_for_dummy: bool,
     /// The buffer holding the first match, which is kept loaded so that the
     /// jump lands in it.
-    first_match_buf: *mut buf_T,
+    first_match_buf: Option<Buf>,
     /// Where an autocommand left the directory, if the first match's buffer
     /// is to be entered with it.
     target_dir: Option<Name>,
-}
-
-impl Default for Outcome {
-    fn default() -> Self {
-        Outcome {
-            redraw_for_dummy: false,
-            first_match_buf: ptr::null_mut(),
-            target_dir: None,
-        }
-    }
 }
 
 /// Whether the swap file the buffer has is one that already existed, i.e.
@@ -419,9 +408,7 @@ impl Default for Outcome {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-unsafe fn existing_swapfile(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- a live `buf_T`.
-    let buf = unsafe { Buf::new(buf.cast_mut()) };
+unsafe fn existing_swapfile(buf: Buf) -> bool {
     // SAFETY: forwarded from the caller.
     if buf.b_ml.ml_mfp.is_null() {
         return false;
@@ -438,9 +425,9 @@ unsafe fn existing_swapfile(buf: *const buf_T) -> bool {
 ///
 /// # Safety
 ///
-/// `qi` must be a live stack and `wp` null or a live window.
+/// `qi` must be a live stack.
 unsafe fn process_files(
-    wp: *mut win_T,
+    wp: Option<Win>,
     qi: *mut qf_info_T,
     search: &mut Search,
     files: &Files,
@@ -469,10 +456,11 @@ unsafe fn process_files(
         }
 
         // Load the file into a buffer, unless it is already loaded.
+        // SAFETY: a NUL-terminated file name.
         let mut buf = unsafe { buflist_findname_exp(files.get(fi)) };
-        let using_dummy = buf.is_null() || unsafe { (*buf).b_ml.ml_mfp.is_null() };
+        let using_dummy = buf.is_none_or(|buf| buf.b_ml.ml_mfp.is_null());
         if using_dummy {
-            duplicate_name = !buf.is_null();
+            duplicate_name = buf.is_some();
             out.redraw_for_dummy = true;
             buf = unsafe { load_quietly(fname, start, dirname_now.as_mut_ptr()) };
         }
@@ -483,13 +471,7 @@ unsafe fn process_files(
         }
         save_qfid = qf_current_list(qi).qf_id;
 
-        if buf.is_null() {
-            if !got_int.get() {
-                // SAFETY: the message macros expand to a `vim_snprintf` over
-                // the format literal above and the editor's message buffers.
-                unsafe { smsg_c!(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname) };
-            }
-        } else {
+        if let Some(buf) = buf {
             let found_match = unsafe {
                 match_buflines(
                     qf_current_list(qi).raw(),
@@ -512,6 +494,10 @@ unsafe fn process_files(
                     )
                 };
             }
+        } else if !got_int.get() {
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
+            unsafe { smsg_c!(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname) };
         }
         fi += 1;
     }
@@ -527,7 +513,7 @@ unsafe fn process_files(
 /// `buf` must be the dummy buffer just searched, and the two directory names
 /// NUL-terminated.
 unsafe fn keep_or_drop_dummy(
-    buf: *mut buf_T,
+    mut buf: Buf,
     found_match: bool,
     duplicate_name: bool,
     search: &Search,
@@ -535,11 +521,11 @@ unsafe fn keep_or_drop_dummy(
     dirname_now: *const c_char,
     out: &mut Outcome,
 ) {
-    // SAFETY: forwarded from the caller.
-    if found_match && out.first_match_buf.is_null() {
-        out.first_match_buf = buf;
+    if found_match && out.first_match_buf.is_none() {
+        out.first_match_buf = Some(buf);
     }
 
+    // SAFETY: forwarded from the caller -- two NUL-terminated directories.
     // Never keep a dummy buffer when another buffer has the same name.
     if duplicate_name {
         unsafe { wipe_dummy_buffer(buf, dirname_start) };
@@ -548,7 +534,8 @@ unsafe fn keep_or_drop_dummy(
 
     // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
     // buffer goes away as soon as it is hidden, which wins.
-    let bufhidden = unsafe { *(*buf).b_p_bh } as u8;
+    // SAFETY: `'bufhidden'` is a NUL-terminated option string.
+    let bufhidden = unsafe { *buf.b_p_bh } as u8;
     let hidden_stays = cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
     if !hidden_stays {
         if !found_match {
@@ -556,34 +543,38 @@ unsafe fn keep_or_drop_dummy(
             unsafe { wipe_dummy_buffer(buf, dirname_start) };
             return;
         }
-        if !ptr::eq(buf, out.first_match_buf)
+        if out.first_match_buf != Some(buf)
             || search.flags & VGR_NOJUMP as c_int != 0
             || unsafe { existing_swapfile(buf) }
         {
             unsafe { unload_dummy_buffer(buf, dirname_start) };
             // Keeping the buffer, remove the dummy flag.
-            unsafe { (*buf).b_flags.clear(BufFlags::DUMMY) };
+            buf.b_flags.clear(BufFlags::DUMMY);
             return;
         }
     }
 
     // Keeping the buffer, remove the dummy flag.
-    unsafe { (*buf).b_flags.clear(BufFlags::DUMMY) };
+    buf.b_flags.clear(BufFlags::DUMMY);
 
     // The buffer is still loaded, so the jump below has to go to the
     // directory the search left it in.
-    if ptr::eq(buf, out.first_match_buf)
+    if out.first_match_buf == Some(buf)
         && out.target_dir.is_none()
+        // SAFETY: the caller's two NUL-terminated directories.
         && unsafe { strcmp(dirname_start, dirname_now) } != 0
     {
+        // SAFETY: as above.
         out.target_dir = Some(unsafe { Name::from_ptr(dirname_now) });
     }
 
     // The Filetype autocommands and the modelines need to run now, in
     // that buffer — but not the window-local options.
     let mut aco = aco_save_T::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-    unsafe { apply_autocmds(EVENT_FILETYPE, (*buf).b_p_ft, (*buf).b_fname, true, buf) };
+    let raw = buf.raw();
+    // SAFETY: a live buffer, entered and left again around the events.
+    unsafe { aucmd_prepbuf(&raw mut aco, raw) };
+    unsafe { apply_autocmds(EVENT_FILETYPE, buf.b_p_ft, buf.b_fname, true, raw) };
     do_modelines(OptionSetFlags::NOWIN);
     unsafe { aucmd_restbuf(&raw mut aco) };
 }
@@ -605,7 +596,9 @@ unsafe fn jump_to_match(qi: *mut qf_info_T, forceit: c_int, out: &mut Outcome) {
     // The buffer of the first match is the one the search left the
     // directory in; put the window back there.
     if let Some(target_dir) = &out.target_dir
-        && ptr::eq(curbuf.get(), out.first_match_buf)
+        && out
+            .first_match_buf
+            .is_some_and(|b| ptr::eq(curbuf.get(), b.raw()))
     {
         let mut ea = exarg_T {
             arg: target_dir.as_ptr().cast_mut(),
@@ -638,8 +631,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
         }
     }
 
-    let mut wp: *mut win_T = ptr::null_mut();
-    let qi = qf_cmd_stack_or_alloc(eap, &raw mut wp);
+    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
 
     let parsed = unsafe { Search::parse(eap.raw()) };
     let Some((mut search, files)) = parsed else {
@@ -698,6 +690,6 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     // Reading the files may have messed up the folds of the window the
     // command was given in.
     if out.redraw_for_dummy {
-        unsafe { fold_update_all(curwin.get()) };
+        fold_update_all(unsafe { Win::current() });
     }
 }

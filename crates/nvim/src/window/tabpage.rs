@@ -106,8 +106,7 @@ pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
 pub(crate) fn free_tab(tp: TabPage) {
     let mut tp = tp;
     forget_tabpage(tp.handle());
-    // SAFETY: a live tab page's diff state.
-    unsafe { diff_clear(tp.raw()) };
+    diff_clear(tp);
     for idx in 0..SNAP_COUNT {
         drop_snapshot(tp, idx);
     }
@@ -570,7 +569,7 @@ fn check_tabpage_windows(old_curtab: TabPage) {
 fn config_float(mut wp: Win) {
     let (raw, config) = (wp.raw(), wp.w_config.clone());
     // SAFETY: a live window and its own configuration.
-    unsafe { win_config_float(raw, config) };
+    unsafe { win_config_float(Win::new(raw), config) };
 }
 
 pub fn goto_tabpage(n: c_int) {

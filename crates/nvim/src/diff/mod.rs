@@ -37,8 +37,8 @@ use crate::autocmd::{
     block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    bt_prompt, buf_get_changedtick, buf_is_empty, buf_valid, buflist_findnr, buflist_findpat,
-    bufref_valid, set_bufref,
+    bt_prompt, buf_get_changedtick, buf_is_empty, buf_valid, buflist_findpat, bufref_valid,
+    find_buf, set_bufref,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
@@ -63,7 +63,7 @@ use crate::main::{
     KeyTyped, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
     e_cannot_have_more_than_nr_diff_anchors, e_diff_anchors_with_hidden_windows,
     e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir, e_problem_creating_internal_diff,
-    first_tabpage, firstwin, need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr,
+    first_tabpage, need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr,
 };
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
@@ -91,10 +91,10 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
     CMD_diffget, CMD_diffput, CMD_split, CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
-    bufref_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T, garray_T, hlf_T,
-    linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t, varnumber_T, win_T,
-    xdemitcb_t, xdemitconf_t, xpparam_t,
+    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, bufref_T,
+    colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T, garray_T, hlf_T, linenr_T,
+    mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t,
+    xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

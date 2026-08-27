@@ -258,7 +258,7 @@ pub(crate) fn end_visual_mode() {
     cur_buf().b_visual.vi_end = cur_win().w_cursor;
     cur_buf().b_visual.vi_curswant = cur_win().w_curswant;
     cur_buf().b_visual_mode_eval = visual_mode().raw();
-    if !unsafe { virtual_active(curwin.get()) } {
+    if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;
     }
     may_clear_cmdline();
@@ -311,7 +311,7 @@ pub(crate) unsafe fn get_visual_text(
     let mut ca = unsafe { CmdArg::new(cap) };
     if !visual_mode().is_line() {
         // SAFETY: adjusts the current window's cursor or `VIsual`.
-        unsafe { unadjust_for_sel() };
+        unadjust_for_sel();
     }
     let anchor = visual_anchor();
     // SAFETY: `cap` is null or the caller's live command argument, and `pp`
@@ -377,9 +377,9 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     let win = cur_win();
     let (from, to) = (&raw mut old_cursor, &raw mut anchor);
     let (l, r) = (&raw mut left, &raw mut right);
-    unsafe { getvcols(win.raw(), from, to, l, r) };
+    unsafe { getvcols(win, from, to, l, r) };
     cur_win().w_cursor.lnum = visual_anchor().lnum;
-    unsafe { coladvance(curwin.get(), left) };
+    coladvance(unsafe { Win::current() }, left);
     set_visual_anchor(cur_win().w_cursor);
     cur_win().w_cursor.lnum = old_cursor.lnum;
     cur_win().w_curswant = right;
@@ -387,22 +387,21 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     if old_cursor.lnum >= visual_anchor().lnum && sel_exclusive() {
         cur_win().w_curswant += 1;
     }
-    unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
+    coladvance(unsafe { Win::current() }, cur_win().w_curswant);
 
     // Nothing moved: the block's two columns are the same width, so swap
     // them the other way round instead.
     if cur_win().w_cursor.col == old_cursor.col
-        && (!unsafe { virtual_active(curwin.get()) }
-            || cur_win().w_cursor.coladd == old_cursor.coladd)
+        && (!virtual_active(cur_win()) || cur_win().w_cursor.coladd == old_cursor.coladd)
     {
         cur_win().w_cursor.lnum = visual_anchor().lnum;
         if old_cursor.lnum <= visual_anchor().lnum && sel_exclusive() {
             right += 1;
         }
-        unsafe { coladvance(curwin.get(), right) };
+        coladvance(unsafe { Win::current() }, right);
         set_visual_anchor(cur_win().w_cursor);
         cur_win().w_cursor.lnum = old_cursor.lnum;
-        unsafe { coladvance(curwin.get(), left) };
+        coladvance(unsafe { Win::current() }, left);
         cur_win().w_curswant = left;
     }
 }
@@ -478,7 +477,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
                 .wrapping_mul(ca.count0 as linenr_T)
                 .wrapping_sub(1),
         );
-        unsafe { check_cursor(curwin.get()) };
+        check_cursor(unsafe { Win::current() });
     }
     set_visual_mode(resel_VIsual_mode.get());
 
@@ -494,12 +493,12 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         } else {
             cur_win().w_curswant = resel_VIsual_vcol.get();
         }
-        unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
+        coladvance(unsafe { Win::current() }, cur_win().w_curswant);
     }
 
     if resel_VIsual_vcol.get() == MAXCOL as c_int {
         cur_win().w_curswant = MAXCOL as colnr_T;
-        unsafe { coladvance(curwin.get(), MAXCOL as c_int) };
+        coladvance(unsafe { Win::current() }, MAXCOL as c_int);
     } else if visual_mode().is_block() {
         // The width is measured from the *start* line, so the cursor goes
         // there while 'curswant' is recomputed and comes back after.
@@ -516,7 +515,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         if sel_exclusive() {
             cur_win().w_curswant += 1;
         }
-        unsafe { coladvance(curwin.get(), cur_win().w_curswant) };
+        coladvance(unsafe { Win::current() }, cur_win().w_curswant);
     } else {
         cur_win().w_set_curswant = true;
     }
@@ -610,11 +609,11 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
     if c == Ctrl_V
-        && unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagBlock as c_int as c_uint != 0
+        && get_ve_flags(cur_win()) & kOptVeFlagBlock as c_int as c_uint != 0
         && gchar_cursor() == TAB
     {
-        unsafe { validate_virtcol(curwin.get()) };
-        unsafe { coladvance(curwin.get(), cur_win().w_virtcol) };
+        validate_virtcol(unsafe { Win::current() });
+        coladvance(unsafe { Win::current() }, cur_win().w_virtcol);
     }
     set_visual_anchor(cur_win().w_cursor);
     unsafe { fold_adjust_visual() };
@@ -672,11 +671,11 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
     set_visual_active(true);
     VIsual_reselect.set(1);
     // Both ends are checked against the buffer: it may have shrunk since.
-    unsafe { check_cursor(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
     set_visual_anchor(cur_win().w_cursor);
     cur_win().w_cursor = tpos;
-    unsafe { check_cursor(curwin.get()) };
-    unsafe { update_topline(curwin.get()) };
+    check_cursor(unsafe { Win::current() });
+    update_topline(unsafe { Win::current() });
     if ca.arg != 0 {
         set_visual_select(true);
         VIsual_select_reg.set(0);
@@ -708,13 +707,13 @@ pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
 /// Undo [`adjust_for_sel`] on whichever end is the later one.
 ///
 /// Answers whether the position moved to the previous line.
-pub(crate) unsafe fn unadjust_for_sel() -> bool {
-    // SAFETY (throughout): `curwin` is the current window and `VIsual` a live position.
+pub(crate) fn unadjust_for_sel() -> bool {
     if sel_exclusive() && !equalpos(visual_anchor(), cur_win().w_cursor) {
         if lt(visual_anchor(), cur_win().w_cursor) {
-            return unsafe { unadjust_for_sel_inner(&raw mut (*curwin.get()).w_cursor) };
+            let mut win = cur_win();
+            return unadjust_for_sel_inner(&mut win.w_cursor);
         }
-        return with_visual_anchor(|anchor| unsafe { unadjust_for_sel_inner(anchor) });
+        return with_visual_anchor(unadjust_for_sel_inner);
     }
     false
 }
@@ -722,24 +721,36 @@ pub(crate) unsafe fn unadjust_for_sel() -> bool {
 /// Move one position back, across a line break if there is nothing else left.
 ///
 /// Answers whether it crossed one.
-pub(crate) unsafe fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool {
+pub(crate) fn unadjust_for_sel_inner(pp: &mut pos_T) -> bool {
     VIsual_select_exclu_adj.set(false);
-    // SAFETY: `pp` is the caller's live position in the current buffer.
-    if unsafe { (*pp).coladd } > 0 {
-        unsafe { (*pp).coladd -= 1 };
-    } else if unsafe { (*pp).col } > 0 {
-        unsafe { (*pp).col -= 1 };
+    if pp.coladd > 0 {
+        pp.coladd -= 1;
+    } else if pp.col > 0 {
+        pp.col -= 1;
+        // SAFETY: `curbuf` is set from startup to exit, and `pp` is lent for
+        // the length of the call.
         unsafe { mark_mb_adjustpos(curbuf.get(), pp) };
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
-        if unsafe { virtual_active(curwin.get()) } {
+        // SAFETY: `curwin` is set from startup to exit.
+        if virtual_active(cur_win()) {
             let (mut cs, mut ce): (colnr_T, colnr_T) = (0, 0);
-            unsafe { getvcol(curwin.get(), pp, &raw mut cs, ptr::null_mut(), &raw mut ce) };
-            unsafe { (*pp).coladd = ce - cs };
+            // SAFETY: the current window, `pp` lent for the call, and two
+            // columns of this frame's own.
+            unsafe {
+                getvcol(
+                    Win::new(curwin.get()),
+                    pp,
+                    &raw mut cs,
+                    ptr::null_mut(),
+                    &raw mut ce,
+                )
+            };
+            pp.coladd = ce - cs;
         }
-    } else if unsafe { (*pp).lnum } > 1 {
-        unsafe { (*pp).lnum -= 1 };
-        unsafe { (*pp).col = ml_get_len((*pp).lnum) };
+    } else if pp.lnum > 1 {
+        pp.lnum -= 1;
+        pp.col = ml_get_len(pp.lnum);
         return true;
     }
     false

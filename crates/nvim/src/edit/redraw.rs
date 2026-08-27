@@ -42,7 +42,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if unsafe { char_avail() } {
+    if char_avail() {
         return;
     }
 
@@ -77,7 +77,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // block has to be closed the way `ins_apply_autocmds` does it.
     let fire_text_changed = |event: event_T, tick: *mut varnumber_T| {
         let mut aco = aco_save_T::default();
-        let before = unsafe { buf_get_changedtick(curbuf.get()) };
+        let before = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
         // Save and restore curwin/curbuf, in case the autocommand changes
         // them.
@@ -86,7 +86,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         unsafe { apply_autocmds(event, none, none, false, curbuf.get()) };
         unsafe { aucmd_restbuf(&raw mut aco) };
 
-        unsafe { *tick = buf_get_changedtick(curbuf.get()) };
+        unsafe { *tick = buf_get_changedtick(Buf::new(curbuf.get())) };
         if before != unsafe { *tick } {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
@@ -97,13 +97,13 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     let mut buf = cur_buf();
     if ready && has_event(EVENT_TEXTCHANGEDI) && !pum_visible() {
         let tick = &mut buf.b_last_changedtick_i;
-        if *tick != unsafe { buf_get_changedtick(curbuf.get()) } {
+        if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
             fire_text_changed(EVENT_TEXTCHANGEDI, tick);
         }
     }
     if ready && has_event(EVENT_TEXTCHANGEDP) && pum_visible() {
         let tick = &mut buf.b_last_changedtick_pum;
-        if *tick != unsafe { buf_get_changedtick(curbuf.get()) } {
+        if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
             fire_text_changed(EVENT_TEXTCHANGEDP, tick);
         }
     }
@@ -153,8 +153,8 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 
     // SAFETY: `curwin` is live, which is all these editor-wide routines ask
     // for, and the grid line is opened and flushed around every write.
-    unsafe { update_topline(win.raw()) }; // just in case w_topline isn't valid
-    unsafe { validate_cursor(win.raw()) };
+    update_topline(win); // just in case w_topline isn't valid
+    validate_cursor(win);
     let attr = if highlight { hl_attr(HLF_8) } else { 0 };
 
     pc_row.set(win.w_wrow);
@@ -237,7 +237,7 @@ pub(crate) unsafe fn display_dollar(col_arg: colnr_T) {
     // so `p + col` is a byte of that line.
     let p = get_cursor_line_ptr();
     win.w_cursor.col -= unsafe { utf_head_off(p, p.offset(col as isize)) };
-    unsafe { curs_columns(win.raw(), 0) }; // recompute w_wrow and w_wcol
+    curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {
         unsafe { edit_putchar('$' as c_int, false) };
         dollar_vcol.set(win.w_virtcol);
@@ -278,7 +278,7 @@ pub(crate) unsafe fn get_nolist_virtcol() -> colnr_T {
         return unsafe { getvcol_nolist(&mut win.w_cursor) };
     }
     // SAFETY: `curwin` is live for the whole session.
-    unsafe { validate_virtcol(win.raw()) };
+    validate_virtcol(win);
     win.w_virtcol
 }
 

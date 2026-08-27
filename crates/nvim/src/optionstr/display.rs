@@ -52,6 +52,7 @@ use super::{
 use crate::decoration::SCL_NUM;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
+use crate::winlayer::Win;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.
@@ -468,8 +469,8 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     unsafe {
         if strcmp(value, old_value(args)) != 0 {
             // What column the cursor may sit in just changed.
-            validate_virtcol(wp);
-            coladvance(wp, (*wp).w_virtcol);
+            validate_virtcol(Win::new(wp));
+            coladvance(Win::new(wp), (*wp).w_virtcol);
         }
     }
     ptr::null()

@@ -20,6 +20,7 @@ use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
     FAIL, NUL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
+use crate::winlayer::Buf;
 
 /// Fire `CompleteDone` with `v:event` describing how the completion ended.
 pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char) {
@@ -356,7 +357,7 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
         // Check for undo allowed here, because if something was already
         // inserted the line was already saved for undo and this check isn't
         // done.
-        if !undo_allowed(curbuf.get()) {
+        if !undo_allowed(Buf::current()) {
             return;
         }
 
@@ -542,10 +543,9 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         }
         if ret == OK && what_flag & CI_WHAT_SELECTED != 0 {
             ret = add_nr("selected", selected_idx as varnumber_T);
-            let wp = win_float_find_preview();
-            if !wp.is_null() {
-                add_nr("preview_winid", (*wp).handle as varnumber_T);
-                add_nr("preview_bufnr", (*(*wp).w_buffer).handle as varnumber_T);
+            if let Some(wp) = win_float_find_preview() {
+                add_nr("preview_winid", wp.handle as varnumber_T);
+                add_nr("preview_bufnr", wp.buffer().handle as varnumber_T);
             }
         }
         if ret == OK && selected_idx != -1 && has_completed {

@@ -200,7 +200,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         // SAFETY: a live window and two live positions in its buffer.
         unsafe {
             let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
-            getvcols(curwin.get(), &raw mut min, &raw mut max, sv, ev);
+            getvcols(cur_win(), &raw mut min, &raw mut max, sv, ev);
         }
 
         p_sbr.set(saved_sbr);
@@ -298,7 +298,7 @@ fn count_selected_line(
     let mut s: *mut c_char = ::core::ptr::null_mut();
     let mut len = 0;
     if sel.mode.is_block() {
-        virtual_op.set(Some(unsafe { virtual_active(curwin.get()) }));
+        virtual_op.set(Some(virtual_active(cur_win())));
         unsafe { block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false) };
         virtual_op.set(None);
         s = bd.textstart;
@@ -376,7 +376,7 @@ fn report_counts(
         let (col, virtcol) = (cur_win().w_cursor.col + 1, cur_win().w_virtcol + 1);
         unsafe {
             let p = get_cursor_line_ptr();
-            validate_virtcol(curwin.get());
+            validate_virtcol(cur_win());
             col_print(b1, n1, col, virtcol);
             col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p));
             if same_as_bytes {
@@ -414,7 +414,7 @@ fn report_counts(
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
         unsafe {
             let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
-            getvcols(curwin.get(), &raw mut min, &raw mut max, minc, maxc);
+            getvcols(cur_win(), &raw mut min, &raw mut max, minc, maxc);
             vim_snprintf(b1, n1, gettext(c"%ld Cols; ".as_ptr()), cols);
         }
     } else {
@@ -474,18 +474,15 @@ unsafe fn store_counts(
 /// buffer API and quickfix use it to size a splice. A range past the end of
 /// the buffer is clipped rather than refused.
 ///
-/// # Safety
-/// `buf` must point to a live buffer.
-pub unsafe fn get_region_bytecount(
-    buf: *mut buf_T,
+/// Safe: a [`Buf`] carries the whole of the promise this needs, and every
+/// line asked for below is checked against its line count first.
+pub fn get_region_bytecount(
+    buf: Buf,
     start_lnum: linenr_T,
     end_lnum: linenr_T,
     start_col: colnr_T,
     end_col: colnr_T,
 ) -> bcount_t {
-    // SAFETY: the caller's promise -- a live buffer. Every line asked for
-    // below is checked against its line count first.
-    let buf = unsafe { Buf::new(buf) };
     let max_lnum = buf.line_count();
     if start_lnum > max_lnum {
         return 0;

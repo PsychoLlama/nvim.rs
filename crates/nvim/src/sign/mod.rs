@@ -37,7 +37,7 @@ use crate::api::extmark::namespace_id_map;
 use crate::api::extmark::{describe_ns, nvim_create_namespace};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::buffer::{buflist_findname_exp, buflist_findnr};
+use crate::buffer::{buflist_findname_exp, find_buf};
 use crate::charset::{
     backslash_halve, getdigits_int, skiptowhite, skiptowhite_esc, skipwhite, vim_isprintc,
 };

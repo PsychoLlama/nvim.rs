@@ -245,7 +245,7 @@ pub unsafe fn nvim_replace_termcodes(
 }
 
 pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
-    unsafe { keymap_array(mode, ::core::ptr::null_mut::<buf_T>(), arena) }
+    unsafe { keymap_array(mode, None, arena) }
 }
 
 pub unsafe fn nvim_set_keymap(

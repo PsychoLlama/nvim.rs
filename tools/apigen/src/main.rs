@@ -1052,12 +1052,7 @@ fn emit_fn(
         writeln!(out, "        return NIL;").unwrap();
         writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
-        writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
-        writeln!(
-            out,
-            "    if textlock.get() != 0 || unsafe {{ expr_map_locked() }} {{"
-        )
-        .unwrap();
+        writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
         writeln!(out, "        expr_map_locked_error(error);").unwrap();
         writeln!(out, "        return NIL;").unwrap();
         writeln!(out, "    }}").unwrap();
@@ -1174,7 +1169,7 @@ fn emit_fn(
             writeln!(out, "    let dict = unsafe {{").unwrap();
             writeln!(
                 out,
-                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr().cast_mut(), {size} as size_t, arena)"
+                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr(), {size} as size_t, arena)"
             )
             .unwrap();
             writeln!(out, "    }};").unwrap();
@@ -2054,18 +2049,18 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     if k.keys.is_empty() {
         writeln!(
             out,
-            "pub unsafe fn key_dict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
+            "pub unsafe fn key_dict_{name}_get_field(_str: *const c_char, _len: size_t) -> *const KeySetLink {{"
         )
         .unwrap();
         writeln!(out, "    // The keyset has no keys, so nothing matches.").unwrap();
-        writeln!(out, "    ptr::null_mut()").unwrap();
+        writeln!(out, "    ptr::null()").unwrap();
         writeln!(out, "}}").unwrap();
         out.push('\n');
         return;
     }
     writeln!(
         out,
-        "pub unsafe fn key_dict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
+        "pub unsafe fn key_dict_{name}_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {{"
     )
     .unwrap();
     writeln!(
@@ -2081,11 +2076,11 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     for (i, key) in k.keys.iter().enumerate() {
         writeln!(out, "        b\"{}\" => {i},", key.wire).unwrap();
     }
-    writeln!(out, "        _ => return ptr::null_mut(),").unwrap();
+    writeln!(out, "        _ => return ptr::null(),").unwrap();
     writeln!(out, "    }};").unwrap();
     writeln!(
         out,
-        "    let table: *mut KeySetLink = {name}_table.as_ptr().cast_mut();"
+        "    let table: *const KeySetLink = {name}_table.as_ptr();"
     )
     .unwrap();
     writeln!(out, "    table.wrapping_add(index)").unwrap();
@@ -2440,12 +2435,12 @@ type Convert = unsafe fn(*mut lua_State, &mut Call);
 unsafe trait KeySet: Sized {
     const GET_FIELD: FieldHashfn;
 
-    fn table() -> *mut KeySetLink;
+    fn table() -> *const KeySetLink;
 }
 
 /// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *mut KeySetLink {
-    table.as_ptr().cast_mut()
+fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const KeySetLink {
+    table.as_ptr()
 }
 
 /// A keyset argument, with its release armed from the moment it exists: the
@@ -2899,10 +2894,9 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         writeln!(out, "            return;").unwrap();
         writeln!(out, "        }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
-        writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(
             out,
-            "        if textlock.get() != 0 || unsafe {{ expr_map_locked() }} {{"
+            "        if textlock.get() != 0 || expr_map_locked() {{"
         )
         .unwrap();
         writeln!(out, "            expr_map_locked_error(err);").unwrap();
@@ -3288,7 +3282,7 @@ fn generate_lua(
              unsafe impl KeySet for KeyDict_{keyset} {{\n\
              \x20   const GET_FIELD: FieldHashfn = Some(key_dict_{keyset}_get_field);\n\
              \n\
-             \x20   fn table() -> *mut KeySetLink {{\n\
+             \x20   fn table() -> *const KeySetLink {{\n\
              \x20       keyset_table(&{keyset}_table)\n\
              \x20   }}\n\
              }}"

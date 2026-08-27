@@ -41,6 +41,7 @@ use crate::types::{
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, linenr_T, sctx_T, uint64_t,
 };
 use crate::window::close_windows;
+use crate::winlayer::Buf;
 use core::ptr;
 
 const kOptValTypeString: OptValType = 2;
@@ -293,8 +294,8 @@ unsafe fn do_ft_buf(
     // SAFETY: `ftbuf` is live; the autocommands may delete it, which the
     // `bufref` below re-checks.
     // SAFETY: `err` is the caller's.
-    let did_au_ft = api_try(unsafe { &mut *err }, |_| unsafe {
-        do_filetype_autocmd(ftbuf, true)
+    let did_au_ft = api_try(unsafe { &mut *err }, |_| {
+        do_filetype_autocmd(unsafe { Buf::new(ftbuf) }, true)
     });
     // SAFETY: `bufref` is this frame's own.
     if !unsafe { bufref_valid(&raw mut bufref) } {
@@ -335,7 +336,7 @@ unsafe fn wipe_ft_buf(buf: *mut buf_T) {
         set_bufref(&raw mut bufref, buf);
         close_windows(buf, false);
         if bufref_valid(&raw mut bufref) && buf != curbuf.get() && (*buf).b_nwindows == 0 {
-            wipe_buffer(buf, false);
+            wipe_buffer(Buf::new(buf), false);
         }
         if bufref_valid(&raw mut bufref) {
             (*buf).b_flags.clear(BufFlags::DUMMY);

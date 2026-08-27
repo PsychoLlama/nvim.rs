@@ -160,7 +160,7 @@ pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     let mut buf = unsafe { Buf::current() };
     if !buf.b_u_synced {
         // SAFETY: as above.
-        unsafe { u_sync(true) };
+        u_sync(true);
         // SAFETY: as above; `u_sync` may have moved the tree under us.
         buf = unsafe { Buf::current() };
     }
@@ -341,10 +341,8 @@ fn undo_search(
         if absolute {
             // SAFETY: a NUL-terminated literal and an integer.
             unsafe {
-                semsg_c!(
-                    gettext(c"E830: Undo number %ld not found".as_ptr()),
-                    step as int64_t,
-                );
+                let fmt = gettext(c"E830: Undo number %ld not found".as_ptr());
+                semsg_c!(fmt, step as int64_t);
             }
             return None;
         }
@@ -421,7 +419,7 @@ unsafe fn undo_up_to(dest: &UndoDest) {
     while !got_int.get() {
         // The change warning first, for the reason `u_doit` gives.
         // SAFETY: a live current buffer, by the contract above.
-        unsafe { change_warning(curbuf.get(), 0) };
+        unsafe { change_warning(Buf::current(), 0) };
         // SAFETY: as above — the warning may have reloaded the buffer.
         let mut buf = unsafe { Buf::current() };
         let above = match buf.header(buf.b_u_curhead) {
@@ -455,7 +453,7 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
     let mut did_undo = true;
     while !got_int.get() {
         // SAFETY: a live current buffer, by the contract above.
-        unsafe { change_warning(curbuf.get(), 0) };
+        unsafe { change_warning(Buf::current(), 0) };
         // SAFETY: as above — the warning may have reloaded the buffer.
         let mut buf = unsafe { Buf::current() };
         let Some(fork) = buf.header(buf.b_u_curhead) else {
@@ -522,7 +520,7 @@ unsafe fn take_marked_branch(mut buf: Buf, fork: Header, mark: c_int) -> Header 
     // The whole list of alternates may start further back than the marked
     // run does, and that head is where the branch has to end up.
     // SAFETY: as above.
-    let mut first = unsafe { header_chain(buf.raw(), head.link(), |uh| uh.uh_alt_prev) }
+    let mut first = unsafe { header_chain(buf, head.link(), |uh| uh.uh_alt_prev) }
         .last()
         .unwrap_or(head);
     // Unlink it from where it sits... (`last != head` means it was reached
@@ -561,8 +559,8 @@ unsafe fn furthest_marked(
     step: fn(&u_header_T) -> UndoLink,
 ) -> Header {
     // The chain always yields its start; every further hop has to be marked.
-    // SAFETY: a live buffer that owns these headers, by the contract above.
-    unsafe { header_chain(buf.raw(), uhp.link(), step) }
+    // SAFETY: the buffer owns these headers, by the contract above.
+    unsafe { header_chain(buf, uhp.link(), step) }
         .skip(1)
         .take_while(|uh| uh.uh_walk == mark)
         .last()

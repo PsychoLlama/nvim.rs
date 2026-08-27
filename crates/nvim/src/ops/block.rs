@@ -198,7 +198,7 @@ pub(crate) unsafe fn block_insert(
     if oap.start.lnum < oap.end.lnum {
         let (first, last) = (oap.start.lnum + 1, oap.end.lnum + 1);
         // SAFETY: both name lines of the current buffer.
-        unsafe { changed_lines(curbuf.get(), first, 0, last, 0, true) };
+        changed_lines(cur_buf(), first, 0, last, 0, true);
     }
 }
 
@@ -275,7 +275,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
     let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, line) };
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
     while vcol < oap.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -329,7 +329,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
             }
         } else {
             // Walk on to the block's right edge.
-            cstype = unsafe { init_charsize_arg(&mut csarg, curwin.get(), lnum, line) };
+            cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;

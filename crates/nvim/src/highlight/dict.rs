@@ -23,9 +23,9 @@ use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm,
-    KeySetLink, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
+    Arena, Boolean, Dict, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
+    KeyDict_highlight_cterm, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
 };
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
@@ -517,10 +517,7 @@ pub unsafe fn dict2hlattrs(
         // amending them: what it does not name is off.
         if is_set(dict, key::CTERM) {
             let mut cterm = KeyDict_highlight_cterm::default();
-            let field = Some(
-                key_dict_highlight_cterm_get_field
-                    as unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
-            );
+            let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
             let target = (&raw mut cterm).cast();
             if !api_dict_to_keydict(target, field, dict.cterm, err) {
                 return HLATTRS_INIT;

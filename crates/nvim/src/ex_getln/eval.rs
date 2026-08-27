@@ -14,15 +14,6 @@ use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
 use crate::types::{ExpandContext, FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
 
-/// The command line being edited, whether or not it holds any text.
-///
-/// Unlike [`get_ccline_ptr`] this is the raw `ccline` static: it is what the
-/// redraw and completion code needs, which runs while `cmdbuff` is still
-/// being built.
-pub fn get_cmdline_info() -> *mut CmdlineInfo {
-    Cc::current().raw()
-}
-
 /// Whether a command line is being edited at all: C's
 /// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`
 /// can ask now that the buffer is owned.

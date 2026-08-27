@@ -44,12 +44,12 @@ pub unsafe fn diff_redraw(dofold: bool) {
             wp_other = Some(wp);
         }
         // SAFETY: a live window, here and in the two calls below.
-        if dofold && unsafe { foldmethod_is_diff(wp.raw()) } {
-            unsafe { fold_update_all(wp.raw()) };
+        if dofold && foldmethod_is_diff(wp) {
+            fold_update_all(wp);
         }
         // Only the current window's topfill may *grow*, and only up
         // to what the block at its topline needs.
-        let n = unsafe { diff_check_fill(wp.raw(), wp.w_topline) };
+        let n = diff_check_fill(wp, wp.w_topline);
         if !wp.is_current() && wp.w_topfill > 0 || n > 0 {
             if wp.w_topfill > n {
                 wp.w_topfill = n.max(0);
@@ -78,7 +78,7 @@ pub unsafe fn diff_redraw(dofold: bool) {
         };
         if let Some((from, to)) = pair {
             // SAFETY: both windows are live.
-            unsafe { diff_set_topline(from.raw(), to.raw()) };
+            diff_set_topline(from, to);
         }
     }
 }
@@ -91,14 +91,8 @@ pub unsafe fn diff_redraw(dofold: bool) {
 /// The two are independent: a line can carry filler *and* be changed.
 ///
 /// # Safety
-/// `wp` must be a live window, and `linestatus` null or writable.
-pub unsafe fn diff_check_with_linestatus(
-    wp: *mut win_T,
-    lnum: linenr_T,
-    linestatus: *mut c_int,
-) -> c_int {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+/// `linestatus` must be null or writable.
+pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: linenr_T, linestatus: *mut c_int) -> c_int {
     let set_status = |status| {
         if !linestatus.is_null() {
             // SAFETY: the caller's out-parameter, and it is not null.
@@ -123,7 +117,7 @@ pub unsafe fn diff_check_with_linestatus(
         return 0;
     }
     // SAFETY: a live buffer and a live tab page.
-    let idx = unsafe { diff_buf_idx(buf.raw(), tp.raw()) };
+    let idx = diff_buf_idx(buf, tp);
     if idx == DB_COUNT {
         return 0;
     }
@@ -215,13 +209,12 @@ pub unsafe fn diff_check_with_linestatus(
 /// The number of filler lines above `lnum`, or 0 when `'diffopt'` has no
 /// `filler`.
 ///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn diff_check_fill(wp: *mut win_T, lnum: linenr_T) -> c_int {
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub fn diff_check_fill(wp: Win, lnum: linenr_T) -> c_int {
     if diff_flags.get() & DIFF_FILLER == 0 {
         return 0;
     }
-    // SAFETY: the caller's window; no status is asked for.
+    // SAFETY: no status is asked for, so there is nothing to write through.
     unsafe { diff_check_with_linestatus(wp, lnum, ::core::ptr::null_mut()) }.max(0)
 }
 
@@ -230,11 +223,8 @@ pub unsafe fn diff_check_fill(wp: *mut win_T, lnum: linenr_T) -> c_int {
 /// Unchanged, and further than `'diffopt'`'s `context:` from any change.  A
 /// window whose buffer is the only one in the diff folds nothing.
 ///
-/// # Safety
-/// `wp` must be a live window.
-pub unsafe fn diff_infold(wp: *mut win_T, lnum: linenr_T) -> bool {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+/// Safe: a [`Win`] carries the whole of the promise this needs.
+pub fn diff_infold(wp: Win, lnum: linenr_T) -> bool {
     if wp.w_onebuf_opt.wo_diff == 0 {
         return false;
     }
@@ -286,7 +276,7 @@ pub(crate) unsafe fn diff_fold_update(dp: *mut diff_T, skip_idx: c_int) {
         for i in 0..DB_COUNT as usize {
             if tp.tp_diffbuf[i] == wp.w_buffer && i as c_int != skip_idx {
                 // SAFETY: a live window.
-                unsafe { fold_update(wp.raw(), dp.df_lnum[i], dp.end(i)) };
+                fold_update(wp, dp.df_lnum[i], dp.end(i));
             }
         }
     }
@@ -303,7 +293,7 @@ pub unsafe fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     //
     // SAFETY: the caller's cells, and the current window is live.
     unsafe {
-        let fill = diff_check_fill(cur_win().raw(), tv_get_lnum(argvars));
+        let fill = diff_check_fill(cur_win(), tv_get_lnum(argvars));
         (*rettv).vval.v_number = fill as varnumber_T;
     }
 }

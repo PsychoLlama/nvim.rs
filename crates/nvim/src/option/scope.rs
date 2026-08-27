@@ -19,7 +19,6 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
-use core::ptr;
 
 use crate::main::{curbuf, curwin};
 use crate::message::iemsg;
@@ -91,10 +90,11 @@ impl From<*mut *mut c_char> for OptSlot {
 }
 
 impl OptSlot {
-    /// The slot a raw `varp` is, given the option whose variable it is.
-    /// The boundary in the other direction, for the C-shaped frames that
-    /// still carry a `void *`.
-    pub(crate) fn from_raw(opt_idx: OptIndex, varp: *mut c_void) -> Self {
+    /// The slot a raw `varp` is, given the option whose variable it is. The
+    /// last untyped edge: [`option_default_var`] answers the address of a
+    /// hidden option's own default, which is a `void *` because the defaults
+    /// table is one union per row.
+    fn from_raw(opt_idx: OptIndex, varp: *mut c_void) -> Self {
         if varp.is_null() {
             return OptSlot::None;
         }
@@ -103,18 +103,6 @@ impl OptSlot {
             kOptValTypeNumber => OptSlot::Number(varp.cast::<OptInt>()),
             kOptValTypeString => OptSlot::String(varp.cast::<*mut c_char>()),
             type_0 => unreachable!("option value type {type_0}"),
-        }
-    }
-
-    /// The address, for `optset_T.os_varp` and `optexpand_T.oe_varp` — the
-    /// two frames handed to the `did_set_*`/`opt_expand_cb` callbacks,
-    /// which are still shaped the way C left them.
-    pub(crate) fn addr(self) -> *mut c_void {
-        match self {
-            OptSlot::None => ptr::null_mut(),
-            OptSlot::Boolean(var) => var.cast::<c_void>(),
-            OptSlot::Number(var) => var.cast::<c_void>(),
-            OptSlot::String(var) => var.cast::<c_void>(),
         }
     }
 

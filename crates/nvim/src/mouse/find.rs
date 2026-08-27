@@ -227,7 +227,7 @@ pub(crate) fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, 
     let line = unsafe { win.buffer().line(lnum) };
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window and a NUL-terminated line of its buffer.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, win.raw(), lnum, line.raw()) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, line.raw()) };
     let mut ci = line.first_char();
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column.

@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::winlayer::Win;
-use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::CHAR_DISPLAY_LEN;
@@ -183,8 +182,8 @@ fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (linenr_T, linen
     } else {
         (cur_win().w_cursor.lnum, sel.anchor.lnum)
     };
-    unsafe { has_folding(curwin.get(), top, &raw mut top, ptr::null_mut()) };
-    unsafe { has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot) };
+    has_folding(unsafe { Win::current() }, top, Some(&mut top), None);
+    has_folding(unsafe { Win::current() }, bot, None, Some(&mut bot));
     (top, bot)
 }
 
@@ -203,7 +202,7 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     let win = cur_win();
     let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
     let (l, r) = (&raw mut leftcol, &raw mut rightcol);
-    unsafe { getvcols(win.raw(), cursor, other, l, r) };
+    unsafe { getvcols(win, cursor, other, l, r) };
     p_sbr.set(saved_sbr);
     cur_win().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
@@ -281,7 +280,7 @@ pub(crate) fn clear_showcmd() {
         return;
     }
     // SAFETY: reads the typeahead state.
-    if let Some(sel) = visual_selection().filter(|_| !unsafe { char_avail() }) {
+    if let Some(sel) = visual_selection().filter(|_| !char_avail()) {
         show_visual_size(sel);
     } else {
         showcmd_buf.set(ShowCmd::new());
@@ -335,7 +334,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     showcmd_buf.set(sc);
 
     // SAFETY: reads the typeahead state.
-    if unsafe { char_avail() } {
+    if char_avail() {
         return false;
     }
     display_showcmd();
@@ -358,7 +357,7 @@ pub(crate) fn del_from_showcmd(len: c_int) {
     sc.truncate(sc.len.saturating_sub(len as usize));
     showcmd_buf.set(sc);
     // SAFETY: reads the typeahead state.
-    if !unsafe { char_avail() } {
+    if !char_avail() {
         display_showcmd();
     }
 }

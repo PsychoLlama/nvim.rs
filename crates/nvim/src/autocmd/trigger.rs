@@ -13,6 +13,7 @@
 use super::*;
 use crate::smsg_c;
 use crate::types::{FAIL, OK, OptionSetFlags};
+use crate::winlayer::Buf;
 
 /// A `multiqueue` event's argument vector with nothing in it.
 const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
@@ -27,37 +28,49 @@ pub unsafe fn do_doautocmd(
     do_msg: bool,
     did_something: *mut bool,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let mut arg = arg_start;
-        let mut nothing_done = true;
+    let mut arg = arg_start;
+    let mut nothing_done = true;
 
-        if !did_something.is_null() {
-            *did_something = false;
-        }
+    if !did_something.is_null() {
+        // SAFETY: a writable `bool`, by the contract above.
+        unsafe { *did_something = false };
+    }
 
-        // A leading word that is not a group name stays part of the events.
-        let group = arg_augroup_get(&raw mut arg);
+    // A leading word that is not a group name stays part of the events.
+    // SAFETY: `arg` is the caller's NUL-terminated argument, and
+    // `arg_augroup_get` advances it past any group name.
+    let group = unsafe { arg_augroup_get(&raw mut arg) };
 
-        if *arg == b'*' as ::core::ffi::c_char {
+    // SAFETY: still inside the caller's NUL-terminated argument.
+    if unsafe { *arg } == b'*' as ::core::ffi::c_char {
+        // SAFETY: a NUL-terminated message literal.
+        unsafe {
             emsg(gettext(
                 c"E217: Can't execute autocommands for ALL events".as_ptr(),
-            ));
-            return FAIL;
-        }
+            ))
+        };
+        return FAIL;
+    }
 
-        // Validate every event name before running any of them.
-        let fname = arg_event_skip(arg, group != AUGROUP_ALL);
-        if fname.is_null() {
-            return FAIL;
-        }
-        let fname = skipwhite(fname);
+    // Validate every event name before running any of them.
+    // SAFETY: as above.
+    let fname = unsafe { arg_event_skip(arg, group != AUGROUP_ALL) };
+    if fname.is_null() {
+        return FAIL;
+    }
+    // SAFETY: `arg_event_skip` answered a pointer into the same string.
+    let fname = unsafe { skipwhite(fname) };
 
-        while *arg != 0
-            && ends_excmd(*arg as ::core::ffi::c_int) == 0
-            && !ascii_iswhite(*arg as ::core::ffi::c_int)
-        {
-            // `event_name2nr` is what advances `arg` to the next event.
-            if apply_autocmds_group(
+    // SAFETY: `arg` stays inside the caller's NUL-terminated argument, and
+    // `event_name2nr` is what advances it to the next event.
+    while unsafe { *arg } != 0
+        && unsafe { ends_excmd(*arg as ::core::ffi::c_int) } == 0
+        && !unsafe { ascii_iswhite(*arg as ::core::ffi::c_int) }
+    {
+        // SAFETY: the event name at `arg`, the file name beside it, and
+        // `curbuf`, which is live from startup to exit.
+        let ran = unsafe {
+            apply_autocmds_group(
                 event_name2nr(arg, &raw mut arg),
                 fname,
                 ::core::ptr::null_mut(),
@@ -66,24 +79,29 @@ pub unsafe fn do_doautocmd(
                 curbuf.get(),
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
-            ) {
-                nothing_done = false;
-            }
+            )
+        };
+        if ran {
+            nothing_done = false;
         }
+    }
 
-        if nothing_done && do_msg && !aborting() {
+    if nothing_done && do_msg && !aborting() {
+        // SAFETY: a NUL-terminated format literal and the caller's argument.
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"No matching autocommands: %s".as_ptr()),
                 arg_start,
-            );
-        }
-        if !did_something.is_null() {
-            *did_something = !nothing_done;
-        }
-
-        if aborting() { FAIL } else { OK }
+            )
+        };
     }
+    if !did_something.is_null() {
+        // SAFETY: a writable `bool`, by the contract above.
+        unsafe { *did_something = !nothing_done };
+    }
+
+    if aborting() { FAIL } else { OK }
 }
 
 /// `:doautoall`: run the event in every loaded buffer, the current one
@@ -94,48 +112,59 @@ pub unsafe fn do_doautocmd(
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
 pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
-    unsafe {
-        let mut aco = aco_save_T::default();
-        let mut arg = (*eap).arg;
-        let call_do_modelines = check_nomodeline(&raw mut arg);
-        let mut bufref = bufref_T::default();
-        let mut did_aucmd = false;
+    let mut aco = aco_save_T::default();
+    // SAFETY: a live command block, by the contract above, and
+    // `check_nomodeline` only advances `arg` inside its own argument.
+    let mut arg = unsafe { (*eap).arg };
+    let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
+    let mut bufref = bufref_T::default();
+    let mut did_aucmd = false;
 
-        let mut retval = OK;
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            // Loaded buffers only, and the current one is done last.
-            if !(*buf).b_ml.ml_mfp.is_null() && buf != curbuf.get() {
-                aucmd_prepbuf(&raw mut aco, buf);
-                set_bufref(&raw mut bufref, buf);
+    let mut retval = OK;
+    let mut buf = firstbuf.get();
+    while !buf.is_null() {
+        // Loaded buffers only, and the current one is done last.
+        // SAFETY: `buf` is a live buffer of the editor's own list -- either
+        // the head, or a `b_next` reached below only after `bufref_valid`
+        // proved this pass did not delete it.
+        if !unsafe { (*buf).b_ml.ml_mfp }.is_null() && buf != curbuf.get() {
+            // SAFETY: `aco` and `bufref` are this frame's own storage, and
+            // `buf` is live as above.
+            unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+            unsafe { set_bufref(&raw mut bufref, buf) };
 
-                retval = do_doautocmd(arg, false, &raw mut did_aucmd);
+            // SAFETY: `arg` is the command's own argument and `did_aucmd`
+            // this frame's own `bool`.
+            retval = unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
 
-                if call_do_modelines && did_aucmd {
-                    // Don't set window-local options when the window we are
-                    // in belongs to another buffer.
-                    do_modelines(if is_aucmd_win(curwin.get()) {
-                        OptionSetFlags::NOWIN
-                    } else {
-                        OptionSetFlags::NONE
-                    });
-                }
-                aucmd_restbuf(&raw mut aco);
-
-                // Stop on an error, or if the buffer was deleted under us.
-                if retval == FAIL || !bufref_valid(&raw mut bufref) {
-                    retval = FAIL;
-                    break;
-                }
-            }
-            buf = (*buf).b_next;
-        }
-
-        if retval == OK {
-            do_doautocmd(arg, false, &raw mut did_aucmd);
             if call_do_modelines && did_aucmd {
-                do_modelines(OptionSetFlags::NONE);
+                // Don't set window-local options when the window we are
+                // in belongs to another buffer.
+                do_modelines(if is_aucmd_win(curwin.get()) {
+                    OptionSetFlags::NOWIN
+                } else {
+                    OptionSetFlags::NONE
+                });
             }
+            // SAFETY: the `aucmd_prepbuf` above opened this pair.
+            unsafe { aucmd_restbuf(&raw mut aco) };
+
+            // Stop on an error, or if the buffer was deleted under us.
+            // SAFETY: `bufref` is this frame's own.
+            if retval == FAIL || !unsafe { bufref_valid(&raw mut bufref) } {
+                retval = FAIL;
+                break;
+            }
+        }
+        // SAFETY: `buf` survived this pass, as the `break` above ensures.
+        buf = unsafe { (*buf).b_next };
+    }
+
+    if retval == OK {
+        // SAFETY: as above.
+        unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+        if call_do_modelines && did_aucmd {
+            do_modelines(OptionSetFlags::NONE);
         }
     }
 }
@@ -149,105 +178,134 @@ pub unsafe fn aucmd_defer(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
-    buf: *mut buf_T,
+    buf: Buf,
     eap: *mut exarg_T,
     data: *mut Object,
 ) {
-    unsafe {
-        let dup = |s: *mut ::core::ffi::c_char| {
-            if s.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                xstrdup(s)
-            }
-        };
+    // SAFETY: `fname`/`fname_io` are the caller's NUL-terminated names or
+    // NULL, so each is either copied or passed through as NULL.
+    let dup = |s: *mut ::core::ffi::c_char| {
+        if s.is_null() {
+            ::core::ptr::null_mut()
+        } else {
+            unsafe { xstrdup(s) }
+        }
+    };
 
-        let evdata = xmalloc(::core::mem::size_of::<AutoCmdEvent>()).cast::<AutoCmdEvent>();
-        (*evdata).event = event;
-        (*evdata).fname = dup(fname);
-        (*evdata).fname_io = dup(fname_io);
-        (*evdata).group = group;
-        (*evdata).buf = (*buf).handle as Buffer;
-        (*evdata).eap = eap;
+    // SAFETY: a fresh allocation, every field written before anything reads
+    // it, and handed straight to the queue that owns it from here on.
+    let evdata = unsafe { xmalloc(::core::mem::size_of::<AutoCmdEvent>()) }.cast::<AutoCmdEvent>();
+    unsafe { (*evdata).event = event };
+    unsafe { (*evdata).fname = dup(fname) };
+    unsafe { (*evdata).fname_io = dup(fname_io) };
+    unsafe { (*evdata).group = group };
+    // The *handle* is stored, not the pointer: the buffer may be gone by the
+    // time the queued event runs, and `deferred_event` looks it up again.
+    unsafe { (*evdata).buf = buf.handle as Buffer };
+    unsafe { (*evdata).eap = eap };
+    // SAFETY: `data` is the caller's object or NULL; the copy is owned by
+    // the event from here on.
+    unsafe {
         (*evdata).data = if data.is_null() {
             ::core::ptr::null_mut()
         } else {
             let copy = xmalloc(::core::mem::size_of::<Object>()).cast::<Object>();
             *copy = copy_object(*data, ::core::ptr::null_mut());
             copy
-        };
+        }
+    };
 
-        let mut argv = NO_ARGV;
-        argv[0] = evdata.cast::<::core::ffi::c_void>();
+    let mut argv = NO_ARGV;
+    argv[0] = evdata.cast::<::core::ffi::c_void>();
+    // SAFETY: the queue is the editor's own and takes ownership of `evdata`.
+    unsafe {
         multiqueue_put_event(
             deferred_events.get(),
             Event {
                 handler: Some(deferred_event),
                 argv,
             },
-        );
-    }
+        )
+    };
 }
 
 /// Run a queued [`aucmd_defer`] event, and free everything it copied.
 unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
-    unsafe {
-        let e = (*argv).cast::<AutoCmdEvent>();
-        let event = (*e).event;
-        let fname = (*e).fname;
-        let fname_io = (*e).fname_io;
-        let group = (*e).group;
-        let eap = (*e).eap;
-        let data = (*e).data;
+    // SAFETY: the event `aucmd_defer` queued, whose payload it owns until
+    // this call frees it below.
+    let e = unsafe { *argv }.cast::<AutoCmdEvent>();
+    let event = unsafe { (*e).event };
+    let fname = unsafe { (*e).fname };
+    let fname_io = unsafe { (*e).fname_io };
+    let group = unsafe { (*e).group };
+    let eap = unsafe { (*e).eap };
+    let data = unsafe { (*e).data };
 
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut(),
-        };
-        // The buffer may well have gone since the event was queued.
-        let buf = find_buffer_by_handle((*e).buf, &raw mut err);
-        if !buf.is_null() {
-            let mut save_v_event = save_v_event_T::default();
-            let v_event = get_v_event(&raw mut save_v_event);
-            if !data.is_null() && (*data).type_0 == kObjectTypeDict {
-                let items = (*data).data.dict;
-                for i in 0..items.size {
-                    let item = *items.items.add(i);
-                    let mut tv = TV_INITIAL_VALUE;
-                    object_to_vim(item.value, &raw mut tv, &raw mut err);
-                    // A value `v:event` cannot hold is dropped, not fatal.
-                    if err.type_0 == kErrorTypeNone {
-                        tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &raw mut tv);
-                        tv_clear(&raw mut tv);
-                    } else {
-                        api_clear_error(&raw mut err);
-                    }
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ::core::ptr::null_mut(),
+    };
+    // The buffer may well have gone since the event was queued, which is
+    // why the *handle* was stored and is resolved here.
+    // SAFETY: `err` is this frame's own.
+    let buf = unsafe { find_buffer_by_handle((*e).buf, &raw mut err) };
+    if !buf.is_null() {
+        let mut save_v_event = save_v_event_T::default();
+        // SAFETY: `save_v_event` is this frame's own storage, and the
+        // dictionary is `v:event`, live until `restore_v_event` below.
+        let v_event = unsafe { get_v_event(&raw mut save_v_event) };
+        if !data.is_null() && unsafe { (*data).type_0 } == kObjectTypeDict {
+            // SAFETY: the tag above says the dict arm of the union is live,
+            // and `size` is that dict's own item count.
+            let items = unsafe { (*data).data.dict };
+            for i in 0..items.size {
+                let item = unsafe { *items.items.add(i) };
+                let mut tv = TV_INITIAL_VALUE;
+                // SAFETY: `tv` and `err` are this frame's own.
+                unsafe { object_to_vim(item.value, &raw mut tv, &raw mut err) };
+                // A value `v:event` cannot hold is dropped, not fatal.
+                if err.type_0 == kErrorTypeNone {
+                    // SAFETY: `v_event` is that dictionary and `item.key` is
+                    // the dict entry's own name of the length given.
+                    unsafe {
+                        tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &raw mut tv)
+                    };
+                    unsafe { tv_clear(&raw mut tv) };
+                } else {
+                    unsafe { api_clear_error(&raw mut err) };
                 }
             }
-            tv_dict_set_keys_readonly(v_event);
-
-            let mut aco = aco_save_T::default();
-            aucmd_prepbuf(&raw mut aco, buf);
-            apply_autocmds_group(event, fname, fname_io, false, group, buf, eap, data);
-            aucmd_restbuf(&raw mut aco);
-            restore_v_event(v_event, &raw mut save_v_event);
         }
+        // SAFETY: `v_event` is that dictionary.
+        unsafe { tv_dict_set_keys_readonly(v_event) };
 
-        xfree(fname.cast::<::core::ffi::c_void>());
-        xfree(fname_io.cast::<::core::ffi::c_void>());
-        if !data.is_null() {
-            api_free_object(*data);
-            xfree(data.cast::<::core::ffi::c_void>());
-        }
-        xfree(e.cast::<::core::ffi::c_void>());
+        let mut aco = aco_save_T::default();
+        // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
+        // the `prepbuf`/`restbuf` pair brackets the firing.
+        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, buf, eap, data) };
+        unsafe { aucmd_restbuf(&raw mut aco) };
+        // SAFETY: the pair `get_v_event` above opened.
+        unsafe { restore_v_event(v_event, &raw mut save_v_event) };
     }
+
+    // SAFETY: everything `aucmd_defer` copied, owned by this event alone.
+    unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
+    unsafe { xfree(fname_io.cast::<::core::ffi::c_void>()) };
+    if !data.is_null() {
+        unsafe { api_free_object(*data) };
+        unsafe { xfree(data.cast::<::core::ffi::c_void>()) };
+    }
+    unsafe { xfree(e.cast::<::core::ffi::c_void>()) };
 }
 
 /// Fire `TermResponse` with the terminal's reply in `v:event.sequence`.
 pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
+    let mut data = DictBuf::<1>::new();
+    let mut event_data = data.insert(c"sequence", Object::string(sequence)).object();
+    // SAFETY: no file name and no buffer; `event_data` is this frame's own
+    // and outlives the call.
     unsafe {
-        let mut data = DictBuf::<1>::new();
-        let mut event_data = data.insert(c"sequence", Object::string(sequence)).object();
         apply_autocmds_group(
             EVENT_TERMRESPONSE,
             ::core::ptr::null_mut(),
@@ -257,14 +315,16 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             &raw mut event_data,
-        );
-        termresponse_changed.set(true);
-    }
+        )
+    };
+    termresponse_changed.set(true);
 }
 
 /// The queued half of [`may_trigger_vim_suspend_resume`]: `VimResume` has
 /// to fire from the event loop, not from the signal handler's caller.
 unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
+    // SAFETY: no file name and no buffer, so there is nothing for the event
+    // to read but the editor's own autocommand tables.
     unsafe {
         apply_autocmds(
             EVENT_VIMRESUME,
@@ -272,55 +332,67 @@ unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
             ::core::ptr::null_mut(),
             false,
             ::core::ptr::null_mut(),
-        );
-        pending_vimresume.set(SuspendLatch::Idle);
-    }
+        )
+    };
+    pending_vimresume.set(SuspendLatch::Idle);
 }
 
 /// Fire `VimSuspend`/`VimResume`, at most once per suspension.
 ///
 /// [`SuspendLatch`] is what makes that true.
-pub unsafe fn may_trigger_vim_suspend_resume(suspend: bool) {
-    unsafe {
-        if suspend && pending_vimresume.get() == SuspendLatch::Idle {
-            pending_vimresume.set(SuspendLatch::Firing);
+pub fn may_trigger_vim_suspend_resume(suspend: bool) {
+    if suspend && pending_vimresume.get() == SuspendLatch::Idle {
+        pending_vimresume.set(SuspendLatch::Firing);
+        // SAFETY: no file name and no buffer, so there is nothing for the
+        // event to read but the editor's own autocommand tables.
+        unsafe {
             apply_autocmds(
                 EVENT_VIMSUSPEND,
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
                 ::core::ptr::null_mut(),
-            );
-            pending_vimresume.set(SuspendLatch::ResumeOwed);
-        } else if !suspend && pending_vimresume.get() == SuspendLatch::ResumeOwed {
-            pending_vimresume.set(SuspendLatch::Firing);
+            )
+        };
+        pending_vimresume.set(SuspendLatch::ResumeOwed);
+    } else if !suspend && pending_vimresume.get() == SuspendLatch::ResumeOwed {
+        pending_vimresume.set(SuspendLatch::Firing);
+        // SAFETY: `main_loop` is the editor's own loop, live from startup to
+        // exit, and the event carries no arguments to outlive it.
+        unsafe {
             multiqueue_put_event(
                 (*main_loop.ptr()).events,
                 Event {
                     handler: Some(vimresume_event),
                     argv: NO_ARGV,
                 },
-            );
-        }
+            )
+        };
     }
 }
 
 /// Fire `UIEnter`/`UILeave` for the channel that attached or detached.
-pub unsafe fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
+pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false);
+
+    if starting.get() == NO_SCREEN || recursive.get() {
+        return;
+    }
+    recursive.set(true);
+
+    let mut save_v_event = save_v_event_T::default();
+    // SAFETY: `save_v_event` is this frame's own storage, and the dictionary
+    // `get_v_event` hands back is `v:event`, live until `restore_v_event`.
+    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    debug_assert!(chanid < varnumber_T::MAX as uint64_t);
+    // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
+    // literal of the length given.
+    unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T) };
+    // SAFETY: as above.
+    unsafe { tv_dict_set_keys_readonly(dict) };
+
+    // SAFETY: no file name, and `curbuf` is live from startup to exit.
     unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false);
-
-        if starting.get() == NO_SCREEN || recursive.get() {
-            return;
-        }
-        recursive.set(true);
-
-        let mut save_v_event = save_v_event_T::default();
-        let dict = get_v_event(&raw mut save_v_event);
-        debug_assert!(chanid < varnumber_T::MAX as uint64_t);
-        tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T);
-        tv_dict_set_keys_readonly(dict);
-
         apply_autocmds(
             if attached {
                 EVENT_UIENTER
@@ -331,25 +403,27 @@ pub unsafe fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
             ::core::ptr::null_mut(),
             false,
             curbuf.get(),
-        );
-        restore_v_event(dict, &raw mut save_v_event);
+        )
+    };
+    // SAFETY: the pair `get_v_event` above opened.
+    unsafe { restore_v_event(dict, &raw mut save_v_event) };
 
-        recursive.set(false);
-    }
+    recursive.set(false);
 }
 
 /// Fire `FocusGained`/`FocusLost`, and re-check file timestamps on a gain
 /// -- but not more often than every two seconds.
-pub unsafe fn do_autocmd_focusgained(gained: bool) {
+pub fn do_autocmd_focusgained(gained: bool) {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false);
+    static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
+
+    if recursive.get() {
+        return;
+    }
+    recursive.set(true);
+
+    // SAFETY: no file name, and `curbuf` is live from startup to exit.
     unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false);
-        static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
-
-        if recursive.get() {
-            return;
-        }
-        recursive.set(true);
-
         apply_autocmds(
             if gained {
                 EVENT_FOCUSGAINED
@@ -360,14 +434,16 @@ pub unsafe fn do_autocmd_focusgained(gained: bool) {
             ::core::ptr::null_mut(),
             false,
             curbuf.get(),
-        );
-        if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
-            check_timestamps(1);
-            last_time.set(os_now());
-        }
-
-        recursive.set(false);
+        )
+    };
+    if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
+        // SAFETY: re-checks the buffer list's timestamps; nothing here holds
+        // a borrow of editor state across it.
+        unsafe { check_timestamps(1) };
+        last_time.set(os_now());
     }
+
+    recursive.set(false);
 }
 
 /// Fire `FileType` for `buf`, with `secure` cleared and recursion counted.
@@ -375,29 +451,31 @@ pub unsafe fn do_autocmd_focusgained(gained: bool) {
 /// A nested `FileType` only fires when `force` says so; the *inner* one
 /// then does not `force` the autocommands themselves, which is what the
 /// `ft_recursive == 1` test says.
-pub unsafe fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
-    unsafe {
-        static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
+    static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-        if ft_recursive.get() > 0 && !force {
-            return false;
-        }
-
-        let secure_save = secure.get();
-        secure.set(0);
-        ft_recursive.set(ft_recursive.get() + 1);
-
-        (*buf).b_did_filetype = true;
-        let ret = apply_autocmds(
-            EVENT_FILETYPE,
-            (*buf).b_p_ft,
-            (*buf).b_fname,
-            force || ft_recursive.get() == 1,
-            buf,
-        );
-
-        ft_recursive.set(ft_recursive.get() - 1);
-        secure.set(secure_save);
-        ret
+    if ft_recursive.get() > 0 && !force {
+        return false;
     }
+
+    let secure_save = secure.get();
+    secure.set(0);
+    ft_recursive.set(ft_recursive.get() + 1);
+
+    buf.b_did_filetype = true;
+    // SAFETY: `b_p_ft` and `b_fname` are that buffer's own NUL-terminated
+    // names, and the buffer is live by `Buf`'s contract.
+    let ret = unsafe {
+        apply_autocmds(
+            EVENT_FILETYPE,
+            buf.b_p_ft,
+            buf.b_fname,
+            force || ft_recursive.get() == 1,
+            buf.raw(),
+        )
+    };
+
+    ft_recursive.set(ft_recursive.get() - 1);
+    secure.set(secure_save);
+    ret
 }

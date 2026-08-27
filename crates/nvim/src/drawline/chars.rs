@@ -535,7 +535,7 @@ impl Cells {
 
             let mut csarg = CharsizeArg::default();
             // `lnum` 0: virtual text is not to be counted here.
-            let cstype = init_charsize_arg(&mut csarg, wp, 0, self.line);
+            let cstype = init_charsize_arg(&mut csarg, Win::new(wp), 0, self.line);
             wlv.extra_todo =
                 win_charsize(cstype, wlv.vcol, p, utf_ptr2char_info(p).value, &mut csarg).width - 1;
 

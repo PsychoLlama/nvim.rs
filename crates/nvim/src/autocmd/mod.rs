@@ -9,7 +9,7 @@ use crate::api::private::helpers::{
     find_buffer_by_handle,
 };
 use crate::ascii::ascii_iswhite;
-use crate::buffer::{bt_prompt, buflist_findnr, bufref_valid, do_modelines, set_bufref};
+use crate::buffer::{bt_prompt, bufref_valid, do_modelines, find_buf, set_bufref};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::typval::{
@@ -78,7 +78,7 @@ use crate::window::{
     win_init_empty, win_remove,
 };
 use crate::winfloat::win_config_float;
-use crate::winlayer::{Win, forget_window, free_deferred, register_window};
+use crate::winlayer::{forget_window, free_deferred, register_window};
 use ::libc::{abort, atoi, strcasecmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -287,28 +287,31 @@ unsafe fn map_put_string_int(
     mut key: String_0,
     mut value: ::core::ffi::c_int,
 ) {
-    unsafe {
-        let mut val: *mut ::core::ffi::c_int = map_put_ref_string_int(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut String_0>(),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
+    // The two out-parameters `map_put_ref` offers -- the key it took
+    // ownership of, and whether the entry is new -- are both unwanted here.
+    let no_key_out = ::core::ptr::null_mut::<*mut String_0>();
+    let no_new_item_out = ::core::ptr::null_mut::<bool>();
+    // SAFETY: `map` points at a live `Map_String_int` and `key` is a string
+    // it may take; null out-parameters are how they are declined.
+    let val = unsafe { map_put_ref_string_int(map, key, no_key_out, no_new_item_out) };
+    // SAFETY: `val` is the value slot the map just handed back, which stays
+    // valid until the map is next changed -- and nothing changes it here.
+    unsafe { *val = value };
 }
 #[inline]
 unsafe fn map_get_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let mut k: uint32_t = mh_get_string(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE as uint32_t {
-            value_init_int.get()
-        } else {
-            *(*map).values.offset(k as isize)
-        }
+    // SAFETY: `map` points at a live `Map_String_int`, so `&raw mut` on its
+    // `set` field is in bounds; `key` is only borrowed for the lookup.
+    let k: uint32_t = unsafe { mh_get_string(&raw mut (*map).set, key) };
+    if k == MH_TOMBSTONE as uint32_t {
+        value_init_int.get()
+    } else {
+        // SAFETY: not a tombstone, so `k` is the index into `values` that
+        // the lookup just answered.
+        unsafe { *(*map).values.offset(k as isize) }
     }
 }
 #[inline]
@@ -317,28 +320,31 @@ unsafe fn map_put_int_string(
     mut key: ::core::ffi::c_int,
     mut value: String_0,
 ) {
-    unsafe {
-        let mut val: *mut String_0 = map_put_ref_int_string(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
+    // Both of `map_put_ref`'s out-parameters are unwanted here; see
+    // [`map_put_string_int`].
+    let no_key_out = ::core::ptr::null_mut::<*mut ::core::ffi::c_int>();
+    let no_new_item_out = ::core::ptr::null_mut::<bool>();
+    // SAFETY: `map` points at a live `Map_int_String`; null out-parameters
+    // are how they are declined.
+    let val = unsafe { map_put_ref_int_string(map, key, no_key_out, no_new_item_out) };
+    // SAFETY: `val` is the value slot the map just handed back, which stays
+    // valid until the map is next changed -- and nothing changes it here.
+    unsafe { *val = value };
 }
 #[inline]
 unsafe fn map_get_int_string(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
 ) -> String_0 {
-    unsafe {
-        let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE as uint32_t {
-            value_init_String.get()
-        } else {
-            *(*map).values.offset(k as isize)
-        }
+    // SAFETY: `map` points at a live `Map_int_String`, so `&raw mut` on its
+    // `set` field is in bounds.
+    let k: uint32_t = unsafe { mh_get_int(&raw mut (*map).set, key) };
+    if k == MH_TOMBSTONE as uint32_t {
+        value_init_String.get()
+    } else {
+        // SAFETY: not a tombstone, so `k` is the index into `values` that
+        // the lookup just answered.
+        unsafe { *(*map).values.offset(k as isize) }
     }
 }
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
@@ -370,10 +376,13 @@ static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_
     },
     values: ::core::ptr::null_mut::<String_0>(),
 });
-pub unsafe fn autocmd_init() {
-    unsafe {
-        deferred_events.set(multiqueue_new_child((*main_loop.ptr()).events));
-    }
+/// Safe: it takes nothing, and the event loop it hangs the deferred-event
+/// queue off is live from startup to exit.
+pub fn autocmd_init() {
+    // SAFETY: `main_loop` is initialised before this is reached, so reading
+    // its `events` queue and giving it a child are both on a live loop.
+    let child = unsafe { multiqueue_new_child((*main_loop.ptr()).events) };
+    deferred_events.set(child);
 }
 /// Where the `VimSuspend`/`VimResume` pair has got to.
 ///

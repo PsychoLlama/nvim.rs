@@ -110,7 +110,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         if let Some(last) = cur_win().fold_end(cur_win().w_cursor.lnum) {
             cur_win().w_cursor.lnum = last;
             // SAFETY: `cur_win()` is a live window.
-            unsafe { coladvance(cur_win().raw(), MAXCOL) };
+            coladvance(cur_win(), MAXCOL);
         }
         let sclass = cls();
 
@@ -236,7 +236,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
         && VIsual_select_exclu_adj.get()
     {
         // SAFETY: Visual mode is active, with a current window.
-        unsafe { unadjust_for_sel() };
+        unadjust_for_sel();
     }
 
     loop {
@@ -248,7 +248,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
         if let Some(last) = cur_win().fold_end(cur_win().w_cursor.lnum) {
             cur_win().w_cursor.lnum = last;
             // SAFETY: `cur_win()` is a live window.
-            unsafe { coladvance(cur_win().raw(), MAXCOL) };
+            coladvance(cur_win(), MAXCOL);
         }
         let sclass = cls();
         // SAFETY, for every step below: the caller guarantees a current window

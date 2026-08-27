@@ -80,6 +80,7 @@ use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
 use core::ffi::c_int;
 
+use crate::winlayer::Win;
 /// The screen the editor draws into when nothing else claims a grid.
 const DEFAULT_GRID_HANDLE: handle_T = 1;
 
@@ -438,7 +439,7 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
 /// Runs autocommands.
 pub unsafe fn do_autocmd_uienter_all() {
     for ui in each_ui() {
-        unsafe { do_autocmd_uienter((*ui).channel_id, true) };
+        do_autocmd_uienter(unsafe { (*ui).channel_id }, true);
     }
 }
 
@@ -517,7 +518,7 @@ pub unsafe fn ui_detach_impl(ui: *mut RemoteUI, chanid: u64) {
     if !multigrid && !float_debug {
         unsafe { ui_comp_detach(ui) };
     }
-    unsafe { do_autocmd_uienter(chanid, false) };
+    do_autocmd_uienter(chanid, false);
 }
 
 /// Tells `ui` that `ext` changed.
@@ -892,17 +893,20 @@ pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int,
         };
         return;
     }
-    let wp = unsafe { &mut *wp };
+    // SAFETY: `wp` is the window the grid handle names, checked non-null
+    // above.
+    let mut wp = unsafe { Win::new(wp) };
     if wp.w_floating {
         if width != wp.w_width || height != wp.w_height {
             wp.w_config.width = width.max(1);
             wp.w_config.height = height.max(1);
-            unsafe { win_config_float(wp, wp.w_config.clone()) };
+            win_config_float(wp, wp.w_config.clone());
         }
     } else {
         // A split's size is a request: the layout decides what it gets.
         wp.w_height_request = height.max(0);
         wp.w_width_request = width.max(0);
-        unsafe { win_set_inner_size(wp, true) };
+        // SAFETY: a live window.
+        unsafe { win_set_inner_size(wp.raw(), true) };
     }
 }

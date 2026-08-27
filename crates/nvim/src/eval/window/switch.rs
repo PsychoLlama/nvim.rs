@@ -67,7 +67,7 @@ pub unsafe fn win_execute_before(
             }
         }
         if switch_win_noblock(&raw mut args.switchwin, wp, tp, true) == OK {
-            check_cursor(curwin.get());
+            check_cursor(Win::current());
             return true;
         }
     }
@@ -103,9 +103,9 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
                 win.w_redr_status = true;
             }
         }
-        check_cursor(curwin.get());
+        check_cursor(Win::current());
         if visual_active() {
-            with_visual_anchor(|anchor| check_pos(curbuf.get(), anchor));
+            with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
         }
     }
 }

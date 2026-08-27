@@ -81,9 +81,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 ins_ctrl_o();
                 // Don't move the cursor left when 'virtualedit' has
                 // "onemore".
-                if unsafe { get_ve_flags(curwin.get()) } & kOptVeFlagOnemore as ::core::ffi::c_uint
-                    != 0
-                {
+                if get_ve_flags(cur_win()) & kOptVeFlagOnemore as ::core::ffi::c_uint != 0 {
                     ins_at_eol.set(false);
                     s.nomove = true;
                 }
@@ -541,10 +539,7 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if !(unsafe { ins_compl_has_autocomplete() }
-        && !unsafe { char_avail() }
-        && cur_win().w_cursor.col > 0)
-    {
+    if !(unsafe { ins_compl_has_autocomplete() } && !char_avail() && cur_win().w_cursor.col > 0) {
         return;
     }
     s.c = unsafe { char_before_cursor() };
@@ -654,7 +649,7 @@ fn insert_normal_char(s: &mut InsertState) {
     unsafe { fold_open_cursor() };
 
     // Autocompletion, on the character just inserted.
-    if unsafe { ins_compl_has_autocomplete() } && !unsafe { char_avail() } && printable(s.c) {
+    if unsafe { ins_compl_has_autocomplete() } && !char_avail() && printable(s.c) {
         start_autocomplete(s);
     }
 }

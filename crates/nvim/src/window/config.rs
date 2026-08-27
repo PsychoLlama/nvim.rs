@@ -138,7 +138,7 @@ fn fdccol_count(wp: Win) -> c_int {
         1
     };
     // SAFETY: a live window.
-    fdccol.min(unsafe { deepest_fold_nesting(wp.raw()) })
+    fdccol.min(deepest_fold_nesting(wp))
 }
 
 pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
@@ -341,10 +341,7 @@ fn anchor_to_window(
     col: &mut Float,
 ) {
     // SAFETY: only compares the pointer against the window list.
-    if parent.w_pos_changed
-        && parent.w_grid_alloc.is_allocated()
-        && unsafe { win_valid(parent.raw()) }
-    {
+    if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.raw()) {
         ext_win_position(parent, validate);
     }
     let mut parent = parent;
@@ -475,10 +472,10 @@ fn text_height(
     end_lnum: &mut linenr_T,
     end_vcol: &mut int64_t,
 ) -> int64_t {
-    let (win, none, all) = (wp.raw(), ptr::null_mut::<int64_t>(), INT64_MAX as int64_t);
-    // SAFETY: a live window, two lines of its buffer, and two out-parameters of
+    let (none, all) = (ptr::null_mut::<int64_t>(), INT64_MAX as int64_t);
+    // SAFETY: two lines of the window's own buffer, and two out-parameters of
     // the caller's.
-    unsafe { win_text_height(win, start_lnum, start_vcol, end_lnum, end_vcol, none, all) }
+    unsafe { win_text_height(wp, start_lnum, start_vcol, end_lnum, end_vcol, none, all) }
 }
 
 // ---------------------------------------------------------------------------

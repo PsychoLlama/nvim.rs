@@ -192,7 +192,7 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
     // window is up to date before it is written.
     //
     // SAFETY: main thread, with a current window and buffer.
-    unsafe { update_topline(curwin.get()) };
+    update_topline(unsafe { Win::current() });
     if must_redraw.get() != 0 {
         // SAFETY: as above.
         unsafe { update_screen() };

@@ -17,7 +17,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, windows};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -48,7 +48,7 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     unsafe { ex_cd(&raw mut ea) };
 }
 
-/// Load `fname` into a dummy buffer and answer it, or null when the file
+/// Load `fname` into a dummy buffer and answer it, or `None` when the file
 /// could not be read. `resulting_dir` is filled with the directory the read
 /// left the editor in, before it is put back to `dirname_start`.
 ///
@@ -60,13 +60,13 @@ pub(crate) unsafe fn load_dummy_buffer(
     fname: *mut c_char,
     dirname_start: *const c_char,
     resulting_dir: *mut c_char,
-) -> *mut buf_T {
+) -> Option<Buf> {
     // SAFETY: forwarded from the caller.
     // Allocate a buffer without putting it in the buffer list.
     let mut newbuf =
         unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
     if newbuf.is_null() {
-        return ptr::null_mut();
+        return None;
     }
 
     let mut failed = true;
@@ -85,7 +85,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.
-        unsafe { setfname(curbuf.get(), fname, ptr::null_mut(), false) };
+        unsafe { setfname(cur_buf(), fname, ptr::null_mut(), false) };
 
         // Create swap file now to avoid the ATTENTION message.
         unsafe { check_need_swap(true) };
@@ -117,7 +117,8 @@ pub(crate) unsafe fn load_dummy_buffer(
 
         if !newbuf_to_wipe.br_buf.is_null() && unsafe { bufref_valid(&raw mut newbuf_to_wipe) } {
             unsafe { block_autocmds() };
-            unsafe { wipe_dummy_buffer(newbuf_to_wipe.br_buf, ptr::null()) };
+            // SAFETY: `bufref_valid` just established the buffer.
+            unsafe { wipe_dummy_buffer(Buf::new(newbuf_to_wipe.br_buf), ptr::null()) };
             unsafe { unblock_autocmds() };
         }
 
@@ -132,13 +133,16 @@ pub(crate) unsafe fn load_dummy_buffer(
     unsafe { restore_start_dir(dirname_start) };
 
     if !unsafe { bufref_valid(&raw mut newbufref) } {
-        return ptr::null_mut();
+        return None;
     }
+    // SAFETY: `bufref_valid` just established the buffer.
+    let newbuf = unsafe { Buf::new(newbuf) };
     if failed {
+        // SAFETY: `dirname_start` is the caller's NUL-terminated string.
         unsafe { wipe_dummy_buffer(newbuf, dirname_start) };
-        return ptr::null_mut();
+        return None;
     }
-    newbuf
+    Some(newbuf)
 }
 
 /// Wipe out the dummy buffer, closing every window that shows it first.
@@ -149,25 +153,19 @@ pub(crate) unsafe fn load_dummy_buffer(
 ///
 /// `buf` must be a live buffer; `dirname_start` must be null or
 /// NUL-terminated.
-pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_char) {
-    // SAFETY: the caller's promise -- a live `buf_T`.
-    let mut buf = unsafe { Buf::new(buf) };
-    // SAFETY: forwarded from the caller.
+pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_char) {
     // Note: `win_close` drops `b_nwindows` behind the raw pointer.
     #[allow(clippy::while_immutable_condition)]
     while buf.b_nwindows > 0 {
         // Only close the window if it is not the last one, and only when
         // closing it actually worked — otherwise this would spin.
         let mut did_one = false;
-        if !unsafe { (*firstwin.get()).w_next.is_null() } {
-            let mut wp = firstwin.get();
-            while !wp.is_null() {
-                if ptr::eq(unsafe { (*wp).w_buffer }, buf.raw().cast_const()) {
-                    did_one = unsafe { win_close(wp, false, false) } == OK;
-                    break;
-                }
-                wp = unsafe { (*wp).w_next };
-            }
+        if windows().nth(1).is_some()
+            && let Some(wp) = windows().find(|wp| ptr::eq(wp.w_buffer, buf.raw()))
+        {
+            // SAFETY: one of the live windows the walk just handed us; the
+            // walk stops here, so it may free that window.
+            did_one = unsafe { win_close(wp.raw(), false, false) } == OK;
         }
         if !did_one {
             // The buffer keeps a window; it can only stop being a dummy.
@@ -185,7 +183,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
             exception: ptr::null_mut(),
         };
         unsafe { enter_cleanup(&raw mut cs) };
-        unsafe { wipe_buffer(buf.raw(), true) };
+        wipe_buffer(buf, true);
         unsafe { leave_cleanup(&raw mut cs) };
 
         // When autocommands/'autochdir' option changed directory: go back.
@@ -203,13 +201,12 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
 ///
 /// # Safety
 ///
-/// `buf` must be a live buffer and `dirname_start` NUL-terminated.
-pub(crate) unsafe fn unload_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_char) {
-    // SAFETY: forwarded from the caller.
-    if ptr::eq(curbuf.get(), buf) {
+/// `dirname_start` must be NUL-terminated.
+pub(crate) unsafe fn unload_dummy_buffer(buf: Buf, dirname_start: *const c_char) {
+    if ptr::eq(curbuf.get(), buf.raw()) {
         return;
     }
-    unsafe { close_buffer(ptr::null_mut(), buf, DOBUF_UNLOAD as c_int, false, true) };
+    close_buffer(None, buf, DOBUF_UNLOAD as c_int, false, true);
 
     // When autocommands/'autochdir' option changed directory: go back.
     unsafe { restore_start_dir(dirname_start) };

@@ -29,10 +29,10 @@ use crate::lua::ffi::{
 };
 use crate::memory::strequal;
 use crate::types::{
-    Arena, Error, KeyDict_xdl_diff, KeySetLink, Object, OptionalKeys, String_0, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
-    kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t,
-    mmfile_t, object_data, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    Arena, Error, KeyDict_xdl_diff, Object, OptionalKeys, String_0, int64_t, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
+    linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t,
+    xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -369,9 +369,7 @@ unsafe fn process_xdl_diff_opts(
         nlua_pop_keydict(
             lstate,
             (&raw mut opts).cast::<c_void>(),
-            Some(
-                key_dict_xdl_diff_get_field as unsafe fn(*const c_char, size_t) -> *mut KeySetLink,
-            ),
+            Some(key_dict_xdl_diff_get_field),
             &raw mut err_param,
             ptr::null_mut::<Arena>(),
             err,

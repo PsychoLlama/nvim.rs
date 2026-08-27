@@ -114,7 +114,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         // SAFETY: the copies occupy the tail of the buffer.
         unsafe {
             changed_lines(
-                curbuf.get(),
+                Buf::new(curbuf.get()),
                 last_line - num_lines + 1,
                 0,
                 last_line + 1,
@@ -154,7 +154,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         // SAFETY: as above.
         unsafe {
             changed_lines(
-                curbuf.get(),
+                Buf::new(curbuf.get()),
                 last_line - num_lines + 1,
                 0,
                 last_line + 1,
@@ -219,9 +219,9 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     // that moved to the last, whichever direction the move went.
     if line1 < dest {
         let end = (dest + num_lines + 1).min(cur_buf().b_ml.ml_line_count + 1);
-        unsafe { changed_lines(curbuf.get(), line1, 0, end, 0, false) };
+        changed_lines(cur_buf(), line1, 0, end, 0, false);
     } else {
-        unsafe { changed_lines(curbuf.get(), dest + 1, 0, line1 + num_lines, 0, false) };
+        changed_lines(cur_buf(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
     unsafe { buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t) };
@@ -337,7 +337,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     unsafe { appended_lines_mark(n, count) };
     if visual_active() {
         // SAFETY: `curbuf` is live and `VIsual` is a global position.
-        with_visual_anchor(|anchor| unsafe { check_pos(curbuf.get(), anchor) });
+        with_visual_anchor(|anchor| unsafe { check_pos(Buf::current(), anchor) });
     }
     // SAFETY: message state, main thread.
     unsafe { msgmore(count) };

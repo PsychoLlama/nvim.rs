@@ -12,6 +12,7 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
+use crate::winlayer::Buf;
 pub unsafe fn nvim_buf_get_var(
     buf: Buffer,
     name: String_0,
@@ -36,7 +37,7 @@ pub unsafe fn nvim_buf_get_changedtick(buf: Buffer) -> Result<Integer, Error> {
         if b.is_null() {
             return (-1 as Integer).reported(error);
         }
-        buf_get_changedtick(b).reported(error)
+        buf_get_changedtick(Buf::new(b.cast_mut())).reported(error)
     }
 }
 
@@ -57,7 +58,7 @@ pub unsafe fn nvim_buf_get_keymap(
             }
             .reported(error);
         }
-        keymap_array(mode, b, arena).reported(error)
+        keymap_array(mode, Some(Buf::new(b)), arena).reported(error)
     }
 }
 

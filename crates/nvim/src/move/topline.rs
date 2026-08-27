@@ -22,16 +22,12 @@ use crate::main::{
     curtab, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, skip_update_topline,
 };
 use crate::option::{ScrollMargin, ScrollOff};
-use crate::types::{OptInt, int64_t, linenr_T, win_T};
+use crate::types::{OptInt, int64_t, linenr_T};
 use crate::winlayer::Win;
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn update_topline(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.update_topline();
+pub fn update_topline(wp: Win) {
+    wp.update_topline();
 }
 
 impl Win {
@@ -102,17 +98,13 @@ fn update_topline_win(mut win: Win) {
         // Far out to begin with: put the cursor in the middle of the window.
         // Close: put it near the top.
         if n >= halfheight as int64_t {
-            // SAFETY: a live window.
-            unsafe { scroll_cursor_halfway(wp, false, false) };
+            scroll_cursor_halfway(win, false, false);
         } else {
-            // SAFETY: a live window.
-            unsafe {
-                scroll_cursor_top(
-                    wp,
-                    arith::scrolljump_lines(p_sj.get(), win.w_view_height),
-                    0,
-                )
-            };
+            scroll_cursor_top(
+                win,
+                arith::scrolljump_lines(p_sj.get(), win.w_view_height),
+                0,
+            );
             check_botline = true;
         }
     } else {
@@ -140,17 +132,14 @@ fn update_topline_win(mut win: Win) {
                     ((win.w_cursor.lnum - win.w_botline + 1) as OptInt + so.get()) as int64_t
                 };
                 if n <= (win.w_view_height + 1) as int64_t {
-                    // SAFETY: a live window.
-                    unsafe {
-                        scroll_cursor_bot(
-                            wp,
-                            arith::scrolljump_lines(p_sj.get(), win.w_view_height),
-                            false,
-                        )
-                    };
+                    scroll_cursor_bot(
+                        win,
+                        arith::scrolljump_lines(p_sj.get(), win.w_view_height),
+                        false,
+                    );
                 } else {
                     // SAFETY: a live window.
-                    unsafe { scroll_cursor_halfway(wp, false, false) };
+                    unsafe { scroll_cursor_halfway(Win::new(wp), false, false) };
                 }
             }
         }
@@ -198,7 +187,7 @@ fn check_topline(win: Win) -> bool {
             // top-left marker covers.
             let vcol = win.virtual_vcol(win.cursor());
             // SAFETY: a live window.
-            let overlap = unsafe { sms_marker_overlap(win.raw(), -1) };
+            let overlap = sms_marker_overlap(win, -1);
             if win.w_skipcol + overlap > vcol {
                 return true;
             }
@@ -326,12 +315,8 @@ pub unsafe fn update_curswant() {
 }
 
 /// [`Win::check_cursor_moved`], for the callers still holding a raw window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn check_cursor_moved(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.check_cursor_moved();
+pub fn check_cursor_moved(wp: Win) {
+    wp.check_cursor_moved();
 }
 
 impl Win {
@@ -407,12 +392,8 @@ fn check_cursor_moved_win(mut win: Win) {
 
 /// [`Win::changed_window_setting`], for the callers still holding a raw
 /// window.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn changed_window_setting(wp: *mut win_T) {
-    // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.changed_window_setting();
+pub fn changed_window_setting(wp: Win) {
+    wp.changed_window_setting();
 }
 
 /// [`changed_window_setting`] for every window of every tab page.
@@ -443,12 +424,7 @@ pub unsafe fn changed_window_setting_all() {
 
 /// Put the window's top line at `lnum`, approximating `w_botline` rather than
 /// recomputing it.
-///
-/// # Safety
-/// `wp` must be a valid window.
-pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
-    // SAFETY: the caller's promise.
-    let mut win = unsafe { Win::new(wp) };
+pub fn set_topline(mut win: Win, lnum: linenr_T) {
     let prev_topline = win.w_topline;
     // Go to the first line of a closed fold.
     let lnum = win.fold_first(lnum).unwrap_or(lnum);

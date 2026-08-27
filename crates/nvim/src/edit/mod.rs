@@ -180,9 +180,9 @@ use crate::textobject::{bck_word, fwd_word};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
-    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, buf_T, cmdarg_T,
-    colnr_T, event_T, int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
-    uint8_t, varnumber_T, win_T,
+    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, cmdarg_T, colnr_T,
+    event_T, int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t,
+    varnumber_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};

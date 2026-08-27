@@ -23,6 +23,7 @@
 
 use super::*;
 use crate::types::FAIL;
+use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -412,10 +413,11 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
 
         // `diff_read` reads both of these: the list it appends to, and the
         // table that says which buffers are active.
-        let tp = curtab.get();
-        let orig_diff = (*tp).tp_first_diff;
-        let orig_diffbuf = (*tp).tp_diffbuf;
-        (*tp).tp_first_diff = ::core::ptr::null_mut();
+        // SAFETY: `curtab` is set from startup to exit.
+        let mut tp = TabPage::current();
+        let orig_diff = tp.tp_first_diff;
+        let orig_diffbuf = tp.tp_diffbuf;
+        tp.tp_first_diff = ::core::ptr::null_mut();
 
         let mut linemap: LineMap = ::core::array::from_fn(|_| Vec::new());
         let (mut file1, mut file2) = (Vec::<u8>::new(), Vec::<u8>::new());
@@ -424,14 +426,14 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
         'done: {
             for (i, map) in linemap.iter_mut().enumerate() {
                 dio.dio_diff.dout_ga.ga_len = 0;
-                let buf = (*tp).tp_diffbuf[i];
+                let buf = tp.tp_diffbuf[i];
                 if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
                     continue; // not loaded
                 }
                 if (*dp).df_count[i] == 0 {
                     // A buffer with no text in this block must not be left in
                     // the table, or the whole block reads as modified in it.
-                    (*tp).tp_diffbuf[i] = ::core::ptr::null_mut();
+                    tp.tp_diffbuf[i] = ::core::ptr::null_mut();
                     continue;
                 }
                 if file1_idx == usize::MAX {
@@ -442,7 +444,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
                 out.clear();
                 // Deliberately the *first* buffer's 'iskeyword', so that
                 // every buffer is segmented the same way.
-                let chartab = (*(*tp).tp_diffbuf[file1_idx]).b_chartab.as_ptr();
+                let chartab = (*tp.tp_diffbuf[file1_idx]).b_chartab.as_ptr();
                 for off in 0..(*dp).df_count[i] {
                     let line = CStr::from_ptr(ml_get_buf(buf, (*dp).df_lnum[i] + off));
                     tokenize_line(
@@ -472,7 +474,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
                 clear_diffout(&raw mut dio.dio_diff);
             }
 
-            let head = (*tp).tp_first_diff;
+            let head = tp.tp_first_diff;
             if file1_idx != usize::MAX {
                 if diff_flags.get() & DIFF_INLINE_WORD != 0 {
                     refine_inline_word(head, &linemap, file1_idx, (*dp).df_lnum[file1_idx]);
@@ -496,8 +498,8 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
         diff_algorithm.set(save_diff_algorithm);
         (*dp).has_changes = true;
         diff_clear(tp);
-        (*tp).tp_first_diff = orig_diff;
-        (*tp).tp_diffbuf = orig_diffbuf;
+        tp.tp_first_diff = orig_diff;
+        tp.tp_diffbuf = orig_diffbuf;
         // `dio.dio_orig`/`dio_new` point into `file1`/`file2`, which go out of
         // scope here; only the hunk array is separately owned.
         clear_diffout(&raw mut dio.dio_diff);

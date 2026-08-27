@@ -23,6 +23,7 @@ use crate::regexp::{
 use crate::semsg;
 use crate::types::{NUL, colnr_T, int64_t, uint8_t, uint32_t};
 
+use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
 pub(crate) fn z_atom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     match unmagic(getchr()) as u8 {
@@ -337,7 +338,7 @@ fn cursor_value(kind: u8) -> uint32_t {
             _ => {
                 let mut vcol: colnr_T = 0;
                 getvvcol(
-                    curwin.get(),
+                    Win::new(curwin.get()),
                     &raw mut (*curwin.get()).w_cursor,
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),

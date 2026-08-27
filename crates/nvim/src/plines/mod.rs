@@ -33,8 +33,8 @@ use crate::option::get_showbreak_value;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, MetaIndex, NUL, OptInt, StrCharInfo, VirtLines, buf_T,
-    colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, MetaIndex, NUL, OptInt, StrCharInfo, VirtLines, colnr_T,
+    int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -127,10 +127,8 @@ unsafe fn byte_at(p: *const c_char) -> c_int {
 /// at virtual column `col` (which only matters for a tab).
 ///
 /// # Safety
-/// `wp` must be live and `p` must point into a NUL-terminated line.
-pub(crate) unsafe fn win_chartabsize(wp: *mut win_T, p: *mut c_char, col: colnr_T) -> c_int {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+/// `p` must point into a NUL-terminated line.
+pub(crate) unsafe fn win_chartabsize(wp: Win, p: *mut c_char, col: colnr_T) -> c_int {
     // SAFETY: the caller's pointer into a NUL-terminated line.
     if unsafe { byte_at(p) } == TAB && wp.expands_tab() {
         return wp.buffer().tab_width(col);
@@ -147,7 +145,7 @@ pub(crate) unsafe fn win_chartabsize(wp: *mut win_T, p: *mut c_char, col: colnr_
 pub(crate) unsafe fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int {
     // SAFETY: `curwin` is live from startup to exit, and `s` is the caller's
     // NUL-terminated string.
-    unsafe { win_linetabsize_col(curwin.get(), 0, s, startvcol, MAXCOL) }
+    unsafe { win_linetabsize_col(Win::new(curwin.get()), 0, s, startvcol, MAXCOL) }
 }
 
 /// The screen width of a whole line, starting from virtual column zero.
@@ -163,11 +161,11 @@ pub(crate) unsafe fn linetabsize_str(s: *mut c_char) -> c_int {
 /// virtual text. Pass `MAXCOL` for the whole line.
 ///
 /// # Safety
-/// `wp` must be live; `line` must be line `lnum` of its buffer, or any
-/// NUL-terminated string when `lnum` is 0 (which skips virtual text).
+/// `line` must be line `lnum` of `wp`'s buffer, or any NUL-terminated string
+/// when `lnum` is 0 (which skips virtual text).
 #[inline(always)]
 pub(crate) unsafe fn win_linetabsize(
-    wp: *mut win_T,
+    wp: Win,
     lnum: linenr_T,
     line: *mut c_char,
     len: colnr_T,
@@ -183,7 +181,7 @@ pub(crate) unsafe fn win_linetabsize(
 /// As [`win_linetabsize`].
 #[inline(always)]
 unsafe fn win_linetabsize_col(
-    wp: *mut win_T,
+    wp: Win,
     lnum: linenr_T,
     line: *mut c_char,
     startvcol: c_int,
@@ -204,10 +202,10 @@ unsafe fn win_linetabsize_col(
 /// 'listchars' "eol".
 ///
 /// # Safety
-/// `wp` must be live and `lnum` must be a line of its buffer.
-pub(crate) unsafe fn linetabsize(wp: *mut win_T, lnum: linenr_T) -> c_int {
-    // SAFETY: the caller's window, and `lnum` is a line of its buffer.
-    let line = unsafe { Win::new(wp).buffer().line(lnum) };
+/// `lnum` must be a line of `wp`'s buffer.
+pub(crate) unsafe fn linetabsize(wp: Win, lnum: linenr_T) -> c_int {
+    // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
+    let line = unsafe { wp.buffer().line(lnum) };
     // SAFETY: as above.
     unsafe { win_linetabsize(wp, lnum, line.raw(), MAXCOL) }
 }
@@ -215,12 +213,10 @@ pub(crate) unsafe fn linetabsize(wp: *mut win_T, lnum: linenr_T) -> c_int {
 /// Like [`linetabsize`], but counts the 'listchars' "eol".
 ///
 /// # Safety
-/// `wp` must be live and `lnum` must be a line of its buffer.
-pub(crate) unsafe fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> c_int {
-    // SAFETY: the caller's window.
-    let win = unsafe { Win::new(wp) };
-    let eol = win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.eol != 0;
-    // SAFETY: the caller's window, and `lnum` is a line of its buffer.
+/// `lnum` must be a line of `wp`'s buffer.
+pub(crate) unsafe fn linetabsize_eol(wp: Win, lnum: linenr_T) -> c_int {
+    let eol = wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0;
+    // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
     unsafe { linetabsize(wp, lnum) + c_int::from(eol) }
 }
 
@@ -231,16 +227,14 @@ pub(crate) unsafe fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> c_int {
 /// callers that measure a bare string rather than a buffer line ask for it.
 ///
 /// # Safety
-/// `wp` must be live; `line` must be NUL-terminated, and must be line `lnum`
-/// of `wp`'s buffer when `lnum` is not 0.
+/// `line` must be NUL-terminated, and must be line `lnum` of `wp`'s buffer
+/// when `lnum` is not 0.
 pub(crate) unsafe fn init_charsize_arg(
     csarg: &mut CharsizeArg,
-    wp: *mut win_T,
+    wp: Win,
     lnum: linenr_T,
     line: *mut c_char,
 ) -> CharsizeKind {
-    // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
     csarg.win = wp.raw();
     csarg.line = line;
     csarg.max_head_vcol = 0;
@@ -531,7 +525,7 @@ unsafe fn linebreak_size(win: Win, cur: *mut c_char, vcol: colnr_T, size: c_int)
             return size;
         }
         // SAFETY: a live window and a pointer into its line.
-        vcol2 += unsafe { win_chartabsize(win.raw(), s, vcol2) };
+        vcol2 += unsafe { win_chartabsize(win, s, vcol2) };
         if vcol2 >= colmax {
             // Doesn't fit.
             return colmax - vcol + col_adj;
@@ -703,17 +697,16 @@ pub(crate) unsafe fn win_charsize(
 /// Cells the character at `cur` takes when there is no wrapping to consider.
 ///
 /// # Safety
-/// `buf` must be live and `cur` must point into a NUL-terminated line.
+/// `cur` must point into a NUL-terminated line.
 pub(crate) unsafe fn charsize_nowrap(
-    buf: *mut buf_T,
+    buf: Buf,
     cur: *const c_char,
     use_tabstop: bool,
     vcol: colnr_T,
     cur_char: int32_t,
 ) -> c_int {
     if cur_char == TAB && use_tabstop {
-        // SAFETY: the caller's buffer.
-        unsafe { Buf::new(buf) }.tab_width(vcol)
+        buf.tab_width(vcol)
     } else if cur_char < 0 {
         INVALID_BYTE_CELLS
     } else {
@@ -749,7 +742,7 @@ unsafe fn in_win_border(wp: *mut win_T, vcol: colnr_T) -> bool {
     }
     // Width of the wrapped screen lines after it.
     // SAFETY: as above.
-    let width2 = width1 + unsafe { win_col_off2(wp) };
+    let width2 = width1 + unsafe { win_col_off2(Win::new(wp)) };
     if width2 <= 0 {
         return false;
     }

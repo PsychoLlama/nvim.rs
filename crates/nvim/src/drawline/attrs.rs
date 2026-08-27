@@ -218,7 +218,7 @@ impl Cells {
             }
 
             if State.get() & MODE_INSERT != 0
-                && ins_compl_win_active(wp)
+                && ins_compl_win_active(Win::new(wp))
                 && (self.in_curline || ins_compl_lnum_in_range(wlv.lnum))
             {
                 let ins_match_attr = ins_compl_col_range_attr(wlv.lnum, self.byte_col());

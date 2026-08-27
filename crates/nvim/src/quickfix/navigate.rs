@@ -65,7 +65,7 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
             1
         };
         let per_file = matches!(eap.cmdidx, CMD_cfdo | CMD_lfdo);
-        let valid_entry = unsafe { qf_get_nth_valid_entry(qf_current_list(qi).raw(), n, per_file) };
+        let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
         debug_assert!(valid_entry <= c_int::MAX as size_t);
         errornr = valid_entry as c_int;
     }

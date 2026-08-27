@@ -59,8 +59,7 @@ pub unsafe fn handle_nvim_buf_set_lines(
         wrong_type(error, 5, c"nvim_buf_set_lines", c"ArrayOf(String)");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
@@ -244,8 +243,7 @@ pub unsafe fn handle_nvim_buf_set_text(
         wrong_type(error, 6, c"nvim_buf_set_text", c"ArrayOf(String)");
         return NIL;
     };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+    if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
         return NIL;
     }
