@@ -28,7 +28,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{MarkMove, OP_NOP, PUT_FIXINDENT, cmdarg_T, linenr_T, pos_T, smt_T};
+use crate::types::{MarkMove, OP_NOP, PUT_FIXINDENT, cmdarg_T, fmark_T, linenr_T, pos_T, smt_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -245,8 +245,10 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
 unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    // The walk starts from a mark standing for the cursor itself.
-    let mut fm = unsafe { pos_to_mark(curbuf.get(), ptr::null_mut(), cur_win().w_cursor) };
+    // The walk starts from a mark standing for the cursor itself, in this
+    // frame's own record — every later `fm` is a store's address instead.
+    let mut here = fmark_T::UNSET;
+    let mut fm = unsafe { pos_to_mark(curbuf.get(), &raw mut here, cur_win().w_cursor) };
     debug_assert!(!fm.is_null());
     let linewise = ca.nchar == '\'' as c_int;
     let mut prev_fm = ptr::null_mut();

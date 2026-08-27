@@ -106,13 +106,16 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
 
 /// `\%'m`: the position of mark `m`.
 pub(crate) fn at_mark(rex: Rex, state: *mut nfa_state_T) -> bool {
+    // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
+    // store of its own, so it is computed straight into this frame's slot.
+    let mut slot = fmark_T::UNSET;
     // SAFETY: reads the match context and the buffer's marks.
     unsafe {
         let col = if rex.multi() { col(rex) } else { 0 };
         let fm: *mut fmark_T = mark_get(
             rex.reg_buf(),
             curwin.get(),
-            core::ptr::null_mut(),
+            &raw mut slot,
             kMarkBufLocal,
             (*state).val,
         );

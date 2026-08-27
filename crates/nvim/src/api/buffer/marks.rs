@@ -12,6 +12,8 @@ use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
+    // The record `mark_get` answers into; see `mark_get`.
+    let mut slot = fmark_T::UNSET;
     unsafe {
         let mut res: bool = false;
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
@@ -31,7 +33,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         let mut fm: *mut fmark_T = mark_get(
             b,
             curwin.get(),
-            ::core::ptr::null_mut::<fmark_T>(),
+            &raw mut slot,
             kMarkAllNoResolve,
             *name.data() as ::core::ffi::c_int,
         );
@@ -83,6 +85,8 @@ pub unsafe fn nvim_buf_get_mark(
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
+    // The record `mark_get` answers into; see `mark_get`.
+    let mut slot = fmark_T::UNSET;
     unsafe {
         let mut rv: Array = Array {
             size: 0 as size_t,
@@ -113,7 +117,7 @@ pub unsafe fn nvim_buf_get_mark(
         fm = mark_get(
             b,
             curwin.get(),
-            ::core::ptr::null_mut::<fmark_T>(),
+            &raw mut slot,
             kMarkAllNoResolve,
             mark as ::core::ffi::c_int,
         );

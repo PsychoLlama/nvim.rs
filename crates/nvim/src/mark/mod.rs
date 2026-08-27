@@ -29,7 +29,6 @@ use crate::buffer::{bt_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells, vim_isprintc};
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
-use crate::global_cell::GlobalCell;
 use crate::main::{e_markinval, e_marknotset, e_umark};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -357,28 +356,29 @@ pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
     }
 }
 
-/// Wrap a pos_T into an fmark_T, used to abstract marks handling.
+/// Wrap a `pos_T` into an `fmark_T`, used to abstract marks handling.
 ///
-/// Pass an fmp if multiple c
-/// @note  view fields are set to 0.
+/// `fmp` is the caller's own record and is where the answer is written; the
+/// address handed back is `fmp` itself, so the mark lives exactly as long as
+/// the caller's slot does. Only `fnum` and `mark` are touched — `view`,
+/// `timestamp` and `additional_data` are left as the caller found them, which
+/// is why a slot starts life as [`fmark_T::UNSET`].
+///
+/// The C had a single `static` here that every `fmp`-less caller shared, so
+/// two motion-mark lookups invalidated each other; the slot is the caller's
+/// now precisely so they cannot.
+///
 /// `buf` — for fmark->fnum.
 /// `pos` — for fmark->mark.
-/// `fmp` — pointer to save the mark.
-///
-/// @return[static] Mark with the given information.
+/// `fmp` — the record to write.
 ///
 /// # Safety
-/// `buf` must be a live buffer; `fmp` must be null or point at a live,
-/// writable `fmark_T`. A null `fmp` answers a shared static, so the result is
-/// only valid until the next such call.
+/// `buf` must be a live buffer and `fmp` must point at a live, writable
+/// `fmark_T` that outlives every use of the answer.
 pub unsafe fn pos_to_mark(buf: *mut buf_T, fmp: *mut fmark_T, pos: pos_T) -> *mut fmark_T {
-    /// The scratch record the `fmp`-less callers share. `mark_get_local`
-    /// hands its address straight back to the caller, which is why a second
-    /// motion-mark lookup invalidates the first.
-    static SCRATCH: GlobalCell<fmark_T> = GlobalCell::new(store::UNSET_FMARK);
-
-    // SAFETY: `fmp` is the caller's live record, or the shared static.
-    let fm = unsafe { Fmark::new(if fmp.is_null() { SCRATCH.ptr() } else { fmp }) };
+    debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
+    // SAFETY: the caller promised a live, writable record.
+    let fm = unsafe { Fmark::new(fmp) };
     // SAFETY: the caller promised a live buffer.
     fm.set_fnum(unsafe { Buf::new(buf) }.handle as c_int);
     fm.set_pos(pos);

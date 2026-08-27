@@ -97,6 +97,9 @@ pub unsafe fn var2fpos(
     wp: *mut win_T,
 ) -> Option<pos_T> {
     let mut numbuf = NumBuf::new();
+    // The record a `'m` lookup answers into: a motion mark has no store of
+    // its own, so it is computed straight into this frame's slot.
+    let mut slot = fmark_T::UNSET;
     unsafe {
         let mut pos = pos_T::default();
         let bp: *mut buf_T = (*wp).w_buffer;
@@ -162,7 +165,7 @@ pub unsafe fn var2fpos(
             }
         } else if *name.add(0) == b'\'' as c_char {
             let mname = *name.add(1) as uint8_t as c_int;
-            let fm: *const fmark_T = mark_get(bp, wp, null_mut::<fmark_T>(), kMarkAll, mname);
+            let fm: *const fmark_T = mark_get(bp, wp, &raw mut slot, kMarkAll, mname);
             if fm.is_null() || (*fm).mark.lnum <= 0 {
                 return None;
             }

@@ -254,7 +254,9 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
         flags |= kMarkSetView as MarkMove;
     }
 
-    let fm = unsafe { mark_get(curbuf.get(), curwin.get(), ptr::null_mut(), kMarkAll, name) };
+    // The record the lookup answers into; it outlives the jump below.
+    let mut slot = fmark_T::UNSET;
+    let fm = unsafe { mark_get(curbuf.get(), curwin.get(), &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cap, flags, fm) };
     if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;

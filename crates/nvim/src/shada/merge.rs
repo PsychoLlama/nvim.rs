@@ -727,7 +727,7 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
             if !(*buf).b_ffname.is_null()
                 && path_fnamecmp(entry.data.filemark.fname, (*buf).b_ffname) == 0
             {
-                let mut fm: fmark_T = core::mem::zeroed();
+                let mut fm: fmark_T = fmark_T::UNSET;
                 mark_get(
                     buf,
                     curwin.get(),

@@ -232,13 +232,16 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // the comparison character.
     let (mark, cmp) = unsafe { (*scan.add(3) as c_int, *scan.add(4) as c_int) };
     let col = if rex.multi() { rex.col() } else { 0 };
+    // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
+    // store of its own, so it is computed straight into this frame's slot.
+    let mut slot = fmark_T::UNSET;
     // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
-    // window; a null `fmark_T` asks for the buffer's own mark list.
+    // window; `slot` is this frame's and outlives every use of `fm`.
     let fm = unsafe {
         mark_get(
             rex.reg_buf(),
             curwin.get(),
-            core::ptr::null_mut::<fmark_T>(),
+            &raw mut slot,
             kMarkBufLocal,
             mark,
         )

@@ -18,7 +18,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
-use crate::buffer::{bt_quickfix, get_highest_fnum};
+use crate::buffer::{buf_is_quickfix, current_buf, get_highest_fnum};
 use crate::charset::{getdigits, getdigits_int32, skipwhite};
 use crate::cursor::{check_cursor, check_cursor_col};
 use crate::ex_docmd::lookup::find_ex_command;
@@ -41,8 +41,8 @@ use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_s
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, CmdAddr, Direction, ExArgt,
-    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, linenr_T, pos_T,
-    size_t,
+    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, fmark_T, linenr_T,
+    pos_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
@@ -153,7 +153,7 @@ pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
         }
         // `:cc`/`:ll` in a quickfix window address the window's entries.
         if (ea.cmdidx as c_int == CMD_cc as c_int || ea.cmdidx as c_int == CMD_ll as c_int)
-            && bt_quickfix(curbuf.get())
+            && buf_is_quickfix(current_buf())
         {
             ea.addr_type = CmdAddr::Other;
         }
@@ -287,6 +287,9 @@ pub unsafe fn parse_cmd_address(
     errormsg: &mut Option<CString>,
     silent: bool,
 ) -> c_int {
+    // The records `:*` reads the Visual marks into: they are never adjusted
+    // and have no store, so each is computed into a record of its own.
+    let (mut first, mut last) = (fmark_T::UNSET, fmark_T::UNSET);
     unsafe {
         let ea = &mut *eap;
         let mut address_count = 1;
@@ -331,13 +334,13 @@ pub unsafe fn parse_cmd_address(
                     }
                     ea.cmd = ea.cmd.add(1);
                     if ea.skip == 0 {
-                        let fm = mark_get_visual(curbuf.get(), '<' as c_int);
+                        let fm = mark_get_visual(curbuf.get(), &raw mut first, '<' as c_int);
                         if !mark_check(fm, errormsg) {
                             break 'theend;
                         }
                         debug_assert!(!fm.is_null());
                         ea.line1 = (*fm).mark.lnum;
-                        let fm = mark_get_visual(curbuf.get(), '>' as c_int);
+                        let fm = mark_get_visual(curbuf.get(), &raw mut last, '>' as c_int);
                         if !mark_check(fm, errormsg) {
                             break 'theend;
                         }
@@ -519,6 +522,8 @@ pub unsafe fn get_address(
     address_count: c_int,
     errormsg: &mut Option<CString>,
 ) -> linenr_T {
+    // The record a `'m` address answers into; see `mark_get`.
+    let mut slot = fmark_T::UNSET;
     unsafe {
         let mut cmd: *mut c_char = skipwhite(*ptr);
         let mut lnum: linenr_T = MAXLNUM as linenr_T;
@@ -572,7 +577,7 @@ pub unsafe fn get_address(
                         let fm = mark_get(
                             curbuf.get(),
                             curwin.get(),
-                            ptr::null_mut(),
+                            &raw mut slot,
                             flag,
                             *cmd as c_int,
                         );
