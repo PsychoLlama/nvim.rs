@@ -6,6 +6,7 @@ use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::charset::{skiptowhite, skipwhite};
+use crate::winlayer::Live;
 
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
@@ -27,15 +28,18 @@ pub(crate) unsafe fn set_context_for_expression(
     mut arg: *mut c_char,
     cmdidx: cmdidx_T,
 ) {
+    // SAFETY: the caller's promise -- `xp` is the live completion context
+    // and `arg` outlives it.
+    let mut xpand = unsafe { Live::new(xp) };
     let mut got_eq = false;
 
     if cmdidx == CMD_let || cmdidx == CMD_const {
-        unsafe { (*xp) .xp_context  = ExpandContext::UserVars };
+        xpand.xp_context = ExpandContext::UserVars;
         if unsafe { strpbrk(arg, BREAKS.as_ptr()) }.is_null() {
             // ":let var1 var2 ...": find the last space.
             let mut p = unsafe { arg.add(strlen(arg) as usize) };
             loop {
-                unsafe { (*xp) .xp_pattern  = p };
+                xpand.xp_pattern = p;
                 // Upstream steps back unconditionally and so reads the
                 // byte before `arg` on the last pass; the answer is the
                 // same either way, since the loop ends there.
@@ -50,48 +54,48 @@ pub(crate) unsafe fn set_context_for_expression(
             return;
         }
     } else {
-        unsafe { (*xp) .xp_context  = if cmdidx == CMD_call {
+        xpand.xp_context = if cmdidx == CMD_call {
             ExpandContext::Functions
         } else {
             ExpandContext::Expression
-        } };
+        };
     }
 
     loop {
-        unsafe { (*xp) .xp_pattern  = strpbrk(arg, BREAKS.as_ptr()) };
-        if unsafe { (*xp) .xp_pattern }.is_null() {
+        xpand.xp_pattern = unsafe { strpbrk(arg, BREAKS.as_ptr()) };
+        if xpand.xp_pattern.is_null() {
             break;
         }
-        let mut c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+        let mut c = unsafe { *xpand.xp_pattern } as u8 as c_int;
         if c == '&' as c_int {
-            c = unsafe { *(*xp).xp_pattern.add(1) } as u8 as c_int;
+            c = unsafe { *xpand.xp_pattern.add(1) } as u8 as c_int;
             if c == '&' as c_int {
-                unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
-                unsafe { (*xp) .xp_context  = if cmdidx != CMD_let || got_eq {
+                xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
+                xpand.xp_context = if cmdidx != CMD_let || got_eq {
                     ExpandContext::Expression
                 } else {
                     ExpandContext::Nothing
-                } };
+                };
             } else if c != ' ' as c_int {
-                unsafe { (*xp) .xp_context  = ExpandContext::Settings };
+                xpand.xp_context = ExpandContext::Settings;
                 if (c == 'l' as c_int || c == 'g' as c_int)
-                    && unsafe { *(*xp).xp_pattern.add(2) } == b':' as c_char
+                    && unsafe { *xpand.xp_pattern.add(2) } == b':' as c_char
                 {
-                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(2) };
+                    xpand.xp_pattern = unsafe { xpand.xp_pattern.add(2) };
                 }
             }
         } else if c == '$' as c_int {
             // environment variable
-            unsafe { (*xp) .xp_context  = ExpandContext::EnvVars };
+            xpand.xp_context = ExpandContext::EnvVars;
         } else if c == '=' as c_int {
             got_eq = true;
-            unsafe { (*xp) .xp_context  = ExpandContext::Expression };
-        } else if c == '#' as c_int && unsafe { (*xp) .xp_context } == ExpandContext::Expression {
+            xpand.xp_context = ExpandContext::Expression;
+        } else if c == '#' as c_int && xpand.xp_context == ExpandContext::Expression {
             // An autoload function or variable contains '#'.
             break;
         } else if (c == '<' as c_int || c == '#' as c_int)
-            && unsafe { (*xp) .xp_context } == ExpandContext::Functions
-            && unsafe { vim_strchr((*xp).xp_pattern, '(' as c_int) }.is_null()
+            && xpand.xp_context == ExpandContext::Functions
+            && unsafe { vim_strchr(xpand.xp_pattern, '(' as c_int) }.is_null()
         {
             // A function name can start with "<SNR>" and contain '#'.
             break;
@@ -99,43 +103,43 @@ pub(crate) unsafe fn set_context_for_expression(
             if c == '"' as c_int {
                 // a string
                 loop {
-                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
-                    c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+                    xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
+                    c = unsafe { *xpand.xp_pattern } as u8 as c_int;
                     if c == NUL || c == '"' as c_int {
                         break;
                     }
-                    if c == '\\' as c_int && unsafe { *(*xp).xp_pattern.add(1) } as c_int != NUL {
-                        unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                    if c == '\\' as c_int && unsafe { *xpand.xp_pattern.add(1) } as c_int != NUL {
+                        xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
                     }
                 }
-                unsafe { (*xp) .xp_context  = ExpandContext::Nothing };
+                xpand.xp_context = ExpandContext::Nothing;
             } else if c == '\'' as c_int {
                 // A literal string; `''` is like stopping and starting
                 // one, which this walk gets right by accident.
                 loop {
-                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
-                    c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+                    xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
+                    c = unsafe { *xpand.xp_pattern } as u8 as c_int;
                     if c == NUL || c == '\'' as c_int {
                         break;
                     }
                 }
-                unsafe { (*xp) .xp_context  = ExpandContext::Nothing };
+                xpand.xp_context = ExpandContext::Nothing;
             } else if c == '|' as c_int {
-                if unsafe { *(*xp).xp_pattern.add(1) } == b'|' as c_char {
-                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
-                    unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+                if unsafe { *xpand.xp_pattern.add(1) } == b'|' as c_char {
+                    xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
+                    xpand.xp_context = ExpandContext::Expression;
                 } else {
-                    unsafe { (*xp) .xp_context  = ExpandContext::Commands };
+                    xpand.xp_context = ExpandContext::Commands;
                 }
             } else {
-                unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+                xpand.xp_context = ExpandContext::Expression;
             }
         } else {
             // Nothing that looks valid; expand as an expression anyway.
-            unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+            xpand.xp_context = ExpandContext::Expression;
         }
 
-        arg = unsafe { (*xp) .xp_pattern };
+        arg = xpand.xp_pattern;
         if unsafe { *arg } as c_int != NUL {
             loop {
                 arg = unsafe { arg.add(1) };
@@ -148,7 +152,7 @@ pub(crate) unsafe fn set_context_for_expression(
     }
 
     // ":exe one two" completes "two".
-    if cmd_has_expr_args(cmdidx) && unsafe { (*xp) .xp_context } == ExpandContext::Expression {
+    if cmd_has_expr_args(cmdidx) && xpand.xp_context == ExpandContext::Expression {
         loop {
             let n = unsafe { skiptowhite(arg) };
             if n == arg || ascii_iswhite_or_nul(unsafe { *skipwhite(n) } as c_int) {
@@ -157,5 +161,5 @@ pub(crate) unsafe fn set_context_for_expression(
             arg = unsafe { skipwhite(n) };
         }
     }
-    unsafe { (*xp) .xp_pattern  = arg };
+    xpand.xp_pattern = arg;
 }

@@ -284,14 +284,10 @@ pub(crate) unsafe fn eval_number(
                 if !blob.is_null() {
                     // SAFETY: a literal message, and `blob` is this call's
                     // own, unreferenced allocation.
-                    unsafe {
-                        emsg(gettext(
-                            c"E973: Blob literal should have an even number of hex characters"
-                                .as_ptr(),
-                        ));
-                        ga_clear(&raw mut (*blob).bv_ga);
-                        xfree(blob.cast());
-                    }
+                    let odd = c"E973: Blob literal should have an even number of hex characters";
+                    unsafe { emsg(gettext(odd.as_ptr())) };
+                    unsafe { ga_clear(&raw mut (*blob).bv_ga) };
+                    unsafe { xfree(blob.cast()) };
                 }
                 return FAIL;
             }
@@ -318,19 +314,8 @@ pub(crate) unsafe fn eval_number(
         let all = STR2NR_ALL as c_int;
         // SAFETY: the cursor is on the first digit and the two
         // out-parameters are this frame's locals.
-        unsafe {
-            vim_str2nr(
-                text,
-                null_mut(),
-                lenp,
-                all,
-                np,
-                null_mut(),
-                0,
-                true,
-                null_mut(),
-            )
-        };
+        let (skip_pre, no_len, no_ov) = (null_mut(), null_mut(), null_mut());
+        unsafe { vim_str2nr(text, skip_pre, lenp, all, np, no_len, 0, true, no_ov) };
         if len == 0 {
             if evaluate {
                 unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), text) };

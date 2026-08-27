@@ -9,20 +9,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::winlayer::Live;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::skipwhite;
 use crate::eval::typval::{
     NumBuf, tv_blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
     tv_get_number, tv_is_func, tv_list_slice_or_index,
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
-    EVAL_EVALUATE, VARNUMBER_MAX, call_func_rettv, check_luafunc_name, e_cannot_index_a_funcref,
-    e_cannot_index_special_variable, e_cannot_slice_dictionary, e_missbrac, eval_isdictc,
-    eval_lambda, eval_method, eval1, tv_is_luafunc,
+    Cur, EVAL_EVALUATE, Tv, VARNUMBER_MAX, call_func_rettv, check_luafunc_name,
+    e_cannot_index_a_funcref, e_cannot_index_special_variable, e_cannot_slice_dictionary,
+    e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
 use crate::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
@@ -64,6 +64,10 @@ pub(crate) unsafe fn eval_index(
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> c_int {
+    // SAFETY: the caller's promise -- `arg` is the cursor into the
+    // expression, `rettv` is the value being subscripted and `evalarg` is
+    // null or valid. All three hold for every call below.
+    let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut empty1 = false;
     let mut empty2 = false;
@@ -77,21 +81,23 @@ pub(crate) unsafe fn eval_index(
 
     let mut var1 = UNSET_TV;
     let mut var2 = UNSET_TV;
-    if unsafe { **arg } == b'.' as c_char {
+    if cur.byte() == b'.' {
         // dict.name
-        key = unsafe { *arg }.add(1);
+        key = cur.get().wrapping_add(1);
         keylen = 0;
+        // SAFETY: the key runs to the first byte that cannot be in one,
+        // which the terminating NUL is not.
         while eval_isdictc(unsafe { *key.offset(keylen) } as c_int) {
             keylen += 1;
         }
         if keylen == 0 {
             return FAIL;
         }
-        unsafe { *arg  = skipwhite(key.offset(keylen)) };
+        cur.skip(1 + keylen as usize);
     } else {
         // The first index, from inside the brackets.
-        unsafe { *arg  = skipwhite((*arg).add(1)) };
-        if unsafe { **arg } == b':' as c_char {
+        cur.skip(1);
+        if cur.byte() == b':' {
             empty1 = true;
         } else if unsafe { eval1(arg, &raw mut var1, evalarg) } == FAIL {
             return FAIL;
@@ -101,10 +107,10 @@ pub(crate) unsafe fn eval_index(
         }
 
         // The second index, from inside the `[ : ]`.
-        if unsafe { **arg } == b':' as c_char {
+        if cur.byte() == b':' {
             range = true;
-            unsafe { *arg  = skipwhite((*arg).add(1)) };
-            if unsafe { **arg } == b']' as c_char {
+            cur.skip(1);
+            if cur.byte() == b']' {
                 empty2 = true;
             } else if unsafe { eval1(arg, &raw mut var2, evalarg) } == FAIL {
                 if !empty1 {
@@ -120,7 +126,7 @@ pub(crate) unsafe fn eval_index(
             }
         }
 
-        if unsafe { **arg } != b']' as c_char {
+        if cur.byte() != b']' {
             if verbose {
                 unsafe { emsg(gettext(e_missbrac.as_ptr())) };
             }
@@ -131,22 +137,15 @@ pub(crate) unsafe fn eval_index(
             }
             return FAIL;
         }
-        unsafe { *arg  = skipwhite((*arg).add(1)) };
+        cur.skip(1);
     }
 
     if !evaluate {
         return OK;
     }
-    let res = unsafe { eval_index_inner(
-        rettv,
-        range,
-        if empty1 { null_mut() } else { &raw mut var1 },
-        if empty2 { null_mut() } else { &raw mut var2 },
-        false,
-        key,
-        keylen,
-        verbose,
-    ) };
+    let one = if empty1 { null_mut() } else { &raw mut var1 };
+    let two = if empty2 { null_mut() } else { &raw mut var2 };
+    let res = unsafe { eval_index_inner(rettv, range, one, two, false, key, keylen, verbose) };
     if !empty1 {
         unsafe { tv_clear(&raw mut var1) };
     }
@@ -192,21 +191,15 @@ pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         return;
     }
     unsafe { tv_copy(argvars, rettv) };
-    let last = unsafe { argvars.add(2) };
-    unsafe { eval_index_inner(
-        rettv,
-        true,
-        argvars.add(1),
-        if (*last).v_type == VAR_UNKNOWN {
-            null_mut()
-        } else {
-            last
-        },
-        true,
-        null(),
-        0,
-        false,
-    ) };
+    // SAFETY: the builtin table hands in three argument slots, terminated by
+    // a `VAR_UNKNOWN` when the third was not given.
+    let (first, last) = unsafe { (argvars.add(1), argvars.add(2)) };
+    let end = if unsafe { (*last).v_type } == VAR_UNKNOWN {
+        null_mut()
+    } else {
+        last
+    };
+    unsafe { eval_index_inner(rettv, true, first, end, true, null(), 0, false) };
 }
 
 /// Apply an index or a range to `rettv`, in place.
@@ -234,11 +227,14 @@ pub(crate) unsafe fn eval_index_inner(
     let mut numbuf2 = NumBuf::new();
     let mut n1: varnumber_T = 0;
     let mut n2: varnumber_T = 0;
-    if !var1.is_null() && unsafe { (*rettv) .v_type } != VAR_DICT {
+    // SAFETY: the caller's promise -- `rettv` is the value being indexed,
+    // and `var1`/`var2` are null or valid typvals.
+    let mut rv = unsafe { Tv::new(rettv) };
+    if !var1.is_null() && rv.v_type != VAR_DICT {
         n1 = unsafe { tv_get_number(var1) };
     }
     if is_range {
-        if unsafe { (*rettv) .v_type } == VAR_DICT {
+        if rv.v_type == VAR_DICT {
             if verbose {
                 unsafe { emsg(gettext(e_cannot_slice_dictionary.as_ptr())) };
             }
@@ -251,8 +247,10 @@ pub(crate) unsafe fn eval_index_inner(
         };
     }
 
-    match unsafe { (*rettv) .v_type } {
+    match rv.v_type {
         VAR_NUMBER | VAR_STRING => {
+            // SAFETY: `numbuf` is this frame's own scratch, and the String
+            // it answers is NUL-terminated with `n1`/`n2` inside it.
             let s = unsafe { numbuf.string(rettv) };
             let len = unsafe { strlen(s) } as c_int as varnumber_T;
             let v = if exclusive {
@@ -275,18 +273,24 @@ pub(crate) unsafe fn eval_index_inner(
                 if n1 >= len || n2 < 0 || n1 > n2 {
                     null_mut()
                 } else {
-                    unsafe { xmemdupz(s.offset(n1 as isize).cast(), (n2 - n1 + 1) as size_t)  as *mut c_char }}
+                    let at = s.wrapping_offset(n1 as isize).cast();
+                    unsafe { xmemdupz(at, (n2 - n1 + 1) as size_t) as *mut c_char }
+                }
             } else if n1 >= len || n1 < 0 {
                 // A one-byte String; too big or negative gives an empty one.
                 null_mut()
             } else {
-                unsafe { xmemdupz(s.offset(n1 as isize).cast::<c_void>(), 1)  as *mut c_char }};
+                let at = s.wrapping_offset(n1 as isize).cast::<c_void>();
+                unsafe { xmemdupz(at, 1) as *mut c_char }
+            };
             unsafe { tv_clear(rettv) };
-            unsafe { (*rettv) .v_type  = VAR_STRING };
-            unsafe { (*rettv) .vval.v_string  = v };
+            rv.v_type = VAR_STRING;
+            rv.vval.v_string = v;
         }
         VAR_BLOB => {
-            unsafe { tv_blob_slice_or_index((*rettv).vval.v_blob, is_range, n1, n2, exclusive, rettv) };
+            // SAFETY: the tag says the union holds a Blob.
+            let blob = unsafe { rv.vval.v_blob };
+            unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, rettv) };
         }
         VAR_LIST => {
             if var1.is_null() {
@@ -295,28 +299,28 @@ pub(crate) unsafe fn eval_index_inner(
             if var2.is_null() {
                 n2 = VARNUMBER_MAX;
             }
-            if unsafe { tv_list_slice_or_index(
-                (*rettv).vval.v_list,
-                is_range,
-                n1,
-                n2,
-                exclusive,
-                rettv,
-                verbose,
-            ) } == FAIL
-            {
+            // SAFETY: the tag says the union holds a List.
+            let list = unsafe { rv.vval.v_list };
+            let sliced = unsafe {
+                tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
+            };
+            if sliced == FAIL {
                 return FAIL;
             }
         }
         VAR_DICT => {
             let mut key = key;
             if key.is_null() {
+                // SAFETY: `numbuf2` is this frame's own scratch.
                 key = unsafe { numbuf2.string_chk(var1) };
                 if key.is_null() {
                     return FAIL;
                 }
             }
-            let item: *mut dictitem_T = unsafe { tv_dict_find((*rettv).vval.v_dict, key, keylen) };
+            // SAFETY: the tag says the union holds a Dict, and `key` is the
+            // caller's own of `keylen` bytes.
+            let dict = unsafe { rv.vval.v_dict };
+            let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
                     semsg_c!(unsafe { gettext(e_dictkey_len.as_ptr()) }, keylen, key);
@@ -332,7 +336,7 @@ pub(crate) unsafe fn eval_index_inner(
             let mut tmp = UNSET_TV;
             unsafe { tv_copy(&raw mut (*item).di_tv, &raw mut tmp) };
             unsafe { tv_clear(rettv) };
-            unsafe { *rettv  = tmp };
+            *rv = tmp;
         }
         // Not evaluating: skipping over the subscript.
         _ => {}
@@ -375,10 +379,12 @@ pub(crate) unsafe fn char_from_string(str: *const c_char, index: varnumber_T) ->
     if nbyte >= slen {
         return null_mut();
     }
-    unsafe { xmemdupz(
-        str.add(nbyte as usize).cast(),
-        utfc_ptr2len(str.add(nbyte as usize)) as size_t,
-    )  as *mut c_char }}
+    // SAFETY: the caller's promise -- `str` is NUL-terminated, and `nbyte`
+    // is the start of a character inside it.
+    let at = str.wrapping_add(nbyte as usize);
+    let len = unsafe { utfc_ptr2len(at) } as size_t;
+    unsafe { xmemdupz(at.cast(), len) as *mut c_char }
+}
 
 /// The byte index of character index `idx` in `str`, composing characters
 /// included. Answers `str_len` for an index past the end and -1 for one
@@ -443,10 +449,10 @@ pub(crate) unsafe fn string_slice(
     if start_byte >= slen as ssize_t || end_byte <= start_byte {
         return null_mut();
     }
-    unsafe { xmemdupz(
-        str.add(start_byte as usize).cast(),
-        (end_byte - start_byte) as size_t,
-    )  as *mut c_char }}
+    // SAFETY: as above -- both byte offsets are inside `str`.
+    let at = str.wrapping_add(start_byte as usize).cast();
+    unsafe { xmemdupz(at, (end_byte - start_byte) as size_t) as *mut c_char }
+}
 
 /// Everything that can follow a completed operand, in any order:
 /// `expr[idx]`, `expr[a:b]`, `.name`, a call through a Funcref, and
@@ -463,6 +469,10 @@ pub(crate) unsafe fn handle_subscript(
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> c_int {
+    // SAFETY: the caller's promise -- `arg` is the cursor into the
+    // expression, `rettv` is the operand it follows and `evalarg` is null or
+    // valid. All three hold for every call below.
+    let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(rettv)) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut ret = OK;
     let mut selfdict: *mut dict_T = null_mut();
@@ -472,18 +482,18 @@ pub(crate) unsafe fn handle_subscript(
         if !evaluate {
             unsafe { tv_clear(rettv) };
         }
-        if unsafe { **arg } != b'.' as c_char {
+        if cur.byte() != b'.' {
             unsafe { tv_clear(rettv) };
             ret = FAIL;
         } else {
-            unsafe { *arg  = (*arg).add(1) };
-            lua_funcname = unsafe { *arg };
-            let len = unsafe { check_luafunc_name(*arg, true) };
+            cur.bump(1);
+            lua_funcname = cur.get();
+            let len = unsafe { check_luafunc_name(cur.get(), true) };
             if len == 0 {
                 unsafe { tv_clear(rettv) };
                 ret = FAIL;
             }
-            unsafe { *arg  = (*arg).offset(len as isize) };
+            cur.bump(len as usize);
         }
     }
 
@@ -491,25 +501,22 @@ pub(crate) unsafe fn handle_subscript(
     // only read once one of the three opening characters is there, which
     // is what proves it is inside the expression rather than before it.
     let more = || {
-        let c = unsafe { **arg };
-        let opens = c == b'[' as c_char
-            || (c == b'.' as c_char && unsafe { (*rettv) .v_type } == VAR_DICT)
-            || (c == b'(' as c_char && (!evaluate || tv_is_func(unsafe { *rettv })));
-        (opens && !ascii_iswhite(unsafe { *(*arg).offset(-1) } as c_int))
-            || (c == b'-' as c_char && unsafe { *(*arg).add(1) } == b'>' as c_char)
+        let c = cur.byte();
+        let opens = c == b'['
+            || (c == b'.' && rv.v_type == VAR_DICT)
+            || (c == b'(' && (!evaluate || tv_is_func(*rv)));
+        // SAFETY: the caller's promise -- the byte before the cursor is
+        // readable, and only an opening character asks for it.
+        (opens && !ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int))
+            || (c == b'-' && cur.at(1) == b'>')
     };
 
     while ret == OK && more() {
-        if unsafe { **arg } == b'(' as c_char {
-            ret = unsafe { call_func_rettv(
-                arg as *mut *mut c_char,
-                evalarg,
-                rettv,
-                evaluate,
-                selfdict,
-                null_mut(),
-                lua_funcname,
-            ) };
+        if cur.byte() == b'(' {
+            let (raw, lua) = (cur.raw(), lua_funcname);
+            ret = unsafe {
+                call_func_rettv(raw, evalarg, rettv, evaluate, selfdict, null_mut(), lua)
+            };
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {
@@ -520,28 +527,29 @@ pub(crate) unsafe fn handle_subscript(
             }
             unsafe { tv_dict_unref(selfdict) };
             selfdict = null_mut();
-        } else if unsafe { **arg } == b'-' as c_char {
-            ret = if unsafe { *(*arg).add(2) } == b'{' as c_char {
+        } else if cur.byte() == b'-' {
+            ret = if cur.at(2) == b'{' {
                 // expr->{lambda}()
-                unsafe { eval_lambda(arg as *mut *mut c_char, rettv, evalarg, verbose) }
+                unsafe { eval_lambda(cur.raw(), rettv, evalarg, verbose) }
             } else {
                 // expr->name()
-                unsafe { eval_method(arg as *mut *mut c_char, rettv, evalarg, verbose) }
+                unsafe { eval_method(cur.raw(), rettv, evalarg, verbose) }
             };
         } else {
             // `[` or `.`: a Dict being subscripted is the `self` a
             // Funcref found in it would be bound to.
             unsafe { tv_dict_unref(selfdict) };
-            selfdict = if unsafe { (*rettv) .v_type } == VAR_DICT {
-                let d = unsafe { (*rettv) .vval.v_dict };
+            selfdict = if rv.v_type == VAR_DICT {
+                // SAFETY: the tag says the union holds a Dict.
+                let d = unsafe { rv.vval.v_dict };
                 if !d.is_null() {
-                    unsafe { (*d) .dv_refcount }.retain();
+                    unsafe { (*d).dv_refcount.retain() };
                 }
                 d
             } else {
                 null_mut()
             };
-            if unsafe { eval_index(arg as *mut *mut c_char, rettv, evalarg, verbose) } == FAIL {
+            if unsafe { eval_index(cur.raw(), rettv, evalarg, verbose) } == FAIL {
                 unsafe { tv_clear(rettv) };
                 ret = FAIL;
             }
@@ -549,7 +557,7 @@ pub(crate) unsafe fn handle_subscript(
     }
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
-    if !selfdict.is_null() && tv_is_func(unsafe { *rettv }) {
+    if !selfdict.is_null() && tv_is_func(*rv) {
         unsafe { set_selfdict(rettv, selfdict) };
     }
     unsafe { tv_dict_unref(selfdict) };
@@ -563,11 +571,14 @@ pub(crate) unsafe fn handle_subscript(
 /// over.
 pub(crate) unsafe fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
     // Not for a partial that was bound explicitly (`pt_auto` clear).
-    if unsafe { (*rettv) .v_type } == VAR_PARTIAL
-        && !unsafe { (*(*rettv).vval.v_partial) .pt_auto }
-        && !unsafe { (*(*rettv).vval.v_partial) .pt_dict }.is_null()
-    {
-        return;
+    // SAFETY: the caller's promise -- `rettv` is valid, and the tag says
+    // whether the union holds a live partial.
+    let rv = unsafe { Tv::new(rettv) };
+    if rv.v_type == VAR_PARTIAL {
+        let pt = unsafe { Live::new(rv.vval.v_partial) };
+        if !pt.pt_auto && !pt.pt_dict.is_null() {
+            return;
+        }
     }
     unsafe { make_partial(selfdict, rettv) };
 }

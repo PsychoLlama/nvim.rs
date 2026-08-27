@@ -320,13 +320,12 @@ pub(crate) unsafe fn eval1(
     let mut local_evalarg = BORROWED_EVALARG;
     // SAFETY: the caller's promise -- `evalarg` is null or valid; when it is
     // null the substitute is this frame's own.
-    let mut used = unsafe {
-        Live::new(if evalarg.is_null() {
-            &raw mut local_evalarg
-        } else {
-            evalarg
-        })
+    let borrowed = if evalarg.is_null() {
+        &raw mut local_evalarg
+    } else {
+        evalarg
     };
+    let mut used = unsafe { Live::new(borrowed) };
     let orig_flags = used.eval_flags;
     let evaluate = orig_flags & EVAL_EVALUATE as c_int != 0;
 
@@ -334,12 +333,11 @@ pub(crate) unsafe fn eval1(
     if evaluate {
         let mut error = false;
         // SAFETY: `rettv` is the operand `eval2` just parsed.
-        result = unsafe {
-            if op_falsy {
-                tv2bool(rettv)
-            } else {
-                tv_get_number_chk(rettv, &raw mut error) != 0
-            }
+        result = if op_falsy {
+            unsafe { tv2bool(rettv) }
+        } else {
+            let n = unsafe { tv_get_number_chk(rettv, &raw mut error) };
+            n != 0
         };
         // `??` keeps the left operand when it is truthy; `? :` never
         // does, and neither keeps it after an error.
@@ -433,13 +431,12 @@ unsafe fn eval_logical(
     let mut local_evalarg = BORROWED_EVALARG;
     // SAFETY: the caller's promise -- `evalarg` is null or valid; when it is
     // null the substitute is this frame's own.
-    let mut used = unsafe {
-        Live::new(if evalarg.is_null() {
-            &raw mut local_evalarg
-        } else {
-            evalarg
-        })
+    let borrowed = if evalarg.is_null() {
+        &raw mut local_evalarg
+    } else {
+        evalarg
     };
+    let mut used = unsafe { Live::new(borrowed) };
     let orig_flags = used.eval_flags;
     let evaluate = orig_flags & EVAL_EVALUATE as c_int != 0;
 
