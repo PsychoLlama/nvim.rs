@@ -27,10 +27,11 @@ use crate::global_cell::GlobalCell;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, GRegFlags, LuaRetMode, MarkGet, MotionType, Object, OptValType,
-    blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, partial_T, size_t,
-    timer_T, typval_T, uint64_t,
+    Array, Callback, ChannelStreamType, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
+    OptValType, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T,
+    partial_T, size_t, timer_T, typval_T, uint64_t,
 };
+use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
 mod entry;
@@ -62,6 +63,36 @@ pub(crate) use self::expr::*;
 // `eval0` is reached from `crates/nvim/tests/unit`, which links the library
 // from outside; the rest of `expr` stays in-crate.
 pub use self::expr::eval0;
+/// The handles this tree passes around by pointer.
+///
+/// Each is a [`Live<T>`](crate::winlayer::Live) — a `Copy` newtype over a
+/// `*mut T` recording that whoever built it promised the pointee outlives
+/// the value. Construction is the one unsafe step; every `(*p).field` after
+/// it is ordinary checked code. See [`crate::winlayer::live`] for why this
+/// is not `&mut *p`: the evaluator re-enters itself through autocommands
+/// and Lua, and a `&mut` is `noalias` to LLVM.
+///
+/// They live here rather than in the module that needed each first because
+/// the same pointee crosses several of this family's files.
+///
+/// A value the evaluator is working on. The `*const typval_T` arguments the
+/// builtins take are wrapped with `cast_mut()` and only read.
+pub(crate) type Tv = Live<typval_T>;
+
+/// A callback the user handed a builtin, and its ownership of a name or a
+/// partial.
+pub(crate) type Cb = Live<Callback>;
+
+/// A registered timer. The promise is discharged by the reference count:
+/// nothing here holds one across a call that has not taken a reference.
+pub(crate) type Tm = Live<timer_T>;
+
+/// One `:for` loop's iteration state, owned by the `:endfor` that frees it.
+pub(crate) type Fi = Live<forinfo_T>;
+
+/// The left-hand side [`get_lval`] parsed, owned by the caller's frame.
+pub(crate) type Lv = Live<lval_T>;
+
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;

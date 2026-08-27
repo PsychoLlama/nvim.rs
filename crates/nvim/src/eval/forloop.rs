@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::ascii::ascii_iswhite;
@@ -23,7 +23,7 @@ use crate::eval::typval::{
     tv_list_watch_add, tv_list_watch_remove,
 };
 use crate::eval::vars::{ex_let_vars, skip_var_list};
-use crate::eval::{EVAL_EVALUATE, e_string_list_or_blob_required, eval0, forinfo_T};
+use crate::eval::{EVAL_EVALUATE, Fi, e_string_list_or_blob_required, eval0, forinfo_T};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
@@ -55,80 +55,106 @@ pub unsafe fn eval_for_line(
     eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
 ) -> *mut c_void {
-    unsafe {
-        let fi = xcalloc(1, size_of::<forinfo_T>()) as *mut forinfo_T;
-        let skip = (*evalarg).eval_flags & EVAL_EVALUATE as c_int == 0;
-        *errp = true;
+    // SAFETY: `xcalloc` never answers NULL and hands back one zeroed
+    // `forinfo_T`, which the caller owns until `:endfor` frees it.
+    let mut fi = unsafe { Fi::new(xcalloc(1, size_of::<forinfo_T>()) as *mut forinfo_T) };
+    // SAFETY: the caller's promise about `evalarg` and `errp`.
+    let skip = unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int == 0;
+    // SAFETY: as above.
+    unsafe { *errp = true };
 
-        let expr = skip_var_list(
-            arg,
-            &raw mut (*fi).fi_varcount,
-            &raw mut (*fi).fi_semicolon,
-            false,
-        );
-        if expr.is_null() {
-            return fi as *mut c_void;
-        }
-        let expr = skipwhite(expr);
-        if *expr.add(0) != b'i' as c_char
-            || *expr.add(1) != b'n' as c_char
-            || !(*expr.add(2) as c_int == NUL || ascii_iswhite(*expr.add(2) as c_int))
-        {
-            emsg(gettext(c"E690: Missing \"in\" after :for".as_ptr()));
-            return fi as *mut c_void;
-        }
+    let varcount = fi.field_ptr(offset_of!(forinfo_T, fi_varcount));
+    let semicolon = fi.field_ptr(offset_of!(forinfo_T, fi_semicolon));
+    // SAFETY: the caller's promise that `arg` is NUL-terminated; the two
+    // out-parameters are the `forinfo_T`'s own fields.
+    let expr = unsafe { skip_var_list(arg, varcount, semicolon, false) };
+    if expr.is_null() {
+        return fi.raw() as *mut c_void;
+    }
+    // SAFETY: `expr` points into `arg`, which is NUL-terminated, so the
+    // three bytes tested below stop at the terminator.
+    let expr = unsafe { skipwhite(expr) };
+    if unsafe { *expr.add(0) } != b'i' as c_char
+        || unsafe { *expr.add(1) } != b'n' as c_char
+        || !(unsafe { *expr.add(2) } as c_int == NUL
+            || ascii_iswhite(unsafe { *expr.add(2) } as c_int))
+    {
+        // SAFETY: the message is a NUL-terminated literal.
+        unsafe { emsg(gettext(c"E690: Missing \"in\" after :for".as_ptr())) };
+        return fi.raw() as *mut c_void;
+    }
 
-        let _skipping = skip.then(Suppress::emsg_skip);
-        let expr = skipwhite(expr.add(2));
-        let mut tv = UNSET_TV;
-        if eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) == OK {
-            *errp = false;
-            if !skip {
-                match tv.v_type {
-                    VAR_LIST => {
-                        let l = tv.vval.v_list;
-                        if l.is_null() {
-                            tv_clear(&raw mut tv);
-                        } else {
-                            // The reference moves into `fi`, and the watcher
-                            // is what keeps the cursor valid across changes
-                            // to the List while the loop runs.
-                            (*fi).fi_list = l;
-                            tv_list_watch_add(l, &raw mut (*fi).fi_lw);
-                            (*fi).fi_lw.lw_item = tv_list_first(l);
-                        }
+    let _skipping = skip.then(Suppress::emsg_skip);
+    // SAFETY: as above -- two bytes into a NUL-terminated string.
+    let expr = unsafe { skipwhite(expr.add(2)) };
+    let mut tv = UNSET_TV;
+    // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `eap` and
+    // `evalarg` are the caller's.
+    if unsafe { eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) } == OK {
+        // SAFETY: the caller's promise about `errp`.
+        unsafe { *errp = false };
+        if !skip {
+            match tv.v_type {
+                VAR_LIST => {
+                    // SAFETY: `VAR_LIST` says `v_list` is the live member.
+                    let l = unsafe { tv.vval.v_list };
+                    if l.is_null() {
+                        // SAFETY: `tv` is this frame's.
+                        unsafe { tv_clear(&raw mut tv) };
+                    } else {
+                        // The reference moves into `fi`, and the watcher
+                        // is what keeps the cursor valid across changes
+                        // to the List while the loop runs.
+                        fi.fi_list = l;
+                        let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
+                        // SAFETY: `l` is the live List the typval held, and
+                        // `lw` is the `forinfo_T`'s own watcher.
+                        unsafe { tv_list_watch_add(l, lw) };
+                        // SAFETY: as above.
+                        fi.fi_lw.lw_item = unsafe { tv_list_first(l) };
                     }
-                    VAR_BLOB => {
-                        (*fi).fi_bi = 0;
-                        if !tv.vval.v_blob.is_null() {
-                            // Copied, so the loop is not affected by later
-                            // changes to the Blob it was handed.
-                            let mut btv = UNSET_TV;
-                            tv_blob_copy(tv.vval.v_blob, &raw mut btv);
-                            (*fi).fi_blob = btv.vval.v_blob;
-                        }
-                        tv_clear(&raw mut tv);
+                }
+                VAR_BLOB => {
+                    fi.fi_bi = 0;
+                    // SAFETY: `VAR_BLOB` says `v_blob` is the live member.
+                    if !unsafe { tv.vval.v_blob }.is_null() {
+                        // Copied, so the loop is not affected by later
+                        // changes to the Blob it was handed.
+                        let mut btv = UNSET_TV;
+                        // SAFETY: as above; `btv` is this frame's.
+                        unsafe { tv_blob_copy(tv.vval.v_blob, &raw mut btv) };
+                        // SAFETY: the copy left a Blob in `btv`.
+                        fi.fi_blob = unsafe { btv.vval.v_blob };
                     }
-                    VAR_STRING => {
-                        (*fi).fi_byte_idx = 0;
-                        // The String is taken over rather than copied; a
-                        // null one becomes an owned empty string so that
-                        // `free_for_info` has something to free either way.
-                        (*fi).fi_string = tv.vval.v_string;
-                        tv.vval.v_string = null_mut();
-                        if (*fi).fi_string.is_null() {
-                            (*fi).fi_string = xstrdup(c"".as_ptr());
-                        }
+                    // SAFETY: `tv` is this frame's.
+                    unsafe { tv_clear(&raw mut tv) };
+                }
+                VAR_STRING => {
+                    fi.fi_byte_idx = 0;
+                    // The String is taken over rather than copied; a
+                    // null one becomes an owned empty string so that
+                    // `free_for_info` has something to free either way.
+                    // SAFETY: `VAR_STRING` says `v_string` is the live
+                    // member, and the ownership moves into `fi`.
+                    fi.fi_string = unsafe { tv.vval.v_string };
+                    tv.vval.v_string = null_mut();
+                    if fi.fi_string.is_null() {
+                        // SAFETY: the literal is NUL-terminated.
+                        fi.fi_string = unsafe { xstrdup(c"".as_ptr()) };
                     }
-                    _ => {
+                }
+                _ => {
+                    // SAFETY: the message is a NUL-terminated literal, and
+                    // `tv` is this frame's.
+                    unsafe {
                         emsg(gettext(e_string_list_or_blob_required.as_ptr()));
                         tv_clear(&raw mut tv);
-                    }
+                    };
                 }
             }
         }
-        fi as *mut c_void
     }
+    fi.raw() as *mut c_void
 }
 
 /// Assign the next item to the loop variables. False when the iteration is
@@ -138,65 +164,67 @@ pub unsafe fn eval_for_line(
 /// `fi_void` must be a `forinfo_T` from `eval_for_line`; `arg` the loop's
 /// variable list.
 pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
-    unsafe {
-        let fi = fi_void as *mut forinfo_T;
+    // SAFETY: the caller's promise -- the loop's own `forinfo_T`, which
+    // `:endfor` keeps alive for as long as the loop runs.
+    let mut fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
 
-        if !(*fi).fi_blob.is_null() {
-            if (*fi).fi_bi >= tv_blob_len((*fi).fi_blob) {
-                return false;
-            }
-            let mut tv = UNSET_TV;
-            tv.v_type = VAR_NUMBER;
-            tv.v_lock = VarLock::Fixed;
-            tv.vval.v_number = tv_blob_get((*fi).fi_blob, (*fi).fi_bi) as varnumber_T;
-            (*fi).fi_bi += 1;
-            return assign(fi, arg, &raw mut tv);
-        }
-
-        if !(*fi).fi_string.is_null() {
-            let len = utfc_ptr2len((*fi).fi_string.offset((*fi).fi_byte_idx as isize));
-            if len == 0 {
-                return false;
-            }
-            let mut tv = UNSET_TV;
-            tv.v_type = VAR_STRING;
-            tv.v_lock = VarLock::Fixed;
-            tv.vval.v_string = xmemdupz(
-                (*fi).fi_string.offset((*fi).fi_byte_idx as isize) as *const c_void,
-                len as size_t,
-            ) as *mut c_char;
-            (*fi).fi_byte_idx += len;
-            let ok = assign(fi, arg, &raw mut tv);
-            // The typval was never handed over, so its String is ours.
-            xfree(tv.vval.v_string as *mut c_void);
-            return ok;
-        }
-
-        let item: *mut listitem_T = (*fi).fi_lw.lw_item;
-        if item.is_null() {
+    if !fi.fi_blob.is_null() {
+        // SAFETY: `fi_blob` is the copy `eval_for_line` took.
+        if fi.fi_bi >= unsafe { tv_blob_len(fi.fi_blob) } {
             return false;
         }
-        (*fi).fi_lw.lw_item = (*item).li_next;
-        assign(fi, arg, &raw mut (*item).li_tv)
+        let mut tv = UNSET_TV;
+        tv.v_type = VAR_NUMBER;
+        tv.v_lock = VarLock::Fixed;
+        // SAFETY: as above; `fi_bi` is inside the Blob.
+        tv.vval.v_number = unsafe { tv_blob_get(fi.fi_blob, fi.fi_bi) } as varnumber_T;
+        fi.fi_bi += 1;
+        // SAFETY: `tv` is this frame's, and `arg` the caller's list.
+        return unsafe { assign(fi, arg, &raw mut tv) };
     }
+
+    if !fi.fi_string.is_null() {
+        // SAFETY: `fi_string` is owned and NUL-terminated, and `fi_byte_idx`
+        // is a character boundary inside it.
+        let at = unsafe { fi.fi_string.offset(fi.fi_byte_idx as isize) };
+        // SAFETY: as above.
+        let len = unsafe { utfc_ptr2len(at) };
+        if len == 0 {
+            return false;
+        }
+        let mut tv = UNSET_TV;
+        tv.v_type = VAR_STRING;
+        tv.v_lock = VarLock::Fixed;
+        // SAFETY: `len` bytes from `at` are the character just measured.
+        tv.vval.v_string = unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char };
+        fi.fi_byte_idx += len;
+        // SAFETY: `tv` is this frame's, and `arg` the caller's list.
+        let ok = unsafe { assign(fi, arg, &raw mut tv) };
+        // The typval was never handed over, so its String is ours.
+        // SAFETY: the string allocated just above.
+        unsafe { xfree(tv.vval.v_string as *mut c_void) };
+        return ok;
+    }
+
+    let item: *mut listitem_T = fi.fi_lw.lw_item;
+    if item.is_null() {
+        return false;
+    }
+    // SAFETY: the watcher keeps `lw_item` pointing at a live item.
+    fi.fi_lw.lw_item = unsafe { (*item).li_next };
+    // SAFETY: as above -- the item's typval is the List's own.
+    unsafe { assign(fi, arg, &raw mut (*item).li_tv) }
 }
 
 /// Hand one item to the loop's variable list, copying it.
 ///
 /// # Safety
 /// As `next_for_item`.
-unsafe fn assign(fi: *mut forinfo_T, arg: *mut c_char, tv: *mut typval_T) -> bool {
-    unsafe {
-        ex_let_vars(
-            arg,
-            tv,
-            true,
-            (*fi).fi_semicolon,
-            (*fi).fi_varcount,
-            false,
-            null_mut(),
-        ) == OK
-    }
+unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut typval_T) -> bool {
+    let (semicolon, varcount) = (fi.fi_semicolon, fi.fi_varcount);
+    // SAFETY: the caller's promise -- `arg` is the loop's variable list and
+    // `tv` the item being assigned.
+    unsafe { ex_let_vars(arg, tv, true, semicolon, varcount, false, null_mut()) == OK }
 }
 
 /// Release the iteration.
@@ -204,19 +232,26 @@ unsafe fn assign(fi: *mut forinfo_T, arg: *mut c_char, tv: *mut typval_T) -> boo
 /// # Safety
 /// `fi_void` must be null or a `forinfo_T` from `eval_for_line`.
 pub unsafe fn free_for_info(fi_void: *mut c_void) {
-    unsafe {
-        let fi = fi_void as *mut forinfo_T;
-        if fi.is_null() {
-            return;
-        }
-        if !(*fi).fi_list.is_null() {
-            tv_list_watch_remove((*fi).fi_list, &raw mut (*fi).fi_lw);
-            tv_list_unref((*fi).fi_list);
-        } else if !(*fi).fi_blob.is_null() {
-            tv_blob_unref((*fi).fi_blob);
-        } else {
-            xfree((*fi).fi_string as *mut c_void);
-        }
-        xfree(fi as *mut c_void);
+    if fi_void.is_null() {
+        return;
     }
+    // SAFETY: the caller's promise -- the loop's own `forinfo_T`.
+    let fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
+    if !fi.fi_list.is_null() {
+        let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
+        // SAFETY: the watcher was added to this List by `eval_for_line`,
+        // and the reference it took is released here.
+        unsafe {
+            tv_list_watch_remove(fi.fi_list, lw);
+            tv_list_unref(fi.fi_list);
+        };
+    } else if !fi.fi_blob.is_null() {
+        // SAFETY: the Blob is the copy `eval_for_line` took.
+        unsafe { tv_blob_unref(fi.fi_blob) };
+    } else {
+        // SAFETY: the String is owned, and null is fine for `xfree`.
+        unsafe { xfree(fi.fi_string as *mut c_void) };
+    }
+    // SAFETY: nothing reaches the `forinfo_T` after `:endfor`.
+    unsafe { xfree(fi.raw() as *mut c_void) };
 }
