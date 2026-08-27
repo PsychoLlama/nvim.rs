@@ -186,8 +186,7 @@ pub unsafe fn nvim_create_autocmd(
                                             while pat_index < patterns.size {
                                                 let mut pat: Object =
                                                     *patterns.items.add(pat_index);
-                                                let save_current_sctx: sctx_T =
-                                                    api_set_sctx(channel_id);
+                                                let sctx = api_set_sctx(channel_id);
                                                 retval = autocmd_register(
                                                     autocmd_id,
                                                     event_nr,
@@ -200,7 +199,7 @@ pub unsafe fn nvim_create_autocmd(
                                                     handler_cmd,
                                                     &raw mut handler_fn,
                                                 );
-                                                current_sctx.set(save_current_sctx);
+                                                drop(sctx);
                                                 if retval == 0 as ::core::ffi::c_int {
                                                     api_set_error(
                                                         err,

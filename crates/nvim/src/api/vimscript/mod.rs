@@ -14,8 +14,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col, redir_off,
-    suppress_errthrow,
+    capture_ga, curwin, did_emsg, did_throw, force_abort, msg_col, redir_off, suppress_errthrow,
 };
 use crate::memory::xfree;
 use crate::os::cshim::memmove;
@@ -27,7 +26,7 @@ use crate::types::{
     ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, dict_T,
     dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeDict, kObjectTypeNil, kObjectTypeString, linenr_T, partial_T,
-    ptrdiff_t, sctx_T, size_t, typval_T, uint64_t, uvarnumber_T,
+    ptrdiff_t, size_t, typval_T, uint64_t, uvarnumber_T,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,

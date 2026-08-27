@@ -432,7 +432,7 @@ pub unsafe fn create_user_command(
                                 }
                             }
                         }
-                        let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+                        let _sctx = api_set_sctx(channel_id);
                         if uc_add_command(
                             name.data(),
                             name.len(),
@@ -455,7 +455,6 @@ pub unsafe fn create_user_command(
                                 c"Failed to create user command".as_ptr(),
                             );
                         }
-                        current_sctx.set(save_current_sctx);
                         return;
                     }
                 }

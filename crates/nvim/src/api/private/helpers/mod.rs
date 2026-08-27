@@ -24,6 +24,7 @@ use core::ptr;
 
 use crate::api::private::validate::api_err_invalid;
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
+use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::main::{
     curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw, force_abort,
@@ -38,7 +39,7 @@ use crate::types::{
     Buffer, Dict, Error, ErrorType, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState,
     Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
     kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T,
-    sctx_T, size_t, tabpage_T, uint64_t, win_T,
+    size_t, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -478,23 +479,31 @@ pub(crate) fn get_default_stl_hl(
 }
 
 /// Point `current_sctx` at whoever made this API call, so that `:verbose`
-/// and `<sfile>` name them, and return what it was pointing at.
-pub(crate) fn api_set_sctx(channel_id: uint64_t) -> sctx_T {
-    let old_current_sctx = current_sctx.get();
+/// and `<sfile>` name them, for as long as the returned guard lives.
+///
+/// This is the C's `WITH_SCRIPT_CONTEXT`, whose trailing `current_sctx =
+/// save_current_sctx` every caller had to write out by hand. Holding the
+/// restore in a [`SavedSctx`] means no way out of the call -- an early
+/// return, a `?`, a panic -- can leave the editor believing the API client
+/// is still the one running. `nvim_create_augroup` returns early on a bad
+/// group name and upstream leaks the client's context out of the call that
+/// way; here it cannot.
+pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
+    let caller = current_sctx.get();
     // A call from Vimscript is already running in the right context.
-    if channel_id != VIML_INTERNAL_CALL {
-        let mut sctx = old_current_sctx.with_lnum(0);
-        if channel_id == LUA_INTERNAL_CALL {
-            // Unless the caller is a Lua script, which keeps its own id.
-            // SAFETY: `script_is_lua` takes a script id, not a pointer.
-            if !unsafe { script_is_lua(sctx.sc_sid) } {
-                sctx.sc_sid = SID_LUA;
-            }
-        } else {
-            sctx.sc_sid = SID_API_CLIENT;
-            sctx.sc_chan = channel_id;
-        }
-        current_sctx.set(sctx);
+    if channel_id == VIML_INTERNAL_CALL {
+        return Script::saved();
     }
-    old_current_sctx
+    let mut sctx = caller.with_lnum(0);
+    if channel_id == LUA_INTERNAL_CALL {
+        // Unless the caller is a Lua script, which keeps its own id.
+        // SAFETY: `script_is_lua` takes a script id, not a pointer.
+        if !unsafe { script_is_lua(sctx.sc_sid) } {
+            sctx.sc_sid = SID_LUA;
+        }
+    } else {
+        sctx.sc_sid = SID_API_CLIENT;
+        sctx.sc_chan = channel_id;
+    }
+    Script::context(sctx)
 }

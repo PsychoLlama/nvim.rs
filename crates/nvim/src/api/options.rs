@@ -28,7 +28,7 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use crate::main::{curbuf, current_sctx, curwin};
+use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
 use crate::memory::xstrdup;
 use crate::option::{
@@ -38,7 +38,7 @@ use crate::option::{
 use crate::types::{
     Arena, Dict, Error, FAIL, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData,
     OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, int64_t, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, linenr_T, sctx_T, uint64_t,
+    kErrorTypeNone, kErrorTypeValidation, linenr_T, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -464,7 +464,7 @@ pub unsafe fn nvim_set_option_value(
     };
     // Whoever made this API call owns the write, so that `:verbose set` names
     // them rather than whatever ran last.
-    let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+    let _sctx = api_set_sctx(channel_id);
     // SAFETY: `name` is the caller's, `target.from` is null or the live
     // object `scope` names, and `err` is this frame's own.
     unsafe {
@@ -478,7 +478,6 @@ pub unsafe fn nvim_set_option_value(
             &raw mut err,
         );
     }
-    current_sctx.set(save_current_sctx);
     ().reported(err)
 }
 

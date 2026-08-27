@@ -22,7 +22,7 @@
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
-use crate::guard::Suppress;
+use crate::guard::{Script, Suppress};
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -353,7 +353,9 @@ pub unsafe fn apply_autocmds_group(
         // `es_name` and `es_lnum` are filled in by `aucmd_next`.
         estack_push(ETYPE_AUCMD, ::core::ptr::null_mut(), 0);
 
-        let save_current_sctx = current_sctx.get();
+        // Restored below, in the run of teardown before `restore_funccal`;
+        // the handlers this fires each point it at themselves.
+        let sctx = Script::saved();
 
         let mut wait_time: proftime_T = 0;
         if do_profiling.get() == PROF_YES {
@@ -493,7 +495,7 @@ pub unsafe fn apply_autocmds_group(
         autocmd_fname_full.set(save_autocmd_fname_full);
         autocmd_bufnr.set(save_autocmd_bufnr);
         autocmd_match.set(save_autocmd_match);
-        current_sctx.set(save_current_sctx);
+        drop(sctx);
         unsafe { restore_funccal() };
         if do_profiling.get() == PROF_YES {
             unsafe { prof_child_exit(wait_time) };

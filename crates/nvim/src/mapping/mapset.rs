@@ -222,7 +222,7 @@ pub unsafe fn modify_keymap(
             return;
         }
 
-        let save_current_sctx = api_set_sctx(channel_id);
+        let sctx = api_set_sctx(channel_id);
 
         let mut parsed_args = MAP_ARGUMENTS_INIT;
         if !opts.is_null() {
@@ -375,7 +375,7 @@ pub unsafe fn modify_keymap(
             }
         }
 
-        current_sctx.set(save_current_sctx);
+        drop(sctx);
         if parsed_args.rhs_lua != LUA_NOREF {
             api_free_luaref(parsed_args.rhs_lua);
             parsed_args.rhs_lua = LUA_NOREF;

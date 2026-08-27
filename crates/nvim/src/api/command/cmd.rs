@@ -816,11 +816,11 @@ unsafe fn run_cmd(
         msg_col.set(0);
     }
 
-    let save_current_sctx = api_set_sctx(channel_id);
+    let sctx = api_set_sctx(channel_id);
     // SAFETY: `ea`/`cmdinfo` are fully prepared; this is the call the whole
     // function exists to make.
     unsafe { execute_cmd(ea, cmdinfo, false) };
-    current_sctx.set(save_current_sctx);
+    drop(sctx);
 
     drop(silenced);
     if capture {

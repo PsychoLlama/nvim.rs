@@ -17,7 +17,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};
 use crate::lua::executor::nlua_exec;
-use crate::main::{curbuf, current_sctx, curwin, got_int, msg_didout, msg_silent};
+use crate::main::{curbuf, curwin, got_int, msg_didout, msg_silent};
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::{emsg, msg, msg_end};
 use crate::option::{
@@ -32,7 +32,7 @@ use crate::types::{
     KeyDict_exec_opts, KeyValuePair, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
     OptScope, OptVal, OptValType, String_0, StringBuilder, Tabpage, VirtText, VirtTextChunk,
     Window, buf_T, colnr_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeString, lua_State, object, object_data, schar_T, sctx_T, size_t, tabpage_T, uint8_t,
+    kObjectTypeString, lua_State, object, object_data, schar_T, size_t, tabpage_T, uint8_t,
     uint16_t, uint32_t, uint64_t, win_T,
 };
 

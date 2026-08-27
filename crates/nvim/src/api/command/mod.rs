@@ -21,7 +21,7 @@ use crate::ex_eval::aborting;
 
 use crate::garray::{ga_clear, ga_init};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
-use crate::main::{capture_ga, curbuf, current_sctx, msg_col, redir_off};
+use crate::main::{capture_ga, curbuf, msg_col, redir_off};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
 use crate::os::cshim::{snprintf, strncmp};
@@ -36,7 +36,7 @@ use crate::types::{
     StringBuilder, TryState, buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint64_t,
+    kObjectTypeTabpage, kObjectTypeWindow, linenr_T, size_t, ucmd_T, uint8_t, uint64_t,
 };
 use crate::usercmd::{
     Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,

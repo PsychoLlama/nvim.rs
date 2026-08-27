@@ -25,7 +25,7 @@ use crate::lua::ffi::{
     luaL_error,
 };
 use crate::main::{
-    current_sctx, curwin, did_emsg, did_throw, e_fast_api_disabled, force_abort, suppress_errthrow,
+    curwin, did_emsg, did_throw, e_fast_api_disabled, force_abort, suppress_errthrow,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
@@ -104,7 +104,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
             funcexe.fe_evaluate = true;
 
-            let save_current_sctx = api_set_sctx(LUA_INTERNAL_CALL);
+            let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
             call_func(
@@ -116,7 +116,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 &raw mut funcexe,
             );
             try_leave(&raw mut tstate, &raw mut err);
-            current_sctx.set(save_current_sctx);
+            drop(sctx);
 
             if err.type_0 == kErrorTypeNone {
                 nlua_push_typval(lstate, &raw mut rettv, 0);

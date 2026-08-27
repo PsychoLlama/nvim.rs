@@ -30,9 +30,13 @@ pub unsafe fn nvim_create_augroup(
             1
         } != 0;
         let mut augroup: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+        let _sctx = api_set_sctx(channel_id);
         augroup = augroup_add(augroup_name_0);
         if augroup == AUGROUP_ERROR as ::core::ffi::c_int {
+            // Unreachable: `augroup_add` only ever answers a positive id.
+            // The guard restores on the way out regardless -- upstream's
+            // `WITH_SCRIPT_CONTEXT` puts the restore *after* the block, so
+            // this `return` skips it there.
             api_set_error(err, kErrorTypeException, c"Failed to set augroup".as_ptr());
             return (-1 as Integer).reported(error);
         }
@@ -43,7 +47,6 @@ pub unsafe fn nvim_create_augroup(
                 event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
             }
         }
-        current_sctx.set(save_current_sctx);
         (augroup as Integer).reported(error)
     }
 }

@@ -218,8 +218,7 @@ unsafe fn set_option_to(
         } else {
             OptionSetFlags::LOCAL
         };
-        let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+        let _sctx = api_set_sctx(channel_id);
         set_option_value_for(opt_name, opt_idx, optval, opt_flags, scope, to, err);
-        current_sctx.set(save_current_sctx);
     }
 }

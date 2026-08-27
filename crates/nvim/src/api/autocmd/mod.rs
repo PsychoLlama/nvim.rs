@@ -20,7 +20,7 @@ use crate::eval::typval::{
 };
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
-use crate::main::{curbuf, current_sctx};
+use crate::main::curbuf;
 use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
 use crate::types::{
@@ -29,7 +29,7 @@ use crate::types::{
     KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, auto_event,
     buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, msglist_T, sctx_T, size_t, uint64_t,
+    kObjectTypeString, msglist_T, size_t, uint64_t,
 };
 use ::libc::{abort, strlen};
 

@@ -65,7 +65,7 @@ pub unsafe fn exec_impl(
             redir_off.set(false);
             msg_col.set(0);
         }
-        let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+        let sctx = api_set_sctx(channel_id);
         do_source_str(src.data(), c"nvim_exec2()".as_ptr() as *mut c_char);
         drop(silenced);
         if capture {
@@ -73,7 +73,7 @@ pub unsafe fn exec_impl(
             redir_off.set(save_redir_off);
             msg_col.set(save_msg_col);
         }
-        current_sctx.set(save_current_sctx);
+        drop(sctx);
         try_leave(&raw mut tstate, err);
 
         // The capture always starts with the newline that separated the first
