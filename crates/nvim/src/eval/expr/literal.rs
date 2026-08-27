@@ -22,6 +22,7 @@ use crate::eval::{
     BS, CAR, ESC, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, STR2NR_ALL, TAB,
     find_option_var_end, get_env_len, kOptValTypeNil,
 };
+use crate::eval::{Cur, Tv};
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
 use crate::keycodes::{find_special_key, trans_special};
 use crate::main::{e_invexpr2, e_stray_closing_curly_str};
@@ -55,6 +56,96 @@ const UNSET_GA: garray_T = garray_T {
     ga_data: null_mut(),
 };
 
+/// A walk over a NUL-terminated buffer: the `*mut c_char` a scan steps
+/// along, with its byte reads checked once here.
+///
+/// Named for the two passes of a string literal, which is what it was
+/// written for; the `:function` parser walks its argument lists with it too.
+///
+/// Construction is the one unsafe step, as [`Live<T>`](crate::winlayer::Live)
+/// has it; every `byte()`/`at()` after it is ordinary checked code. It is
+/// `#[repr(transparent)]` so that `(&raw mut walk).cast()` is the
+/// `*mut *const c_char` that `mb_copy_char`, `find_special_key` and
+/// `trans_special` take — they advance the walk in place, which is why this
+/// cannot be an index.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub(crate) struct Walk(*mut c_char);
+
+impl Walk {
+    /// # Safety
+    /// `p` must point inside a NUL-terminated buffer that stays valid for as
+    /// long as the walk is used.
+    pub(crate) const unsafe fn new(p: *mut c_char) -> Self {
+        Self(p)
+    }
+
+    /// The byte `i` past the walk.
+    ///
+    /// Reading past the terminating NUL would be out of bounds, so a caller
+    /// asking for `i > 0` has already seen a non-NUL at every offset below.
+    pub(crate) fn at(self, i: usize) -> u8 {
+        // SAFETY: the constructor's promise, plus the caller's: the walk has
+        // not stepped past the NUL.
+        unsafe { *self.0.add(i) as u8 }
+    }
+
+    /// The byte under the walk.
+    pub(crate) fn byte(self) -> u8 {
+        self.at(0)
+    }
+
+    /// The byte `i` before it, which the caller has already walked past.
+    pub(crate) fn behind(self, i: usize) -> u8 {
+        // SAFETY: as [`Walk::at`], backwards over bytes already read.
+        unsafe { *self.0.sub(i) as u8 }
+    }
+
+    /// Step it `n` bytes on.
+    pub(crate) fn step(&mut self, n: usize) {
+        self.0 = self.0.wrapping_add(n);
+    }
+
+    /// Step it `n` bytes back, over bytes it has already read.
+    pub(crate) fn step_back(&mut self, n: usize) {
+        self.0 = self.0.wrapping_sub(n);
+    }
+
+    /// The `c_char` under the walk, for the octal escape, which reads back
+    /// what it wrote and needs the sign the C arithmetic has.
+    pub(crate) fn chr(self) -> c_char {
+        // SAFETY: as [`Walk::at`].
+        unsafe { *self.0 }
+    }
+
+    /// Write `b` where the walk stands, without stepping.
+    pub(crate) fn set(&mut self, b: c_char) {
+        // SAFETY: the constructor's promise -- the destination was sized by
+        // the measuring pass, which counted this byte.
+        unsafe { *self.0 = b };
+    }
+
+    /// Write `b` where it stands and step past it, which is how the second
+    /// pass fills the result.
+    pub(crate) fn put(&mut self, b: c_char) {
+        self.set(b);
+        self.step(1);
+    }
+
+    /// The pointer back, for the callees that still take one.
+    pub(crate) fn ptr(self) -> *mut c_char {
+        self.0
+    }
+
+    /// How many bytes it stands past `start`.
+    ///
+    /// # Safety
+    /// `start` must be in the same allocation.
+    pub(crate) unsafe fn since(self, start: *const c_char) -> isize {
+        unsafe { self.0.offset_from(start) }
+    }
+}
+
 /// `&option`, `&l:option`, `&g:option` or `+option`, with the cursor on the
 /// `&` or the `+`. Leaves it after the option name.
 ///
@@ -69,57 +160,60 @@ pub(crate) unsafe fn eval_option(
     rettv: *mut typval_T,
     evaluate: bool,
 ) -> c_int {
-    unsafe {
-        let working = **arg == b'+' as c_char; // has("+option")
-        let mut opt_idx: OptIndex = kOptAleph;
-        let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
+    // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
+    // NUL-terminated expression, and `rettv` is null or valid.
+    let working = unsafe { **arg } == b'+' as c_char; // has("+option")
+    let mut opt_idx: OptIndex = kOptAleph;
+    let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
 
-        // Isolate the option name and find its value.
-        let option_end =
-            find_option_var_end(arg, &raw mut opt_idx, &raw mut opt_flags) as *mut c_char;
-        if option_end.is_null() {
-            if !rettv.is_null() {
-                semsg_c!(gettext(c"E112: Option name missing: %s".as_ptr()), *arg);
-            }
-            return FAIL;
+    // Isolate the option name and find its value.
+    let (idxp, flagsp) = (&raw mut opt_idx, &raw mut opt_flags);
+    let option_end = unsafe { find_option_var_end(arg, idxp, flagsp) } as *mut c_char;
+    if option_end.is_null() {
+        if !rettv.is_null() {
+            let name = unsafe { *arg };
+            unsafe { semsg_c!(gettext(c"E112: Option name missing: %s".as_ptr()), name) };
         }
-        if !evaluate {
-            *arg = option_end;
-            return OK;
-        }
-
-        // The name is terminated in place for the lookup and put back
-        // afterwards, because the error messages want the whole expression.
-        let c = *option_end;
-        *option_end = NUL as c_char;
-
-        let opt_name = CStr::from_ptr(*arg);
-        let is_tty_opt = is_tty_option(opt_name);
-        let ret = if opt_idx == kOptInvalid && !is_tty_opt {
-            // Only report it when the result is going to be used.
-            if !rettv.is_null() {
-                semsg_c!(gettext(c"E113: Unknown option: %s".as_ptr()), *arg);
-            }
-            FAIL
-        } else if !rettv.is_null() {
-            let value: OptVal = if is_tty_opt {
-                get_tty_option(opt_name)
-            } else {
-                get_option_value(opt_idx, opt_flags)
-            };
-            debug_assert!(value.type_0 != kOptValTypeNil);
-            *rettv = optval_as_tv(value, true);
-            OK
-        } else if working && !is_tty_opt && is_option_hidden(opt_idx) {
-            FAIL
-        } else {
-            OK
-        };
-
-        *option_end = c;
-        *arg = option_end;
-        ret
+        return FAIL;
     }
+    if !evaluate {
+        unsafe { *arg = option_end };
+        return OK;
+    }
+
+    // The name is terminated in place for the lookup and put back
+    // afterwards, because the error messages want the whole expression.
+    // SAFETY: `option_end` is inside the expression, which is writable.
+    let c = unsafe { *option_end };
+    unsafe { *option_end = NUL as c_char };
+
+    let opt_name = unsafe { CStr::from_ptr(*arg) };
+    let is_tty_opt = is_tty_option(opt_name);
+    let ret = if opt_idx == kOptInvalid && !is_tty_opt {
+        // Only report it when the result is going to be used.
+        if !rettv.is_null() {
+            let name = unsafe { *arg };
+            unsafe { semsg_c!(gettext(c"E113: Unknown option: %s".as_ptr()), name) };
+        }
+        FAIL
+    } else if !rettv.is_null() {
+        let value: OptVal = if is_tty_opt {
+            get_tty_option(opt_name)
+        } else {
+            get_option_value(opt_idx, opt_flags)
+        };
+        debug_assert!(value.type_0 != kOptValTypeNil);
+        unsafe { *rettv = optval_as_tv(value, true) };
+        OK
+    } else if working && !is_tty_opt && is_option_hidden(opt_idx) {
+        FAIL
+    } else {
+        OK
+    };
+
+    unsafe { *option_end = c };
+    unsafe { *arg = option_end };
+    ret
 }
 
 /// A Number, a Float or a `0z` Blob literal, with the cursor on the first
@@ -135,52 +229,62 @@ pub(crate) unsafe fn eval_number(
     evaluate: bool,
     want_string: bool,
 ) -> c_int {
-    unsafe {
-        let mut p = skipdigits((*arg).add(1));
+    // SAFETY: the caller's promise -- `arg` is the cursor into a
+    // NUL-terminated expression and `rettv` is valid when `evaluate`.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let mut p = unsafe { Walk::new(skipdigits(cur.get().add(1))) };
 
-        // A Float is accepted only for the exact `1.2`, `1.2e3` shapes: a
-        // digit either side of the dot, and nothing alphabetic or a second
-        // dot after what was read.
-        let mut get_float = false;
-        if !want_string && *p == b'.' as c_char && ascii_isdigit(*p.add(1) as c_int) {
-            get_float = true;
-            p = skipdigits(p.add(2));
-            if *p == b'e' as c_char || *p == b'E' as c_char {
-                p = p.add(1);
-                if *p == b'-' as c_char || *p == b'+' as c_char {
-                    p = p.add(1);
-                }
-                if !ascii_isdigit(*p as c_int) {
-                    get_float = false;
-                } else {
-                    p = skipdigits(p.add(1));
-                }
+    // A Float is accepted only for the exact `1.2`, `1.2e3` shapes: a
+    // digit either side of the dot, and nothing alphabetic or a second
+    // dot after what was read.
+    let mut get_float = false;
+    if !want_string && p.byte() == b'.' && ascii_isdigit(c_int::from(p.at(1))) {
+        get_float = true;
+        // SAFETY: `skipdigits` stops at the NUL, and the walk is still
+        // inside the expression at every step below.
+        p = unsafe { Walk::new(skipdigits(p.ptr().add(2))) };
+        if p.byte() == b'e' || p.byte() == b'E' {
+            p.step(1);
+            if p.byte() == b'-' || p.byte() == b'+' {
+                p.step(1);
             }
-            let after = *p as u8;
-            if after.is_ascii_alphabetic() || after == b'.' {
+            if !ascii_isdigit(c_int::from(p.byte())) {
                 get_float = false;
+            } else {
+                p = unsafe { Walk::new(skipdigits(p.ptr().add(1))) };
             }
         }
+        let after = p.byte();
+        if after.is_ascii_alphabetic() || after == b'.' {
+            get_float = false;
+        }
+    }
 
-        if get_float {
-            let mut f: float_T = 0.;
-            *arg = (*arg).add(string2float(*arg, &raw mut f) as usize);
-            if evaluate {
-                (*rettv).v_type = VAR_FLOAT;
-                (*rettv).vval.v_float = f;
-            }
-        } else if **arg == b'0' as c_char
-            && (*(*arg).add(1) == b'z' as c_char || *(*arg).add(1) == b'Z' as c_char)
-        {
-            let mut blob: *mut blob_T = if evaluate {
-                tv_blob_alloc()
-            } else {
-                null_mut()
-            };
-            let mut bp = (*arg).add(2);
-            while ascii_isxdigit(*bp as c_int) {
-                if !ascii_isxdigit(*bp.add(1) as c_int) {
-                    if !blob.is_null() {
+    if get_float {
+        let mut f: float_T = 0.;
+        // SAFETY: the cursor is on the first digit of the literal.
+        let used = unsafe { string2float(cur.get(), &raw mut f) };
+        cur.bump(used as usize);
+        if evaluate {
+            rv.v_type = VAR_FLOAT;
+            rv.vval.v_float = f;
+        }
+    } else if cur.byte() == b'0' && matches!(cur.at(1), b'z' | b'Z') {
+        // SAFETY: a fresh Blob of this call's own, or none while skipping.
+        let blob: *mut blob_T = if evaluate {
+            unsafe { tv_blob_alloc() }
+        } else {
+            null_mut()
+        };
+        // SAFETY: the `0z` was just read, so the walk starts inside the
+        // expression and every step below stops at a non-hex byte.
+        let mut bp = unsafe { Walk::new(cur.get().add(2)) };
+        while ascii_isxdigit(c_int::from(bp.byte())) {
+            if !ascii_isxdigit(c_int::from(bp.at(1))) {
+                if !blob.is_null() {
+                    // SAFETY: a literal message, and `blob` is this call's
+                    // own, unreferenced allocation.
+                    unsafe {
                         emsg(gettext(
                             c"E973: Blob literal should have an even number of hex characters"
                                 .as_ptr(),
@@ -188,52 +292,58 @@ pub(crate) unsafe fn eval_number(
                         ga_clear(&raw mut (*blob).bv_ga);
                         xfree(blob.cast());
                     }
-                    return FAIL;
                 }
-                if !blob.is_null() {
-                    ga_append(
-                        &raw mut (*blob).bv_ga,
-                        ((hex2nr(*bp as c_int) << 4) + hex2nr(*bp.add(1) as c_int)) as uint8_t,
-                    );
-                }
-                // A dot may separate byte pairs: `0z00.11.22`.
-                if *bp.add(2) == b'.' as c_char && ascii_isxdigit(*bp.add(3) as c_int) {
-                    bp = bp.add(1);
-                }
-                bp = bp.add(2);
+                return FAIL;
             }
             if !blob.is_null() {
-                tv_blob_set_ret(rettv, blob);
+                let pair = (hex2nr(c_int::from(bp.byte())) << 4) + hex2nr(c_int::from(bp.at(1)));
+                // SAFETY: as above -- `blob` is this call's own.
+                unsafe { ga_append(&raw mut (*blob).bv_ga, pair as uint8_t) };
             }
-            *arg = bp;
-        } else {
-            let mut len: c_int = 0;
-            let mut n: varnumber_T = 0;
+            // A dot may separate byte pairs: `0z00.11.22`.
+            if bp.at(2) == b'.' && ascii_isxdigit(c_int::from(bp.at(3))) {
+                bp.step(1);
+            }
+            bp.step(2);
+        }
+        if !blob.is_null() {
+            // SAFETY: `rettv` is valid whenever a Blob was allocated.
+            unsafe { tv_blob_set_ret(rettv, blob) };
+        }
+        cur.set(bp.ptr());
+    } else {
+        let mut len: c_int = 0;
+        let mut n: varnumber_T = 0;
+        let (text, lenp, np) = (cur.get(), &raw mut len, &raw mut n);
+        let all = STR2NR_ALL as c_int;
+        // SAFETY: the cursor is on the first digit and the two
+        // out-parameters are this frame's locals.
+        unsafe {
             vim_str2nr(
-                *arg,
+                text,
                 null_mut(),
-                &raw mut len,
-                STR2NR_ALL as c_int,
-                &raw mut n,
+                lenp,
+                all,
+                np,
                 null_mut(),
                 0,
                 true,
                 null_mut(),
-            );
-            if len == 0 {
-                if evaluate {
-                    semsg_c!(gettext(e_invexpr2.as_ptr()), *arg);
-                }
-                return FAIL;
-            }
-            *arg = (*arg).offset(len as isize);
+            )
+        };
+        if len == 0 {
             if evaluate {
-                (*rettv).v_type = VAR_NUMBER;
-                (*rettv).vval.v_number = n;
+                unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), text) };
             }
+            return FAIL;
         }
-        OK
+        cur.bump(len as usize);
+        if evaluate {
+            rv.v_type = VAR_NUMBER;
+            rv.vval.v_number = n;
+        }
     }
+    OK
 }
 
 /// A double-quoted string, with the cursor on the quote — or, when
@@ -249,206 +359,211 @@ pub(crate) unsafe fn eval_string(
     evaluate: bool,
     interpolate: bool,
 ) -> c_int {
-    unsafe {
-        let arg_end = (*arg).add(strlen(*arg) as usize) as *const c_char;
-        let off = if interpolate { 0 } else { 1 };
-        // How much longer the result is than the text it is read from. The
-        // 1 an interpolated piece starts with is the terminator it writes;
-        // a doubled brace gives a byte back. It is `unsigned` upstream and
-        // may go negative here for the same reason it wraps there — the
-        // sum with the source length is what is used, and stays positive.
-        let mut extra: isize = if interpolate { 1 } else { 0 };
+    // SAFETY: the caller's promise -- `arg` is the cursor into a
+    // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
+    // walks below stay inside that expression: the measuring pass stops at
+    // the NUL and the filling pass repeats it byte for byte.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let arg_end = unsafe { cur.get().add(strlen(cur.get()) as usize) } as *const c_char;
+    let off = if interpolate { 0 } else { 1 };
+    // How much longer the result is than the text it is read from. The
+    // 1 an interpolated piece starts with is the terminator it writes;
+    // a doubled brace gives a byte back. It is `unsigned` upstream and
+    // may go negative here for the same reason it wraps there — the
+    // sum with the source length is what is used, and stays positive.
+    let mut extra: isize = if interpolate { 1 } else { 0 };
 
-        // Find the end of the string, skipping backslashed characters.
-        let mut p = (*arg).add(off);
-        while *p as c_int != NUL && *p != b'"' as c_char {
-            if *p == b'\\' as c_char && *p.add(1) as c_int != NUL {
-                p = p.add(1);
-                if *p == b'<' as c_char {
-                    // A `\<x>` form is at least 4 characters and produces up
-                    // to 9 (6 for the character, 3 for a modifier): reserve
-                    // five extra.
-                    extra += 5;
-                    let mut modifiers: c_int = 0;
-                    let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
-                    if *p.add(1) != b'*' as c_char {
-                        flags |= FSK_SIMPLIFY as c_int;
-                    }
-                    // Skip to the `>` so a `{` inside is not read as the
-                    // start of an interpolated expression.
-                    if find_special_key(
-                        &raw mut p as *mut *const c_char,
-                        arg_end.offset_from(p) as size_t,
-                        &raw mut modifiers,
-                        flags,
-                        null_mut(),
-                    ) != 0
-                    {
-                        p = p.sub(1); // leave `p` on the `>`
-                    }
+    // Find the end of the string, skipping backslashed characters.
+    let mut p = unsafe { Walk::new(cur.get().add(off)) };
+    while p.byte() != NUL as u8 && p.byte() != b'"' {
+        if p.byte() == b'\\' && p.at(1) != NUL as u8 {
+            p.step(1);
+            if p.byte() == b'<' {
+                // A `\<x>` form is at least 4 characters and produces up
+                // to 9 (6 for the character, 3 for a modifier): reserve
+                // five extra.
+                extra += 5;
+                let mut modifiers: c_int = 0;
+                let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
+                if p.at(1) != b'*' {
+                    flags |= FSK_SIMPLIFY as c_int;
                 }
-            } else if interpolate && (*p == b'{' as c_char || *p == b'}' as c_char) {
-                if *p == b'{' as c_char && *p.add(1) != b'{' as c_char {
+                // Skip to the `>` so a `{` inside is not read as the
+                // start of an interpolated expression.
+                let left = unsafe { arg_end.offset_from(p.ptr()) } as size_t;
+                let (walk, mods) = ((&raw mut p).cast(), &raw mut modifiers);
+                // SAFETY: `walk` is this frame's own walk, which
+                // `find_special_key` advances in place.
+                let found = unsafe { find_special_key(walk, left, mods, flags, null_mut()) };
+                if found != 0 {
+                    p = unsafe { Walk::new(p.ptr().sub(1)) }; // leave `p` on the `>`
+                }
+            }
+        } else if interpolate && (p.byte() == b'{' || p.byte() == b'}') {
+            if p.byte() == b'{' && p.at(1) != b'{' {
+                break; // start of an expression
+            }
+            p.step(1);
+            if p.behind(1) == b'}' && p.byte() != b'}' {
+                let text = cur.get();
+                unsafe { semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), text) };
+                return FAIL;
+            }
+            extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
+        }
+        p.step(unsafe { utfc_ptr2len(p.ptr()) } as usize);
+    }
+
+    if p.byte() != b'"' && !(interpolate && p.byte() == b'{') {
+        let text = cur.get();
+        unsafe { semsg_c!(gettext(c"E114: Missing quote: %s".as_ptr()), text) };
+        return FAIL;
+    }
+    if !evaluate {
+        cur.set(unsafe { p.ptr().add(off) });
+        return OK;
+    }
+
+    // Copy the string into allocated memory, resolving the escapes.
+    rv.v_type = VAR_STRING;
+    let len = (unsafe { p.since(cur.get()) } + extra) as c_int;
+    let buffer = unsafe { xmalloc(len as size_t) } as *mut c_char;
+    rv.vval.v_string = buffer;
+    let mut end = unsafe { Walk::new(buffer) };
+
+    p = unsafe { Walk::new(cur.get().add(off)) };
+    while p.byte() != NUL as u8 && p.byte() != b'"' {
+        if p.byte() != b'\\' {
+            if interpolate && (p.byte() == b'{' || p.byte() == b'}') {
+                if p.byte() == b'{' && p.at(1) != b'{' {
                     break; // start of an expression
                 }
-                p = p.add(1);
-                if *p.sub(1) == b'}' as c_char && *p != b'}' as c_char {
-                    semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), *arg);
-                    return FAIL;
-                }
-                extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
+                p.step(1); // reduce `{{` to `{` and `}}` to `}`
             }
-            p = p.offset(utfc_ptr2len(p) as isize);
+            // SAFETY: both are this frame's own walks, which
+            // `mb_copy_char` advances in place.
+            unsafe { mb_copy_char((&raw mut p).cast(), (&raw mut end).cast()) };
+            continue;
         }
 
-        if *p != b'"' as c_char && !(interpolate && *p == b'{' as c_char) {
-            semsg_c!(gettext(c"E114: Missing quote: %s".as_ptr()), *arg);
-            return FAIL;
-        }
-        if !evaluate {
-            *arg = p.add(off);
-            return OK;
-        }
-
-        // Copy the string into allocated memory, resolving the escapes.
-        (*rettv).v_type = VAR_STRING;
-        let len = (p.offset_from(*arg) + extra) as c_int;
-        (*rettv).vval.v_string = xmalloc(len as size_t) as *mut c_char;
-        let mut end = (*rettv).vval.v_string;
-
-        p = (*arg).add(off);
-        while *p as c_int != NUL && *p != b'"' as c_char {
-            if *p != b'\\' as c_char {
-                if interpolate && (*p == b'{' as c_char || *p == b'}' as c_char) {
-                    if *p == b'{' as c_char && *p.add(1) != b'{' as c_char {
-                        break; // start of an expression
-                    }
-                    p = p.add(1); // reduce `{{` to `{` and `}}` to `}`
-                }
-                mb_copy_char(&raw mut p as *mut *const c_char, &raw mut end);
-                continue;
+        p.step(1);
+        // Every arm that handles the escape itself leaves `handled` set;
+        // the rest — including `\<` that did not name a key — fall
+        // through to copying the character after the backslash.
+        let mut handled = true;
+        match p.byte() {
+            b'b' => {
+                end.put(BS as c_char);
+                p.step(1);
             }
-
-            p = p.add(1);
-            // Every arm that handles the escape itself leaves `handled` set;
-            // the rest — including `\<` that did not name a key — fall
-            // through to copying the character after the backslash.
-            let mut handled = true;
-            match *p as u8 {
-                b'b' => {
-                    *end = BS as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                b'e' => {
-                    *end = ESC as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                b'f' => {
-                    *end = FF as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                b'n' => {
-                    *end = NL as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                b'r' => {
-                    *end = CAR as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                b't' => {
-                    *end = TAB as c_char;
-                    end = end.add(1);
-                    p = p.add(1);
-                }
-                // hex `\x1`/`\x12`, Unicode `\u0023`/`\U0001f600`. With no
-                // hex digit after it the letter itself is copied, by the
-                // next pass of the loop rather than here.
-                b'X' | b'x' | b'u' | b'U' => {
-                    if ascii_isxdigit(*p.add(1) as c_int) {
-                        let c = toupper(*p as u8 as c_int);
-                        let mut n = if c == 'X' as c_int {
-                            2
-                        } else if *p == b'u' as c_char {
-                            4
-                        } else {
-                            8
-                        };
-                        let mut nr: c_int = 0;
-                        loop {
-                            n -= 1;
-                            if n < 0 || !ascii_isxdigit(*p.add(1) as c_int) {
-                                break;
-                            }
-                            p = p.add(1);
-                            nr = (nr << 4) + hex2nr(*p as c_int);
-                        }
-                        p = p.add(1);
-                        // `\u` stores the character in the current encoding;
-                        // `\x` stores the byte.
-                        if c != 'X' as c_int {
-                            end = end.offset(utf_char2bytes(nr, end) as isize);
-                        } else {
-                            *end = nr as c_char;
-                            end = end.add(1);
-                        }
-                    }
-                }
-                // octal `\1`, `\12`, `\123`
-                b'0'..=b'7' => {
-                    *end = (*p as c_int - '0' as c_int) as c_char;
-                    p = p.add(1);
-                    if *p >= b'0' as c_char && *p <= b'7' as c_char {
-                        *end = (((*end as c_int) << 3) + *p as c_int - '0' as c_int) as c_char;
-                        p = p.add(1);
-                        if *p >= b'0' as c_char && *p <= b'7' as c_char {
-                            *end = (((*end as c_int) << 3) + *p as c_int - '0' as c_int) as c_char;
-                            p = p.add(1);
-                        }
-                    }
-                    end = end.add(1);
-                }
-                // a special key, e.g. `\<C-W>`
-                b'<' => {
-                    let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
-                    if *p.add(1) != b'*' as c_char {
-                        flags |= FSK_SIMPLIFY as c_int;
-                    }
-                    let written = trans_special(
-                        &raw mut p as *mut *const c_char,
-                        arg_end.offset_from(p) as size_t,
-                        end,
-                        flags,
-                        false,
-                        null_mut(),
-                    );
-                    if written != 0 {
-                        end = end.offset(written as isize);
-                        if end >= (*rettv).vval.v_string.offset(len as isize) {
-                            iemsg(c"eval_string() used more space than allocated".as_ptr());
-                        }
+            b'e' => {
+                end.put(ESC as c_char);
+                p.step(1);
+            }
+            b'f' => {
+                end.put(FF as c_char);
+                p.step(1);
+            }
+            b'n' => {
+                end.put(NL as c_char);
+                p.step(1);
+            }
+            b'r' => {
+                end.put(CAR as c_char);
+                p.step(1);
+            }
+            b't' => {
+                end.put(TAB as c_char);
+                p.step(1);
+            }
+            // hex `\x1`/`\x12`, Unicode `\u0023`/`\U0001f600`. With no
+            // hex digit after it the letter itself is copied, by the
+            // next pass of the loop rather than here.
+            b'X' | b'x' | b'u' | b'U' => {
+                if ascii_isxdigit(c_int::from(p.at(1))) {
+                    // SAFETY: `toupper` reads no memory.
+                    let c = unsafe { toupper(c_int::from(p.byte())) };
+                    let mut n = if c == 'X' as c_int {
+                        2
+                    } else if p.byte() == b'u' {
+                        4
                     } else {
-                        handled = false;
+                        8
+                    };
+                    let mut nr: c_int = 0;
+                    loop {
+                        n -= 1;
+                        if n < 0 || !ascii_isxdigit(c_int::from(p.at(1))) {
+                            break;
+                        }
+                        p.step(1);
+                        nr = (nr << 4) + hex2nr(c_int::from(p.byte()));
+                    }
+                    p.step(1);
+                    // `\u` stores the character in the current encoding;
+                    // `\x` stores the byte.
+                    if c != 'X' as c_int {
+                        // SAFETY: the measuring pass reserved five bytes for
+                        // this escape, which is more than a character takes.
+                        let written = unsafe { utf_char2bytes(nr, end.ptr()) };
+                        end.step(written as usize);
+                    } else {
+                        end.put(nr as c_char);
                     }
                 }
-                _ => handled = false,
             }
-            if !handled {
-                mb_copy_char(&raw mut p as *mut *const c_char, &raw mut end);
+            // octal `\1`, `\12`, `\123`
+            b'0'..=b'7' => {
+                end.set((c_int::from(p.chr()) - '0' as c_int) as c_char);
+                p.step(1);
+                if p.byte() >= b'0' && p.byte() <= b'7' {
+                    let digit = c_int::from(p.chr()) - '0' as c_int;
+                    end.set(((c_int::from(end.chr()) << 3) + digit) as c_char);
+                    p.step(1);
+                    if p.byte() >= b'0' && p.byte() <= b'7' {
+                        let digit = c_int::from(p.chr()) - '0' as c_int;
+                        end.set(((c_int::from(end.chr()) << 3) + digit) as c_char);
+                        p.step(1);
+                    }
+                }
+                end.step(1);
             }
+            // a special key, e.g. `\<C-W>`
+            b'<' => {
+                let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
+                if p.at(1) != b'*' {
+                    flags |= FSK_SIMPLIFY as c_int;
+                }
+                let left = unsafe { arg_end.offset_from(p.ptr()) } as size_t;
+                let (walk, out) = ((&raw mut p).cast(), end.ptr());
+                // SAFETY: `walk` is this frame's own walk, which
+                // `trans_special` advances in place, and `out` has the five
+                // bytes the measuring pass reserved.
+                let written = unsafe { trans_special(walk, left, out, flags, false, null_mut()) };
+                if written != 0 {
+                    end.step(written as usize);
+                    if end.ptr() >= buffer.wrapping_offset(len as isize) {
+                        // SAFETY: a literal message.
+                        unsafe { iemsg(c"eval_string() used more space than allocated".as_ptr()) };
+                    }
+                } else {
+                    handled = false;
+                }
+            }
+            _ => handled = false,
         }
-
-        *end = NUL as c_char;
-        if *p == b'"' as c_char && !interpolate {
-            p = p.add(1);
+        if !handled {
+            // SAFETY: as the copy above.
+            unsafe { mb_copy_char((&raw mut p).cast(), (&raw mut end).cast()) };
         }
-        *arg = p;
-        OK
     }
+
+    end.set(NUL as c_char);
+    if p.byte() == b'"' && !interpolate {
+        p.step(1);
+    }
+    cur.set(p.ptr());
+    OK
 }
 
 /// A single-quoted string, in which the only escape is a doubled quote —
@@ -463,72 +578,81 @@ pub(crate) unsafe fn eval_lit_string(
     evaluate: bool,
     interpolate: bool,
 ) -> c_int {
-    unsafe {
-        let off = if interpolate { 0 } else { 1 };
-        // How much *shorter* the result is than the text: one byte per
-        // doubled quote or brace, less the terminator an interpolated piece
-        // writes. The sign is the opposite of `eval_string`'s `extra`.
-        let mut reduce: c_int = if interpolate { -1 } else { 0 };
+    // SAFETY: the caller's promise -- `arg` is the cursor into a
+    // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
+    // walks below stay inside that expression: the measuring pass stops at
+    // the NUL and the filling pass repeats it byte for byte.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let off = if interpolate { 0 } else { 1 };
+    // How much *shorter* the result is than the text: one byte per
+    // doubled quote or brace, less the terminator an interpolated piece
+    // writes. The sign is the opposite of `eval_string`'s `extra`.
+    let mut reduce: c_int = if interpolate { -1 } else { 0 };
 
-        // Find the end of the string, skipping `''`.
-        let mut p = (*arg).add(off);
-        while *p as c_int != NUL {
-            if *p == b'\'' as c_char {
-                if *p.add(1) != b'\'' as c_char {
-                    break;
-                }
-                reduce += 1;
-                p = p.add(1);
-            } else if interpolate {
-                if *p == b'{' as c_char {
-                    if *p.add(1) != b'{' as c_char {
-                        break; // start of an expression
-                    }
-                    p = p.add(1);
-                    reduce += 1;
-                } else if *p == b'}' as c_char {
-                    p = p.add(1);
-                    if *p != b'}' as c_char {
-                        semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), *arg);
-                        return FAIL;
-                    }
-                    reduce += 1;
-                }
+    // Find the end of the string, skipping `''`.
+    let mut p = unsafe { Walk::new(cur.get().add(off)) };
+    while p.byte() != NUL as u8 {
+        if p.byte() == b'\'' {
+            if p.at(1) != b'\'' {
+                break;
             }
-            p = p.offset(utfc_ptr2len(p) as isize);
-        }
-
-        if *p != b'\'' as c_char && !(interpolate && *p == b'{' as c_char) {
-            semsg_c!(gettext(c"E115: Missing quote: %s".as_ptr()), *arg);
-            return FAIL;
-        }
-        if !evaluate {
-            *arg = p.add(off);
-            return OK;
-        }
-
-        let mut str = xmalloc((p.offset_from(*arg) - reduce as isize) as size_t) as *mut c_char;
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = str;
-        p = (*arg).add(off);
-        while *p as c_int != NUL {
-            if *p == b'\'' as c_char {
-                if *p.add(1) != b'\'' as c_char {
-                    break;
-                }
-                p = p.add(1);
-            } else if interpolate && (*p == b'{' as c_char || *p == b'}' as c_char) {
-                if *p == b'{' as c_char && *p.add(1) != b'{' as c_char {
+            reduce += 1;
+            p.step(1);
+        } else if interpolate {
+            if p.byte() == b'{' {
+                if p.at(1) != b'{' {
                     break; // start of an expression
                 }
-                p = p.add(1);
+                p.step(1);
+                reduce += 1;
+            } else if p.byte() == b'}' {
+                p.step(1);
+                if p.byte() != b'}' {
+                    let text = cur.get();
+                    unsafe { semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), text) };
+                    return FAIL;
+                }
+                reduce += 1;
             }
-            mb_copy_char(&raw mut p as *mut *const c_char, &raw mut str);
         }
-        *str = NUL as c_char;
-        *arg = p.add(off);
-        OK
+        p.step(unsafe { utfc_ptr2len(p.ptr()) } as usize);
     }
+
+    if p.byte() != b'\'' && !(interpolate && p.byte() == b'{') {
+        let text = cur.get();
+        unsafe { semsg_c!(gettext(c"E115: Missing quote: %s".as_ptr()), text) };
+        return FAIL;
+    }
+    if !evaluate {
+        cur.set(unsafe { p.ptr().add(off) });
+        return OK;
+    }
+
+    let size = (unsafe { p.since(cur.get()) } - reduce as isize) as size_t;
+    let buffer = unsafe { xmalloc(size) } as *mut c_char;
+    rv.v_type = VAR_STRING;
+    rv.vval.v_string = buffer;
+    let mut str = unsafe { Walk::new(buffer) };
+    p = unsafe { Walk::new(cur.get().add(off)) };
+    while p.byte() != NUL as u8 {
+        if p.byte() == b'\'' {
+            if p.at(1) != b'\'' {
+                break;
+            }
+            p.step(1);
+        } else if interpolate && (p.byte() == b'{' || p.byte() == b'}') {
+            if p.byte() == b'{' && p.at(1) != b'{' {
+                break; // start of an expression
+            }
+            p.step(1);
+        }
+        // SAFETY: both are this frame's own walks, which `mb_copy_char`
+        // advances in place.
+        unsafe { mb_copy_char((&raw mut p).cast(), (&raw mut str).cast()) };
+    }
+    str.set(NUL as c_char);
+    cur.set(unsafe { p.ptr().add(off) });
+    OK
 }
 
 /// `$"..."` or `$'...'`, with the cursor on the `$`: alternating literal
@@ -544,52 +668,57 @@ pub(crate) unsafe fn eval_interp_string(
     rettv: *mut typval_T,
     evaluate: bool,
 ) -> c_int {
-    unsafe {
-        let mut ret = OK;
-        let mut ga = UNSET_GA;
-        ga_init(&raw mut ga, 1, 80);
+    // SAFETY: the caller's promise -- `arg` is the cursor into a
+    // NUL-terminated expression and `rettv` is valid when `evaluate`. `ga`
+    // is this frame's own and is initialised before anything appends to it.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let mut ret = OK;
+    let mut ga = UNSET_GA;
+    unsafe { ga_init(&raw mut ga, 1, 80) };
 
-        // `*arg` is on the `$`; move it to the first string character.
-        *arg = (*arg).add(1);
-        let quote = **arg as u8;
-        *arg = (*arg).add(1);
+    // `*arg` is on the `$`; move it to the first string character.
+    cur.bump(1);
+    let quote = cur.byte();
+    cur.bump(1);
 
-        loop {
-            // The piece up to the matching quote or to a single `{`; `arg`
-            // is left on whichever it was.
-            let mut tv = UNSET_TV;
-            ret = if quote == b'"' {
-                eval_string(arg, &raw mut tv, evaluate, true)
-            } else {
-                eval_lit_string(arg, &raw mut tv, evaluate, true)
-            };
-            if ret == FAIL {
-                break;
-            }
-            if evaluate {
-                ga_concat(&raw mut ga, tv.vval.v_string);
-                tv_clear(&raw mut tv);
-            }
-            if **arg != b'{' as c_char {
-                // Found the terminating quote.
-                *arg = (*arg).add(1);
-                break;
-            }
-            let p = eval_one_expr_in_str(*arg, &raw mut ga, evaluate);
-            if p.is_null() {
-                ret = FAIL;
-                break;
-            }
-            *arg = p;
+    loop {
+        // The piece up to the matching quote or to a single `{`; `arg`
+        // is left on whichever it was.
+        let mut tv = UNSET_TV;
+        let two = &raw mut tv;
+        ret = if quote == b'"' {
+            unsafe { eval_string(arg, two, evaluate, true) }
+        } else {
+            unsafe { eval_lit_string(arg, two, evaluate, true) }
+        };
+        if ret == FAIL {
+            break;
         }
-
-        (*rettv).v_type = VAR_STRING;
-        if ret != FAIL && evaluate {
-            ga_append(&raw mut ga, NUL as uint8_t);
+        if evaluate {
+            // SAFETY: the piece just parsed is a String typval.
+            unsafe { ga_concat(&raw mut ga, tv.vval.v_string) };
+            unsafe { tv_clear(two) };
         }
-        (*rettv).vval.v_string = ga.ga_data as *mut c_char;
-        OK
+        if cur.byte() != b'{' {
+            // Found the terminating quote.
+            cur.bump(1);
+            break;
+        }
+        // SAFETY: the cursor is on the `{` of a substitution.
+        let p = unsafe { eval_one_expr_in_str(cur.get(), &raw mut ga, evaluate) };
+        if p.is_null() {
+            ret = FAIL;
+            break;
+        }
+        cur.set(p);
     }
+
+    rv.v_type = VAR_STRING;
+    if ret != FAIL && evaluate {
+        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    }
+    rv.vval.v_string = ga.ga_data as *mut c_char;
+    OK
 }
 
 /// Read a Float out of `text`, answering how many bytes it consumed. The
@@ -599,26 +728,23 @@ pub(crate) unsafe fn eval_interp_string(
 /// # Safety
 /// `text` must be NUL-terminated and `ret_value` valid.
 pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut float_T) -> size_t {
-    unsafe {
-        for (name, len, value) in [
-            (c"inf", 3, f64::INFINITY),
-            (c"-inf", 4, f64::NEG_INFINITY),
-            (c"nan", 3, f64::NAN),
-        ] {
-            if strncasecmp(
-                text as *mut c_char,
-                name.as_ptr() as *mut c_char,
-                len as size_t,
-            ) == 0
-            {
-                *ret_value = value as float_T;
-                return len as size_t;
-            }
+    for (name, len, value) in [
+        (c"inf", 3, f64::INFINITY),
+        (c"-inf", 4, f64::NEG_INFINITY),
+        (c"nan", 3, f64::NAN),
+    ] {
+        let (lhs, rhs) = (text as *mut c_char, name.as_ptr() as *mut c_char);
+        // SAFETY: the caller's promise -- `text` is NUL-terminated, `name`
+        // is a literal, and `ret_value` is valid.
+        if unsafe { strncasecmp(lhs, rhs, len as size_t) } == 0 {
+            unsafe { *ret_value = value as float_T };
+            return len as size_t;
         }
-        let mut s: *mut c_char = null_mut();
-        *ret_value = strtod(text, &raw mut s) as float_T;
-        s.offset_from(text) as size_t
     }
+    let mut s: *mut c_char = null_mut();
+    // SAFETY: as above; `strtod` leaves `s` inside `text`.
+    unsafe { *ret_value = strtod(text, &raw mut s) as float_T };
+    unsafe { s.offset_from(text) as size_t }
 }
 
 /// `$NAME`, with the cursor on the `$`.
@@ -631,37 +757,41 @@ pub(crate) unsafe fn eval_env_var(
     rettv: *mut typval_T,
     evaluate: bool,
 ) -> c_int {
-    unsafe {
-        *arg = (*arg).add(1);
-        let name = *arg;
-        let len = get_env_len(arg as *mut *const c_char);
-        if !evaluate {
-            return OK;
-        }
-        if len == 0 {
-            return FAIL;
-        }
-
-        // The name is terminated in place across the two lookups.
-        let cc = *name.offset(len as isize);
-        *name.offset(len as isize) = NUL as c_char;
-        let mut string = vim_getenv(name);
-        if string.is_null() || *string as c_int == NUL {
-            xfree(string as *mut c_void);
-            // Not in the environment: let `expand_env` have it, which knows
-            // the names nvim answers itself. A result that still starts with
-            // `$` is the name coming back unexpanded.
-            string = expand_env_save(name.sub(1));
-            if !string.is_null() && *string == b'$' as c_char {
-                xfree(string as *mut c_void);
-                string = null_mut();
-            }
-        }
-        *name.offset(len as isize) = cc;
-
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = string;
-        (*rettv).v_lock = VarLock::Unlocked;
-        OK
+    // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
+    // NUL-terminated expression and `rettv` is valid when `evaluate`.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    cur.bump(1);
+    let name = cur.get();
+    let len = unsafe { get_env_len(cur.raw().cast()) };
+    if !evaluate {
+        return OK;
     }
+    if len == 0 {
+        return FAIL;
+    }
+
+    // The name is terminated in place across the two lookups.
+    // SAFETY: `name` is `len` bytes inside the expression, which is
+    // writable, and the byte after them is the one being blanked.
+    let end = name.wrapping_offset(len as isize);
+    let cc = unsafe { *end };
+    unsafe { *end = NUL as c_char };
+    let mut string = unsafe { vim_getenv(name) };
+    if string.is_null() || unsafe { *string } as c_int == NUL {
+        unsafe { xfree(string as *mut c_void) };
+        // Not in the environment: let `expand_env` have it, which knows
+        // the names nvim answers itself. A result that still starts with
+        // `$` is the name coming back unexpanded.
+        string = unsafe { expand_env_save(name.sub(1)) };
+        if !string.is_null() && unsafe { *string } == b'$' as c_char {
+            unsafe { xfree(string as *mut c_void) };
+            string = null_mut();
+        }
+    }
+    unsafe { *end = cc };
+
+    rv.v_type = VAR_STRING;
+    rv.vval.v_string = string;
+    rv.v_lock = VarLock::Unlocked;
+    OK
 }

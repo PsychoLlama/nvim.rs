@@ -48,58 +48,56 @@ pub(crate) unsafe fn eval_list(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
 ) -> c_int {
-    unsafe {
-        let evaluate = evaluating(evalarg);
-        let list: *mut list_T = if evaluate {
-            tv_list_alloc(kListLenShouldKnow as ptrdiff_t)
-        } else {
-            null_mut()
-        };
-        *arg = skipwhite((*arg).add(1));
+    let evaluate = unsafe { evaluating(evalarg) };
+    let list: *mut list_T = if evaluate {
+        unsafe { tv_list_alloc(kListLenShouldKnow as ptrdiff_t) }
+    } else {
+        null_mut()
+    };
+    unsafe { *arg  = skipwhite((*arg).add(1)) };
 
-        let ok = 'items: {
-            while **arg != b']' as c_char && **arg as c_int != NUL {
-                let mut tv = UNSET_TV;
-                if eval1(arg, &raw mut tv, evalarg) == FAIL {
-                    break 'items false;
-                }
-                if evaluate {
-                    tv.v_lock = VarLock::Unlocked;
-                    tv_list_append_owned_tv(list, tv);
-                }
-                let had_comma = **arg == b',' as c_char;
-                if had_comma {
-                    *arg = skipwhite((*arg).add(1));
-                }
-                if **arg == b']' as c_char {
-                    break;
-                }
-                // A trailing comma is allowed; a missing one is not.
-                if had_comma {
-                    continue;
-                }
-                semsg_c!(gettext(c"E696: Missing comma in List: %s".as_ptr()), *arg);
+    let ok = 'items: {
+        while unsafe { **arg } != b']' as c_char && unsafe { **arg } as c_int != NUL {
+            let mut tv = UNSET_TV;
+            if unsafe { eval1(arg, &raw mut tv, evalarg) } == FAIL {
                 break 'items false;
             }
-            if **arg != b']' as c_char {
-                semsg_c!(gettext(e_list_end.as_ptr()), *arg);
-                break 'items false;
-            }
-            *arg = skipwhite((*arg).add(1));
             if evaluate {
-                tv_list_set_ret(rettv, list);
+                tv.v_lock = VarLock::Unlocked;
+                unsafe { tv_list_append_owned_tv(list, tv) };
             }
-            true
-        };
-
-        if ok {
-            return OK;
+            let had_comma = unsafe { **arg } == b',' as c_char;
+            if had_comma {
+                unsafe { *arg  = skipwhite((*arg).add(1)) };
+            }
+            if unsafe { **arg } == b']' as c_char {
+                break;
+            }
+            // A trailing comma is allowed; a missing one is not.
+            if had_comma {
+                continue;
+            }
+            semsg_c!(unsafe { gettext(c"E696: Missing comma in List: %s".as_ptr()) }, unsafe { *arg });
+            break 'items false;
         }
+        if unsafe { **arg } != b']' as c_char {
+            semsg_c!(unsafe { gettext(e_list_end.as_ptr()) }, unsafe { *arg });
+            break 'items false;
+        }
+        unsafe { *arg  = skipwhite((*arg).add(1)) };
         if evaluate {
-            tv_list_free(list);
+            unsafe { tv_list_set_ret(rettv, list) };
         }
-        FAIL
+        true
+    };
+
+    if ok {
+        return OK;
     }
+    if evaluate {
+        unsafe { tv_list_free(list) };
+    }
+    FAIL
 }
 
 /// The bare word a `#{}` literal uses as a key.
@@ -113,19 +111,17 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut typval_T) -
         b.is_ascii_alphabetic() || ascii_isdigit(c as c_int) || b == b'_' || b == b'-'
     }
 
-    unsafe {
-        if !is_key_char(**arg) {
-            return FAIL;
-        }
-        let mut p = *arg;
-        while is_key_char(*p) {
-            p = p.add(1);
-        }
-        (*tv).v_type = VAR_STRING;
-        (*tv).vval.v_string = xmemdupz((*arg).cast(), p.offset_from(*arg) as size_t) as *mut c_char;
-        *arg = skipwhite(p);
-        OK
+    if !is_key_char(unsafe { **arg }) {
+        return FAIL;
     }
+    let mut p = unsafe { *arg };
+    while is_key_char(unsafe { *p }) {
+        p = unsafe { p.add(1) };
+    }
+    unsafe { (*tv) .v_type  = VAR_STRING };
+    unsafe { (*tv) .vval.v_string  = xmemdupz((*arg).cast(), p.offset_from(*arg) as size_t) as *mut c_char };
+    unsafe { *arg  = skipwhite(p) };
+    OK
 }
 
 /// `{k: v}` and, with `literal` set, `#{k: v}`.
@@ -141,123 +137,121 @@ pub(crate) unsafe fn eval_dict(
     evalarg: *mut evalarg_T,
     literal: bool,
 ) -> c_int {
-    unsafe {
-        let evaluate = evaluating(evalarg);
-        let mut tv = UNSET_TV;
-        let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let evaluate = unsafe { evaluating(evalarg) };
+    let mut tv = UNSET_TV;
+    let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
 
-        // Is this `{expr}` rather than a Dict? It has to be decided without
-        // evaluating, or a function in it would be called twice — which is
-        // also why `eval1` is handed no `evalarg`. `{}` is an empty Dict and
-        // `#{abc}` is never a curly-braces name.
-        let mut curly_expr = skipwhite((*arg).add(1));
-        if *curly_expr != b'}' as c_char
-            && !literal
-            && eval1(&raw mut curly_expr, &raw mut tv, null_mut()) == OK
-            && *skipwhite(curly_expr) == b'}' as c_char
-        {
-            return NOTDONE;
-        }
-
-        let dict: *mut dict_T = if evaluate {
-            tv_dict_alloc()
-        } else {
-            null_mut()
-        };
-        let mut tvkey = UNSET_TV;
-        tv = UNSET_TV;
-        *arg = skipwhite((*arg).add(1));
-
-        let ok = 'items: {
-            while **arg != b'}' as c_char && **arg as c_int != NUL {
-                let read_key = if literal {
-                    get_literal_key(arg, &raw mut tvkey)
-                } else {
-                    eval1(arg, &raw mut tvkey, evalarg)
-                };
-                if read_key == FAIL {
-                    break 'items false;
-                }
-                if **arg != b':' as c_char {
-                    semsg_c!(
-                        gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()),
-                        *arg,
-                    );
-                    tv_clear(&raw mut tvkey);
-                    break 'items false;
-                }
-
-                // The key borrows `buf`, so it must not outlive this pass.
-                let mut key: *mut c_char = null_mut();
-                if evaluate {
-                    key = tv_get_string_buf_chk(&raw mut tvkey, buf.as_mut_ptr()) as *mut c_char;
-                    if key.is_null() {
-                        tv_clear(&raw mut tvkey);
-                        break 'items false;
-                    }
-                }
-                *arg = skipwhite((*arg).add(1));
-                if eval1(arg, &raw mut tv, evalarg) == FAIL {
-                    tv_clear(&raw mut tvkey);
-                    break 'items false;
-                }
-                if evaluate {
-                    if !tv_dict_find(dict, key, -1 as ptrdiff_t).is_null() {
-                        semsg_c!(
-                            gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()),
-                            key,
-                        );
-                        tv_clear(&raw mut tvkey);
-                        tv_clear(&raw mut tv);
-                        break 'items false;
-                    }
-                    let item: *mut dictitem_T = tv_dict_item_alloc(key);
-                    (*item).di_tv = tv;
-                    (*item).di_tv.v_lock = VarLock::Unlocked;
-                    if tv_dict_add(dict, item) == FAIL {
-                        tv_dict_item_free(item);
-                    }
-                }
-                tv_clear(&raw mut tvkey);
-
-                let had_comma = **arg == b',' as c_char;
-                if had_comma {
-                    *arg = skipwhite((*arg).add(1));
-                }
-                if **arg == b'}' as c_char {
-                    break;
-                }
-                if had_comma {
-                    continue;
-                }
-                semsg_c!(
-                    gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()),
-                    *arg,
-                );
-                break 'items false;
-            }
-            if **arg != b'}' as c_char {
-                semsg_c!(
-                    gettext(c"E723: Missing end of Dictionary '}': %s".as_ptr()),
-                    *arg,
-                );
-                break 'items false;
-            }
-            *arg = skipwhite((*arg).add(1));
-            if evaluate {
-                tv_dict_set_ret(rettv, dict);
-            }
-            true
-        };
-
-        if ok {
-            return OK;
-        }
-        if !dict.is_null() {
-            tv_dict_free(dict);
-        }
-        FAIL
+    // Is this `{expr}` rather than a Dict? It has to be decided without
+    // evaluating, or a function in it would be called twice — which is
+    // also why `eval1` is handed no `evalarg`. `{}` is an empty Dict and
+    // `#{abc}` is never a curly-braces name.
+    let mut curly_expr = unsafe { skipwhite((*arg).add(1)) };
+    if unsafe { *curly_expr } != b'}' as c_char
+        && !literal
+        && unsafe { eval1(&raw mut curly_expr, &raw mut tv, null_mut()) } == OK
+        && unsafe { *skipwhite(curly_expr) } == b'}' as c_char
+    {
+        return NOTDONE;
     }
+
+    let dict: *mut dict_T = if evaluate {
+        unsafe { tv_dict_alloc() }
+    } else {
+        null_mut()
+    };
+    let mut tvkey = UNSET_TV;
+    tv = UNSET_TV;
+    unsafe { *arg  = skipwhite((*arg).add(1)) };
+
+    let ok = 'items: {
+        while unsafe { **arg } != b'}' as c_char && unsafe { **arg } as c_int != NUL {
+            let read_key = if literal {
+                unsafe { get_literal_key(arg, &raw mut tvkey) }
+            } else {
+                unsafe { eval1(arg, &raw mut tvkey, evalarg) }
+            };
+            if read_key == FAIL {
+                break 'items false;
+            }
+            if unsafe { **arg } != b':' as c_char {
+                semsg_c!(
+                    unsafe { gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()) },
+                    unsafe { *arg },
+                );
+                unsafe { tv_clear(&raw mut tvkey) };
+                break 'items false;
+            }
+
+            // The key borrows `buf`, so it must not outlive this pass.
+            let mut key: *mut c_char = null_mut();
+            if evaluate {
+                key = unsafe { tv_get_string_buf_chk(&raw mut tvkey, buf.as_mut_ptr()) } as *mut c_char;
+                if key.is_null() {
+                    unsafe { tv_clear(&raw mut tvkey) };
+                    break 'items false;
+                }
+            }
+            unsafe { *arg  = skipwhite((*arg).add(1)) };
+            if unsafe { eval1(arg, &raw mut tv, evalarg) } == FAIL {
+                unsafe { tv_clear(&raw mut tvkey) };
+                break 'items false;
+            }
+            if evaluate {
+                if !unsafe { tv_dict_find(dict, key, -1 as ptrdiff_t) }.is_null() {
+                    semsg_c!(
+                        unsafe { gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()) },
+                        key,
+                    );
+                    unsafe { tv_clear(&raw mut tvkey) };
+                    unsafe { tv_clear(&raw mut tv) };
+                    break 'items false;
+                }
+                let item: *mut dictitem_T = unsafe { tv_dict_item_alloc(key) };
+                unsafe { (*item) .di_tv  = tv };
+                unsafe { (*item) .di_tv.v_lock  = VarLock::Unlocked };
+                if unsafe { tv_dict_add(dict, item) } == FAIL {
+                    unsafe { tv_dict_item_free(item) };
+                }
+            }
+            unsafe { tv_clear(&raw mut tvkey) };
+
+            let had_comma = unsafe { **arg } == b',' as c_char;
+            if had_comma {
+                unsafe { *arg  = skipwhite((*arg).add(1)) };
+            }
+            if unsafe { **arg } == b'}' as c_char {
+                break;
+            }
+            if had_comma {
+                continue;
+            }
+            semsg_c!(
+                unsafe { gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()) },
+                unsafe { *arg },
+            );
+            break 'items false;
+        }
+        if unsafe { **arg } != b'}' as c_char {
+            semsg_c!(
+                unsafe { gettext(c"E723: Missing end of Dictionary '}': %s".as_ptr()) },
+                unsafe { *arg },
+            );
+            break 'items false;
+        }
+        unsafe { *arg  = skipwhite((*arg).add(1)) };
+        if evaluate {
+            unsafe { tv_dict_set_ret(rettv, dict) };
+        }
+        true
+    };
+
+    if ok {
+        return OK;
+    }
+    if !dict.is_null() {
+        unsafe { tv_dict_free(dict) };
+    }
+    FAIL
 }
 
 /// `#{...}`, with the cursor on the `#`.
@@ -269,11 +263,9 @@ pub(crate) unsafe fn eval_lit_dict(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
 ) -> c_int {
-    unsafe {
-        if *(*arg).add(1) != b'{' as c_char {
-            return NOTDONE;
-        }
-        *arg = (*arg).add(1);
-        eval_dict(arg, rettv, evalarg, true)
+    if unsafe { *(*arg).add(1) } != b'{' as c_char {
+        return NOTDONE;
     }
+    unsafe { *arg  = (*arg).add(1) };
+    unsafe { eval_dict(arg, rettv, evalarg, true) }
 }

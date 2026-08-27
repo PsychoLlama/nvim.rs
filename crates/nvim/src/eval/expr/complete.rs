@@ -27,137 +27,135 @@ pub(crate) unsafe fn set_context_for_expression(
     mut arg: *mut c_char,
     cmdidx: cmdidx_T,
 ) {
-    unsafe {
-        let mut got_eq = false;
+    let mut got_eq = false;
 
-        if cmdidx == CMD_let || cmdidx == CMD_const {
-            (*xp).xp_context = ExpandContext::UserVars;
-            if strpbrk(arg, BREAKS.as_ptr()).is_null() {
-                // ":let var1 var2 ...": find the last space.
-                let mut p = arg.add(strlen(arg) as usize);
-                loop {
-                    (*xp).xp_pattern = p;
-                    // Upstream steps back unconditionally and so reads the
-                    // byte before `arg` on the last pass; the answer is the
-                    // same either way, since the loop ends there.
-                    if p == arg {
-                        break;
-                    }
-                    p = p.sub(utf_head_off(arg, p.sub(1)) as usize + 1);
-                    if ascii_iswhite(*p as c_int) {
-                        break;
-                    }
-                }
-                return;
-            }
-        } else {
-            (*xp).xp_context = if cmdidx == CMD_call {
-                ExpandContext::Functions
-            } else {
-                ExpandContext::Expression
-            };
-        }
-
-        loop {
-            (*xp).xp_pattern = strpbrk(arg, BREAKS.as_ptr());
-            if (*xp).xp_pattern.is_null() {
-                break;
-            }
-            let mut c = *(*xp).xp_pattern as u8 as c_int;
-            if c == '&' as c_int {
-                c = *(*xp).xp_pattern.add(1) as u8 as c_int;
-                if c == '&' as c_int {
-                    (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                    (*xp).xp_context = if cmdidx != CMD_let || got_eq {
-                        ExpandContext::Expression
-                    } else {
-                        ExpandContext::Nothing
-                    };
-                } else if c != ' ' as c_int {
-                    (*xp).xp_context = ExpandContext::Settings;
-                    if (c == 'l' as c_int || c == 'g' as c_int)
-                        && *(*xp).xp_pattern.add(2) == b':' as c_char
-                    {
-                        (*xp).xp_pattern = (*xp).xp_pattern.add(2);
-                    }
-                }
-            } else if c == '$' as c_int {
-                // environment variable
-                (*xp).xp_context = ExpandContext::EnvVars;
-            } else if c == '=' as c_int {
-                got_eq = true;
-                (*xp).xp_context = ExpandContext::Expression;
-            } else if c == '#' as c_int && (*xp).xp_context == ExpandContext::Expression {
-                // An autoload function or variable contains '#'.
-                break;
-            } else if (c == '<' as c_int || c == '#' as c_int)
-                && (*xp).xp_context == ExpandContext::Functions
-                && vim_strchr((*xp).xp_pattern, '(' as c_int).is_null()
-            {
-                // A function name can start with "<SNR>" and contain '#'.
-                break;
-            } else if cmdidx != CMD_let || got_eq {
-                if c == '"' as c_int {
-                    // a string
-                    loop {
-                        (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                        c = *(*xp).xp_pattern as u8 as c_int;
-                        if c == NUL || c == '"' as c_int {
-                            break;
-                        }
-                        if c == '\\' as c_int && *(*xp).xp_pattern.add(1) as c_int != NUL {
-                            (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                        }
-                    }
-                    (*xp).xp_context = ExpandContext::Nothing;
-                } else if c == '\'' as c_int {
-                    // A literal string; `''` is like stopping and starting
-                    // one, which this walk gets right by accident.
-                    loop {
-                        (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                        c = *(*xp).xp_pattern as u8 as c_int;
-                        if c == NUL || c == '\'' as c_int {
-                            break;
-                        }
-                    }
-                    (*xp).xp_context = ExpandContext::Nothing;
-                } else if c == '|' as c_int {
-                    if *(*xp).xp_pattern.add(1) == b'|' as c_char {
-                        (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                        (*xp).xp_context = ExpandContext::Expression;
-                    } else {
-                        (*xp).xp_context = ExpandContext::Commands;
-                    }
-                } else {
-                    (*xp).xp_context = ExpandContext::Expression;
-                }
-            } else {
-                // Nothing that looks valid; expand as an expression anyway.
-                (*xp).xp_context = ExpandContext::Expression;
-            }
-
-            arg = (*xp).xp_pattern;
-            if *arg as c_int != NUL {
-                loop {
-                    arg = arg.add(1);
-                    c = *arg as u8 as c_int;
-                    if c == NUL || (c != ' ' as c_int && c != '\t' as c_int) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // ":exe one two" completes "two".
-        if cmd_has_expr_args(cmdidx) && (*xp).xp_context == ExpandContext::Expression {
+    if cmdidx == CMD_let || cmdidx == CMD_const {
+        unsafe { (*xp) .xp_context  = ExpandContext::UserVars };
+        if unsafe { strpbrk(arg, BREAKS.as_ptr()) }.is_null() {
+            // ":let var1 var2 ...": find the last space.
+            let mut p = unsafe { arg.add(strlen(arg) as usize) };
             loop {
-                let n = skiptowhite(arg);
-                if n == arg || ascii_iswhite_or_nul(*skipwhite(n) as c_int) {
+                unsafe { (*xp) .xp_pattern  = p };
+                // Upstream steps back unconditionally and so reads the
+                // byte before `arg` on the last pass; the answer is the
+                // same either way, since the loop ends there.
+                if p == arg {
                     break;
                 }
-                arg = skipwhite(n);
+                p = unsafe { p.sub(utf_head_off(arg, p.sub(1)) as usize + 1) };
+                if ascii_iswhite(unsafe { *p } as c_int) {
+                    break;
+                }
+            }
+            return;
+        }
+    } else {
+        unsafe { (*xp) .xp_context  = if cmdidx == CMD_call {
+            ExpandContext::Functions
+        } else {
+            ExpandContext::Expression
+        } };
+    }
+
+    loop {
+        unsafe { (*xp) .xp_pattern  = strpbrk(arg, BREAKS.as_ptr()) };
+        if unsafe { (*xp) .xp_pattern }.is_null() {
+            break;
+        }
+        let mut c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+        if c == '&' as c_int {
+            c = unsafe { *(*xp).xp_pattern.add(1) } as u8 as c_int;
+            if c == '&' as c_int {
+                unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                unsafe { (*xp) .xp_context  = if cmdidx != CMD_let || got_eq {
+                    ExpandContext::Expression
+                } else {
+                    ExpandContext::Nothing
+                } };
+            } else if c != ' ' as c_int {
+                unsafe { (*xp) .xp_context  = ExpandContext::Settings };
+                if (c == 'l' as c_int || c == 'g' as c_int)
+                    && unsafe { *(*xp).xp_pattern.add(2) } == b':' as c_char
+                {
+                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(2) };
+                }
+            }
+        } else if c == '$' as c_int {
+            // environment variable
+            unsafe { (*xp) .xp_context  = ExpandContext::EnvVars };
+        } else if c == '=' as c_int {
+            got_eq = true;
+            unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+        } else if c == '#' as c_int && unsafe { (*xp) .xp_context } == ExpandContext::Expression {
+            // An autoload function or variable contains '#'.
+            break;
+        } else if (c == '<' as c_int || c == '#' as c_int)
+            && unsafe { (*xp) .xp_context } == ExpandContext::Functions
+            && unsafe { vim_strchr((*xp).xp_pattern, '(' as c_int) }.is_null()
+        {
+            // A function name can start with "<SNR>" and contain '#'.
+            break;
+        } else if cmdidx != CMD_let || got_eq {
+            if c == '"' as c_int {
+                // a string
+                loop {
+                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                    c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+                    if c == NUL || c == '"' as c_int {
+                        break;
+                    }
+                    if c == '\\' as c_int && unsafe { *(*xp).xp_pattern.add(1) } as c_int != NUL {
+                        unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                    }
+                }
+                unsafe { (*xp) .xp_context  = ExpandContext::Nothing };
+            } else if c == '\'' as c_int {
+                // A literal string; `''` is like stopping and starting
+                // one, which this walk gets right by accident.
+                loop {
+                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                    c = unsafe { *(*xp).xp_pattern } as u8 as c_int;
+                    if c == NUL || c == '\'' as c_int {
+                        break;
+                    }
+                }
+                unsafe { (*xp) .xp_context  = ExpandContext::Nothing };
+            } else if c == '|' as c_int {
+                if unsafe { *(*xp).xp_pattern.add(1) } == b'|' as c_char {
+                    unsafe { (*xp) .xp_pattern  = (*xp) .xp_pattern.add(1) };
+                    unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+                } else {
+                    unsafe { (*xp) .xp_context  = ExpandContext::Commands };
+                }
+            } else {
+                unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+            }
+        } else {
+            // Nothing that looks valid; expand as an expression anyway.
+            unsafe { (*xp) .xp_context  = ExpandContext::Expression };
+        }
+
+        arg = unsafe { (*xp) .xp_pattern };
+        if unsafe { *arg } as c_int != NUL {
+            loop {
+                arg = unsafe { arg.add(1) };
+                c = unsafe { *arg } as u8 as c_int;
+                if c == NUL || (c != ' ' as c_int && c != '\t' as c_int) {
+                    break;
+                }
             }
         }
-        (*xp).xp_pattern = arg;
     }
+
+    // ":exe one two" completes "two".
+    if cmd_has_expr_args(cmdidx) && unsafe { (*xp) .xp_context } == ExpandContext::Expression {
+        loop {
+            let n = unsafe { skiptowhite(arg) };
+            if n == arg || ascii_iswhite_or_nul(unsafe { *skipwhite(n) } as c_int) {
+                break;
+            }
+            arg = unsafe { skipwhite(n) };
+        }
+    }
+    unsafe { (*xp) .xp_pattern  = arg };
 }
