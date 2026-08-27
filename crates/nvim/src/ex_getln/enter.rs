@@ -359,7 +359,7 @@ pub(crate) unsafe fn command_line_enter(
         // the mode() function.
         if !cmd_silent.get() && !exmode_active.get() {
             let mut found_one = false;
-            for wp in unsafe { windows_in_curtab() } {
+            for wp in windows_in_curtab() {
                 if unsafe { *p_stl.get() } as ::core::ffi::c_int != NUL
                     || unsafe { *(*wp).w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
                     || unsafe { *p_wbr.get() } as ::core::ffi::c_int != NUL

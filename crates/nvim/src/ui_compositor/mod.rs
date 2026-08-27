@@ -388,7 +388,7 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
         // `comp_row`/`comp_col`; the window's own position stands in.
         // SAFETY: the caller's obligation; nothing here restructures the
         // window list.
-        for wp in unsafe { windows_in_curtab() } {
+        for wp in windows_in_curtab() {
             // SAFETY: `wp` came from the live window list.
             let (grid, winrow, wincol) = unsafe { (win_layer(wp), (*wp).w_winrow, (*wp).w_wincol) };
             if grid.mouse_enabled
@@ -413,7 +413,7 @@ pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGr
         return grid.raw();
     }
     // SAFETY: the caller's obligation.
-    for wp in unsafe { windows_in_curtab() } {
+    for wp in windows_in_curtab() {
         // SAFETY: `wp` came from the live window list.
         let (grid, hidden) = unsafe { (win_layer(wp), (*wp).w_config.hide) };
         if grid.covers(row, col) && !hidden {

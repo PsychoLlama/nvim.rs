@@ -145,10 +145,11 @@ pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int
 /// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, i.e. [`winlayer::windows`] handing
 /// back the raw pointer its callers still take.
 ///
-/// # Safety
-/// The window list must not be restructured while the iterator is live, and
-/// the pointers it yields are only live for as long as that holds.
-pub(crate) unsafe fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
+/// Safe: handing out an address reads nothing, and [`winlayer::windows`] is
+/// itself safe — it walks the registry, so the walk has the C's
+/// `FOR_ALL_WINDOWS_IN_TAB` timing (the next link is read before the body).
+/// What the *caller* does with the pointer is the unsafe part, and stays so.
+pub(crate) fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
     winlayer::windows().map(Win::raw)
 }
 
