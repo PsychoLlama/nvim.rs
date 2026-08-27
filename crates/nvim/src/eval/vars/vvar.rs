@@ -50,6 +50,15 @@ fn vimvar_val(idx: Vv) -> Tv {
     unsafe { Tv::new(vimvar(idx).field_ptr(offset_of!(VimVar, vv_di.di_tv))) }
 }
 
+/// Clear `v:` variable `idx`, freeing whatever it holds.
+///
+/// Safe: `tv_clear`'s only precondition is a live, writable value, and a row
+/// of the `v:` table is one for the whole program.
+fn clear_vimvar(idx: Vv) {
+    // SAFETY: a row of a live `static` table.
+    unsafe { tv_clear(vimvar_val(idx).raw()) };
+}
+
 /// The key of `v:` variable `idx`, as the hashtab spells it.
 fn vimvar_key(idx: Vv) -> *mut c_char {
     vimvar_row_key(vimvar(idx))
@@ -198,8 +207,7 @@ pub unsafe fn set_vim_var_type(idx: Vv, type_0: VarType) {
 /// As [`get_vim_var_tv`].
 pub unsafe fn set_vim_var_nr(idx: Vv, val: varnumber_T) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.vval.v_number = val;
 }
 
@@ -209,8 +217,7 @@ pub unsafe fn set_vim_var_nr(idx: Vv, val: varnumber_T) {
 /// As [`get_vim_var_tv`].
 pub unsafe fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.v_type = VAR_BOOL;
     tv.vval.v_bool = val;
 }
@@ -221,8 +228,7 @@ pub unsafe fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
 /// As [`get_vim_var_tv`].
 pub unsafe fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.v_type = VAR_SPECIAL;
     tv.vval.v_special = val;
 }
@@ -248,8 +254,7 @@ pub unsafe fn set_vim_var_char(c: c_int) {
 /// As [`get_vim_var_tv`]; `val` is NULL or readable for `len`.
 pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.v_type = VAR_STRING;
     tv.vval.v_string = if val.is_null() {
         ptr::null_mut()
@@ -268,8 +273,7 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 /// As [`get_vim_var_tv`]; `val` is NULL or a live list.
 pub unsafe fn set_vim_var_list(idx: Vv, val: *mut list_T) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.v_type = VAR_LIST;
     tv.vval.v_list = val;
     if !val.is_null() {
@@ -285,8 +289,7 @@ pub unsafe fn set_vim_var_list(idx: Vv, val: *mut list_T) {
 /// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
 pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
     let mut tv = vimvar_val(idx);
-    // SAFETY: a live `v:` value.
-    unsafe { tv_clear(tv.raw()) };
+    clear_vimvar(idx);
     tv.v_type = VAR_DICT;
     tv.vval.v_dict = val;
     if val.is_null() {

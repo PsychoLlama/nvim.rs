@@ -23,6 +23,47 @@ use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
 
+/// Argument `i` as a Number.
+///
+/// Safe: [`Args`] carries the promise for the whole frame -- every index it
+/// answers is a live typval -- which is `tv_get_number`'s only precondition.
+/// The same goes for the two below it.
+pub(crate) fn arg_number(args: Args<'_>, i: usize) -> varnumber_T {
+    // SAFETY: `Args` promises a live typval at every index.
+    unsafe { tv_get_number(args.ptr(i)) }
+}
+
+/// Argument `i` as a Number, answering 0 for a value that has none.
+pub(crate) fn arg_number_chk(args: Args<'_>, i: usize) -> varnumber_T {
+    // SAFETY: as [`arg_number`].
+    unsafe { tv_get_number_chk(args.ptr(i), ptr::null_mut()) }
+}
+
+/// The window argument `i` names: an id in any tab page, or a number in the
+/// current one.
+pub(crate) fn arg_win(args: Args<'_>, i: usize) -> Option<Win> {
+    // SAFETY: as [`arg_number`].
+    unsafe { find_win_by_nr_or_id(args.ptr(i)) }
+}
+
+/// The window the editor is working in.
+pub(crate) fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The buffer the editor is working in.
+pub(crate) fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The tab page the editor is working in.
+pub(crate) fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
+}
+
 /// The window with id `id`, in whichever tab page holds it.
 pub fn win_by_id(id: c_int) -> Option<Win> {
     win_and_tab_by_id(id).map(|(wp, _)| wp)

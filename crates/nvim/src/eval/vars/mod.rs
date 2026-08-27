@@ -118,51 +118,9 @@ pub use self::scoped::*;
 pub use self::store::*;
 pub use self::unlet::*;
 pub use self::vvar::*;
-/// Clear a value this frame owns, freeing whatever it holds.
-///
-/// Safe: `tv_clear`'s only precondition is a live, writable value, which an
-/// exclusive borrow of the caller's own local is. Nothing it frees runs user
-/// code, so the borrow cannot be re-entered through.
-pub(crate) fn clear_local(tv: &mut typval_T) {
-    // SAFETY: an exclusive borrow of a live local.
-    unsafe { tv_clear(&raw mut *tv) };
-}
-
 /// One of the `list_*_vars` scope listers: everything a bare `g:`/`b:`/`w:`/
 /// ... can name, whether on a `:let` line or as the whole of one.
 pub(crate) type ScopeLister = unsafe fn(*mut c_int);
-
-/// The translation of one of the editor's message strings, which are held as
-/// NUL-terminated `static` byte arrays.
-///
-/// Safe because the whole array is passed rather than a pointer into it: its
-/// last byte is the terminator, so `gettext` is handed a NUL-terminated
-/// string, and what it answers is either that `static` or one of its own --
-/// both of which outlive the report it is passed to.
-pub(crate) fn translate<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
-    debug_assert_eq!(msg[N - 1], 0, "an editor message is NUL-terminated");
-    // SAFETY: a NUL-terminated `static`, as the assertion above says.
-    unsafe { gettext(msg.as_ptr()) }
-}
-
-/// [`translate`] for a message written as a literal, where the terminator is
-/// the type's own guarantee.
-pub(crate) fn translate_lit(msg: &'static CStr) -> *const c_char {
-    // SAFETY: a `CStr` is NUL-terminated by construction.
-    unsafe { gettext(msg.as_ptr()) }
-}
-
-/// Report one of the editor's `static` messages, translated.
-pub(crate) fn emsg_static<const N: usize>(msg: &'static [c_char; N]) {
-    // SAFETY: [`translate`]'s answer is a live NUL-terminated string.
-    unsafe { emsg(translate(msg)) };
-}
-
-/// [`emsg_static`] for a message written as a literal.
-pub(crate) fn emsg_lit(msg: &'static CStr) {
-    // SAFETY: as [`emsg_static`].
-    unsafe { emsg(translate_lit(msg)) };
-}
 
 /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
 pub const _ISlower: c_uint = 512;

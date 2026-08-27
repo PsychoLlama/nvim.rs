@@ -36,6 +36,10 @@ pub use resolve::{
     f_win_id2win, f_winbufnr, f_winnr, find_tabwin, find_win_by_nr, find_win_by_nr_or_id,
     win_and_tab_by_id, win_by_id,
 };
+// The family's shared views of the editor's roots and of one argument. They
+// live in `resolve` because resolving an argument to a window is its job,
+// and are named here so that `use super::*` finds them.
+pub(crate) use resolve::{arg_number, arg_number_chk, arg_win, cur_buf, cur_tab, cur_win};
 pub use switch::{
     f_win_execute, restore_win, restore_win_noblock, switch_win, switch_win_noblock,
     win_execute_after, win_execute_before,
@@ -89,47 +93,6 @@ use crate::window::{
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
     win_valid, win_vert_neighbor,
 };
-/// Argument `i` as a Number.
-///
-/// Safe: [`Args`] carries the promise for the whole frame -- every index it
-/// answers is a live typval -- which is `tv_get_number`'s only precondition.
-/// The same goes for the two below it.
-pub(super) fn arg_number(args: Args<'_>, i: usize) -> varnumber_T {
-    // SAFETY: `Args` promises a live typval at every index.
-    unsafe { tv_get_number(args.ptr(i)) }
-}
-
-/// Argument `i` as a Number, answering 0 for a value that has none.
-pub(super) fn arg_number_chk(args: Args<'_>, i: usize) -> varnumber_T {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_number_chk(args.ptr(i), ptr::null_mut()) }
-}
-
-/// The window argument `i` names: an id in any tab page, or a number in the
-/// current one.
-pub(super) fn arg_win(args: Args<'_>, i: usize) -> Option<Win> {
-    // SAFETY: as [`arg_number`].
-    unsafe { find_win_by_nr_or_id(args.ptr(i)) }
-}
-
-/// The window the editor is working in.
-pub(super) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
-}
-
-/// The buffer the editor is working in.
-pub(super) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The tab page the editor is working in.
-pub(super) fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
-}
-
 /// The three window pointers a tab page keeps, read the way upstream reads
 /// them.
 ///
