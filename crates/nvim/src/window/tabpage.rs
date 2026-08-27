@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::allocator::Owned;
 use crate::autocmd::{
     EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABENTER, EVENT_TABLEAVE, EVENT_TABNEW,
     EVENT_TABNEWENTERED, EVENT_WINENTER, EVENT_WINLEAVE, EVENT_WINNEW, block_autocmds,
@@ -34,7 +35,7 @@ use crate::main::{
     first_tabpage, firstwin, lastused_tabpage, lastwin, p_ch, p_tpm, postponed_split_tab, prevwin,
     redraw_tabline, skip_win_fix_scroll, starting, tabpage_move_disallowed, topframe,
 };
-use crate::memory::{xcalloc, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
 use crate::normal::reset_VIsual_and_resel;
@@ -79,12 +80,16 @@ pub(crate) fn adopt_tabpage(tp: TabPage) {
 /// Allocate a `tabpage_T` and fill in its defaults.
 pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
-    // SAFETY: `xcalloc` aborts rather than answering null, so this is a fresh
-    // zeroed `tabpage_T`, live from here on.
-    let mut tp = unsafe { TabPage::new(xcalloc(1, size_of::<tabpage_T>()) as *mut tabpage_T) };
+    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(tabpage_T))`
+    // hands a fresh tab page, and every field of `tabpage_S` that owns an
+    // allocation is null when zeroed.
+    let owned = Owned::new(unsafe { Box::<tabpage_T>::new_zeroed().assume_init() });
+    // SAFETY: the allocation just made, which `owned` keeps alive until the
+    // registry takes it over two lines below.
+    let mut tp = unsafe { TabPage::new(owned.address()) };
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
     tp.handle = LAST_TP_HANDLE.get() as handle_T;
-    register_tabpage(tp);
+    let mut tp = register_tabpage(tp.handle, owned);
 
     // Init t: variables.
     // SAFETY: a fresh dictionary, which becomes the tab page's own.
@@ -105,7 +110,10 @@ pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
 /// Free `tp` and everything hanging off it.
 pub(crate) fn free_tab(tp: TabPage) {
     let mut tp = tp;
-    forget_tabpage(tp.handle());
+    // The allocation, out of the registry from here on. `tp` is still the
+    // address to work through; `owned` is only who gives the memory back.
+    // Every tab page reaching here was registered by `alloc_tabpage`.
+    let owned = forget_tabpage(tp.handle()).expect("a tab page being freed is a registered one");
     diff_clear(tp);
     for idx in 0..SNAP_COUNT {
         drop_snapshot(tp, idx);
@@ -123,7 +131,8 @@ pub(crate) fn free_tab(tp: TabPage) {
     }
     free(tp.tp_localdir);
     free(tp.tp_prevdir);
-    free(tp.raw());
+    // The free: `tabpage_S`'s destructor runs and the memory goes back.
+    drop(owned);
 }
 
 pub unsafe fn win_new_tabpage(

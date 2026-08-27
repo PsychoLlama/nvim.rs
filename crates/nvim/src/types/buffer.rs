@@ -431,7 +431,12 @@ pub struct file_buffer_update_channels {
     pub capacity: size_t,
     pub items: *mut uint64_t,
 }
-#[derive(Copy, Clone)]
+/// Neither `Copy` nor `Clone`. A frame is a *node* of the window layout
+/// tree: its `fr_parent`/`fr_next`/`fr_prev`/`fr_child` links and its
+/// `fr_win` back-edge are all owned by the tree's shape, and duplicating one
+/// would put a second node into a structure the editor walks by pointer.
+/// Frames are allocated one at a time and freed with the window; nothing in
+/// the tree may copy one, and the absence of the derives is what says so.
 pub struct frame_S {
     pub fr_layout: ::core::ffi::c_char,
     pub fr_width: ::core::ffi::c_int,

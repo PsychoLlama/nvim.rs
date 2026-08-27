@@ -16,6 +16,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{iter, ptr, slice};
 
 use super::*;
+use crate::allocator::Owned;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds};
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
@@ -36,7 +37,7 @@ use crate::main::{
     lastbuf, p_sol, swb_flags,
 };
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
-use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_delay};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
@@ -286,9 +287,20 @@ pub unsafe fn buflist_new(
     // made another buffer current, and then this one is not reusable after
     // all.
     let reused_curbuf = reusable.is_some() && reusable == current_buf();
+    // The allocation of a fresh buffer, held here until `append_to_list`
+    // gives it to the registry; `None` when the current buffer is reused,
+    // which the registry has owned since it was made.
+    let mut fresh = None;
     let mut buf = match reusable.filter(|_| reused_curbuf) {
         Some(buf) => buf,
-        None => new_buffer(),
+        None => {
+            let owned = new_buffer();
+            // SAFETY: the allocation just made, which `fresh` keeps alive
+            // until the registry takes it over a few lines below.
+            let buf = unsafe { Buf::new(owned.address()) };
+            fresh = Some(owned);
+            buf
+        }
     };
 
     if !ffname.is_null() {
@@ -309,7 +321,9 @@ pub unsafe fn buflist_new(
         // The keymaps have to be reloaded and b:keymap_name set.
         buf.b_kmap_state = (buf.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
     } else {
-        append_to_list(buf);
+        // `fresh` is `Some` exactly when the buffer is not the reused
+        // current one, which is the branch this is.
+        append_to_list(buf, fresh.take().expect("a fresh buffer was allocated"));
         // Always copy the options from the current buffer.
         copy_options_into(buf, BCO_ALWAYS as c_int);
     }
@@ -383,10 +397,15 @@ fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
 }
 
 /// A zeroed `buf_T` with its `b:` dictionary and `b:changedtick` in place.
-fn new_buffer() -> Buf {
+///
+/// The allocation is the caller's until [`append_to_list`] hands it to the
+/// registry, which owns every buffer that has a number.
+fn new_buffer() -> Owned<buf_T> {
     // A zeroed `buf_T` is what upstream starts one from; `append_to_list`
     // gives it its number and puts it in the registry.
-    let mut buf = alloc_unregistered_buffer();
+    let owned = alloc_unregistered_buffer();
+    // SAFETY: the allocation just made, which `owned` keeps alive.
+    let mut buf = unsafe { Buf::new(owned.address()) };
     // Init the b: variables.
     // SAFETY: a fresh dictionary for the buffer's own `b:` scope.
     buf.b_vars = unsafe { tv_dict_alloc() };
@@ -394,7 +413,7 @@ fn new_buffer() -> Buf {
     // SAFETY: the dictionary just allocated and the buffer's scope variable.
     unsafe { init_var_dict(vars, scope_var, VAR_SCOPE) };
     buf_init_changedtick(buf);
-    buf
+    owned
 }
 
 /// A `buf_T` that lives **outside** the handle registry and off the buffer
@@ -415,14 +434,16 @@ fn new_buffer() -> Buf {
 /// Most fields stay zero and are *not* valid buffer state: string options
 /// are null, there are no `b:` variables and no undo information. Only what
 /// the caller fills in afterwards may be read.
-pub(crate) fn alloc_unregistered_buffer() -> Buf {
-    // SAFETY: `xcalloc` aborts rather than answering null, so this is a
-    // fresh zeroed `buf_T`, live until its owner frees it.
-    unsafe { Buf::new(xcalloc(1, size_of::<buf_T>()).cast::<buf_T>()) }
+pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
+    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(buf_T))`
+    // hands a fresh buffer, and every field of `buf_T` that owns an
+    // allocation is null or empty when zeroed.
+    Owned::new(unsafe { Box::<buf_T>::new_zeroed().assume_init() })
 }
 
-/// Put a new buffer at the end of the buffer list and give it its number.
-fn append_to_list(mut buf: Buf) {
+/// Put a new buffer at the end of the buffer list, give it its number and
+/// hand its allocation to the registry, which owns it from here on.
+fn append_to_list(mut buf: Buf, owned: Owned<buf_T>) {
     buf.b_next = ptr::null_mut();
     match current_last() {
         // The buffer list is empty.
@@ -440,7 +461,7 @@ fn append_to_list(mut buf: Buf) {
 
     buf.handle = top_file_num.get() as handle_T;
     top_file_num.set(top_file_num.get() + 1);
-    register_buffer(buf);
+    register_buffer(buf.handle, owned);
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));

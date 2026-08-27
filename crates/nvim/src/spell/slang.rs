@@ -21,6 +21,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 
+use crate::allocator::Owned;
 use crate::buffer::alloc_unregistered_buffer;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::hashtab::{
@@ -330,7 +331,9 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
     unsafe {
         // Never registered and never on the buffer list -- see
         // `alloc_unregistered_buffer`.
-        let buf = alloc_unregistered_buffer().raw();
+        // The allocation travels as a bare address: it is stored in a
+        // `slang_T`'s `sl_sugbuf`, and `close_spellbuf` takes it back.
+        let buf = alloc_unregistered_buffer().into_raw();
 
         (*buf).b_spell = true;
         (*buf).b_p_swf = 1;
@@ -357,6 +360,10 @@ pub unsafe fn close_spellbuf(buf: *mut buf_T) {
             return;
         }
         ml_close(buf, 1);
-        xfree(buf as *mut c_void);
+        // The free: `buf_T`'s destructor runs and the memory goes back.
+        // SAFETY: `open_spellbuf` gave up this address and nothing else
+        // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after
+        // this call.
+        drop(Owned::from_raw(buf));
     }
 }

@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::guard::Suppress;
 use crate::{semsg_c, smsg_c};
@@ -35,6 +36,10 @@ pub unsafe fn ml_recover(checkext: bool) {
         let called_from_main = (*curbuf.get()).b_ml.ml_mfp.is_null();
 
         let mut buf: *mut buf_T = core::ptr::null_mut();
+        // Who owns what `buf` points at. The recovery buffer is not in the
+        // registry, so this frame is its owner; `buf` is only the address the
+        // memline code below works through.
+        let mut owned_buf: Option<Owned<buf_T>> = None;
         let mut mfp: *mut memfile_T = core::ptr::null_mut();
         let mut hp: *mut bhdr_T = core::ptr::null_mut();
         let mut fname_used: *mut c_char = core::ptr::null_mut();
@@ -71,7 +76,9 @@ pub unsafe fn ml_recover(checkext: bool) {
             // A buffer structure for the swap file being recovered. Only the
             // memline in it is really used, and it is never registered or
             // put on the buffer list -- see `alloc_unregistered_buffer`.
-            buf = alloc_unregistered_buffer().raw();
+            let owned = alloc_unregistered_buffer();
+            buf = owned.address();
+            owned_buf = Some(owned);
             (*buf).b_ml.ml_stack_size = 0; // no stack yet
             (*buf).b_ml.ml_stack = core::ptr::null_mut();
             (*buf).b_ml.ml_stack_top = 0; // nothing in the stack
@@ -379,8 +386,9 @@ pub unsafe fn ml_recover(checkext: bool) {
         if !buf.is_null() {
             // May be null: the swap file was never found.
             xfree((*buf).b_ml.ml_stack.cast());
-            xfree(buf.cast());
         }
+        // The free: `buf_T`'s destructor runs and the memory goes back.
+        drop(owned_buf);
         if serious_error && called_from_main {
             ml_close(curbuf.get(), 1);
         } else {

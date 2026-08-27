@@ -5,9 +5,11 @@
 //! sees. Upstream spells that as a khash `Map_*` reached through a raw
 //! pointer; this is the same table with the raw pointer gone.
 //!
-//! [`SlotTable`] is the table itself. [`HandleRegistry`] is the three
-//! graph registries' shared shape on top of it — see its own docs for the
-//! liveness invariant that makes a lookup a *safe* call.
+//! [`SlotTable`] is the table itself. [`HandleRegistry`] is the graph
+//! registries' shared shape on top of it — see its own docs for the
+//! liveness invariant that makes a lookup a *safe* call — and
+//! [`OwnedRegistry`] is that shape with the allocation moved in, so that the
+//! table releases what it holds and an object in it may own a [`Vec`].
 //! [`PendingFree`] is the other half of a registry's bookkeeping: the
 //! allocations an autocommand deferred, which used to be a chain threaded
 //! through the graph's own `b_next`/`w_next` links.
@@ -60,6 +62,7 @@
 use core::hash::{BuildHasherDefault, Hash, Hasher};
 use std::collections::HashMap;
 
+use crate::allocator::Owned;
 use crate::types::handle_T;
 
 /// A registry: values found by id, iterated in khash's order.
@@ -89,11 +92,18 @@ impl<K, V> Default for SlotTable<K, V> {
     }
 }
 
-impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
-    /// The value registered under `key`, if any.
-    pub(crate) fn get(&self, key: K) -> Option<V> {
+impl<K: Copy + Eq + Hash, V> SlotTable<K, V> {
+    /// The value registered under `key`, borrowed.
+    ///
+    /// The one accessor that hands out a reference into the table, and it is
+    /// private for that reason: the module docs' reentrancy rule stands
+    /// because the only caller — [`OwnedRegistry::get`] — copies an address
+    /// out of the borrow and lets it end with the expression. A value type
+    /// that owns its object cannot be copied out, and taking it out would
+    /// unfile it.
+    fn get_ref(&self, key: K) -> Option<&V> {
         let i = *self.index.get(&key)?;
-        Some(self.slots[i].1)
+        Some(&self.slots[i].1)
     }
 
     /// File `value` under `key`.
@@ -127,6 +137,14 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
     pub(crate) fn snapshot_keys(&self) -> Vec<K> {
         self.slots.iter().map(|&(key, _)| key).collect()
     }
+}
+
+impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
+    /// The value registered under `key`, if any.
+    pub(crate) fn get(&self, key: K) -> Option<V> {
+        let i = *self.index.get(&key)?;
+        Some(self.slots[i].1)
+    }
 
     /// Every value, in order, as an owned `Vec`. As [`Self::snapshot_keys`].
     pub(crate) fn snapshot_values(&self) -> Vec<V> {
@@ -155,9 +173,14 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
 /// unfindable here — exactly what the khash map answered once `map_del` had
 /// run.
 ///
-/// The values are raw pointers rather than owned allocations. Ownership of
-/// the `win_T`/`buf_T`/`tabpage_T` moves in a later slice; what moved here
-/// is the *table*.
+/// **The values are bare addresses: this registry does not own its objects.**
+/// [`OwnedRegistry`] is the same table with the allocation moved in, and the
+/// buffer and tab page registries use it. Windows have not followed, and the
+/// reason is the autocommand window: `aucmd_restbuf` takes it *out* of the
+/// registry while it stays alive and `aucmd_prepbuf` puts it back, so
+/// "registered" and "owned" are not the same lifetime for a `win_T` the way
+/// they are for a `buf_T`. Moving windows across means giving the idle
+/// autocommand window a named owner first.
 pub(crate) struct HandleRegistry<T> {
     /// Handle to the object it names. `V: Copy` — see the module docs on
     /// reentrancy; an autocommand fires between two of these calls all the
@@ -192,6 +215,66 @@ impl<T> HandleRegistry<T> {
     }
 }
 
+/// The live objects of one kind that the registry **owns**, found by the
+/// handle the user sees.
+///
+/// [`HandleRegistry`]'s table with the allocation moved in. The invariant is
+/// the same one, and so is what a lookup answers — a bare address, because
+/// that is the currency the transpiled editor deals in and because an
+/// address disturbs nothing when it is copied out ([`Owned::address`]).
+/// What changed is who releases the memory: taking a handle out with
+/// [`forget`](Self::forget) hands the caller an [`Owned`], and dropping that
+/// runs the object's destructor. So an object in here may own a [`Vec`], a
+/// [`String`] or anything else with a [`Drop`], which a `xcalloc`ed struct
+/// released with `xfree` could not.
+///
+/// **Why the value is not a `Box<T>`.** A `Box` retags every time it moves,
+/// which invalidates every raw pointer derived from it — and the editor's
+/// whole point is that those pointers escape (`curbuf`, `w_buffer`, the
+/// `firstbuf` list, whatever an autocommand kept). [`Owned`] is the `Box`
+/// with its address taken once; see its own docs.
+///
+/// The free paths still call [`forget`](Self::forget) *first* and hold the
+/// `Owned` while they tear the object down, so nothing can find it
+/// half-freed, and the drop happens exactly where the `xfree` used to.
+pub(crate) struct OwnedRegistry<T> {
+    /// Handle to the object it names, which this table owns.
+    live: SlotTable<handle_T, Owned<T>>,
+}
+
+impl<T> OwnedRegistry<T> {
+    /// An empty registry. `const`, so it can be a `static`.
+    pub(crate) const fn new() -> Self {
+        OwnedRegistry {
+            live: SlotTable::new(),
+        }
+    }
+
+    /// The address of the object `handle` names, or `None` when nothing is
+    /// registered under it — the khash miss, which answered a null.
+    pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
+        Some(self.live.get_ref(handle)?.address())
+    }
+
+    /// Take ownership of `object` and file it under `handle`, answering its
+    /// address for the caller to work from.
+    pub(crate) fn register(&mut self, handle: handle_T, object: Owned<T>) -> *mut T {
+        let address = object.address();
+        self.live.insert(handle, object);
+        address
+    }
+
+    /// Take `handle`'s object out, handing its allocation to the caller.
+    ///
+    /// `None` for a handle that was never filed, which `map_del` treats as a
+    /// no-op upstream too. The object is unfindable from here on, but it is
+    /// not yet freed: the caller decides when to drop what it was given, and
+    /// the free paths do it where the `xfree` used to be.
+    pub(crate) fn forget(&mut self, handle: handle_T) -> Option<Owned<T>> {
+        self.live.remove(handle)
+    }
+}
+
 /// The objects of one kind whose memory must outlive the call that gave them
 /// up: the *deferred-free set*.
 ///
@@ -207,19 +290,20 @@ impl<T> HandleRegistry<T> {
 /// gave. Nothing here dereferences a parked address — this type stores it and
 /// hands it back — which is why the module can `forbid(unsafe_code)` and the
 /// free itself lives with the caller.
-pub(crate) struct PendingFree<T> {
-    /// Parked addresses, oldest first.
-    parked: Vec<*mut T>,
+pub(crate) struct PendingFree<V> {
+    /// What was parked, oldest first: an [`Owned`] for the objects a
+    /// registry owns, a bare address for the ones it does not yet.
+    parked: Vec<V>,
 }
 
-impl<T> PendingFree<T> {
+impl<V> PendingFree<V> {
     /// An empty set. `const`, so it can be a `static`.
     pub(crate) const fn new() -> Self {
         PendingFree { parked: Vec::new() }
     }
 
-    /// Park `object`'s allocation until the deferral ends.
-    pub(crate) fn park(&mut self, object: *mut T) {
+    /// Park `object` until the deferral ends.
+    pub(crate) fn park(&mut self, object: V) {
         self.parked.push(object);
     }
 
@@ -227,7 +311,7 @@ impl<T> PendingFree<T> {
     /// empty. Callers loop on this rather than draining, so that nothing is
     /// borrowed while a free runs — the C re-reads its list head for the same
     /// reason.
-    pub(crate) fn take_next(&mut self) -> Option<*mut T> {
+    pub(crate) fn take_next(&mut self) -> Option<V> {
         self.parked.pop()
     }
 
@@ -292,7 +376,9 @@ impl Hasher for IdHasher {
 
 #[cfg(test)]
 mod tests {
-    use super::{HandleRegistry, PendingFree, SlotTable};
+    use core::cell::Cell;
+
+    use super::{HandleRegistry, Owned, OwnedRegistry, PendingFree, SlotTable};
 
     /// The table's own view of itself, checked after every mutation: the
     /// index agrees with the slots, and every key is findable.
@@ -483,14 +569,94 @@ mod tests {
         assert_eq!(reg.get(8), Some(pa));
     }
 
+    // -- OwnedRegistry -----------------------------------------------------
+    //
+    // Miri-sized, like the above. What these check is that the registry
+    // *owns*: an object it still holds is not dropped, one taken out is
+    // dropped by whoever took it, and the address stays the same throughout.
+
+    /// Counts its own drops through a shared cell, so a test can say when the
+    /// allocation went back.
+    struct Tracked<'a>(&'a Cell<u32>);
+
+    impl Drop for Tracked<'_> {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+
+    fn tracked(drops: &Cell<u32>) -> Owned<Tracked<'_>> {
+        Owned::new(Box::new(Tracked(drops)))
+    }
+
+    #[test]
+    fn an_empty_owned_registry_finds_nothing() {
+        let reg: OwnedRegistry<Tracked<'_>> = OwnedRegistry::new();
+        assert_eq!(reg.get(1), None);
+    }
+
+    #[test]
+    fn a_registered_object_answers_the_address_it_was_filed_under() {
+        let drops = Cell::new(0);
+        let mut reg = OwnedRegistry::new();
+        let object = tracked(&drops);
+        let address = object.address();
+        assert_eq!(reg.register(7, object), address);
+        assert_eq!(reg.get(7), Some(address));
+        assert_eq!(reg.get(8), None);
+        assert_eq!(drops.get(), 0, "the registry holds it");
+        drop(reg);
+        assert_eq!(drops.get(), 1, "and releases it");
+    }
+
+    /// The free path's shape: take the object out, keep working through the
+    /// address, and drop it at the end. Nothing is freed until then.
+    #[test]
+    fn forgetting_hands_the_allocation_over_without_freeing_it() {
+        let drops = Cell::new(0);
+        let mut reg = OwnedRegistry::new();
+        let address = reg.register(7, tracked(&drops));
+        let owned = reg.forget(7).expect("registered");
+        assert_eq!(reg.get(7), None, "unfindable at once");
+        assert_eq!(owned.address(), address, "the same allocation");
+        assert_eq!(drops.get(), 0, "not yet freed");
+        drop(owned);
+        assert_eq!(drops.get(), 1);
+    }
+
+    #[test]
+    fn forgetting_an_unregistered_handle_answers_nothing() {
+        let drops = Cell::new(0);
+        let mut reg = OwnedRegistry::new();
+        reg.register(7, tracked(&drops));
+        assert!(reg.forget(8).is_none());
+        assert_eq!(drops.get(), 0);
+    }
+
+    /// Dropping the registry releases everything left in it, which is what
+    /// makes it the owner rather than a directory.
+    #[test]
+    fn dropping_the_registry_frees_what_it_still_holds() {
+        let drops = Cell::new(0);
+        let mut reg = OwnedRegistry::new();
+        for handle in 1..4 {
+            reg.register(handle, tracked(&drops));
+        }
+        drop(reg.forget(2).expect("registered"));
+        assert_eq!(drops.get(), 1);
+        drop(reg);
+        assert_eq!(drops.get(), 3);
+    }
+
     // -- PendingFree -------------------------------------------------------
     //
-    // Miri-sized: the set stores addresses and never reads through one, so
-    // these park the addresses of local `Object`s and check only the order.
+    // Miri-sized: the set is generic over what it parks -- an `Owned` for
+    // buffers, a bare address for windows -- so these park the addresses of
+    // local `Object`s and check only the order.
 
     #[test]
     fn an_empty_pending_set_hands_back_nothing() {
-        let mut pending: PendingFree<Object> = PendingFree::new();
+        let mut pending: PendingFree<*mut Object> = PendingFree::new();
         assert_eq!(pending.len(), 0);
         assert!(pending.take_next().is_none());
     }
@@ -502,7 +668,7 @@ mod tests {
     fn parked_allocations_come_back_last_in_first_out() {
         let (mut a, mut b, mut c) = (Object, Object, Object);
         let (pa, pb, pc) = (&raw mut a, &raw mut b, &raw mut c);
-        let mut pending: PendingFree<Object> = PendingFree::new();
+        let mut pending: PendingFree<*mut Object> = PendingFree::new();
         pending.park(pa);
         pending.park(pb);
         pending.park(pc);
@@ -520,7 +686,7 @@ mod tests {
     fn a_drain_loop_empties_the_set_including_what_it_grew_by() {
         let mut objects = [Object, Object, Object, Object];
         let addresses: Vec<*mut Object> = objects.iter_mut().map(|o| &raw mut *o).collect();
-        let mut pending: PendingFree<Object> = PendingFree::new();
+        let mut pending: PendingFree<*mut Object> = PendingFree::new();
         pending.park(addresses[0]);
         pending.park(addresses[1]);
         let mut freed = Vec::new();
@@ -546,7 +712,7 @@ mod tests {
     fn a_drained_set_can_be_used_again() {
         let mut a = Object;
         let pa = &raw mut a;
-        let mut pending: PendingFree<Object> = PendingFree::new();
+        let mut pending: PendingFree<*mut Object> = PendingFree::new();
         for _ in 0..3 {
             pending.park(pa);
             assert_eq!(pending.take_next(), Some(pa));

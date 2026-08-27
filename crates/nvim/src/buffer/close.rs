@@ -22,6 +22,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::allocator::Owned;
 use crate::autocmd::{
     EVENT_BUFDELETE, EVENT_BUFHIDDEN, EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_BUFWIPEOUT,
     aubuflocal_remove,
@@ -262,11 +263,17 @@ fn forget_autocmds(mut buf: Buf) {
     unsafe { aubuflocal_remove(buf) };
 }
 
-/// Drop the buffer's number from the registry, so that nothing can look it
-/// up again. The first thing [`free_buffer`] does, which is what lets the
-/// registry promise that everything in it is live.
-fn forget_handle(fnum: handle_T) {
-    forget_buffer(fnum);
+/// Take the buffer's number out of the registry, so that nothing can look it
+/// up again, and with it the allocation the registry owned.
+///
+/// The first thing [`free_buffer`] does, which is what lets the registry
+/// promise that everything in it is live. Dropping what this answers is the
+/// free; [`free_buffer`] holds it until the point the `xfree` used to be.
+#[must_use = "dropping the answer is the free"]
+fn forget_handle(fnum: handle_T) -> Owned<buf_T> {
+    // Every buffer reaching a free path was registered when it was given its
+    // number, and a number is given exactly once.
+    forget_buffer(fnum).expect("a buffer being freed is a registered buffer")
 }
 
 // ---------------------------------------------------------------------------
@@ -792,7 +799,9 @@ fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
 /// Free the buffer structure and everything belonging to the *buffer* rather
 /// than to the file, which must have been freed already.
 fn free_buffer(mut buf: Buf) {
-    forget_handle(buf.handle());
+    // The allocation, out of the registry from here on. `buf` is still the
+    // address to work through; `owned` is only who gives the memory back.
+    let owned = forget_handle(buf.handle());
     note_buffer_freed();
     // b:changedtick uses an item in buf_T.
     free_buffer_stuff(buf, kBffClearWinInfo as c_int);
@@ -822,9 +831,10 @@ fn free_buffer(mut buf: Buf) {
         // it's still needed. Free it when autocmd_busy is reset.
         buf.b_namedm = [ZERO_FMARK; NMARKS as usize];
         buf.b_changelist = [ZERO_FMARK; 100];
-        defer_free_buffer(buf);
+        defer_free_buffer(owned);
     } else {
-        free(buf.raw());
+        // The free: `buf_T`'s destructor runs and the memory goes back.
+        drop(owned);
         if curbuf.get() == buf.raw() {
             curbuf.set(ptr::null_mut()); // make clear it's not to be used
         }

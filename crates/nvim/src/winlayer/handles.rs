@@ -34,20 +34,21 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::allocator::Owned;
 use crate::buffer::free;
 use crate::global_cell::GlobalCell;
-use crate::registry::{HandleRegistry, PendingFree};
+use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
 use crate::types::{buf_T, handle_T, tabpage_T, win_T};
 use crate::winlayer::{Buf, TabPage, Win};
 
 /// Every live window, by handle.
 static WINDOWS: GlobalCell<HandleRegistry<win_T>> = GlobalCell::new(HandleRegistry::new());
 
-/// Every live buffer, by number.
-static BUFFERS: GlobalCell<HandleRegistry<buf_T>> = GlobalCell::new(HandleRegistry::new());
+/// Every live buffer, by number. The registry **owns** them.
+static BUFFERS: GlobalCell<OwnedRegistry<buf_T>> = GlobalCell::new(OwnedRegistry::new());
 
-/// Every live tab page, by handle.
-static TABPAGES: GlobalCell<HandleRegistry<tabpage_T>> = GlobalCell::new(HandleRegistry::new());
+/// Every live tab page, by handle. The registry **owns** them.
+static TABPAGES: GlobalCell<OwnedRegistry<tabpage_T>> = GlobalCell::new(OwnedRegistry::new());
 
 /// The window `handle` names, `None` once it has been closed.
 pub(crate) fn window(handle: handle_T) -> Option<Win> {
@@ -82,26 +83,36 @@ pub(crate) fn forget_window(handle: handle_T) {
     WINDOWS.with_mut(|reg| reg.forget(handle));
 }
 
-/// [`register_window`] for a buffer, called once its number is assigned.
-pub(crate) fn register_buffer(buf: Buf) {
-    let (handle, raw) = (buf.handle(), buf.raw());
-    BUFFERS.with_mut(|reg| reg.register(handle, raw));
+/// Hand `buf` to the buffer registry, which owns it from here on, and answer
+/// the [`Buf`] the caller works through.
+///
+/// Called by the allocator once the buffer's number is assigned — `handle`
+/// is that number, which the caller has already written into the buffer.
+pub(crate) fn register_buffer(handle: handle_T, buf: Owned<buf_T>) -> Buf {
+    Buf(BUFFERS.with_mut(|reg| reg.register(handle, buf)))
 }
 
-/// [`forget_window`] for a buffer.
-pub(crate) fn forget_buffer(handle: handle_T) {
-    BUFFERS.with_mut(|reg| reg.forget(handle));
+/// Take the buffer `handle` names out of the registry, handing its
+/// allocation back.
+///
+/// The first thing a free path does, so that nothing can find the buffer
+/// while it is being torn down. Dropping what this answers is the free
+/// itself; `free_buffer` holds it until the point the `xfree` used to be,
+/// and hands it to [`defer_free_buffer`] when an autocommand is running.
+#[must_use = "dropping the answer is the free; ignoring it leaks the buffer"]
+pub(crate) fn forget_buffer(handle: handle_T) -> Option<Owned<buf_T>> {
+    BUFFERS.with_mut(|reg| reg.forget(handle))
 }
 
-/// [`register_window`] for a tab page.
-pub(crate) fn register_tabpage(tp: TabPage) {
-    let (handle, raw) = (tp.handle(), tp.raw());
-    TABPAGES.with_mut(|reg| reg.register(handle, raw));
+/// [`register_buffer`] for a tab page.
+pub(crate) fn register_tabpage(handle: handle_T, tp: Owned<tabpage_T>) -> TabPage {
+    TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tp)))
 }
 
-/// [`forget_window`] for a tab page.
-pub(crate) fn forget_tabpage(handle: handle_T) {
-    TABPAGES.with_mut(|reg| reg.forget(handle));
+/// [`forget_buffer`] for a tab page.
+#[must_use = "dropping the answer is the free; ignoring it leaks the tab page"]
+pub(crate) fn forget_tabpage(handle: handle_T) -> Option<Owned<tabpage_T>> {
+    TABPAGES.with_mut(|reg| reg.forget(handle))
 }
 
 // ---------------------------------------------------------------------------
@@ -121,20 +132,23 @@ pub(crate) fn forget_tabpage(handle: handle_T) {
 // drains at exactly the same point, buffers still go before windows, and the
 // order within each is still last-deferred-first-freed.
 
-/// Buffers whose allocation is waiting for the outermost autocommand.
-static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<buf_T>> = GlobalCell::new(PendingFree::new());
+/// Buffers whose allocation is waiting for the outermost autocommand. The
+/// set owns them: it took the [`Owned`] the registry gave the free path.
+static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<buf_T>>> =
+    GlobalCell::new(PendingFree::new());
 
-/// Windows whose allocation is waiting for the outermost autocommand.
-static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<win_T>> = GlobalCell::new(PendingFree::new());
+/// Windows whose allocation is waiting for the outermost autocommand. A bare
+/// address, as the window registry still holds — see [`OwnedRegistry`].
+static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut win_T>> =
+    GlobalCell::new(PendingFree::new());
 
 /// Park `buf`'s allocation until the outermost autocommand returns.
 ///
 /// Everything else about the buffer is torn down already and its handle is
-/// out of the registry; what is left is the memory. The caller must not use
-/// `buf` again.
-pub(crate) fn defer_free_buffer(buf: Buf) {
-    let raw = buf.raw();
-    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(raw));
+/// out of the registry; what is left is the memory, which this set owns until
+/// [`free_deferred`] drops it. The caller must not use the buffer again.
+pub(crate) fn defer_free_buffer(buf: Owned<buf_T>) {
+    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buf));
 }
 
 /// [`defer_free_buffer`] for a window.
@@ -152,9 +166,11 @@ pub(crate) fn defer_free_window(win: Win) {
 /// its list head each time round.
 pub(crate) fn free_deferred() {
     // Each allocation was given up by its owner and nothing has reached it
-    // since: the handle left the registry before it was parked.
+    // since: the handle left the registry before it was parked. Dropping the
+    // buffer's `Owned` runs `buf_T`'s destructor and gives the memory back,
+    // outside the `with_mut` so that nothing is borrowed while it runs.
     while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
-        free(buf);
+        drop(buf);
     }
     while let Some(win) = PENDING_FREE_WINDOWS.with_mut(PendingFree::take_next) {
         free(win);

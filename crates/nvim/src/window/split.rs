@@ -589,9 +589,24 @@ fn split_frame(
 
 /// A copy of `frame`, allocated: the C's `*frp = *curfrp` over a fresh
 /// `xcalloc`.
+///
+/// Written out field by field because `frame_T` is deliberately neither
+/// `Copy` nor `Clone` — a frame is a node of the layout tree, and this is the
+/// one place in the editor that duplicates one. The links come across with
+/// the rest, exactly as the struct assignment copied them, and the caller
+/// rewires them straight afterwards.
 fn new_frame_like(frame: Frame) -> Frame {
     let mut copy = attach_frame_raw();
-    *copy = *frame;
+    copy.fr_layout = frame.fr_layout;
+    copy.fr_width = frame.fr_width;
+    copy.fr_newwidth = frame.fr_newwidth;
+    copy.fr_height = frame.fr_height;
+    copy.fr_newheight = frame.fr_newheight;
+    copy.fr_parent = frame.fr_parent;
+    copy.fr_next = frame.fr_next;
+    copy.fr_prev = frame.fr_prev;
+    copy.fr_child = frame.fr_child;
+    copy.fr_win = frame.fr_win;
     copy
 }
 
