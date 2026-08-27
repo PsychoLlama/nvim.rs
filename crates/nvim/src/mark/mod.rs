@@ -25,7 +25,7 @@
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
-use crate::buffer::{bt_prompt, buflist_new, find_buf};
+use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells, vim_isprintc};
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
@@ -297,8 +297,7 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
     } else if c == '"' as c_int {
         buf.last_cursor().replace(at, handle, view);
     } else if c == ':' as c_int {
-        // SAFETY: `buf` is live.
-        if !unsafe { bt_prompt(buf.raw()) } {
+        if !buf_is_prompt(Some(buf)) {
             return FAIL;
         }
         buf.prompt_start().replace(at, handle, view);

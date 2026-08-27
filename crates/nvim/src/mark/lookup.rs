@@ -16,7 +16,7 @@
 )]
 
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
-use crate::buffer::{bt_prompt, buflist_getfile};
+use crate::buffer::{buf_is_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::main::listcmd_busy;
@@ -184,8 +184,7 @@ pub unsafe fn mark_get_local(
         bufh.last_insert().raw()
     } else if name == '.' as c_int {
         bufh.last_change().raw()
-    // SAFETY: `buf` is live, which is all `bt_prompt` reads.
-    } else if name == ':' as c_int && unsafe { bt_prompt(buf) } {
+    } else if name == ':' as c_int && buf_is_prompt(Some(bufh)) {
         bufh.prompt_start().raw()
     } else {
         // SAFETY: the caller promised a live buffer and window, and `fmp` is

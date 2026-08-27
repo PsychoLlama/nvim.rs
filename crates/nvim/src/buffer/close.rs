@@ -742,8 +742,7 @@ pub fn buf_freeall(buf: Buf, flags: c_int) {
 
     // Ensure marks are adjusted for cleared buffer in case buffer not on
     // disk: if it is reloaded the buffer will be empty.
-    // SAFETY: a live buffer.
-    if unsafe { bt_nofilename(buf.raw()) } && !exiting.get() {
+    if buf_is_nofilename(Some(buf)) && !exiting.get() {
         forget_lines(buf, count);
     }
 

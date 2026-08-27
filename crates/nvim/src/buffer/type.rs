@@ -164,43 +164,6 @@ pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
     false
 }
 
-// ---------------------------------------------------------------------------
-// The raw-pointer entry points still in use
-//
-// Slice p23-11 could not edit `mark/**`, `buffer/close.rs` or
-// `buffer/list.rs`, so these three keep the C's shape for them.  Each is one
-// line over the safe predicate above; delete it once its callers hand over a
-// buffer they already hold.
-
-/// `bt_prompt()` over a raw pointer.
-///
-/// # Safety
-/// `buf` is null or points at a live buffer.
-pub(crate) unsafe fn bt_prompt(buf: *mut buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    buf_is_prompt(unsafe { Buf::from_raw(buf) })
-}
-
-/// `bt_quickfix()` over a raw pointer.
-///
-/// # Safety
-/// `buf` is null or points at a live buffer.
-pub(crate) unsafe fn bt_quickfix(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer. Nothing below
-    // writes through the result, so dropping `const` costs nothing.
-    buf_is_quickfix(unsafe { Buf::from_raw(buf.cast_mut()) })
-}
-
-/// `bt_nofilename()` over a raw pointer.
-///
-/// # Safety
-/// `buf` is null or points at a live buffer.
-pub(crate) unsafe fn bt_nofilename(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer. Nothing below
-    // writes through the result, so dropping `const` costs nothing.
-    buf_is_nofilename(unsafe { Buf::from_raw(buf.cast_mut()) })
-}
-
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
 pub unsafe fn buf_hide(buf: *const buf_T) -> bool {

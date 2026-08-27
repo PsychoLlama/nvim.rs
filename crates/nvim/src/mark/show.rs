@@ -17,7 +17,7 @@
 )]
 
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
-use crate::buffer::{bt_prompt, buflist_nr2name, find_buf};
+use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::global_cell::GlobalCell;
 use crate::main::{Columns, e_argreq, e_invarg, e_invarg2, got_int};
@@ -79,8 +79,7 @@ pub unsafe fn ex_marks(eap: *mut exarg_T) {
         ('^' as c_int, buf.last_insert().pos()),
         ('.' as c_int, buf.last_change().pos()),
     ];
-    // SAFETY: `buf` is live, which is all `bt_prompt` reads.
-    let prompt = unsafe { bt_prompt(buf.raw()) }.then(|| (':' as c_int, buf.prompt_start().pos()));
+    let prompt = buf_is_prompt(Some(buf)).then(|| (':' as c_int, buf.prompt_start().pos()));
     let visual = [('<' as c_int, first), ('>' as c_int, second)];
 
     // SAFETY: `arg` is a NUL-terminated string or null, every name below is

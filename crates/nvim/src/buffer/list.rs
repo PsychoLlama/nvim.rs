@@ -528,7 +528,7 @@ pub unsafe fn curbuf_reusable() -> bool {
         && buf.b_nwindows <= 1
         && buf.terminal.is_null()
         && empty
-        && !unsafe { bt_quickfix(buf.raw()) }
+        && !buf_is_quickfix(Some(buf))
         && !curbuf_is_changed()
 }
 

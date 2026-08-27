@@ -28,7 +28,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::buffer::bt_prompt;
+use crate::buffer::buf_is_prompt;
 use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_adjust;
@@ -291,8 +291,7 @@ pub unsafe fn mark_adjust_buf(
         {
             shift.mark(buf.last_cursor());
         }
-        // SAFETY: `buf` is live, which is all `bt_prompt` reads.
-        if unsafe { bt_prompt(buf.raw()) } {
+        if buf_is_prompt(Some(buf)) {
             shift.mark_nodel(buf.prompt_start());
         }
         for change in buf.changes() {
@@ -477,8 +476,7 @@ pub unsafe fn mark_col_adjust(
     }
     shift.mark(buf.last_insert());
     shift.mark(buf.last_change());
-    // SAFETY: `buf` is live.
-    if unsafe { bt_prompt(buf.raw()) } {
+    if buf_is_prompt(Some(buf)) {
         shift.mark(buf.prompt_start());
     }
     for change in buf.changes() {
