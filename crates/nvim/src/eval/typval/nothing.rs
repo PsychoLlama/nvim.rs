@@ -28,8 +28,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
-    VAR_PARTIAL, VarLock, func_unref, partial_unref, tv_blob_unref, tv_dict_unref, tv_empty_string,
-    tv_list_unref,
+    Ls, Pt, Tv, VAR_PARTIAL, VarLock, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
+    tv_empty_string, tv_list_unref,
 };
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
@@ -50,40 +50,38 @@ impl TypvalSink for NothingSink {
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_nothing_convert_one_value()";
 
     unsafe fn conv_nil(&mut self, tv: *mut typval_T) {
-        unsafe {
-            (*tv).vval.v_special = kSpecialVarNull;
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.vval.v_special = kSpecialVarNull;
+        val.v_lock = VarLock::Unlocked;
     }
 
     unsafe fn conv_bool(&mut self, tv: *mut typval_T, _num: bool) {
-        unsafe {
-            (*tv).vval.v_bool = kBoolVarFalse;
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.vval.v_bool = kBoolVarFalse;
+        val.v_lock = VarLock::Unlocked;
     }
 
     unsafe fn conv_number(&mut self, tv: *mut typval_T, _num: int64_t) {
-        unsafe {
-            (*tv).vval.v_number = 0;
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.vval.v_number = 0;
+        val.v_lock = VarLock::Unlocked;
     }
 
     unsafe fn conv_float(&mut self, tv: *mut typval_T, _flt: float_T) -> Flow {
-        unsafe {
-            (*tv).vval.v_float = 0.0;
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.vval.v_float = 0.0;
+        val.v_lock = VarLock::Unlocked;
         Flow::Go
     }
 
     unsafe fn conv_string(&mut self, tv: *mut typval_T, buf: *mut c_char, _len: size_t) -> Flow {
-        unsafe {
-            xfree(buf.cast::<c_void>());
-            (*tv).vval.v_string = ptr::null_mut();
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        unsafe { xfree(buf.cast::<c_void>()) };
+        unsafe { (*tv).vval.v_string = ptr::null_mut() };
+        unsafe { (*tv).v_lock = VarLock::Unlocked };
         Flow::Go
     }
 
@@ -112,11 +110,9 @@ impl TypvalSink for NothingSink {
     }
 
     unsafe fn conv_blob(&mut self, tv: *mut typval_T, _blob: *const blob_T, _len: c_int) {
-        unsafe {
-            tv_blob_unref((*tv).vval.v_blob);
-            (*tv).vval.v_blob = ptr::null_mut();
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        unsafe { tv_blob_unref((*tv).vval.v_blob) };
+        unsafe { (*tv).vval.v_blob = ptr::null_mut() };
+        unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
 
     /// A funcref releases its name here and is done.  A partial with another
@@ -129,45 +125,51 @@ impl TypvalSink for NothingSink {
         _prefix: &'static CStr,
         _path: &ConvPath,
     ) -> Flow {
-        unsafe {
-            (*tv).v_lock = VarLock::Unlocked;
-            if (*tv).v_type == VAR_PARTIAL {
-                let pt = (*tv).vval.v_partial;
-                if !pt.is_null() && (*pt).pt_refcount.is_shared() {
-                    (*pt).pt_refcount.release();
-                    (*tv).vval.v_partial = ptr::null_mut();
-                    return Flow::Stop;
-                }
-            } else {
-                func_unref(fun);
-                if !ptr::eq(fun, tv_empty_string.get()) {
-                    xfree(fun.cast::<c_void>());
-                }
-                (*tv).vval.v_string = ptr::null_mut();
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.v_lock = VarLock::Unlocked;
+        if val.v_type == VAR_PARTIAL {
+            let pt = val.partial();
+            // SAFETY: the typval's own partial.
+            let mut part = unsafe { Pt::new(pt) };
+            if !pt.is_null() && part.pt_refcount.is_shared() {
+                part.pt_refcount.release();
+                unsafe { (*tv).vval.v_partial = ptr::null_mut() };
+                return Flow::Stop;
             }
-            Flow::Go
+        } else {
+            unsafe { func_unref(fun) };
+            if !ptr::eq(fun, tv_empty_string.get()) {
+                unsafe { xfree(fun.cast::<c_void>()) };
+            }
+            unsafe { (*tv).vval.v_string = ptr::null_mut() };
         }
+        Flow::Go
     }
 
     /// The last reference to a partial, its arguments and self dictionary
     /// already released by the frames the walk drained.
     unsafe fn conv_func_end(&mut self, tv: *mut typval_T, copyid: c_int) {
-        unsafe {
-            if (*tv).v_type != VAR_PARTIAL {
-                return;
-            }
-            let pt = (*tv).vval.v_partial;
-            if pt.is_null() {
-                return;
-            }
-            debug_assert!((*pt).pt_dict.is_null() || (*(*pt).pt_dict).dv_copyID == copyid);
-            (*pt).pt_dict = ptr::null_mut();
-            (*pt).pt_argc = 0;
-            debug_assert!(!(*pt).pt_refcount.is_shared());
-            partial_unref(pt);
-            (*tv).vval.v_partial = ptr::null_mut();
-            debug_assert!((*tv).v_lock == VarLock::Unlocked);
+        // SAFETY: the walk's live typval.
+        let val = unsafe { Tv::new(tv) };
+        if val.v_type != VAR_PARTIAL {
+            return;
         }
+        let pt = val.partial();
+        if pt.is_null() {
+            return;
+        }
+        debug_assert!(
+            unsafe { (*pt).pt_dict }.is_null() || unsafe { (*(*pt).pt_dict).dv_copyID } == copyid
+        );
+        unsafe { (*pt).pt_dict = ptr::null_mut() };
+        // SAFETY: the typval's own partial.
+        let mut part = unsafe { Pt::new(pt) };
+        part.pt_argc = 0;
+        debug_assert!(!part.pt_refcount.is_shared());
+        unsafe { partial_unref(pt) };
+        unsafe { (*tv).vval.v_partial = ptr::null_mut() };
+        debug_assert!(val.v_lock == VarLock::Unlocked);
     }
 
     /// Nothing to announce; the frame surgery below is where the list is
@@ -181,25 +183,21 @@ impl TypvalSink for NothingSink {
     }
 
     unsafe fn conv_empty_list(&mut self, tv: *mut typval_T) {
-        unsafe {
-            tv_list_unref((*tv).vval.v_list);
-            (*tv).vval.v_list = ptr::null_mut();
-            (*tv).v_lock = VarLock::Unlocked;
-        }
+        unsafe { tv_list_unref((*tv).vval.v_list) };
+        unsafe { (*tv).vval.v_list = ptr::null_mut() };
+        unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
 
     unsafe fn conv_empty_dict(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
         // Upstream asserts the lvalue is a real one.  `None` is a special
         // map's `_VAL`, which cannot reach a sink that refuses specials.
         debug_assert!(dictp.is_some());
-        unsafe {
-            if let Some(dictp) = dictp {
-                tv_dict_unref(*dictp);
-                *dictp = ptr::null_mut();
-            }
-            if !tv.is_null() {
-                (*tv).v_lock = VarLock::Unlocked;
-            }
+        if let Some(dictp) = dictp {
+            unsafe { tv_dict_unref(*dictp) };
+            unsafe { *dictp = ptr::null_mut() };
+        }
+        if !tv.is_null() {
+            unsafe { (*tv).v_lock = VarLock::Unlocked };
         }
     }
 
@@ -211,34 +209,34 @@ impl TypvalSink for NothingSink {
         tv: *mut typval_T,
         frame: &mut ConvFrame,
     ) -> Flow {
-        unsafe {
-            debug_assert!(!tv.is_null());
-            (*tv).v_lock = VarLock::Unlocked;
-            let list = (*tv).vval.v_list;
-            if (*list).lv_refcount.is_shared() {
-                (*list).lv_refcount.release();
-                (*tv).vval.v_list = ptr::null_mut();
-                // Always a `List`: the walk calls this straight after pushing
-                // one for this very value.
-                if let Frame::List { li, .. } = &mut frame.frame {
-                    *li = ptr::null_mut();
-                }
-                return Flow::Stop;
+        debug_assert!(!tv.is_null());
+        // SAFETY: the walk's live typval.
+        let mut val = unsafe { Tv::new(tv) };
+        val.v_lock = VarLock::Unlocked;
+        let list = val.list();
+        // SAFETY: the typval's own list.
+        let mut ls = unsafe { Ls::new(list) };
+        if ls.lv_refcount.is_shared() {
+            ls.lv_refcount.release();
+            unsafe { (*tv).vval.v_list = ptr::null_mut() };
+            // Always a `List`: the walk calls this straight after pushing
+            // one for this very value.
+            if let Frame::List { li, .. } = &mut frame.frame {
+                *li = ptr::null_mut();
             }
-            Flow::Go
+            return Flow::Stop;
         }
+        Flow::Go
     }
 
     unsafe fn conv_list_end(&mut self, tv: *mut typval_T) {
-        unsafe {
-            if tv.is_null() {
-                // A partial's argument list, which has no `typval_T` of its
-                // own; `conv_func_end` releases the partial that owns it.
-                return;
-            }
-            tv_list_unref((*tv).vval.v_list);
-            (*tv).vval.v_list = ptr::null_mut();
+        if tv.is_null() {
+            // A partial's argument list, which has no `typval_T` of its
+            // own; `conv_func_end` releases the partial that owns it.
+            return;
         }
+        unsafe { tv_list_unref((*tv).vval.v_list) };
+        unsafe { (*tv).vval.v_list = ptr::null_mut() };
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
@@ -248,30 +246,26 @@ impl TypvalSink for NothingSink {
         dictp: Option<*mut *mut dict_T>,
         frame: &mut ConvFrame,
     ) -> Flow {
-        unsafe {
-            if !tv.is_null() {
-                (*tv).v_lock = VarLock::Unlocked;
-            }
-            if let Some(dictp) = dictp
-                && (**dictp).dv_refcount.is_shared()
-            {
-                (**dictp).dv_refcount.release();
-                *dictp = ptr::null_mut();
-                if let Frame::Dict { todo, .. } = &mut frame.frame {
-                    *todo = 0;
-                }
-                return Flow::Stop;
-            }
-            Flow::Go
+        if !tv.is_null() {
+            unsafe { (*tv).v_lock = VarLock::Unlocked };
         }
+        if let Some(dictp) = dictp
+            && unsafe { (**dictp).dv_refcount }.is_shared()
+        {
+            unsafe { (**dictp).dv_refcount.release() };
+            unsafe { *dictp = ptr::null_mut() };
+            if let Frame::Dict { todo, .. } = &mut frame.frame {
+                *todo = 0;
+            }
+            return Flow::Stop;
+        }
+        Flow::Go
     }
 
     unsafe fn conv_dict_end(&mut self, _tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
-        unsafe {
-            if let Some(dictp) = dictp {
-                tv_dict_unref(*dictp);
-                *dictp = ptr::null_mut();
-            }
+        if let Some(dictp) = dictp {
+            unsafe { tv_dict_unref(*dictp) };
+            unsafe { *dictp = ptr::null_mut() };
         }
     }
 

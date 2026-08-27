@@ -52,18 +52,18 @@ pub unsafe fn tv_dict_item_alloc_len(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
 ) -> *mut dictitem_T {
-    unsafe {
-        let key_offset = ::core::mem::offset_of!(dictitem_T, di_key);
-        let size = ::core::mem::size_of::<dictitem_T>().max(key_offset + key_len + 1);
-        let di = xmalloc(size) as *mut dictitem_T;
-        let di_key = tv_dict_item_key(di);
-        memcpy(di_key.cast(), key.cast(), key_len);
-        *di_key.add(key_len) = NUL as ::core::ffi::c_char;
-        (*di).di_flags = DI_FLAGS_ALLOC as uint8_t;
-        (*di).di_tv.v_lock = VarLock::Unlocked;
-        (*di).di_tv.v_type = VAR_UNKNOWN;
-        di
-    }
+    let key_offset = ::core::mem::offset_of!(dictitem_T, di_key);
+    let size = ::core::mem::size_of::<dictitem_T>().max(key_offset + key_len + 1);
+    let di = unsafe { xmalloc(size) } as *mut dictitem_T;
+    let di_key = tv_dict_item_key(di);
+    unsafe { memcpy(di_key.cast(), key.cast(), key_len) };
+    unsafe { *di_key.add(key_len) = NUL as ::core::ffi::c_char };
+    // SAFETY: freshly allocated just above.
+    let mut item = unsafe { Di::new(di) };
+    item.di_flags = DI_FLAGS_ALLOC as uint8_t;
+    item.di_tv.v_lock = VarLock::Unlocked;
+    item.di_tv.v_type = VAR_UNKNOWN;
+    di
 }
 
 /// [`tv_dict_item_alloc_len`] for a NUL-terminated key.
@@ -85,11 +85,9 @@ pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictit
 /// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `funccall_S`
 /// or a scope dictionary is merely emptied.
 pub unsafe fn tv_dict_item_free(item: *mut dictitem_T) {
-    unsafe {
-        tv_clear(&raw mut (*item).di_tv);
-        if (*item).di_flags as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
-            xfree(item.cast());
-        }
+    unsafe { tv_clear(&raw mut (*item).di_tv) };
+    if unsafe { (*item).di_flags } as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
+        unsafe { xfree(item.cast()) };
     }
 }
 
@@ -99,11 +97,9 @@ pub unsafe fn tv_dict_item_free(item: *mut dictitem_T) {
 /// `di` must be a live item. The copy is the caller's, with the same
 /// obligation as [`tv_dict_item_alloc_len`]'s result.
 pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
-    unsafe {
-        let new_di = tv_dict_item_alloc(tv_dict_item_key(di));
-        tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv);
-        new_di
-    }
+    let new_di = unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) };
+    unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv) };
+    new_di
 }
 
 /// Remove `item` from `dict` and free it.
@@ -112,18 +108,13 @@ pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
 /// `item` must be an item of `dict`, and both must be live. `item` is
 /// freed, so the caller must not hold it afterwards.
 pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
-    unsafe {
-        let hi = hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item));
-        if (*hi).is_kept() {
-            hash_remove(&raw mut (*dict).dv_hashtab, hi);
-        } else {
-            semsg_c!(
-                gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-                c"tv_dict_item_remove()".as_ptr(),
-            );
-        }
-        tv_dict_item_free(item);
+    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item)) };
+    if unsafe { (*hi).is_kept() } {
+        unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
+    } else {
+        semsg_c!(tr_bytes(&e_intern2), c"tv_dict_item_remove()".as_ptr(),);
     }
+    unsafe { tv_dict_item_free(item) };
 }
 
 /// Allocate an empty dictionary.  The caller owns the reference count.
@@ -136,27 +127,27 @@ pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
 /// The result has a reference count of zero: the caller either raises it
 /// or hands the dictionary somewhere that does.
 pub unsafe fn tv_dict_alloc() -> *mut dict_T {
-    unsafe {
-        let d = xcalloc(1, ::core::mem::size_of::<dict_T>()) as *mut dict_T;
+    let d = unsafe { xcalloc(1, ::core::mem::size_of::<dict_T>()) } as *mut dict_T;
 
-        // Prepend the dictionary to the list of dictionaries for garbage
-        // collection.
-        if let Some(first) = gc_first_dict.get().as_mut() {
-            first.dv_used_prev = d;
-        }
-        (*d).dv_used_next = gc_first_dict.get();
-        (*d).dv_used_prev = ::core::ptr::null_mut();
-        gc_first_dict.set(d);
-
-        hash_init(&raw mut (*d).dv_hashtab);
-        (*d).dv_lock = VarLock::Unlocked;
-        (*d).dv_scope = VAR_NO_SCOPE;
-        (*d).dv_refcount = Refcount::ZERO;
-        (*d).dv_copyID = 0;
-        queue_init(&raw mut (*d).watchers);
-        (*d).lua_table_ref = LUA_NOREF as LuaRef;
-        d
+    // Prepend the dictionary to the list of dictionaries for garbage
+    // collection.
+    if let Some(first) = unsafe { gc_first_dict.get().as_mut() } {
+        first.dv_used_prev = d;
     }
+    unsafe { (*d).dv_used_next = gc_first_dict.get() };
+    unsafe { (*d).dv_used_prev = ::core::ptr::null_mut() };
+    gc_first_dict.set(d);
+
+    unsafe { hash_init(&raw mut (*d).dv_hashtab) };
+    // SAFETY: freshly allocated just above.
+    let mut dict = unsafe { Dt::new(d) };
+    dict.dv_lock = VarLock::Unlocked;
+    dict.dv_scope = VAR_NO_SCOPE;
+    dict.dv_refcount = Refcount::ZERO;
+    dict.dv_copyID = 0;
+    unsafe { queue_init(&raw mut (*d).watchers) };
+    dict.lua_table_ref = LUA_NOREF as LuaRef;
+    d
 }
 
 /// Free every item and watcher of `d`, leaving the `dict_T` itself allocated
@@ -167,29 +158,29 @@ pub unsafe fn tv_dict_alloc() -> *mut dict_T {
 /// hashtab is locked for the walk, so a re-entrant call through a watcher
 /// callback would see a half-emptied dictionary.
 pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
-    unsafe {
-        // Lock the hashtab so `hash_remove` below cannot rehash it under the
-        // walk.
-        hash_lock(&raw mut (*d).dv_hashtab);
-        debug_assert!((*d).dv_hashtab.ht_locked > 0);
-        for hi in tv_dict_iter(&*d) {
-            // Remove the item before freeing it, so that a callback that
-            // reaches this dictionary does not see a freed value.
-            let di = tv_dict_hi2di(hi);
-            hash_remove(&raw mut (*d).dv_hashtab, hi);
-            tv_dict_item_free(di);
-        }
-
-        while !queue_empty(&raw mut (*d).watchers) {
-            let w = (*d).watchers.next;
-            queue_remove(w);
-            tv_dict_watcher_free(tv_dict_watcher_node_data(w));
-        }
-
-        hash_clear(&raw mut (*d).dv_hashtab);
-        (*d).dv_hashtab.ht_locked -= 1;
-        hash_init(&raw mut (*d).dv_hashtab);
+    // Lock the hashtab so `hash_remove` below cannot rehash it under the
+    // walk.
+    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
+    // SAFETY: the caller's promise: a live dictionary.
+    let mut dict = unsafe { Dt::new(d) };
+    debug_assert!(dict.dv_hashtab.ht_locked > 0);
+    for hi in tv_dict_iter(unsafe { &*d }) {
+        // Remove the item before freeing it, so that a callback that
+        // reaches this dictionary does not see a freed value.
+        let di = unsafe { tv_dict_hi2di(hi) };
+        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
+        unsafe { tv_dict_item_free(di) };
     }
+
+    while !unsafe { queue_empty(&raw mut (*d).watchers) } {
+        let w = dict.watchers.next;
+        unsafe { queue_remove(w) };
+        unsafe { tv_dict_watcher_free(tv_dict_watcher_node_data(w)) };
+    }
+
+    unsafe { hash_clear(&raw mut (*d).dv_hashtab) };
+    dict.dv_hashtab.ht_locked -= 1;
+    unsafe { hash_init(&raw mut (*d).dv_hashtab) };
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `dict_T` itself.
@@ -200,24 +191,24 @@ pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
 /// `gc_first_dict`, which this unlinks it from. `d` is dangling
 /// afterwards.
 pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
-    unsafe {
-        // Remove the dictionary from the list of dictionaries for garbage
-        // collection.
-        match (*d).dv_used_prev.as_mut() {
-            Some(prev) => prev.dv_used_next = (*d).dv_used_next,
-            None => gc_first_dict.set((*d).dv_used_next),
-        }
-        if let Some(next) = (*d).dv_used_next.as_mut() {
-            next.dv_used_prev = (*d).dv_used_prev;
-        }
-
-        // NLUA_CLEAR_REF
-        if (*d).lua_table_ref != LUA_NOREF {
-            api_free_luaref((*d).lua_table_ref);
-            (*d).lua_table_ref = LUA_NOREF as LuaRef;
-        }
-        xfree(d.cast());
+    // Remove the dictionary from the list of dictionaries for garbage
+    // collection.
+    // SAFETY: the caller's promise: a live dictionary.
+    let mut dict = unsafe { Dt::new(d) };
+    match unsafe { (*d).dv_used_prev.as_mut() } {
+        Some(prev) => prev.dv_used_next = dict.dv_used_next,
+        None => gc_first_dict.set(dict.dv_used_next),
     }
+    if let Some(next) = unsafe { (*d).dv_used_next.as_mut() } {
+        next.dv_used_prev = dict.dv_used_prev;
+    }
+
+    // NLUA_CLEAR_REF
+    if dict.lua_table_ref != LUA_NOREF {
+        unsafe { api_free_luaref((*d).lua_table_ref) };
+        dict.lua_table_ref = LUA_NOREF as LuaRef;
+    }
+    unsafe { xfree(d.cast()) };
 }
 
 /// Free `d` and everything in it.  A no-op while `free_unref_items()` is
@@ -226,13 +217,11 @@ pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
 /// # Safety
 /// `d` must point at a live dictionary that nothing still references.
 pub unsafe fn tv_dict_free(d: *mut dict_T) {
-    unsafe {
-        if tv_in_free_unref_items.get() {
-            return;
-        }
-        tv_dict_free_contents(d);
-        tv_dict_free_dict(d);
+    if tv_in_free_unref_items.get() {
+        return;
     }
+    unsafe { tv_dict_free_contents(d) };
+    unsafe { tv_dict_free_dict(d) };
 }
 
 /// Drop a reference to `d`, freeing it when the last one goes.
@@ -242,12 +231,10 @@ pub unsafe fn tv_dict_free(d: *mut dict_T) {
 /// reference. That reference is given up here, so the caller must not use
 /// `d` again.
 pub unsafe fn tv_dict_unref(d: *mut dict_T) {
-    unsafe {
-        if let Some(dict) = d.as_mut()
-            && dict.dv_refcount.release() <= 0
-        {
-            tv_dict_free(d);
-        }
+    if let Some(dict) = unsafe { d.as_mut() }
+        && dict.dv_refcount.release() <= 0
+    {
+        unsafe { tv_dict_free(d) };
     }
 }
 
@@ -259,13 +246,11 @@ pub unsafe fn tv_dict_unref(d: *mut dict_T) {
 /// in no hashtab. On `OK` the dictionary owns `item`; on `FAIL` it is
 /// still the caller's to free.
 pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
-    unsafe {
-        let key = tv_dict_item_key(item);
-        if tv_dict_wrong_func_name(d, &raw mut (*item).di_tv, key) != 0 {
-            return FAIL;
-        }
-        hash_add(&raw mut (*d).dv_hashtab, key)
+    let key = tv_dict_item_key(item);
+    if unsafe { tv_dict_wrong_func_name(d, &raw mut (*item).di_tv, key) } != 0 {
+        return FAIL;
     }
+    unsafe { hash_add(&raw mut (*d).dv_hashtab, key) }
 }
 
 /// Add `list` to `d` under `key`, taking a reference to it.
@@ -280,13 +265,10 @@ pub unsafe fn tv_dict_add_list(
     key_len: size_t,
     list: *mut list_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_LIST;
-        (*item).di_tv.vval.v_list = list;
-        tv_list_ref(list);
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::list(list) };
+    unsafe { tv_list_ref(list) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add a copy of `tv` to `d` under `key`.
@@ -301,11 +283,9 @@ pub unsafe fn tv_dict_add_tv(
     key_len: size_t,
     tv: *mut typval_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        tv_copy(tv, &raw mut (*item).di_tv);
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { tv_copy(tv, &raw mut (*item).di_tv) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add `dict` to `d` under `key`, taking a reference to it.
@@ -320,13 +300,10 @@ pub unsafe fn tv_dict_add_dict(
     key_len: size_t,
     dict: *mut dict_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_DICT;
-        (*item).di_tv.vval.v_dict = dict;
-        (*dict).dv_refcount.retain();
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::dict(dict) };
+    unsafe { (*dict).dv_refcount.retain() };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add the number `nr` to `d` under `key`.
@@ -340,12 +317,9 @@ pub unsafe fn tv_dict_add_nr(
     key_len: size_t,
     nr: varnumber_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_NUMBER;
-        (*item).di_tv.vval.v_number = nr;
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::number(nr) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add the float `nr` to `d` under `key`.
@@ -359,12 +333,9 @@ pub unsafe fn tv_dict_add_float(
     key_len: size_t,
     nr: float_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_FLOAT;
-        (*item).di_tv.vval.v_float = nr;
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::float(nr) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add the boolean `val` to `d` under `key`.
@@ -378,12 +349,9 @@ pub unsafe fn tv_dict_add_bool(
     key_len: size_t,
     val: BoolVarValue,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_BOOL;
-        (*item).di_tv.vval.v_bool = val;
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::boolean(val) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add a copy of the NUL-terminated string `val` to `d` under `key`.
@@ -414,16 +382,14 @@ pub unsafe fn tv_dict_add_str_len(
     val: *const ::core::ffi::c_char,
     len: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let s = if val.is_null() {
-            ::core::ptr::null_mut()
-        } else if len < 0 {
-            xstrdup(val)
-        } else {
-            xstrndup(val, len as size_t)
-        };
-        tv_dict_add_allocated_str(d, key, key_len, s)
-    }
+    let s = if val.is_null() {
+        ::core::ptr::null_mut()
+    } else if len < 0 {
+        unsafe { xstrdup(val) }
+    } else {
+        unsafe { xstrndup(val, len as size_t) }
+    };
+    unsafe { tv_dict_add_allocated_str(d, key, key_len, s) }
 }
 
 /// Add `val` to `d` under `key`, taking ownership of the allocation.
@@ -439,12 +405,9 @@ pub unsafe fn tv_dict_add_allocated_str(
     key_len: size_t,
     val: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_STRING;
-        (*item).di_tv.vval.v_string = val;
-        add_or_free(d, item)
-    }
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    unsafe { (*item).di_tv = typval_T::string(val) };
+    unsafe { add_or_free(d, item) }
 }
 
 /// Add a funcref to `fp` to `d` under `key`.
@@ -460,18 +423,24 @@ pub unsafe fn tv_dict_add_func(
     key_len: size_t,
     fp: *mut ufunc_T,
 ) -> ::core::ffi::c_int {
+    let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
+    let name = unsafe { (&raw mut (*fp).uf_name).cast() };
+    // SAFETY: the caller's promise: a live function.
+    let func = unsafe { Live::<ufunc_T>::new(fp) };
+    let namelen = func.uf_namelen;
+    let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
     unsafe {
-        let item = tv_dict_item_alloc_len(key, key_len);
-        (*item).di_tv.v_type = VAR_FUNC;
-        (*item).di_tv.vval.v_string =
-            xmemdupz((&raw mut (*fp).uf_name).cast(), (*fp).uf_namelen) as *mut ::core::ffi::c_char;
-        if tv_dict_add(d, item) == FAIL {
-            tv_dict_item_free(item);
-            return FAIL;
+        (*item).di_tv = typval_T {
+            v_type: VAR_FUNC,
+            ..typval_T::string(owned)
         }
-        func_ref((*item).di_tv.vval.v_string);
-        OK
+    };
+    if unsafe { tv_dict_add(d, item) } == FAIL {
+        unsafe { tv_dict_item_free(item) };
+        return FAIL;
     }
+    unsafe { func_ref((*item).di_tv.vval.v_string) };
+    OK
 }
 
 /// The tail every `tv_dict_add_*` shares: hand `item` to `d`, or free it again
@@ -483,13 +452,11 @@ pub unsafe fn tv_dict_add_func(
 /// on either answer.
 #[inline]
 unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
-    unsafe {
-        if tv_dict_add(d, item) == FAIL {
-            tv_dict_item_free(item);
-            return FAIL;
-        }
-        OK
+    if unsafe { tv_dict_add(d, item) } == FAIL {
+        unsafe { tv_dict_item_free(item) };
+        return FAIL;
     }
+    OK
 }
 
 /// Free every item of `d`, leaving it allocated and empty.
@@ -498,17 +465,15 @@ unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_i
 /// `d` must point at a live dictionary that nothing else is walking; as
 /// [`tv_dict_free_contents`], the hashtab is locked for the walk.
 pub unsafe fn tv_dict_clear(d: *mut dict_T) {
-    unsafe {
-        // Lock the hashtab so `hash_remove` below cannot rehash it under the
-        // walk.
-        hash_lock(&raw mut (*d).dv_hashtab);
-        debug_assert!((*d).dv_hashtab.ht_locked > 0);
-        for hi in tv_dict_iter(&*d) {
-            tv_dict_item_free(tv_dict_hi2di(hi));
-            hash_remove(&raw mut (*d).dv_hashtab, hi);
-        }
-        hash_unlock(&raw mut (*d).dv_hashtab);
+    // Lock the hashtab so `hash_remove` below cannot rehash it under the
+    // walk.
+    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
+    debug_assert!(unsafe { (*d).dv_hashtab.ht_locked } > 0);
+    for hi in tv_dict_iter(unsafe { &*d }) {
+        unsafe { tv_dict_item_free(tv_dict_hi2di(hi)) };
+        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
     }
+    unsafe { hash_unlock(&raw mut (*d).dv_hashtab) };
 }
 
 /// `extend(d1, d2, action)`: fold `d2`'s items into `d1`.
@@ -522,93 +487,80 @@ pub unsafe fn tv_dict_clear(d: *mut dict_T) {
 /// of at least one byte. `"move"` empties `d2`, so it must not be the same
 /// dictionary as `d1` and must not be locked against a walk.
 pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char) {
-    unsafe {
-        let watched = tv_dict_is_watched(d1);
-        let arg_errmsg = gettext(c"extend() argument".as_ptr());
-        let arg_errmsg_len = strlen(arg_errmsg);
-        let action = *action as u8;
+    let watched = unsafe { tv_dict_is_watched(d1) };
+    let arg_errmsg = tr(c"extend() argument");
+    let arg_errmsg_len = unsafe { strlen(arg_errmsg) };
+    let action = unsafe { *action } as u8;
 
-        if action == b'm' {
-            hash_lock(&raw mut (*d2).dv_hashtab); // don't rehash on hash_remove()
+    if action == b'm' {
+        unsafe { hash_lock(&raw mut (*d2).dv_hashtab) }; // don't rehash on hash_remove()
+    }
+
+    for hi2 in tv_dict_iter(unsafe { &*d2 }) {
+        let di2 = unsafe { tv_dict_hi2di(hi2) };
+        let di2_key = tv_dict_item_key(di2);
+        let di1 = unsafe { tv_dict_find(d1, di2_key, -1) };
+        // Check the key to be valid when adding to any scope.
+        if unsafe { (*d1).dv_scope } != VAR_NO_SCOPE && !unsafe { valid_varname(di2_key) } {
+            break;
         }
-
-        for hi2 in tv_dict_iter(&*d2) {
-            let di2 = tv_dict_hi2di(hi2);
-            let di2_key = tv_dict_item_key(di2);
-            let di1 = tv_dict_find(d1, di2_key, -1);
-            // Check the key to be valid when adding to any scope.
-            if (*d1).dv_scope != VAR_NO_SCOPE && !valid_varname(di2_key) {
-                break;
-            }
-            if di1.is_null() {
-                if action == b'm' {
-                    // Cheap way to move a dict item from "d2" to "d1".
-                    // If dict_add() fails then "d2" won't be empty.
-                    if tv_dict_add(d1, di2) == OK {
-                        hash_remove(&raw mut (*d2).dv_hashtab, hi2);
-                        // Note upstream does not gate this on `watched`, unlike
-                        // the copying branch below.
-                        tv_dict_watcher_notify(
-                            d1,
-                            di2_key,
-                            &raw mut (*di2).di_tv,
-                            ::core::ptr::null_mut(),
-                        );
-                    }
-                } else {
-                    let new_di = tv_dict_item_copy(di2);
-                    if tv_dict_add(d1, new_di) == FAIL {
-                        tv_dict_item_free(new_di);
-                    } else if watched {
-                        tv_dict_watcher_notify(
-                            d1,
-                            tv_dict_item_key(new_di),
-                            &raw mut (*new_di).di_tv,
-                            ::core::ptr::null_mut(),
-                        );
-                    }
+        if di1.is_null() {
+            if action == b'm' {
+                // Cheap way to move a dict item from "d2" to "d1".
+                // If dict_add() fails then "d2" won't be empty.
+                if unsafe { tv_dict_add(d1, di2) } == OK {
+                    unsafe { hash_remove(&raw mut (*d2).dv_hashtab, hi2) };
+                    // Note upstream does not gate this on `watched`, unlike
+                    // the copying branch below.
+                    let newtv = di_tv(di2);
+                    let nul = ::core::ptr::null_mut();
+                    unsafe { tv_dict_watcher_notify(d1, di2_key, newtv, nul) };
                 }
-            } else if action == b'e' {
-                semsg_c!(gettext(c"E737: Key already exists: %s".as_ptr()), di2_key);
-                break;
-            } else if action == b'f' && di2 != di1 {
-                if value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len)
-                    || var_check_ro(
-                        (*di1).di_flags as ::core::ffi::c_int,
-                        arg_errmsg,
-                        arg_errmsg_len,
-                    )
-                {
-                    break;
-                }
-                // Disallow replacing a builtin function.
-                if tv_dict_wrong_func_name(d1, &raw mut (*di2).di_tv, di2_key) != 0 {
-                    break;
-                }
-
-                let mut oldtv = TV_INITIAL_VALUE;
-                if watched {
-                    tv_copy(&raw mut (*di1).di_tv, &raw mut oldtv);
-                }
-
-                tv_clear(&raw mut (*di1).di_tv);
-                tv_copy(&raw mut (*di2).di_tv, &raw mut (*di1).di_tv);
-
-                if watched {
-                    tv_dict_watcher_notify(
-                        d1,
-                        tv_dict_item_key(di1),
-                        &raw mut (*di1).di_tv,
-                        &raw mut oldtv,
-                    );
-                    tv_clear(&raw mut oldtv);
+            } else {
+                let new_di = unsafe { tv_dict_item_copy(di2) };
+                if unsafe { tv_dict_add(d1, new_di) } == FAIL {
+                    unsafe { tv_dict_item_free(new_di) };
+                } else if watched {
+                    let key = tv_dict_item_key(new_di);
+                    let newtv = di_tv(new_di);
+                    let nul = ::core::ptr::null_mut();
+                    unsafe { tv_dict_watcher_notify(d1, key, newtv, nul) };
                 }
             }
-        }
+        } else if action == b'e' {
+            semsg_c!(tr(c"E737: Key already exists: %s"), di2_key);
+            break;
+        } else if action == b'f' && di2 != di1 {
+            if unsafe { value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len) } || {
+                let flags = unsafe { (*di1).di_flags } as ::core::ffi::c_int;
+                unsafe { var_check_ro(flags, arg_errmsg, arg_errmsg_len) }
+            } {
+                break;
+            }
+            // Disallow replacing a builtin function.
+            if unsafe { tv_dict_wrong_func_name(d1, &raw mut (*di2).di_tv, di2_key) } != 0 {
+                break;
+            }
 
-        if action == b'm' {
-            hash_unlock(&raw mut (*d2).dv_hashtab);
+            let mut oldtv = TV_INITIAL_VALUE;
+            if watched {
+                unsafe { tv_copy(&raw mut (*di1).di_tv, &raw mut oldtv) };
+            }
+
+            unsafe { tv_clear(&raw mut (*di1).di_tv) };
+            unsafe { tv_copy(&raw mut (*di2).di_tv, &raw mut (*di1).di_tv) };
+
+            if watched {
+                let key = tv_dict_item_key(di1);
+                let newtv = di_tv(di1);
+                unsafe { tv_dict_watcher_notify(d1, key, newtv, &raw mut oldtv) };
+                unsafe { tv_clear(&raw mut oldtv) };
+            }
         }
+    }
+
+    if action == b'm' {
+        unsafe { hash_unlock(&raw mut (*d2).dv_hashtab) };
     }
 }
 
@@ -619,29 +571,28 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
 /// recurse, so a cycle must already have been ruled out by the caller's
 /// `copyID` bookkeeping.
 pub unsafe fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool {
-    unsafe {
-        if d1 == d2 {
-            return true;
-        }
-        if tv_dict_len(d1) != tv_dict_len(d2) {
-            return false;
-        }
-        if tv_dict_len(d1) == 0 {
-            return true;
-        }
-        if d1.is_null() || d2.is_null() {
-            return false;
-        }
-
-        for hi in tv_dict_iter(&*d1) {
-            let di1 = tv_dict_hi2di(hi);
-            let di2 = tv_dict_find(d2, tv_dict_item_key(di1), -1);
-            if di2.is_null() || !tv_equal(&raw mut (*di1).di_tv, &raw mut (*di2).di_tv, ic) {
-                return false;
-            }
-        }
-        true
+    if d1 == d2 {
+        return true;
     }
+    let len1 = unsafe { tv_dict_len(d1) };
+    if len1 != unsafe { tv_dict_len(d2) } {
+        return false;
+    }
+    if len1 == 0 {
+        return true;
+    }
+    if d1.is_null() || d2.is_null() {
+        return false;
+    }
+
+    for hi in tv_dict_iter(unsafe { &*d1 }) {
+        let di1 = unsafe { tv_dict_hi2di(hi) };
+        let di2 = unsafe { tv_dict_find(d2, tv_dict_item_key(di1), -1) };
+        if di2.is_null() || !unsafe { tv_equal(&raw mut (*di1).di_tv, &raw mut (*di2).di_tv, ic) } {
+            return false;
+        }
+    }
+    true
 }
 
 /// Copy `orig`, deeply when `deep`, converting keys through `conv`.
@@ -660,65 +611,60 @@ pub unsafe fn tv_dict_copy(
     deep: bool,
     copyID: ::core::ffi::c_int,
 ) -> *mut dict_T {
-    unsafe {
-        if orig.is_null() {
-            return ::core::ptr::null_mut();
-        }
-
-        let mut copy = tv_dict_alloc();
-        if copyID != 0 {
-            (*orig).dv_copyID = copyID;
-            (*orig).dv_copydict = copy;
-        }
-        for hi in tv_dict_iter(&*orig) {
-            let di = tv_dict_hi2di(hi);
-            if got_int.get() {
-                break;
-            }
-            let new_di = if conv.is_null() || (*conv).vc_type == CONV_NONE {
-                tv_dict_item_alloc(tv_dict_item_key(di))
-            } else {
-                let di_key = tv_dict_item_key(di);
-                let mut len = strlen(di_key);
-                let key = string_convert(conv, di_key, &raw mut len);
-                if key.is_null() {
-                    // The conversion failed: keep the original key, but at the
-                    // length `string_convert` left behind.
-                    tv_dict_item_alloc_len(di_key, len)
-                } else {
-                    let new_di = tv_dict_item_alloc_len(key, len);
-                    xfree(key.cast());
-                    new_di
-                }
-            };
-            if deep {
-                if var_item_copy(
-                    conv,
-                    &raw mut (*di).di_tv,
-                    &raw mut (*new_di).di_tv,
-                    deep,
-                    copyID,
-                ) == FAIL
-                {
-                    xfree(new_di.cast());
-                    break;
-                }
-            } else {
-                tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv);
-            }
-            if tv_dict_add(copy, new_di) == FAIL {
-                tv_dict_item_free(new_di);
-                break;
-            }
-        }
-
-        (*copy).dv_refcount.retain();
-        if got_int.get() {
-            tv_dict_unref(copy);
-            copy = ::core::ptr::null_mut();
-        }
-        copy
+    if orig.is_null() {
+        return ::core::ptr::null_mut();
     }
+
+    let mut copy = unsafe { tv_dict_alloc() };
+    if copyID != 0 {
+        // SAFETY: the caller's promise: a live dictionary.
+        let mut from = unsafe { Dt::new(orig) };
+        from.dv_copyID = copyID;
+        from.dv_copydict = copy;
+    }
+    for hi in tv_dict_iter(unsafe { &*orig }) {
+        let di = unsafe { tv_dict_hi2di(hi) };
+        if got_int.get() {
+            break;
+        }
+        let new_di = if conv.is_null() || unsafe { (*conv).vc_type } == CONV_NONE {
+            unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) }
+        } else {
+            let di_key = tv_dict_item_key(di);
+            let mut len = unsafe { strlen(di_key) };
+            let key = unsafe { string_convert(conv, di_key, &raw mut len) };
+            if key.is_null() {
+                // The conversion failed: keep the original key, but at the
+                // length `string_convert` left behind.
+                unsafe { tv_dict_item_alloc_len(di_key, len) }
+            } else {
+                let new_di = unsafe { tv_dict_item_alloc_len(key, len) };
+                unsafe { xfree(key.cast()) };
+                new_di
+            }
+        };
+        if deep {
+            let from = di_tv(di);
+            let to = di_tv(new_di);
+            if unsafe { var_item_copy(conv, from, to, deep, copyID) } == FAIL {
+                unsafe { xfree(new_di.cast()) };
+                break;
+            }
+        } else {
+            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv) };
+        }
+        if unsafe { tv_dict_add(copy, new_di) } == FAIL {
+            unsafe { tv_dict_item_free(new_di) };
+            break;
+        }
+    }
+
+    unsafe { (*copy).dv_refcount.retain() };
+    if got_int.get() {
+        unsafe { tv_dict_unref(copy) };
+        copy = ::core::ptr::null_mut();
+    }
+    copy
 }
 
 /// Mark every key of `dict` read-only and fixed.
@@ -726,11 +672,9 @@ pub unsafe fn tv_dict_copy(
 /// # Safety
 /// `dict` must point at a live dictionary.
 pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
-    unsafe {
-        for hi in tv_dict_iter(&*dict) {
-            let di = tv_dict_hi2di(hi);
-            (*di).di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t;
-        }
+    for hi in tv_dict_iter(unsafe { &*dict }) {
+        let di = unsafe { tv_dict_hi2di(hi) };
+        unsafe { (*di).di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t };
     }
 }
 
@@ -740,11 +684,9 @@ pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
 /// As [`tv_dict_alloc`]: the caller owns `gc_first_dict`, and the result
 /// arrives with a reference count of zero.
 pub unsafe fn tv_dict_alloc_lock(lock: VarLock) -> *mut dict_T {
-    unsafe {
-        let d = tv_dict_alloc();
-        (*d).dv_lock = lock;
-        d
-    }
+    let d = unsafe { tv_dict_alloc() };
+    unsafe { (*d).dv_lock = lock };
+    d
 }
 
 /// Allocate an empty dictionary and store it in `ret_tv` as the return value.
@@ -753,10 +695,8 @@ pub unsafe fn tv_dict_alloc_lock(lock: VarLock) -> *mut dict_T {
 /// `ret_tv` must point at a writable `typval_T` that holds no value yet —
 /// whatever was there is overwritten, not cleared.
 pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
-    unsafe {
-        let d = tv_dict_alloc_lock(VarLock::Unlocked);
-        tv_dict_set_ret(ret_tv, d);
-    }
+    let d = unsafe { tv_dict_alloc_lock(VarLock::Unlocked) };
+    unsafe { tv_dict_set_ret(ret_tv, d) };
 }
 
 /// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `rettv`.
@@ -772,45 +712,40 @@ pub unsafe fn tv_dict_remove(
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        if (*argvars.add(2)).v_type != VAR_UNKNOWN {
-            semsg_c!(
-                gettext(&raw const e_toomanyarg as *const ::core::ffi::c_char),
-                c"remove()".as_ptr(),
-            );
-            return;
-        }
+    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
+        semsg_c!(tr_bytes(&e_toomanyarg), c"remove()".as_ptr(),);
+        return;
+    }
 
-        let d = (*argvars).vval.v_dict;
-        if d.is_null() || value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) {
-            return;
-        }
-        let key = numbuf.string_chk(argvars.add(1));
-        if key.is_null() {
-            return;
-        }
-        let di = tv_dict_find(d, key, -1);
-        if di.is_null() {
-            semsg_c!(
-                gettext(&raw const e_dictkey as *const ::core::ffi::c_char),
-                key,
-            );
-            return;
-        }
-        let flags = (*di).di_flags as ::core::ffi::c_int;
-        if var_check_fixed(flags, arg_errmsg, TV_TRANSLATE as size_t)
-            || var_check_ro(flags, arg_errmsg, TV_TRANSLATE as size_t)
-        {
-            return;
-        }
+    let d = unsafe { (*argvars).vval.v_dict };
+    if d.is_null() || unsafe { value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
+    {
+        return;
+    }
+    let key = unsafe { numbuf.string_chk(argvars.add(1)) };
+    if key.is_null() {
+        return;
+    }
+    let di = unsafe { tv_dict_find(d, key, -1) };
+    if di.is_null() {
+        semsg_c!(tr_bytes(&e_dictkey), key,);
+        return;
+    }
+    // SAFETY: the item the lookup just found in `d`.
+    let mut item = unsafe { Di::new(di) };
+    let flags = item.di_flags as ::core::ffi::c_int;
+    if unsafe { var_check_fixed(flags, arg_errmsg, TV_TRANSLATE as size_t) }
+        || unsafe { var_check_ro(flags, arg_errmsg, TV_TRANSLATE as size_t) }
+    {
+        return;
+    }
 
-        // Move the value out rather than copying it: `rettv` takes the
-        // reference the item held.
-        *rettv = (*di).di_tv;
-        (*di).di_tv = TV_INITIAL_VALUE;
-        tv_dict_item_remove(d, di);
-        if tv_dict_is_watched(d) {
-            tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), rettv);
-        }
+    // Move the value out rather than copying it: `rettv` takes the
+    // reference the item held.
+    unsafe { *rettv = item.di_tv };
+    item.di_tv = TV_INITIAL_VALUE;
+    unsafe { tv_dict_item_remove(d, di) };
+    if unsafe { tv_dict_is_watched(d) } {
+        unsafe { tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), rettv) };
     }
 }

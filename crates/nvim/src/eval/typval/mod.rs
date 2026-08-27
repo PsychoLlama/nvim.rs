@@ -34,13 +34,14 @@ use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
-    MPConvPartialStage, MPConvStackValType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, blob_T, buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T,
-    hashitem_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, linenr_T,
-    list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t, ssize_t, staticList10_T,
-    typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
+    MPConvPartialStage, MPConvStackValType, QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, dict_T, dictitem_T, float_T, funcexe_T,
+    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    linenr_T, list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t, ssize_t,
+    staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
 };
+use crate::winlayer::Live;
 use ::libc::{abort, memcmp, memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strlen, strtod};
 
 // The carve of the transpiled module; see each child's docs.

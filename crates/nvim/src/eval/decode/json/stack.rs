@@ -96,13 +96,9 @@ impl<'a> Decoder<'a> {
         let rest = &self.buf[at..];
         // SAFETY: `rest` outlives the call and `semsg` copies what it keeps;
         // `%.*s` reads at most the length given.
-        unsafe {
-            semsg_c!(
-                gettext(fmt.as_ptr()),
-                rest.len() as c_int,
-                rest.as_ptr() as *const c_char,
-            )
-        };
+        let msg = unsafe { gettext(fmt.as_ptr()) };
+        let (len, at) = (rest.len() as c_int, rest.as_ptr() as *const c_char);
+        semsg_c!(msg, len, at);
     }
 
     /// Upstream's `OBJ()`: a scanned value, tagged with the punctuation that
@@ -141,122 +137,122 @@ impl<'a> Decoder<'a> {
     /// # Safety
     /// `obj` owns its value and `at` indexes [`Self::buf`].
     pub(crate) unsafe fn finish_value(&mut self, mut obj: Value, at: &mut usize) -> bool {
-        unsafe {
-            if self.containers.is_empty() {
-                self.stack.push(obj);
-                return true;
-            }
+        if self.containers.is_empty() {
+            self.stack.push(obj);
+            return true;
+        }
 
-            let mut last = self.innermost();
-            let mut val_location = *at;
-            // The value being stored *is* the container on top: it has just
-            // closed, so it belongs to the one below, and the error position
-            // to report against is where it opened.
-            if obj.val.v_type == last.container.v_type
-                // vval.v_list and vval.v_dict have the same size and offset.
-                && obj.val.vval.v_list == last.container.vval.v_list
-            {
-                self.containers.pop();
-                val_location = last.at;
-                last = self.innermost();
-            }
+        let mut last = self.innermost();
+        let mut val_location = *at;
+        // The value being stored *is* the container on top: it has just
+        // closed, so it belongs to the one below, and the error position
+        // to report against is where it opened.
+        if obj.val.v_type == last.container.v_type
+            // vval.v_list and vval.v_dict have the same size and offset.
+            && unsafe { obj.val.vval.v_list } == unsafe { last.container.vval.v_list }
+        {
+            self.containers.pop();
+            val_location = last.at;
+            last = self.innermost();
+        }
 
-            if last.container.v_type == VAR_LIST {
-                if tv_list_len(last.container.vval.v_list) != 0 && !obj.didcomma {
-                    semsg_c!(
-                        gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
-                        self.buf[val_location..].as_ptr() as *const c_char,
-                    );
-                    tv_clear(&raw mut obj.val);
-                    return false;
-                }
-                debug_assert!(last.special_val.is_null());
-                tv_list_append_owned_tv(last.container.vval.v_list, obj.val);
-                return true;
-            }
-
-            // A dictionary, with its key already on the stack: this is the
-            // value that goes with it.
-            if last.stack_index == self.stack.len().wrapping_sub(2) {
-                if !obj.didcolon {
-                    semsg_c!(
-                        gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
-                        self.buf[val_location..].as_ptr() as *const c_char,
-                    );
-                    tv_clear(&raw mut obj.val);
-                    return false;
-                }
-                let mut key = self.stack.pop().expect("a dictionary key below the value");
-                if last.special_val.is_null() {
-                    // A key that could not be a `dict_T` key has already sent
-                    // this container down the special-map path below.
-                    debug_assert!(!(key.is_special_string || key.val.vval.v_string.is_null()));
-                    let obj_di = tv_dict_item_alloc(key.val.vval.v_string);
-                    tv_clear(&raw mut key.val);
-                    if tv_dict_add(last.container.vval.v_dict, obj_di) == FAIL {
-                        abort();
-                    }
-                    (*obj_di).di_tv = obj.val;
-                } else {
-                    let kv_pair = tv_list_alloc(2);
-                    tv_list_append_list(last.special_val, kv_pair);
-                    tv_list_append_owned_tv(kv_pair, key.val);
-                    tv_list_append_owned_tv(kv_pair, obj.val);
-                }
-                return true;
-            }
-
-            // A dictionary with nothing pending: this value is a key.
-            if !obj.is_special_string && obj.val.v_type != VAR_STRING {
+        if last.container.v_type == VAR_LIST {
+            if unsafe { tv_list_len(last.container.vval.v_list) } != 0 && !obj.didcomma {
                 semsg_c!(
-                    gettext(E474_STRING_KEY.as_ptr()),
-                    self.buf[*at..].as_ptr() as *const c_char,
-                );
-                tv_clear(&raw mut obj.val);
-                return false;
-            }
-            if !obj.didcomma
-                && last.special_val.is_null()
-                && (*last.container.vval.v_dict).dv_hashtab.ht_used != 0
-            {
-                semsg_c!(
-                    gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
+                    unsafe { gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()) },
                     self.buf[val_location..].as_ptr() as *const c_char,
                 );
-                tv_clear(&raw mut obj.val);
+                unsafe { tv_clear(&raw mut obj.val) };
                 return false;
             }
-
-            // Three kinds of key a `dict_T` cannot hold: one that is itself a
-            // special dictionary, one carrying an embedded NUL (decoded as a
-            // blob, so `v_string` is NULL), and a duplicate.  Any of them
-            // sends the whole container back to be re-parsed as a special
-            // map, which can hold every one of them.
-            if last.special_val.is_null()
-                && (obj.is_special_string
-                    || obj.val.vval.v_string.is_null()
-                    || !tv_dict_find(last.container.vval.v_dict, obj.val.vval.v_string, -1)
-                        .is_null())
-            {
-                tv_clear(&raw mut obj.val);
-                // Rewind to the `{` and reopen it as a special map.
-                // Everything decoded inside it is dropped — the container's
-                // own value included, which frees the half-filled dictionary.
-                self.containers.pop();
-                let reopened = self.stack[last.stack_index];
-                while self.stack.len() > last.stack_index {
-                    let mut dropped = self.stack.pop().expect("the loop bound is the depth");
-                    tv_clear(&raw mut dropped.val);
-                }
-                *at = last.at;
-                self.didcomma = reopened.didcomma;
-                self.didcolon = reopened.didcolon;
-                self.next_map_special = true;
-                return true;
-            }
-
-            self.stack.push(obj);
-            true
+            debug_assert!(last.special_val.is_null());
+            unsafe { tv_list_append_owned_tv(last.container.vval.v_list, obj.val) };
+            return true;
         }
+
+        // A dictionary, with its key already on the stack: this is the
+        // value that goes with it.
+        if last.stack_index == self.stack.len().wrapping_sub(2) {
+            if !obj.didcolon {
+                semsg_c!(
+                    unsafe { gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()) },
+                    self.buf[val_location..].as_ptr() as *const c_char,
+                );
+                unsafe { tv_clear(&raw mut obj.val) };
+                return false;
+            }
+            let mut key = self.stack.pop().expect("a dictionary key below the value");
+            if last.special_val.is_null() {
+                // A key that could not be a `dict_T` key has already sent
+                // this container down the special-map path below.
+                debug_assert!(
+                    !(key.is_special_string || unsafe { key.val.vval.v_string }.is_null())
+                );
+                let obj_di = unsafe { tv_dict_item_alloc(key.val.vval.v_string) };
+                unsafe { tv_clear(&raw mut key.val) };
+                if unsafe { tv_dict_add(last.container.vval.v_dict, obj_di) } == FAIL {
+                    unsafe { abort() };
+                }
+                unsafe { (*obj_di).di_tv = obj.val };
+            } else {
+                let kv_pair = unsafe { tv_list_alloc(2) };
+                unsafe { tv_list_append_list(last.special_val, kv_pair) };
+                unsafe { tv_list_append_owned_tv(kv_pair, key.val) };
+                unsafe { tv_list_append_owned_tv(kv_pair, obj.val) };
+            }
+            return true;
+        }
+
+        // A dictionary with nothing pending: this value is a key.
+        if !obj.is_special_string && obj.val.v_type != VAR_STRING {
+            semsg_c!(
+                unsafe { gettext(E474_STRING_KEY.as_ptr()) },
+                self.buf[*at..].as_ptr() as *const c_char,
+            );
+            unsafe { tv_clear(&raw mut obj.val) };
+            return false;
+        }
+        if !obj.didcomma
+            && last.special_val.is_null()
+            && unsafe { (*last.container.vval.v_dict).dv_hashtab.ht_used } != 0
+        {
+            semsg_c!(
+                unsafe { gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()) },
+                self.buf[val_location..].as_ptr() as *const c_char,
+            );
+            unsafe { tv_clear(&raw mut obj.val) };
+            return false;
+        }
+
+        // Three kinds of key a `dict_T` cannot hold: one that is itself a
+        // special dictionary, one carrying an embedded NUL (decoded as a
+        // blob, so `v_string` is NULL), and a duplicate.  Any of them
+        // sends the whole container back to be re-parsed as a special
+        // map, which can hold every one of them.
+        if last.special_val.is_null()
+            && (obj.is_special_string
+                || unsafe { obj.val.vval.v_string }.is_null()
+                || !unsafe { tv_dict_find(last.container.vval.v_dict, obj.val.vval.v_string, -1) }
+                    .is_null())
+        {
+            unsafe { tv_clear(&raw mut obj.val) };
+            // Rewind to the `{` and reopen it as a special map.
+            // Everything decoded inside it is dropped — the container's
+            // own value included, which frees the half-filled dictionary.
+            self.containers.pop();
+            let reopened = self.stack[last.stack_index];
+            while self.stack.len() > last.stack_index {
+                let mut dropped = self.stack.pop().expect("the loop bound is the depth");
+                unsafe { tv_clear(&raw mut dropped.val) };
+            }
+            *at = last.at;
+            self.didcomma = reopened.didcomma;
+            self.didcolon = reopened.didcolon;
+            self.next_map_special = true;
+            return true;
+        }
+
+        self.stack.push(obj);
+        true
     }
 }

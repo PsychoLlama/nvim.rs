@@ -31,7 +31,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
 use crate::eval::typval::{
-    GARRAY_EMPTY, tv_dict_find, tv_list_append_allocated_string, tv_list_first,
+    GARRAY_EMPTY, Li, Tv, tv_dict_find, tv_list_append_allocated_string, tv_list_first,
     tv_list_idx_of_item, tv_list_last, tv_list_len,
 };
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
@@ -45,7 +45,7 @@ use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
     FAIL, IOSIZE, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
-    VarLock, garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
 };
 use ::libc::{abort, strlen};
 
@@ -149,16 +149,15 @@ fn store_nuls_as_newlines(line: &mut [u8]) {
 /// `li` must be a live list item whose value is a `VAR_STRING` this may take
 /// ownership of and replace.
 unsafe fn extend_item(li: *mut listitem_T, line: &[u8]) {
-    unsafe {
-        let old_len = item_strlen(li);
-        let grown =
-            xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1).cast::<c_char>();
-        (*li).li_tv.vval.v_string = grown;
-        let tail = slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1);
-        tail[..line.len()].copy_from_slice(line);
-        tail[line.len()] = 0;
-        store_nuls_as_newlines(&mut tail[..line.len()]);
-    }
+    let old_len = unsafe { item_strlen(li) };
+    let grown = unsafe { xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1) }
+        .cast::<c_char>();
+    unsafe { (*li).li_tv.vval.v_string = grown };
+    let tail =
+        unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
+    tail[..line.len()].copy_from_slice(line);
+    tail[line.len()] = 0;
+    store_nuls_as_newlines(&mut tail[..line.len()]);
 }
 
 /// `line` as a fresh NUL-terminated allocation the list takes over.
@@ -272,21 +271,13 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // the one the walk is now standing on.
                 // SAFETY: the frame's dictionary is live and `hi` is either
                 // NULL or one past a slot of its hash table.
-                let key = unsafe {
-                    let hi = if hi.is_null() {
-                        (*dict).dv_hashtab.ht_array
-                    } else {
-                        hi.sub(1)
-                    };
-                    let mut key_tv = typval_T {
-                        v_type: VAR_STRING,
-                        v_lock: VarLock::Unlocked,
-                        vval: typval_vval_union {
-                            v_string: (*hi).hi_key,
-                        },
-                    };
-                    encode_tv2string(&raw mut key_tv, core::ptr::null_mut())
+                let hi = if hi.is_null() {
+                    unsafe { (*dict).dv_hashtab.ht_array }
+                } else {
+                    unsafe { hi.sub(1) }
                 };
+                let mut key_tv = typval_T::string(unsafe { (*hi).hi_key });
+                let key = unsafe { encode_tv2string(&raw mut key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
                 unsafe { xfree(key.cast::<c_void>()) };
@@ -296,37 +287,35 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // the last one once the walk has run off the end.
                 // SAFETY: the frame's list is live and `li` is one of its
                 // items or NULL.
-                let (idx, li) = unsafe {
-                    let idx = if li == tv_list_first(list) {
-                        0
-                    } else if li.is_null() {
-                        tv_list_len(list) - 1
-                    } else {
-                        tv_list_idx_of_item(list, (*li).li_prev)
-                    };
-                    let li = if li.is_null() {
-                        tv_list_last(list)
-                    } else {
-                        (*li).li_prev
-                    };
-                    (idx, li)
+                let idx = if li == unsafe { tv_list_first(list) } {
+                    0
+                } else if li.is_null() {
+                    (unsafe { tv_list_len(list) }) - 1
+                } else {
+                    unsafe { tv_list_idx_of_item(list, (*li).li_prev) }
                 };
-                // SAFETY: `li` is an item of the frame's list, or NULL.
-                let pair_key = unsafe {
-                    let pairs = matches!(frame.frame, Frame::Pairs { .. });
-                    if !pairs
-                        || li.is_null()
-                        || ((*li).li_tv.v_type != VAR_LIST
-                            && tv_list_len((*li).li_tv.vval.v_list) <= 0)
-                    {
-                        None
-                    } else {
-                        // A special map's item is a [key, value] pair, so the
-                        // path can name the key rather than the index.
-                        let first_item = tv_list_first((*li).li_tv.vval.v_list);
-                        let mut key_tv = (*first_item).li_tv;
-                        Some(encode_tv2echo(&raw mut key_tv, core::ptr::null_mut()))
-                    }
+                let li = if li.is_null() {
+                    unsafe { tv_list_last(list) }
+                } else {
+                    unsafe { (*li).li_prev }
+                };
+                let pairs = matches!(frame.frame, Frame::Pairs { .. });
+                let not_a_pair = || {
+                    // SAFETY: `li` is an item of the frame's list.
+                    let item = unsafe { Li::new(li) };
+                    let ty = item.v_type();
+                    ty != VAR_LIST && unsafe { tv_list_len(item.list()) } <= 0
+                };
+                let pair_key = if !pairs || li.is_null() || not_a_pair() {
+                    None
+                } else {
+                    // A special map's item is a [key, value] pair, so the
+                    // path can name the key rather than the index.
+                    // SAFETY: `li` is an item of the frame's list.
+                    let inner = unsafe { Li::new(li) }.list();
+                    let first_item = unsafe { tv_list_first(inner) };
+                    let mut key_tv = unsafe { (*first_item).li_tv };
+                    Some(unsafe { encode_tv2echo(&raw mut key_tv, core::ptr::null_mut()) })
                 };
                 match pair_key {
                     None => append_formatted!(idx_msg, idx),
@@ -358,18 +347,16 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
 
     // SAFETY: `msg` is the caller's two-`%s` format; the path is either the
     // rendered stack or the literal below.
-    unsafe {
-        semsg_c!(
-            msg,
-            gettext(path.objname),
-            if path.stack.is_empty() {
-                tr(c"itself")
-            } else {
-                msg_ga.ga_data.cast::<c_char>()
-            },
-        );
-        ga_clear(&raw mut msg_ga);
-    }
+    semsg_c!(
+        msg,
+        unsafe { gettext(path.objname) },
+        if path.stack.is_empty() {
+            tr(c"itself")
+        } else {
+            msg_ga.ga_data.cast::<c_char>()
+        },
+    );
+    unsafe { ga_clear(&raw mut msg_ga) };
     Flow::Fail
 }
 
@@ -755,12 +742,8 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
         return false;
     }
     // SAFETY: `spdict` is live and both keys are NUL-terminated literals.
-    let (type_di, val_di) = unsafe {
-        (
-            tv_dict_find(spdict, c"_TYPE".as_ptr(), 5 as ptrdiff_t),
-            tv_dict_find(spdict, c"_VAL".as_ptr(), 4 as ptrdiff_t),
-        )
-    };
+    let type_di = unsafe { tv_dict_find(spdict, c"_TYPE".as_ptr(), 5 as ptrdiff_t) };
+    let val_di = unsafe { tv_dict_find(spdict, c"_VAL".as_ptr(), 4 as ptrdiff_t) };
     if type_di.is_null() {
         return false;
     }
@@ -826,20 +809,20 @@ pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_ch
 pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
     let mut ga = text_garray();
     // SAFETY: the caller's promise about `tv`.
-    unsafe {
-        // A string or function reference echoes as its own bytes, which is
-        // the whole difference between `:echo` and `string()` at the top
-        // level; below it, the sink says it again.
-        if (*tv).v_type == VAR_STRING || (*tv).v_type == VAR_FUNC {
-            if !(*tv).vval.v_string.is_null() {
-                ga_concat(&raw mut ga, (*tv).vval.v_string);
-            }
-        } else {
-            let eve_ret = encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr());
-            debug_assert!(eve_ret);
+    // A string or function reference echoes as its own bytes, which is
+    // the whole difference between `:echo` and `string()` at the top
+    // level; below it, the sink says it again.
+    // SAFETY: the caller's promise: a live typval.
+    let val = unsafe { Tv::new(tv) };
+    if val.v_type == VAR_STRING || val.v_type == VAR_FUNC {
+        if !val.string().is_null() {
+            unsafe { ga_concat(&raw mut ga, (*tv).vval.v_string) };
         }
-        finish_tv2(ga, len)
+    } else {
+        let eve_ret = unsafe { encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr()) };
+        debug_assert!(eve_ret);
     }
+    unsafe { finish_tv2(ga, len) }
 }
 
 /// `tv` as JSON, or an empty buffer once the refusal has been reported.

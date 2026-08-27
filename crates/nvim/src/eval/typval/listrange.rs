@@ -22,16 +22,14 @@ pub unsafe fn tv_list_check_range_index_one(
     n1: *mut ::core::ffi::c_int,
     quiet: bool,
 ) -> *mut listitem_T {
-    unsafe {
-        let li = tv_list_find_index(l, n1);
-        if li.is_null() && !quiet {
-            semsg_c!(
-                gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
-                int64_t::from(*n1),
-            );
-        }
-        li
+    let li = unsafe { tv_list_find_index(l, n1) };
+    if li.is_null() && !quiet {
+        semsg_c!(
+            tr_bytes(&e_list_index_out_of_range_nr),
+            int64_t::from(unsafe { *n1 }),
+        );
     }
+    li
 }
 
 /// Resolve the second index of `l[n1:n2]` against the item `li1` the first one
@@ -43,36 +41,32 @@ pub unsafe fn tv_list_check_range_index_two(
     n2: *mut ::core::ffi::c_int,
     quiet: bool,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        if *n2 < 0 {
-            let ni = tv_list_find(l, *n2);
-            if ni.is_null() {
-                if !quiet {
-                    semsg_c!(
-                        gettext(
-                            &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char,
-                        ),
-                        int64_t::from(*n2),
-                    );
-                }
-                return FAIL;
-            }
-            *n2 = tv_list_idx_of_item(l, ni);
-        }
-        if *n1 < 0 {
-            *n1 = tv_list_idx_of_item(l, li1);
-        }
-        if *n2 < *n1 {
+    if unsafe { *n2 } < 0 {
+        let ni = unsafe { tv_list_find(l, *n2) };
+        if ni.is_null() {
             if !quiet {
                 semsg_c!(
-                    gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
-                    int64_t::from(*n2),
+                    tr_bytes(&e_list_index_out_of_range_nr),
+                    int64_t::from(unsafe { *n2 }),
                 );
             }
             return FAIL;
         }
-        OK
+        unsafe { *n2 = tv_list_idx_of_item(l, ni) };
     }
+    if unsafe { *n1 } < 0 {
+        unsafe { *n1 = tv_list_idx_of_item(l, li1) };
+    }
+    if unsafe { *n2 } < unsafe { *n1 } {
+        if !quiet {
+            semsg_c!(
+                tr_bytes(&e_list_index_out_of_range_nr),
+                int64_t::from(unsafe { *n2 }),
+            );
+        }
+        return FAIL;
+    }
+    OK
 }
 
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
@@ -87,71 +81,68 @@ pub unsafe fn tv_list_assign_range(
     op: *const ::core::ffi::c_char,
     varname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let mut idx1 = idx1_arg;
-        let first_li = tv_list_find_index(dest, &raw mut idx1);
+    let mut idx1 = idx1_arg;
+    let first_li = unsafe { tv_list_find_index(dest, &raw mut idx1) };
 
-        // Check whether any of the list items is locked before making any
-        // changes.
-        let mut idx = idx1;
-        let mut dest_li = first_li;
-        let mut src_li = tv_list_first(src);
-        while !src_li.is_null() && !dest_li.is_null() {
-            if value_check_lock((*dest_li).li_tv.v_lock, varname, TV_CSTRING as size_t) {
-                return FAIL;
-            }
-            src_li = (*src_li).li_next;
-            if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
-                break;
-            }
-            dest_li = (*dest_li).li_next;
-            idx += 1;
-        }
-
-        // Assign the List values to the list items.
-        idx = idx1;
-        dest_li = first_li;
-        src_li = tv_list_first(src);
-        while !src_li.is_null() {
-            debug_assert!(!dest_li.is_null());
-            if !op.is_null() && *op as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
-                eexe_mod_op(&raw mut (*dest_li).li_tv, &raw mut (*src_li).li_tv, op);
-            } else {
-                tv_clear(&raw mut (*dest_li).li_tv);
-                tv_copy(&raw mut (*src_li).li_tv, &raw mut (*dest_li).li_tv);
-            }
-            src_li = (*src_li).li_next;
-            if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
-                break;
-            }
-            if (*dest_li).li_next.is_null() {
-                // Need to add an empty item.
-                tv_list_append_number(dest, 0);
-                // "dest_li" may have become invalid after append, don't use it.
-                dest_li = tv_list_last(dest); // Valid again.
-            } else {
-                dest_li = (*dest_li).li_next;
-            }
-            idx += 1;
-        }
-
-        if !src_li.is_null() {
-            emsg(gettext(
-                c"E710: List value has more items than target".as_ptr(),
-            ));
+    // Check whether any of the list items is locked before making any
+    // changes.
+    let mut idx = idx1;
+    let mut dest_li = first_li;
+    let mut src_li = unsafe { tv_list_first(src) };
+    while !src_li.is_null() && !dest_li.is_null() {
+        if unsafe { value_check_lock((*dest_li).li_tv.v_lock, varname, TV_CSTRING as size_t) } {
             return FAIL;
         }
-        let short = if empty_idx2 {
-            !dest_li.is_null() && !(*dest_li).li_next.is_null()
-        } else {
-            idx != idx2
-        };
-        if short {
-            emsg(gettext(c"E711: List value has not enough items".as_ptr()));
-            return FAIL;
+        src_li = unsafe { (*src_li).li_next };
+        if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
+            break;
         }
-        OK
+        dest_li = unsafe { (*dest_li).li_next };
+        idx += 1;
     }
+
+    // Assign the List values to the list items.
+    idx = idx1;
+    dest_li = first_li;
+    src_li = unsafe { tv_list_first(src) };
+    while !src_li.is_null() {
+        debug_assert!(!dest_li.is_null());
+        if !op.is_null() && unsafe { *op } as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
+            unsafe { eexe_mod_op(&raw mut (*dest_li).li_tv, &raw mut (*src_li).li_tv, op) };
+        } else {
+            unsafe { tv_clear(&raw mut (*dest_li).li_tv) };
+            unsafe { tv_copy(&raw mut (*src_li).li_tv, &raw mut (*dest_li).li_tv) };
+        }
+        src_li = unsafe { (*src_li).li_next };
+        if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
+            break;
+        }
+        if unsafe { (*dest_li).li_next }.is_null() {
+            // Need to add an empty item.
+            unsafe { tv_list_append_number(dest, 0) };
+            // "dest_li" may have become invalid after append, don't use it.
+            dest_li = unsafe { tv_list_last(dest) }; // Valid again.
+        } else {
+            dest_li = unsafe { (*dest_li).li_next };
+        }
+        idx += 1;
+    }
+
+    if !src_li.is_null() {
+        let msg = tr(c"E710: List value has more items than target");
+        unsafe { emsg(msg) };
+        return FAIL;
+    }
+    let short = if empty_idx2 {
+        !dest_li.is_null() && !unsafe { (*dest_li).li_next }.is_null()
+    } else {
+        idx != idx2
+    };
+    if short {
+        unsafe { emsg(gettext(c"E711: List value has not enough items".as_ptr())) };
+        return FAIL;
+    }
+    OK
 }
 
 /// `flatten()`: splice the items of any nested list into `list` in place,
@@ -162,51 +153,50 @@ pub unsafe fn tv_list_flatten(
     maxitems: int64_t,
     maxdepth: int64_t,
 ) {
-    unsafe {
-        if maxdepth == 0 {
+    if maxdepth == 0 {
+        return;
+    }
+
+    let mut item = if first.is_null() {
+        // SAFETY: the caller's promise: a live list.
+        let flat = unsafe { Ls::new(list) };
+        flat.lv_first
+    } else {
+        first
+    };
+    let mut done = 0;
+    while !item.is_null() && done < maxitems {
+        // The link is read before the body, which unlinks and frees `item`.
+        // SAFETY: an item of the list being flattened.
+        let flat = unsafe { Li::new(item) };
+        let next = flat.li_next;
+
+        fast_breakcheck();
+        if got_int.get() {
             return;
         }
+        if flat.li_tv.v_type == VAR_LIST {
+            let itemlist = flat.list();
 
-        let mut item = if first.is_null() {
-            (*list).lv_first
-        } else {
-            first
-        };
-        let mut done = 0;
-        while !item.is_null() && done < maxitems {
-            // The link is read before the body, which unlinks and frees `item`.
-            let next = (*item).li_next;
+            unsafe { tv_list_drop_items(list, item, item) };
+            unsafe { tv_list_extend(list, itemlist, next) };
 
-            fast_breakcheck();
-            if got_int.get() {
-                return;
+            if maxdepth > 0 {
+                let spliced_first = if flat.li_prev.is_null() {
+                    // SAFETY: the caller's promise: a live list.
+                    unsafe { Ls::new(list) }.lv_first
+                } else {
+                    unsafe { (*(*item).li_prev).li_next }
+                };
+                let n = int64_t::from(unsafe { (*itemlist).lv_len });
+                unsafe { tv_list_flatten(list, spliced_first, n, maxdepth - 1) };
             }
-            if (*item).li_tv.v_type == VAR_LIST {
-                let itemlist = (*item).li_tv.vval.v_list;
-
-                tv_list_drop_items(list, item, item);
-                tv_list_extend(list, itemlist, next);
-
-                if maxdepth > 0 {
-                    let spliced_first = if (*item).li_prev.is_null() {
-                        (*list).lv_first
-                    } else {
-                        (*(*item).li_prev).li_next
-                    };
-                    tv_list_flatten(
-                        list,
-                        spliced_first,
-                        int64_t::from((*itemlist).lv_len),
-                        maxdepth - 1,
-                    );
-                }
-                tv_clear(&raw mut (*item).li_tv);
-                xfree(item.cast());
-            }
-
-            done += 1;
-            item = next;
+            unsafe { tv_clear(&raw mut (*item).li_tv) };
+            unsafe { xfree(item.cast()) };
         }
+
+        done += 1;
+        item = next;
     }
 }
 
@@ -216,16 +206,14 @@ pub(crate) unsafe fn tv_list_slice(
     mut n1: varnumber_T,
     n2: varnumber_T,
 ) -> *mut list_T {
-    unsafe {
-        let l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
-        let mut item = tv_list_find(ol, n1 as ::core::ffi::c_int);
-        while n1 <= n2 {
-            tv_list_append_tv(l, &raw mut (*item).li_tv);
-            item = (*item).li_next;
-            n1 += 1;
-        }
-        l
+    let l = unsafe { tv_list_alloc((n2 - n1 + 1) as ptrdiff_t) };
+    let mut item = unsafe { tv_list_find(ol, n1 as ::core::ffi::c_int) };
+    while n1 <= n2 {
+        unsafe { tv_list_append_tv(l, &raw mut (*item).li_tv) };
+        item = unsafe { (*item).li_next };
+        n1 += 1;
     }
+    l
 }
 
 /// `list[n1]` or `list[n1 : n2]`, whichever `range` says.
@@ -241,57 +229,50 @@ pub unsafe fn tv_list_slice_or_index(
     rettv: *mut typval_T,
     verbose: bool,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let len = tv_list_len((*rettv).vval.v_list);
-        let mut n1 = n1_arg;
-        let mut n2 = n2_arg;
+    let len = unsafe { tv_list_len((*rettv).vval.v_list) };
+    let mut n1 = n1_arg;
+    let mut n2 = n2_arg;
 
-        if n1 < 0 {
-            n1 += varnumber_T::from(len);
-        }
-        if n1 < 0 || n1 >= varnumber_T::from(len) {
-            // For a range we allow invalid values and return an empty list.
-            // A list index out of range is an error.
-            if !range {
-                if verbose {
-                    semsg_c!(
-                        gettext(
-                            &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char,
-                        ),
-                        n1_arg,
-                    );
-                }
-                return FAIL;
-            }
-            n1 = varnumber_T::from(len);
-        }
-
-        if range {
-            if n2 < 0 {
-                n2 += varnumber_T::from(len);
-            } else if n2 >= varnumber_T::from(len) {
-                n2 = varnumber_T::from(len - if exclusive { 0 } else { 1 });
-            }
-            if exclusive {
-                n2 -= 1;
-            }
-            if n2 < 0 || n2 + 1 < n1 {
-                n2 = -1;
-            }
-            let l = tv_list_slice((*rettv).vval.v_list, n1, n2);
-            tv_clear(rettv);
-            tv_list_set_ret(rettv, l);
-        } else {
-            // copy the item to "var1" to avoid that freeing the list makes it
-            // invalid.
-            let mut var1 = TV_INITIAL_VALUE;
-            let li = tv_list_find((*rettv).vval.v_list, n1 as ::core::ffi::c_int);
-            tv_copy(&raw mut (*li).li_tv, &raw mut var1);
-            tv_clear(rettv);
-            *rettv = var1;
-        }
-        OK
+    if n1 < 0 {
+        n1 += varnumber_T::from(len);
     }
+    if n1 < 0 || n1 >= varnumber_T::from(len) {
+        // For a range we allow invalid values and return an empty list.
+        // A list index out of range is an error.
+        if !range {
+            if verbose {
+                semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), n1_arg,);
+            }
+            return FAIL;
+        }
+        n1 = varnumber_T::from(len);
+    }
+
+    if range {
+        if n2 < 0 {
+            n2 += varnumber_T::from(len);
+        } else if n2 >= varnumber_T::from(len) {
+            n2 = varnumber_T::from(len - if exclusive { 0 } else { 1 });
+        }
+        if exclusive {
+            n2 -= 1;
+        }
+        if n2 < 0 || n2 + 1 < n1 {
+            n2 = -1;
+        }
+        let l = unsafe { tv_list_slice((*rettv).vval.v_list, n1, n2) };
+        unsafe { tv_clear(rettv) };
+        unsafe { tv_list_set_ret(rettv, l) };
+    } else {
+        // copy the item to "var1" to avoid that freeing the list makes it
+        // invalid.
+        let mut var1 = TV_INITIAL_VALUE;
+        let li = unsafe { tv_list_find((*rettv).vval.v_list, n1 as ::core::ffi::c_int) };
+        unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut var1) };
+        unsafe { tv_clear(rettv) };
+        unsafe { *rettv = var1 };
+    }
+    OK
 }
 
 /// `join()`'s two passes: stringify every item into `join_gap`, then
@@ -304,56 +285,58 @@ pub(crate) unsafe fn list_join_inner(
     sep: *const ::core::ffi::c_char,
     join_gap: *mut garray_T,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let mut sumlen: size_t = 0;
-        let mut first = true;
+    let mut sumlen: size_t = 0;
+    let mut first = true;
 
-        // Stringify each item in the list.
-        for item in tv_list_iter(l.as_ref()) {
-            if got_int.get() {
-                break;
-            }
-            let mut s = String_0::NULL;
-            let data = encode_tv2echo(&raw mut (*item).li_tv, s.len_mut());
-            s.set_data(data);
-            if s.data().is_null() {
-                return FAIL;
-            }
-
-            sumlen += s.len();
-
-            let p = ga_append_via_ptr(join_gap, ::core::mem::size_of::<Join>()) as *mut Join;
-            (*p).s = s;
-            (*p).tofree = s.data();
-
-            line_breakcheck();
+    // Stringify each item in the list.
+    for item in tv_list_iter(unsafe { l.as_ref() }) {
+        if got_int.get() {
+            break;
+        }
+        let mut s = String_0::NULL;
+        let data = unsafe { encode_tv2echo(&raw mut (*item).li_tv, s.len_mut()) };
+        s.set_data(data);
+        if s.data().is_null() {
+            return FAIL;
         }
 
-        // Allocate result buffer with its total size, avoid re-allocation and
-        // multiple copy operations.  Add 2 for a tailing ']' and NUL.
-        let seplen = strlen(sep);
-        if (*join_gap).ga_len >= 2 {
-            sumlen += seplen * ((*join_gap).ga_len - 1) as size_t;
-        }
-        ga_grow(gap, sumlen as ::core::ffi::c_int + 2);
+        sumlen += s.len();
 
-        let mut i = 0;
-        while i < (*join_gap).ga_len && !got_int.get() {
-            if first {
-                first = false;
-            } else {
-                ga_concat_len(gap, sep, seplen);
-            }
-            let p = ((*join_gap).ga_data as *const Join).offset(i as isize);
-            if !(*p).s.data().is_null() {
-                ga_concat_len(gap, (*p).s.data(), (*p).s.len());
-            }
-            line_breakcheck();
-            i += 1;
-        }
+        let p = unsafe { ga_append_via_ptr(join_gap, ::core::mem::size_of::<Join>()) } as *mut Join;
+        // SAFETY: the entry `ga_append_via_ptr` just made room for.
+        let mut joined = unsafe { Live::<Join>::new(p) };
+        joined.s = s;
+        joined.tofree = s.data();
 
-        OK
+        line_breakcheck();
     }
+
+    // Allocate result buffer with its total size, avoid re-allocation and
+    // multiple copy operations.  Add 2 for a tailing ']' and NUL.
+    let seplen = unsafe { strlen(sep) };
+    // SAFETY: the caller's stack garray.
+    let ga = unsafe { Ga::new(join_gap) };
+    if ga.ga_len >= 2 {
+        sumlen += seplen * (ga.ga_len - 1) as size_t;
+    }
+    unsafe { ga_grow(gap, sumlen as ::core::ffi::c_int + 2) };
+
+    let mut i = 0;
+    while i < ga.ga_len && !got_int.get() {
+        if first {
+            first = false;
+        } else {
+            unsafe { ga_concat_len(gap, sep, seplen) };
+        }
+        let p = unsafe { (ga.ga_data as *const Join).offset(i as isize) };
+        if !unsafe { (*p).s }.data().is_null() {
+            unsafe { ga_concat_len(gap, (*p).s.data(), (*p).s.len()) };
+        }
+        line_breakcheck();
+        i += 1;
+    }
+
+    OK
 }
 
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
@@ -362,91 +345,79 @@ pub unsafe fn tv_list_join(
     l: *mut list_T,
     sep: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        if tv_list_len(l) == 0 {
-            return OK;
-        }
-
-        let mut join_ga = GARRAY_EMPTY;
-        ga_init(
-            &raw mut join_ga,
-            ::core::mem::size_of::<Join>() as ::core::ffi::c_int,
-            tv_list_len(l),
-        );
-        let retval = list_join_inner(gap, l, sep, &raw mut join_ga);
-
-        // GA_DEEP_CLEAR with FREE_JOIN_TOFREE.
-        if !join_ga.ga_data.is_null() {
-            for i in 0..join_ga.ga_len {
-                xfree(
-                    (*(join_ga.ga_data as *mut Join).offset(i as isize))
-                        .tofree
-                        .cast(),
-                );
-            }
-        }
-        ga_clear(&raw mut join_ga);
-
-        retval
+    if unsafe { tv_list_len(l) } == 0 {
+        return OK;
     }
+
+    let mut join_ga = GARRAY_EMPTY;
+    let itemsize = ::core::mem::size_of::<Join>() as ::core::ffi::c_int;
+    let growsize = unsafe { tv_list_len(l) };
+    unsafe { ga_init(&raw mut join_ga, itemsize, growsize) };
+    let retval = unsafe { list_join_inner(gap, l, sep, &raw mut join_ga) };
+
+    // GA_DEEP_CLEAR with FREE_JOIN_TOFREE.
+    if !join_ga.ga_data.is_null() {
+        for i in 0..join_ga.ga_len {
+            let joined = join_ga.ga_data as *mut Join;
+            unsafe { xfree((*joined.offset(i as isize)).tofree.cast()) };
+        }
+    }
+    unsafe { ga_clear(&raw mut join_ga) };
+
+    retval
 }
 
 /// `join()` the builtin.
 pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        if (*argvars).v_type != VAR_LIST {
-            emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
-            return;
-        }
-        let sep = if (*argvars.add(1)).v_type == VAR_UNKNOWN {
-            c" ".as_ptr()
-        } else {
-            numbuf.string_chk(argvars.add(1))
-        };
-
-        (*rettv).v_type = VAR_STRING;
-        if sep.is_null() {
-            (*rettv).vval.v_string = ::core::ptr::null_mut();
-            return;
-        }
-
-        let mut ga = GARRAY_EMPTY;
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-            80,
-        );
-        tv_list_join(&raw mut ga, (*argvars).vval.v_list, sep);
-        ga_append(&raw mut ga, NUL as uint8_t);
-        (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
+    if unsafe { (*argvars).v_type } != VAR_LIST {
+        unsafe { emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char)) };
+        return;
     }
+    let sep = if unsafe { (*argvars.add(1)).v_type } == VAR_UNKNOWN {
+        c" ".as_ptr()
+    } else {
+        unsafe { numbuf.string_chk(argvars.add(1)) }
+    };
+
+    unsafe { (*rettv).v_type = VAR_STRING };
+    if sep.is_null() {
+        unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut() };
+        return;
+    }
+
+    let mut ga = GARRAY_EMPTY;
+    let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
+    unsafe { ga_init(&raw mut ga, itemsize, 80) };
+    unsafe { tv_list_join(&raw mut ga, (*argvars).vval.v_list, sep) };
+    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }
 
 /// `list2str()`: a list of codepoints as a string.
 pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut();
-        if (*argvars).v_type != VAR_LIST {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-            return;
-        }
-        let l = (*argvars).vval.v_list;
-        if l.is_null() {
-            return;
-        }
-
-        let mut ga = GARRAY_EMPTY;
-        ga_init(&raw mut ga, 1, 80);
-        let mut buf: [::core::ffi::c_char; 22] = [0; 22];
-        for li in tv_list_iter(l.as_ref()) {
-            let n = tv_get_number(&raw const (*li).li_tv);
-            let buflen = utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) as size_t;
-            buf[buflen as usize] = '\0' as ::core::ffi::c_char;
-            ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen);
-        }
-        ga_append(&raw mut ga, NUL as uint8_t);
-        (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut() };
+    // SAFETY: the builtin's argument array.
+    let args = unsafe { Tv::new(argvars) };
+    if args.v_type != VAR_LIST {
+        unsafe { emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char)) };
+        return;
     }
+    let l = args.list();
+    if l.is_null() {
+        return;
+    }
+
+    let mut ga = GARRAY_EMPTY;
+    unsafe { ga_init(&raw mut ga, 1, 80) };
+    let mut buf: [::core::ffi::c_char; 22] = [0; 22];
+    for li in tv_list_iter(unsafe { l.as_ref() }) {
+        let n = unsafe { tv_get_number(&raw const (*li).li_tv) };
+        let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
+        buf[buflen as usize] = '\0' as ::core::ffi::c_char;
+        unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };
+    }
+    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }

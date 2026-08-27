@@ -17,15 +17,15 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc_len,
-    tv_list_alloc, tv_list_ref,
+    Bl, Di, TV_INITIAL_VALUE, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
+    tv_dict_item_alloc_len, tv_list_alloc, tv_list_ref,
 };
 use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
 use crate::types::{
-    MessagePackType, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, dictitem_T, list_T, ptrdiff_t,
-    size_t, typval_T, typval_vval_union,
+    MessagePackType, VAR_LIST, VAR_STRING, VarLock, dictitem_T, list_T, ptrdiff_t, size_t,
+    typval_T, typval_vval_union,
 };
 use ::libc::memchr;
 
@@ -56,29 +56,25 @@ pub(crate) unsafe fn create_special_dict(
     type_: MessagePackType,
     val: typval_T,
 ) {
-    unsafe {
-        let dict = tv_dict_alloc();
+    let dict = unsafe { tv_dict_alloc() };
 
-        let type_di: *mut dictitem_T =
-            tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len());
-        (*type_di).di_tv.v_type = VAR_LIST;
-        (*type_di).di_tv.v_lock = VarLock::Unlocked;
-        (*type_di).di_tv.vval.v_list = msgpack_type_list(type_);
-        tv_list_ref((*type_di).di_tv.vval.v_list);
-        tv_dict_add(dict, type_di);
+    let type_di: *mut dictitem_T =
+        unsafe { tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len()) };
+    // SAFETY: the item just added to the special dictionary.
+    let mut type_item = unsafe { Di::new(type_di) };
+    type_item.di_tv.v_type = VAR_LIST;
+    type_item.di_tv.v_lock = VarLock::Unlocked;
+    unsafe { (*type_di).di_tv.vval.v_list = msgpack_type_list(type_) };
+    unsafe { tv_list_ref((*type_di).di_tv.vval.v_list) };
+    unsafe { tv_dict_add(dict, type_di) };
 
-        let val_di: *mut dictitem_T =
-            tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len());
-        (*val_di).di_tv = val;
-        tv_dict_add(dict, val_di);
+    let val_di: *mut dictitem_T =
+        unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
+    unsafe { (*val_di).di_tv = val };
+    unsafe { tv_dict_add(dict, val_di) };
 
-        (*dict).dv_refcount.retain();
-        *rettv = typval_T {
-            v_type: VAR_DICT,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_dict: dict },
-        };
-    }
+    unsafe { (*dict).dv_refcount.retain() };
+    unsafe { *rettv = typval_T::dict(dict) };
 }
 
 /// The special dictionary a map that cannot be a `dict_T` decodes to.
@@ -91,20 +87,11 @@ pub(crate) unsafe fn create_special_dict(
 /// # Safety
 /// `ret_tv` is writable and holds no value that needs clearing.
 pub unsafe fn decode_create_map_special_dict(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T {
-    unsafe {
-        let list = tv_list_alloc(len);
-        tv_list_ref(list);
-        create_special_dict(
-            ret_tv,
-            kMPMap,
-            typval_T {
-                v_type: VAR_LIST,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_list: list },
-            },
-        );
-        list
-    }
+    let list = unsafe { tv_list_alloc(len) };
+    unsafe { tv_list_ref(list) };
+    let val_tv = typval_T::list(list);
+    unsafe { create_special_dict(ret_tv, kMPMap, val_tv) };
+    list
 }
 
 /// `len` bytes at `s` as a `typval_T`: a `VAR_STRING`, or a `VAR_BLOB` when
@@ -127,31 +114,31 @@ pub unsafe fn decode_string(
     s_allocated: bool,
 ) -> typval_T {
     debug_assert!(!s.is_null() || len == 0);
-    unsafe {
-        if force_blob || (!s.is_null() && !memchr(s.cast(), 0, len).is_null()) {
-            let mut tv = TV_INITIAL_VALUE;
-            let b = tv_blob_alloc_ret(&raw mut tv);
-            if s_allocated {
-                // The caller's allocation becomes the blob's, sized exactly to
-                // `len`: nothing is copied and nothing is left to grow into.
-                (*b).bv_ga.ga_data = s as *mut c_void;
-                (*b).bv_ga.ga_len = len as c_int;
-                (*b).bv_ga.ga_maxlen = len as c_int;
+    if force_blob || (!s.is_null() && !unsafe { memchr(s.cast(), 0, len) }.is_null()) {
+        let mut tv = TV_INITIAL_VALUE;
+        let b = unsafe { tv_blob_alloc_ret(&raw mut tv) };
+        if s_allocated {
+            // The caller's allocation becomes the blob's, sized exactly to
+            // `len`: nothing is copied and nothing is left to grow into.
+            unsafe { (*b).bv_ga.ga_data = s as *mut c_void };
+            // SAFETY: freshly allocated just above.
+            let mut bl = unsafe { Bl::new(b) };
+            bl.bv_ga.ga_len = len as c_int;
+            bl.bv_ga.ga_maxlen = len as c_int;
+        } else {
+            unsafe { ga_concat_len(&raw mut (*b).bv_ga, s, len) };
+        }
+        return tv;
+    }
+    typval_T {
+        v_type: VAR_STRING,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union {
+            v_string: if s.is_null() || s_allocated {
+                s as *mut c_char
             } else {
-                ga_concat_len(&raw mut (*b).bv_ga, s, len);
-            }
-            return tv;
-        }
-        typval_T {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_string: if s.is_null() || s_allocated {
-                    s as *mut c_char
-                } else {
-                    xmemdupz(s.cast(), len) as *mut c_char
-                },
+                unsafe { xmemdupz(s.cast(), len) as *mut c_char }
             },
-        }
+        },
     }
 }

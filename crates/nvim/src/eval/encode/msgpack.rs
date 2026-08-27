@@ -101,14 +101,12 @@ impl TypvalSink for MsgpackSink<'_> {
     }
 
     unsafe fn conv_blob(&mut self, _tv: *mut typval_T, blob: *const blob_T, len: c_int) {
-        unsafe {
-            let data = if blob.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                (*blob).bv_ga.ga_data.cast::<c_char>()
-            };
-            mpack_bin(Self::buf(data, len as size_t), self.packer);
-        }
+        let data = if blob.is_null() {
+            ::core::ptr::null_mut()
+        } else {
+            unsafe { (*blob).bv_ga.ga_data }.cast::<c_char>()
+        };
+        unsafe { mpack_bin(Self::buf(data, len as size_t), self.packer) };
     }
 
     unsafe fn conv_func_start(

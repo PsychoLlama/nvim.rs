@@ -217,12 +217,12 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         let name_off = self.gap.0.ga_len as usize;
         let prefix = prefix.to_bytes();
         self.gap.concat(prefix);
+        unsafe { self.quoted(fun, strlen(fun)) };
+        let data = self.gap.0.ga_data.cast::<u8>();
+        unsafe { *data.add(name_off) = b'\'' };
         unsafe {
-            self.quoted(fun, strlen(fun));
-            let data = self.gap.0.ga_data.cast::<u8>();
-            *data.add(name_off) = b'\'';
-            ::core::ptr::copy_nonoverlapping(prefix.as_ptr(), data.add(name_off + 1), prefix.len());
-        }
+            ::core::ptr::copy_nonoverlapping(prefix.as_ptr(), data.add(name_off + 1), prefix.len())
+        };
         Flow::Go
     }
 
@@ -322,12 +322,10 @@ pub(crate) unsafe fn encode_vim_to_string(
     tv: *mut typval_T,
     objname: *const c_char,
 ) -> bool {
-    unsafe {
-        let mut sink = TextSink::<false> {
-            gap: Gap(&mut *gap),
-        };
-        encode_typval(&mut sink, tv, objname)
-    }
+    let mut sink = TextSink::<false> {
+        gap: Gap(unsafe { &mut *gap }),
+    };
+    unsafe { encode_typval(&mut sink, tv, objname) }
 }
 
 /// Append `tv` to `gap` as the text `:echo` prints.
@@ -339,10 +337,8 @@ pub(crate) unsafe fn encode_vim_to_echo(
     tv: *mut typval_T,
     objname: *const c_char,
 ) -> bool {
-    unsafe {
-        let mut sink = TextSink::<true> {
-            gap: Gap(&mut *gap),
-        };
-        encode_typval(&mut sink, tv, objname)
-    }
+    let mut sink = TextSink::<true> {
+        gap: Gap(unsafe { &mut *gap }),
+    };
+    unsafe { encode_typval(&mut sink, tv, objname) }
 }

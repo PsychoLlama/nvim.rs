@@ -16,6 +16,336 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::winlayer::Live;
+
+/// The `Copy` handles over the four objects this module manipulates through
+/// raw pointers, plus the two it reaches through them.
+///
+/// See [`Live`](crate::winlayer::Live): construction is the one `unsafe` step
+/// and records the caller's promise that the pointee stays live; every
+/// `(*p).field` after it is ordinary checked code. Writing a `typval_T`'s
+/// union member through one is checked too — it is only *reading* a union
+/// that stays unsafe — which is why the `tv_*_set`/`_alloc` families lose
+/// almost all of their regions to these.
+///
+/// A handle is never built from a pointer the code has not already committed
+/// to dereferencing: the null-tolerant entry points (`tv_list_len`,
+/// `tv_list_ref`, …) keep their `as_ref()` guard and take no handle.
+pub(crate) type Tv = Live<typval_T>;
+/// A live `list_T`; see [`Tv`].
+pub(crate) type Ls = Live<list_T>;
+/// A live `listitem_T`; see [`Tv`].
+pub(crate) type Li = Live<listitem_T>;
+/// A live `dict_T`; see [`Tv`].
+pub(crate) type Dt = Live<dict_T>;
+/// A live `dictitem_T`; see [`Tv`].
+pub(crate) type Di = Live<dictitem_T>;
+/// A live `blob_T`; see [`Tv`].
+pub(crate) type Bl = Live<blob_T>;
+/// A live `garray_T`; see [`Tv`].
+pub(crate) type Ga = Live<garray_T>;
+/// A live `partial_T`; see [`Tv`].
+pub(crate) type Pt = Live<partial_T>;
+/// A live `Callback`; see [`Tv`].
+pub(crate) type Cb = Live<Callback>;
+/// A live `DictWatcher`; see [`Tv`].
+pub(crate) type Dw = Live<DictWatcher>;
+/// A live `listwatch_T`; see [`Tv`].
+pub(crate) type Lw = Live<listwatch_T>;
+/// A live `sortinfo_T`; see [`Tv`].
+pub(crate) type Si = Live<sortinfo_T>;
+
+/// The address of a field of `*p`, **computed rather than read**.
+///
+/// `&raw mut (*p).field` still requires an `unsafe` block today even though
+/// nothing is dereferenced; `wrapping_byte_add` is the same arithmetic
+/// spelled with a safe method, and it is defined for *every* pointer, null
+/// and dangling included. The obligation the field's address carries belongs
+/// to whoever dereferences it, and it is paid there.
+///
+/// This is [`Live::field_ptr`] without the handle, for the many places that
+/// hold a bare pointer and only want to name one of its fields. The named
+/// wrappers below spell the offsets, so no call site writes `offset_of!`.
+#[inline(always)]
+pub(crate) fn field_of<T, F>(p: *mut T, offset: usize) -> *mut F {
+    p.wrapping_byte_add(offset).cast()
+}
+
+/// The address of a dictionary item's value; see [`field_of`].
+#[inline(always)]
+pub(crate) fn di_tv(di: *mut dictitem_T) -> *mut typval_T {
+    field_of(di, ::core::mem::offset_of!(dictitem_T, di_tv))
+}
+
+/// The address of a list item's value; see [`field_of`].
+#[inline(always)]
+pub(crate) fn li_tv(li: *mut listitem_T) -> *mut typval_T {
+    field_of(li, ::core::mem::offset_of!(listitem_T, li_tv))
+}
+
+/// The address of a dictionary's hash table; see [`field_of`].
+#[inline(always)]
+pub(crate) fn dv_hashtab(d: *mut dict_T) -> *mut hashtab_T {
+    field_of(d, ::core::mem::offset_of!(dict_T, dv_hashtab))
+}
+
+/// The address of a dictionary's copy mark; see [`field_of`].
+#[inline(always)]
+pub(crate) fn dv_copyid(d: *mut dict_T) -> *mut ::core::ffi::c_int {
+    field_of(d, ::core::mem::offset_of!(dict_T, dv_copyID))
+}
+
+/// The address of a dictionary's watcher queue; see [`field_of`].
+#[inline(always)]
+pub(crate) fn dv_watchers(d: *mut dict_T) -> *mut QUEUE {
+    field_of(d, ::core::mem::offset_of!(dict_T, watchers))
+}
+
+/// The address of a list's copy mark; see [`field_of`].
+#[inline(always)]
+pub(crate) fn lv_copyid(l: *mut list_T) -> *mut ::core::ffi::c_int {
+    field_of(l, ::core::mem::offset_of!(list_T, lv_copyID))
+}
+
+/// The address of a list's watcher chain head; see [`field_of`].
+#[inline(always)]
+pub(crate) fn lv_watch(l: *mut list_T) -> *mut *mut listwatch_T {
+    field_of(l, ::core::mem::offset_of!(list_T, lv_watch))
+}
+
+/// The address of a blob's byte array; see [`field_of`].
+#[inline(always)]
+pub(crate) fn bv_ga(b: *mut blob_T) -> *mut garray_T {
+    field_of(b, ::core::mem::offset_of!(blob_T, bv_ga))
+}
+
+/// The union members of a live `typval_T`, read as ordinary safe code.
+///
+/// Reading a union field is `unsafe` in Rust because a member the union does
+/// not currently hold may have an invalid bit pattern for its type.
+/// `typval_vval_union` has none: its nine members are a `varnumber_T`, two
+/// `c_uint` tags, an `f64` and five raw pointers, and *every* bit pattern is
+/// a valid value of each. So for an initialised `typval_T` — which is what
+/// [`Live::new`] promises — reading any member is defined however the
+/// `v_type` tag reads, and these are safe projections rather than an escape
+/// hatch.
+///
+/// The tag still says which member is *meaningful*; that is the caller's
+/// business, exactly as it was when the read spelled itself `(*tv).vval.v_x`.
+impl Tv {
+    /// `vval.v_number`.
+    #[inline(always)]
+    pub(crate) fn number(self) -> varnumber_T {
+        unsafe { self.vval.v_number }
+    }
+
+    /// `vval.v_bool`.
+    #[inline(always)]
+    pub(crate) fn boolean(self) -> BoolVarValue {
+        unsafe { self.vval.v_bool }
+    }
+
+    /// `vval.v_special`.
+    #[inline(always)]
+    pub(crate) fn special(self) -> SpecialVarValue {
+        unsafe { self.vval.v_special }
+    }
+
+    /// `vval.v_float`.
+    #[inline(always)]
+    pub(crate) fn float(self) -> float_T {
+        unsafe { self.vval.v_float }
+    }
+
+    /// `vval.v_string`.
+    #[inline(always)]
+    pub(crate) fn string(self) -> *mut ::core::ffi::c_char {
+        unsafe { self.vval.v_string }
+    }
+
+    /// `vval.v_list`.
+    #[inline(always)]
+    pub(crate) fn list(self) -> *mut list_T {
+        unsafe { self.vval.v_list }
+    }
+
+    /// `vval.v_dict`.
+    #[inline(always)]
+    pub(crate) fn dict(self) -> *mut dict_T {
+        unsafe { self.vval.v_dict }
+    }
+
+    /// `vval.v_partial`.
+    #[inline(always)]
+    pub(crate) fn partial(self) -> *mut partial_T {
+        unsafe { self.vval.v_partial }
+    }
+
+    /// `vval.v_blob`.
+    #[inline(always)]
+    pub(crate) fn blob(self) -> *mut blob_T {
+        unsafe { self.vval.v_blob }
+    }
+
+    /// The *address* of `vval.v_dict`, for the sinks that are handed a
+    /// `*mut *mut dict_T` so they can clear the slot; see [`field_of`].
+    #[inline(always)]
+    pub(crate) fn dict_ptr(self) -> *mut *mut dict_T {
+        self.field_ptr(::core::mem::offset_of!(typval_T, vval))
+    }
+}
+
+impl Li {
+    /// The item's value, as a handle: it lives exactly as long as the item.
+    #[inline(always)]
+    pub(crate) fn tv(self) -> Tv {
+        // SAFETY: `li_tv` is a field of the live item this handle names, and
+        // `field_ptr` computes its address without borrowing the item.
+        unsafe { Tv::new(self.field_ptr(::core::mem::offset_of!(listitem_T, li_tv))) }
+    }
+
+    /// `li_tv.v_type`.
+    #[inline(always)]
+    pub(crate) fn v_type(self) -> crate::types::VarType {
+        self.li_tv.v_type
+    }
+
+    /// `li_tv.vval.v_number`; see [`Tv::number`].
+    #[inline(always)]
+    pub(crate) fn number(self) -> varnumber_T {
+        self.tv().number()
+    }
+
+    /// `li_tv.vval.v_list`; see [`Tv::list`].
+    #[inline(always)]
+    pub(crate) fn list(self) -> *mut list_T {
+        self.tv().list()
+    }
+}
+
+impl Di {
+    /// The item's value, as a handle: it lives exactly as long as the item.
+    #[inline(always)]
+    pub(crate) fn tv(self) -> Tv {
+        // SAFETY: `di_tv` is a field of the live item this handle names.
+        unsafe { Tv::new(self.field_ptr(::core::mem::offset_of!(dictitem_T, di_tv))) }
+    }
+}
+
+/// `_()`: the translation of a message, which is always a literal here.
+///
+/// Safe by construction rather than by promise: the argument is a `&CStr`,
+/// so the NUL `gettext` looks for is part of the type.
+#[inline(always)]
+pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char {
+    // SAFETY: `gettext` only reads the NUL-terminated string it is handed.
+    unsafe { gettext(msg.as_ptr()) }
+}
+
+/// `_()` on one of the `c_bytes` error statics.
+///
+/// Those are `[c_char; N]` arrays rather than `CStr`s, so the NUL is the
+/// literal's last byte rather than the type's promise — which is checked here
+/// with a `debug_assert` rather than left to a comment.
+#[inline(always)]
+pub(crate) fn tr_bytes(msg: &'static [::core::ffi::c_char]) -> *const ::core::ffi::c_char {
+    debug_assert!(msg.last() == Some(&0));
+    // SAFETY: as `tr`, with the NUL checked just above.
+    unsafe { gettext(msg.as_ptr()) }
+}
+
+/// The unlocked scalars and container handles, spelled once.
+///
+/// c2rust wrote the designated initialiser out in full at every site — three
+/// fields, one of them a union literal, over six to nine lines. Every one of
+/// them is the same shape: a `v_type` tag, `VarLock::Unlocked`, and the one
+/// union member that tag selects. Writing a union field is safe, so these are
+/// safe `const fn`s, and the sites that used to spell them inside an `unsafe`
+/// region no longer put the literal there.
+///
+/// Deliberately not a constructor for `VAR_UNKNOWN`: that one is
+/// [`TV_INITIAL_VALUE`], because it is a value rather than a conversion.
+impl typval_T {
+    /// A `VAR_NUMBER`.
+    #[inline(always)]
+    pub(crate) const fn number(v_number: varnumber_T) -> Self {
+        Self {
+            v_type: VAR_NUMBER,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_number },
+        }
+    }
+
+    /// A `VAR_BOOL`.
+    #[inline(always)]
+    pub(crate) const fn boolean(v_bool: BoolVarValue) -> Self {
+        Self {
+            v_type: VAR_BOOL,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_bool },
+        }
+    }
+
+    /// A `VAR_SPECIAL`.
+    #[inline(always)]
+    pub(crate) const fn special(v_special: SpecialVarValue) -> Self {
+        Self {
+            v_type: VAR_SPECIAL,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_special },
+        }
+    }
+
+    /// A `VAR_FLOAT`.
+    #[inline(always)]
+    pub(crate) const fn float(v_float: float_T) -> Self {
+        Self {
+            v_type: VAR_FLOAT,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_float },
+        }
+    }
+
+    /// A `VAR_STRING` owning `v_string`.
+    #[inline(always)]
+    pub(crate) const fn string(v_string: *mut ::core::ffi::c_char) -> Self {
+        Self {
+            v_type: VAR_STRING,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_string },
+        }
+    }
+
+    /// A `VAR_LIST`.  Takes no reference; the caller still owes `tv_list_ref`.
+    #[inline(always)]
+    pub(crate) const fn list(v_list: *mut list_T) -> Self {
+        Self {
+            v_type: VAR_LIST,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_list },
+        }
+    }
+
+    /// A `VAR_DICT`.  Takes no reference; the caller still owes a `retain`.
+    #[inline(always)]
+    pub(crate) const fn dict(v_dict: *mut dict_T) -> Self {
+        Self {
+            v_type: VAR_DICT,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_dict },
+        }
+    }
+
+    /// A `VAR_BLOB`.  Takes no reference; the caller still owes a `retain`.
+    #[inline(always)]
+    pub(crate) const fn blob(v_blob: *mut blob_T) -> Self {
+        Self {
+            v_type: VAR_BLOB,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_blob },
+        }
+    }
+}
 
 /// True when an intrusive queue head has no entries.
 ///
@@ -35,10 +365,8 @@ pub unsafe fn queue_empty(q: *const QUEUE) -> bool {
 /// that is on no queue.
 #[inline(always)]
 pub unsafe fn queue_init(q: *mut QUEUE) {
-    unsafe {
-        (*q).next = q;
-        (*q).prev = q;
-    }
+    unsafe { (*q).next = q };
+    unsafe { (*q).prev = q };
 }
 
 /// Splice `q` in as the last entry of the queue headed by `h`.
@@ -48,12 +376,10 @@ pub unsafe fn queue_init(q: *mut QUEUE) {
 /// queue. Both must outlive the link.
 #[inline(always)]
 pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
-    unsafe {
-        (*q).next = h;
-        (*q).prev = (*h).prev;
-        (*(*q).prev).next = q;
-        (*h).prev = q;
-    }
+    unsafe { (*q).next = h };
+    unsafe { (*q).prev = (*h).prev };
+    unsafe { (*(*q).prev).next = q };
+    unsafe { (*h).prev = q };
 }
 
 /// Unlink `q` from whatever queue it is on.
@@ -64,10 +390,8 @@ pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
 /// re-initialised before it is used as a head again.
 #[inline(always)]
 pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
-    unsafe {
-        (*(*q).prev).next = (*q).next;
-        (*(*q).next).prev = (*q).prev;
-    }
+    unsafe { (*(*q).prev).next = (*q).next };
+    unsafe { (*(*q).next).prev = (*q).prev };
 }
 
 /// Increase the reference count of `l`; does nothing for a NULL list.
@@ -89,11 +413,11 @@ pub unsafe fn tv_list_ref(l: *mut list_T) {
 /// contents are overwritten, not cleared — and `l` is null or a live list.
 #[inline(always)]
 pub unsafe fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    unsafe {
-        (*tv).v_type = VAR_LIST;
-        (*tv).vval.v_list = l;
-        tv_list_ref(l);
-    }
+    // SAFETY: the caller's promise: a writable typval.
+    let mut val = unsafe { Tv::new(tv) };
+    val.v_type = VAR_LIST;
+    val.vval.v_list = l;
+    unsafe { tv_list_ref(l) };
 }
 
 /// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
@@ -125,9 +449,7 @@ pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLock) {
 /// `copyid` must be one the caller reserved from `get_copyID`.
 #[inline]
 pub unsafe fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
-    unsafe {
-        (*l).lv_copyID = copyid;
-    }
+    unsafe { (*l).lv_copyID = copyid };
 }
 
 /// Number of items in `l`; a NULL list is empty.
@@ -156,11 +478,10 @@ pub unsafe fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
 /// `l` is null or points at a live list.
 #[inline]
 pub unsafe fn tv_list_uidx(l: *const list_T, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    unsafe {
-        // A negative index counts back from the end.
-        let n = if n < 0 { n + tv_list_len(l) } else { n };
-        if n < 0 || n >= tv_list_len(l) { -1 } else { n }
-    }
+    let len = unsafe { tv_list_len(l) };
+    // A negative index counts back from the end.
+    let n = if n < 0 { n + len } else { n };
+    if n < 0 || n >= len { -1 } else { n }
 }
 
 /// First item of `l`, or NULL when it is empty or NULL.
@@ -229,12 +550,12 @@ pub(crate) fn tv_list_iter(l: Option<&list_T>) -> ListIter {
 /// dictionary.
 #[inline(always)]
 pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
-    unsafe {
-        (*tv).v_type = VAR_DICT;
-        (*tv).vval.v_dict = d;
-        if let Some(d) = d.as_mut() {
-            d.dv_refcount.retain();
-        }
+    // SAFETY: the caller's promise: a writable typval.
+    let mut val = unsafe { Tv::new(tv) };
+    val.v_type = VAR_DICT;
+    val.vval.v_dict = d;
+    if let Some(d) = unsafe { d.as_mut() } {
+        d.dv_refcount.retain();
     }
 }
 
@@ -254,10 +575,7 @@ pub unsafe fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
 /// initialised (every dictionary from `tv_dict_alloc` has).
 #[inline]
 pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
-    unsafe {
-        d.as_ref()
-            .is_some_and(|d| !queue_empty(&raw const d.watchers))
-    }
+    unsafe { d.as_ref() }.is_some_and(|d| !unsafe { queue_empty(&raw const d.watchers) })
 }
 
 /// The key of `di`, which upstream reads as the plain `di->di_key`.
@@ -267,18 +585,17 @@ pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
 /// itself covers zero bytes, so the pointer has to be formed with `&raw`, not
 /// by autoreffing the array.
 ///
-/// # Safety
-/// `di` must point at a `dictitem_T` allocated by
-/// [`tv_dict_item_alloc_len`](super::tv_dict_item_alloc_len) or embedded
-/// in a fixed-variable array — the key is read out of the allocation's
-/// tail, so an item that was not over-allocated for its key has none.
+/// Safe: this is arithmetic, not a read.  The key's address is the item's
+/// plus a constant, and [`field_of`] computes it with `wrapping_byte_add`,
+/// which is defined for every pointer.  *Reading* what comes back still needs
+/// an item allocated by
+/// [`tv_dict_item_alloc_len`](super::tv_dict_item_alloc_len) or embedded in a
+/// fixed-variable array — the key lives in the allocation's tail, so an item
+/// that was not over-allocated for its key has none — but that obligation
+/// belongs to the dereference, which is where it is now paid.
 #[inline(always)]
-pub(crate) unsafe fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi::c_char {
-    unsafe {
-        (&raw const (*di).di_key)
-            .cast::<::core::ffi::c_char>()
-            .cast_mut()
-    }
+pub(crate) fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi::c_char {
+    field_of(di.cast_mut(), ::core::mem::offset_of!(dictitem_T, di_key))
 }
 
 /// The `dictitem_T` a hashtab item's key points into: upstream's
@@ -314,17 +631,15 @@ impl Iterator for DictIter {
 
     #[inline]
     fn next(&mut self) -> Option<*mut hashitem_T> {
-        unsafe {
-            while self.todo != 0 {
-                let hi = self.hi;
-                self.hi = self.hi.add(1);
-                if (*hi).is_kept() {
-                    self.todo -= 1;
-                    return Some(hi);
-                }
+        while self.todo != 0 {
+            let hi = self.hi;
+            self.hi = unsafe { self.hi.add(1) };
+            if unsafe { (*hi).is_kept() } {
+                self.todo -= 1;
+                return Some(hi);
             }
-            None
         }
+        None
     }
 }
 
@@ -368,12 +683,12 @@ pub(crate) fn tv_ht_iter(ht: &hashtab_T) -> DictIter {
 /// contents are overwritten, not cleared — and `b` is null or a live blob.
 #[inline(always)]
 pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
-    unsafe {
-        (*tv).v_type = VAR_BLOB;
-        (*tv).vval.v_blob = b;
-        if let Some(b) = b.as_mut() {
-            b.bv_refcount.retain();
-        }
+    // SAFETY: the caller's promise: a writable typval.
+    let mut val = unsafe { Tv::new(tv) };
+    val.v_type = VAR_BLOB;
+    val.vval.v_blob = b;
+    if let Some(b) = unsafe { b.as_mut() } {
+        b.bv_refcount.retain();
     }
 }
 
@@ -403,9 +718,7 @@ pub unsafe fn tv_blob_get(b: *const blob_T, idx: ::core::ffi::c_int) -> uint8_t 
 /// `0..tv_blob_len(blob)`. Neither is checked.
 #[inline(always)]
 pub unsafe fn tv_blob_set(blob: *mut blob_T, idx: ::core::ffi::c_int, c: uint8_t) {
-    unsafe {
-        *(*blob).bv_ga.ga_data.cast::<uint8_t>().offset(idx as isize) = c;
-    }
+    unsafe { *(*blob).bv_ga.ga_data.cast::<uint8_t>().offset(idx as isize) = c };
 }
 
 /// The `DictWatcher` a queue node is embedded in (upstream's `QUEUE_DATA`).
@@ -423,8 +736,8 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
     unsafe {
         q.cast::<::core::ffi::c_char>()
             .sub(::core::mem::offset_of!(DictWatcher, node))
-            .cast::<DictWatcher>()
     }
+    .cast::<DictWatcher>()
 }
 
 /// Whether `tv` holds a function: either `VAR_FUNC` or `VAR_PARTIAL`.

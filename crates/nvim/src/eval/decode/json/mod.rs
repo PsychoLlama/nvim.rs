@@ -101,249 +101,246 @@ pub unsafe fn json_decode_string(
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
     // owned by it until it is stored, and the failure path clears whatever is
     // left.
-    unsafe {
-        let bytes = ::core::slice::from_raw_parts(buf as *const u8, buf_len);
+    let bytes = unsafe { ::core::slice::from_raw_parts(buf as *const u8, buf_len) };
 
-        let mut p = 0;
-        while p < buf_len && matches!(bytes[p], b' ' | TAB | NL | CAR) {
-            p += 1;
-        }
-        if p == buf_len {
-            emsg(gettext(E474_BLANK_STRING.as_ptr()));
-            return FAIL;
-        }
+    let mut p = 0;
+    while p < buf_len && matches!(bytes[p], b' ' | TAB | NL | CAR) {
+        p += 1;
+    }
+    if p == buf_len {
+        unsafe { emsg(gettext(E474_BLANK_STRING.as_ptr())) };
+        return FAIL;
+    }
 
-        (*rettv).v_type = VAR_UNKNOWN;
-        let mut dec = Decoder::new(bytes);
-        let mut ret = OK;
-        // Whether a container holds nothing yet, which is what makes a comma
-        // a leading one.
-        let is_empty = |c: &Container| {
-            if !c.special_val.is_null() {
-                tv_list_len(c.special_val) == 0
-            } else if c.container.v_type == VAR_DICT {
-                (*c.container.vval.v_dict).dv_hashtab.ht_used == 0
-            } else {
-                tv_list_len(c.container.vval.v_list) == 0
-            }
-        };
-        'done: {
-            'fail: {
-                'scan: while p < buf_len {
-                    // Only `{` may be reached with the flag still set: it is
-                    // the byte the restart rewound to.
-                    debug_assert!(bytes[p] == b'{' || !dec.next_map_special);
-                    match bytes[p] {
-                        b'}' | b']' => {
-                            let Some(&last) = dec.containers.last() else {
-                                dec.emsg_rest(E474_NO_CONTAINER, p);
-                                break 'fail;
-                            };
-                            if bytes[p] == b'}' && last.container.v_type != VAR_DICT {
-                                dec.emsg_rest(E474_CLOSE_LIST_CURLY, p);
-                                break 'fail;
-                            } else if bytes[p] == b']' && last.container.v_type != VAR_LIST {
-                                dec.emsg_rest(E474_CLOSE_DICT_SQUARE, p);
-                                break 'fail;
-                            } else if dec.didcomma {
-                                dec.emsg_rest(E474_TRAILING_COMMA, p);
-                                break 'fail;
-                            } else if dec.didcolon {
-                                dec.emsg_rest(E474_VALUE_AFTER_COLON, p);
-                                break 'fail;
-                            } else if last.stack_index != dec.stack.len() - 1 {
-                                debug_assert!(last.stack_index < dec.stack.len() - 1);
-                                dec.emsg_rest(E474_EXPECTED_VALUE, p);
-                                break 'fail;
-                            }
-                            if dec.stack.len() == 1 {
-                                // The outermost container just closed: the
-                                // document is done.
-                                p += 1;
-                                dec.containers.pop();
-                                break 'scan;
-                            }
-                            let closed = dec.stack.pop().expect("the container itself");
-                            if !dec.finish_value(closed, &mut p) {
-                                break 'fail;
-                            }
-                            // A container is never a dictionary key, so it
-                            // cannot have triggered the restart.
-                            debug_assert!(!dec.next_map_special);
-                        }
-                        b',' => {
-                            let Some(&last) = dec.containers.last() else {
-                                dec.emsg_rest(E474_COMMA_OUTSIDE, p);
-                                break 'fail;
-                            };
-                            if dec.didcomma {
-                                dec.emsg_rest(E474_DUPLICATE_COMMA, p);
-                                break 'fail;
-                            } else if dec.didcolon {
-                                dec.emsg_rest(E474_COMMA_AFTER_COLON, p);
-                                break 'fail;
-                            } else if last.container.v_type == VAR_DICT
-                                && last.stack_index != dec.stack.len() - 1
-                            {
-                                dec.emsg_rest(E474_COMMA_FOR_COLON, p);
-                                break 'fail;
-                            } else if is_empty(&last) {
-                                dec.emsg_rest(E474_LEADING_COMMA, p);
-                                break 'fail;
-                            }
-                            dec.didcomma = true;
-                            p += 1;
-                            continue;
-                        }
-                        b':' => {
-                            let Some(&last) = dec.containers.last() else {
-                                dec.emsg_rest(E474_COLON_OUTSIDE, p);
-                                break 'fail;
-                            };
-                            if last.container.v_type != VAR_DICT {
-                                dec.emsg_rest(E474_COLON_NOT_IN_DICT, p);
-                                break 'fail;
-                            } else if last.stack_index != dec.stack.len().wrapping_sub(2) {
-                                dec.emsg_rest(E474_UNEXPECTED_COLON, p);
-                                break 'fail;
-                            } else if dec.didcomma {
-                                dec.emsg_rest(E474_COLON_AFTER_COMMA, p);
-                                break 'fail;
-                            } else if dec.didcolon {
-                                dec.emsg_rest(E474_DUPLICATE_COLON, p);
-                                break 'fail;
-                            }
-                            dec.didcolon = true;
-                            p += 1;
-                            continue;
-                        }
-                        b' ' | TAB | NL | CAR => {
-                            p += 1;
-                            continue;
-                        }
-                        b'n' => {
-                            if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"ull" {
-                                dec.emsg_rest(E474_EXPECTED_NULL, p);
-                                break 'fail;
-                            }
-                            p += 3;
-                            let value = dec.value(NULL_TV, false);
-                            if !dec.finish_value(value, &mut p) {
-                                break 'fail;
-                            }
-                            if dec.next_map_special {
-                                continue;
-                            }
-                        }
-                        b't' => {
-                            if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"rue" {
-                                dec.emsg_rest(E474_EXPECTED_TRUE, p);
-                                break 'fail;
-                            }
-                            p += 3;
-                            let value = dec.value(bool_tv(true), false);
-                            if !dec.finish_value(value, &mut p) {
-                                break 'fail;
-                            }
-                            if dec.next_map_special {
-                                continue;
-                            }
-                        }
-                        b'f' => {
-                            if p + 4 >= buf_len || &bytes[p + 1..p + 5] != b"alse" {
-                                dec.emsg_rest(E474_EXPECTED_FALSE, p);
-                                break 'fail;
-                            }
-                            p += 4;
-                            let value = dec.value(bool_tv(false), false);
-                            if !dec.finish_value(value, &mut p) {
-                                break 'fail;
-                            }
-                            if dec.next_map_special {
-                                continue;
-                            }
-                        }
-                        b'"' => {
-                            // The error was reported by the scanner.
-                            if !parse_json_string(&mut dec, &mut p) {
-                                break 'fail;
-                            }
-                            if dec.next_map_special {
-                                continue;
-                            }
-                        }
-                        b'-' | b'0'..=b'9' => {
-                            if !parse_json_number(&mut dec, &mut p) {
-                                break 'fail;
-                            }
-                            if dec.next_map_special {
-                                continue;
-                            }
-                        }
-                        b'[' => {
-                            let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-                            tv_list_ref(list);
-                            let tv = typval_T {
-                                v_type: VAR_LIST,
-                                v_lock: VarLock::Unlocked,
-                                vval: typval_vval_union { v_list: list },
-                            };
-                            dec.open(tv, ::core::ptr::null_mut(), p);
-                        }
-                        b'{' => {
-                            let mut tv = TV_INITIAL_VALUE;
-                            let mut special_val: *mut list_T = ::core::ptr::null_mut();
-                            if dec.next_map_special {
-                                dec.next_map_special = false;
-                                special_val = decode_create_map_special_dict(
-                                    &raw mut tv,
-                                    kListLenMayKnow as ptrdiff_t,
-                                );
-                            } else {
-                                let dict = tv_dict_alloc();
-                                (*dict).dv_refcount.retain();
-                                tv = typval_T {
-                                    v_type: VAR_DICT,
-                                    v_lock: VarLock::Unlocked,
-                                    vval: typval_vval_union { v_dict: dict },
-                                };
-                            }
-                            dec.open(tv, special_val, p);
-                        }
-                        _ => {
-                            dec.emsg_rest(E474_UNIDENTIFIED_BYTE, p);
+    unsafe { (*rettv).v_type = VAR_UNKNOWN };
+    let mut dec = Decoder::new(bytes);
+    let mut ret = OK;
+    // Whether a container holds nothing yet, which is what makes a comma
+    // a leading one.
+    let is_empty = |c: &Container| {
+        if !c.special_val.is_null() {
+            unsafe { tv_list_len(c.special_val) == 0 }
+        } else if c.container.v_type == VAR_DICT {
+            unsafe { (*c.container.vval.v_dict).dv_hashtab.ht_used == 0 }
+        } else {
+            unsafe { tv_list_len(c.container.vval.v_list) == 0 }
+        }
+    };
+    'done: {
+        'fail: {
+            'scan: while p < buf_len {
+                // Only `{` may be reached with the flag still set: it is
+                // the byte the restart rewound to.
+                debug_assert!(bytes[p] == b'{' || !dec.next_map_special);
+                match bytes[p] {
+                    b'}' | b']' => {
+                        let Some(&last) = dec.containers.last() else {
+                            dec.emsg_rest(E474_NO_CONTAINER, p);
+                            break 'fail;
+                        };
+                        if bytes[p] == b'}' && last.container.v_type != VAR_DICT {
+                            dec.emsg_rest(E474_CLOSE_LIST_CURLY, p);
+                            break 'fail;
+                        } else if bytes[p] == b']' && last.container.v_type != VAR_LIST {
+                            dec.emsg_rest(E474_CLOSE_DICT_SQUARE, p);
+                            break 'fail;
+                        } else if dec.didcomma {
+                            dec.emsg_rest(E474_TRAILING_COMMA, p);
+                            break 'fail;
+                        } else if dec.didcolon {
+                            dec.emsg_rest(E474_VALUE_AFTER_COLON, p);
+                            break 'fail;
+                        } else if last.stack_index != dec.stack.len() - 1 {
+                            debug_assert!(last.stack_index < dec.stack.len() - 1);
+                            dec.emsg_rest(E474_EXPECTED_VALUE, p);
                             break 'fail;
                         }
+                        if dec.stack.len() == 1 {
+                            // The outermost container just closed: the
+                            // document is done.
+                            p += 1;
+                            dec.containers.pop();
+                            break 'scan;
+                        }
+                        let closed = dec.stack.pop().expect("the container itself");
+                        if !unsafe { dec.finish_value(closed, &mut p) } {
+                            break 'fail;
+                        }
+                        // A container is never a dictionary key, so it
+                        // cannot have triggered the restart.
+                        debug_assert!(!dec.next_map_special);
                     }
-                    dec.didcomma = false;
-                    dec.didcolon = false;
-                    p += 1;
-                    if dec.containers.is_empty() {
-                        break 'scan;
+                    b',' => {
+                        let Some(&last) = dec.containers.last() else {
+                            dec.emsg_rest(E474_COMMA_OUTSIDE, p);
+                            break 'fail;
+                        };
+                        if dec.didcomma {
+                            dec.emsg_rest(E474_DUPLICATE_COMMA, p);
+                            break 'fail;
+                        } else if dec.didcolon {
+                            dec.emsg_rest(E474_COMMA_AFTER_COLON, p);
+                            break 'fail;
+                        } else if last.container.v_type == VAR_DICT
+                            && last.stack_index != dec.stack.len() - 1
+                        {
+                            dec.emsg_rest(E474_COMMA_FOR_COLON, p);
+                            break 'fail;
+                        } else if is_empty(&last) {
+                            dec.emsg_rest(E474_LEADING_COMMA, p);
+                            break 'fail;
+                        }
+                        dec.didcomma = true;
+                        p += 1;
+                        continue;
                     }
-                }
-
-                // Past the value: only whitespace may follow.
-                while p < buf_len {
-                    if !matches!(bytes[p], NL | b' ' | TAB | CAR) {
-                        dec.emsg_rest(E474_TRAILING_CHARACTERS, p);
+                    b':' => {
+                        let Some(&last) = dec.containers.last() else {
+                            dec.emsg_rest(E474_COLON_OUTSIDE, p);
+                            break 'fail;
+                        };
+                        if last.container.v_type != VAR_DICT {
+                            dec.emsg_rest(E474_COLON_NOT_IN_DICT, p);
+                            break 'fail;
+                        } else if last.stack_index != dec.stack.len().wrapping_sub(2) {
+                            dec.emsg_rest(E474_UNEXPECTED_COLON, p);
+                            break 'fail;
+                        } else if dec.didcomma {
+                            dec.emsg_rest(E474_COLON_AFTER_COMMA, p);
+                            break 'fail;
+                        } else if dec.didcolon {
+                            dec.emsg_rest(E474_DUPLICATE_COLON, p);
+                            break 'fail;
+                        }
+                        dec.didcolon = true;
+                        p += 1;
+                        continue;
+                    }
+                    b' ' | TAB | NL | CAR => {
+                        p += 1;
+                        continue;
+                    }
+                    b'n' => {
+                        if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"ull" {
+                            dec.emsg_rest(E474_EXPECTED_NULL, p);
+                            break 'fail;
+                        }
+                        p += 3;
+                        let value = dec.value(NULL_TV, false);
+                        if !unsafe { dec.finish_value(value, &mut p) } {
+                            break 'fail;
+                        }
+                        if dec.next_map_special {
+                            continue;
+                        }
+                    }
+                    b't' => {
+                        if p + 3 >= buf_len || &bytes[p + 1..p + 4] != b"rue" {
+                            dec.emsg_rest(E474_EXPECTED_TRUE, p);
+                            break 'fail;
+                        }
+                        p += 3;
+                        let value = dec.value(bool_tv(true), false);
+                        if !unsafe { dec.finish_value(value, &mut p) } {
+                            break 'fail;
+                        }
+                        if dec.next_map_special {
+                            continue;
+                        }
+                    }
+                    b'f' => {
+                        if p + 4 >= buf_len || &bytes[p + 1..p + 5] != b"alse" {
+                            dec.emsg_rest(E474_EXPECTED_FALSE, p);
+                            break 'fail;
+                        }
+                        p += 4;
+                        let value = dec.value(bool_tv(false), false);
+                        if !unsafe { dec.finish_value(value, &mut p) } {
+                            break 'fail;
+                        }
+                        if dec.next_map_special {
+                            continue;
+                        }
+                    }
+                    b'"' => {
+                        // The error was reported by the scanner.
+                        if !unsafe { parse_json_string(&mut dec, &mut p) } {
+                            break 'fail;
+                        }
+                        if dec.next_map_special {
+                            continue;
+                        }
+                    }
+                    b'-' | b'0'..=b'9' => {
+                        if !unsafe { parse_json_number(&mut dec, &mut p) } {
+                            break 'fail;
+                        }
+                        if dec.next_map_special {
+                            continue;
+                        }
+                    }
+                    b'[' => {
+                        let list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+                        unsafe { tv_list_ref(list) };
+                        let tv = typval_T {
+                            v_type: VAR_LIST,
+                            v_lock: VarLock::Unlocked,
+                            vval: typval_vval_union { v_list: list },
+                        };
+                        dec.open(tv, ::core::ptr::null_mut(), p);
+                    }
+                    b'{' => {
+                        let mut tv = TV_INITIAL_VALUE;
+                        let mut special_val: *mut list_T = ::core::ptr::null_mut();
+                        if dec.next_map_special {
+                            dec.next_map_special = false;
+                            let len = kListLenMayKnow as ptrdiff_t;
+                            special_val =
+                                unsafe { decode_create_map_special_dict(&raw mut tv, len) };
+                        } else {
+                            let dict = unsafe { tv_dict_alloc() };
+                            unsafe { (*dict).dv_refcount.retain() };
+                            tv = typval_T {
+                                v_type: VAR_DICT,
+                                v_lock: VarLock::Unlocked,
+                                vval: typval_vval_union { v_dict: dict },
+                            };
+                        }
+                        dec.open(tv, special_val, p);
+                    }
+                    _ => {
+                        dec.emsg_rest(E474_UNIDENTIFIED_BYTE, p);
                         break 'fail;
                     }
-                    p += 1;
                 }
-                if dec.stack.len() == 1 && dec.containers.is_empty() {
-                    *rettv = dec.stack.pop().expect("the decoded value").val;
-                    break 'done;
+                dec.didcomma = false;
+                dec.didcolon = false;
+                p += 1;
+                if dec.containers.is_empty() {
+                    break 'scan;
                 }
-                dec.emsg_rest(E474_UNEXPECTED_END, 0);
             }
-            ret = FAIL;
-            while let Some(mut left) = dec.stack.pop() {
-                tv_clear(&raw mut left.val);
+
+            // Past the value: only whitespace may follow.
+            while p < buf_len {
+                if !matches!(bytes[p], NL | b' ' | TAB | CAR) {
+                    dec.emsg_rest(E474_TRAILING_CHARACTERS, p);
+                    break 'fail;
+                }
+                p += 1;
             }
+            if dec.stack.len() == 1 && dec.containers.is_empty() {
+                unsafe { *rettv = dec.stack.pop().expect("the decoded value").val };
+                break 'done;
+            }
+            dec.emsg_rest(E474_UNEXPECTED_END, 0);
         }
-        ret
+        ret = FAIL;
+        while let Some(mut left) = dec.stack.pop() {
+            unsafe { tv_clear(&raw mut left.val) };
+        }
     }
+    ret
 }
 
 impl Decoder<'_> {
