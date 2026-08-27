@@ -14,7 +14,7 @@ use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::semsg_c;
 use crate::undo::UNDO_HASH_SIZE;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -650,22 +650,10 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     cur_buf().b_keep_filetype = false;
 
     // Update folds unless they are defined manually.
-    let mut tp = first_tabpage.get();
-    while !tp.is_null() {
-        let mut wp = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            unsafe { (*tp).tp_firstwin }
-        };
-        while !wp.is_null() {
-            if unsafe { (*wp).w_buffer } == cur_win().w_buffer
-                && !unsafe { foldmethod_is_manual(Win::new(wp)) }
-            {
-                unsafe { fold_update_all(Win::new(wp)) };
-            }
-            wp = unsafe { (*wp).w_next };
+    for wp in tab_windows() {
+        if wp.w_buffer == cur_win().w_buffer && !foldmethod_is_manual(wp) {
+            fold_update_all(wp);
         }
-        tp = unsafe { (*tp).tp_next };
     }
 
     // If the mode didn't change and 'readonly' was set, keep the old

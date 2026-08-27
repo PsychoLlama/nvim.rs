@@ -5,7 +5,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
 use crate::cursor::set_leftcol;
@@ -13,7 +13,7 @@ use crate::diff::diff_set_topline;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo};
+use crate::main::{curbuf, curwin, did_syncbind, mod_mask, p_sbo};
 use crate::normal::{
     CmdArg, MOD_MASK_CTRL, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
     set_visual_select, visual_active, visual_select,
@@ -104,15 +104,11 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
     set_visual_select(visual_active());
 
     // Upstream asks `curtab == curtab`, so this always walks the current
-    // tab page's windows however it reads.
-    let mut wp = firstwin.get();
-    while !wp.is_null() {
-        // SAFETY: `firstwin` and every `w_next` from it is a live window;
-        // nothing in this body can free one.
-        let mut win = unsafe { Win::new(wp) };
-        curwin.set(wp);
+    // tab page's windows however it reads. Nothing in the body can free one.
+    for mut win in windows() {
+        curwin.set(win.raw());
         curbuf.set(win.w_buffer);
-        if wp != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
+        if win.raw() != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
             if want_ver {
                 if unsafe { (*old_curwin).w_onebuf_opt.wo_diff } != 0
                     && win.w_onebuf_opt.wo_diff != 0
@@ -139,7 +135,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
                         scrolldown(win, -(y as linenr_T), false);
                     }
                 }
-                unsafe { redraw_later(wp, UPD_VALID) };
+                unsafe { redraw_later(win.raw(), UPD_VALID) };
                 cursor_correct(win);
                 win.w_redr_status = true;
             }
@@ -147,7 +143,6 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
                 unsafe { set_leftcol(tgt_leftcol) };
             }
         }
-        wp = unsafe { (*wp).w_next };
     }
 
     set_visual_select(old_visual_select);

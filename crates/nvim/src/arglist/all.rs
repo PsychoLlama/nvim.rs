@@ -14,6 +14,7 @@ use crate::buffer::BufRef;
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
 use crate::window::{WSP_BELOW, WSP_ROOM};
+use crate::winlayer::windows;
 
 /// What the two passes of `:all` share. A stack local of [`do_arg_all`],
 /// never handed to C, so the passes take it by reference and its fields
@@ -314,32 +315,25 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
     if cur_win().w_arg_idx == i {
         return false;
     }
-    let mut wp = firstwin.get();
-    while !wp.is_null() {
-        // SAFETY: the window list of the current tab page is well formed.
-        if unsafe { (*wp).w_arg_idx } != i {
-            wp = unsafe { (*wp).w_next };
-            continue;
-        }
-        if aall.keep_tabs {
-            aall.new_curwin = wp;
-            aall.new_curtab = curtab.get();
-            return false;
-        }
-        // SAFETY: `wp` is live and every window sits in a frame.
-        // SAFETY: `wp` is a live window with a frame, as is `curwin`.
-        let moved = unsafe {
-            (*wp).w_floating || (*(*wp).w_frame).fr_parent == (*cur_win().w_frame).fr_parent
-        };
-        if !moved {
-            crate::semsg!("E249: Window layout changed unexpectedly");
-            return true;
-        }
-        // SAFETY: as above; a floating window is left where it is.
-        if !unsafe { (*wp).w_floating } {
-            unsafe { win_move_after(wp, curwin.get()) };
-        }
+    let Some(wp) = windows().find(|wp| wp.w_arg_idx == i) else {
         return false;
+    };
+    if aall.keep_tabs {
+        aall.new_curwin = wp.raw();
+        aall.new_curtab = curtab.get();
+        return false;
+    }
+    // SAFETY: `wp` is a live window with a frame, as is `curwin`.
+    let moved =
+        wp.w_floating || unsafe { (*wp.w_frame).fr_parent == (*cur_win().w_frame).fr_parent };
+    if !moved {
+        crate::semsg!("E249: Window layout changed unexpectedly");
+        return true;
+    }
+    // A floating window is left where it is.
+    if !wp.w_floating {
+        // SAFETY: `wp` and `curwin` are live windows of the same tab page.
+        unsafe { win_move_after(wp.raw(), curwin.get()) };
     }
     false
 }

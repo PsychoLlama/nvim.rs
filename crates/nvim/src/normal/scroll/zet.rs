@@ -3,7 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
@@ -16,7 +16,7 @@ use crate::fold::{
     foldmethod_is_marker, has_folding, new_fold_level, open_fold, open_fold_recurse,
 };
 use crate::guard::Suppress;
-use crate::main::{curwin, finish_op, firstwin};
+use crate::main::{curwin, finish_op};
 use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
@@ -545,16 +545,11 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
         // Windows bound by 'scrollbind' in diff mode have to fold alike,
         // or the same line is at a different height in each.
         if foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
-            let mut wp = firstwin.get();
-            while !wp.is_null() {
-                if wp != win.raw()
-                    && unsafe { foldmethod_is_diff(Win::new(wp)) }
-                    && unsafe { (*wp).w_onebuf_opt.wo_scb } != 0
-                {
-                    unsafe { (*wp).w_onebuf_opt.wo_fen = win.w_onebuf_opt.wo_fen };
-                    unsafe { changed_window_setting(Win::new(wp)) };
+            for mut wp in windows() {
+                if wp.raw() != win.raw() && foldmethod_is_diff(wp) && wp.w_onebuf_opt.wo_scb != 0 {
+                    wp.w_onebuf_opt.wo_fen = win.w_onebuf_opt.wo_fen;
+                    changed_window_setting(wp);
                 }
-                wp = unsafe { (*wp).w_next };
             }
         }
         changed_window_setting(win);
