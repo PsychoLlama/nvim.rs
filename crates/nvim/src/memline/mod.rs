@@ -30,7 +30,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout, got_int,
+    allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, getout, got_int,
     inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
     need_wait_return, no_lines_msg, p_dir, p_shm, p_uc, p_verbose, recoverymode,
     swap_exists_action,
@@ -80,7 +80,7 @@ use crate::types::{
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, buffers};
 use ::libc::{__errno_location, close, lseek, readlink, strcasecmp, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
@@ -402,13 +402,11 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
 /// # Safety
 /// Must run on the main thread.
 pub unsafe fn ml_open_files() {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if (*buf).b_p_ro == 0 || (*buf).b_changed != 0 {
-                ml_open_file(buf);
-            }
-            buf = (*buf).b_next;
+    for buf in buffers() {
+        if buf.b_p_ro == 0 || buf.b_changed != 0 {
+            // SAFETY: a live buffer from the editor's own list, on the main
+            // thread as the caller promised.
+            unsafe { ml_open_file(buf.raw()) };
         }
     }
 }
@@ -542,12 +540,13 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
 /// # Safety
 /// Must run on the main thread.
 pub unsafe fn ml_close_all(del_file: bool) {
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, on the main
+        // thread as the caller promised. `ml_close` drops the memline, not
+        // the buffer, so the link the walk reads next stays good.
+        unsafe { ml_close(buf.raw(), del_file as ::core::ffi::c_int) };
+    }
     unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            ml_close(buf, del_file as ::core::ffi::c_int);
-            buf = (*buf).b_next;
-        }
         spell_delete_wordlist(); // delete the internal wordlist
         vim_deltempdir(); // delete the temp directory that was created
     }
@@ -559,13 +558,11 @@ pub unsafe fn ml_close_all(del_file: bool) {
 /// # Safety
 /// Must run on the main thread.
 pub unsafe fn ml_close_notmod() {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !buf_is_changed(Buf::new(buf)) {
-                ml_close(buf, 1);
-            }
-            buf = (*buf).b_next;
+    for buf in buffers() {
+        if !buf_is_changed(buf) {
+            // SAFETY: a live buffer from the editor's own list, on the main
+            // thread as the caller promised.
+            unsafe { ml_close(buf.raw(), 1) };
         }
     }
 }

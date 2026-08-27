@@ -793,42 +793,43 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
 /// unchanged. `check_char`: stop as soon as a character is typed, having
 /// synced at least one block.
 pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            if !(*buf).b_ml.ml_mfp.is_null() && !mf_fname((*buf).b_ml.ml_mfp).is_null() {
-                ml_flush_line(buf, false); // flush the buffered line
-                ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, and the memfile
+        // it owns.
+        unsafe {
+            if !buf.b_ml.ml_mfp.is_null() && !mf_fname(buf.b_ml.ml_mfp).is_null() {
+                ml_flush_line(buf.raw(), false); // flush the buffered line
+                ml_find_line(buf.raw(), 0, ML_FLUSH as c_int); // flush the locked block
 
-                if buf_is_changed(Buf::new(buf))
+                if buf_is_changed(buf)
                     && check_file != 0
-                    && mf_need_trans((*buf).b_ml.ml_mfp)
-                    && !(*buf).b_ffname.is_null()
+                    && mf_need_trans(buf.b_ml.ml_mfp)
+                    && !buf.b_ffname.is_null()
                 {
                     // If the original file is gone or has changed, preserve
                     // now, to get rid of all the negative numbered blocks.
                     let mut file_info: FileInfo = core::mem::zeroed();
-                    if !os_fileinfo((*buf).b_ffname, &raw mut file_info)
-                        || file_info.stat.st_mtim.tv_sec != (*buf).b_mtime_read
-                        || file_info.stat.st_mtim.tv_nsec != (*buf).b_mtime_read_ns
-                        || os_fileinfo_size(&raw mut file_info) != (*buf).b_orig_size
+                    if !os_fileinfo(buf.b_ffname, &raw mut file_info)
+                        || file_info.stat.st_mtim.tv_sec != buf.b_mtime_read
+                        || file_info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
+                        || os_fileinfo_size(&raw mut file_info) != buf.b_orig_size
                     {
-                        ml_preserve(buf, false, do_fsync);
+                        ml_preserve(buf.raw(), false, do_fsync);
                         did_check_timestamps.set(false);
                         need_check_timestamps.set(true); // give the message later
                     }
                 }
 
-                if (*(*buf).b_ml.ml_mfp).mf_dirty == MfDirty::Yes {
+                if (*buf.b_ml.ml_mfp).mf_dirty == MfDirty::Yes {
                     // Best effort: `ml_sync_all` writes what it can and
                     // leaves the rest dirty.
                     let _ = mf_sync(
-                        (*buf).b_ml.ml_mfp,
+                        buf.b_ml.ml_mfp,
                         (if check_char != 0 {
                             MFS_STOP as c_int
                         } else {
                             0
-                        }) | (if do_fsync && buf_is_changed(Buf::new(buf)) {
+                        }) | (if do_fsync && buf_is_changed(buf) {
                             MFS_FLUSH as c_int
                         } else {
                             0
@@ -839,7 +840,6 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                     }
                 }
             }
-            buf = (*buf).b_next;
         }
     }
 }

@@ -53,7 +53,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use crate::fileio::{read_eintr, write_eintr};
-use crate::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
+use crate::main::{did_swapwrite_msg, e_swapclose, got_int, main_loop};
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
@@ -65,6 +65,7 @@ use crate::os::fs::{
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
 use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
+use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};
 
 /// A swap-file operation that did not complete.
@@ -640,39 +641,40 @@ pub(crate) unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
 /// Drop as many cached blocks as possible, for when memory has run out.
 /// Answers whether anything was released.
 pub(crate) unsafe fn mf_release_all() -> bool {
-    unsafe {
-        let mut released = false;
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            let mfp = (*buf).b_ml.ml_mfp;
-            if !mfp.is_null() {
-                // Nothing can be released without somewhere to put it.
-                if (*mfp).mf_fd < 0 && (*buf).b_may_swap {
-                    ml_open_file(buf);
-                }
+    let mut released = false;
+    for buf in buffers() {
+        let mfp = buf.b_ml.ml_mfp;
+        if mfp.is_null() {
+            continue;
+        }
+        // SAFETY: the buffer is a live one from the editor's own list, and
+        // `mfp` is the memfile it owns.
+        unsafe {
+            // Nothing can be released without somewhere to put it.
+            if (*mfp).mf_fd < 0 && buf.b_may_swap {
+                ml_open_file(buf.raw());
+            }
 
-                if (*mfp).mf_fd >= 0 {
-                    let mut i = 0;
-                    while i < (*mfp).used.len() {
-                        let hp = (*mfp).used.at(i);
-                        if (*hp).bh_flags & BH_LOCKED == 0
-                            && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp).is_ok())
-                        {
-                            // Dropping it releases the block's pages.
-                            drop((*mfp).used.remove((*hp).bh_bnum));
-                            released = true;
-                            // Stay at `i`: removal moved another block into
-                            // this slot (or that was the last one).
-                        } else {
-                            i += 1;
-                        }
+            if (*mfp).mf_fd >= 0 {
+                let mut i = 0;
+                while i < (*mfp).used.len() {
+                    let hp = (*mfp).used.at(i);
+                    if (*hp).bh_flags & BH_LOCKED == 0
+                        && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp).is_ok())
+                    {
+                        // Dropping it releases the block's pages.
+                        drop((*mfp).used.remove((*hp).bh_bnum));
+                        released = true;
+                        // Stay at `i`: removal moved another block into
+                        // this slot (or that was the last one).
+                    } else {
+                        i += 1;
                     }
                 }
             }
-            buf = (*buf).b_next;
         }
-        released
     }
+    released
 }
 
 /// Read a block's pages from the file.
