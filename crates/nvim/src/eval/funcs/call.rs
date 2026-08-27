@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::wrappers::{arg_number, arg_string, arg_string_chk, check_arg};
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
@@ -10,8 +11,8 @@ use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{
-    NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_number,
-    tv_get_string_buf_chk, tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
+    NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
+    tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -73,69 +74,69 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
-    unsafe {
-        if tv_check_for_list_arg(args.ptr(0), 1) == FAIL {
-            return;
-        }
-        // A null List is v:_null_list, which calls nothing.
-        if args.get(1).vval.v_list.is_null() {
-            return;
-        }
+    if check_arg(args, 1, tv_check_for_list_arg) == FAIL {
+        return;
+    }
+    // A null List is v:_null_list, which calls nothing.
+    if unsafe { args.get(1).vval.v_list }.is_null() {
+        return;
+    }
 
-        let mut partial = ptr::null_mut::<partial_T>();
-        // Only the Lua-table arm allocates; the others borrow.
-        let mut owned = false;
-        let mut func = match args.ty(0) {
-            VAR_FUNC => args.get(0).vval.v_string,
-            VAR_PARTIAL => {
-                partial = args.get(0).vval.v_partial;
-                partial_name(partial)
-            }
-            _ if nlua_is_table_from_lua(args.ptr(0)) => {
-                owned = true;
-                nlua_register_table_as_callable(args.ptr(0))
-            }
-            _ => numbuf.string(args.ptr(0)) as *mut c_char,
-        };
-        if func.is_null() || *func as c_int == NUL {
-            // Upstream returns here without releasing an owned name.
-            return;
+    let mut partial = ptr::null_mut::<partial_T>();
+    // Only the Lua-table arm allocates; the others borrow.
+    let mut owned = false;
+    let mut func = match args.ty(0) {
+        VAR_FUNC => unsafe { args.get(0).vval.v_string },
+        VAR_PARTIAL => {
+            partial = unsafe { args.get(0).vval.v_partial };
+            unsafe { partial_name(partial) }
         }
+        _ if unsafe { nlua_is_table_from_lua(args.ptr(0)) } => {
+            owned = true;
+            unsafe { nlua_register_table_as_callable(args.ptr(0)) }
+        }
+        _ => arg_string(&mut numbuf, args.get(0)) as *mut c_char,
+    };
+    if func.is_null() || unsafe { *func } as c_int == NUL {
+        // Upstream returns here without releasing an owned name.
+        return;
+    }
 
-        // A String name is resolved through the function-name translator,
-        // which is what turns `s:`/`<SID>` into the real name.
-        let mut tofree = Owned(ptr::null_mut());
-        if args.ty(0) == VAR_STRING {
-            let mut p = func;
-            tofree = Owned(trans_function_name(
+    // A String name is resolved through the function-name translator,
+    // which is what turns `s:`/`<SID>` into the real name.
+    let mut tofree = Owned(ptr::null_mut());
+    if args.ty(0) == VAR_STRING {
+        let mut p = func;
+        tofree = Owned(unsafe {
+            trans_function_name(
                 &raw mut p,
                 false,
                 TFN_INT as c_int | TFN_QUIET as c_int,
                 ptr::null_mut::<funcdict_T>(),
                 ptr::null_mut::<*mut partial_T>(),
-            ));
-            if tofree.0.is_null() {
-                emsg_funcname(e_unknown_function_str.as_ptr(), func);
-                return;
-            }
-            func = tofree.0;
+            )
+        });
+        if tofree.0.is_null() {
+            unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), func) };
+            return;
         }
+        func = tofree.0;
+    }
 
-        // A bad {dict} skips the call but still runs the cleanup below.
-        let selfdict = if !args.has(2) {
-            Some(ptr::null_mut())
-        } else if tv_check_for_dict_arg(args.ptr(0), 2) == FAIL {
-            None
-        } else {
-            Some(args.get(2).vval.v_dict)
-        };
-        if let Some(selfdict) = selfdict {
-            func_call(func, args.ptr(1), partial, selfdict, rettv);
-        }
+    // A bad {dict} skips the call but still runs the cleanup below.
+    let selfdict = if !args.has(2) {
+        Some(ptr::null_mut())
+    } else if check_arg(args, 2, tv_check_for_dict_arg) == FAIL {
+        None
+    } else {
+        Some(unsafe { args.get(2).vval.v_dict })
+    };
+    if let Some(selfdict) = selfdict {
+        unsafe { func_call(func, args.ptr(1), partial, selfdict, rettv) };
+    }
 
-        if owned {
-            func_unref(func);
-        }
+    if owned {
+        unsafe { func_unref(func) };
     }
 }
 
@@ -145,23 +146,23 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `s` walks a string an argument owns.
-    unsafe {
-        let mut s = numbuf.string_chk(args.ptr(0));
-        if !s.is_null() {
-            s = skipwhite(s);
+    let mut s = arg_string_chk(&mut numbuf, args.get(0));
+    if !s.is_null() {
+        s = unsafe { skipwhite(s) };
+    }
+    // Kept for the message: `eval1` advances `s` past what it consumed.
+    let expr_start = s;
+    if s.is_null()
+        || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) } == FAIL
+    {
+        if !expr_start.is_null() && !aborting() {
+            semsg_c!(unsafe { gettext(e_invexpr2.as_ptr()) }, expr_start);
         }
-        // Kept for the message: `eval1` advances `s` past what it consumed.
-        let expr_start = s;
-        if s.is_null() || eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) == FAIL {
-            if !expr_start.is_null() && !aborting() {
-                semsg_c!(gettext(e_invexpr2.as_ptr()), expr_start);
-            }
-            need_clr_eos.set(false);
-            rettv.v_type = VAR_NUMBER;
-            rettv.vval.v_number = 0;
-        } else if *s as c_int != NUL {
-            semsg_c!(gettext(e_trailing_arg.as_ptr()), s);
-        }
+        need_clr_eos.set(false);
+        rettv.v_type = VAR_NUMBER;
+        rettv.vval.v_number = 0;
+    } else if unsafe { *s } as c_int != NUL {
+        semsg_c!(unsafe { gettext(e_trailing_arg.as_ptr()) }, s);
     }
 }
 
@@ -183,22 +184,20 @@ unsafe fn get_list_line(
     _indent: c_int,
     _do_concat: bool,
 ) -> *mut c_char {
-    // SAFETY: the caller's obligation; `buf` outlives the string
+    let state = cookie.cast::<ListLines>();
+    // SAFETY: the caller's obligation. `buf` outlives the string
     // `tv_get_string_buf_chk` may park in it, because the duplicate is made
     // before returning.
-    unsafe {
-        let state = &mut *(cookie as *mut ListLines);
-        let Some(item) = state.item.as_ref() else {
-            return ptr::null_mut();
-        };
-        let mut buf = [0 as c_char; NUMBUFLEN];
-        let s = tv_get_string_buf_chk(&raw const item.li_tv, buf.as_mut_ptr());
-        state.item = item.li_next;
-        if s.is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup(s)
-        }
+    let Some(item) = (unsafe { (*state).item.as_ref() }) else {
+        return ptr::null_mut();
+    };
+    let mut buf = [0 as c_char; NUMBUFLEN];
+    let s = unsafe { tv_get_string_buf_chk(&raw const item.li_tv, buf.as_mut_ptr()) };
+    unsafe { (*state).item = item.li_next };
+    if s.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { xstrdup(s) }
     }
 }
 
@@ -226,81 +225,81 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
 
     // SAFETY: the frame is live; `capture_local` outlives every command run
     // below, and `rettv` adopts its allocation at the end.
-    unsafe {
-        if check_secure() {
+    if check_secure() {
+        return;
+    }
+
+    if args.has(silent_idx) {
+        let mut buf = NumBuf::new();
+        let s = arg_string_chk(&mut buf, args.get(silent_idx));
+        if s.is_null() {
             return;
         }
-
-        if args.has(silent_idx) {
-            let mut buf = [0 as c_char; NUMBUFLEN];
-            let s = tv_get_string_buf_chk(args.ptr(silent_idx), buf.as_mut_ptr());
-            if s.is_null() {
-                return;
-            }
-            // An explicit empty {silent} means "not silent", and is the
-            // only spelling that leaves the cursor column alone.
-            if *s as c_int == NUL {
-                echo_output = true;
-            }
-            // Any prefix of "silent" silences; only the exact "silent!"
-            // also silences errors.
-            silence = strncmp(s, c"silent".as_ptr(), 6) == 0;
-            if strcmp(s, c"silent!".as_ptr()) == 0 {
-                emsg_silent.set(1);
-                emsg_noredir.set(true);
-            }
+        // An explicit empty {silent} means "not silent", and is the
+        // only spelling that leaves the cursor column alone.
+        if unsafe { *s } as c_int == NUL {
+            echo_output = true;
         }
-        // Restored either way: an explicit empty {silent} asks for output
-        // and still resets what the commands below leave behind.
-        let _silenced = Suppress::messages_saved_when(silence);
+        // Any prefix of "silent" silences; only the exact "silent!"
+        // also silences errors.
+        silence = unsafe { strncmp(s, c"silent".as_ptr(), 6) } == 0;
+        if unsafe { strcmp(s, c"silent!".as_ptr()) } == 0 {
+            emsg_silent.set(1);
+            emsg_noredir.set(true);
+        }
+    }
+    // Restored either way: an explicit empty {silent} asks for output
+    // and still resets what the commands below leave behind.
+    let _silenced = Suppress::messages_saved_when(silence);
 
-        let mut capture_local = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ptr::null_mut(),
+    let mut capture_local = garray_T {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: ptr::null_mut(),
+    };
+    unsafe { ga_init(&raw mut capture_local, size_of::<c_char>() as c_int, 80) };
+    capture_ga.set(&raw mut capture_local);
+    redir_off.set(false);
+    if !echo_output {
+        msg_col.set(0);
+    }
+
+    if args.ty(cmd_idx) != VAR_LIST {
+        unsafe { do_cmdline_cmd(arg_string(&mut numbuf, args.get(cmd_idx))) };
+    } else if !unsafe { args.get(cmd_idx).vval.v_list }.is_null() {
+        let list = unsafe { args.get(cmd_idx).vval.v_list };
+        // The List is held across the run: a command may drop the
+        // variable holding it.
+        unsafe { tv_list_ref(list) };
+        let mut cookie = ListLines {
+            _list: list,
+            item: unsafe { tv_list_first(list) },
         };
-        ga_init(&raw mut capture_local, size_of::<c_char>() as c_int, 80);
-        capture_ga.set(&raw mut capture_local);
-        redir_off.set(false);
-        if !echo_output {
-            msg_col.set(0);
-        }
-
-        if args.ty(cmd_idx) != VAR_LIST {
-            do_cmdline_cmd(numbuf.string(args.ptr(cmd_idx)));
-        } else if !args.get(cmd_idx).vval.v_list.is_null() {
-            let list = args.get(cmd_idx).vval.v_list;
-            // The List is held across the run: a command may drop the
-            // variable holding it.
-            tv_list_ref(list);
-            let mut cookie = ListLines {
-                _list: list,
-                item: tv_list_first(list),
-            };
+        unsafe {
             do_cmdline(
                 ptr::null_mut(),
                 Some(get_list_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
                 &raw mut cookie as *mut c_void,
                 DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED,
-            );
-            tv_list_unref(list);
-        }
-
-        emsg_silent.set(save_emsg_silent);
-        emsg_noredir.set(save_emsg_noredir);
-        redir_off.set(save_redir_off);
-        msg_col.set(if echo_output { 0 } else { save_msg_col });
-
-        // Read `capture_ga` back rather than using `capture_local`: a
-        // nested `execute()` restores the pointer, and it is the current
-        // one that holds this run's output.
-        ga_append(capture_ga.get(), NUL as uint8_t);
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = (*capture_ga.get()).ga_data as *mut c_char;
-        capture_ga.set(save_capture_ga);
+            )
+        };
+        unsafe { tv_list_unref(list) };
     }
+
+    emsg_silent.set(save_emsg_silent);
+    emsg_noredir.set(save_emsg_noredir);
+    redir_off.set(save_redir_off);
+    msg_col.set(if echo_output { 0 } else { save_msg_col });
+
+    // Read `capture_ga` back rather than using `capture_local`: a
+    // nested `execute()` restores the pointer, and it is the current
+    // one that holds this run's output.
+    unsafe { ga_append(capture_ga.get(), NUL as uint8_t) };
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = (*capture_ga.get()).ga_data as *mut c_char };
+    capture_ga.set(save_capture_ga);
 }
 
 /// `execute({command} [, {silent}])`
@@ -315,42 +314,42 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `p` walks a string an argument owns.
-    unsafe {
-        let mut p = numbuf.string(args.ptr(0));
-        // Not a bool: the `:` arm answers 2 for an exact command name, and
-        // that grading is part of `exists()`'s contract.
-        let found: c_int = match *p as u8 {
-            b'$' => {
-                // The environment, or a name that expands to something
-                // other than itself.
-                (if os_env_exists(p.add(1), false) {
-                    true
-                } else {
-                    let expanded = Owned(expand_env_save(p as *mut c_char));
-                    !expanded.0.is_null() && *expanded.0 as u8 != b'$'
-                }) as c_int
+    let mut p = arg_string(&mut numbuf, args.get(0));
+    // Not a bool: the `:` arm answers 2 for an exact command name, and
+    // that grading is part of `exists()`'s contract.
+    let found: c_int = match unsafe { *p } as u8 {
+        b'$' => {
+            // The environment, or a name that expands to something
+            // other than itself.
+            (if unsafe { os_env_exists(p.add(1), false) } {
+                true
+            } else {
+                let expanded = Owned(unsafe { expand_env_save(p as *mut c_char) });
+                !expanded.0.is_null() && unsafe { *expanded.0 } as u8 != b'$'
+            }) as c_int
+        }
+        b'&' | b'+' => {
+            // An option, and nothing may follow it.
+            (unsafe { eval_option(&raw mut p, ptr::null_mut(), true) } == OK
+                && unsafe { *skipwhite(p) } as c_int == NUL) as c_int
+        }
+        b'*' => {
+            if unsafe { strnequal(p, c"*v:lua.".as_ptr(), 7) } {
+                unsafe { nlua_func_exists(p.add(7)) as c_int }
+            } else {
+                unsafe { function_exists(p.add(1), false) as c_int }
             }
-            b'&' | b'+' => {
-                // An option, and nothing may follow it.
-                (eval_option(&raw mut p, ptr::null_mut(), true) == OK
-                    && *skipwhite(p) as c_int == NUL) as c_int
-            }
-            b'*' => {
-                if strnequal(p, c"*v:lua.".as_ptr(), 7) {
-                    nlua_func_exists(p.add(7)) as c_int
-                } else {
-                    function_exists(p.add(1), false) as c_int
-                }
-            }
-            b':' => cmd_exists(p.add(1)),
-            // `##event` asks whether the event name is known at all;
-            // `#event` asks whether an autocommand is defined for it.
-            b'#' if *p.add(1) as u8 == b'#' => autocmd_supported(p.add(2)) as c_int,
-            b'#' => au_exists(p.add(1)) as c_int,
-            _ => var_exists(p) as c_int,
-        };
-        rettv.vval.v_number = found as varnumber_T;
-    }
+        }
+        b':' => unsafe { cmd_exists(p.add(1)) },
+        // `##event` asks whether the event name is known at all;
+        // `#event` asks whether an autocommand is defined for it.
+        b'#' if unsafe { *p.add(1) } as u8 == b'#' => unsafe {
+            autocmd_supported(p.add(2)) as c_int
+        },
+        b'#' => unsafe { au_exists(p.add(1)) as c_int },
+        _ => unsafe { var_exists(p) as c_int },
+    };
+    rettv.vval.v_number = found as varnumber_T;
 }
 
 /// `function()` and `funcref()`.
@@ -365,30 +364,30 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
-    unsafe {
-        let mut arg_pt = ptr::null_mut::<partial_T>();
-        let mut use_string = false;
-        let mut s = match args.ty(0) {
-            // function(MyFunc, [arg], dict)
-            VAR_FUNC => args.get(0).vval.v_string,
-            // function(dict.MyFunc, [arg])
-            VAR_PARTIAL if !args.get(0).vval.v_partial.is_null() => {
-                arg_pt = args.get(0).vval.v_partial;
-                partial_name(arg_pt)
-            }
-            // function('MyFunc', [arg], dict)
-            _ => {
-                use_string = true;
-                numbuf.string(args.ptr(0)) as *mut c_char
-            }
-        };
+    let mut arg_pt = ptr::null_mut::<partial_T>();
+    let mut use_string = false;
+    let mut s = match args.ty(0) {
+        // function(MyFunc, [arg], dict)
+        VAR_FUNC => unsafe { args.get(0).vval.v_string },
+        // function(dict.MyFunc, [arg])
+        VAR_PARTIAL if !unsafe { args.get(0).vval.v_partial }.is_null() => {
+            arg_pt = unsafe { args.get(0).vval.v_partial };
+            unsafe { partial_name(arg_pt) }
+        }
+        // function('MyFunc', [arg], dict)
+        _ => {
+            use_string = true;
+            arg_string(&mut numbuf, args.get(0)) as *mut c_char
+        }
+    };
 
-        // An autoload name is left alone: it may not be loaded yet, and
-        // checking would load it.
-        let mut trans_name = Owned(ptr::null_mut());
-        if (use_string && vim_strchr(s, AUTOLOAD_CHAR).is_null()) || is_funcref {
-            let mut name = s;
-            trans_name = Owned(save_function_name(
+    // An autoload name is left alone: it may not be loaded yet, and
+    // checking would load it.
+    let mut trans_name = Owned(ptr::null_mut());
+    if (use_string && unsafe { vim_strchr(s, AUTOLOAD_CHAR) }.is_null()) || is_funcref {
+        let mut name = s;
+        trans_name = Owned(unsafe {
+            save_function_name(
                 &raw mut name,
                 false,
                 TFN_INT as c_int
@@ -396,160 +395,170 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
                     | TFN_NO_AUTOLOAD as c_int
                     | TFN_NO_DEREF as c_int,
                 ptr::null_mut::<funcdict_T>(),
-            ));
-            // Anything left over means the name was not a name.
-            if *name as c_int != NUL {
-                s = ptr::null_mut();
-            }
+            )
+        });
+        // Anything left over means the name was not a name.
+        if unsafe { *name } as c_int != NUL {
+            s = ptr::null_mut();
         }
+    }
 
-        if s.is_null()
-            || *s as c_int == NUL
-            || (use_string && ascii_isdigit(*s as c_int))
-            || (is_funcref && trans_name.0.is_null())
-        {
-            semsg_c!(
-                gettext(e_invarg2.as_ptr()),
-                if use_string {
-                    numbuf2.string(args.ptr(0))
-                } else {
-                    s as *const c_char
-                },
-            );
-            return;
-        }
-        if !trans_name.0.is_null()
-            && if is_funcref {
-                find_func(trans_name.0).is_null()
+    if s.is_null()
+        || unsafe { *s } as c_int == NUL
+        || (use_string && ascii_isdigit(unsafe { *s } as c_int))
+        || (is_funcref && trans_name.0.is_null())
+    {
+        semsg_c!(
+            unsafe { gettext(e_invarg2.as_ptr()) },
+            if use_string {
+                arg_string(&mut numbuf2, args.get(0))
             } else {
-                !translated_function_exists(trans_name.0)
-            }
-        {
-            semsg_c!(gettext(c"E700: Unknown function: %s".as_ptr()), s);
-            return;
-        }
-
-        // Expand `s:` and `<SID>` into `<SNR>nr_` so the result can be
-        // called from another script. `trans_function_name` would do it
-        // too, but some plugins depend on the name staying printable.
-        let name = if strncmp(s, c"s:".as_ptr(), 2) == 0 || strncmp(s, c"<SID>".as_ptr(), 5) == 0 {
-            get_scriptlocal_funcname(s)
+                s as *const c_char
+            },
+        );
+        return;
+    }
+    if !trans_name.0.is_null()
+        && if is_funcref {
+            unsafe { find_func(trans_name.0) }.is_null()
         } else {
-            xstrdup(s)
-        };
+            !unsafe { translated_function_exists(trans_name.0) }
+        }
+    {
+        semsg_c!(
+            unsafe { gettext(c"E700: Unknown function: %s".as_ptr()) },
+            s
+        );
+        return;
+    }
 
-        // The second argument may be either the argument list or the dict;
-        // a third settles it.
-        let mut dict_idx = 0;
-        let mut arg_idx = 0;
-        let mut list = ptr::null_mut::<list_T>();
-        if args.has(1) {
-            if args.has(2) {
-                arg_idx = 1;
-                dict_idx = 2;
-            } else if args.ty(1) == VAR_DICT {
-                dict_idx = 1;
-            } else {
-                arg_idx = 1;
+    // Expand `s:` and `<SID>` into `<SNR>nr_` so the result can be
+    // called from another script. `trans_function_name` would do it
+    // too, but some plugins depend on the name staying printable.
+    let name = if unsafe { strncmp(s, c"s:".as_ptr(), 2) } == 0
+        || unsafe { strncmp(s, c"<SID>".as_ptr(), 5) } == 0
+    {
+        unsafe { get_scriptlocal_funcname(s) }
+    } else {
+        unsafe { xstrdup(s) }
+    };
+
+    // The second argument may be either the argument list or the dict;
+    // a third settles it.
+    let mut dict_idx = 0;
+    let mut arg_idx = 0;
+    let mut list = ptr::null_mut::<list_T>();
+    if args.has(1) {
+        if args.has(2) {
+            arg_idx = 1;
+            dict_idx = 2;
+        } else if args.ty(1) == VAR_DICT {
+            dict_idx = 1;
+        } else {
+            arg_idx = 1;
+        }
+        if dict_idx > 0 {
+            if check_arg(args, dict_idx, tv_check_for_dict_arg) == FAIL {
+                unsafe { xfree(name as *mut c_void) };
+                return;
             }
-            if dict_idx > 0 {
-                if tv_check_for_dict_arg(args.ptr(0), dict_idx) == FAIL {
-                    xfree(name as *mut c_void);
-                    return;
-                }
-                // v:_null_dict binds nothing.
-                if args.get(dict_idx as usize).vval.v_dict.is_null() {
-                    dict_idx = 0;
-                }
+            // v:_null_dict binds nothing.
+            if unsafe { args.get(dict_idx as usize).vval.v_dict }.is_null() {
+                dict_idx = 0;
             }
-            if arg_idx > 0 {
-                if args.ty(arg_idx as usize) != VAR_LIST {
+        }
+        if arg_idx > 0 {
+            if args.ty(arg_idx as usize) != VAR_LIST {
+                unsafe {
                     emsg(gettext(
                         c"E923: Second argument of function() must be a list or a dict".as_ptr(),
-                    ));
-                    xfree(name as *mut c_void);
-                    return;
-                }
-                list = args.get(arg_idx as usize).vval.v_list;
-                if tv_list_len(list) == 0 {
-                    arg_idx = 0;
-                } else if tv_list_len(list) > MAX_FUNC_ARGS as c_int {
-                    emsg_funcname(e_toomanyarg.as_ptr(), s);
-                    xfree(name as *mut c_void);
-                    return;
-                }
+                    ))
+                };
+                unsafe { xfree(name as *mut c_void) };
+                return;
+            }
+            list = unsafe { args.get(arg_idx as usize).vval.v_list };
+            if unsafe { tv_list_len(list) } == 0 {
+                arg_idx = 0;
+            } else if unsafe { tv_list_len(list) } > MAX_FUNC_ARGS as c_int {
+                unsafe { emsg_funcname(e_toomanyarg.as_ptr(), s) };
+                unsafe { xfree(name as *mut c_void) };
+                return;
             }
         }
+    }
 
-        // Nothing bound and nothing to bind: a plain Funcref will do.
-        if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
-            rettv.v_type = VAR_FUNC;
-            rettv.vval.v_string = name;
-            func_ref(name);
-            return;
-        }
+    // Nothing bound and nothing to bind: a plain Funcref will do.
+    if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
+        rettv.v_type = VAR_FUNC;
+        rettv.vval.v_string = name;
+        unsafe { func_ref(name) };
+        return;
+    }
 
-        let pt = xcalloc(1, size_of::<partial_T>()) as *mut partial_T;
-        if arg_idx > 0 || (!arg_pt.is_null() && (*arg_pt).pt_argc > 0) {
-            // The bound arguments of the partial being extended come
-            // first, then this call's.
-            let arg_len = if arg_pt.is_null() {
-                0
-            } else {
-                (*arg_pt).pt_argc
-            };
-            let lv_len = tv_list_len(list);
-            (*pt).pt_argc = arg_len + lv_len;
-            (*pt).pt_argv =
-                xmalloc(size_of::<typval_T>() * (*pt).pt_argc as usize) as *mut typval_T;
-            let mut i = 0;
-            while i < arg_len {
+    let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
+    if arg_idx > 0 || (!arg_pt.is_null() && unsafe { (*arg_pt).pt_argc } > 0) {
+        // The bound arguments of the partial being extended come
+        // first, then this call's.
+        let arg_len = if arg_pt.is_null() {
+            0
+        } else {
+            unsafe { (*arg_pt).pt_argc }
+        };
+        let lv_len = unsafe { tv_list_len(list) };
+        unsafe { (*pt).pt_argc = arg_len + lv_len };
+        unsafe {
+            (*pt).pt_argv = xmalloc(size_of::<typval_T>() * (*pt).pt_argc as usize) as *mut typval_T
+        };
+        let mut i = 0;
+        while i < arg_len {
+            unsafe {
                 tv_copy(
                     (*arg_pt).pt_argv.add(i as usize),
                     (*pt).pt_argv.add(i as usize),
-                );
+                )
+            };
+            i += 1;
+        }
+        if lv_len > 0 && !list.is_null() {
+            let mut li = unsafe { (*list).lv_first };
+            while !li.is_null() {
+                unsafe { tv_copy(&raw mut (*li).li_tv, (*pt).pt_argv.add(i as usize)) };
                 i += 1;
-            }
-            if lv_len > 0 && !list.is_null() {
-                let mut li = (*list).lv_first;
-                while !li.is_null() {
-                    tv_copy(&raw mut (*li).li_tv, (*pt).pt_argv.add(i as usize));
-                    i += 1;
-                    li = (*li).li_next;
-                }
+                li = unsafe { (*li).li_next };
             }
         }
-
-        if dict_idx > 0 {
-            // Bound explicitly, so `pt_auto` stays false.
-            (*pt).pt_dict = args.get(dict_idx as usize).vval.v_dict;
-            (*(*pt).pt_dict).dv_refcount.retain();
-        } else if !arg_pt.is_null() {
-            // A dict bound automatically stays bound automatically. This
-            // is what makes `function(dict.func, [], dict)` keep `dict`.
-            (*pt).pt_dict = (*arg_pt).pt_dict;
-            (*pt).pt_auto = (*arg_pt).pt_auto;
-            if !(*pt).pt_dict.is_null() {
-                (*(*pt).pt_dict).dv_refcount.retain();
-            }
-        }
-
-        (*pt).pt_refcount = Refcount::ONE;
-        if !arg_pt.is_null() && !(*arg_pt).pt_func.is_null() {
-            (*pt).pt_func = (*arg_pt).pt_func;
-            func_ptr_ref((*pt).pt_func);
-            xfree(name as *mut c_void);
-        } else if is_funcref {
-            (*pt).pt_func = find_func(trans_name.0);
-            func_ptr_ref((*pt).pt_func);
-            xfree(name as *mut c_void);
-        } else {
-            (*pt).pt_name = name;
-            func_ref(name);
-        }
-        rettv.v_type = VAR_PARTIAL;
-        rettv.vval.v_partial = pt;
     }
+
+    if dict_idx > 0 {
+        // Bound explicitly, so `pt_auto` stays false.
+        unsafe { (*pt).pt_dict = args.get(dict_idx as usize).vval.v_dict };
+        unsafe { (*(*pt).pt_dict).dv_refcount }.retain();
+    } else if !arg_pt.is_null() {
+        // A dict bound automatically stays bound automatically. This
+        // is what makes `function(dict.func, [], dict)` keep `dict`.
+        unsafe { (*pt).pt_dict = (*arg_pt).pt_dict };
+        unsafe { (*pt).pt_auto = (*arg_pt).pt_auto };
+        if !unsafe { (*pt).pt_dict }.is_null() {
+            unsafe { (*(*pt).pt_dict).dv_refcount }.retain();
+        }
+    }
+
+    unsafe { (*pt).pt_refcount = Refcount::ONE };
+    if !arg_pt.is_null() && !unsafe { (*arg_pt).pt_func }.is_null() {
+        unsafe { (*pt).pt_func = (*arg_pt).pt_func };
+        unsafe { func_ptr_ref((*pt).pt_func) };
+        unsafe { xfree(name as *mut c_void) };
+    } else if is_funcref {
+        unsafe { (*pt).pt_func = find_func(trans_name.0) };
+        unsafe { func_ptr_ref((*pt).pt_func) };
+        unsafe { xfree(name as *mut c_void) };
+    } else {
+        unsafe { (*pt).pt_name = name };
+        unsafe { func_ref(name) };
+    }
+    rettv.v_type = VAR_PARTIAL;
+    rettv.vval.v_partial = pt;
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
@@ -572,11 +581,9 @@ pub unsafe fn f_garbagecollect(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     let (args, _rettv) = frame!(argvars, rettv);
     want_garbage_collect.set(true);
     // SAFETY: the frame is live.
-    unsafe {
-        // Exactly 1, not "non-zero".
-        if args.has(0) && tv_get_number(args.ptr(0)) == 1 {
-            garbage_collect_at_exit.set(true);
-        }
+    // Exactly 1, not "non-zero".
+    if args.has(0) && arg_number(args.get(0)) == 1 {
+        garbage_collect_at_exit.set(true);
     }
 }
 
@@ -591,48 +598,46 @@ unsafe fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     }
     // SAFETY: the frame is live; the two names and the string argument are
     // owned by arguments and outlive the call.
-    unsafe {
-        if check_secure() {
-            return;
+    if check_secure() {
+        return;
+    }
+    if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
+        return;
+    }
+    let libname = unsafe { args.get(0).vval.v_string };
+    let funcname = unsafe { args.get(1).vval.v_string };
+    let arg3 = args.get(2);
+    let str_in = if arg3.v_type == VAR_STRING {
+        unsafe { arg3.vval.v_string }
+    } else {
+        ptr::null_mut()
+    };
+    // A VAR_STRING third argument with a NULL v_string falls through to
+    // the int-taking prototype, reading the same union as a number.
+    // Upstream quirk, preserved.
+    let arg = if str_in.is_null() {
+        LibcallArg::Int(unsafe { arg3.vval.v_number } as c_int)
+    } else {
+        LibcallArg::Str(unsafe { CStr::from_ptr(str_in) })
+    };
+    let want = if out_type == VAR_STRING {
+        LibcallReturn::Str
+    } else {
+        LibcallReturn::Int
+    };
+    let result = if libname.is_null() || funcname.is_null() {
+        None
+    } else {
+        unsafe { os_libcall(CStr::from_ptr(libname), CStr::from_ptr(funcname), arg, want) }
+    };
+    match result {
+        None => {
+            semsg_c!(unsafe { gettext(e_libcall.as_ptr()) }, funcname);
         }
-        if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
-            return;
+        Some(LibcallResult::Str(s)) => {
+            rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
         }
-        let libname = args.get(0).vval.v_string;
-        let funcname = args.get(1).vval.v_string;
-        let arg3 = args.get(2);
-        let str_in = if arg3.v_type == VAR_STRING {
-            arg3.vval.v_string
-        } else {
-            ptr::null_mut()
-        };
-        // A VAR_STRING third argument with a NULL v_string falls through to
-        // the int-taking prototype, reading the same union as a number.
-        // Upstream quirk, preserved.
-        let arg = if str_in.is_null() {
-            LibcallArg::Int(arg3.vval.v_number as c_int)
-        } else {
-            LibcallArg::Str(CStr::from_ptr(str_in))
-        };
-        let want = if out_type == VAR_STRING {
-            LibcallReturn::Str
-        } else {
-            LibcallReturn::Int
-        };
-        let result = if libname.is_null() || funcname.is_null() {
-            None
-        } else {
-            os_libcall(CStr::from_ptr(libname), CStr::from_ptr(funcname), arg, want)
-        };
-        match result {
-            None => {
-                semsg_c!(gettext(e_libcall.as_ptr()), funcname);
-            }
-            Some(LibcallResult::Str(s)) => {
-                rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
-            }
-            Some(LibcallResult::Int(n)) => rettv.vval.v_number = n as varnumber_T,
-        }
+        Some(LibcallResult::Int(n)) => rettv.vval.v_number = n as varnumber_T,
     }
 }
 
@@ -655,13 +660,11 @@ pub unsafe fn f_luaeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and the chunk outlives the call.
-    unsafe {
-        let chunk = numbuf.string_chk(args.ptr(0));
-        if chunk.is_null() {
-            return;
-        }
-        nlua_typval_eval(cstr_as_string(chunk), args.ptr(1), rettv);
+    let chunk = arg_string_chk(&mut numbuf, args.get(0));
+    if chunk.is_null() {
+        return;
     }
+    unsafe { nlua_typval_eval(cstr_as_string(chunk), args.ptr(1), rettv) };
 }
 
 /// `py3eval({expr})`

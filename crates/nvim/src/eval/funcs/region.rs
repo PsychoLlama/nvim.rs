@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::wrappers::{check_arg, list_alloc_ret};
 use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
 use crate::buffer::find_buf;
@@ -10,7 +11,7 @@ use crate::charset::getdigits_int;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
     NumBuf, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
+    tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
 use crate::main::{
@@ -140,103 +141,106 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     // SAFETY: the caller's obligation. `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
-    unsafe {
-        tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        if tv_check_for_list_arg(args.ptr(0), 0) == FAIL
-            || tv_check_for_list_arg(args.ptr(0), 1) == FAIL
-            || tv_check_for_opt_dict_arg(args.ptr(0), 2) == FAIL
-        {
-            return None;
-        }
-        let (mut p1, mut p2) = (NOWHERE, NOWHERE);
-        let (mut fnum1, mut fnum2) = (-1, -1);
-        if list2fpos(
+    list_alloc_ret(rettv, kListLenMayKnow as isize);
+    if check_arg(args, 0, tv_check_for_list_arg) == FAIL
+        || check_arg(args, 1, tv_check_for_list_arg) == FAIL
+        || check_arg(args, 2, tv_check_for_opt_dict_arg) == FAIL
+    {
+        return None;
+    }
+    let (mut p1, mut p2) = (NOWHERE, NOWHERE);
+    let (mut fnum1, mut fnum2) = (-1, -1);
+    if unsafe {
+        list2fpos(
             args.ptr(0),
             &raw mut p1,
             &raw mut fnum1,
             ptr::null_mut(),
             false,
-        ) != OK
-            || list2fpos(
+        )
+    } != OK
+        || unsafe {
+            list2fpos(
                 args.ptr(1),
                 &raw mut p2,
                 &raw mut fnum2,
                 ptr::null_mut(),
                 false,
-            ) != OK
-            || fnum1 != fnum2
-        {
-            return None;
-        }
-
-        // 'selection' decides the default exclusivity; an option dict may
-        // override it and may name the region type.
-        let opts = (args.ty(2) == VAR_DICT).then(|| args.get(2).vval.v_dict);
-        let exclusive_by_default = *p_sel.get() == b'e' as c_char;
-        let (is_select_exclusive, spec) = match opts {
-            Some(d) => (
-                tv_dict_get_bool(d, c"exclusive".as_ptr(), exclusive_by_default as c_int) != 0,
-                numbuf.dict_string(d, c"type".as_ptr()),
-            ),
-            None => (exclusive_by_default, ptr::null()),
-        };
-        let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
-        let (region_type, block_width) = parse_type(spec)?;
-
-        let findbuf = if fnum1 != 0 {
-            find_buf(fnum1).map_or(ptr::null_mut(), |mut b| b.raw())
-        } else {
-            curbuf.get()
-        };
-        if findbuf.is_null() || (*findbuf).b_ml.ml_mfp.is_null() {
-            emsg(gettext(e_buffer_is_not_loaded.as_ptr()));
-            return None;
-        }
-        check_corner(findbuf, &mut p1)?;
-        check_corner(findbuf, &mut p2)?;
-
-        curbuf.set(findbuf);
-        (*curwin.get()).w_buffer = curbuf.get();
-        virtual_op.set(Some(virtual_active(cur_win())));
-
-        // Columns are one-based on the way in and zero-based from here.
-        p1.col -= 1;
-        p2.col -= 1;
-        if !lt(p1, p2) {
-            core::mem::swap(&mut p1, &mut p2);
-        }
-
-        let mut inclusive = true;
-        let mut oap = NO_OPARG;
-        if region_type == kMTCharWise {
-            if is_select_exclusive && !equalpos(p1, p2) {
-                inclusive = !unadjust_for_sel_inner(&mut p2);
-            }
-            // An inclusive selection ending on the line terminator does not
-            // actually cover a character, unless 'virtualedit' is on.
-            if inclusive
-                && virtual_op.get() == Some(false)
-                && *ml_get_pos(&raw mut p2) == NUL as c_char
-            {
-                inclusive = false;
-            }
-        } else if region_type == kMTBlockWise {
-            oap = block_oparg(p1, p2, is_select_exclusive, block_width);
-        }
-
-        // Extend the far corner over the rest of a multibyte character.
-        let l = utfc_ptr2len(ml_get_pos(&raw mut p2));
-        if l > 1 {
-            p2.col += l - 1;
-        }
-        Some(Region {
-            p1,
-            p2,
-            inclusive,
-            region_type,
-            oap,
-        })
+            )
+        } != OK
+        || fnum1 != fnum2
+    {
+        return None;
     }
+
+    // 'selection' decides the default exclusivity; an option dict may
+    // override it and may name the region type.
+    let opts = (args.ty(2) == VAR_DICT).then(|| unsafe { args.get(2).vval.v_dict });
+    let exclusive_by_default = unsafe { *p_sel.get() } == b'e' as c_char;
+    let (is_select_exclusive, spec) = match opts {
+        Some(d) => (
+            unsafe { tv_dict_get_bool(d, c"exclusive".as_ptr(), exclusive_by_default as c_int) }
+                != 0,
+            unsafe { numbuf.dict_string(d, c"type".as_ptr()) },
+        ),
+        None => (exclusive_by_default, ptr::null()),
+    };
+    let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
+    let (region_type, block_width) = unsafe { parse_type(spec) }?;
+
+    let findbuf = if fnum1 != 0 {
+        find_buf(fnum1).map_or(ptr::null_mut(), |mut b| b.raw())
+    } else {
+        curbuf.get()
+    };
+    if findbuf.is_null() || unsafe { (*findbuf).b_ml.ml_mfp }.is_null() {
+        unsafe { emsg(gettext(e_buffer_is_not_loaded.as_ptr())) };
+        return None;
+    }
+    unsafe { check_corner(findbuf, &mut p1) }?;
+    unsafe { check_corner(findbuf, &mut p2) }?;
+
+    curbuf.set(findbuf);
+    unsafe { (*curwin.get()).w_buffer = curbuf.get() };
+    virtual_op.set(Some(virtual_active(cur_win())));
+
+    // Columns are one-based on the way in and zero-based from here.
+    p1.col -= 1;
+    p2.col -= 1;
+    if !lt(p1, p2) {
+        core::mem::swap(&mut p1, &mut p2);
+    }
+
+    let mut inclusive = true;
+    let mut oap = NO_OPARG;
+    if region_type == kMTCharWise {
+        if is_select_exclusive && !equalpos(p1, p2) {
+            inclusive = !unadjust_for_sel_inner(&mut p2);
+        }
+        // An inclusive selection ending on the line terminator does not
+        // actually cover a character, unless 'virtualedit' is on.
+        if inclusive
+            && virtual_op.get() == Some(false)
+            && unsafe { *ml_get_pos(&raw mut p2) } == NUL as c_char
+        {
+            inclusive = false;
+        }
+    } else if region_type == kMTBlockWise {
+        oap = unsafe { block_oparg(p1, p2, is_select_exclusive, block_width) };
+    }
+
+    // Extend the far corner over the rest of a multibyte character.
+    let l = unsafe { utfc_ptr2len(ml_get_pos(&raw mut p2)) };
+    if l > 1 {
+        p2.col += l - 1;
+    }
+    Some(Region {
+        p1,
+        p2,
+        inclusive,
+        region_type,
+        oap,
+    })
 }
 
 /// The `type` option: "v", "V", or CTRL-V optionally followed by a width.
@@ -247,29 +251,31 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // SAFETY: the caller's obligation; `getdigits_int` only walks forward
     // over `spec` and leaves `p` on the terminator when it consumed the
     // whole width.
-    unsafe {
-        let bad = || {
-            semsg_c!(gettext(e_invargNval.as_ptr()), c"type".as_ptr(), spec,);
-            None
-        };
-        match CStr::from_ptr(spec).to_bytes() {
-            b"v" => Some((kMTCharWise, 0)),
-            b"V" => Some((kMTLineWise, 0)),
-            [c, ..] if *c as c_int == Ctrl_V => {
-                let mut p = spec.add(1) as *mut c_char;
-                // A bare CTRL-V means "as wide as the corners"; a width
-                // must be a positive number and nothing else.
-                if *p != NUL as c_char {
-                    let width = getdigits_int(&raw mut p, false, 0);
-                    if width <= 0 || *p != NUL as c_char {
-                        return bad();
-                    }
-                    return Some((kMTBlockWise, width));
+    let bad = || {
+        semsg_c!(
+            unsafe { gettext(e_invargNval.as_ptr()) },
+            c"type".as_ptr(),
+            spec,
+        );
+        None
+    };
+    match unsafe { CStr::from_ptr(spec) }.to_bytes() {
+        b"v" => Some((kMTCharWise, 0)),
+        b"V" => Some((kMTLineWise, 0)),
+        [c, ..] if *c as c_int == Ctrl_V => {
+            let mut p = unsafe { spec.add(1) } as *mut c_char;
+            // A bare CTRL-V means "as wide as the corners"; a width
+            // must be a positive number and nothing else.
+            if unsafe { *p } != NUL as c_char {
+                let width = unsafe { getdigits_int(&raw mut p, false, 0) };
+                if width <= 0 || unsafe { *p } != NUL as c_char {
+                    return bad();
                 }
-                Some((kMTBlockWise, 0))
+                return Some((kMTBlockWise, width));
             }
-            _ => bad(),
+            Some((kMTBlockWise, 0))
         }
+        _ => bad(),
     }
 }
 
@@ -281,20 +287,24 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
-    unsafe {
-        if p.lnum < 1 || p.lnum > (*buf).b_ml.ml_line_count {
-            semsg_c!(gettext(e_invalid_line_number_nr.as_ptr()), p.lnum,);
-            return None;
-        }
-        let len = ml_get_buf_len(buf, p.lnum);
-        if p.col == MAXCOL as colnr_T {
-            p.col = len + 1;
-        } else if p.col < 1 || p.col > len + 1 {
-            semsg_c!(gettext(e_invalid_column_number_nr.as_ptr()), p.col,);
-            return None;
-        }
-        Some(())
+    if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {
+        semsg_c!(
+            unsafe { gettext(e_invalid_line_number_nr.as_ptr()) },
+            p.lnum,
+        );
+        return None;
     }
+    let len = unsafe { ml_get_buf_len(buf, p.lnum) };
+    if p.col == MAXCOL as colnr_T {
+        p.col = len + 1;
+    } else if p.col < 1 || p.col > len + 1 {
+        semsg_c!(
+            unsafe { gettext(e_invalid_column_number_nr.as_ptr()) },
+            p.col,
+        );
+        return None;
+    }
+    Some(())
 }
 
 /// The operator argument a blockwise region needs, which is what
@@ -311,43 +321,45 @@ unsafe fn block_oparg(
     // SAFETY: the caller's obligation. 'linebreak' is turned off around
     // the virtual-column measurements so that a wrapped line does not
     // change where the block's edges are.
+    let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
+    let lbr_saved = reset_lbr();
     unsafe {
-        let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
-        let lbr_saved = reset_lbr();
         getvvcol(
             cur_win(),
             &raw const p1 as *mut pos_T,
             &raw mut sc1,
             ptr::null_mut(),
             &raw mut ec1,
-        );
+        )
+    };
+    unsafe {
         getvvcol(
             cur_win(),
             &raw const p2 as *mut pos_T,
             &raw mut sc2,
             ptr::null_mut(),
             &raw mut ec2,
-        );
-        restore_lbr(lbr_saved);
-        let start_vcol = sc1.min(sc2);
-        oparg_T {
-            motion_type: kMTBlockWise,
-            inclusive: true,
-            op_type: OP_NOP,
-            start: p1,
-            end: p2,
-            start_vcol,
-            end_vcol: if block_width > 0 {
-                // An explicit width wins over where the corners landed.
-                start_vcol + block_width - 1
-            } else if is_select_exclusive && ec1 < sc2 && sc2 > 0 && ec2 > ec1 {
-                // Exclusive: the far corner's own column is not covered.
-                sc2 - 1
-            } else {
-                ec1.max(ec2)
-            },
-            ..NO_OPARG
-        }
+        )
+    };
+    restore_lbr(lbr_saved);
+    let start_vcol = sc1.min(sc2);
+    oparg_T {
+        motion_type: kMTBlockWise,
+        inclusive: true,
+        op_type: OP_NOP,
+        start: p1,
+        end: p2,
+        start_vcol,
+        end_vcol: if block_width > 0 {
+            // An explicit width wins over where the corners landed.
+            start_vcol + block_width - 1
+        } else if is_select_exclusive && ec1 < sc2 && sc2 > 0 && ec2 > ec1 {
+            // Exclusive: the far corner's own column is not covered.
+            sc2 - 1
+        } else {
+            ec1.max(ec2)
+        },
+        ..NO_OPARG
     }
 }
 
@@ -360,30 +372,34 @@ unsafe fn block_oparg(
 unsafe fn block_def2str(bd: &block_def) -> String_0 {
     // SAFETY: the caller's obligation. The allocation is exactly the three
     // pieces plus a terminator, and each piece is written once in order.
+    let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;
+    let data = unsafe { xmalloc(size + 1) }.cast::<c_char>();
     unsafe {
-        let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;
-        let data = xmalloc(size + 1).cast::<c_char>();
         memset(
             data.cast::<c_void>(),
             b' ' as c_int,
             bd.startspaces as usize,
-        );
-        let mut at = bd.startspaces as usize;
+        )
+    };
+    let mut at = bd.startspaces as usize;
+    unsafe {
         memmove(
             data.add(at).cast::<c_void>(),
             bd.textstart.cast::<c_void>(),
             bd.textlen as usize,
-        );
-        at += bd.textlen as usize;
+        )
+    };
+    at += bd.textlen as usize;
+    unsafe {
         memset(
             data.add(at).cast::<c_void>(),
             b' ' as c_int,
             bd.endspaces as usize,
-        );
-        at += bd.endspaces as usize;
-        *data.add(at) = NUL as c_char;
-        String_0::from_raw_parts(data, at)
-    }
+        )
+    };
+    at += bd.endspaces as usize;
+    unsafe { *data.add(at) = NUL as c_char };
+    String_0::from_raw_parts(data, at)
 }
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
@@ -392,28 +408,26 @@ pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
-    unsafe {
-        let _swap = BufferSwap::save();
-        let Some(r) = resolve(args, rettv) else {
-            return;
+    let _swap = unsafe { BufferSwap::save() };
+    let Some(r) = (unsafe { resolve(args, rettv) }) else {
+        return;
+    };
+    for lnum in r.p1.lnum..=r.p2.lnum {
+        let text = if r.region_type == kMTBlockWise {
+            let mut bd = NO_BLOCK;
+            unsafe { block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false) };
+            unsafe { block_def2str(&bd) }
+        } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
+            // A whole line: either the region is linewise, or this is
+            // an interior line of a charwise region.
+            unsafe { cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as usize) }
+        } else {
+            let mut bd = NO_BLOCK;
+            unsafe { charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive) };
+            unsafe { block_def2str(&bd) }
         };
-        for lnum in r.p1.lnum..=r.p2.lnum {
-            let text = if r.region_type == kMTBlockWise {
-                let mut bd = NO_BLOCK;
-                block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false);
-                block_def2str(&bd)
-            } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
-                // A whole line: either the region is linewise, or this is
-                // an interior line of a charwise region.
-                cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as usize)
-            } else {
-                let mut bd = NO_BLOCK;
-                charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive);
-                block_def2str(&bd)
-            };
-            debug_assert!(!text.data().is_null());
-            tv_list_append_allocated_string(rettv.vval.v_list, text.data());
-        }
+        debug_assert!(!text.data().is_null());
+        unsafe { tv_list_append_allocated_string(rettv.vval.v_list, text.data()) };
     }
 }
 
@@ -423,24 +437,22 @@ pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
-    unsafe {
-        let _swap = BufferSwap::save();
-        let Some(r) = resolve(args, rettv) else {
-            return;
-        };
-        // Whether a position may sit one past the end of its line.
-        let allow_eol = args.ty(2) == VAR_DICT
-            && tv_dict_get_bool(args.get(2).vval.v_dict, c"eol".as_ptr(), 0) != 0;
+    let _swap = unsafe { BufferSwap::save() };
+    let Some(r) = (unsafe { resolve(args, rettv) }) else {
+        return;
+    };
+    // Whether a position may sit one past the end of its line.
+    let allow_eol = args.ty(2) == VAR_DICT
+        && unsafe { tv_dict_get_bool(args.get(2).vval.v_dict, c"eol".as_ptr(), 0) } != 0;
 
-        for lnum in r.p1.lnum..=r.p2.lnum {
-            let line = ml_get(lnum);
-            let line_len = ml_get_len(lnum);
-            let (mut ret_p1, mut ret_p2) = line_corners(&r, lnum, line);
-            clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
-            ret_p1.lnum = lnum;
-            ret_p2.lnum = lnum;
-            add_regionpos_range(rettv, ret_p1, ret_p2);
-        }
+    for lnum in r.p1.lnum..=r.p2.lnum {
+        let line = ml_get(lnum);
+        let line_len = ml_get_len(lnum);
+        let (mut ret_p1, mut ret_p2) = unsafe { line_corners(&r, lnum, line) };
+        clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
+        ret_p1.lnum = lnum;
+        ret_p2.lnum = lnum;
+        unsafe { add_regionpos_range(rettv, ret_p1, ret_p2) };
     }
 }
 
@@ -463,47 +475,45 @@ unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T,
     }
     // SAFETY: the caller's obligation; `bd.textstart` points into `line`,
     // so `mb_prevptr` stays inside it.
-    unsafe {
-        let mut bd = NO_BLOCK;
-        if r.region_type == kMTBlockWise {
-            block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false);
-        } else {
-            charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive);
-        }
-
-        let mut p1 = NOWHERE;
-        if bd.is_oneChar != 0 {
-            if r.region_type == kMTBlockWise {
-                p1.col = mb_prevptr(line, bd.textstart).offset_from(line) as colnr_T + 1;
-                p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.oap.start_vcol);
-            } else {
-                p1.col = r.p1.col + 1;
-                p1.coladd = r.p1.coladd;
-            }
-        } else if r.region_type == kMTBlockWise && r.oap.start_vcol > bd.start_vcol {
-            // The block starts inside a character that begins before it.
-            p1.col = MAXCOL as colnr_T;
-            p1.coladd = r.oap.start_vcol - bd.start_vcol;
-            bd.is_oneChar = 1;
-        } else if bd.startspaces > 0 {
-            p1.col = mb_prevptr(line, bd.textstart).offset_from(line) as colnr_T + 1;
-            p1.coladd = bd.start_char_vcols - bd.startspaces;
-        } else {
-            p1.col = bd.textcol + 1;
-        }
-
-        let mut p2 = NOWHERE;
-        if bd.is_oneChar != 0 {
-            p2.col = p1.col;
-            p2.coladd = p1.coladd + bd.startspaces + bd.endspaces;
-        } else if bd.endspaces > 0 {
-            p2.col = bd.textcol + bd.textlen + 1;
-            p2.coladd = bd.endspaces;
-        } else {
-            p2.col = bd.textcol + bd.textlen;
-        }
-        (p1, p2)
+    let mut bd = NO_BLOCK;
+    if r.region_type == kMTBlockWise {
+        unsafe { block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false) };
+    } else {
+        unsafe { charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive) };
     }
+
+    let mut p1 = NOWHERE;
+    if bd.is_oneChar != 0 {
+        if r.region_type == kMTBlockWise {
+            p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as colnr_T + 1;
+            p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.oap.start_vcol);
+        } else {
+            p1.col = r.p1.col + 1;
+            p1.coladd = r.p1.coladd;
+        }
+    } else if r.region_type == kMTBlockWise && r.oap.start_vcol > bd.start_vcol {
+        // The block starts inside a character that begins before it.
+        p1.col = MAXCOL as colnr_T;
+        p1.coladd = r.oap.start_vcol - bd.start_vcol;
+        bd.is_oneChar = 1;
+    } else if bd.startspaces > 0 {
+        p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as colnr_T + 1;
+        p1.coladd = bd.start_char_vcols - bd.startspaces;
+    } else {
+        p1.col = bd.textcol + 1;
+    }
+
+    let mut p2 = NOWHERE;
+    if bd.is_oneChar != 0 {
+        p2.col = p1.col;
+        p2.coladd = p1.coladd + bd.startspaces + bd.endspaces;
+    } else if bd.endspaces > 0 {
+        p2.col = bd.textcol + bd.textlen + 1;
+        p2.coladd = bd.endspaces;
+    } else {
+        p2.col = bd.textcol + bd.textlen;
+    }
+    (p1, p2)
 }
 
 /// Pull both corners back onto the line. Without `eol` a corner past the
@@ -532,17 +542,15 @@ fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: colnr_T, allow_eol: b
 unsafe fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
-    unsafe {
-        let pair = tv_list_alloc(2);
-        tv_list_append_list(rettv.vval.v_list, pair);
-        for p in [p1, p2] {
-            let l = tv_list_alloc(4);
-            tv_list_append_list(pair, l);
-            tv_list_append_number(l, (*curbuf.get()).handle as varnumber_T);
-            tv_list_append_number(l, p.lnum as varnumber_T);
-            tv_list_append_number(l, p.col as varnumber_T);
-            tv_list_append_number(l, p.coladd as varnumber_T);
-        }
+    let pair = unsafe { tv_list_alloc(2) };
+    unsafe { tv_list_append_list(rettv.vval.v_list, pair) };
+    for p in [p1, p2] {
+        let l = unsafe { tv_list_alloc(4) };
+        unsafe { tv_list_append_list(pair, l) };
+        unsafe { tv_list_append_number(l, (*curbuf.get()).handle as varnumber_T) };
+        unsafe { tv_list_append_number(l, p.lnum as varnumber_T) };
+        unsafe { tv_list_append_number(l, p.col as varnumber_T) };
+        unsafe { tv_list_append_number(l, p.coladd as varnumber_T) };
     }
 }
 

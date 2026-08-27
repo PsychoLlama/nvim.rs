@@ -63,17 +63,19 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arena and the error are owned here and freed on the way
     // out; `object_to_vim` copies what it keeps out of the arena's dict.
+    let arg = args.ptr(0);
+    let Some(index) =
+        (unsafe { context_index(arg, "expected nothing or a Number as an argument") })
+    else {
+        return;
+    };
+    let Some(ctx) = (unsafe { context_at(index) }) else {
+        return;
+    };
+    let mut arena = ARENA_EMPTY;
+    let ctx_dict = unsafe { ctx_to_dict(ctx, &raw mut arena) };
+    let mut err = NO_ERROR;
     unsafe {
-        let Some(index) = context_index(args.ptr(0), "expected nothing or a Number as an argument")
-        else {
-            return;
-        };
-        let Some(ctx) = context_at(index) else {
-            return;
-        };
-        let mut arena = ARENA_EMPTY;
-        let ctx_dict = ctx_to_dict(ctx, &raw mut arena);
-        let mut err = NO_ERROR;
         object_to_vim(
             object {
                 type_0: kObjectTypeDict,
@@ -81,10 +83,10 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             },
             rettv,
             &raw mut err,
-        );
-        arena_mem_free(arena_finish(&raw mut arena));
-        api_clear_error(&raw mut err);
-    }
+        )
+    };
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { api_clear_error(&raw mut err) };
 }
 
 /// `ctxpop()` — restore and drop the context on top of the stack.
@@ -100,40 +102,38 @@ pub unsafe fn f_ctxpop(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: walks the argument list, whose items live for the call.
-    unsafe {
-        let types = match args.ty(0) {
-            VAR_LIST => {
-                let mut types: c_int = 0;
-                let mut li = tv_list_first(args.get(0).vval.v_list);
-                while !li.is_null() {
-                    let tv = &(*li).li_tv;
-                    // An unrecognised name is silently ignored, as is a
-                    // non-String item.
-                    // A null `v_string` is the empty string, which matches
-                    // no name; `strequal` answered the same for it.
-                    if tv.v_type == VAR_STRING && !tv.vval.v_string.is_null() {
-                        types |= match CStr::from_ptr(tv.vval.v_string).to_bytes() {
-                            b"regs" => kCtxRegs as c_int,
-                            b"jumps" => kCtxJumps as c_int,
-                            b"bufs" => kCtxBufs as c_int,
-                            b"gvars" => kCtxGVars as c_int,
-                            b"sfuncs" => kCtxSFuncs as c_int,
-                            b"funcs" => kCtxFuncs as c_int,
-                            _ => 0,
-                        };
-                    }
-                    li = (*li).li_next;
+    let types = match args.ty(0) {
+        VAR_LIST => {
+            let mut types: c_int = 0;
+            let mut li = unsafe { tv_list_first(args.get(0).vval.v_list) };
+            while !li.is_null() {
+                let tv = &unsafe { (*li).li_tv };
+                // An unrecognised name is silently ignored, as is a
+                // non-String item.
+                // A null `v_string` is the empty string, which matches
+                // no name; `strequal` answered the same for it.
+                if tv.v_type == VAR_STRING && !unsafe { tv.vval.v_string }.is_null() {
+                    types |= match unsafe { CStr::from_ptr(tv.vval.v_string) }.to_bytes() {
+                        b"regs" => kCtxRegs as c_int,
+                        b"jumps" => kCtxJumps as c_int,
+                        b"bufs" => kCtxBufs as c_int,
+                        b"gvars" => kCtxGVars as c_int,
+                        b"sfuncs" => kCtxSFuncs as c_int,
+                        b"funcs" => kCtxFuncs as c_int,
+                        _ => 0,
+                    };
                 }
-                types
+                li = unsafe { (*li).li_next };
             }
-            VAR_UNKNOWN => kCtxAll.get(),
-            _ => {
-                semsg!("E475: Invalid argument: expected nothing or a List as an argument");
-                return;
-            }
-        };
-        ctx_save(ptr::null_mut(), types);
-    }
+            types
+        }
+        VAR_UNKNOWN => kCtxAll.get(),
+        _ => {
+            semsg!("E475: Invalid argument: expected nothing or a List as an argument");
+            return;
+        }
+    };
+    unsafe { ctx_save(ptr::null_mut(), types) };
 }
 
 /// `ctxset({context} [, {index}])` — replace the context at `index`.
@@ -141,42 +141,39 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: the arena, the error and the scratch context are owned here;
     // `tmp` is either installed in place of `ctx` or freed.
-    unsafe {
-        if args.ty(0) != VAR_DICT {
-            semsg!("E475: Invalid argument: expected dictionary as first argument");
-            return;
-        }
-        let Some(index) = context_index(
-            args.ptr(1),
-            "expected nothing or a Number as second argument",
-        ) else {
-            return;
-        };
-        let Some(ctx) = context_at(index) else {
-            return;
-        };
-        // `vim_to_object` reports conversion problems through `did_emsg`;
-        // the caller's flag is restored whatever happens here.
-        let save_did_emsg = did_emsg.get();
-        did_emsg.set(0);
-        let mut arena = ARENA_EMPTY;
-        let dict = vim_to_object(args.ptr(0), &raw mut arena, true).data.dict;
-        let mut tmp = CONTEXT_INIT;
-        let mut err = NO_ERROR;
-        ctx_from_dict(dict, &raw mut tmp, &raw mut err);
-        if err.type_0 != kErrorTypeNone {
-            // The message is whatever the API layer produced, so it keeps
-            // the variadic call rather than assuming UTF-8.
-            semsg_c!(c"%s".as_ptr(), err.msg);
-            ctx_free(&raw mut tmp);
-        } else {
-            ctx_free(ctx);
-            *ctx = tmp;
-        }
-        arena_mem_free(arena_finish(&raw mut arena));
-        api_clear_error(&raw mut err);
-        did_emsg.set(save_did_emsg);
+    if args.ty(0) != VAR_DICT {
+        semsg!("E475: Invalid argument: expected dictionary as first argument");
+        return;
     }
+    let arg = args.ptr(1);
+    let msg = "expected nothing or a Number as second argument";
+    let Some(index) = (unsafe { context_index(arg, msg) }) else {
+        return;
+    };
+    let Some(ctx) = (unsafe { context_at(index) }) else {
+        return;
+    };
+    // `vim_to_object` reports conversion problems through `did_emsg`;
+    // the caller's flag is restored whatever happens here.
+    let save_did_emsg = did_emsg.get();
+    did_emsg.set(0);
+    let mut arena = ARENA_EMPTY;
+    let dict = unsafe { vim_to_object(args.ptr(0), &raw mut arena, true).data.dict };
+    let mut tmp = CONTEXT_INIT;
+    let mut err = NO_ERROR;
+    unsafe { ctx_from_dict(dict, &raw mut tmp, &raw mut err) };
+    if err.type_0 != kErrorTypeNone {
+        // The message is whatever the API layer produced, so it keeps
+        // the variadic call rather than assuming UTF-8.
+        semsg_c!(c"%s".as_ptr(), err.msg);
+        unsafe { ctx_free(&raw mut tmp) };
+    } else {
+        unsafe { ctx_free(ctx) };
+        unsafe { *ctx = tmp };
+    }
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { api_clear_error(&raw mut err) };
+    did_emsg.set(save_did_emsg);
 }
 
 /// `ctxsize()` — how many contexts are on the stack.

@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::wrappers::{arg_copy, arg_string, check_arg};
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
@@ -66,68 +67,66 @@ const fn number_tv(n: varnumber_T) -> typval_T {
 unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
     // SAFETY: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
-    unsafe {
-        let mut error = false;
-        rettv.vval.v_number = 0;
-        // Seeded at the far end so the first item always wins. An empty
-        // container returns the 0 written above instead.
-        let mut n: varnumber_T = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
-        let better = |i: varnumber_T, n: varnumber_T| if domax { i > n } else { i < n };
-        let tv = &*tv;
-        match tv.v_type {
-            VAR_LIST => {
-                if tv_list_len(tv.vval.v_list) == 0 {
+    let mut error = false;
+    rettv.vval.v_number = 0;
+    // Seeded at the far end so the first item always wins. An empty
+    // container returns the 0 written above instead.
+    let mut n: varnumber_T = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
+    let better = |i: varnumber_T, n: varnumber_T| if domax { i > n } else { i < n };
+    let tv = &unsafe { *tv };
+    match tv.v_type {
+        VAR_LIST => {
+            if unsafe { tv_list_len(tv.vval.v_list) } == 0 {
+                return;
+            }
+            let mut li = unsafe { tv_list_first(tv.vval.v_list) };
+            while !li.is_null() {
+                let i = unsafe { tv_get_number_chk(&raw const (*li).li_tv, &raw mut error) };
+                if error {
                     return;
                 }
-                let mut li = tv_list_first(tv.vval.v_list);
-                while !li.is_null() {
-                    let i = tv_get_number_chk(&raw const (*li).li_tv, &raw mut error);
+                if better(i, n) {
+                    n = i;
+                }
+                li = unsafe { (*li).li_next };
+            }
+        }
+        VAR_DICT => {
+            if unsafe { tv_dict_len(tv.vval.v_dict) } == 0 {
+                return;
+            }
+            let ht = unsafe { &raw mut (*tv.vval.v_dict).dv_hashtab };
+            let mut todo = unsafe { (*ht).ht_used };
+            let mut hi = unsafe { (*ht).ht_array };
+            while todo != 0 {
+                let key = unsafe { (*hi).hi_key };
+                if !key.is_null() && !core::ptr::eq(key, &raw const hash_removed) {
+                    todo -= 1;
+                    let di = unsafe { key.offset(-DI_KEY_OFFSET) } as *mut dictitem_T;
+                    let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
                     if error {
                         return;
                     }
                     if better(i, n) {
                         n = i;
                     }
-                    li = (*li).li_next;
                 }
-            }
-            VAR_DICT => {
-                if tv_dict_len(tv.vval.v_dict) == 0 {
-                    return;
-                }
-                let ht = &raw mut (*tv.vval.v_dict).dv_hashtab;
-                let mut todo = (*ht).ht_used;
-                let mut hi = (*ht).ht_array;
-                while todo != 0 {
-                    let key = (*hi).hi_key;
-                    if !key.is_null() && !core::ptr::eq(key, &raw const hash_removed) {
-                        todo -= 1;
-                        let di = key.offset(-DI_KEY_OFFSET) as *mut dictitem_T;
-                        let i = tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error);
-                        if error {
-                            return;
-                        }
-                        if better(i, n) {
-                            n = i;
-                        }
-                    }
-                    hi = hi.add(1);
-                }
-            }
-            _ => {
-                semsg_c!(
-                    gettext(e_listdictarg.as_ptr()),
-                    if domax {
-                        c"max()".as_ptr()
-                    } else {
-                        c"min()".as_ptr()
-                    },
-                );
-                return;
+                hi = unsafe { hi.add(1) };
             }
         }
-        rettv.vval.v_number = n;
+        _ => {
+            semsg_c!(
+                unsafe { gettext(e_listdictarg.as_ptr()) },
+                if domax {
+                    c"max()".as_ptr()
+                } else {
+                    c"min()".as_ptr()
+                },
+            );
+            return;
+        }
     }
+    rettv.vval.v_number = n;
 }
 
 /// `max({expr})`.
@@ -194,22 +193,20 @@ unsafe fn fold_step(
 ) -> bool {
     // SAFETY: the caller's obligation. `argv` outlives the call, and
     // `rettv`'s old value moves into `argv[0]`.
-    unsafe {
-        let mut argv = [EMPTY_TV; 3];
-        argv[0] = *rettv;
-        argv[1] = item;
-        if cleanup.blank_rettv {
-            rettv.v_type = VAR_UNKNOWN;
-        }
-        let r = eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, rettv);
-        if cleanup.clear_acc {
-            tv_clear(&raw mut argv[0]);
-        }
-        if cleanup.clear_item {
-            tv_clear(&raw mut argv[1]);
-        }
-        r != FAIL && called_emsg.get() == called_emsg_start
+    let mut argv = [EMPTY_TV; 3];
+    argv[0] = *rettv;
+    argv[1] = item;
+    if cleanup.blank_rettv {
+        rettv.v_type = VAR_UNKNOWN;
     }
+    let r = unsafe { eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, rettv) };
+    if cleanup.clear_acc {
+        unsafe { tv_clear(&raw mut argv[0]) };
+    }
+    if cleanup.clear_item {
+        unsafe { tv_clear(&raw mut argv[1]) };
+    }
+    r != FAIL && called_emsg.get() == called_emsg_start
 }
 
 /// `reduce()` over a List.
@@ -219,38 +216,36 @@ unsafe fn fold_step(
 unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
-    unsafe {
-        let l = args.get(0).vval.v_list;
-        let called_emsg_start = called_emsg.get();
-        let (initial, mut li) = if args.has(2) {
-            (*args.get(2), tv_list_first(l))
-        } else {
-            if tv_list_len(l) == 0 {
-                semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
-                    c"List".as_ptr(),
-                );
-                return;
-            }
-            let first = tv_list_first(l);
-            ((*first).li_tv, (*first).li_next)
-        };
-        tv_copy(&raw const initial, rettv);
-        // A null List is `v:_null_list`: nothing to fold, and nothing to
-        // lock either.
-        if l.is_null() {
+    let l = unsafe { args.get(0).vval.v_list };
+    let called_emsg_start = called_emsg.get();
+    let (initial, mut li) = if args.has(2) {
+        (*args.get(2), unsafe { tv_list_first(l) })
+    } else {
+        if unsafe { tv_list_len(l) } == 0 {
+            semsg_c!(
+                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
+                c"List".as_ptr(),
+            );
             return;
         }
-        let prev_locked = tv_list_locked(l);
-        tv_list_set_lock(l, VarLock::Fixed);
-        while !li.is_null() {
-            if !fold_step(expr, rettv, (*li).li_tv, LIST_CLEANUP, called_emsg_start) {
-                break;
-            }
-            li = (*li).li_next;
-        }
-        tv_list_set_lock(l, prev_locked);
+        let first = unsafe { tv_list_first(l) };
+        (unsafe { (*first).li_tv }, unsafe { (*first).li_next })
+    };
+    unsafe { tv_copy(&raw const initial, rettv) };
+    // A null List is `v:_null_list`: nothing to fold, and nothing to
+    // lock either.
+    if l.is_null() {
+        return;
     }
+    let prev_locked = unsafe { tv_list_locked(l) };
+    unsafe { tv_list_set_lock(l, VarLock::Fixed) };
+    while !li.is_null() {
+        if !unsafe { fold_step(expr, rettv, (*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
+            break;
+        }
+        li = unsafe { (*li).li_next };
+    }
+    unsafe { tv_list_set_lock(l, prev_locked) };
 }
 
 /// `reduce()` over a String, one composed character at a time.
@@ -261,39 +256,39 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
-    unsafe {
-        let mut p = numbuf.string(args.ptr(0));
-        let called_emsg_start = called_emsg.get();
-        if !args.has(2) {
-            if *p as c_int == NUL {
-                semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
-                    c"String".as_ptr(),
-                );
-                return;
-            }
-            // With no initial value the first character is it.
-            let len = utfc_ptr2len(p);
-            *rettv = owned_str(p, len);
-            p = p.add(len as usize);
-        } else if tv_check_for_string_arg(args.ptr(0), 2) == FAIL {
+    let mut p = arg_string(&mut numbuf, args.get(0));
+    let called_emsg_start = called_emsg.get();
+    if !args.has(2) {
+        if unsafe { *p } as c_int == NUL {
+            semsg_c!(
+                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
+                c"String".as_ptr(),
+            );
             return;
-        } else {
-            tv_copy(args.ptr(2), rettv);
         }
-        while *p as c_int != NUL {
-            let len = utfc_ptr2len(p);
-            if !fold_step(
+        // With no initial value the first character is it.
+        let len = unsafe { utfc_ptr2len(p) };
+        *rettv = unsafe { owned_str(p, len) };
+        p = unsafe { p.add(len as usize) };
+    } else if check_arg(args, 2, tv_check_for_string_arg) == FAIL {
+        return;
+    } else {
+        arg_copy(args.get(2), rettv);
+    }
+    while unsafe { *p } as c_int != NUL {
+        let len = unsafe { utfc_ptr2len(p) };
+        if !unsafe {
+            fold_step(
                 expr,
                 rettv,
                 owned_str(p, len),
                 STRING_CLEANUP,
                 called_emsg_start,
-            ) {
-                break;
-            }
-            p = p.add(len as usize);
+            )
+        } {
+            break;
         }
+        p = unsafe { p.add(len as usize) };
     }
 }
 
@@ -304,37 +299,37 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
 unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
-    unsafe {
-        let b: *const blob_T = args.get(0).vval.v_blob;
-        let called_emsg_start = called_emsg.get();
-        let (initial, mut i) = if args.has(2) {
-            if tv_check_for_number_arg(args.ptr(0), 2) == FAIL {
-                return;
-            }
-            (*args.get(2), 0)
-        } else {
-            if tv_blob_len(b) == 0 {
-                semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
-                    c"Blob".as_ptr(),
-                );
-                return;
-            }
-            (number_tv(tv_blob_get(b, 0) as varnumber_T), 1)
-        };
-        tv_copy(&raw const initial, rettv);
-        while i < tv_blob_len(b) {
-            if !fold_step(
+    let b: *const blob_T = unsafe { args.get(0).vval.v_blob };
+    let called_emsg_start = called_emsg.get();
+    let (initial, mut i) = if args.has(2) {
+        if check_arg(args, 2, tv_check_for_number_arg) == FAIL {
+            return;
+        }
+        (*args.get(2), 0)
+    } else {
+        if unsafe { tv_blob_len(b) } == 0 {
+            semsg_c!(
+                unsafe { gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()) },
+                c"Blob".as_ptr(),
+            );
+            return;
+        }
+        (number_tv(unsafe { tv_blob_get(b, 0) } as varnumber_T), 1)
+    };
+    unsafe { tv_copy(&raw const initial, rettv) };
+    while i < unsafe { tv_blob_len(b) } {
+        if !unsafe {
+            fold_step(
                 expr,
                 rettv,
                 number_tv(tv_blob_get(b, i) as varnumber_T),
                 BLOB_CLEANUP,
                 called_emsg_start,
-            ) {
-                return;
-            }
-            i += 1;
+            )
+        } {
+            return;
         }
+        i += 1;
     }
 }
 
@@ -343,29 +338,27 @@ pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: everything read below is the frame's.
-    unsafe {
-        let ty = args.ty(0);
-        if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
-            emsg(gettext(e_string_list_or_blob_required.as_ptr()));
-            return;
-        }
-        // The callable is checked for emptiness here rather than by
-        // `eval_expr_typval`, so that an empty name reports E1132 instead of
-        // an "unknown function" for the empty string.
-        let func_name = match args.ty(1) {
-            VAR_FUNC => args.get(1).vval.v_string,
-            VAR_PARTIAL => partial_name(args.get(1).vval.v_partial),
-            _ => numbuf.string(args.ptr(1)),
-        };
-        if func_name.is_null() || *func_name as c_int == NUL {
-            emsg(gettext(e_missing_function_argument.as_ptr()));
-            return;
-        }
-        let expr = args.ptr(1);
-        match ty {
-            VAR_LIST => reduce_list(args, expr, rettv),
-            VAR_STRING => reduce_string(args, expr, rettv),
-            _ => reduce_blob(args, expr, rettv),
-        }
+    let ty = args.ty(0);
+    if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
+        unsafe { emsg(gettext(e_string_list_or_blob_required.as_ptr())) };
+        return;
+    }
+    // The callable is checked for emptiness here rather than by
+    // `eval_expr_typval`, so that an empty name reports E1132 instead of
+    // an "unknown function" for the empty string.
+    let func_name = match args.ty(1) {
+        VAR_FUNC => unsafe { args.get(1).vval.v_string },
+        VAR_PARTIAL => unsafe { partial_name(args.get(1).vval.v_partial) },
+        _ => arg_string(&mut numbuf, args.get(1)),
+    };
+    if func_name.is_null() || unsafe { *func_name } as c_int == NUL {
+        unsafe { emsg(gettext(e_missing_function_argument.as_ptr())) };
+        return;
+    }
+    let expr = args.ptr(1);
+    match ty {
+        VAR_LIST => unsafe { reduce_list(args, expr, rettv) },
+        VAR_STRING => unsafe { reduce_string(args, expr, rettv) },
+        _ => unsafe { reduce_blob(args, expr, rettv) },
     }
 }

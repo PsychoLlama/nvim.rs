@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
+use super::wrappers::{arg_string, arg_string_chk, blob_alloc_ret, list_alloc_ret};
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
 use crate::api::private::helpers::api_free_string;
 use crate::eval::decode::{
@@ -12,8 +13,7 @@ use crate::eval::encode::{
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
 use crate::eval::typval::{
-    NumBuf, tv_blob_alloc_ret, tv_blob_len, tv_list_alloc_ret, tv_list_append_owned_tv,
-    tv_list_first, tv_list_len,
+    NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_first, tv_list_len,
 };
 use crate::main::{e_listarg, e_listblobarg};
 use crate::memory::{alloc_block, free_block, strequal, xfree};
@@ -44,43 +44,43 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: `tofree` owns whatever the List conversion allocated and is
     // released on every path; `s` points into it or into `numbuf`, both of
     // which outlive the parse.
-    unsafe {
-        let mut numbuf = NumBuf::new();
-        let mut tofree: *mut c_char = ptr::null_mut();
-        let mut len: usize = 0;
-        let s: *const c_char = if args.ty(0) == VAR_LIST {
-            if !encode_vim_list_to_buf(args.get(0).vval.v_list, &raw mut len, &raw mut tofree) {
-                semsg!("E474: Failed to convert list to string");
-                return;
-            }
-            if tofree.is_null() {
-                debug_assert!(len == 0);
-                c"".as_ptr()
-            } else {
-                tofree
-            }
-        } else {
-            let s = numbuf.string_chk(args.ptr(0));
-            if s.is_null() {
-                return;
-            }
-            len = strlen(s);
-            s
-        };
-        if json_decode_string(s, len, rettv) == FAIL {
-            // The text that failed to parse is arbitrary user bytes, so the
-            // message keeps the variadic call and its `%.*s`.
-            semsg_c!(
-                gettext(c"E474: Failed to parse %.*s".as_ptr()),
-                len as c_int,
-                s,
-            );
-            rettv.v_type = VAR_NUMBER;
-            rettv.vval.v_number = 0;
+    let mut numbuf = NumBuf::new();
+    let mut tofree: *mut c_char = ptr::null_mut();
+    let mut len: usize = 0;
+    let s: *const c_char = if args.ty(0) == VAR_LIST {
+        if !unsafe {
+            encode_vim_list_to_buf(args.get(0).vval.v_list, &raw mut len, &raw mut tofree)
+        } {
+            semsg!("E474: Failed to convert list to string");
+            return;
         }
-        debug_assert!(rettv.v_type != VAR_UNKNOWN);
-        xfree(tofree as *mut c_void);
+        if tofree.is_null() {
+            debug_assert!(len == 0);
+            c"".as_ptr()
+        } else {
+            tofree
+        }
+    } else {
+        let s = arg_string_chk(&mut numbuf, args.get(0));
+        if s.is_null() {
+            return;
+        }
+        len = unsafe { strlen(s) };
+        s
+    };
+    if unsafe { json_decode_string(s, len, rettv) } == FAIL {
+        // The text that failed to parse is arbitrary user bytes, so the
+        // message keeps the variadic call and its `%.*s`.
+        semsg_c!(
+            unsafe { gettext(c"E474: Failed to parse %.*s".as_ptr()) },
+            len as c_int,
+            s,
+        );
+        rettv.v_type = VAR_NUMBER;
+        rettv.vval.v_number = 0;
     }
+    debug_assert!(rettv.v_type != VAR_UNKNOWN);
+    unsafe { xfree(tofree as *mut c_void) };
 }
 
 /// `json_encode({expr})`.
@@ -100,44 +100,47 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the packer owns its buffer until `packer_take_string` hands
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
-    unsafe {
-        if args.ty(0) != VAR_LIST {
-            semsg_c!(gettext(e_listarg.as_ptr()), c"msgpackdump()".as_ptr(),);
-            return;
-        }
-        let mut packer = packer_string_buffer();
-        // The per-item label the encoder names in its own error messages.
-        // One buffer, reused, as the C's 189-byte stack array was.
-        let mut label = String::with_capacity(64);
-        let mut li = tv_list_first(args.get(0).vval.v_list);
-        let mut idx: c_int = 0;
-        while !li.is_null() {
-            label.clear();
-            let _ = write!(label, "msgpackdump() argument, index {idx}\0");
-            idx += 1;
-            if encode_vim_to_msgpack(
+    if args.ty(0) != VAR_LIST {
+        semsg_c!(
+            unsafe { gettext(e_listarg.as_ptr()) },
+            c"msgpackdump()".as_ptr(),
+        );
+        return;
+    }
+    let mut packer = packer_string_buffer();
+    // The per-item label the encoder names in its own error messages.
+    // One buffer, reused, as the C's 189-byte stack array was.
+    let mut label = String::with_capacity(64);
+    let mut li = unsafe { tv_list_first(args.get(0).vval.v_list) };
+    let mut idx: c_int = 0;
+    while !li.is_null() {
+        label.clear();
+        let _ = write!(label, "msgpackdump() argument, index {idx}\0");
+        idx += 1;
+        if unsafe {
+            encode_vim_to_msgpack(
                 &raw mut packer,
                 &raw mut (*li).li_tv,
                 label.as_ptr() as *const c_char,
-            ) == 0
-            {
-                break;
-            }
-            li = (*li).li_next;
+            )
+        } == 0
+        {
+            break;
         }
-        let data = packer_take_string(&packer);
-        if args.has(1) && strequal(numbuf.string(args.ptr(1)), c"B".as_ptr()) {
-            // The Blob adopts the packer's allocation as-is, capacity and
-            // all; nothing copies.
-            let b: *mut blob_T = tv_blob_alloc_ret(rettv);
-            (*b).bv_ga.ga_data = data.data() as *mut c_void;
-            (*b).bv_ga.ga_len = data.len() as c_int;
-            (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int;
-        } else {
-            let l = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-            encode_list_write(l as *mut c_void, data.data(), data.len());
-            api_free_string(data);
-        }
+        li = unsafe { (*li).li_next };
+    }
+    let data = packer_take_string(&packer);
+    if args.has(1) && unsafe { strequal(arg_string(&mut numbuf, args.get(1)), c"B".as_ptr()) } {
+        // The Blob adopts the packer's allocation as-is, capacity and
+        // all; nothing copies.
+        let b: *mut blob_T = blob_alloc_ret(rettv);
+        unsafe { (*b).bv_ga.ga_data = data.data() as *mut c_void };
+        unsafe { (*b).bv_ga.ga_len = data.len() as c_int };
+        unsafe { (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int };
+    } else {
+        let l = list_alloc_ret(rettv, kListLenMayKnow as isize);
+        unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
+        unsafe { api_free_string(data) };
     }
 }
 
@@ -161,64 +164,65 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
     // SAFETY: the caller's obligation. `buf` is an arena block owned for the
     // whole walk and freed at the end; `parser` is initialised before use
     // and its error state released before the last message.
-    unsafe {
-        if tv_list_len(list) == 0 {
-            return;
-        }
-        if (*tv_list_first(list)).li_tv.v_type != VAR_STRING {
-            semsg!("E475: Invalid argument: List item is not a string");
-            return;
-        }
-        let mut lrstate = encode_init_lrstate(list);
-        let buf = alloc_block() as *mut c_char;
-        let mut buf_size: usize = 0;
-        let mut cur_item = EMPTY_TV;
-        let mut parser: mpack_parser_t = core::mem::zeroed();
-        mpack_parser_init(&raw mut parser, 0);
-        parser.data.p = &raw mut cur_item as *mut c_void;
+    if unsafe { tv_list_len(list) } == 0 {
+        return;
+    }
+    if unsafe { (*tv_list_first(list)).li_tv.v_type } != VAR_STRING {
+        semsg!("E475: Invalid argument: List item is not a string");
+        return;
+    }
+    let mut lrstate = unsafe { encode_init_lrstate(list) };
+    let buf = unsafe { alloc_block() } as *mut c_char;
+    let mut buf_size: usize = 0;
+    let mut cur_item = EMPTY_TV;
+    let mut parser: mpack_parser_t = unsafe { core::mem::zeroed() };
+    unsafe { mpack_parser_init(&raw mut parser, 0) };
+    parser.data.p = &raw mut cur_item as *mut c_void;
 
-        let mut status = MPACK_OK as c_int;
-        loop {
-            let mut read_bytes: usize = 0;
-            let rlret = encode_read_from_list(
+    let mut status = MPACK_OK as c_int;
+    loop {
+        let mut read_bytes: usize = 0;
+        let rlret = unsafe {
+            encode_read_from_list(
                 &raw mut lrstate,
                 buf.add(buf_size),
                 (ARENA_BLOCK_SIZE as usize) - buf_size,
                 &raw mut read_bytes,
-            );
-            if rlret == FAIL {
-                semsg!("E475: Invalid argument: List item is not a string");
-                break;
-            }
-            buf_size += read_bytes;
-            let mut cursor: *const c_char = buf;
-            while buf_size != 0 {
-                status = mpack_parse_typval(&raw mut parser, &raw mut cursor, &raw mut buf_size);
-                if status != MPACK_OK as c_int {
-                    break;
-                }
-                tv_list_append_owned_tv(ret_list, cur_item);
-                cur_item.v_type = VAR_UNKNOWN;
-            }
-            if rlret == OK {
-                break;
-            }
-            if status == MPACK_EOF as c_int {
-                // Shuffle the partial object back to the front so the next
-                // read tops it up.
-                if buf_size != 0 && cursor > buf as *const c_char {
-                    memmove(buf as *mut c_void, cursor as *const c_void, buf_size);
-                }
-            } else if status != MPACK_OK as c_int {
-                break;
-            }
+            )
+        };
+        if rlret == FAIL {
+            semsg!("E475: Invalid argument: List item is not a string");
+            break;
         }
-        if status != MPACK_OK as c_int {
-            typval_parser_error_free(&raw mut parser);
-            emsg_mpack_error(status);
+        buf_size += read_bytes;
+        let mut cursor: *const c_char = buf;
+        while buf_size != 0 {
+            status =
+                unsafe { mpack_parse_typval(&raw mut parser, &raw mut cursor, &raw mut buf_size) };
+            if status != MPACK_OK as c_int {
+                break;
+            }
+            unsafe { tv_list_append_owned_tv(ret_list, cur_item) };
+            cur_item.v_type = VAR_UNKNOWN;
         }
-        free_block(buf as *mut c_void);
+        if rlret == OK {
+            break;
+        }
+        if status == MPACK_EOF as c_int {
+            // Shuffle the partial object back to the front so the next
+            // read tops it up.
+            if buf_size != 0 && cursor > buf as *const c_char {
+                unsafe { memmove(buf as *mut c_void, cursor as *const c_void, buf_size) };
+            }
+        } else if status != MPACK_OK as c_int {
+            break;
+        }
     }
+    if status != MPACK_OK as c_int {
+        unsafe { typval_parser_error_free(&raw mut parser) };
+        emsg_mpack_error(status);
+    }
+    unsafe { free_block(buf as *mut c_void) };
 }
 
 /// Unpack a Blob, which is already one contiguous buffer.
@@ -228,22 +232,20 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
 unsafe fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mut list_T) {
     // SAFETY: the caller's obligation; `unpack_typval` advances the cursor
     // and the remaining count together.
-    unsafe {
-        let len = tv_blob_len(blob);
-        if len == 0 {
+    let len = unsafe { tv_blob_len(blob) };
+    if len == 0 {
+        return;
+    }
+    let mut data = unsafe { (*blob).bv_ga.ga_data } as *const c_char;
+    let mut remaining = len as usize;
+    while remaining != 0 {
+        let mut tv = EMPTY_TV;
+        let status = unsafe { unpack_typval(&raw mut data, &raw mut remaining, &raw mut tv) };
+        if status != MPACK_OK as c_int {
+            emsg_mpack_error(status);
             return;
         }
-        let mut data = (*blob).bv_ga.ga_data as *const c_char;
-        let mut remaining = len as usize;
-        while remaining != 0 {
-            let mut tv = EMPTY_TV;
-            let status = unpack_typval(&raw mut data, &raw mut remaining, &raw mut tv);
-            if status != MPACK_OK as c_int {
-                emsg_mpack_error(status);
-                return;
-            }
-            tv_list_append_owned_tv(ret_list, tv);
-        }
+        unsafe { tv_list_append_owned_tv(ret_list, tv) };
     }
 }
 
@@ -252,16 +254,17 @@ pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the argument and the freshly allocated result list are both
     // live for the call.
-    unsafe {
-        if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
-            semsg_c!(gettext(e_listblobarg.as_ptr()), c"msgpackparse()".as_ptr(),);
-            return;
-        }
-        let ret_list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        if args.ty(0) == VAR_LIST {
-            msgpackparse_unpack_list(args.get(0).vval.v_list, ret_list);
-        } else {
-            msgpackparse_unpack_blob(args.get(0).vval.v_blob, ret_list);
-        }
+    if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
+        semsg_c!(
+            unsafe { gettext(e_listblobarg.as_ptr()) },
+            c"msgpackparse()".as_ptr(),
+        );
+        return;
+    }
+    let ret_list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    if args.ty(0) == VAR_LIST {
+        unsafe { msgpackparse_unpack_list(args.get(0).vval.v_list, ret_list) };
+    } else {
+        unsafe { msgpackparse_unpack_blob(args.get(0).vval.v_blob, ret_list) };
     }
 }

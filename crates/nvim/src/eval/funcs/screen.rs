@@ -3,11 +3,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-
-use crate::eval::typval::{
-    NumBuf, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_list_alloc_ret,
-    tv_list_append_number, tv_list_append_string, tv_list_set_ret,
+use super::wrappers::{
+    arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, list_set_ret,
 };
+
+use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_append_string};
 use crate::grid::{
     GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
@@ -56,22 +56,18 @@ impl Cell {
     unsafe fn at(args: Args) -> Cell {
         // SAFETY: the caller's obligation; the compositor always answers
         // with a live grid.
-        unsafe {
-            // A coercion failure answers 0, which the -1 turns into an
-            // out-of-range coordinate. The subtraction wraps because the C's
-            // does: a `{row}` of INT_MIN is a silly argument, not a crash.
-            let mut row =
-                (tv_get_number_chk(args.ptr(0), ptr::null_mut()) as c_int).wrapping_sub(1);
-            let mut col =
-                (tv_get_number_chk(args.ptr(1), ptr::null_mut()) as c_int).wrapping_sub(1);
-            // Legacy tests read printed messages back with screenchar(), so
-            // the pending message scroll has to reach the grid first.
-            msg_scroll_flush();
-            let grid = GridRef::new(ui_comp_get_grid_at_coord(row, col));
-            row -= grid.comp_row;
-            col -= grid.comp_col;
-            Cell { grid, row, col }
-        }
+        // A coercion failure answers 0, which the -1 turns into an
+        // out-of-range coordinate. The subtraction wraps because the C's
+        // does: a `{row}` of INT_MIN is a silly argument, not a crash.
+        let mut row = (arg_number_chk(args.get(0), None) as c_int).wrapping_sub(1);
+        let mut col = (arg_number_chk(args.get(1), None) as c_int).wrapping_sub(1);
+        // Legacy tests read printed messages back with screenchar(), so
+        // the pending message scroll has to reach the grid first.
+        unsafe { msg_scroll_flush() };
+        let grid = unsafe { GridRef::new(ui_comp_get_grid_at_coord(row, col)) };
+        row -= grid.comp_row;
+        col -= grid.comp_col;
+        Cell { grid, row, col }
     }
 
     /// Whether the cell is on the grid it was rebased onto.
@@ -108,15 +104,13 @@ pub unsafe fn f_screenattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; the attribute row is as long as the grid is
     // wide, which the bounds check has established.
-    unsafe {
-        let cell = Cell::at(args);
-        rettv.vval.v_number = if cell.on_grid() {
-            let offset = cell.grid.cell_offset(cell.row, cell.col);
-            cell.grid.attr_at(offset) as c_int
-        } else {
-            -1
-        } as varnumber_T;
-    }
+    let cell = unsafe { Cell::at(args) };
+    rettv.vval.v_number = if cell.on_grid() {
+        let offset = cell.grid.cell_offset(cell.row, cell.col);
+        cell.grid.attr_at(offset) as c_int
+    } else {
+        -1
+    } as varnumber_T;
 }
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
@@ -124,14 +118,12 @@ pub unsafe fn f_screenattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 pub unsafe fn f_screenchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe {
-        let cell = Cell::at(args);
-        rettv.vval.v_number = if cell.on_grid() {
-            schar_get_first_codepoint(cell.schar())
-        } else {
-            -1
-        } as varnumber_T;
-    }
+    let cell = unsafe { Cell::at(args) };
+    rettv.vval.v_number = if cell.on_grid() {
+        unsafe { schar_get_first_codepoint(cell.schar()) }
+    } else {
+        -1
+    } as varnumber_T;
 }
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
@@ -139,22 +131,20 @@ pub unsafe fn f_screenchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 pub unsafe fn f_screenchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `rettv` is the cleared return value.
-    unsafe {
-        let cell = Cell::at(args);
-        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        if !cell.on_grid() {
-            return;
-        }
-        let buf = cell.text();
-        // The C walks with a do-while, so a cell whose text is empty still
-        // reports one codepoint.
-        let mut i = 0usize;
-        loop {
-            tv_list_append_number(list, utf_ptr2char(buf.as_ptr().add(i)) as varnumber_T);
-            i += utf_ptr2len(buf.as_ptr().add(i)) as usize;
-            if buf[i] as c_int == NUL {
-                break;
-            }
+    let cell = unsafe { Cell::at(args) };
+    let list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    if !cell.on_grid() {
+        return;
+    }
+    let buf = unsafe { cell.text() };
+    // The C walks with a do-while, so a cell whose text is empty still
+    // reports one codepoint.
+    let mut i = 0usize;
+    loop {
+        unsafe { tv_list_append_number(list, utf_ptr2char(buf.as_ptr().add(i)) as varnumber_T) };
+        i += unsafe { utf_ptr2len(buf.as_ptr().add(i)) } as usize;
+        if buf[i] as c_int == NUL {
+            break;
         }
     }
 }
@@ -177,11 +167,9 @@ pub unsafe fn f_screenstring(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the frame is live and `rettv` now owns the duplicated string.
-    unsafe {
-        let cell = Cell::at(args);
-        if cell.on_grid() {
-            rettv.vval.v_string = xstrdup(cell.text().as_ptr());
-        }
+    let cell = unsafe { Cell::at(args) };
+    if cell.on_grid() {
+        rettv.vval.v_string = unsafe { xstrdup(cell.text().as_ptr()) };
     }
 }
 
@@ -190,7 +178,8 @@ pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { syn_name2id(numbuf.string(args.ptr(0))) } as varnumber_T;
+    rettv.vval.v_number =
+        unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
 }
 
 /// `hlexists({name})` — whether the group is defined.
@@ -198,7 +187,8 @@ pub unsafe fn f_hlexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { highlight_exists(numbuf.string(args.ptr(0))) } as varnumber_T;
+    rettv.vval.v_number =
+        unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -266,38 +256,36 @@ pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the frame is live; `what` is the string an argument owns and
     // outlives the `highlight_color` call, and `modebuf` outlives the string
     // `tv_get_string_buf` may park in it.
-    unsafe {
-        let id = tv_get_number(args.ptr(0)) as c_int;
-        let what = numbuf.string(args.ptr(1));
+    let id = arg_number(args.get(0)) as c_int;
+    let what = arg_string(&mut numbuf, args.get(1));
 
-        // "cterm" or "gui"; anything else, including an absent argument,
-        // means whatever the attached UI is.
-        let modec = if args.has(2) {
-            let mut modebuf = [0 as c_char; NUMBUFLEN];
-            let mode = tv_get_string_buf(args.ptr(2), modebuf.as_mut_ptr());
-            match (*mode as u8).to_ascii_lowercase() {
-                c @ (b'c' | b'g') => c as c_int,
-                _ => 0,
-            }
-        } else if ui_rgb_attached() {
-            'g' as c_int
-        } else {
-            'c' as c_int
-        };
+    // "cterm" or "gui"; anything else, including an absent argument,
+    // means whatever the attached UI is.
+    let modec = if args.has(2) {
+        let mut modebuf = NumBuf::new();
+        let mode = arg_string(&mut modebuf, args.get(2));
+        match (unsafe { *mode } as u8).to_ascii_lowercase() {
+            c @ (b'c' | b'g') => c as c_int,
+            _ => 0,
+        }
+    } else if ui_rgb_attached() {
+        'g' as c_int
+    } else {
+        'c' as c_int
+    };
 
-        let p = match attr_selector(CStr::from_ptr(what).to_bytes()) {
-            Some(Attr::Color) => highlight_color(id, what, modec, &mut color),
-            Some(Attr::Name) => get_highlight_name_ext(ptr::null_mut(), id - 1, false),
-            Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
-            None => ptr::null(),
-        };
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = if p.is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup(p)
-        };
-    }
+    let p = match attr_selector(unsafe { CStr::from_ptr(what) }.to_bytes()) {
+        Some(Attr::Color) => unsafe { highlight_color(id, what, modec, &mut color) },
+        Some(Attr::Name) => unsafe { get_highlight_name_ext(ptr::null_mut(), id - 1, false) },
+        Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
+        None => ptr::null(),
+    };
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = if p.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { xstrdup(p) }
+    };
 }
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
@@ -306,34 +294,34 @@ pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live, and `curbuf`/`curwin` are live for the
     // whole call.
-    unsafe {
-        let lnum = tv_get_lnum(args.ptr(0));
-        // Wraps because the C's does; `col` is only used as a range test.
-        let col = (tv_get_number(args.ptr(1)) as colnr_T).wrapping_sub(1);
-        let mut transerr = false;
-        let trans = tv_get_number_chk(args.ptr(2), &raw mut transerr) as c_int;
+    let lnum = arg_lnum(args.get(0));
+    // Wraps because the C's does; `col` is only used as a range test.
+    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
+    let mut transerr = false;
+    let trans = arg_number_chk(args.get(2), Some(&mut transerr)) as c_int;
 
-        let mut id = 0;
-        if !transerr
-            && lnum >= 1
-            && lnum <= (*curbuf.get()).b_ml.ml_line_count
-            && col >= 0
-            && col < ml_get_len(lnum)
-        {
-            id = syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), 0);
-        }
-        rettv.vval.v_number = id as varnumber_T;
+    let mut id = 0;
+    if !transerr
+        && lnum >= 1
+        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        && col >= 0
+        && col < ml_get_len(lnum)
+    {
+        id = unsafe { syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), 0) };
     }
+    rettv.vval.v_number = id as varnumber_T;
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
 pub unsafe fn f_syn_id_trans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe {
-        let id = tv_get_number(args.ptr(0)) as c_int;
-        rettv.vval.v_number = if id > 0 { syn_get_final_id(id) } else { 0 } as varnumber_T;
-    }
+    let id = arg_number(args.get(0)) as c_int;
+    rettv.vval.v_number = if id > 0 {
+        unsafe { syn_get_final_id(id) }
+    } else {
+        0
+    } as varnumber_T;
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
@@ -344,50 +332,52 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let mut text = [0 as c_char; NUMBUFLEN];
     // SAFETY: the frame is live; `curbuf`/`curwin` are live for the whole
     // call and `text` outlives the list it is copied into.
-    unsafe {
-        // Cleared first: an out-of-range position answers an empty List,
-        // not a three-item one.
-        tv_list_set_ret(rettv, ptr::null_mut());
-        let lnum = tv_get_lnum(args.ptr(0));
-        // Wraps because the C's does.
-        let col = (tv_get_number(args.ptr(1)) as colnr_T).wrapping_sub(1);
+    // Cleared first: an out-of-range position answers an empty List,
+    // not a three-item one.
+    list_set_ret(rettv, ptr::null_mut());
+    let lnum = arg_lnum(args.get(0));
+    // Wraps because the C's does.
+    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
 
-        // Note the `<=`: unlike synID(), the position one past the end of
-        // the line is in range here.
-        if lnum >= 1
-            && lnum <= (*curbuf.get()).b_ml.ml_line_count
-            && col >= 0
-            && col <= ml_get_len(lnum)
-            && (*curwin.get()).w_onebuf_opt.wo_cole > 0
+    // Note the `<=`: unlike synID(), the position one past the end of
+    // the line is in range here.
+    if lnum >= 1
+        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        && col >= 0
+        && col <= ml_get_len(lnum)
+        && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } > 0
+    {
+        // Run the syntax engine for its side effect: `get_syntax_info`
+        // reports on the position it last looked at.
+        unsafe { syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 0) };
+        syntax_flags = unsafe { get_syntax_info(&raw mut matchid) };
+        if syntax_flags.has(SynFlags::CONCEAL)
+            && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } < 3
         {
-            // Run the syntax engine for its side effect: `get_syntax_info`
-            // reports on the position it last looked at.
-            syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 0);
-            syntax_flags = get_syntax_info(&raw mut matchid);
-            if syntax_flags.has(SynFlags::CONCEAL) && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
-                let mut cchar = schar_from_char(syn_get_sub_char());
-                // At 'conceallevel' 1 a group with no `cchar` falls back to
-                // 'listchars' "conceal", and to a space if that is unset.
-                if cchar == NUL as schar_T && (*curwin.get()).w_onebuf_opt.wo_cole == 1 {
-                    cchar = match (*curwin.get()).w_p_lcs_chars.conceal {
-                        c if c == NUL as schar_T => ' ' as schar_T,
-                        c => c,
-                    };
-                }
-                if cchar != NUL as schar_T {
-                    schar_get(text.as_mut_ptr(), cchar);
-                }
+            let mut cchar = schar_from_char(unsafe { syn_get_sub_char() });
+            // At 'conceallevel' 1 a group with no `cchar` falls back to
+            // 'listchars' "conceal", and to a space if that is unset.
+            if cchar == NUL as schar_T && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } == 1 {
+                cchar = match unsafe { (*curwin.get()).w_p_lcs_chars.conceal } {
+                    c if c == NUL as schar_T => ' ' as schar_T,
+                    c => c,
+                };
+            }
+            if cchar != NUL as schar_T {
+                unsafe { schar_get(text.as_mut_ptr(), cchar) };
             }
         }
+    }
 
-        let list = tv_list_alloc_ret(rettv, 3);
+    let list = list_alloc_ret(rettv, 3);
+    unsafe {
         tv_list_append_number(
             list,
             (syntax_flags.has(SynFlags::CONCEAL)) as c_int as varnumber_T,
-        );
-        tv_list_append_string(list, text.as_ptr(), -1);
-        tv_list_append_number(list, matchid as varnumber_T);
-    }
+        )
+    };
+    unsafe { tv_list_append_string(list, text.as_ptr(), -1) };
+    unsafe { tv_list_append_number(list, matchid as varnumber_T) };
 }
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
@@ -396,29 +386,27 @@ pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `curbuf`/`curwin` are live for the whole
     // call.
-    unsafe {
-        // An out-of-range position answers an empty List, not a List of no
-        // items.
-        tv_list_set_ret(rettv, ptr::null_mut());
-        let lnum = tv_get_lnum(args.ptr(0));
-        // Wraps because the C's does.
-        let col = (tv_get_number(args.ptr(1)) as colnr_T).wrapping_sub(1);
+    // An out-of-range position answers an empty List, not a List of no
+    // items.
+    list_set_ret(rettv, ptr::null_mut());
+    let lnum = arg_lnum(args.get(0));
+    // Wraps because the C's does.
+    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
 
-        if lnum >= 1
-            && lnum <= (*curbuf.get()).b_ml.ml_line_count
-            && col >= 0
-            && col <= ml_get_len(lnum)
-        {
-            let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-            // Run the syntax engine, keeping the stack this time.
-            syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 1);
-            for i in 0.. {
-                let id = syn_get_stack_item(i);
-                if id < 0 {
-                    break;
-                }
-                tv_list_append_number(list, id as varnumber_T);
+    if lnum >= 1
+        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        && col >= 0
+        && col <= ml_get_len(lnum)
+    {
+        let list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+        // Run the syntax engine, keeping the stack this time.
+        unsafe { syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 1) };
+        for i in 0.. {
+            let id = unsafe { syn_get_stack_item(i) };
+            if id < 0 {
+                break;
             }
+            unsafe { tv_list_append_number(list, id as varnumber_T) };
         }
     }
 }

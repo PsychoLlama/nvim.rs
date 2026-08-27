@@ -4,11 +4,11 @@
 
 use super::VARNUMBER_MAX;
 use super::args::{Args, frame};
-use super::wrappers::tv_get_float_chk;
+use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
 use crate::eval::typval::{
-    NumBuf, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number, tv_list_find, tv_list_len,
+    NumBuf, tv_list_alloc_ret, tv_list_append_number, tv_list_find, tv_list_len,
 };
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
@@ -36,7 +36,7 @@ pub unsafe fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     let mut error = false;
     // SAFETY: `args.ptr(0)` is a live typval; the callee reports through
     // `error` rather than returning a failure.
-    let n = unsafe { tv_get_number_chk(args.ptr(0), &raw mut error) };
+    let n = arg_number_chk(args.get(0), Some(&mut error));
     rettv.vval.v_number = if error {
         -1
     } else if n > 0 {
@@ -76,7 +76,7 @@ pub unsafe fn f_invert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 fn number(args: Args<'_>, i: usize) -> varnumber_T {
     // SAFETY: `args.ptr(i)` is a live typval; a null error pointer is the
     // documented "report and return 0" mode.
-    unsafe { tv_get_number_chk(args.ptr(i), ptr::null_mut()) }
+    arg_number_chk(args.get(i), None)
 }
 
 /// The two-argument float builtins. Both arguments are read left to right
@@ -302,25 +302,28 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // format string can only carry UTF-8.
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), numbuf.string(args.ptr(0)),) };
+            unsafe {
+                semsg_c!(
+                    gettext(e_invarg2.as_ptr()),
+                    arg_string(&mut numbuf, args.get(0)),
+                )
+            };
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;
         };
         // SAFETY: `seed_list` proved all four items are live Numbers.
-        unsafe {
-            let mut state = [
-                (*seed[0]).vval.v_number as u32,
-                (*seed[1]).vval.v_number as u32,
-                (*seed[2]).vval.v_number as u32,
-                (*seed[3]).vval.v_number as u32,
-            ];
-            let result = xoshiro128starstar(&mut state);
-            for (item, word) in seed.iter().zip(state) {
-                (**item).vval.v_number = word as varnumber_T;
-            }
-            result
+        let mut state = [
+            unsafe { (*seed[0]).vval.v_number } as u32,
+            unsafe { (*seed[1]).vval.v_number } as u32,
+            unsafe { (*seed[2]).vval.v_number } as u32,
+            unsafe { (*seed[3]).vval.v_number } as u32,
+        ];
+        let result = xoshiro128starstar(&mut state);
+        for (item, word) in seed.iter().zip(state) {
+            unsafe { (**item).vval.v_number = word as varnumber_T };
         }
+        result
     };
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = result as varnumber_T;
@@ -358,11 +361,11 @@ fn seed_list(tv: &typval_T) -> Option<[*mut typval_T; 4]> {
 pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `rettv` is the dispatcher's cleared return value.
-    unsafe { tv_list_alloc_ret(rettv, 4) };
+    list_alloc_ret(rettv, 4);
     let mut x = if args.has(0) {
         let mut error = false;
         // SAFETY: `args.ptr(0)` is a live typval.
-        let n = unsafe { tv_get_number_chk(args.ptr(0), &raw mut error) };
+        let n = arg_number_chk(args.get(0), Some(&mut error));
         if error {
             // The list stays empty, as upstream leaves it.
             return;
@@ -381,17 +384,16 @@ pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut error = false;
-    // SAFETY: each `args.ptr(i)` is a live typval. The errors accumulate
-    // into one flag, so every argument is still read — matching upstream,
-    // which reports each bad argument in turn.
-    let (mut start, end, stride) = unsafe {
-        let first = tv_get_number_chk(args.ptr(0), &raw mut error);
+    // The errors accumulate into one flag, so every argument is still read —
+    // matching upstream, which reports each bad argument in turn.
+    let (mut start, end, stride) = {
+        let first = arg_number_chk(args.get(0), Some(&mut error));
         if !args.has(1) {
             (0, first.wrapping_sub(1), 1)
         } else {
-            let end = tv_get_number_chk(args.ptr(1), &raw mut error);
+            let end = arg_number_chk(args.get(1), Some(&mut error));
             let stride = if args.has(2) {
-                tv_get_number_chk(args.ptr(2), &raw mut error)
+                arg_number_chk(args.get(2), Some(&mut error))
             } else {
                 1
             };
@@ -450,18 +452,16 @@ pub unsafe fn f_str2float(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: `args.ptr(0)` is a live typval; `tv_get_string` hands back a
     // NUL-terminated buffer that outlives this call, and `skipwhite` only
     // walks forward over it.
-    unsafe {
-        let mut p = skipwhite(numbuf.string(args.ptr(0)));
-        // Only one sign is consumed, and the whitespace skip after it is
-        // what makes `"- 1"` parse as -1.
-        let negate = *p == b'-' as c_char;
-        if *p == b'+' as c_char || *p == b'-' as c_char {
-            p = skipwhite(p.add(1));
-        }
-        string2float(p, &raw mut rettv.vval.v_float);
-        if negate {
-            rettv.vval.v_float = -rettv.vval.v_float;
-        }
+    let mut p = unsafe { skipwhite(arg_string(&mut numbuf, args.get(0))) };
+    // Only one sign is consumed, and the whitespace skip after it is
+    // what makes `"- 1"` parse as -1.
+    let negate = unsafe { *p } == b'-' as c_char;
+    if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
+        p = unsafe { skipwhite(p.add(1)) };
+    }
+    unsafe { string2float(p, &raw mut rettv.vval.v_float) };
+    if negate {
+        rettv.vval.v_float = -unsafe { rettv.vval.v_float };
     }
     rettv.v_type = VAR_FLOAT;
 }

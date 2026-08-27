@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
+use super::wrappers::{arg_number, arg_number_chk, arg_string, arg_string_chk};
 use super::{
     SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
 };
@@ -11,9 +12,7 @@ use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
-use crate::eval::typval::{
-    NumBuf, tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_list_len,
-};
+use crate::eval::typval::{NumBuf, tv_list_len};
 use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
@@ -56,8 +55,8 @@ const DIALOG_TYPES: [(u8, c_int); 5] = [
 pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut buttons_buf = [0 as c_char; NUMBUFLEN];
-    let mut type_buf = [0 as c_char; NUMBUFLEN];
+    let mut buttons_buf = NumBuf::new();
+    let mut type_buf = NumBuf::new();
     let mut buttons = ptr::null::<c_char>();
     let mut default = 1;
     let mut kind = VIM_GENERIC as c_int;
@@ -66,45 +65,43 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // SAFETY: the frame is live; the two scratch buffers outlive the
     // strings `tv_get_string_buf_chk` may park in them and the dialog runs
     // before they go out of scope.
-    unsafe {
-        let message = numbuf.string_chk(args.ptr(0));
-        if message.is_null() {
+    let message = arg_string_chk(&mut numbuf, args.get(0));
+    if message.is_null() {
+        error = true;
+    }
+    // Each optional argument is only read when the one before it was
+    // supplied, and a coercion failure anywhere cancels the dialog --
+    // but not the rest of the parse.
+    if args.has(1) {
+        buttons = arg_string_chk(&mut buttons_buf, args.get(1));
+        if buttons.is_null() {
             error = true;
         }
-        // Each optional argument is only read when the one before it was
-        // supplied, and a coercion failure anywhere cancels the dialog --
-        // but not the rest of the parse.
-        if args.has(1) {
-            buttons = tv_get_string_buf_chk(args.ptr(1), buttons_buf.as_mut_ptr());
-            if buttons.is_null() {
-                error = true;
-            }
-            if args.has(2) {
-                default = tv_get_number_chk(args.ptr(2), &raw mut error) as c_int;
-                if args.has(3) {
-                    let typestr = tv_get_string_buf_chk(args.ptr(3), type_buf.as_mut_ptr());
-                    if typestr.is_null() {
-                        error = true;
-                    } else {
-                        let first = (*typestr as u8).to_ascii_uppercase();
-                        if let Some(&(_, found)) =
-                            DIALOG_TYPES.iter().find(|&&(letter, _)| letter == first)
-                        {
-                            kind = found;
-                        }
+        if args.has(2) {
+            default = arg_number_chk(args.get(2), Some(&mut error)) as c_int;
+            if args.has(3) {
+                let typestr = arg_string_chk(&mut type_buf, args.get(3));
+                if typestr.is_null() {
+                    error = true;
+                } else {
+                    let first = (unsafe { *typestr } as u8).to_ascii_uppercase();
+                    if let Some(&(_, found)) =
+                        DIALOG_TYPES.iter().find(|&&(letter, _)| letter == first)
+                    {
+                        kind = found;
                     }
                 }
             }
         }
-        // No {choices}, or an empty one, means a single "Ok".
-        if buttons.is_null() || *buttons as c_int == NUL {
-            buttons = gettext(c"&Ok".as_ptr());
-        }
-        if !error {
-            rettv.vval.v_number =
-                do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0)
-                    as varnumber_T;
-        }
+    }
+    // No {choices}, or an empty one, means a single "Ok".
+    if buttons.is_null() || unsafe { *buttons } as c_int == NUL {
+        buttons = unsafe { gettext(c"&Ok".as_ptr()) };
+    }
+    if !error {
+        rettv.vval.v_number =
+            unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) }
+                as varnumber_T;
     }
 }
 
@@ -114,35 +111,31 @@ pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = FAIL as varnumber_T;
     // SAFETY: the frame is live.
-    unsafe {
-        let pid = tv_get_number(args.ptr(0)) as c_int;
-        if pid == 0 {
-            emsg(gettext(e_invarg.as_ptr()));
-            return;
-        }
-        uv_kill(pid, SIGINT);
+    let pid = arg_number(args.get(0)) as c_int;
+    if pid == 0 {
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        return;
     }
+    unsafe { uv_kill(pid, SIGINT) };
 }
 
 /// `feedkeys({string} [, {mode}])`
 pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, rettv);
-    let mut mode_buf = [0 as c_char; NUMBUFLEN];
+    let mut mode_buf = NumBuf::new();
     // SAFETY: the frame is live and both strings outlive the call.
-    unsafe {
-        if check_secure() {
-            return;
-        }
-        let keys = numbuf.string(args.ptr(0));
-        // A missing {mode} is spelled as a null string, not as "".
-        let mode = if args.has(1) {
-            tv_get_string_buf(args.ptr(1), mode_buf.as_mut_ptr())
-        } else {
-            ptr::null()
-        };
-        nvim_feedkeys(cstr_as_string(keys), cstr_as_string(mode), true);
+    if check_secure() {
+        return;
     }
+    let keys = arg_string(&mut numbuf, args.get(0));
+    // A missing {mode} is spelled as a null string, not as "".
+    let mode = if args.has(1) {
+        arg_string(&mut mode_buf, args.get(1))
+    } else {
+        ptr::null()
+    };
+    unsafe { nvim_feedkeys(cstr_as_string(keys), cstr_as_string(mode), true) };
 }
 
 /// Whether the prompt currently being read should echo `*` instead of what
@@ -166,13 +159,11 @@ pub unsafe fn f_inputdialog(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
-    unsafe {
-        cmdline_star.set(cmdline_star.get() + 1);
-        INPUTSECRET.set(true);
-        f_input(argvars, rettv, fptr);
-        cmdline_star.set(cmdline_star.get() - 1);
-        INPUTSECRET.set(false);
-    }
+    cmdline_star.set(cmdline_star.get() + 1);
+    INPUTSECRET.set(true);
+    unsafe { f_input(argvars, rettv, fptr) };
+    cmdline_star.set(cmdline_star.get() - 1);
+    INPUTSECRET.set(false);
 }
 
 /// `inputlist({textlist})` — print the list and read a number.
@@ -181,42 +172,43 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and the List is held by an argument for the
     // whole call.
-    unsafe {
-        if args.ty(0) != VAR_LIST {
-            semsg_c!(gettext(e_listarg.as_ptr()), c"inputlist()".as_ptr(),);
-            return;
-        }
-        // Start at the bottom of the screen so the whole list is visible.
-        msg_ext_set_kind(c"confirm".as_ptr());
-        msg_start();
-        msg_row.set(Rows.get() - 1);
-        lines_left.set(Rows.get());
-        msg_scroll.set(1);
-        msg_clr_eos();
-
-        let list = args.get(0).vval.v_list;
-        if !list.is_null() {
-            let mut li: *const listitem_T = (*list).lv_first;
-            while !li.is_null() {
-                msg_puts(numbuf.string(&raw const (*li).li_tv));
-                // A UI that owns the message area keeps the items in one
-                // message, bar the last separator.
-                if !ui_has(kUIMessages) || !(*li).li_next.is_null() {
-                    msg_putchar('\n' as c_int);
-                }
-                li = (*li).li_next;
-            }
-        }
-
-        let mut mouse_used = false;
-        let mut selected = prompt_for_input(ptr::null_mut(), 0, false, &raw mut mouse_used);
-        // A click names a line rather than an item, so count back from the
-        // bottom of the list.
-        if mouse_used {
-            selected = tv_list_len(list) - (cmdline_row.get() - mouse_row.get());
-        }
-        rettv.vval.v_number = selected as varnumber_T;
+    if args.ty(0) != VAR_LIST {
+        semsg_c!(
+            unsafe { gettext(e_listarg.as_ptr()) },
+            c"inputlist()".as_ptr(),
+        );
+        return;
     }
+    // Start at the bottom of the screen so the whole list is visible.
+    unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
+    unsafe { msg_start() };
+    msg_row.set(Rows.get() - 1);
+    lines_left.set(Rows.get());
+    msg_scroll.set(1);
+    unsafe { msg_clr_eos() };
+
+    let list = unsafe { args.get(0).vval.v_list };
+    if !list.is_null() {
+        let mut li: *const listitem_T = unsafe { (*list).lv_first };
+        while !li.is_null() {
+            unsafe { msg_puts(numbuf.string(&raw const (*li).li_tv)) };
+            // A UI that owns the message area keeps the items in one
+            // message, bar the last separator.
+            if !ui_has(kUIMessages) || !unsafe { (*li).li_next }.is_null() {
+                unsafe { msg_putchar('\n' as c_int) };
+            }
+            li = unsafe { (*li).li_next };
+        }
+    }
+
+    let mut mouse_used = false;
+    let mut selected = unsafe { prompt_for_input(ptr::null_mut(), 0, false, &raw mut mouse_used) };
+    // A click names a line rather than an item, so count back from the
+    // bottom of the list.
+    if mouse_used {
+        selected = unsafe { tv_list_len(list) } - (cmdline_row.get() - mouse_row.get());
+    }
+    rettv.vval.v_number = selected as varnumber_T;
 }
 
 /// The typeahead states `inputsave()` has stacked up.
@@ -248,9 +240,9 @@ pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         unsafe {
             verb_msg(gettext(
                 c"called inputrestore() more often than inputsave()".as_ptr(),
-            ));
-            (*rettv).vval.v_number = 1;
-        }
+            ))
+        };
+        unsafe { (*rettv).vval.v_number = 1 };
     }
 }
 
@@ -282,10 +274,8 @@ pub unsafe fn f_prompt_getprompt(
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the frame is live and `rettv` owns the duplicate.
-    unsafe {
-        if let Some(buf) = prompt_buffer(args.ptr(0)) {
-            rettv.vval.v_string = xstrdup(buf_prompt_text(buf));
-        }
+    if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
+        rettv.vval.v_string = unsafe { xstrdup(buf_prompt_text(buf)) };
     }
 }
 
@@ -296,9 +286,7 @@ pub unsafe fn f_prompt_getinput(argvars: *mut typval_T, rettv: *mut typval_T, _f
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `rettv` then owns.
-    unsafe {
-        if let Some(buf) = prompt_buffer(args.ptr(0)) {
-            rettv.vval.v_string = prompt_get_input(buf.raw());
-        }
+    if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
+        rettv.vval.v_string = unsafe { prompt_get_input(buf.raw()) };
     }
 }

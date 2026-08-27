@@ -8,12 +8,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
-use crate::eval::typval::{
-    NumBuf, tv_get_number_chk, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
-};
+use crate::eval::typval::{NumBuf, tv_get_string_buf_chk, tv_list_append_number};
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::main::{curwin, e_invarg2, p_cpo, p_ws};
 use crate::mark::setpcmark;
@@ -103,39 +102,37 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
     // SAFETY: the caller's obligation; `nbuf` outlives the string
     // `tv_get_string_buf_chk` may park in it.
-    unsafe {
-        if (*varp).v_type == VAR_UNKNOWN {
-            return FORWARD as c_int;
-        }
-        let mut nbuf = [0 as c_char; NUMBUFLEN];
-        let mut p = tv_get_string_buf_chk(varp, nbuf.as_mut_ptr());
-        if p.is_null() {
-            // Type error; the message is already out.
-            return 0;
-        }
-        while *p as c_int != NUL {
-            match *p as u8 {
-                b'b' => dir = BACKWARD as c_int,
-                b'w' => p_ws.set(1),
-                b'W' => p_ws.set(0),
-                letter => match FLAG_BITS.iter().find(|&&(l, _)| l == letter) {
-                    Some(&(_, mask)) => *flags |= mask,
-                    None => {
-                        // The message quotes the rest of the flag string
-                        // from the offending letter on, not just the
-                        // letter, and those are arbitrary user bytes.
-                        semsg_c!(gettext(e_invarg2.as_ptr()), p);
-                        dir = 0;
-                    }
-                },
-            }
-            if dir == 0 {
-                break;
-            }
-            p = p.add(1);
-        }
-        dir
+    if unsafe { (*varp).v_type } == VAR_UNKNOWN {
+        return FORWARD as c_int;
     }
+    let mut nbuf = [0 as c_char; NUMBUFLEN];
+    let mut p = unsafe { tv_get_string_buf_chk(varp, nbuf.as_mut_ptr()) };
+    if p.is_null() {
+        // Type error; the message is already out.
+        return 0;
+    }
+    while unsafe { *p } as c_int != NUL {
+        match unsafe { *p } as u8 {
+            b'b' => dir = BACKWARD as c_int,
+            b'w' => p_ws.set(1),
+            b'W' => p_ws.set(0),
+            letter => match FLAG_BITS.iter().find(|&&(l, _)| l == letter) {
+                Some(&(_, mask)) => *flags |= mask,
+                None => {
+                    // The message quotes the rest of the flag string
+                    // from the offending letter on, not just the
+                    // letter, and those are arbitrary user bytes.
+                    semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, p);
+                    dir = 0;
+                }
+            },
+        }
+        if dir == 0 {
+            break;
+        }
+        p = unsafe { p.add(1) };
+    }
+    dir
 }
 
 /// Shared by `search()` and `searchpos()`.
@@ -157,70 +154,73 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     // SAFETY: the frame's arguments and the current window are live for the
     // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
     // pointer and outlive it.
-    unsafe {
-        let pat = numbuf.string(args.ptr(0));
-        // May set 'wrapscan'.
-        let dir = search_direction(args.ptr(1), flagsp);
-        if dir == 0 {
+    let pat = arg_string(&mut numbuf, args.get(0));
+    // May set 'wrapscan'.
+    let dir = unsafe { search_direction(args.ptr(1), flagsp) };
+    if dir == 0 {
+        return 0;
+    }
+    let flags = *flagsp;
+    if flags & SP_START != 0 {
+        options |= SEARCH_START as c_int;
+    }
+    if flags & SP_END != 0 {
+        options |= SEARCH_END as c_int;
+    }
+    if flags & SP_COLUMN != 0 {
+        options |= SEARCH_COL as c_int;
+    }
+
+    // The optional {stopline}, {timeout} and {skip} arguments. Each is
+    // only read when the one before it was supplied, so a {skip} passed
+    // without a {flags} is silently ignored.
+    if args.has(1) && args.has(2) {
+        lnum_stop = arg_number_chk(args.get(2), None) as linenr_T;
+        if lnum_stop < 0 {
             return 0;
         }
-        let flags = *flagsp;
-        if flags & SP_START != 0 {
-            options |= SEARCH_START as c_int;
-        }
-        if flags & SP_END != 0 {
-            options |= SEARCH_END as c_int;
-        }
-        if flags & SP_COLUMN != 0 {
-            options |= SEARCH_COL as c_int;
-        }
-
-        // The optional {stopline}, {timeout} and {skip} arguments. Each is
-        // only read when the one before it was supplied, so a {skip} passed
-        // without a {flags} is silently ignored.
-        if args.has(1) && args.has(2) {
-            lnum_stop = tv_get_number_chk(args.ptr(2), ptr::null_mut()) as linenr_T;
-            if lnum_stop < 0 {
+        if args.has(3) {
+            time_limit = arg_number_chk(args.get(3), None) as int64_t;
+            if time_limit < 0 {
                 return 0;
             }
-            if args.has(3) {
-                time_limit = tv_get_number_chk(args.ptr(3), ptr::null_mut()) as int64_t;
-                if time_limit < 0 {
-                    return 0;
-                }
-                use_skip = eval_expr_valid_arg(args.ptr(4));
-            }
+            use_skip = unsafe { eval_expr_valid_arg(args.ptr(4)) };
         }
-        let mut tm = profile_setlimit(time_limit);
+    }
+    let mut tm = profile_setlimit(time_limit);
 
-        // `m` and `r` belong to searchpair(); `n` and `s` contradict each
-        // other.
-        if flags & (SP_REPEAT | SP_RETCOUNT) != 0
-            || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
-        {
-            semsg_c!(gettext(e_invarg2.as_ptr()), numbuf2.string(args.ptr(1)),);
-            return 0;
-        }
+    // `m` and `r` belong to searchpair(); `n` and `s` contradict each
+    // other.
+    if flags & (SP_REPEAT | SP_RETCOUNT) != 0
+        || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
+    {
+        semsg_c!(
+            unsafe { gettext(e_invarg2.as_ptr()) },
+            arg_string(&mut numbuf2, args.get(1)),
+        );
+        return 0;
+    }
 
-        let save_cursor = (*curwin.get()).w_cursor;
-        let mut pos = save_cursor;
-        let mut firstpos = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut sia = searchit_arg_T {
-            sa_stop_lnum: lnum_stop,
-            sa_tm: &raw mut tm,
-            sa_timed_out: 0,
-            sa_wrapped: 0,
-        };
-        let patlen = strlen(pat);
+    let save_cursor = unsafe { (*curwin.get()).w_cursor };
+    let mut pos = save_cursor;
+    let mut firstpos = pos_T {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    };
+    let mut sia = searchit_arg_T {
+        sa_stop_lnum: lnum_stop,
+        sa_tm: &raw mut tm,
+        sa_timed_out: 0,
+        sa_wrapped: 0,
+    };
+    let patlen = unsafe { strlen(pat) };
 
-        // Repeat until {skip} answers false.
-        let mut subpatnum;
-        loop {
-            subpatnum = searchit(
+    // Repeat until {skip} answers false.
+    let mut subpatnum;
+    loop {
+        subpatnum = unsafe {
+            searchit(
                 Some(Win::current()),
                 Buf::current(),
                 &raw mut pos,
@@ -232,61 +232,61 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
                 options,
                 RE_SEARCH as c_int,
                 &raw mut sia,
-            );
-            // Coming back to the first match means every match was skipped.
-            if firstpos.lnum != 0 && equalpos(pos, firstpos) {
-                subpatnum = FAIL;
-            }
-            if subpatnum == FAIL || !use_skip {
-                break;
-            }
-            if firstpos.lnum == 0 {
-                firstpos = pos;
-            }
-
-            // {skip} is evaluated with the cursor on the match.
-            let save_pos = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = pos;
-            let mut err = false;
-            let do_skip = eval_expr_to_bool(args.ptr(4), &raw mut err);
-            (*curwin.get()).w_cursor = save_pos;
-            if err {
-                subpatnum = FAIL;
-                break;
-            }
-            if !do_skip {
-                break;
-            }
-            // Clear the start flag so that the next round moves on.
-            options &= !(SEARCH_START as c_int);
+            )
+        };
+        // Coming back to the first match means every match was skipped.
+        if firstpos.lnum != 0 && equalpos(pos, firstpos) {
+            subpatnum = FAIL;
+        }
+        if subpatnum == FAIL || !use_skip {
+            break;
+        }
+        if firstpos.lnum == 0 {
+            firstpos = pos;
         }
 
-        let mut retval = 0;
-        if subpatnum != FAIL {
-            retval = if flags & SP_SUBPAT != 0 {
-                subpatnum
-            } else {
-                pos.lnum as c_int
-            };
-            if flags & SP_SETPCMARK != 0 {
-                setpcmark();
-            }
-            (*curwin.get()).w_cursor = pos;
-            if let Some(match_pos) = match_pos {
-                match_pos.lnum = pos.lnum;
-                match_pos.col = pos.col + 1;
-            }
-            // A `/$` match leaves the cursor past the end of the line.
-            check_cursor(Win::current());
+        // {skip} is evaluated with the cursor on the match.
+        let save_pos = unsafe { (*curwin.get()).w_cursor };
+        unsafe { (*curwin.get()).w_cursor = pos };
+        let mut err = false;
+        let do_skip = unsafe { eval_expr_to_bool(args.ptr(4), &raw mut err) };
+        unsafe { (*curwin.get()).w_cursor = save_pos };
+        if err {
+            subpatnum = FAIL;
+            break;
         }
-
-        if flags & SP_NOMOVE != 0 {
-            (*curwin.get()).w_cursor = save_cursor;
-        } else {
-            (*curwin.get()).w_set_curswant = true;
+        if !do_skip {
+            break;
         }
-        retval
+        // Clear the start flag so that the next round moves on.
+        options &= !(SEARCH_START as c_int);
     }
+
+    let mut retval = 0;
+    if subpatnum != FAIL {
+        retval = if flags & SP_SUBPAT != 0 {
+            subpatnum
+        } else {
+            pos.lnum as c_int
+        };
+        if flags & SP_SETPCMARK != 0 {
+            setpcmark();
+        }
+        unsafe { (*curwin.get()).w_cursor = pos };
+        if let Some(match_pos) = match_pos {
+            match_pos.lnum = pos.lnum;
+            match_pos.col = pos.col + 1;
+        }
+        // A `/$` match leaves the cursor past the end of the line.
+        check_cursor(unsafe { Win::current() });
+    }
+
+    if flags & SP_NOMOVE != 0 {
+        unsafe { (*curwin.get()).w_cursor = save_cursor };
+    } else {
+        unsafe { (*curwin.get()).w_set_curswant = true };
+    }
+    retval
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
@@ -308,19 +308,17 @@ pub unsafe fn f_searchpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     };
     let mut flags = 0;
     // SAFETY: the frame is live and `rettv` is the cleared return value.
-    unsafe {
-        let n = search_cmn(args, Some(&mut match_pos), &mut flags);
-        let list = tv_list_alloc_ret(rettv, 2 + (flags & SP_SUBPAT != 0) as isize);
-        let (lnum, col) = if n > 0 {
-            (match_pos.lnum as c_int, match_pos.col as c_int)
-        } else {
-            (0, 0)
-        };
-        tv_list_append_number(list, lnum as varnumber_T);
-        tv_list_append_number(list, col as varnumber_T);
-        if flags & SP_SUBPAT != 0 {
-            tv_list_append_number(list, n as varnumber_T);
-        }
+    let n = unsafe { search_cmn(args, Some(&mut match_pos), &mut flags) };
+    let list = list_alloc_ret(rettv, 2 + (flags & SP_SUBPAT != 0) as isize);
+    let (lnum, col) = if n > 0 {
+        (match_pos.lnum as c_int, match_pos.col as c_int)
+    } else {
+        (0, 0)
+    };
+    unsafe { tv_list_append_number(list, lnum as varnumber_T) };
+    unsafe { tv_list_append_number(list, col as varnumber_T) };
+    if flags & SP_SUBPAT != 0 {
+        unsafe { tv_list_append_number(list, n as varnumber_T) };
     }
 }
 
@@ -337,24 +335,24 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
     // SAFETY: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
-    unsafe {
-        let name = numbuf.string_chk(args.ptr(0));
-        if args.has(1) {
-            locally = tv_get_number_chk(args.ptr(1), &raw mut error) == 0;
-            if !error && args.has(2) {
-                thisblock = tv_get_number_chk(args.ptr(2), &raw mut error) != 0;
-            }
+    let name = arg_string_chk(&mut numbuf, args.get(0));
+    if args.has(1) {
+        locally = arg_number_chk(args.get(1), Some(&mut error)) == 0;
+        if !error && args.has(2) {
+            thisblock = arg_number_chk(args.get(2), Some(&mut error)) != 0;
         }
-        if !error && !name.is_null() {
-            let found = find_decl(
+    }
+    if !error && !name.is_null() {
+        let found = unsafe {
+            find_decl(
                 name as *mut c_char,
                 strlen(name),
                 locally,
                 thisblock,
                 SEARCH_KEEP as c_int,
-            );
-            rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
-        }
+            )
+        };
+        rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
     }
 }
 
@@ -376,59 +374,66 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     // SAFETY: the frame's arguments are live typvals; the two scratch
     // buffers outlive the strings `tv_get_string_buf_chk` may park in them,
     // and the three patterns outlive the `do_searchpair` call.
-    unsafe {
-        let mut nbuf1 = [0 as c_char; NUMBUFLEN];
-        let mut nbuf2 = [0 as c_char; NUMBUFLEN];
-        let spat = numbuf.string_chk(args.ptr(0));
-        let mpat = tv_get_string_buf_chk(args.ptr(1), nbuf1.as_mut_ptr());
-        let epat = tv_get_string_buf_chk(args.ptr(2), nbuf2.as_mut_ptr());
-        if spat.is_null() || mpat.is_null() || epat.is_null() {
-            // Type error, already reported.
-            return 0;
-        }
+    let mut nbuf1 = NumBuf::new();
+    let mut nbuf2 = NumBuf::new();
+    let spat = arg_string_chk(&mut numbuf, args.get(0));
+    let mpat = arg_string_chk(&mut nbuf1, args.get(1));
+    let epat = arg_string_chk(&mut nbuf2, args.get(2));
+    if spat.is_null() || mpat.is_null() || epat.is_null() {
+        // Type error, already reported.
+        return 0;
+    }
 
-        // May set 'wrapscan'.
-        let dir = search_direction(args.ptr(3), &mut flags);
-        if dir == 0 {
-            return 0;
-        }
+    // May set 'wrapscan'.
+    let dir = unsafe { search_direction(args.ptr(3), &mut flags) };
+    if dir == 0 {
+        return 0;
+    }
 
-        // `e` and `p` belong to search(); `n` and `s` contradict each other.
-        if flags & (SP_END | SP_SUBPAT) != 0
-            || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
-        {
-            semsg_c!(gettext(e_invarg2.as_ptr()), numbuf2.string(args.ptr(3)),);
-            return 0;
-        }
+    // `e` and `p` belong to search(); `n` and `s` contradict each other.
+    if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
+        semsg_c!(
+            unsafe { gettext(e_invarg2.as_ptr()) },
+            arg_string(&mut numbuf2, args.get(3)),
+        );
+        return 0;
+    }
 
-        // `r` implies `W`; without it the repeat would wrap forever.
-        if flags & SP_REPEAT != 0 {
-            p_ws.set(0);
-        }
+    // `r` implies `W`; without it the repeat would wrap forever.
+    if flags & SP_REPEAT != 0 {
+        p_ws.set(0);
+    }
 
-        // The optional {skip}, {stopline} and {timeout}. As in search(),
-        // each is only read when the one before it was supplied.
-        let skip = if !args.has(3) || !args.has(4) {
-            ptr::null()
-        } else {
-            // The type is checked later, when the expression is evaluated.
-            if args.has(5) {
-                lnum_stop = tv_get_number_chk(args.ptr(5), ptr::null_mut()) as linenr_T;
-                if lnum_stop < 0 {
-                    semsg_c!(gettext(e_invarg2.as_ptr()), numbuf3.string(args.ptr(5)),);
+    // The optional {skip}, {stopline} and {timeout}. As in search(),
+    // each is only read when the one before it was supplied.
+    let skip = if !args.has(3) || !args.has(4) {
+        ptr::null()
+    } else {
+        // The type is checked later, when the expression is evaluated.
+        if args.has(5) {
+            lnum_stop = arg_number_chk(args.get(5), None) as linenr_T;
+            if lnum_stop < 0 {
+                semsg_c!(
+                    unsafe { gettext(e_invarg2.as_ptr()) },
+                    arg_string(&mut numbuf3, args.get(5)),
+                );
+                return 0;
+            }
+            if args.has(6) {
+                time_limit = arg_number_chk(args.get(6), None) as int64_t;
+                if time_limit < 0 {
+                    semsg_c!(
+                        unsafe { gettext(e_invarg2.as_ptr()) },
+                        arg_string(&mut numbuf4, args.get(6)),
+                    );
                     return 0;
                 }
-                if args.has(6) {
-                    time_limit = tv_get_number_chk(args.ptr(6), ptr::null_mut()) as int64_t;
-                    if time_limit < 0 {
-                        semsg_c!(gettext(e_invarg2.as_ptr()), numbuf4.string(args.ptr(6)),);
-                        return 0;
-                    }
-                }
             }
-            args.ptr(4) as *const typval_T
-        };
+        }
+        args.ptr(4) as *const typval_T
+    };
 
+    unsafe {
         do_searchpair(
             spat,
             mpat,
@@ -461,15 +466,13 @@ pub unsafe fn f_searchpairpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     };
     let (mut lnum, mut col) = (0, 0);
     // SAFETY: the frame is live and `rettv` is the cleared return value.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, 2);
-        if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
-            lnum = match_pos.lnum as c_int;
-            col = match_pos.col as c_int;
-        }
-        tv_list_append_number(list, lnum as varnumber_T);
-        tv_list_append_number(list, col as varnumber_T);
+    let list = list_alloc_ret(rettv, 2);
+    if unsafe { searchpair_cmn(args, Some(&mut match_pos)) } > 0 {
+        lnum = match_pos.lnum as c_int;
+        col = match_pos.col as c_int;
     }
+    unsafe { tv_list_append_number(list, lnum as varnumber_T) };
+    unsafe { tv_list_append_number(list, col as varnumber_T) };
 }
 
 /// The alternation `do_searchpair` hands to `searchit`, NUL-terminated.
@@ -518,21 +521,19 @@ impl Drop for EmptyCpo {
         // SAFETY: `self.0` is the string the option owned on entry and is
         // still live; `set_option_value_give_err` copies it and
         // `free_string_option` then releases our claim on it.
-        unsafe {
-            if *p_cpo.get() == 0 {
-                set_option_value_give_err(
-                    kOptCpoptions,
-                    OptVal {
-                        type_0: kOptValTypeString,
-                        data: OptValData {
-                            string: cstr_as_string(self.0),
-                        },
+        if unsafe { *p_cpo.get() } == 0 {
+            set_option_value_give_err(
+                kOptCpoptions,
+                OptVal {
+                    type_0: kOptValTypeString,
+                    data: OptValData {
+                        string: unsafe { cstr_as_string(self.0) },
                     },
-                    OptionSetFlags::NONE,
-                );
-            }
-            free_string_option(self.0);
+                },
+                OptionSetFlags::NONE,
+            );
         }
+        unsafe { free_string_option(self.0) };
     }
 }
 
@@ -564,50 +565,50 @@ pub unsafe fn do_searchpair(
     // SAFETY: the caller's obligation on the three patterns and `skip`; the
     // current window is live for the whole call, and `pos`/`tm`/the two
     // pattern buffers are locals that outlive every `searchit` call.
-    unsafe {
-        let mut tm = profile_setlimit(time_limit);
+    let mut tm = profile_setlimit(time_limit);
 
-        // Without a middle pattern the nested search is the same as the
-        // outer one.
-        let outer = alternation(&[
-            core::slice::from_raw_parts(spat as *const u8, strlen(spat)),
-            core::slice::from_raw_parts(epat as *const u8, strlen(epat)),
-        ]);
-        let full = if *mpat == 0 {
-            outer.clone()
-        } else {
-            alternation(&[
-                core::slice::from_raw_parts(spat as *const u8, strlen(spat)),
-                core::slice::from_raw_parts(epat as *const u8, strlen(epat)),
-                core::slice::from_raw_parts(mpat as *const u8, strlen(mpat)),
-            ])
+    // Without a middle pattern the nested search is the same as the
+    // outer one.
+    let outer = alternation(&[
+        unsafe { core::slice::from_raw_parts(spat as *const u8, strlen(spat)) },
+        unsafe { core::slice::from_raw_parts(epat as *const u8, strlen(epat)) },
+    ]);
+    let full = if unsafe { *mpat } == 0 {
+        outer.clone()
+    } else {
+        alternation(&[
+            unsafe { core::slice::from_raw_parts(spat as *const u8, strlen(spat)) },
+            unsafe { core::slice::from_raw_parts(epat as *const u8, strlen(epat)) },
+            unsafe { core::slice::from_raw_parts(mpat as *const u8, strlen(mpat)) },
+        ])
+    };
+
+    if flags & SP_START != 0 {
+        options |= SEARCH_START as c_int;
+    }
+    let use_skip = !skip.is_null() && unsafe { eval_expr_valid_arg(skip) };
+
+    let save_cursor = unsafe { (*curwin.get()).w_cursor };
+    let mut pos = save_cursor;
+    let mut firstpos = pos_T {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    };
+    let mut foundpos = firstpos;
+
+    // Start on the full alternation; drop the middle pattern while
+    // nested, since a middle only counts at the outermost level.
+    let mut pat = &full;
+    loop {
+        let mut sia = searchit_arg_T {
+            sa_stop_lnum: lnum_stop,
+            sa_tm: &raw mut tm,
+            sa_timed_out: 0,
+            sa_wrapped: 0,
         };
-
-        if flags & SP_START != 0 {
-            options |= SEARCH_START as c_int;
-        }
-        let use_skip = !skip.is_null() && eval_expr_valid_arg(skip);
-
-        let save_cursor = (*curwin.get()).w_cursor;
-        let mut pos = save_cursor;
-        let mut firstpos = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut foundpos = firstpos;
-
-        // Start on the full alternation; drop the middle pattern while
-        // nested, since a middle only counts at the outermost level.
-        let mut pat = &full;
-        loop {
-            let mut sia = searchit_arg_T {
-                sa_stop_lnum: lnum_stop,
-                sa_tm: &raw mut tm,
-                sa_timed_out: 0,
-                sa_wrapped: 0,
-            };
-            let n = searchit(
+        let n = unsafe {
+            searchit(
                 Some(Win::current()),
                 Buf::current(),
                 &raw mut pos,
@@ -619,83 +620,83 @@ pub unsafe fn do_searchpair(
                 options,
                 RE_SEARCH as c_int,
                 &raw mut sia,
-            );
-            // No match, or back at the first one: the walk is done.
-            if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
+            )
+        };
+        // No match, or back at the first one: the walk is done.
+        if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
+            break;
+        }
+        if firstpos.lnum == 0 {
+            firstpos = pos;
+        }
+        // Landing on the same spot twice means a zero-width match; step
+        // over it so that the walk makes progress.
+        if equalpos(pos, foundpos) {
+            if dir == BACKWARD as c_int {
+                unsafe { decl(&mut pos) };
+            } else {
+                unsafe { incl(&mut pos) };
+            }
+        }
+        foundpos = pos;
+
+        // Clear the start flag so that the next round moves on.
+        options &= !(SEARCH_START as c_int);
+
+        if use_skip {
+            let save_pos = unsafe { (*curwin.get()).w_cursor };
+            unsafe { (*curwin.get()).w_cursor = pos };
+            let mut err = false;
+            let skipped = unsafe { eval_expr_to_bool(skip, &raw mut err) };
+            unsafe { (*curwin.get()).w_cursor = save_pos };
+            if err {
+                unsafe { (*curwin.get()).w_cursor = save_cursor };
+                retval = -1;
                 break;
             }
-            if firstpos.lnum == 0 {
-                firstpos = pos;
-            }
-            // Landing on the same spot twice means a zero-width match; step
-            // over it so that the walk makes progress.
-            if equalpos(pos, foundpos) {
-                if dir == BACKWARD as c_int {
-                    decl(&mut pos);
-                } else {
-                    incl(&mut pos);
-                }
-            }
-            foundpos = pos;
-
-            // Clear the start flag so that the next round moves on.
-            options &= !(SEARCH_START as c_int);
-
-            if use_skip {
-                let save_pos = (*curwin.get()).w_cursor;
-                (*curwin.get()).w_cursor = pos;
-                let mut err = false;
-                let skipped = eval_expr_to_bool(skip, &raw mut err);
-                (*curwin.get()).w_cursor = save_pos;
-                if err {
-                    (*curwin.get()).w_cursor = save_cursor;
-                    retval = -1;
-                    break;
-                }
-                if skipped {
-                    continue;
-                }
-            }
-
-            // Group 2 is the end pattern and group 3 the middle one, so
-            // searching backwards a middle opens a level and searching
-            // forwards an end does.
-            if (dir == BACKWARD as c_int && n == 3) || (dir == FORWARD as c_int && n == 2) {
-                nest += 1;
-                pat = &outer;
-            } else {
-                nest -= 1;
-                if nest == 1 {
-                    pat = &full;
-                }
-            }
-            if nest != 0 {
+            if skipped {
                 continue;
             }
-
-            // Back at the outermost level: this is a result.
-            if flags & SP_RETCOUNT != 0 {
-                retval += 1;
-            } else {
-                retval = pos.lnum as c_int;
-            }
-            if flags & SP_SETPCMARK != 0 {
-                setpcmark();
-            }
-            (*curwin.get()).w_cursor = pos;
-            if flags & SP_REPEAT == 0 {
-                break;
-            }
-            nest = 1;
         }
 
-        if !match_pos.is_null() {
-            (*match_pos).lnum = (*curwin.get()).w_cursor.lnum;
-            (*match_pos).col = (*curwin.get()).w_cursor.col + 1;
+        // Group 2 is the end pattern and group 3 the middle one, so
+        // searching backwards a middle opens a level and searching
+        // forwards an end does.
+        if (dir == BACKWARD as c_int && n == 3) || (dir == FORWARD as c_int && n == 2) {
+            nest += 1;
+            pat = &outer;
+        } else {
+            nest -= 1;
+            if nest == 1 {
+                pat = &full;
+            }
         }
-        if flags & SP_NOMOVE != 0 || retval == 0 {
-            (*curwin.get()).w_cursor = save_cursor;
+        if nest != 0 {
+            continue;
         }
+
+        // Back at the outermost level: this is a result.
+        if flags & SP_RETCOUNT != 0 {
+            retval += 1;
+        } else {
+            retval = pos.lnum as c_int;
+        }
+        if flags & SP_SETPCMARK != 0 {
+            setpcmark();
+        }
+        unsafe { (*curwin.get()).w_cursor = pos };
+        if flags & SP_REPEAT == 0 {
+            break;
+        }
+        nest = 1;
+    }
+
+    if !match_pos.is_null() {
+        unsafe { (*match_pos).lnum = (*curwin.get()).w_cursor.lnum };
+        unsafe { (*match_pos).col = (*curwin.get()).w_cursor.col + 1 };
+    }
+    if flags & SP_NOMOVE != 0 || retval == 0 {
+        unsafe { (*curwin.get()).w_cursor = save_cursor };
     }
     retval
 }

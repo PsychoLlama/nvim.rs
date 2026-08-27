@@ -3,17 +3,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::wrappers::non_zero_arg;
+use super::wrappers::{
+    arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, non_zero_arg,
+};
 use super::{MENU_ALL_MODES, kRetNilBool};
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::cmdexpand::cmdline_pum_active;
-use crate::eval::typval::{
-    NumBuf, tv_dict_alloc_ret, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
-    tv_list_append_number,
-};
+use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_append_number};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
 use crate::garray::{ga_append, ga_init};
@@ -184,30 +183,28 @@ unsafe fn starts_with(name: *const c_char, prefix: &CStr) -> bool {
 unsafe fn has_patch(name: *const c_char) -> bool {
     // SAFETY: the caller's obligation puts `name[5]` at or before the
     // terminator, and the length test below covers `name[6]`.
-    unsafe {
-        if *name.add(5) as u8 == b'-'
-            && strlen(name) >= 11
-            && (b'1'..=b'9').contains(&(*name.add(6) as u8))
+    if unsafe { *name.add(5) } as u8 == b'-'
+        && unsafe { strlen(name) } >= 11
+        && (b'1'..=b'9').contains(&(unsafe { *name.add(6) } as u8))
+    {
+        // patch-M.m.PPPP, with exactly one minor digit -- which is
+        // what the `end[2] == '.'` test below insists on.
+        let mut end = ptr::null_mut::<c_char>();
+        let major = unsafe { strtoul(name.add(6), &raw mut end, 10) } as c_int;
+        if unsafe { *end } as u8 == b'.'
+            && ascii_isdigit(unsafe { *end.add(1) } as c_int)
+            && unsafe { *end.add(2) } as u8 == b'.'
+            && ascii_isdigit(unsafe { *end.add(3) } as c_int)
         {
-            // patch-M.m.PPPP, with exactly one minor digit -- which is
-            // what the `end[2] == '.'` test below insists on.
-            let mut end = ptr::null_mut::<c_char>();
-            let major = strtoul(name.add(6), &raw mut end, 10) as c_int;
-            if *end as u8 == b'.'
-                && ascii_isdigit(*end.add(1) as c_int)
-                && *end.add(2) as u8 == b'.'
-                && ascii_isdigit(*end.add(3) as c_int)
-            {
-                let minor = atoi(end.add(1));
-                return has_vim_patch(atoi(end.add(3)), major * 100 + minor);
-            }
-            return false;
+            let minor = unsafe { atoi(end.add(1)) };
+            return has_vim_patch(unsafe { atoi(end.add(3)) }, major * 100 + minor);
         }
-        if ascii_isdigit(*name.add(5) as c_int) {
-            return has_vim_patch(atoi(name.add(5)), 0);
-        }
-        false
+        return false;
     }
+    if ascii_isdigit(unsafe { *name.add(5) } as c_int) {
+        return has_vim_patch(unsafe { atoi(name.add(5)) }, 0);
+    }
+    false
 }
 
 /// The features answered before the list is consulted.
@@ -219,25 +216,25 @@ unsafe fn has_patch(name: *const c_char) -> bool {
 /// `name` is a NUL-terminated string.
 unsafe fn special_feature(name: *const c_char) -> Option<bool> {
     // SAFETY: the caller's obligation.
-    unsafe {
-        if starts_with(name, c"patch") {
-            return Some(has_patch(name));
-        }
-        // Note the five: the trailing `-` is compared too.
-        if starts_with(name, c"nvim-") {
-            return Some(has_nvim_version(name.add(5)));
-        }
-        Some(match () {
-            _ if same_name(name, c"vim_starting") => starting.get() != 0,
-            _ if same_name(name, c"ttyin") => stdin_isatty.get(),
-            _ if same_name(name, c"ttyout") => stdout_isatty.get(),
-            _ if same_name(name, c"multi_byte_encoding") => true,
-            _ if same_name(name, c"gui_running") => ui_gui_attached(),
-            _ if same_name(name, c"syntax_items") => syntax_present(crate::main::curwin.get()),
-            _ if same_name(name, c"wsl") => has_wsl(),
-            _ => return None,
-        })
+    if unsafe { starts_with(name, c"patch") } {
+        return Some(unsafe { has_patch(name) });
     }
+    // Note the five: the trailing `-` is compared too.
+    if unsafe { starts_with(name, c"nvim-") } {
+        return Some(unsafe { has_nvim_version(name.add(5)) });
+    }
+    Some(match () {
+        _ if unsafe { same_name(name, c"vim_starting") } => starting.get() != 0,
+        _ if unsafe { same_name(name, c"ttyin") } => stdin_isatty.get(),
+        _ if unsafe { same_name(name, c"ttyout") } => stdout_isatty.get(),
+        _ if unsafe { same_name(name, c"multi_byte_encoding") } => true,
+        _ if unsafe { same_name(name, c"gui_running") } => ui_gui_attached(),
+        _ if unsafe { same_name(name, c"syntax_items") } => unsafe {
+            syntax_present(crate::main::curwin.get())
+        },
+        _ if unsafe { same_name(name, c"wsl") } => has_wsl(),
+        _ => return None,
+    })
 }
 
 /// Whether this is a WSL kernel, asked once and remembered.
@@ -278,30 +275,33 @@ pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `name` is the string an argument owns.
-    unsafe {
-        let name = numbuf.string(args.ptr(0));
-        let known = special_feature(name)
-            .or_else(|| FEATURES.iter().any(|f| same_name(name, f)).then_some(true));
+    let name = arg_string(&mut numbuf, args.get(0));
+    let known = unsafe { special_feature(name) }.or_else(|| {
+        FEATURES
+            .iter()
+            .any(|f| unsafe { same_name(name, f) })
+            .then_some(true)
+    });
 
-        rettv.vval.v_number = match known {
-            Some(answer) => answer,
-            None => {
-                // The provider probes run vimscript, which sets
-                // `v:shell_error`; the caller's value goes back afterwards.
-                let saved = get_vim_var_nr(Vv::ShellError);
-                let answer =
-                    if same_name(name, c"clipboard_working") || same_name(name, c"unnamedplus") {
-                        eval_has_provider(c"clipboard".as_ptr(), true)
-                    } else if same_name(name, c"pythonx") {
-                        eval_has_provider(c"python3".as_ptr(), true)
-                    } else {
-                        eval_has_provider(name, true)
-                    };
-                set_vim_var_nr(Vv::ShellError, saved);
-                answer
-            }
-        } as varnumber_T;
-    }
+    rettv.vval.v_number = match known {
+        Some(answer) => answer,
+        None => {
+            // The provider probes run vimscript, which sets
+            // `v:shell_error`; the caller's value goes back afterwards.
+            let saved = unsafe { get_vim_var_nr(Vv::ShellError) };
+            let answer = if unsafe { same_name(name, c"clipboard_working") }
+                || unsafe { same_name(name, c"unnamedplus") }
+            {
+                unsafe { eval_has_provider(c"clipboard".as_ptr(), true) }
+            } else if unsafe { same_name(name, c"pythonx") } {
+                unsafe { eval_has_provider(c"python3".as_ptr(), true) }
+            } else {
+                unsafe { eval_has_provider(name, true) }
+            };
+            unsafe { set_vim_var_nr(Vv::ShellError, saved) };
+            answer
+        }
+    } as varnumber_T;
 }
 
 /// `api_info()` — the whole API metadata dict.
@@ -330,10 +330,8 @@ pub unsafe fn f_foreground(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
 /// `getfontname()` — always empty; nvim has no font.
 pub unsafe fn f_getfontname(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ptr::null_mut();
-    }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
 }
 
 /// `getpid()`
@@ -347,11 +345,9 @@ pub unsafe fn f_hostname(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut hostname = [0 as c_char; 256];
     // SAFETY: `os_get_hostname` writes at most the length it is given,
     // NUL-terminated; `rettv` then owns the duplicate.
-    unsafe {
-        os_get_hostname(hostname.as_mut_ptr(), hostname.len());
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = xstrdup(hostname.as_ptr());
-    }
+    unsafe { os_get_hostname(hostname.as_mut_ptr(), hostname.len()) };
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = xstrdup(hostname.as_ptr()) };
 }
 
 /// `menu_get({path} [, {modes}])`
@@ -360,22 +356,28 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `rettv` is the cleared return value.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        // A non-String second argument is not an error: it just leaves the
-        // mode set at "all".
-        let modes = if args.ty(1) == VAR_STRING {
+    let list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    // A non-String second argument is not an error: it just leaves the
+    // mode set at "all".
+    let modes = if args.ty(1) == VAR_STRING {
+        unsafe {
             get_menu_cmd_modes(
-                numbuf.string(args.ptr(1)),
+                arg_string(&mut numbuf, args.get(1)),
                 false,
                 ptr::null_mut(),
                 ptr::null_mut(),
             )
-        } else {
-            MENU_ALL_MODES as c_int
-        };
-        menu_get(numbuf2.string(args.ptr(0)) as *mut c_char, modes, list);
-    }
+        }
+    } else {
+        MENU_ALL_MODES as c_int
+    };
+    unsafe {
+        menu_get(
+            arg_string(&mut numbuf2, args.get(0)) as *mut c_char,
+            modes,
+            list,
+        )
+    };
 }
 
 /// `mode([{expr}])` — one character, or the full mode string when `{expr}`
@@ -384,14 +386,12 @@ pub unsafe fn f_mode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `get_mode` answers a NUL-padded name and
     // `rettv` then owns the duplicate.
-    unsafe {
-        let mut buf = get_mode();
-        if !non_zero_arg(args.ptr(0)) {
-            buf[1] = NUL as c_char;
-        }
-        rettv.vval.v_string = xstrdup(buf.as_ptr());
-        rettv.v_type = VAR_STRING;
+    let mut buf = unsafe { get_mode() };
+    if !unsafe { non_zero_arg(args.ptr(0)) } {
+        buf[1] = NUL as c_char;
     }
+    rettv.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
+    rettv.v_type = VAR_STRING;
 }
 
 /// `state([{what}])` — the letters for whatever is currently in the way of
@@ -409,45 +409,43 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     // SAFETY: the frame is live; `ga` is a local the appends below own, and
     // `rettv` adopts its allocation at the end. `ga_grow` zero-fills what it
     // adds, so the bytes past the last append terminate the string.
-    unsafe {
-        ga_init(&raw mut ga, 1, 20);
-        let include = if args.has(0) {
-            numbuf.string(args.ptr(0))
-        } else {
-            ptr::null()
-        };
-        let mut add = |c: u8| {
-            if include.is_null() || !vim_strchr(include, c as c_int).is_null() {
-                ga_append(&raw mut ga, c as uint8_t);
-            }
-        };
+    unsafe { ga_init(&raw mut ga, 1, 20) };
+    let include = if args.has(0) {
+        arg_string(&mut numbuf, args.get(0))
+    } else {
+        ptr::null()
+    };
+    let mut add = |c: u8| {
+        if include.is_null() || !unsafe { vim_strchr(include, c as c_int) }.is_null() {
+            unsafe { ga_append(&raw mut ga, c as uint8_t) };
+        }
+    };
 
-        if !(stuff_empty() && typeahead().is_empty() && using_script() == 0) {
-            add(b'm');
-        }
-        if op_pending() {
-            add(b'o');
-        }
-        if autocmd_busy.get() {
-            add(b'x');
-        }
-        if ins_compl_active() {
-            add(b'a');
-        }
-        if !get_was_safe_state() {
-            add(b'S');
-        }
-        // One `c` per nested callback, capped at three.
-        for _ in 0..get_callback_depth().min(3) {
-            add(b'c');
-        }
-        if msg_scrolled.get() > 0 {
-            add(b's');
-        }
-
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = ga.ga_data as *mut c_char;
+    if !(stuff_empty() && typeahead().is_empty() && using_script() == 0) {
+        add(b'm');
     }
+    if op_pending() {
+        add(b'o');
+    }
+    if autocmd_busy.get() {
+        add(b'x');
+    }
+    if ins_compl_active() {
+        add(b'a');
+    }
+    if !get_was_safe_state() {
+        add(b'S');
+    }
+    // One `c` per nested callback, capped at three.
+    for _ in 0..get_callback_depth().min(3) {
+        add(b'c');
+    }
+    if msg_scrolled.get() > 0 {
+        add(b's');
+    }
+
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = ga.ga_data as *mut c_char;
 }
 
 /// `nextnonblank({lnum})` — the first line at or after `{lnum}` that is not
@@ -456,20 +454,18 @@ pub unsafe fn f_nextnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live and `curbuf` is live for the whole call; the
     // loop only reads lines it has range-checked.
-    unsafe {
-        let mut lnum = tv_get_lnum(args.ptr(0));
-        loop {
-            if lnum < 0 || lnum > (*curbuf.get()).b_ml.ml_line_count {
-                lnum = 0;
-                break;
-            }
-            if *skipwhite(ml_get(lnum)) as c_int != NUL {
-                break;
-            }
-            lnum += 1;
+    let mut lnum = arg_lnum(args.get(0));
+    loop {
+        if lnum < 0 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+            lnum = 0;
+            break;
         }
-        rettv.vval.v_number = lnum as varnumber_T;
+        if unsafe { *skipwhite(ml_get(lnum)) } as c_int != NUL {
+            break;
+        }
+        lnum += 1;
     }
+    rettv.vval.v_number = lnum as varnumber_T;
 }
 
 /// `prevnonblank({lnum})` — the last line at or before `{lnum}` that is not
@@ -477,35 +473,29 @@ pub unsafe fn f_nextnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_prevnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: as `f_nextnonblank`.
-    unsafe {
-        let mut lnum = tv_get_lnum(args.ptr(0));
-        if lnum < 1 || lnum > (*curbuf.get()).b_ml.ml_line_count {
-            lnum = 0;
-        } else {
-            while lnum >= 1 && *skipwhite(ml_get(lnum)) as c_int == NUL {
-                lnum -= 1;
-            }
+    let mut lnum = arg_lnum(args.get(0));
+    if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+        lnum = 0;
+    } else {
+        while lnum >= 1 && unsafe { *skipwhite(ml_get(lnum)) } as c_int == NUL {
+            lnum -= 1;
         }
-        rettv.vval.v_number = lnum as varnumber_T;
     }
+    rettv.vval.v_number = lnum as varnumber_T;
 }
 
 /// `pum_getpos()` — where the popup menu is, or an empty dict.
 pub unsafe fn f_pum_getpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe {
-        tv_dict_alloc_ret(rettv);
-        pum_set_event_info((*rettv).vval.v_dict);
-    }
+    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { pum_set_event_info((*rettv).vval.v_dict) };
 }
 
 /// `pumvisible()`
 pub unsafe fn f_pumvisible(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe {
-        if pum_visible() {
-            (*rettv).vval.v_number = 1;
-        }
+    if pum_visible() {
+        unsafe { (*rettv).vval.v_number = 1 };
     }
 }
 
@@ -516,19 +506,17 @@ pub unsafe fn f_shiftwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     // SAFETY: the frame is live and `curbuf` is live for the call.
-    unsafe {
-        if args.has(0) {
-            let col = tv_get_number_chk(args.ptr(0), ptr::null_mut()) as colnr_T;
-            // A coercion failure answers 0, which passes; a negative column
-            // leaves the 0 already in place.
-            if col < 0 {
-                return;
-            }
-            rettv.vval.v_number = get_sw_value_col(curbuf.get(), col, false) as varnumber_T;
+    if args.has(0) {
+        let col = arg_number_chk(args.get(0), None) as colnr_T;
+        // A coercion failure answers 0, which passes; a negative column
+        // leaves the 0 already in place.
+        if col < 0 {
             return;
         }
-        rettv.vval.v_number = get_sw_value(curbuf.get()) as varnumber_T;
+        rettv.vval.v_number = unsafe { get_sw_value_col(curbuf.get(), col, false) } as varnumber_T;
+        return;
     }
+    rettv.vval.v_number = unsafe { get_sw_value(curbuf.get()) } as varnumber_T;
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in
@@ -537,24 +525,22 @@ pub unsafe fn f_tabpagebuflist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; the window chain walked below belongs to a
     // tab page that is live for the whole call.
-    unsafe {
-        let tab = if args.has(0) {
-            TabPage::from_raw(find_tabpage(tv_get_number(args.ptr(0)) as c_int))
-        } else {
-            Some(TabPage::new(curtab.get()))
-        };
-        // A bad tab number answers 0, not an empty List. Every live tab page
-        // has at least one window, so this is the only way out.
-        let Some(tab) = tab else {
-            return;
-        };
-        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        // `windows_in_tab` knows that the current tab's window list lives in
-        // `firstwin` rather than in the tab page record, which is only
-        // updated on the way out.
-        for wp in windows_in_tab(tab) {
-            tv_list_append_number(list, (*wp.w_buffer).handle as varnumber_T);
-        }
+    let tab = if args.has(0) {
+        unsafe { TabPage::from_raw(find_tabpage(arg_number(args.get(0)) as c_int)) }
+    } else {
+        Some(unsafe { TabPage::new(curtab.get()) })
+    };
+    // A bad tab number answers 0, not an empty List. Every live tab page
+    // has at least one window, so this is the only way out.
+    let Some(tab) = tab else {
+        return;
+    };
+    let list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    // `windows_in_tab` knows that the current tab's window list lives in
+    // `firstwin` rather than in the tab page record, which is only
+    // updated on the way out.
+    for wp in windows_in_tab(tab) {
+        unsafe { tv_list_append_number(list, (*wp.w_buffer).handle as varnumber_T) };
     }
 }
 
@@ -564,24 +550,22 @@ pub unsafe fn f_visualmode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live, `curbuf` is live for the call, and `rettv`
     // owns the duplicate.
-    unsafe {
-        let mode = [(*curbuf.get()).b_visual_mode_eval as c_char, NUL as c_char];
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = xstrdup(mode.as_ptr());
-        if non_zero_arg(args.ptr(0)) {
-            (*curbuf.get()).b_visual_mode_eval = NUL;
-        }
+    let mode = [
+        unsafe { (*curbuf.get()).b_visual_mode_eval } as c_char,
+        NUL as c_char,
+    ];
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = unsafe { xstrdup(mode.as_ptr()) };
+    if unsafe { non_zero_arg(args.ptr(0)) } {
+        unsafe { (*curbuf.get()).b_visual_mode_eval = NUL };
     }
 }
 
 /// `wildmenumode()`
 pub unsafe fn f_wildmenumode(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe {
-        if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active())
-        {
-            (*rettv).vval.v_number = 1;
-        }
+    if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
+        unsafe { (*rettv).vval.v_number = 1 };
     }
 }
 
@@ -589,17 +573,13 @@ pub unsafe fn f_wildmenumode(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 pub unsafe fn f_windowsversion(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `windowsVersion` is a live NUL-terminated buffer and `rettv`
     // owns the duplicate.
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = xstrdup(windowsVersion.as_ptr());
-    }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = xstrdup(windowsVersion.as_ptr()) };
 }
 
 /// `wordcount()`
 pub unsafe fn f_wordcount(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe {
-        tv_dict_alloc_ret(rettv);
-        cursor_pos_info((*rettv).vval.v_dict);
-    }
+    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { cursor_pos_info((*rettv).vval.v_dict) };
 }

@@ -4,13 +4,16 @@
 
 use super::TV_TRANSLATE;
 use super::args::{Args, frame};
+use super::wrappers::{
+    arg_copy, arg_number_chk, arg_string, check_arg, dict_alloc_ret, list_alloc_ret,
+};
 use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
-    tv_dict_add_bool, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number_def,
-    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_get_number_chk, tv_is_func,
-    tv_list_alloc_ret, tv_list_append_tv, tv_list_copy, tv_list_find, tv_list_first,
-    tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx, value_check_lock,
+    tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
+    tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_is_func, tv_list_append_tv, tv_list_copy,
+    tv_list_find, tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref,
+    tv_list_uidx, value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
@@ -54,14 +57,12 @@ pub unsafe fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe {
-        if tv_check_for_opt_bool_arg(args.ptr(0), 1) == FAIL {
-            return;
-        }
-        let noref = args.has(1) && tv_get_bool_chk(args.ptr(1), ptr::null_mut()) != 0;
-        let copy_id = if noref { 0 } else { get_copy_id() };
-        var_item_copy(ptr::null(), args.ptr(0), rettv, true, copy_id);
+    if check_arg(args, 1, tv_check_for_opt_bool_arg) == FAIL {
+        return;
     }
+    let noref = args.has(1) && unsafe { tv_get_bool_chk(args.ptr(1), ptr::null_mut()) } != 0;
+    let copy_id = if noref { 0 } else { unsafe { get_copy_id() } };
+    unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, true, copy_id) };
 }
 
 /// `empty({expr})` — what "empty" means for each type.
@@ -118,57 +119,64 @@ pub unsafe fn f_flattennew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// The arguments and `rettv` are live typvals.
 unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
     // SAFETY: the caller's obligation.
-    unsafe {
-        if args.ty(0) != VAR_LIST {
-            semsg_c!(gettext(e_listarg.as_ptr()), c"flatten()".as_ptr(),);
+    if args.ty(0) != VAR_LIST {
+        semsg_c!(
+            unsafe { gettext(e_listarg.as_ptr()) },
+            c"flatten()".as_ptr(),
+        );
+        return;
+    }
+    let maxdepth = if !args.has(1) {
+        999_999
+    } else {
+        let mut error = false;
+        let depth = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+        if error {
             return;
         }
-        let maxdepth = if !args.has(1) {
-            999_999
-        } else {
-            let mut error = false;
-            let depth = tv_get_number_chk(args.ptr(1), &raw mut error) as c_int;
-            if error {
-                return;
-            }
-            if depth < 0 {
+        if depth < 0 {
+            unsafe {
                 emsg(gettext(
                     c"E900: maxdepth must be non-negative number".as_ptr(),
-                ));
-                return;
-            }
-            depth
-        };
+                ))
+            };
+            return;
+        }
+        depth
+    };
 
-        let mut list = args.get(0).vval.v_list;
-        rettv.v_type = VAR_LIST;
+    let mut list = unsafe { args.get(0).vval.v_list };
+    rettv.v_type = VAR_LIST;
+    rettv.vval.v_list = list;
+    if list.is_null() {
+        return;
+    }
+    if make_copy {
+        list = unsafe { tv_list_copy(ptr::null(), list, false, get_copy_id()) };
         rettv.vval.v_list = list;
         if list.is_null() {
             return;
         }
-        if make_copy {
-            list = tv_list_copy(ptr::null(), list, false, get_copy_id());
-            rettv.vval.v_list = list;
-            if list.is_null() {
-                return;
-            }
-        } else {
-            if value_check_lock(
+    } else {
+        if unsafe {
+            value_check_lock(
                 tv_list_locked(list),
                 c"flatten() argument".as_ptr(),
                 TV_TRANSLATE as usize,
-            ) {
-                return;
-            }
-            tv_list_ref(list);
+            )
+        } {
+            return;
         }
+        unsafe { tv_list_ref(list) };
+    }
+    unsafe {
         tv_list_flatten(
             list,
             ptr::null_mut(),
             tv_list_len(list) as i64,
             maxdepth as i64,
-        );
-    }
+        )
+    };
 }
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
@@ -177,29 +185,30 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; each union read
     // is guarded by the type tag above it.
-    unsafe {
-        let found: *mut typval_T = match args.ty(0) {
-            VAR_BLOB => get_from_blob(args, rettv),
-            VAR_LIST => get_from_list(args),
-            VAR_DICT => get_from_dict(args),
-            _ if tv_is_func(*args.get(0)) => {
-                if !get_from_func(args, rettv) {
-                    return;
-                }
-                // Only the "dict" selector falls through to the default
-                // handling below, and only when the Partial had no dict.
-                ptr::null_mut()
+    let found: *mut typval_T = match args.ty(0) {
+        VAR_BLOB => unsafe { get_from_blob(args, rettv) },
+        VAR_LIST => unsafe { get_from_list(args) },
+        VAR_DICT => unsafe { get_from_dict(args) },
+        _ if tv_is_func(*args.get(0)) => {
+            if !unsafe { get_from_func(args, rettv) } {
+                return;
             }
-            _ => {
-                semsg_c!(gettext(e_listdictblobarg.as_ptr()), c"get()".as_ptr(),);
-                ptr::null_mut()
-            }
-        };
-        if !found.is_null() {
-            tv_copy(found, rettv);
-        } else if args.has(2) {
-            tv_copy(args.ptr(2), rettv);
+            // Only the "dict" selector falls through to the default
+            // handling below, and only when the Partial had no dict.
+            ptr::null_mut()
         }
+        _ => {
+            semsg_c!(
+                unsafe { gettext(e_listdictblobarg.as_ptr()) },
+                c"get()".as_ptr(),
+            );
+            ptr::null_mut()
+        }
+    };
+    if !found.is_null() {
+        unsafe { tv_copy(found, rettv) };
+    } else if args.has(2) {
+        arg_copy(args.get(2), rettv);
     }
 }
 
@@ -207,46 +216,42 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
 /// Argument 0 is a live Blob typval.
 unsafe fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
     // SAFETY: the caller's obligation.
-    unsafe {
-        let mut error = false;
-        let mut idx = tv_get_number_chk(args.ptr(1), &raw mut error) as c_int;
-        if error {
-            return ptr::null_mut();
-        }
-        let blob = args.get(0).vval.v_blob;
-        rettv.v_type = VAR_NUMBER;
-        if idx < 0 {
-            idx += tv_blob_len(blob);
-        }
-        if idx < 0 || idx >= tv_blob_len(blob) {
-            // Out of range is -1 rather than the default argument.
-            rettv.vval.v_number = -1;
-            return ptr::null_mut();
-        }
-        rettv.vval.v_number = tv_blob_get(blob, idx) as varnumber_T;
-        // The value is already in place; copying it onto itself is a no-op
-        // and is what upstream does.
-        rettv
+    let mut error = false;
+    let mut idx = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+    if error {
+        return ptr::null_mut();
     }
+    let blob = unsafe { args.get(0).vval.v_blob };
+    rettv.v_type = VAR_NUMBER;
+    if idx < 0 {
+        idx += unsafe { tv_blob_len(blob) };
+    }
+    if idx < 0 || idx >= unsafe { tv_blob_len(blob) } {
+        // Out of range is -1 rather than the default argument.
+        rettv.vval.v_number = -1;
+        return ptr::null_mut();
+    }
+    rettv.vval.v_number = unsafe { tv_blob_get(blob, idx) } as varnumber_T;
+    // The value is already in place; copying it onto itself is a no-op
+    // and is what upstream does.
+    rettv
 }
 
 /// # Safety
 /// Argument 0 is a live List typval.
 unsafe fn get_from_list(args: Args<'_>) -> *mut typval_T {
     // SAFETY: the caller's obligation.
-    unsafe {
-        let l = args.get(0).vval.v_list;
-        if l.is_null() {
-            return ptr::null_mut();
-        }
-        let mut error = false;
-        let idx = tv_get_number_chk(args.ptr(1), &raw mut error) as c_int;
-        let li = tv_list_find(l, idx);
-        if error || li.is_null() {
-            return ptr::null_mut();
-        }
-        &raw mut (*li).li_tv
+    let l = unsafe { args.get(0).vval.v_list };
+    if l.is_null() {
+        return ptr::null_mut();
     }
+    let mut error = false;
+    let idx = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+    let li = unsafe { tv_list_find(l, idx) };
+    if error || li.is_null() {
+        return ptr::null_mut();
+    }
+    unsafe { &raw mut (*li).li_tv }
 }
 
 /// # Safety
@@ -254,17 +259,15 @@ unsafe fn get_from_list(args: Args<'_>) -> *mut typval_T {
 unsafe fn get_from_dict(args: Args<'_>) -> *mut typval_T {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation.
-    unsafe {
-        let d = args.get(0).vval.v_dict;
-        if d.is_null() {
-            return ptr::null_mut();
-        }
-        let di = tv_dict_find(d, numbuf.string(args.ptr(1)), -1);
-        if di.is_null() {
-            return ptr::null_mut();
-        }
-        &raw mut (*di).di_tv
+    let d = unsafe { args.get(0).vval.v_dict };
+    if d.is_null() {
+        return ptr::null_mut();
     }
+    let di = unsafe { tv_dict_find(d, arg_string(&mut numbuf, args.get(1)), -1) };
+    if di.is_null() {
+        return ptr::null_mut();
+    }
+    unsafe { &raw mut (*di).di_tv }
 }
 
 /// Answer `get()` for a Funcref or Partial. Returns whether the caller
@@ -278,70 +281,71 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
     // SAFETY: the caller's obligation. A plain Funcref is answered through
     // a stack Partial holding just its name, which lives as long as this
     // call and is never stored.
-    unsafe {
-        let mut fref = partial_T {
-            pt_refcount: Refcount::ZERO,
-            pt_copyID: 0,
-            pt_name: ptr::null_mut(),
-            pt_func: ptr::null_mut(),
-            pt_auto: false,
-            pt_argc: 0,
-            pt_argv: ptr::null_mut(),
-            pt_dict: ptr::null_mut(),
-        };
-        let pt = if args.ty(0) == VAR_PARTIAL {
-            args.get(0).vval.v_partial
-        } else {
-            fref.pt_name = args.get(0).vval.v_string;
-            &raw mut fref
-        };
-        let what = numbuf.string(args.ptr(1));
-        match CStr::from_ptr(what).to_bytes() {
-            b"func" | b"name" => {
-                let mut name: *const c_char = partial_name(pt);
-                // "func" hands back a Funcref, "name" a plain String.
-                rettv.v_type = if *what == b'f' as c_char {
-                    VAR_FUNC
-                } else {
-                    VAR_STRING
-                };
-                debug_assert!(!name.is_null());
-                if rettv.v_type == VAR_FUNC {
-                    func_ref(name as *mut c_char);
-                }
-                // A lambda has no name of its own; "name" shows the
-                // printable form instead.
-                if *what == b'n' as c_char && (*pt).pt_name.is_null() && !(*pt).pt_func.is_null() {
-                    name = printable_func_name((*pt).pt_func);
-                }
-                rettv.vval.v_string = xstrdup(name);
+    let mut fref = partial_T {
+        pt_refcount: Refcount::ZERO,
+        pt_copyID: 0,
+        pt_name: ptr::null_mut(),
+        pt_func: ptr::null_mut(),
+        pt_auto: false,
+        pt_argc: 0,
+        pt_argv: ptr::null_mut(),
+        pt_dict: ptr::null_mut(),
+    };
+    let pt = if args.ty(0) == VAR_PARTIAL {
+        unsafe { args.get(0).vval.v_partial }
+    } else {
+        fref.pt_name = unsafe { args.get(0).vval.v_string };
+        &raw mut fref
+    };
+    let what = arg_string(&mut numbuf, args.get(1));
+    match unsafe { CStr::from_ptr(what) }.to_bytes() {
+        b"func" | b"name" => {
+            let mut name: *const c_char = unsafe { partial_name(pt) };
+            // "func" hands back a Funcref, "name" a plain String.
+            rettv.v_type = if unsafe { *what } == b'f' as c_char {
+                VAR_FUNC
+            } else {
+                VAR_STRING
+            };
+            debug_assert!(!name.is_null());
+            if rettv.v_type == VAR_FUNC {
+                unsafe { func_ref(name as *mut c_char) };
             }
-            b"dict" => {
-                if !(*pt).pt_dict.is_null() {
-                    tv_dict_set_ret(rettv, (*pt).pt_dict);
-                }
-                // "dict" is the only selector that falls through to the
-                // default-argument handling, and it does so whether or not
-                // it just found a dict — so a default given alongside it
-                // wins. Upstream is the same.
-                return true;
+            // A lambda has no name of its own; "name" shows the
+            // printable form instead.
+            if unsafe { *what } == b'n' as c_char
+                && unsafe { (*pt).pt_name }.is_null()
+                && !unsafe { (*pt).pt_func }.is_null()
+            {
+                name = unsafe { printable_func_name((*pt).pt_func) };
             }
-            b"args" => {
-                rettv.v_type = VAR_LIST;
-                let list = tv_list_alloc_ret(rettv, (*pt).pt_argc as isize);
-                for i in 0..(*pt).pt_argc {
-                    tv_list_append_tv(list, (*pt).pt_argv.offset(i as isize));
-                }
+            rettv.vval.v_string = unsafe { xstrdup(name) };
+        }
+        b"dict" => {
+            if !unsafe { (*pt).pt_dict }.is_null() {
+                unsafe { tv_dict_set_ret(rettv, (*pt).pt_dict) };
             }
-            b"arity" => func_arity(pt, rettv),
-            _ => {
-                // Kept on the variadic message call: `what` is arbitrary
-                // user bytes and a Rust format string can only carry UTF-8.
-                semsg_c!(gettext(e_invarg2.as_ptr()), what);
+            // "dict" is the only selector that falls through to the
+            // default-argument handling, and it does so whether or not
+            // it just found a dict — so a default given alongside it
+            // wins. Upstream is the same.
+            return true;
+        }
+        b"args" => {
+            rettv.v_type = VAR_LIST;
+            let list = unsafe { list_alloc_ret(rettv, (*pt).pt_argc as isize) };
+            for i in 0..unsafe { (*pt).pt_argc } {
+                unsafe { tv_list_append_tv(list, (*pt).pt_argv.offset(i as isize)) };
             }
         }
-        false
+        b"arity" => unsafe { func_arity(pt, rettv) },
+        _ => {
+            // Kept on the variadic message call: `what` is arbitrary
+            // user bytes and a Rust format string can only carry UTF-8.
+            semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, what);
+        }
     }
+    false
 }
 
 /// `get(Funcref, "arity")` — what the function still wants after the
@@ -351,31 +355,31 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
 /// `pt` is a live Partial and `rettv` is the cleared return value.
 unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
+    let (mut required, mut optional, mut varargs) = (0, 0, false);
     unsafe {
-        let (mut required, mut optional, mut varargs) = (0, 0, false);
         get_func_arity(
             partial_name(pt),
             &raw mut required,
             &raw mut optional,
             &raw mut varargs,
-        );
-        rettv.v_type = VAR_DICT;
-        tv_dict_alloc_ret(rettv);
-        let dict = rettv.vval.v_dict;
-        // The bound arguments cover the required ones first.
-        if (*pt).pt_argc >= required + optional {
-            optional = 0;
-            required = 0;
-        } else if (*pt).pt_argc > required {
-            optional -= (*pt).pt_argc - required;
-            required = 0;
-        } else {
-            required -= (*pt).pt_argc;
-        }
-        tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as varnumber_T);
-        tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as varnumber_T);
-        tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue);
+        )
+    };
+    rettv.v_type = VAR_DICT;
+    dict_alloc_ret(rettv);
+    let dict = unsafe { rettv.vval.v_dict };
+    // The bound arguments cover the required ones first.
+    if unsafe { (*pt).pt_argc } >= required + optional {
+        optional = 0;
+        required = 0;
+    } else if unsafe { (*pt).pt_argc } > required {
+        optional -= unsafe { (*pt).pt_argc } - required;
+        required = 0;
+    } else {
+        required -= unsafe { (*pt).pt_argc };
     }
+    unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as varnumber_T) };
+    unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as varnumber_T) };
+    unsafe { tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue) };
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
@@ -383,13 +387,11 @@ pub unsafe fn f_index(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals.
-    unsafe {
-        match args.ty(0) {
-            VAR_BLOB => index_blob(args, rettv),
-            VAR_LIST => index_list(args, rettv),
-            _ => {
-                emsg(gettext(e_listblobreq.as_ptr()));
-            }
+    match args.ty(0) {
+        VAR_BLOB => unsafe { index_blob(args, rettv) },
+        VAR_LIST => unsafe { index_list(args, rettv) },
+        _ => {
+            unsafe { emsg(gettext(e_listblobreq.as_ptr())) };
         }
     }
 }
@@ -398,33 +400,31 @@ pub unsafe fn f_index(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// Argument 0 is a live Blob typval.
 unsafe fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
-    unsafe {
-        let mut start: c_int = 0;
-        if args.has(2) {
-            let mut error = false;
-            start = tv_get_number_chk(args.ptr(2), &raw mut error) as c_int;
-            if error {
-                return;
-            }
-        }
-        let b = args.get(0).vval.v_blob;
-        if b.is_null() {
+    let mut start: c_int = 0;
+    if args.has(2) {
+        let mut error = false;
+        start = arg_number_chk(args.get(2), Some(&mut error)) as c_int;
+        if error {
             return;
         }
-        if start < 0 {
-            start = (tv_blob_len(b) + start).max(0);
-        }
-        for idx in start..tv_blob_len(b) {
-            let mut tv = NIL;
-            tv.v_type = VAR_NUMBER;
-            tv.vval.v_number = tv_blob_get(b, idx) as varnumber_T;
-            // The Blob branch never reads argument 3, so a Blob search is
-            // always case-sensitive however 'ic' was spelled. Upstream is
-            // the same; the flag only reaches the List branch.
-            if tv_equal(&raw mut tv, args.ptr(1), false) {
-                rettv.vval.v_number = idx as varnumber_T;
-                return;
-            }
+    }
+    let b = unsafe { args.get(0).vval.v_blob };
+    if b.is_null() {
+        return;
+    }
+    if start < 0 {
+        start = (unsafe { tv_blob_len(b) } + start).max(0);
+    }
+    for idx in start..unsafe { tv_blob_len(b) } {
+        let mut tv = NIL;
+        tv.v_type = VAR_NUMBER;
+        tv.vval.v_number = unsafe { tv_blob_get(b, idx) } as varnumber_T;
+        // The Blob branch never reads argument 3, so a Blob search is
+        // always case-sensitive however 'ic' was spelled. Upstream is
+        // the same; the flag only reaches the List branch.
+        if unsafe { tv_equal(&raw mut tv, args.ptr(1), false) } {
+            rettv.vval.v_number = idx as varnumber_T;
+            return;
         }
     }
 }
@@ -433,38 +433,36 @@ unsafe fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
 /// Argument 0 is a live List typval.
 unsafe fn index_list(args: Args<'_>, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
-    unsafe {
-        let l = args.get(0).vval.v_list;
-        if l.is_null() {
+    let l = unsafe { args.get(0).vval.v_list };
+    if l.is_null() {
+        return;
+    }
+    let mut idx: c_int = 0;
+    let mut item = unsafe { tv_list_first(l) };
+    let mut ic = false;
+    if args.has(2) {
+        let mut error = false;
+        idx = unsafe { tv_list_uidx(l, arg_number_chk(args.get(2), Some(&mut error)) as c_int) };
+        if error || idx == -1 {
+            item = ptr::null_mut();
+        } else {
+            item = unsafe { tv_list_find(l, idx) };
+            debug_assert!(!item.is_null());
+        }
+        if args.has(3) {
+            ic = arg_number_chk(args.get(3), Some(&mut error)) != 0;
+            if error {
+                item = ptr::null_mut();
+            }
+        }
+    }
+    while !item.is_null() {
+        if unsafe { tv_equal(&raw mut (*item).li_tv, args.ptr(1), ic) } {
+            rettv.vval.v_number = idx as varnumber_T;
             return;
         }
-        let mut idx: c_int = 0;
-        let mut item = tv_list_first(l);
-        let mut ic = false;
-        if args.has(2) {
-            let mut error = false;
-            idx = tv_list_uidx(l, tv_get_number_chk(args.ptr(2), &raw mut error) as c_int);
-            if error || idx == -1 {
-                item = ptr::null_mut();
-            } else {
-                item = tv_list_find(l, idx);
-                debug_assert!(!item.is_null());
-            }
-            if args.has(3) {
-                ic = tv_get_number_chk(args.ptr(3), &raw mut error) != 0;
-                if error {
-                    item = ptr::null_mut();
-                }
-            }
-        }
-        while !item.is_null() {
-            if tv_equal(&raw mut (*item).li_tv, args.ptr(1), ic) {
-                rettv.vval.v_number = idx as varnumber_T;
-                return;
-            }
-            item = (*item).li_next;
-            idx += 1;
-        }
+        item = unsafe { (*item).li_next };
+        idx += 1;
     }
 }
 
@@ -475,45 +473,46 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; the two `v:` variables are
     // saved and put back around the search whatever it does.
-    unsafe {
-        if tv_check_for_list_or_blob_arg(args.ptr(0), 0) == FAIL
-            || tv_check_for_string_or_func_arg(args.ptr(0), 1) == FAIL
-            || tv_check_for_opt_dict_arg(args.ptr(0), 2) == FAIL
-        {
-            return;
-        }
-        // An empty expression matches nothing rather than everything.
-        let expr = args.get(1);
-        let vacuous = match expr.v_type {
-            VAR_STRING => expr.vval.v_string.is_null() || *expr.vval.v_string == NUL as c_char,
-            VAR_FUNC => expr.vval.v_partial.is_null(),
-            _ => false,
-        };
-        if vacuous {
-            return;
-        }
-        let startidx = if args.ty(2) == VAR_DICT {
-            tv_dict_get_number_def(args.get(2).vval.v_dict, c"startidx".as_ptr(), 0)
-        } else {
-            0
-        };
-
-        let (mut save_val, mut save_key) = (NIL, NIL);
-        prepare_vimvar(Vv::Val, &raw mut save_val);
-        prepare_vimvar(Vv::Key, &raw mut save_key);
-        let saved_did_emsg = did_emsg.get();
-        did_emsg.set(0);
-        rettv.vval.v_number = if args.ty(0) == VAR_BLOB {
-            indexof_blob(args.get(0).vval.v_blob, startidx, args.ptr(1))
-        } else {
-            indexof_list(args.get(0).vval.v_list, startidx, args.ptr(1))
-        };
-        restore_vimvar(Vv::Key, &raw mut save_key);
-        restore_vimvar(Vv::Val, &raw mut save_val);
-        // As `printf()`: an error raised before this call survives, one
-        // raised inside it does not.
-        did_emsg.set(did_emsg.get() | saved_did_emsg);
+    if check_arg(args, 0, tv_check_for_list_or_blob_arg) == FAIL
+        || check_arg(args, 1, tv_check_for_string_or_func_arg) == FAIL
+        || check_arg(args, 2, tv_check_for_opt_dict_arg) == FAIL
+    {
+        return;
     }
+    // An empty expression matches nothing rather than everything.
+    let expr = args.get(1);
+    let vacuous = match expr.v_type {
+        VAR_STRING => {
+            unsafe { expr.vval.v_string }.is_null()
+                || unsafe { *expr.vval.v_string } == NUL as c_char
+        }
+        VAR_FUNC => unsafe { expr.vval.v_partial }.is_null(),
+        _ => false,
+    };
+    if vacuous {
+        return;
+    }
+    let startidx = if args.ty(2) == VAR_DICT {
+        unsafe { tv_dict_get_number_def(args.get(2).vval.v_dict, c"startidx".as_ptr(), 0) }
+    } else {
+        0
+    };
+
+    let (mut save_val, mut save_key) = (NIL, NIL);
+    unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
+    unsafe { prepare_vimvar(Vv::Key, &raw mut save_key) };
+    let saved_did_emsg = did_emsg.get();
+    did_emsg.set(0);
+    rettv.vval.v_number = if args.ty(0) == VAR_BLOB {
+        unsafe { indexof_blob(args.get(0).vval.v_blob, startidx, args.ptr(1)) }
+    } else {
+        unsafe { indexof_list(args.get(0).vval.v_list, startidx, args.ptr(1)) }
+    };
+    unsafe { restore_vimvar(Vv::Key, &raw mut save_key) };
+    unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
+    // As `printf()`: an error raised before this call survives, one
+    // raised inside it does not.
+    did_emsg.set(did_emsg.get() | saved_did_emsg);
 }
 
 /// Evaluate `indexof()`'s predicate against the `v:key`/`v:val` already in
@@ -525,17 +524,19 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 unsafe fn indexof_matches(expr: *mut typval_T) -> bool {
     // SAFETY: the caller's obligation; `argv` and `newtv` are locals that
     // outlive the evaluation, and `newtv` is cleared before returning.
-    unsafe {
-        let mut argv = [*get_vim_var_tv(Vv::Key), *get_vim_var_tv(Vv::Val), NIL];
-        let mut newtv = NIL;
-        if eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) == FAIL {
-            return false;
-        }
-        let mut error = false;
-        let found = tv_get_bool_chk(&raw mut newtv, &raw mut error);
-        tv_clear(&raw mut newtv);
-        !error && found != 0
+    let mut argv = [
+        unsafe { *get_vim_var_tv(Vv::Key) },
+        unsafe { *get_vim_var_tv(Vv::Val) },
+        NIL,
+    ];
+    let mut newtv = NIL;
+    if unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) } == FAIL {
+        return false;
     }
+    let mut error = false;
+    let found = unsafe { tv_get_bool_chk(&raw mut newtv, &raw mut error) };
+    unsafe { tv_clear(&raw mut newtv) };
+    !error && found != 0
 }
 
 /// # Safety
@@ -545,28 +546,26 @@ unsafe fn indexof_blob(b: *mut blob_T, startidx: varnumber_T, expr: *mut typval_
         return -1;
     }
     // SAFETY: the caller's obligation.
-    unsafe {
-        let start = if startidx < 0 {
-            (tv_blob_len(b) as varnumber_T + startidx).max(0)
-        } else {
-            startidx
-        };
-        set_vim_var_type(Vv::Key, VAR_NUMBER);
-        set_vim_var_type(Vv::Val, VAR_NUMBER);
-        let called_emsg_start = called_emsg.get();
-        for idx in start..tv_blob_len(b) as varnumber_T {
-            set_vim_var_nr(Vv::Key, idx);
-            set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as varnumber_T);
-            if indexof_matches(expr) {
-                return idx;
-            }
-            // A predicate that reported an error ends the search.
-            if called_emsg.get() != called_emsg_start {
-                return -1;
-            }
+    let start = if startidx < 0 {
+        (unsafe { tv_blob_len(b) } as varnumber_T + startidx).max(0)
+    } else {
+        startidx
+    };
+    unsafe { set_vim_var_type(Vv::Key, VAR_NUMBER) };
+    unsafe { set_vim_var_type(Vv::Val, VAR_NUMBER) };
+    let called_emsg_start = called_emsg.get();
+    for idx in start..unsafe { tv_blob_len(b) } as varnumber_T {
+        unsafe { set_vim_var_nr(Vv::Key, idx) };
+        unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as varnumber_T) };
+        if unsafe { indexof_matches(expr) } {
+            return idx;
         }
-        -1
+        // A predicate that reported an error ends the search.
+        if called_emsg.get() != called_emsg_start {
+            return -1;
+        }
     }
+    -1
 }
 
 /// # Safety
@@ -576,40 +575,38 @@ unsafe fn indexof_list(l: *mut list_T, startidx: varnumber_T, expr: *mut typval_
         return -1;
     }
     // SAFETY: the caller's obligation.
-    unsafe {
-        let mut idx: varnumber_T = 0;
-        let mut item: *mut listitem_T;
-        // A zero start index is taken literally rather than run through
-        // `tv_list_uidx`, so it does not have to be a valid index.
-        if startidx == 0 {
-            item = tv_list_first(l);
+    let mut idx: varnumber_T = 0;
+    let mut item: *mut listitem_T;
+    // A zero start index is taken literally rather than run through
+    // `tv_list_uidx`, so it does not have to be a valid index.
+    if startidx == 0 {
+        item = unsafe { tv_list_first(l) };
+    } else {
+        idx = unsafe { tv_list_uidx(l, startidx as c_int) } as varnumber_T;
+        if idx == -1 {
+            item = ptr::null_mut();
         } else {
-            idx = tv_list_uidx(l, startidx as c_int) as varnumber_T;
-            if idx == -1 {
-                item = ptr::null_mut();
-            } else {
-                item = tv_list_find(l, idx as c_int);
-                debug_assert!(!item.is_null());
-            }
+            item = unsafe { tv_list_find(l, idx as c_int) };
+            debug_assert!(!item.is_null());
         }
-        set_vim_var_type(Vv::Key, VAR_NUMBER);
-        let called_emsg_start = called_emsg.get();
-        while !item.is_null() {
-            set_vim_var_nr(Vv::Key, idx);
-            tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(Vv::Val));
-            let found = indexof_matches(expr);
-            tv_clear(get_vim_var_tv(Vv::Val));
-            if found {
-                return idx;
-            }
-            if called_emsg.get() != called_emsg_start {
-                return -1;
-            }
-            item = (*item).li_next;
-            idx += 1;
-        }
-        -1
     }
+    unsafe { set_vim_var_type(Vv::Key, VAR_NUMBER) };
+    let called_emsg_start = called_emsg.get();
+    while !item.is_null() {
+        unsafe { set_vim_var_nr(Vv::Key, idx) };
+        unsafe { tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(Vv::Val)) };
+        let found = unsafe { indexof_matches(expr) };
+        unsafe { tv_clear(get_vim_var_tv(Vv::Val)) };
+        if found {
+            return idx;
+        }
+        if called_emsg.get() != called_emsg_start {
+            return -1;
+        }
+        item = unsafe { (*item).li_next };
+        idx += 1;
+    }
+    -1
 }
 
 /// `len({expr})` — bytes for a String or Number, items otherwise.
@@ -619,20 +616,20 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     let tv = args.get(0);
     // SAFETY: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
-    unsafe {
-        rettv.vval.v_number = match tv.v_type {
-            VAR_STRING | VAR_NUMBER => strlen(numbuf.string(args.ptr(0))) as varnumber_T,
-            VAR_BLOB => tv_blob_len(tv.vval.v_blob) as varnumber_T,
-            VAR_LIST => tv_list_len(tv.vval.v_list) as varnumber_T,
-            VAR_DICT => tv_dict_len(tv.vval.v_dict) as varnumber_T,
-            // The remaining tags are Unknown, Funcref, Partial, Float,
-            // Bool and Special; `VarType` has no twelfth value.
-            _ => {
-                emsg(gettext(c"E701: Invalid type for len()".as_ptr()));
-                return;
-            }
-        };
-    }
+    rettv.vval.v_number = match tv.v_type {
+        VAR_STRING | VAR_NUMBER => unsafe {
+            strlen(arg_string(&mut numbuf, args.get(0))) as varnumber_T
+        },
+        VAR_BLOB => unsafe { tv_blob_len(tv.vval.v_blob) as varnumber_T },
+        VAR_LIST => unsafe { tv_list_len(tv.vval.v_list) as varnumber_T },
+        VAR_DICT => unsafe { tv_dict_len(tv.vval.v_dict) as varnumber_T },
+        // The remaining tags are Unknown, Funcref, Partial, Float,
+        // Bool and Special; `VarType` has no twelfth value.
+        _ => {
+            unsafe { emsg(gettext(c"E701: Invalid type for len()".as_ptr())) };
+            return;
+        }
+    };
 }
 
 /// `type({expr})` — the `v:t_*` number for the value's type.
