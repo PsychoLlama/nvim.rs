@@ -270,9 +270,7 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
     unsafe {
         // No stack, no cached block, no cached line, no chunk table yet.
-        (*buf).b_ml.ml_stack_size = 0;
-        (*buf).b_ml.ml_stack = ::core::ptr::null_mut();
-        (*buf).b_ml.ml_stack_top = 0;
+        (*buf).b_ml.stack_clear();
         (*buf).b_ml.ml_locked = ::core::ptr::null_mut();
         (*buf).b_ml.ml_line_lnum = 0;
         (*buf).b_ml.ml_line_offset = 0;
@@ -524,7 +522,7 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
         if (*buf).b_ml.ml_line_lnum != 0 && (*buf).b_ml.line_is_owned() {
             xfree((*buf).b_ml.ml_line_ptr.cast());
         }
-        xfree((*buf).b_ml.ml_stack.cast());
+        (*buf).b_ml.stack_free();
         xfree((*buf).b_ml.ml_chunksize.cast());
         (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut();
         (*buf).b_ml.ml_mfp = ::core::ptr::null_mut();

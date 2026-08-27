@@ -77,9 +77,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // memline in it is really used, and it is never registered or
             // put on the buffer list -- see `alloc_unregistered_buffer`.
             buf = owned_buf.insert(alloc_unregistered_buffer()).address();
-            (*buf).b_ml.ml_stack_size = 0; // no stack yet
-            (*buf).b_ml.ml_stack = core::ptr::null_mut();
-            (*buf).b_ml.ml_stack_top = 0; // nothing in the stack
+            (*buf).b_ml.stack_clear(); // nothing in the stack
             (*buf).b_ml.ml_line_lnum = 0; // no cached line
             (*buf).b_ml.ml_line_offset = 0;
             (*buf).b_ml.ml_locked = core::ptr::null_mut(); // no locked block
@@ -381,11 +379,8 @@ pub unsafe fn ml_recover(checkext: bool) {
             }
             mf_close(mfp, false); // also frees the swap file's name
         }
-        if !buf.is_null() {
-            // May be null: the swap file was never found.
-            xfree((*buf).b_ml.ml_stack.cast());
-        }
-        // The free: `buf_T`'s destructor runs and the memory goes back.
+        // The free: `buf_T`'s destructor runs, taking the block stack with
+        // it, and the memory goes back.
         drop(owned_buf);
         if serious_error && called_from_main {
             ml_close(curbuf.get(), 1);
@@ -486,9 +481,7 @@ unsafe fn recover_lines(
         let mut line_count: linenr_T = 0;
         let mut idx = 0; // start with the first index in block 1
         let mut error = 0;
-        (*buf).b_ml.ml_stack_top = 0;
-        (*buf).b_ml.ml_stack = core::ptr::null_mut();
-        (*buf).b_ml.ml_stack_size = 0;
+        (*buf).b_ml.stack_clear();
 
         // Without a file to fall back on, a data block whose number went
         // negative (never written to the swap file) is simply lost.
@@ -595,9 +588,15 @@ unsafe fn recover_lines(
 
                         // One block deeper in the tree.
                         let top = ml_add_stack(buf);
-                        let ip = (*buf).b_ml.ml_stack.offset(top as isize);
-                        (*ip).ip_bnum = bnum;
-                        (*ip).ip_index = idx;
+                        (*buf).b_ml.stack_set(
+                            top,
+                            infoptr_T {
+                                ip_bnum: bnum,
+                                ip_low: 0,
+                                ip_high: 0,
+                                ip_index: idx,
+                            },
+                        );
 
                         bnum = pe.pe_bnum;
                         line_count = pe.pe_line_count;
@@ -613,10 +612,11 @@ unsafe fn recover_lines(
                             append(&mut lnum, gettext(c"???ILLEGAL BLOCK NUMBER".as_ptr()));
                             // Skip this entry and pop back up, to recover
                             // whatever else there is.
-                            idx = (*ip).ip_index + 1;
-                            bnum = (*ip).ip_bnum;
+                            let ip = (*buf).b_ml.stack_at(top);
+                            idx = ip.ip_index + 1;
+                            bnum = ip.ip_bnum;
                             page_count = 1;
-                            (*buf).b_ml.ml_stack_top -= 1;
+                            (*buf).b_ml.stack_pop();
                             break 'step;
                         }
                         idx = 0;
@@ -707,18 +707,12 @@ unsafe fn recover_lines(
                     }
                 }
 
-                if (*buf).b_ml.ml_stack_top == 0 {
-                    break 'walk; // finished
-                }
-
                 // One block back up the tree, and on to the next index.
-                (*buf).b_ml.ml_stack_top -= 1;
-                let ip = (*buf)
-                    .b_ml
-                    .ml_stack
-                    .offset((*buf).b_ml.ml_stack_top as isize);
-                bnum = (*ip).ip_bnum;
-                idx = (*ip).ip_index + 1;
+                let Some(ip) = (*buf).b_ml.stack_pop() else {
+                    break 'walk; // finished
+                };
+                bnum = ip.ip_bnum;
+                idx = ip.ip_index + 1;
                 page_count = 1;
             }
             line_breakcheck();
@@ -871,7 +865,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
         // `ml_preserve` still answers OK/FAIL to its own callers, so the
         // memfile's result is converted here and again below.
         let mut status = mf_sync(mfp, sync_flags).map_or(FAIL, |()| OK);
-        (*buf).b_ml.ml_stack_top = 0; // the stack is invalid after MFS_ALL
+        (*buf).b_ml.stack_clear(); // the stack is invalid after MFS_ALL
 
         // Some data blocks may have gone from a negative to a positive block
         // number, which means the pointer blocks referring to them need
@@ -895,7 +889,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
                 if mf_sync(mfp, sync_flags).is_err() {
                     status = FAIL;
                 }
-                (*buf).b_ml.ml_stack_top = 0; // the stack is invalid now
+                (*buf).b_ml.stack_clear(); // the stack is invalid now
             }
         }
         got_int.set(got_int.get() | got_int_save);

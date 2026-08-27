@@ -421,11 +421,14 @@ fn new_buffer() -> Owned<buf_T> {
 /// the caller fills in afterwards may be read.
 pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     let mut storage = Box::<buf_T>::new_zeroed();
-    // The one field a zeroed `buf_T` is *not* a valid value for: an empty
+    let at = storage.as_mut_ptr();
+    // The two fields a zeroed `buf_T` is *not* a valid value for: an empty
     // `Vec` holds a non-null dangling pointer, not a zero one.
-    // SAFETY: the field is inside the block just allocated, and nothing has
-    // read or dropped it yet.
-    unsafe { (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new()) };
+    // SAFETY: the field is inside the block just allocated, nothing has read
+    // or dropped it, and `write` does not drop what was there.
+    unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
+    // SAFETY: as above -- the memline's block stack.
+    unsafe { (&raw mut (*at).b_ml.ml_stack).write(Vec::new()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })

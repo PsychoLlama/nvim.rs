@@ -413,24 +413,26 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         if action == ML_FIND as c_int {
             // The previous walk's stack usually still covers this line —
             // reads come in runs. Restart from the deepest entry that does.
-            let mut top = (*buf).b_ml.ml_stack_top - 1;
-            while top >= 0 {
-                let ip = (*buf).b_ml.ml_stack.offset(top as isize);
-                if (*ip).ip_low <= lnum && (*ip).ip_high >= lnum {
-                    bnum = (*ip).ip_bnum;
-                    low = (*ip).ip_low;
-                    high = (*ip).ip_high;
-                    (*buf).b_ml.ml_stack_top = top; // truncate at the entry above
+            let mut top = (*buf).b_ml.stack_len();
+            let mut resumed = false;
+            while top > 0 {
+                top -= 1;
+                let ip = (*buf).b_ml.stack_at(top);
+                if ip.ip_low <= lnum && ip.ip_high >= lnum {
+                    bnum = ip.ip_bnum;
+                    low = ip.ip_low;
+                    high = ip.ip_high;
+                    (*buf).b_ml.stack_truncate(top); // drop the entry itself
+                    resumed = true;
                     break;
                 }
-                top -= 1;
             }
-            if top < 0 {
-                (*buf).b_ml.ml_stack_top = 0; // not found, start at the root
+            if !resumed {
+                (*buf).b_ml.stack_clear(); // not found, start at the root
             }
         } else {
             // ML_DELETE or ML_INSERT: the whole path has to be rewritten.
-            (*buf).b_ml.ml_stack_top = 0;
+            (*buf).b_ml.stack_clear();
         }
 
         // Search downwards until a data block is found.
@@ -464,14 +466,16 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
                 break;
             }
 
-            // ml_add_stack may reallocate ml_stack, so `ip` has to be taken
-            // after it and not held across another push.
             let top = ml_add_stack(buf);
-            let ip = (*buf).b_ml.ml_stack.offset(top as isize);
-            (*ip).ip_bnum = bnum;
-            (*ip).ip_low = low;
-            (*ip).ip_high = high;
-            (*ip).ip_index = -1; // index not known yet
+            (*buf).b_ml.stack_set(
+                top,
+                infoptr_T {
+                    ip_bnum: bnum,
+                    ip_low: low,
+                    ip_high: high,
+                    ip_index: -1, // index not known yet
+                },
+            );
 
             let mut dirty = false;
             let count = (*pp).pb_count as c_int;
@@ -481,7 +485,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
                 let t = (*entry).pe_line_count;
                 low += t;
                 if low > lnum {
-                    (*ip).ip_index = idx;
+                    (*buf).b_ml.stack_set_index(top, idx);
                     bnum = (*entry).pe_bnum;
                     page_count = (*entry).pe_page_count;
                     high = low - 1;
@@ -538,27 +542,18 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         } else if action == ML_INSERT as c_int {
             ml_lineadd(buf, -1);
         }
-        (*buf).b_ml.ml_stack_top = 0;
+        (*buf).b_ml.stack_clear();
         core::ptr::null_mut()
     }
 }
 
-/// Push an entry onto the info-pointer stack, growing it if needed, and
-/// return its index.
+/// Push an entry onto the info-pointer stack and return its index. The
+/// entry is left blank; every caller fills it in.
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> c_int {
-    unsafe {
-        let top = (*buf).b_ml.ml_stack_top;
-        if top == (*buf).b_ml.ml_stack_size {
-            (*buf).b_ml.ml_stack_size += STACK_INCR;
-            let new_size = size_of::<infoptr_T>() * (*buf).b_ml.ml_stack_size as usize;
-            (*buf).b_ml.ml_stack = xrealloc((*buf).b_ml.ml_stack.cast(), new_size).cast();
-        }
-        (*buf).b_ml.ml_stack_top += 1;
-        top
-    }
+pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> usize {
+    unsafe { (*buf).b_ml.stack_push() }
 }
 
 /// Add `count` (negative to subtract) to the line count of every pointer
@@ -570,12 +565,29 @@ pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> c_int {
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
 pub(crate) unsafe fn ml_lineadd(buf: *mut buf_T, count: c_int) {
+    // SAFETY: the caller's buffer, and its whole stack.
+    unsafe { ml_lineadd_depth(buf, count, (*buf).b_ml.stack_len()) }
+}
+
+/// [`ml_lineadd`] over the bottom `depth` entries of the stack only.
+///
+/// The two callers that repair a *pointer* block have already put the entry
+/// they are working on back on the stack, and it must not be corrected
+/// twice; upstream expressed that by dropping `ml_stack_top` for the call
+/// and reading the entry back from above it afterwards, which a `Vec` will
+/// not do.
+///
+/// # Safety
+/// `buf` must point at a buffer whose memline is open, and `depth` must not
+/// exceed the stack's length.
+pub(crate) unsafe fn ml_lineadd_depth(buf: *mut buf_T, count: c_int, depth: usize) {
     unsafe {
         let mfp = (*buf).b_ml.ml_mfp;
-        let mut idx = (*buf).b_ml.ml_stack_top - 1;
-        while idx >= 0 {
-            let ip = (*buf).b_ml.ml_stack.offset(idx as isize);
-            let hp = mf_get(mfp, (*ip).ip_bnum, 1);
+        let mut idx = depth;
+        while idx > 0 {
+            idx -= 1;
+            let ip = (*buf).b_ml.stack_at(idx);
+            let hp = mf_get(mfp, ip.ip_bnum, 1);
             if hp.is_null() {
                 break;
             }
@@ -586,11 +598,10 @@ pub(crate) unsafe fn ml_lineadd(buf: *mut buf_T, count: c_int) {
                 iemsg(gettext(c"E317: Pointer block id wrong 2".as_ptr()));
                 break;
             }
-            let entry = pb_entries(pp).offset((*ip).ip_index as isize);
+            let entry = pb_entries(pp).offset(ip.ip_index as isize);
             (*entry).pe_line_count += count;
-            (*ip).ip_high += count;
+            (*buf).b_ml.stack_add_high(idx, count);
             mf_put(mfp, hp, true, false);
-            idx -= 1;
         }
     }
 }

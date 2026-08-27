@@ -425,13 +425,11 @@ unsafe fn ml_split_data_block(
 /// describe two blocks that exist.
 unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut SplitBlocks) -> bool {
     unsafe {
-        let mut stack_idx = (*buf).b_ml.ml_stack_top - 1;
+        let mut stack_idx = (*buf).b_ml.stack_len() as c_int - 1;
         while stack_idx >= 0 {
-            // The stack can be reallocated by ml_add_stack, but nothing here
-            // pushes onto it, so this stays valid for the iteration.
-            let ip = (*buf).b_ml.ml_stack.offset(stack_idx as isize);
-            let pb_idx = (*ip).ip_index;
-            let mut hp = mf_get(mfp, (*ip).ip_bnum, 1);
+            let ip = (*buf).b_ml.stack_at(stack_idx as usize);
+            let pb_idx = ip.ip_index;
+            let mut hp = mf_get(mfp, ip.ip_bnum, 1);
             if hp.is_null() {
                 return false;
             }
@@ -449,11 +447,10 @@ unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut Sp
 
             // The pointer block is full: split it, and go round again to give
             // *its* parent the two halves.
-            let hp_new =
-                match ml_split_pointer_block(buf, mfp, &mut hp, &mut pp, ip, &mut stack_idx) {
-                    Some(hp_new) => hp_new,
-                    None => return false,
-                };
+            let hp_new = match ml_split_pointer_block(buf, mfp, &mut hp, &mut pp, &mut stack_idx) {
+                Some(hp_new) => hp_new,
+                None => return false,
+            };
             let pp_new = (*hp_new).bh_data as *mut PointerBlock;
 
             // Move the entries after the current one into the new block; if
@@ -507,7 +504,7 @@ unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut Sp
 
         // Fallen off the bottom of the stack.
         iemsg(gettext(c"E318: Updated too many blocks?".as_ptr()));
-        (*buf).b_ml.ml_stack_top = 0; // invalidate the stack
+        (*buf).b_ml.stack_clear(); // invalidate the stack
         true
     }
 }
@@ -568,19 +565,15 @@ unsafe fn ml_pointer_add_entry(
         }
 
         mf_put(mfp, hp, true, false);
-        (*buf).b_ml.ml_stack_top = stack_idx + 1; // truncate the stack
+        let stack_idx = stack_idx as usize;
+        (*buf).b_ml.stack_truncate(stack_idx + 1); // truncate the stack
 
         if split.lineadd != 0 {
-            (*buf).b_ml.ml_stack_top -= 1;
             // Fix the line count in the rest of the blocks on the stack, and
-            // then the stack entry itself.
-            ml_lineadd(buf, split.lineadd);
-            (*(*buf)
-                .b_ml
-                .ml_stack
-                .offset((*buf).b_ml.ml_stack_top as isize))
-            .ip_high += split.lineadd;
-            (*buf).b_ml.ml_stack_top += 1;
+            // then the stack entry itself -- which stays on the stack, so
+            // the walk has to stop below it.
+            ml_lineadd_depth(buf, split.lineadd, stack_idx);
+            (*buf).b_ml.stack_add_high(stack_idx, split.lineadd);
         }
     }
 }
@@ -596,17 +589,19 @@ unsafe fn ml_pointer_add_entry(
 /// Returns None if a block could not be allocated.
 ///
 /// # Safety
-/// `*hp`/`*pp` must be a full pointer block, `ip` its stack entry.
+/// `*hp`/`*pp` must be a full pointer block, and `*stack_idx` the index of
+/// its stack entry.
 unsafe fn ml_split_pointer_block(
     buf: *mut buf_T,
     mfp: *mut memfile_T,
     hp: &mut *mut bhdr_T,
     pp: &mut *mut PointerBlock,
-    ip: *mut infoptr_T,
     stack_idx: &mut c_int,
 ) -> Option<*mut bhdr_T> {
     unsafe {
         let page_size = (*mfp).mf_page_size as usize;
+        // Where `*hp`'s own stack entry is; `stack_idx` moves below.
+        let ip = *stack_idx as usize;
         loop {
             let hp_new = ml_new_ptr(mfp);
             if hp_new.is_null() {
@@ -627,7 +622,7 @@ unsafe fn ml_split_pointer_block(
             mf_put(mfp, *hp, true, false); // release block 1
             *hp = hp_new; // the new block is the one to split
             *pp = pp_new;
-            (*ip).ip_index = 0;
+            (*buf).b_ml.stack_set_index(ip, 0);
             *stack_idx += 1; // do block 1 again later
         }
     }
@@ -744,19 +739,25 @@ unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr
         mf_free(mfp, hp); // free the data block
         (*buf).b_ml.ml_locked = core::ptr::null_mut();
 
-        let mut stack_idx = (*buf).b_ml.ml_stack_top - 1;
+        // The stack is invalid until one of the pointer blocks on it survives
+        // the unhooking; upstream said so by dropping `ml_stack_top` to zero
+        // on the way in and putting it back on the way out, which a `Vec`
+        // cannot do without losing the entries it is still reading. The
+        // length is only cut once the answer is known.
+        let mut stack_idx = (*buf).b_ml.stack_len() as c_int - 1;
         while stack_idx >= 0 {
-            (*buf).b_ml.ml_stack_top = 0; // the stack is invalid if this fails
-            let ip = (*buf).b_ml.ml_stack.offset(stack_idx as isize);
-            let idx = (*ip).ip_index;
-            let hp = mf_get(mfp, (*ip).ip_bnum, 1);
+            let ip = (*buf).b_ml.stack_at(stack_idx as usize);
+            let idx = ip.ip_index;
+            let hp = mf_get(mfp, ip.ip_bnum, 1);
             if hp.is_null() {
+                (*buf).b_ml.stack_clear();
                 return false;
             }
             let pp = (*hp).bh_data as *mut PointerBlock;
             if (*pp).pb_id as c_int != PTR_ID as c_int {
                 iemsg(gettext(c"E317: Pointer block id wrong 4".as_ptr()));
                 mf_put(mfp, hp, false, false);
+                (*buf).b_ml.stack_clear();
                 return false;
             }
             (*pp).pb_count = (*pp).pb_count.wrapping_sub(1);
@@ -778,19 +779,21 @@ unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr
             }
             mf_put(mfp, hp, true, false);
 
-            (*buf).b_ml.ml_stack_top = stack_idx; // truncate the stack
-            // Fix the line count in the rest of the blocks on the stack.
+            // This block stays on the stack and everything below it is gone.
+            let stack_idx = stack_idx as usize;
+            (*buf).b_ml.stack_truncate(stack_idx + 1);
+            // Fix the line count in the rest of the blocks on the stack --
+            // below this one, which is corrected by hand right after.
             if (*buf).b_ml.ml_locked_lineadd != 0 {
-                ml_lineadd(buf, (*buf).b_ml.ml_locked_lineadd);
-                (*(*buf)
+                ml_lineadd_depth(buf, (*buf).b_ml.ml_locked_lineadd, stack_idx);
+                (*buf)
                     .b_ml
-                    .ml_stack
-                    .offset((*buf).b_ml.ml_stack_top as isize))
-                .ip_high += (*buf).b_ml.ml_locked_lineadd;
+                    .stack_add_high(stack_idx, (*buf).b_ml.ml_locked_lineadd);
             }
-            (*buf).b_ml.ml_stack_top += 1;
-            break;
+            return true;
         }
+        // Every pointer block on the way up emptied as well.
+        (*buf).b_ml.stack_clear();
         true
     }
 }
