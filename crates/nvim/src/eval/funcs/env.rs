@@ -257,10 +257,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
 /// path, each with the application name appended.
-///
-/// # Safety
-/// `rettv` is the cleared return value.
-unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
+fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
     let appname = get_appname(false);
     // SAFETY: the caller's obligation. `dirs` is owned here; `vim_env_iter`
     // hands back slices of it and null when the walk is done.
@@ -313,8 +310,8 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         // there and there is no XDG log home.
         b"state" | b"log" => get_xdg_home(kXDGStateHome),
         b"run" => stdpaths_get_xdg_var(kXDGRuntimeDir),
-        b"config_dirs" => return unsafe { get_xdg_var_list(kXDGConfigDirs, rettv) },
-        b"data_dirs" => return unsafe { get_xdg_var_list(kXDGDataDirs, rettv) },
+        b"config_dirs" => return get_xdg_var_list(kXDGConfigDirs, rettv),
+        b"data_dirs" => return get_xdg_var_list(kXDGDataDirs, rettv),
         _ => {
             // The name is arbitrary user bytes, so this keeps the
             // variadic call.

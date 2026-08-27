@@ -45,10 +45,7 @@ unsafe fn context_index(tv: *const typval_T, what: &str) -> Option<usize> {
 }
 
 /// Resolve a context by index, reporting the out-of-bounds message.
-///
-/// # Safety
-/// Reads the context stack, which is only touched from the main thread.
-unsafe fn context_at(index: usize) -> Option<*mut Context> {
+fn context_at(index: usize) -> Option<*mut Context> {
     // SAFETY: the caller's obligation.
     let ctx = unsafe { ctx_get(index) };
     if ctx.is_null() {
@@ -69,7 +66,7 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     else {
         return;
     };
-    let Some(ctx) = (unsafe { context_at(index) }) else {
+    let Some(ctx) = context_at(index) else {
         return;
     };
     let mut arena = ARENA_EMPTY;
@@ -145,7 +142,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let Some(index) = (unsafe { context_index(arg, msg) }) else {
         return;
     };
-    let Some(ctx) = (unsafe { context_at(index) }) else {
+    let Some(ctx) = context_at(index) else {
         return;
     };
     // `vim_to_object` reports conversion problems through `did_emsg`;

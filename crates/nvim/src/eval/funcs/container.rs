@@ -100,23 +100,20 @@ pub unsafe fn f_empty(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 pub unsafe fn f_flatten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { flatten_common(args, rettv, false) };
+    flatten_common(args, rettv, false);
 }
 
 /// `flattennew({list} [, {maxdepth}])` — into a copy.
 pub unsafe fn f_flattennew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { flatten_common(args, rettv, true) };
+    flatten_common(args, rettv, true);
 }
 
 /// The shared body. `make_copy` is what separates `flattennew()` from
 /// `flatten()`: the copying form never checks the source for a lock,
 /// because it does not write to it.
-///
-/// # Safety
-/// The arguments and `rettv` are live typvals.
-unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
+fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
     // SAFETY: the caller's obligation.
     if args.ty(0) != VAR_LIST {
         semsg_c!(
@@ -174,11 +171,11 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     // SAFETY: the arguments and `rettv` are live typvals; each union read
     // is guarded by the type tag above it.
     let found: *mut typval_T = match args.ty(0) {
-        VAR_BLOB => unsafe { get_from_blob(args, rettv) },
-        VAR_LIST => unsafe { get_from_list(args) },
-        VAR_DICT => unsafe { get_from_dict(args) },
+        VAR_BLOB => get_from_blob(args, rettv),
+        VAR_LIST => get_from_list(args),
+        VAR_DICT => get_from_dict(args),
         _ if tv_is_func(*args.get(0)) => {
-            if !unsafe { get_from_func(args, rettv) } {
+            if !get_from_func(args, rettv) {
                 return;
             }
             // Only the "dict" selector falls through to the default
@@ -200,9 +197,9 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     }
 }
 
-/// # Safety
-/// Argument 0 is a live Blob typval.
-unsafe fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
+/// `get()` over a Blob. The caller has checked the tag, which is what
+/// makes the union read below the right member.
+fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
     // SAFETY: the caller's obligation.
     let mut error = false;
     let mut idx = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
@@ -225,9 +222,8 @@ unsafe fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
     rettv
 }
 
-/// # Safety
-/// Argument 0 is a live List typval.
-unsafe fn get_from_list(args: Args<'_>) -> *mut typval_T {
+/// `get()` over a List. The caller has checked the tag.
+fn get_from_list(args: Args<'_>) -> *mut typval_T {
     // SAFETY: the caller's obligation.
     let l = unsafe { args.get(0).vval.v_list };
     if l.is_null() {
@@ -242,9 +238,8 @@ unsafe fn get_from_list(args: Args<'_>) -> *mut typval_T {
     unsafe { &raw mut (*li).li_tv }
 }
 
-/// # Safety
-/// Argument 0 is a live Dict typval.
-unsafe fn get_from_dict(args: Args<'_>) -> *mut typval_T {
+/// `get()` over a Dictionary. The caller has checked the tag.
+fn get_from_dict(args: Args<'_>) -> *mut typval_T {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation.
     let d = unsafe { args.get(0).vval.v_dict };
@@ -261,10 +256,7 @@ unsafe fn get_from_dict(args: Args<'_>) -> *mut typval_T {
 /// Answer `get()` for a Funcref or Partial. Returns whether the caller
 /// should fall through to the default-argument handling, which only the
 /// "dict" selector does — and then only when the Partial had no dict.
-///
-/// # Safety
-/// Argument 0 is a live Funcref or Partial typval.
-unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
+fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. A plain Funcref is answered through
     // a stack Partial holding just its name, which lives as long as this
@@ -371,17 +363,16 @@ pub unsafe fn f_index(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals.
     match args.ty(0) {
-        VAR_BLOB => unsafe { index_blob(args, rettv) },
-        VAR_LIST => unsafe { index_list(args, rettv) },
+        VAR_BLOB => index_blob(args, rettv),
+        VAR_LIST => index_list(args, rettv),
         _ => {
             unsafe { emsg(gettext(e_listblobreq.as_ptr())) };
         }
     }
 }
 
-/// # Safety
-/// Argument 0 is a live Blob typval.
-unsafe fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
+/// `index()` over a Blob. The caller has checked the tag.
+fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
     let mut start: c_int = 0;
     if args.has(2) {
@@ -412,9 +403,8 @@ unsafe fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
     }
 }
 
-/// # Safety
-/// Argument 0 is a live List typval.
-unsafe fn index_list(args: Args<'_>, rettv: &mut typval_T) {
+/// `index()` over a List. The caller has checked the tag.
+fn index_list(args: Args<'_>, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
     let l = unsafe { args.get(0).vval.v_list };
     if l.is_null() {

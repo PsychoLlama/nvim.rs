@@ -76,10 +76,7 @@ const NO_CALLBACK: Callback = Callback {
 
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.
-///
-/// # Safety
-/// `arg` is a live typval.
-unsafe fn job_id(arg: &typval_T) -> Option<uint64_t> {
+fn job_id(arg: &typval_T) -> Option<uint64_t> {
     if arg.v_type != VAR_NUMBER {
         // SAFETY: `e_invarg` is a live NUL-terminated buffer.
         unsafe { emsg(gettext(e_invarg.as_ptr())) };
@@ -99,7 +96,7 @@ pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     if check_secure() {
         return;
     }
-    let Some(id) = (unsafe { job_id(args.get(0)) }) else {
+    let Some(id) = job_id(args.get(0)) else {
         return;
     };
     let data = unsafe { find_job(id, true) };
@@ -152,7 +149,7 @@ pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     if check_secure() {
         return;
     }
-    let Some(id) = (unsafe { job_id(args.get(0)) }) else {
+    let Some(id) = job_id(args.get(0)) else {
         return;
     };
     // `false`: a job that has already gone is not an error here.

@@ -133,10 +133,7 @@ impl Drop for BufferSwap {
 
 /// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
 /// the current buffer pointed at the one the positions name.
-///
-/// # Safety
-/// The arguments and `rettv` are live typvals.
-unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
+fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation. `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
@@ -216,7 +213,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
             inclusive = false;
         }
     } else if region_type == kMTBlockWise {
-        oap = unsafe { block_oparg(p1, p2, is_select_exclusive, block_width) };
+        oap = block_oparg(p1, p2, is_select_exclusive, block_width);
     }
 
     // Extend the far corner over the rest of a multibyte character.
@@ -299,15 +296,8 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
 
 /// The operator argument a blockwise region needs, which is what
 /// `block_prep` reads per line.
-///
-/// # Safety
-/// `p1` and `p2` are positions in the current buffer.
-unsafe fn block_oparg(
-    p1: pos_T,
-    p2: pos_T,
-    is_select_exclusive: bool,
-    block_width: c_int,
-) -> oparg_T {
+/// `p1` and `p2` name positions in the current buffer.
+fn block_oparg(p1: pos_T, p2: pos_T, is_select_exclusive: bool, block_width: c_int) -> oparg_T {
     // SAFETY: the caller's obligation. 'linebreak' is turned off around
     // the virtual-column measurements so that a wrapped line does not
     // change where the block's edges are.
@@ -373,7 +363,7 @@ pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };
-    let Some(r) = (unsafe { resolve(args, rettv) }) else {
+    let Some(r) = resolve(args, rettv) else {
         return;
     };
     for lnum in r.p1.lnum..=r.p2.lnum {
@@ -402,7 +392,7 @@ pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };
-    let Some(r) = (unsafe { resolve(args, rettv) }) else {
+    let Some(r) = resolve(args, rettv) else {
         return;
     };
     // Whether a position may sit one past the end of its line.
@@ -416,7 +406,7 @@ pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
         ret_p1.lnum = lnum;
         ret_p2.lnum = lnum;
-        unsafe { add_regionpos_range(rettv, ret_p1, ret_p2) };
+        add_regionpos_range(rettv, ret_p1, ret_p2);
     }
 }
 
@@ -500,10 +490,9 @@ fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: colnr_T, allow_eol: b
 }
 
 /// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
-///
-/// # Safety
-/// `rettv` holds the list being built and `curbuf` is the region's buffer.
-unsafe fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
+/// `rettv` holds the list being built, and `curbuf` is the region's own
+/// buffer -- the caller's `BufferSwap` has already put it there.
+fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
     let pair = unsafe { tv_list_alloc(2) };

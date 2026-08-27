@@ -351,10 +351,7 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// `funcref()` binds the function the name resolves to *now*; `function()`
 /// keeps the name and resolves it at call time.
-///
-/// # Safety
-/// `args` is a live call frame.
-unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
+fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the frame is live; the partial built below owns every value
@@ -550,14 +547,14 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
 pub unsafe fn f_funcref(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe { common_function(args, rettv, true) };
+    common_function(args, rettv, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
 pub unsafe fn f_function(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe { common_function(args, rettv, false) };
+    common_function(args, rettv, false);
 }
 
 /// `garbagecollect([{atexit}])` — schedules a collection; the argument asks
@@ -573,10 +570,7 @@ pub unsafe fn f_garbagecollect(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 }
 
 /// `libcall()` and `libcallnr()`.
-///
-/// # Safety
-/// `args` is a live call frame.
-unsafe fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
+fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     rettv.v_type = out_type;
     if out_type != VAR_NUMBER {
         rettv.vval.v_string = ptr::null_mut();
@@ -630,14 +624,14 @@ unsafe fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
 pub unsafe fn f_libcall(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe { libcall_common(args, rettv, VAR_STRING) };
+    libcall_common(args, rettv, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
 pub unsafe fn f_libcallnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    unsafe { libcall_common(args, rettv, VAR_NUMBER) };
+    libcall_common(args, rettv, VAR_NUMBER);
 }
 
 /// `luaeval({expr} [, {expr}])`
