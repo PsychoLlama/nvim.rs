@@ -29,6 +29,25 @@
 //! Its child [`handles`] holds the three registries and the deferred-free
 //! set.
 //!
+//! # Who owns the object
+//!
+//! **The buffer and tab page registries own what they hold.** A `buf_T` and
+//! a `tabpage_T` are `Box`es the registry took (`allocator::Owned`), so the
+//! free path takes the allocation back with the handle and *drops* it where
+//! the `xfree` used to be — which is what lets a `buf_T` hold a `Vec`.
+//! **Windows are not there yet**: `aucmd_restbuf` takes the autocommand
+//! window out of the registry while it stays alive and `aucmd_prepbuf` puts
+//! it back, so "registered" and "owned" are different lifetimes for a
+//! `win_T` until that idle window has a named owner. `registry`'s two types
+//! say which is which.
+//!
+//! None of that changes what a [`Buf`] or a [`Win`] *is*. Both are still one
+//! address and building one still reads nothing: `Owned::address` hands back
+//! the pointer it was born with rather than borrowing the table, so the
+//! registry's copy, `curbuf` and every `w_buffer` are the same pointer and
+//! all of them stay usable. That is the whole reason the table holds an
+//! `Owned` rather than a `Box` — see its docs.
+//!
 //! # The re-entry rule
 //!
 //! **A `Win`, `Buf` or `TabPage` held across a call that may fire an
