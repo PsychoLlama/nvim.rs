@@ -47,6 +47,23 @@
 //! Phase 22's ruling 6 — nothing an autocommand re-enters holds a `&mut` —
 //! is a property of this API rather than of review.
 //!
+//! # The one pointee shape this cannot wrap
+//!
+//! **A struct that holds a pointer to one of its own fields is off limits.**
+//! [`DerefMut`] hands out a `&mut` to the *whole* struct, and under Stacked
+//! and Tree Borrows that pops every raw pointer previously derived from the
+//! same object — so the interior pointer dies at the next field write, and
+//! only Miri will ever say so. `insexpand`'s `ins_compl_next_state_T` is the
+//! live example: `cur_match_pos` points at its own `first_match_pos` or
+//! `last_match_pos`, so a single `st.found_all = true` through a `Live` would
+//! poison the pointer the next `searchit` reads. Wrap the *fields* instead —
+//! [`Live::field_ptr`] computes an address without a borrow, which is the
+//! whole reason it exists — or leave the struct behind its raw pointer.
+//!
+//! The same arithmetic forbids taking two `&raw mut` field addresses off one
+//! [`Deref`], `Win`'s and `Buf`'s included: the second borrow pops the first.
+//! Take those off [`Live::raw`].
+//!
 //! The two `unsafe` dereferences below are the whole cost, once, for every
 //! newtype in the crate.
 
