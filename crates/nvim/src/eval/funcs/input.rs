@@ -38,9 +38,6 @@ use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// The size of a `tv_get_string_buf*` scratch buffer. `NUMBUFLEN` in the C.
-const NUMBUFLEN: usize = 65;
-
 /// `{type}` spellings `confirm()` recognises, by their first letter.
 /// Anything else leaves the default in place.
 const DIALOG_TYPES: [(u8, c_int); 5] = [
