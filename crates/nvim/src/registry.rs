@@ -93,19 +93,6 @@ impl<K, V> Default for SlotTable<K, V> {
 }
 
 impl<K: Copy + Eq + Hash, V> SlotTable<K, V> {
-    /// The value registered under `key`, borrowed.
-    ///
-    /// The one accessor that hands out a reference into the table, and it is
-    /// private for that reason: the module docs' reentrancy rule stands
-    /// because the only caller — [`OwnedRegistry::get`] — copies an address
-    /// out of the borrow and lets it end with the expression. A value type
-    /// that owns its object cannot be copied out, and taking it out would
-    /// unfile it.
-    fn get_ref(&self, key: K) -> Option<&V> {
-        let i = *self.index.get(&key)?;
-        Some(&self.slots[i].1)
-    }
-
     /// File `value` under `key`.
     ///
     /// A key that is already present keeps its place in the order and has
@@ -152,6 +139,112 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
     }
 }
 
+/// A registry keyed by a **monotone** handle: a `Vec` indexed by the handle,
+/// so a lookup is one load rather than a hash probe.
+///
+/// The graph's three registries are on this rather than on [`SlotTable`] for
+/// one reason: the list links are handles now, so **every step of every
+/// window, buffer or tab page walk is a lookup here**. A `HashMap` probe is
+/// two dependent cache misses; `nvim_win_get_number` over twenty windows is
+/// quadratic in that, and the window-churn benchmark measured the difference
+/// at **+55% on `:split`, +81% on `nvim_list_wins`** before this type
+/// existed. `SlotTable`'s khash iteration order buys these three nothing —
+/// none of them is ever walked, only asked — so the order is dropped and the
+/// index is the storage.
+///
+/// `base` is the handle slot 0 stands for, and rises as the front empties,
+/// which keeps the vector proportional to the *live* window and tab page
+/// handles rather than to every one ever issued. Buffers, whose number 1
+/// outlives the session, keep `base` at 1 and pay four to eight bytes per
+/// buffer ever created — under a megabyte for any plausible session, and
+/// upstream's khash was not free either.
+struct HandleMap<V> {
+    /// `slots[h - base]` is what handle `h` names, `None` for a hole.
+    slots: Vec<Option<V>>,
+    /// The handle `slots[0]` stands for. Meaningless while `slots` is empty.
+    base: handle_T,
+}
+
+/// An index into a [`HandleMap`]'s slots as the handle difference it is.
+///
+/// The vector is indexed by `handle - base`, both of which are `handle_T`,
+/// so its length can never exceed the handle range and the conversion back
+/// is total.
+fn offset(index: usize) -> handle_T {
+    handle_T::try_from(index).expect("a handle-indexed vector is handle-sized")
+}
+
+impl<V> HandleMap<V> {
+    /// An empty map. `const`, so a registry can be a `static`.
+    const fn new() -> Self {
+        HandleMap {
+            slots: Vec::new(),
+            base: 1,
+        }
+    }
+
+    /// Where `handle` would sit. A handle below `base` wraps to an index no
+    /// vector can hold, so the bounds check `Vec::get` already makes covers
+    /// both ends and a lookup is one subtract and one load — which is the
+    /// whole point of this type.
+    #[inline]
+    fn at(&self, handle: handle_T) -> usize {
+        handle.wrapping_sub(self.base).cast_unsigned() as usize
+    }
+
+    /// The value `handle` names, borrowed.
+    ///
+    /// Every step of every window, buffer and tab page walk lands here, so
+    /// it is `inline` for the profile that is not `codegen-units = 1`.
+    #[inline]
+    fn get(&self, handle: handle_T) -> Option<&V> {
+        self.slots.get(self.at(handle))?.as_ref()
+    }
+
+    /// File `value` under `handle`, replacing whatever was there.
+    fn insert(&mut self, handle: handle_T, value: V) {
+        if self.slots.is_empty() {
+            self.base = handle;
+        } else if handle < self.base {
+            // A handle below the window the vector covers. The three
+            // counters are monotone, so this is the wrap-around
+            // `top_file_num` warns about with `W14`; rebuild rather than
+            // grow downwards without bound.
+            let old = core::mem::take(&mut self.slots);
+            let old_base = self.base;
+            self.base = handle;
+            self.slots.push(Some(value));
+            for (i, slot) in old.into_iter().enumerate() {
+                let Some(slot) = slot else { continue };
+                let h = old_base.wrapping_add(offset(i));
+                self.insert(h, slot);
+            }
+            return;
+        }
+        let i = self.at(handle);
+        if i >= self.slots.len() {
+            self.slots.resize_with(i + 1, || None);
+        }
+        self.slots[i] = Some(value);
+    }
+
+    /// Take `handle` out, if it was in.
+    fn remove(&mut self, handle: handle_T) -> Option<V> {
+        let i = self.at(handle);
+        let value = self.slots.get_mut(i)?.take();
+        // Give the front back once it is all holes, so a session that churns
+        // windows or tab pages does not grow this without bound.
+        let empty = self.slots.iter().take_while(|slot| slot.is_none()).count();
+        if empty == self.slots.len() {
+            self.slots.clear();
+        } else if empty > 0 {
+            self.slots.drain(..empty);
+            self.base = self.base.wrapping_add(offset(empty));
+        }
+        value
+    }
+}
+
 /// The live objects of one kind, found by the handle the user sees: the
 /// shape the window, buffer and tab page registries share. They live in
 /// [`crate::winlayer`], which is the only module that may construct one.
@@ -182,24 +275,25 @@ impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
 /// they are for a `buf_T`. Moving windows across means giving the idle
 /// autocommand window a named owner first.
 pub(crate) struct HandleRegistry<T> {
-    /// Handle to the object it names. `V: Copy` — see the module docs on
-    /// reentrancy; an autocommand fires between two of these calls all the
-    /// time, so no borrow may outlive one.
-    live: SlotTable<handle_T, *mut T>,
+    /// Handle to the object it names. The value is `Copy` — see the module
+    /// docs on reentrancy; an autocommand fires between two of these calls
+    /// all the time, so no borrow may outlive one.
+    live: HandleMap<*mut T>,
 }
 
 impl<T> HandleRegistry<T> {
     /// An empty registry. `const`, so it can be a `static`.
     pub(crate) const fn new() -> Self {
         HandleRegistry {
-            live: SlotTable::new(),
+            live: HandleMap::new(),
         }
     }
 
     /// The object `handle` names, or `None` when nothing is registered
     /// under it — which is what the khash miss answered with a null.
+    #[inline]
     pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
-        self.live.get(handle)
+        self.live.get(handle).copied()
     }
 
     /// Record `object` as the live object named by `handle`.
@@ -239,21 +333,22 @@ impl<T> HandleRegistry<T> {
 /// half-freed, and the drop happens exactly where the `xfree` used to.
 pub(crate) struct OwnedRegistry<T> {
     /// Handle to the object it names, which this table owns.
-    live: SlotTable<handle_T, Owned<T>>,
+    live: HandleMap<Owned<T>>,
 }
 
 impl<T> OwnedRegistry<T> {
     /// An empty registry. `const`, so it can be a `static`.
     pub(crate) const fn new() -> Self {
         OwnedRegistry {
-            live: SlotTable::new(),
+            live: HandleMap::new(),
         }
     }
 
     /// The address of the object `handle` names, or `None` when nothing is
     /// registered under it — the khash miss, which answered a null.
+    #[inline]
     pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
-        Some(self.live.get_ref(handle)?.address())
+        Some(self.live.get(handle)?.address())
     }
 
     /// Take ownership of `object` and file it under `handle`, answering its
@@ -378,7 +473,7 @@ impl Hasher for IdHasher {
 mod tests {
     use core::cell::Cell;
 
-    use super::{HandleRegistry, Owned, OwnedRegistry, PendingFree, SlotTable};
+    use super::{HandleMap, HandleRegistry, Owned, OwnedRegistry, PendingFree, SlotTable};
 
     /// The table's own view of itself, checked after every mutation: the
     /// index agrees with the slots, and every key is findable.
@@ -718,5 +813,69 @@ mod tests {
             assert_eq!(pending.take_next(), Some(pa));
             assert_eq!(pending.take_next(), None);
         }
+    }
+
+    /// The front-trim, which is what keeps the handle-indexed vector
+    /// proportional to the *live* handles rather than to every one ever
+    /// issued. A session that churns windows issues handles for ever.
+    #[test]
+    fn a_handle_map_gives_the_front_back() {
+        let mut map: HandleMap<i32> = HandleMap::new();
+        for h in 1..=8 {
+            map.insert(h, h * 10);
+        }
+        assert_eq!(map.slots.len(), 8);
+        for h in 1..=6 {
+            assert_eq!(map.remove(h), Some(h * 10));
+        }
+        // Only 7 and 8 are left, and the vector is two slots long.
+        assert_eq!(map.slots.len(), 2);
+        assert_eq!(map.base, 7);
+        assert_eq!(map.get(7).copied(), Some(70));
+        assert_eq!(map.get(8).copied(), Some(80));
+        assert_eq!(map.get(1), None);
+        assert_eq!(map.get(6), None);
+        // Emptied completely, it starts over wherever the next handle lands.
+        assert_eq!(map.remove(7), Some(70));
+        assert_eq!(map.remove(8), Some(80));
+        assert!(map.slots.is_empty());
+        map.insert(9000, 1);
+        assert_eq!(map.get(9000).copied(), Some(1));
+        assert_eq!(map.slots.len(), 1);
+    }
+
+    /// `top_file_num` wraps to 1 after 2^31 buffers (upstream warns `W14`),
+    /// so a handle below the window the vector covers is possible. It has to
+    /// rebuild rather than index out of bounds or grow downwards.
+    #[test]
+    fn a_handle_map_rebuilds_when_a_handle_wraps() {
+        let mut map: HandleMap<i32> = HandleMap::new();
+        map.insert(100, 1);
+        map.insert(102, 3);
+        map.insert(1, 42);
+        assert_eq!(map.base, 1);
+        assert_eq!(map.get(1).copied(), Some(42));
+        assert_eq!(map.get(100).copied(), Some(1));
+        assert_eq!(map.get(102).copied(), Some(3));
+        assert_eq!(map.get(101), None);
+        assert_eq!(map.get(0), None);
+    }
+
+    /// A hole in the middle stays a hole, and an absent handle is a miss
+    /// rather than a panic — `map_del` on an absent key is a no-op upstream
+    /// and the reused autocommand window relies on that.
+    #[test]
+    fn a_handle_map_holes_are_misses() {
+        let mut map: HandleMap<i32> = HandleMap::new();
+        map.insert(4, 1);
+        map.insert(5, 2);
+        map.insert(6, 3);
+        assert_eq!(map.remove(5), Some(2));
+        assert_eq!(map.get(5), None);
+        assert_eq!(map.remove(5), None);
+        assert_eq!(map.remove(999), None);
+        assert_eq!(map.base, 4);
+        assert_eq!(map.get(4).copied(), Some(1));
+        assert_eq!(map.get(6).copied(), Some(3));
     }
 }

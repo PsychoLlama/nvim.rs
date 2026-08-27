@@ -884,11 +884,13 @@ pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
 
 /// The head of the current tab page's window list, `None` only before the
 /// first window exists and while the editor is tearing the last one down.
+#[inline]
 pub(crate) fn first_window() -> Option<Win> {
     firstwin.get().and_then(WinId::get)
 }
 
 /// The tail of the current tab page's window list. [`first_window`].
+#[inline]
 pub(crate) fn last_window() -> Option<Win> {
     lastwin.get().and_then(WinId::get)
 }
@@ -920,6 +922,7 @@ pub fn tabs() -> impl Iterator<Item = TabPage> {
 
 /// The head of the editor's tab page list, `None` only before the first one
 /// is made. [`first_buffer`].
+#[inline]
 pub(crate) fn first_tab() -> Option<TabPage> {
     first_tabpage.get().and_then(TabId::get)
 }
@@ -950,11 +953,13 @@ pub fn buffers() -> impl Iterator<Item = Buf> {
 
 /// The head of the editor's buffer list, `None` before the first buffer is
 /// created and again once the last one is gone.
+#[inline]
 pub(crate) fn first_buffer() -> Option<Buf> {
     firstbuf.get().and_then(BufId::get)
 }
 
 /// The tail of the editor's buffer list. [`first_buffer`].
+#[inline]
 pub(crate) fn last_buffer() -> Option<Buf> {
     lastbuf.get().and_then(BufId::get)
 }

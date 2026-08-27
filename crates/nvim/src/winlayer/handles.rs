@@ -53,18 +53,21 @@ static BUFFERS: GlobalCell<OwnedRegistry<buf_T>> = GlobalCell::new(OwnedRegistry
 static TABPAGES: GlobalCell<OwnedRegistry<tabpage_T>> = GlobalCell::new(OwnedRegistry::new());
 
 /// The window `handle` names, `None` once it has been closed.
+#[inline]
 pub(crate) fn window(handle: handle_T) -> Option<Win> {
     // The borrow ends with the lookup, which cannot re-enter.
     WINDOWS.with(|reg| reg.get(handle)).map(Win)
 }
 
 /// The buffer numbered `handle`, `None` once it has been wiped.
+#[inline]
 pub(crate) fn buffer(handle: handle_T) -> Option<Buf> {
     // As [`window`].
     BUFFERS.with(|reg| reg.get(handle)).map(Buf)
 }
 
 /// The tab page `handle` names, `None` once it has been closed.
+#[inline]
 pub(crate) fn tabpage(handle: handle_T) -> Option<TabPage> {
     // As [`window`].
     TABPAGES.with(|reg| reg.get(handle)).map(TabPage)
