@@ -76,9 +76,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // A buffer structure for the swap file being recovered. Only the
             // memline in it is really used, and it is never registered or
             // put on the buffer list -- see `alloc_unregistered_buffer`.
-            let owned = alloc_unregistered_buffer();
-            buf = owned.address();
-            owned_buf = Some(owned);
+            buf = owned_buf.insert(alloc_unregistered_buffer()).address();
             (*buf).b_ml.ml_stack_size = 0; // no stack yet
             (*buf).b_ml.ml_stack = core::ptr::null_mut();
             (*buf).b_ml.ml_stack_top = 0; // nothing in the stack
