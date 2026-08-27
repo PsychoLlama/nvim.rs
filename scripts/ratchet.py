@@ -619,6 +619,22 @@ TYPE_ALIAS = re.compile(
     r"(?:[A-Za-z0-9_]+::)*([A-Za-z_][A-Za-z0-9_]*)"
 )
 FN_NAME = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")
+# `&mut unsafe { *p }` and `&raw mut unsafe { (*p).f }`: a borrow of an
+# `unsafe` block whose value is
+# a *dereference*. A block is a value expression, so the borrow binds to a copy
+# on the stack that temporary-lifetime-extension keeps alive for the statement.
+# Every write through it is discarded, it compiles, and nothing warns -- the
+# same trap as `unsafe { *p }.f = v`, one rung up. Phase 23's S16 shipped five
+# in one hour: `save_dbg_stuff` saved nothing, and `get_loop_line`'s
+# `cp.current_line += 1` never advanced, which is a `:while` that never ends.
+#
+# A borrow of a *call*'s result is a different thing and is fine
+# (`&unsafe { render_char(buf, c) }` borrows a value that was returned), so the
+# needle demands a `*` -- optionally behind parentheses -- as the block's first
+# token.
+BORROWED_DEREF = re.compile(
+    r"&\s*(?:mut|raw\s+mut|raw\s+const)\s+unsafe\s*\{\s*\(*\s*\*"
+)
 
 
 def balanced(text, start, opens, closes):
@@ -708,6 +724,30 @@ def place_writes(tree):
                 f"{' or '.join(sorted(declared))}"
             )
     return found
+
+
+def borrowed_derefs(tree):
+    """`&mut unsafe { *p }` -- a borrow of a copy of the pointee."""
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in BORROWED_DEREF.finditer(masked):
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(f"  {file}:{line}: {match.group(0).strip()}...")
+    return found
+
+
+def check_borrowed_derefs(tree):
+    if found := borrowed_derefs(tree):
+        sys.exit(
+            "ratchet: a borrow of an `unsafe` block that dereferences a "
+            "pointer binds to a *copy* -- an `unsafe` block is a value "
+            "expression, so the borrow names a temporary and every write "
+            "through it is discarded:\n"
+            + "\n".join(found)
+            + "\nWrap the pointer once instead -- `winlayer::Live<T>` and the "
+            "`Win`/`Buf` handles exist for this -- or, where the borrow really "
+            "must be one, put it inside the block: `unsafe { &mut *p }`."
+        )
 
 
 def check_place_writes(tree):
@@ -1400,6 +1440,29 @@ SELF_TEST_PLACE_WRITE = [
     # Prose about one costs nothing.
     ("fn a() -> E {}\n// a().x = 1;\n", 0),
 ]
+# (source, expected borrowed_derefs)
+SELF_TEST_BORROWED_DEREF = [
+    # The shapes S16 shipped, all silent.
+    ("fn f() {\n    let d = &mut unsafe { *dsp };\n}\n", 1),
+    ("fn f() {\n    let d = &mut unsafe { (*p).field };\n}\n", 1),
+    ("fn f() {\n    let d = &raw mut unsafe { (*p).field };\n}\n", 1),
+    ("fn f() {\n    let d = &raw const unsafe { (*p).field };\n}\n", 1),
+    ("fn f() {\n    g(&mut unsafe { *(cookie as *mut C) });\n}\n", 1),
+    # A *shared* `&unsafe { *p }` is left alone on purpose: `&` is also the
+    # binary operator and `&&` its neighbour, so the needle cannot tell a
+    # borrow from a mask without parsing, and a shared borrow of a copy is a
+    # waste rather than a lost write. `mut`/`raw` can only follow a borrow.
+    ("fn f() {\n    if a & unsafe { *p } != 0 {}\n}\n", 0),
+    ("fn f() {\n    if a && unsafe { *p } {}\n}\n", 0),
+    # Borrowing what a call *returned* is a real value, not a copy of a
+    # pointee, and is how three sites in the tree are written.
+    ("fn f() {\n    owned(&mut unsafe { render_char(buf, c) })\n}\n", 0),
+    # The sound spellings: the borrow is inside the block, or there is none.
+    ("fn f() {\n    let d = unsafe { &mut *dsp };\n}\n", 0),
+    ("fn f() {\n    let d = unsafe { Live::new(dsp) };\n}\n", 0),
+    # Prose about one costs nothing.
+    ("// let d = &mut unsafe { *dsp };\n", 0),
+]
 # (source, expected pub_items)
 SELF_TEST_PUB_ITEMS = [
     ("pub fn f() {}\n", 1),
@@ -1621,6 +1684,11 @@ def self_test():
     for source, expected in SELF_TEST_PLACE_WRITE:
         got = len(place_writes({"t.rs": mask(source)}))
         assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_BORROWED_DEREF:
+        got = len(borrowed_derefs({"t.rs": mask(source)}))
+        assert got == expected, (
+            f"borrowed_derefs={got}, want {expected}, for {source!r}"
+        )
     for file, expected in SELF_TEST_PERIMETER:
         got = in_perimeter(file)
         assert got == expected, f"in_perimeter={got}, want {expected}, for {file!r}"
@@ -1664,6 +1732,7 @@ def main():
     self_test()
     stats, without_forbid, without_deny, without_casts, tree = measure()
     check_place_writes(tree)
+    check_borrowed_derefs(tree)
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
