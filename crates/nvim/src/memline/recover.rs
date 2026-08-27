@@ -134,10 +134,12 @@ pub unsafe fn ml_recover(checkext: bool) {
             break 'theend;
         }
         if !ml_check_b0_id(unsafe { &*b0p }) {
-            unsafe { semsg_c!(
-                tr(c"E307: %s does not look like a Nvim swap file"),
-                mf_fname(mfp),
-            ) };
+            unsafe {
+                semsg_c!(
+                    tr(c"E307: %s does not look like a Nvim swap file"),
+                    mf_fname(mfp),
+                )
+            };
             break 'theend;
         }
         if b0_magic_wrong(unsafe { &*b0p }) {
@@ -450,7 +452,9 @@ unsafe fn recover_lines(
             *hp = unsafe { mf_get(mfp, bnum, page_count) };
             if hp.is_null() {
                 if bnum == 1 {
-                    unsafe { semsg_c!(tr(c"E309: Unable to read block 1 from %s"), mf_fname(mfp),) };
+                    unsafe {
+                        semsg_c!(tr(c"E309: Unable to read block 1 from %s"), mf_fname(mfp),)
+                    };
                     return Err(());
                 }
                 error += 1;
@@ -558,10 +562,12 @@ unsafe fn recover_lines(
                 let dp = unsafe { (**hp).bh_data } as *mut DataBlock;
                 if unsafe { (*dp).db_id } != DATA_ID as uint16_t {
                     if bnum == 1 {
-                        unsafe { semsg_c!(
-                            tr(c"E310: Block 1 ID wrong (%s not a .swp file?)"),
-                            mf_fname(mfp),
-                        ) };
+                        unsafe {
+                            semsg_c!(
+                                tr(c"E310: Block 1 ID wrong (%s not a .swp file?)"),
+                                mf_fname(mfp),
+                            )
+                        };
                         return Err(());
                     }
                     error += 1;

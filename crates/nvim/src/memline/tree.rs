@@ -157,12 +157,14 @@ pub(crate) unsafe fn ml_get_buf_impl(
                 unsafe { get_trans_bufname(buf, &mut name) };
                 unsafe { shorten_dir(name.as_mut_ptr()) };
                 // The missing space before "in buffer" is upstream's.
-                unsafe { siemsg_c!(
-                    tr(c"E316: ml_get: Cannot find line %ldin buffer %d %s"),
-                    lnum as int64_t,
-                    b.handle,
-                    name.as_ptr(),
-                ) };
+                unsafe {
+                    siemsg_c!(
+                        tr(c"E316: ml_get: Cannot find line %ldin buffer %d %s"),
+                        lnum as int64_t,
+                        b.handle,
+                        name.as_ptr(),
+                    )
+                };
                 ml_get_recursive.set(0);
             }
             return unsafe { ml_get_placeholder(buf, lnum) };
@@ -500,10 +502,12 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         if idx >= count {
             // Past the end: the tree disagrees with the line count.
             if lnum > b.b_ml.ml_line_count {
-                unsafe { siemsg_c!(
-                    tr(c"E322: Line number out of range: %ld past the end"),
-                    lnum as int64_t - b.b_ml.ml_line_count as int64_t,
-                ) };
+                unsafe {
+                    siemsg_c!(
+                        tr(c"E322: Line number out of range: %ld past the end"),
+                        lnum as int64_t - b.b_ml.ml_line_count as int64_t,
+                    )
+                };
             } else {
                 unsafe { siemsg_c!(tr(c"E323: Line count wrong in block %ld"), bnum,) };
             }

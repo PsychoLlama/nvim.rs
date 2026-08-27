@@ -158,10 +158,12 @@ impl<'a> Decoder<'a> {
 
         if last.container.v_type == VAR_LIST {
             if unsafe { tv_list_len(last.container.vval.v_list) } != 0 && !obj.didcomma {
-                unsafe { semsg_c!(
-                    gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
-                    self.buf[val_location..].as_ptr() as *const c_char,
-                ) };
+                unsafe {
+                    semsg_c!(
+                        gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
+                        self.buf[val_location..].as_ptr() as *const c_char,
+                    )
+                };
                 unsafe { tv_clear(&raw mut obj.val) };
                 return false;
             }
@@ -174,10 +176,12 @@ impl<'a> Decoder<'a> {
         // value that goes with it.
         if last.stack_index == self.stack.len().wrapping_sub(2) {
             if !obj.didcolon {
-                unsafe { semsg_c!(
-                    gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
-                    self.buf[val_location..].as_ptr() as *const c_char,
-                ) };
+                unsafe {
+                    semsg_c!(
+                        gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
+                        self.buf[val_location..].as_ptr() as *const c_char,
+                    )
+                };
                 unsafe { tv_clear(&raw mut obj.val) };
                 return false;
             }
@@ -205,10 +209,12 @@ impl<'a> Decoder<'a> {
 
         // A dictionary with nothing pending: this value is a key.
         if !obj.is_special_string && obj.val.v_type != VAR_STRING {
-            unsafe { semsg_c!(
-                gettext(E474_STRING_KEY.as_ptr()),
-                self.buf[*at..].as_ptr() as *const c_char,
-            ) };
+            unsafe {
+                semsg_c!(
+                    gettext(E474_STRING_KEY.as_ptr()),
+                    self.buf[*at..].as_ptr() as *const c_char,
+                )
+            };
             unsafe { tv_clear(&raw mut obj.val) };
             return false;
         }
@@ -216,10 +222,12 @@ impl<'a> Decoder<'a> {
             && last.special_val.is_null()
             && unsafe { (*last.container.vval.v_dict).dv_hashtab.ht_used } != 0
         {
-            unsafe { semsg_c!(
-                gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
-                self.buf[val_location..].as_ptr() as *const c_char,
-            ) };
+            unsafe {
+                semsg_c!(
+                    gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
+                    self.buf[val_location..].as_ptr() as *const c_char,
+                )
+            };
             unsafe { tv_clear(&raw mut obj.val) };
             return false;
         }

@@ -160,10 +160,12 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         // an exception.
         if !aborting() {
             if !fudi.fd_newkey.is_null() {
-                unsafe { semsg_c!(
-                    gettext(&raw const e_dictkey as *const c_char),
-                    fudi.fd_newkey,
-                ) };
+                unsafe {
+                    semsg_c!(
+                        gettext(&raw const e_dictkey as *const c_char),
+                        fudi.fd_newkey,
+                    )
+                };
             }
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
@@ -186,10 +188,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         p = unsafe { skipwhite(p) };
         if unsafe { *p } != b'(' as c_char {
             if ea.skip == 0 {
-                unsafe { semsg_c!(
-                    gettext(c"E124: Missing '(': %s".as_ptr()),
-                    ea.arg
-                ) };
+                unsafe { semsg_c!(gettext(c"E124: Missing '(': %s".as_ptr()), ea.arg) };
                 break 'ret_free;
             }
             // Attempt to carry on by skipping some text.
@@ -299,10 +298,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         && ea.skip == 0
                         && did_emsg.get() == 0
                     {
-                        unsafe { semsg_c!(
-                            gettext(&raw const e_trailing_arg as *const c_char),
-                            p
-                        ) };
+                        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p) };
                     }
 
                     if KeyTyped.get() {

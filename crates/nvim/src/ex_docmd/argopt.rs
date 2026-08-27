@@ -430,14 +430,16 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
         };
         return if answer == VIM_YES as c_int { OK } else { FAIL };
     }
-    unsafe { semsg_c!(
-        ngettext(
+    unsafe {
+        semsg_c!(
+            ngettext(
                 c"E173: %d more file to edit".as_ptr(),
                 c"E173: %d more files to edit".as_ptr(),
                 n as c_ulong,
             ),
-        n,
-    ) };
+            n,
+        )
+    };
     quitmore.set(2);
     FAIL
 }
@@ -446,7 +448,13 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
-        unsafe { semsg_c!(gettext(&raw const e_mkdir as *const c_char), name, uv_strerror(ret),) };
+        unsafe {
+            semsg_c!(
+                gettext(&raw const e_mkdir as *const c_char),
+                name,
+                uv_strerror(ret),
+            )
+        };
         return FAIL;
     }
     OK
@@ -462,18 +470,22 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
         return ptr::null_mut();
     }
     if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {
-        unsafe { semsg_c!(
-            gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
-            fname,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
+                fname,
+            )
+        };
         return ptr::null_mut();
     }
     let fd = unsafe { os_fopen(fname, mode) };
     if fd.is_null() {
-        unsafe { semsg_c!(
-            gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
-            fname,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
+                fname,
+            )
+        };
     }
     fd
 }

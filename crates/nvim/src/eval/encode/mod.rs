@@ -347,15 +347,17 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
 
     // SAFETY: `msg` is the caller's two-`%s` format; the path is either the
     // rendered stack or the literal below.
-    unsafe { semsg_c!(
-        msg,
-        gettext(path.objname),
-        if path.stack.is_empty() {
-            tr(c"itself")
-        } else {
-            msg_ga.ga_data.cast::<c_char>()
-        },
-    ) };
+    unsafe {
+        semsg_c!(
+            msg,
+            gettext(path.objname),
+            if path.stack.is_empty() {
+                tr(c"itself")
+            } else {
+                msg_ga.ga_data.cast::<c_char>()
+            },
+        )
+    };
     unsafe { ga_clear(&raw mut msg_ga) };
     Flow::Fail
 }

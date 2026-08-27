@@ -45,10 +45,12 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
         if unsafe { load_colors(eap.arg) } == FAIL {
-            unsafe { semsg_c!(
-                gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
-                eap.arg,
-            ) };
+            unsafe {
+                semsg_c!(
+                    gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
+                    eap.arg,
+                )
+            };
         }
         return;
     }

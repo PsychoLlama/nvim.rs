@@ -247,11 +247,7 @@ pub unsafe fn value_check_lock(
         } else if name_len == TV_CSTRING as size_t {
             name_len = unsafe { strlen(name) };
         }
-        unsafe { semsg_c!(
-            gettext(error_message),
-            name_len as ::core::ffi::c_int,
-            name
-        ) };
+        unsafe { semsg_c!(gettext(error_message), name_len as ::core::ffi::c_int, name) };
     }
 
     true

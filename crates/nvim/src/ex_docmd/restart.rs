@@ -406,15 +406,17 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
         emsg(close_err);
         return;
     }
-    unsafe { logmsg_c!(
-        LOGLVL_INF,
-        ptr::null(),
-        c"ex_detach".as_ptr(),
-        6019,
-        true,
-        c"detach current_ui=%ld".as_ptr(),
-        (*chan).id,
-    ) };
+    unsafe {
+        logmsg_c!(
+            LOGLVL_INF,
+            ptr::null(),
+            c"ex_detach".as_ptr(),
+            6019,
+            true,
+            c"detach current_ui=%ld".as_ptr(),
+            (*chan).id,
+        )
+    };
 }
 
 /// `:connect` — attach this session's UI to another server, then detach

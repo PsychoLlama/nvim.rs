@@ -97,10 +97,7 @@ pub(crate) unsafe fn list_one_function(
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
-        unsafe { semsg_c!(
-            gettext(&raw const e_trailing_arg as *const c_char),
-            p
-        ) };
+        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p) };
         return ptr::null_mut();
     }
     ea.nextcmd = unsafe { check_nextcmd(p) };
@@ -287,10 +284,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     }
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
         unsafe { xfree(name as *mut c_void) };
-        unsafe { semsg_c!(
-            gettext(&raw const e_trailing_arg as *const c_char),
-            p
-        ) };
+        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p) };
         return;
     }
     ea.nextcmd = unsafe { check_nextcmd(p) };
@@ -301,10 +295,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     if (unsafe { *name } as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
         // Numbered function.
         if ea.skip == 0 {
-            unsafe { semsg_c!(
-                gettext(&raw const e_invarg2 as *const c_char),
-                ea.arg
-            ) };
+            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), ea.arg) };
         }
         unsafe { xfree(name as *mut c_void) };
         return;
@@ -326,10 +317,12 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         return;
     }
     if unsafe { (*fp).uf_calls } > 0 {
-        unsafe { semsg_c!(
-            gettext(c"E131: Cannot delete function %s: It is in use".as_ptr()),
-            ea.arg,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"E131: Cannot delete function %s: It is in use".as_ptr()),
+                ea.arg,
+            )
+        };
         return;
     }
     // `> 2` because deleting a function should also drop a reference, and
@@ -338,10 +331,12 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     // of its own until the garbage collector frees it, which is why this
     // arm is reachable at all (see the docket's O-B14-13).
     if unsafe { (*fp).uf_refcount }.get() > 2 {
-        unsafe { semsg_c!(
-            gettext(c"Cannot delete function %s: It is being used internally".as_ptr()),
-            ea.arg,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"Cannot delete function %s: It is being used internally".as_ptr()),
+                ea.arg,
+            )
+        };
         return;
     }
 

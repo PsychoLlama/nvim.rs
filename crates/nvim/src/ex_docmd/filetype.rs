@@ -147,17 +147,19 @@ unsafe fn report_filetype_state() {
             c"(on)".as_ptr()
         }
     };
-    unsafe { smsg_c!(
-        0,
-        c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
-        if detecting {
-            c"ON".as_ptr()
-        } else {
-            c"OFF".as_ptr()
-        },
-        state(filetype_plugin.get() == Some(true)),
-        state(filetype_indent.get() == Some(true)),
-    ) };
+    unsafe {
+        smsg_c!(
+            0,
+            c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
+            if detecting {
+                c"ON".as_ptr()
+            } else {
+                c"OFF".as_ptr()
+            },
+            state(filetype_plugin.get() == Some(true)),
+            state(filetype_indent.get() == Some(true)),
+        )
+    };
 }
 
 /// Turn the filetype plugin and indent scripts on, unless they were
@@ -276,10 +278,12 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.
-        unsafe { semsg_c!(
-            gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
-            vimruntime,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
+                vimruntime,
+            )
+        };
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }

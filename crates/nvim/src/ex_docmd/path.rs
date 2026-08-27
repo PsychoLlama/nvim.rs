@@ -158,15 +158,19 @@ pub(crate) unsafe fn findfunc_find_file(
     let fname_list = call_findfunc(findarg, kBoolVarFalse);
     let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
-        unsafe { semsg_c!(
-            gettext(&raw const e_cant_find_file_str_in_path as *const c_char),
-            findarg,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(&raw const e_cant_find_file_str_in_path as *const c_char),
+                findarg,
+            )
+        };
     } else if count > fname_count {
-        unsafe { semsg_c!(
-            gettext(&raw const e_no_more_file_str_found_in_path as *const c_char),
-            findarg,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(&raw const e_no_more_file_str_found_in_path as *const c_char),
+                findarg,
+            )
+        };
     } else {
         let li = unsafe { tv_list_find(fname_list, count - 1) };
         if !li.is_null() && unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {

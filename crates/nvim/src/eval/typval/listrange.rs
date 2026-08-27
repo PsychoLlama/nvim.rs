@@ -24,10 +24,7 @@ pub unsafe fn tv_list_check_range_index_one(
 ) -> *mut listitem_T {
     let li = unsafe { tv_list_find_index(l, n1) };
     if li.is_null() && !quiet {
-        unsafe { semsg_c!(
-            tr_bytes(&e_list_index_out_of_range_nr),
-            int64_t::from(*n1),
-        ) };
+        unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n1),) };
     }
     li
 }
@@ -45,10 +42,7 @@ pub unsafe fn tv_list_check_range_index_two(
         let ni = unsafe { tv_list_find(l, *n2) };
         if ni.is_null() {
             if !quiet {
-                unsafe { semsg_c!(
-                    tr_bytes(&e_list_index_out_of_range_nr),
-                    int64_t::from(*n2),
-                ) };
+                unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n2),) };
             }
             return FAIL;
         }
@@ -59,10 +53,7 @@ pub unsafe fn tv_list_check_range_index_two(
     }
     if unsafe { *n2 } < unsafe { *n1 } {
         if !quiet {
-            unsafe { semsg_c!(
-                tr_bytes(&e_list_index_out_of_range_nr),
-                int64_t::from(*n2),
-            ) };
+            unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n2),) };
         }
         return FAIL;
     }

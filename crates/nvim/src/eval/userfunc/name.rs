@@ -327,10 +327,12 @@ unsafe fn mangle_function_name(
     } else if flags & TFN_INT == 0
         && unsafe { builtin_function(lv.ll_name, lv.ll_name_len as c_int) }
     {
-        unsafe { semsg_c!(
-            gettext(c"E128: Function name must start with a capital or \"s:\": %s".as_ptr()),
-            start,
-        ) };
+        unsafe {
+            semsg_c!(
+                gettext(c"E128: Function name must start with a capital or \"s:\": %s".as_ptr()),
+                start,
+            )
+        };
         return ptr::null_mut();
     }
 
@@ -344,10 +346,12 @@ unsafe fn mangle_function_name(
         // the coin flip (O-B14-12).
         let cp = unsafe { xmemrchr(lv.ll_name as *const c_void, b':', lv.ll_name_len) };
         if !cp.is_null() {
-            unsafe { semsg_c!(
-                gettext(c"E884: Function name cannot contain a colon: %s".as_ptr()),
-                start,
-            ) };
+            unsafe {
+                semsg_c!(
+                    gettext(c"E884: Function name cannot contain a colon: %s".as_ptr()),
+                    start,
+                )
+            };
             return ptr::null_mut();
         }
     }
@@ -431,10 +435,7 @@ pub unsafe fn trans_function_name(
             // or an exception.
             if !aborting() {
                 if !end.is_null() {
-                    unsafe { semsg_c!(
-                        gettext(&raw const e_invarg2 as *const c_char),
-                        start
-                    ) };
+                    unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), start) };
                 }
             } else {
                 unsafe {
@@ -465,7 +466,9 @@ pub unsafe fn trans_function_name(
                 {
                     len = unsafe { check_luafunc_name(end.add(1), true) };
                     if len == 0 {
-                        unsafe { semsg_c!(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr()) };
+                        unsafe {
+                            semsg_c!(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr())
+                        };
                         break 'theend;
                     }
                     name = unsafe { xmallocz(len as size_t) } as *mut c_char;

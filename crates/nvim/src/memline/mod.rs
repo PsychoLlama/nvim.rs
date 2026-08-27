@@ -520,14 +520,16 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
     if unsafe { *p_dir.get() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
-        unsafe { semsg_c!(
-            tr(c"E303: Unable to open swap file for \"%s\", recovery impossible"),
-            if !buf_spname(buf).is_null() {
-                buf_spname(buf)
-            } else {
-                b.b_fname
-            },
-        ) };
+        unsafe {
+            semsg_c!(
+                tr(c"E303: Unable to open swap file for \"%s\", recovery impossible"),
+                if !buf_spname(buf).is_null() {
+                    buf_spname(buf)
+                } else {
+                    b.b_fname
+                },
+            )
+        };
     }
 
     b.b_may_swap = false; // don't try to open a swap file again

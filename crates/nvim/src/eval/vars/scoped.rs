@@ -196,11 +196,13 @@ pub(crate) unsafe fn tv_to_optval(
             }
             if idx == 0 || unsafe { *s.add(idx) } != NUL as c_char {
                 err = true;
-                unsafe { semsg_c!(
-                    translate_lit(c"E521: Number required: &%s = '%s'"),
-                    option,
-                    if s.is_null() { c"".as_ptr() } else { s },
-                ) };
+                unsafe {
+                    semsg_c!(
+                        translate_lit(c"E521: Number required: &%s = '%s'"),
+                        option,
+                        if s.is_null() { c"".as_ptr() } else { s },
+                    )
+                };
             }
         }
         if option_has_num {

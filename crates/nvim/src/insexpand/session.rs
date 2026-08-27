@@ -261,14 +261,16 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
         if unsafe { *get_complete_funcname(ctrl_x_mode.get()) } as c_int == NUL {
-            unsafe { semsg_c!(
-                gettext(&raw const e_notset as *const c_char),
-                if ctrl_x_mode_function() {
-                    c"completefunc".as_ptr()
-                } else {
-                    c"omnifunc".as_ptr()
-                },
-            ) };
+            unsafe {
+                semsg_c!(
+                    gettext(&raw const e_notset as *const c_char),
+                    if ctrl_x_mode_function() {
+                        c"completefunc".as_ptr()
+                    } else {
+                        c"omnifunc".as_ptr()
+                    },
+                )
+            };
             return FAIL;
         }
         cb = unsafe { get_insert_callback(ctrl_x_mode.get()) };

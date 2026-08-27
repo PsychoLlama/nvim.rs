@@ -50,10 +50,12 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
         VAR_BOOL => c"E5299: Expected a Number or a String, Boolean found",
         VAR_SPECIAL => c"E5300: Expected a Number or a String",
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(
-                tr_bytes(&e_intern2),
-                c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
-            ) };
+            unsafe {
+                semsg_c!(
+                    tr_bytes(&e_intern2),
+                    c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
+                )
+            };
             return false;
         }
         _ => unsafe { abort() },

@@ -119,10 +119,12 @@ pub(crate) unsafe fn get_function_body(
             }
             if theline.is_null() {
                 if !skip_until.is_null() {
-                    unsafe { semsg_c!(
-                        gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
-                        skip_until,
-                    ) };
+                    unsafe {
+                        semsg_c!(
+                            gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
+                            skip_until,
+                        )
+                    };
                 } else {
                     unsafe { emsg(gettext(c"E126: Missing :endfunction".as_ptr())) };
                 }
@@ -199,11 +201,13 @@ pub(crate) unsafe fn get_function_body(
                     {
                         nextcmd = line_arg;
                     } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose.get() > 0 {
-                        unsafe { swmsg_c!(
-                            true,
-                            gettext(c"W22: Text found after :endfunction: %s".as_ptr()),
-                            p,
-                        ) };
+                        unsafe {
+                            swmsg_c!(
+                                true,
+                                gettext(c"W22: Text found after :endfunction: %s".as_ptr()),
+                                p,
+                            )
+                        };
                     }
                     if !nextcmd.is_null() {
                         // Another command follows.  If the line came from

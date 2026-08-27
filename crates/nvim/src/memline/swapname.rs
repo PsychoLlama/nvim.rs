@@ -570,11 +570,13 @@ pub(crate) unsafe fn findswapname(
             os_mkdir_recurse(dir_name, 0o755, &raw mut failed_dir, core::ptr::null_mut())
         };
         if ret != 0 {
-            unsafe { semsg_c!(
+            unsafe {
+                semsg_c!(
                 tr(c"E303: Unable to create directory \"%s\" for swap file, recovery impossible: %s"),
                 failed_dir,
                 uv_strerror(ret),
-            ) };
+            )
+            };
             unsafe { xfree(failed_dir.cast()) };
         }
     }

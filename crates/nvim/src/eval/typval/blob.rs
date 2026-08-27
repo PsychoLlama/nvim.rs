@@ -334,10 +334,12 @@ pub unsafe fn f_list2blob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let n = unsafe { tv_get_number_chk(&raw const (*li).li_tv, &raw mut error) };
         if error || !(0..=255).contains(&n) {
             if !error {
-                unsafe { semsg_c!(
-                    tr_bytes(&e_invalid_value_for_blob_nr),
-                    n as ::core::ffi::c_int,
-                ) };
+                unsafe {
+                    semsg_c!(
+                        tr_bytes(&e_invalid_value_for_blob_nr),
+                        n as ::core::ffi::c_int,
+                    )
+                };
             }
             unsafe { ga_clear(&raw mut (*blob).bv_ga) };
             return;

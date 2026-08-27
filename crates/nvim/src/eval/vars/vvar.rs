@@ -665,10 +665,12 @@ pub(crate) unsafe fn set_vvar_item(
     let typed = unsafe { before_set_vvar(varname, di, val, copy_out, watched, err) };
     if !typed {
         if type_error {
-            unsafe { semsg_c!(
-                translate_lit(e_setting_v_str_to_value_with_wrong_type),
-                varname,
-            ) };
+            unsafe {
+                semsg_c!(
+                    translate_lit(e_setting_v_str_to_value_with_wrong_type),
+                    varname,
+                )
+            };
         }
         // SAFETY: a live local.
         clear_local(&mut tmp);

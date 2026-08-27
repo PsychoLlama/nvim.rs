@@ -150,10 +150,12 @@ pub unsafe fn set_var_const(
         if ht == get_vimvar_ht() && !unsafe { before_set_vvar(varname, di, tv, copy, watched, err) }
         {
             if type_error {
-                unsafe { semsg_c!(
-                    translate_lit(e_setting_v_str_to_value_with_wrong_type),
-                    varname,
-                ) };
+                unsafe {
+                    semsg_c!(
+                        translate_lit(e_setting_v_str_to_value_with_wrong_type),
+                        varname,
+                    )
+                };
             }
             return;
         }
@@ -262,11 +264,13 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe { semsg_c!(
-        translate_lit(c"E1122: Variable is locked: %.*s"),
-        name_len as c_int,
-        name,
-    ) };
+    unsafe {
+        semsg_c!(
+            translate_lit(c"E1122: Variable is locked: %.*s"),
+            name_len as c_int,
+            name,
+        )
+    };
     true
 }
 
@@ -285,11 +289,13 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe { semsg_c!(
-        translate(&e_cannot_delete_variable_str),
-        name_len as c_int,
-        name,
-    ) };
+    unsafe {
+        semsg_c!(
+            translate(&e_cannot_delete_variable_str),
+            name_len as c_int,
+            name,
+        )
+    };
     true
 }
 
