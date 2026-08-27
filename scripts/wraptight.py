@@ -98,6 +98,34 @@ def code_of(diag: dict) -> str:
     return (diag.get("code") or {}).get("code") or ""
 
 
+def in_paths(name: str, paths: list[str]) -> bool:
+    return any(name.startswith(p) for p in paths)
+
+
+def at_call_site(span: dict, paths: list[str]) -> dict | None:
+    """`span`, or the macro invocation it was expanded from.
+
+    `semsg_c!`/`emsg!`/`smsg_c!` expand to `vim_snprintf` and friends, so a
+    call inside one needs its own region and **rustc reports the span inside
+    `message_fmt.rs`** -- not the caller. Wrapping there is impossible and
+    wrapping nothing is what a dissolved blanket leaves behind, which is why
+    batch 3 came out of a whole afternoon's conversion with 423 errors nobody
+    had seen: `--message-format=short` drops the `:::` line that names the
+    real site, and while any file in the crate failed to *parse* rustc never
+    got far enough to report them at all.
+
+    Walking `expansion.span` outwards finds the invocation, which is a span in
+    the author's own file and exactly the right extent to wrap.
+    """
+    seen = span
+    while seen is not None:
+        if in_paths(seen["file_name"], paths):
+            return seen
+        expansion = seen.get("expansion")
+        seen = expansion["span"] if expansion else None
+    return None
+
+
 def primary_spans(diags: list[dict], paths: list[str], want) -> dict[str, list[dict]]:
     """`{file: [span, ...]}` for the diagnostics `want` accepts."""
     found: dict[str, dict[int, dict]] = {}
@@ -107,9 +135,9 @@ def primary_spans(diags: list[dict], paths: list[str], want) -> dict[str, list[d
         for span in diag["spans"]:
             if not span["is_primary"]:
                 continue
-            name = span["file_name"]
-            if any(name.startswith(p) for p in paths):
-                found.setdefault(name, {})[span["byte_start"]] = span
+            site = at_call_site(span, paths)
+            if site is not None:
+                found.setdefault(site["file_name"], {})[site["byte_start"]] = site
     return {f: [v[k] for k in sorted(v)] for f, v in found.items()}
 
 
