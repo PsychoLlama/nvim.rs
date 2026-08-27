@@ -71,11 +71,6 @@ const NO_CLEANUP: cleanup_T = cleanup_T {
 // one-line body is the only unchecked line the neighbour costs, however many
 // times it is called.
 
-fn prev_buf(buf: Buf) -> Option<Buf> {
-    // SAFETY: a live buffer's `b_prev` is a live buffer or null.
-    (!buf.b_prev.is_null()).then(|| unsafe { Buf::new(buf.b_prev) })
-}
-
 /// Reset the error/interrupt/exception state, so that `aborting()` answers
 /// false while a window or buffer is closed. Paired with [`leave_cleanup_now`].
 fn enter_cleanup_now(cs: &mut cleanup_T) {
@@ -686,7 +681,7 @@ fn step_to_listed(buf: Buf, dir: c_int, count: c_int, flags: c_int, unload: bool
         let step = if dir == FORWARD as c_int {
             buf.next().or_else(first_buf)
         } else {
-            prev_buf(buf).or_else(last_buf)
+            buf.prev().or_else(last_buf)
         };
         let Some(next) = step else {
             return Ok(None);
@@ -866,7 +861,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
         let cur = cur_buf();
         buf = cur
             .next()
-            .or_else(|| prev_buf(cur))
+            .or_else(|| cur.prev())
             .filter(|b| !is_quickfix(*b) && !(b.raw() != curbuf.get() && b.b_locked_split != 0));
     }
     buf
@@ -942,7 +937,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
             if !forward {
                 return None; // tried both directions
             }
-            buf = prev_buf(cur);
+            buf = cur.prev();
             forward = false;
             continue;
         };
@@ -953,7 +948,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
             }
             unloaded.get_or_insert(b); // remember unloaded buf for later
         }
-        buf = if forward { b.next() } else { prev_buf(b) };
+        buf = if forward { b.next() } else { b.prev() };
     }
 }
 
