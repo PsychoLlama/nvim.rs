@@ -55,7 +55,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
-use crate::main::{c_bytes, curbuf, curwin, firstbuf, lastbuf};
+use crate::main::{c_bytes, curbuf, curwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::xfree;
@@ -72,7 +72,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
-use crate::winlayer::{Buf, Win, buffers_back};
+use crate::winlayer::{Buf, Win, buffers_back, first_buffer, last_buffer};
 
 // The carve of the transpiled module; see each child's docs.
 mod all;
@@ -408,16 +408,12 @@ pub(crate) fn current_win() -> Option<Win> {
 
 /// The first buffer in the list, `None` before any exists.
 pub(crate) fn first_buf() -> Option<Buf> {
-    let buf = firstbuf.get();
-    // SAFETY: non-null, hence live.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+    first_buffer()
 }
 
 /// The last buffer in the list, `None` before any exists.
 pub(crate) fn last_buf() -> Option<Buf> {
-    let buf = lastbuf.get();
-    // SAFETY: non-null, hence live.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+    last_buffer()
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.

@@ -24,7 +24,7 @@ use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::main::{
-    curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, lastbuf, p_cpo, p_magic,
+    curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, p_cpo, p_magic,
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
@@ -35,7 +35,7 @@ use crate::types::{
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, expand_T,
     float_T, kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win, last_buffer};
 use crate::{semsg_c, semsg_multiline_c};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int};
@@ -404,7 +404,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
             return curbuf.get();
         }
         if *name as u8 == b'$' && *name.add(1) as c_int == NUL {
-            return lastbuf.get();
+            return last_buffer().map_or(ptr::null_mut(), Buf::raw);
         }
 
         // The pattern is matched with 'magic' on and 'cpoptions' empty, so

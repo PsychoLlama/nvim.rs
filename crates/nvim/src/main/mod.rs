@@ -26,6 +26,7 @@ use crate::types::{
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
     xfmark_T,
 };
+use crate::winlayer::BufId;
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
 mod entry;
@@ -709,8 +710,11 @@ pub static curtab: GlobalCell<*mut tabpage_T> =
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
-pub static firstbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-pub static lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+/// The buffer list's two ends. Handles rather than addresses, as the
+/// `b_next`/`b_prev` links they anchor are — `winlayer::first_buffer` and
+/// `last_buffer` resolve them, and `winlayer::buffers` walks between them.
+pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: garray_T {

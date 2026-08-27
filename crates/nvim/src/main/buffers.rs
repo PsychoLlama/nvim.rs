@@ -230,7 +230,7 @@ pub(crate) unsafe fn read_stdin() {
         } else {
             set_buflisted(1);
             open_buffer(true, ptr::null_mut::<exarg_T>(), 0);
-            if buf_is_empty(curbuf.get()) && !(*curbuf.get()).b_next.is_null() {
+            if buf_is_empty(curbuf.get()) && Buf::current().b_next.is_some() {
                 do_cmdline_cmd(c"silent! bnext".as_ptr());
                 do_cmdline_cmd(c"silent! bwipeout 1".as_ptr());
             }

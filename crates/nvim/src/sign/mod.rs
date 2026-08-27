@@ -63,7 +63,7 @@ use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::main::{
     curwin, e_argreq, e_dictreq, e_invalid_buffer_name_str, e_invarg, e_invarg2, e_listreq,
-    e_trailing_arg, firstbuf, got_int,
+    e_trailing_arg, got_int,
 };
 use crate::map::mh_get_string;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
@@ -83,7 +83,7 @@ use crate::types::{
     size_t, typval_T, uint32_t, varnumber_T,
 };
 use crate::window::buf_jump_open_win;
-use crate::winlayer::{Buf, Win, buffers, windows};
+use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};
 use ::libc::{atoi, strcmp, strlen};
 
 mod command;

@@ -54,12 +54,17 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *const c_char) {
     // SAFETY: a static title.
     unsafe { msg_puts_title(gettext(c"\n--- Signs ---".as_ptr())) };
 
-    let mut buf = if rbuf.is_null() { firstbuf.get() } else { rbuf };
-    while !buf.is_null() && !got_int.get() {
+    // SAFETY: the caller's promise -- `rbuf` is null or live.
+    let mut cur = match unsafe { Buf::from_raw(rbuf) } {
+        Some(buf) => Some(buf),
+        None => first_buffer(),
+    };
+    while let Some(cbuf) = cur {
+        if got_int.get() {
+            break;
+        }
         // SAFETY: a live buffer, either the caller's or one off the list.
-        let cbuf = unsafe { Buf::new(buf) };
-        // SAFETY: as above.
-        if unsafe { buf_has_signs(buf) } {
+        if unsafe { buf_has_signs(cbuf.raw()) } {
             // SAFETY: a live buffer's name is a NUL-terminated string.
             unsafe {
                 msg_putchar('\n' as c_int);
@@ -83,7 +88,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *const c_char) {
         if !rbuf.is_null() {
             return;
         }
-        buf = cbuf.b_next;
+        cur = cbuf.next();
     }
 }
 

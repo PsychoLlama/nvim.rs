@@ -14,7 +14,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::smsg_c;
 use crate::types::{FAIL, OK, OptionSetFlags};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, first_buffer};
 
 /// A `multiqueue` event's argument vector with nothing in it.
 const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
@@ -121,18 +121,15 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
     let mut did_aucmd = false;
 
     let mut retval = OK;
-    let mut buf = firstbuf.get();
-    while !buf.is_null() {
-        // Loaded buffers only, and the current one is done last.
-        // SAFETY: `buf` is a live buffer of the editor's own list -- either
-        // the head, or a `b_next` reached below only after `bufref_valid`
-        // proved this pass did not delete it.
-        if !unsafe { (*buf).b_ml.ml_mfp }.is_null() && buf != curbuf.get() {
-            // SAFETY: `aco` is this frame's own storage and `buf` is live
-            // as above.
-            unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-            // SAFETY: as above -- a live buffer.
-            let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+    let mut next = first_buffer();
+    while let Some(mut buf) = next {
+        // Loaded buffers only, and the current one is done last. The step
+        // is at the bottom, on a buffer `bufref` has just proved this pass
+        // did not delete -- which is why this is not `buffers()`.
+        if !buf.b_ml.ml_mfp.is_null() && buf.raw() != curbuf.get() {
+            // SAFETY: `aco` is this frame's own storage and `buf` is live.
+            unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+            let bufref = BufRef::of(buf);
 
             // SAFETY: `arg` is the command's own argument and `did_aucmd`
             // this frame's own `bool`.
@@ -156,8 +153,8 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
                 break;
             }
         }
-        // SAFETY: `buf` survived this pass, as the `break` above ensures.
-        buf = unsafe { (*buf).b_next };
+        // `buf` survived this pass, as the `break` above ensures.
+        next = buf.next();
     }
 
     if retval == OK {

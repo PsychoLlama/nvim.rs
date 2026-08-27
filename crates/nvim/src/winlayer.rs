@@ -609,17 +609,13 @@ impl Buf {
     /// The next buffer in the editor's buffer list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        // A live buffer's `b_next` is a live buffer or null.
-        let next = self.b_next;
-        (!next.is_null()).then_some(Self(next))
+        self.b_next.and_then(BufId::get)
     }
 
     /// The buffer before this one in the editor's buffer list, if any.
     #[inline(always)]
     pub fn prev(self) -> Option<Self> {
-        // A live buffer's `b_prev` is a live buffer or null.
-        let prev = self.b_prev;
-        (!prev.is_null()).then_some(Self(prev))
+        self.b_prev.and_then(BufId::get)
     }
 }
 
@@ -846,11 +842,23 @@ impl Line {
 //
 // Each of these is one of the C's `FOR_ALL_*` macros. The lists are the
 // editor's own: they are built before the first window is drawn and torn down
-// only at exit, and every link ends at a null, so producing the head and
-// stepping the chain needs no promise from the caller — which is what makes
+// only at exit, and every chain ends — at a `None` link for the buffer list,
+// at a null pointer for the window and frame ones — so producing the head and
+// stepping the chain needs no promise from the caller, which is what makes
 // these safe functions rather than `unsafe fn`s. A walk that its own body can
 // invalidate is a different matter and stays the caller's problem: none of
 // these re-reads the head, exactly as the macros do not.
+//
+// # The links are handles
+//
+// `b_next`/`b_prev` are `Option<BufId>`, and `firstbuf`/`lastbuf` with them:
+// a step is a registry lookup, not a load. That is what makes the object
+// graph index-shaped rather than pointer-shaped — a buffer can move, and a
+// link can never name one that has been freed, because `free_buffer` takes
+// the handle out of the registry before anything else. The cost is one
+// `SlotTable` probe per step, which is a hash of an integer and one `Vec`
+// index; the walks are over a handful of entries and none of them is in the
+// draw path's inner loop.
 
 /// The windows hanging off `first`, in list order.
 fn win_chain(first: *mut win_T) -> impl Iterator<Item = Win> {
@@ -906,16 +914,23 @@ pub fn frames_back(first: Option<Frame>) -> impl Iterator<Item = Frame> {
 
 /// Every buffer, in list order: the C's `FOR_ALL_BUFFERS`.
 pub fn buffers() -> impl Iterator<Item = Buf> {
-    // The chain is the editor's buffer list, ending at a null `b_next`.
-    let first = firstbuf.get();
-    iter::successors((!first.is_null()).then_some(Buf(first)), |buf| buf.next())
+    iter::successors(first_buffer(), |buf| buf.next())
+}
+
+/// The head of the editor's buffer list, `None` before the first buffer is
+/// created and again once the last one is gone.
+pub(crate) fn first_buffer() -> Option<Buf> {
+    firstbuf.get().and_then(BufId::get)
+}
+
+/// The tail of the editor's buffer list. [`first_buffer`].
+pub(crate) fn last_buffer() -> Option<Buf> {
+    lastbuf.get().and_then(BufId::get)
 }
 
 /// Every buffer, last to first: the C's `FOR_ALL_BUFFERS_BACKWARDS`.
 pub(crate) fn buffers_back() -> impl Iterator<Item = Buf> {
-    // The chain is the editor's buffer list, ending at a null `b_prev`.
-    let last = lastbuf.get();
-    iter::successors((!last.is_null()).then_some(Buf(last)), |buf| buf.prev())
+    iter::successors(last_buffer(), |buf| buf.prev())
 }
 
 /// Every window of the current tab page, last to first. The C spells this

@@ -26,13 +26,13 @@ use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
 use crate::main::{
     State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
-    curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstbuf, firstwin, lastwin, mode_displayed,
-    p_confirm, p_write, restart_edit, stop_insert_mode,
+    curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstwin, lastwin, mode_displayed, p_confirm,
+    p_write, restart_edit, stop_insert_mode,
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
 use crate::types::{CMD_SIZE, CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
-use crate::winlayer::tabs;
+use crate::winlayer::{first_buffer, tabs};
 
 pub unsafe fn entering_window(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
@@ -333,7 +333,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     // Make sure `curbuf` is valid: it can become invalid if 'bufhidden' is
     // "wipe".
     if !bufref.valid() {
-        curbuf.set(firstbuf.get());
+        curbuf.set(first_buffer().map_or(ptr::null_mut(), Buf::raw));
     }
     retval
 }
@@ -347,8 +347,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
     let mut win = win;
     let Some(mut buf) = win.buffer_or_none() else {
         // The buffer was removed from the window: it has to be given one.
-        // SAFETY: `firstbuf` is set whenever a window exists.
-        let mut first = unsafe { Buf::new(firstbuf.get()) };
+        let mut first = first_buffer().expect("a window means a buffer list");
         win.w_buffer = first.raw();
         first.b_nwindows += 1;
         if win.is_current() {

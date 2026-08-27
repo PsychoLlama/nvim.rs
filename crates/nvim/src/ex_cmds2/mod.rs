@@ -63,8 +63,8 @@ use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, firstbuf, msg_col, msg_didany,
-    msg_didout, msg_row, no_check_timestamps, p_aw, p_awa, p_confirm, p_write, vgetc_busy,
+    cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, msg_col, msg_didany, msg_didout, msg_row,
+    no_check_timestamps, p_aw, p_awa, p_confirm, p_write, vgetc_busy,
 };
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
@@ -82,7 +82,9 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
-use crate::winlayer::{Buf, Win, buffers as all_buffers, tabs, windows, windows_in_tab};
+use crate::winlayer::{
+    Buf, Win, buffers as all_buffers, first_buffer, tabs, windows, windows_in_tab,
+};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -308,17 +310,16 @@ pub(crate) unsafe fn autowrite_all() {
     // being walked, which is why this is not `buffers()`: upstream resumes
     // from `firstbuf` when that happens.
     unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            let b = Buf::new(buf);
+        let mut cur = first_buffer();
+        while let Some(b) = cur {
             if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
-                let bufref = BufRef::of_opt(Buf::from_raw(buf));
-                buf_write_all(buf, false);
+                let bufref = BufRef::of(b);
+                buf_write_all(b.raw(), false);
                 if !bufref.valid() {
-                    buf = firstbuf.get();
+                    cur = first_buffer();
                 }
             }
-            buf = (*buf).b_next;
+            cur = cur.and_then(Buf::next);
         }
     }
 }
@@ -443,23 +444,22 @@ unsafe fn write_all_writable() {
     // SAFETY: module contract. As in `autowrite_all`, a write's
     // autocommands can delete the buffer being walked.
     unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            let target = Buf::new(buf);
-            if buf_is_changed(target) && !(*buf).b_ffname.is_null() && (*buf).b_p_ro == 0 {
-                let bufref = BufRef::of_opt(Buf::from_raw(buf));
-                if !(*buf).b_fname.is_null()
-                    && check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false)
+        let mut cur = first_buffer();
+        while let Some(target) = cur {
+            if buf_is_changed(target) && !target.b_ffname.is_null() && target.b_p_ro == 0 {
+                let bufref = BufRef::of(target);
+                if !target.b_fname.is_null()
+                    && check_overwrite(&raw mut ea, target, target.b_fname, target.b_ffname, false)
                         == OK
                 {
                     // didn't hit Cancel
-                    buf_write_all(buf, false);
+                    buf_write_all(target.raw(), false);
                 }
                 if !bufref.valid() {
-                    buf = firstbuf.get();
+                    cur = first_buffer();
                 }
             }
-            buf = (*buf).b_next;
+            cur = cur.and_then(Buf::next);
         }
     }
 }
@@ -546,7 +546,7 @@ unsafe fn changed_check_order() -> Vec<c_int> {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
-    if firstbuf.get().is_null() {
+    if first_buffer().is_none() {
         return false;
     }
     // SAFETY: module contract.

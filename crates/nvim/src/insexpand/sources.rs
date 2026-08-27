@@ -12,7 +12,7 @@ use super::*;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, first_buffer};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -390,8 +390,7 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
             // Move to the next buffer, wrapping to the first at the end.
             buf = match buf.next() {
                 Some(next) => next,
-                // SAFETY: the editor's buffer list is live, so its head is.
-                None => unsafe { Buf::new(firstbuf.get()) },
+                None => first_buffer().expect("the editor always has a buffer"),
             };
             // Stop if we're back at the start buffer.
             if buf.raw() == curbuf.get() {

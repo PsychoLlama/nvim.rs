@@ -25,8 +25,8 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::entry::event_teardown;
 use crate::main::{
-    curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf,
-    firstwin, garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
+    curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstwin,
+    garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
     stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::memfile::mf_fname;
@@ -42,7 +42,7 @@ use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
 
-use crate::winlayer::{Buf, buffers};
+use crate::winlayer::{Buf, buffers, first_buffer};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -177,18 +177,19 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             }
 
             // `BufUnload` for every loaded buffer.
-            let mut buf = firstbuf.get();
-            while !buf.is_null() {
-                if !(*buf).b_ml.ml_mfp.is_null() {
-                    let bufref = BufRef::of_opt(Buf::from_raw(buf));
-                    apply_autocmds(EVENT_BUFUNLOAD, (*buf).b_fname, (*buf).b_fname, false, buf);
+            let mut cur = first_buffer();
+            while let Some(mut buf) = cur {
+                if !buf.b_ml.ml_mfp.is_null() {
+                    let bufref = BufRef::of(buf);
+                    let (name, raw) = (buf.b_fname, buf.raw());
+                    apply_autocmds(EVENT_BUFUNLOAD, name, name, false, raw);
                     if !bufref.valid() {
                         // An autocommand deleted the buffer we were standing
                         // on, so the `b_next` link is gone with it.
                         break;
                     }
                 }
-                buf = (*buf).b_next;
+                cur = buf.next();
             }
 
             with_autocmds_unblocked(EVENT_VIMLEAVEPRE);

@@ -30,8 +30,7 @@ use crate::autocmd::{
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::main::{
-    curbuf, curwin, first_tabpage, firstbuf, firstwin, got_int, listcmd_busy, msg_listdo_overwrite,
-    prevwin,
+    curbuf, curwin, first_tabpage, firstwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin,
 };
 use crate::mark::setpcmark;
 use crate::message::emsg;
@@ -45,7 +44,7 @@ use crate::types::{
     cmdidx_T, exarg_T, linenr_T, size_t,
 };
 use crate::window::{goto_tabpage_tp, valid_tabpage, win_goto, win_split, win_valid};
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win, first_buffer};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -210,16 +209,18 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
         match list {
             ListDo::Buffers => {
                 // Advance to the first listed buffer after "eap->line1".
-                buf = firstbuf.get();
-                while !buf.is_null()
-                    && (((*buf).handle as linenr_T) < (*eap).line1 || (*buf).b_p_bl == 0)
-                {
-                    if (*buf).handle as linenr_T > (*eap).line2 {
-                        buf = ptr::null_mut();
+                let mut cur = first_buffer();
+                while let Some(b) = cur {
+                    if (b.handle as linenr_T) >= (*eap).line1 && b.b_p_bl != 0 {
                         break;
                     }
-                    buf = (*buf).b_next;
+                    if b.handle as linenr_T > (*eap).line2 {
+                        cur = None;
+                        break;
+                    }
+                    cur = b.next();
                 }
+                buf = cur.map_or(ptr::null_mut(), Buf::raw);
                 if !buf.is_null() {
                     goto_buffer(
                         eap,
@@ -298,13 +299,13 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                     // Remember the number of the next listed buffer, in case
                     // ":bwipe" is used or autocommands do something strange.
                     next_fnum = -1;
-                    let mut bp = (*curbuf.get()).b_next;
-                    while !bp.is_null() {
-                        if (*bp).b_p_bl != 0 {
-                            next_fnum = (*bp).handle as c_int;
+                    let mut bp = Buf::current().next();
+                    while let Some(b) = bp {
+                        if b.b_p_bl != 0 {
+                            next_fnum = b.handle as c_int;
                             break;
                         }
-                        bp = (*bp).b_next;
+                        bp = b.next();
                     }
                 }
                 ListDo::Quickfix { .. } => {}
@@ -389,12 +390,12 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
         let mut aco = aco_save_T::default();
         au_event_restore(save_ei);
 
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            let mut bnext = (*buf).b_next;
-            if (*buf).b_nwindows > 0 && (*buf).b_flags.has(BufFlags::SYN_SET) {
-                (*buf).b_flags.clear(BufFlags::SYN_SET);
-                if buf == curbuf.get() {
+        let mut cur = first_buffer();
+        while let Some(mut buf) = cur {
+            let mut bnext = buf.next();
+            if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
+                buf.b_flags.clear(BufFlags::SYN_SET);
+                if buf.raw() == curbuf.get() {
                     apply_autocmds(
                         EVENT_SYNTAX,
                         (*curbuf.get()).b_p_syn,
@@ -403,14 +404,15 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
                         curbuf.get(),
                     );
                 } else {
-                    aucmd_prepbuf(&raw mut aco, buf);
-                    apply_autocmds(EVENT_SYNTAX, (*buf).b_p_syn, (*buf).b_fname, true, buf);
+                    let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
+                    aucmd_prepbuf(&raw mut aco, raw);
+                    apply_autocmds(EVENT_SYNTAX, syn, name, true, raw);
                     aucmd_restbuf(&raw mut aco);
                 }
                 // Start over, in case autocommands messed things up.
-                bnext = firstbuf.get();
+                bnext = first_buffer();
             }
-            buf = bnext;
+            cur = bnext;
         }
     }
 }

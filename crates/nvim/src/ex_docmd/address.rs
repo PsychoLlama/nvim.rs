@@ -29,7 +29,7 @@ use crate::ex_docmd::{
     e_norange, ex_msg, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
 use crate::fold::has_folding;
-use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
+use crate::main::{curbuf, curtab, curwin};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::iemsg;
 use crate::option::magic_isset;
@@ -41,10 +41,10 @@ use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_s
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, CmdAddr, Direction, ExArgt,
-    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, fmark_T, linenr_T,
-    pos_T, size_t,
+    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, colnr_T, exarg_T, fmark_T, linenr_T, pos_T,
+    size_t,
 };
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 use ::libc::strlen;
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.
@@ -53,56 +53,53 @@ use ::libc::strlen;
 /// buffer list rather than arithmetic. `CmdAddr::LoadedBuffers` skips the
 /// unloaded ones on the way, and then — the tail loop below — walks back
 /// the other way if it ended on one anyway.
-pub(crate) unsafe fn compute_buffer_local_count(
+pub(crate) fn compute_buffer_local_count(
     addr_type: CmdAddr,
     lnum: linenr_T,
     offset: c_int,
 ) -> c_int {
-    unsafe {
-        let loaded_only = addr_type == CmdAddr::LoadedBuffers;
-        let mut count = offset;
-        let mut buf: *mut buf_T = firstbuf.get();
-        while !(*buf).b_next.is_null() && ((*buf).handle as linenr_T) < lnum {
-            buf = (*buf).b_next;
-        }
-        while count != 0 {
-            count += if count < 0 { 1 } else { -1 };
-            let step = |b: *mut buf_T| {
-                if offset < 0 { (*b).b_prev } else { (*b).b_next }
-            };
-            let nextbuf = step(buf);
-            if nextbuf.is_null() {
-                break;
-            }
-            buf = nextbuf;
-            if loaded_only {
-                while (*buf).b_ml.ml_mfp.is_null() {
-                    let nextbuf = step(buf);
-                    if nextbuf.is_null() {
-                        break;
-                    }
-                    buf = nextbuf;
-                }
-            }
-        }
-        // Landing on an unloaded buffer is still possible — the walk above
-        // gives up at the end of the list. Back out in the *opposite*
-        // direction to the one the offset asked for.
-        if loaded_only {
-            while (*buf).b_ml.ml_mfp.is_null() {
-                let nextbuf = if offset >= 0 {
-                    (*buf).b_prev
-                } else {
-                    (*buf).b_next
-                };
-                if nextbuf.is_null() {
-                    break;
-                }
-                buf = nextbuf;
-            }
-        }
-        (*buf).handle as c_int
+    let loaded_only = addr_type == CmdAddr::LoadedBuffers;
+    let mut count = offset;
+    let mut buf = head();
+    while (buf.handle as linenr_T) < lnum {
+        let Some(next) = buf.next() else { break };
+        buf = next;
     }
+    let step = |b: Buf| if offset < 0 { b.prev() } else { b.next() };
+    while count != 0 {
+        count += if count < 0 { 1 } else { -1 };
+        let Some(next) = step(buf) else { break };
+        buf = next;
+        if loaded_only {
+            while buf.b_ml.ml_mfp.is_null() {
+                let Some(next) = step(buf) else { break };
+                buf = next;
+            }
+        }
+    }
+    // Landing on an unloaded buffer is still possible — the walk above
+    // gives up at the end of the list. Back out in the *opposite*
+    // direction to the one the offset asked for.
+    if loaded_only {
+        while buf.b_ml.ml_mfp.is_null() {
+            let next = if offset >= 0 { buf.prev() } else { buf.next() };
+            let Some(next) = next else { break };
+            buf = next;
+        }
+    }
+    buf.handle as c_int
+}
+
+/// The head of the buffer list, which upstream dereferences here without
+/// checking: the editor has a buffer from startup to exit, and everything
+/// below runs from a command line.
+fn head() -> Buf {
+    first_buffer().expect("the editor always has a buffer")
+}
+
+/// The tail of the buffer list. [`head`].
+fn tail() -> Buf {
+    last_buffer().expect("the editor always has a buffer")
 }
 
 /// `:wincmd`'s address kind depends on the window command it is given: `w`
@@ -207,8 +204,8 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
                 ea.line2 = last;
             }
             CmdAddr::Buffers => {
-                ea.line1 = (*firstbuf.get()).handle as linenr_T;
-                ea.line2 = (*lastbuf.get()).handle as linenr_T;
+                ea.line1 = head().handle as linenr_T;
+                ea.line2 = tail().handle as linenr_T;
             }
             CmdAddr::Windows => {
                 ea.line2 = current_win_nr(ptr::null()) as linenr_T;
@@ -249,19 +246,19 @@ unsafe fn arglist_len() -> c_int {
 }
 
 /// The handles of the first and last *loaded* buffers.
-unsafe fn loaded_buffer_range() -> (linenr_T, linenr_T) {
-    unsafe {
-        let mut buf = firstbuf.get();
-        while !(*buf).b_next.is_null() && (*buf).b_ml.ml_mfp.is_null() {
-            buf = (*buf).b_next;
-        }
-        let first = (*buf).handle as linenr_T;
-        let mut buf = lastbuf.get();
-        while !(*buf).b_prev.is_null() && (*buf).b_ml.ml_mfp.is_null() {
-            buf = (*buf).b_prev;
-        }
-        (first, (*buf).handle as linenr_T)
+fn loaded_buffer_range() -> (linenr_T, linenr_T) {
+    let mut buf = head();
+    while buf.b_ml.ml_mfp.is_null() {
+        let Some(next) = buf.next() else { break };
+        buf = next;
     }
+    let first = buf.handle as linenr_T;
+    let mut buf = tail();
+    while buf.b_ml.ml_mfp.is_null() {
+        let Some(prev) = buf.prev() else { break };
+        buf = prev;
+    }
+    (first, buf.handle as linenr_T)
 }
 
 /// Where the command word starts, without consuming the range.
@@ -402,8 +399,8 @@ unsafe fn whole_range(eap: *mut exarg_T, errormsg: &mut Option<CString>) -> bool
                 ea.line2 = last;
             }
             CmdAddr::Buffers => {
-                ea.line1 = (*firstbuf.get()).handle as linenr_T;
-                ea.line2 = (*lastbuf.get()).handle as linenr_T;
+                ea.line1 = head().handle as linenr_T;
+                ea.line2 = tail().handle as linenr_T;
             }
             CmdAddr::Windows | CmdAddr::Tabs => {
                 // Only a *user* command may say `%` over windows or tab
@@ -828,7 +825,7 @@ unsafe fn last_lnum(eap: *mut exarg_T, addr_type: CmdAddr) -> Addr {
             CmdAddr::Windows => current_win_nr(ptr::null()) as linenr_T,
             CmdAddr::Arguments => arglist_len() as linenr_T,
             CmdAddr::LoadedBuffers => loaded_buffer_range().1,
-            CmdAddr::Buffers => (*lastbuf.get()).handle as linenr_T,
+            CmdAddr::Buffers => tail().handle as linenr_T,
             CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as linenr_T,
             // An empty quickfix list still has a last entry, numbered 1.
             CmdAddr::Quickfix => (qf_get_size(eap) as linenr_T).max(1),
@@ -890,24 +887,24 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
                 }
             }
             CmdAddr::LoadedBuffers => {
-                let mut buf = firstbuf.get();
-                while (*buf).b_ml.ml_mfp.is_null() {
-                    if (*buf).b_next.is_null() {
+                let mut buf = head();
+                while buf.b_ml.ml_mfp.is_null() {
+                    let Some(next) = buf.next() else {
                         return invrange();
-                    }
-                    buf = (*buf).b_next;
+                    };
+                    buf = next;
                 }
-                if ea.line1 < (*buf).handle as linenr_T {
+                if ea.line1 < buf.handle as linenr_T {
                     return invrange();
                 }
-                let mut buf = lastbuf.get();
-                while (*buf).b_ml.ml_mfp.is_null() {
-                    if (*buf).b_prev.is_null() {
+                let mut buf = tail();
+                while buf.b_ml.ml_mfp.is_null() {
+                    let Some(prev) = buf.prev() else {
                         return invrange();
-                    }
-                    buf = (*buf).b_prev;
+                    };
+                    buf = prev;
                 }
-                if ea.line2 > (*buf).handle as linenr_T {
+                if ea.line2 > buf.handle as linenr_T {
                     return invrange();
                 }
             }

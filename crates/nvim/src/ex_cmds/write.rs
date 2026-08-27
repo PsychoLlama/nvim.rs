@@ -39,7 +39,7 @@ use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
 use crate::main::{
     curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly, emsg_silent,
-    exiting, firstbuf, getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
+    exiting, getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
@@ -52,11 +52,11 @@ use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::types::{
     CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
-    ShmFlag, buf_T, exarg_T, int32_t, int64_t, linenr_T,
+    ShmFlag, exarg_T, int32_t, int64_t, linenr_T,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, first_buffer};
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -630,19 +630,18 @@ pub unsafe fn do_wqall(eap: *mut exarg_T) {
     // Not `winlayer::buffers()`: an autocommand fired while writing can delete
     // the buffer under the walk, which is what `WriteAll::Restart` is for --
     // the head has to be re-read, and no iterator re-reads it.
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
+    let mut cur = first_buffer();
+    while let Some(buf) = cur {
         // SAFETY: `buf` is a live buffer of the editor's own list.
-        match unsafe { write_one_buffer(eap, Buf::new(buf), save_forceit, &mut error) } {
+        match unsafe { write_one_buffer(eap, buf, save_forceit, &mut error) } {
             WriteAll::Stop => break,
             // The buffer was deleted under us.  Upstream restarts from
             // `firstbuf` and then takes the step below, so the first buffer
             // is not looked at a second time.
-            WriteAll::Restart => buf = firstbuf.get(),
+            WriteAll::Restart => cur = first_buffer(),
             WriteAll::Next => {}
         }
-        // SAFETY: as above.
-        buf = unsafe { (*buf).b_next };
+        cur = cur.and_then(Buf::next);
     }
 
     if exiting.get() {

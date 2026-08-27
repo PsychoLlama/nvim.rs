@@ -26,9 +26,9 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::main::{
-    Columns, curbuf, firstbuf, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle,
-    need_wait_return, no_lines_msg, p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring,
-    restart_edit, stl_syntax,
+    Columns, curbuf, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle, need_wait_return,
+    no_lines_msg, p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring, restart_edit,
+    stl_syntax,
 };
 use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
@@ -54,7 +54,7 @@ use crate::types::{
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
-use crate::winlayer::{Buf, Win, buffers};
+use crate::winlayer::{Buf, Win, buffers, first_buffer};
 use ::libc::{qsort, strcmp, strcpy, strlen};
 
 use super::list::buf_time_compare;
@@ -177,14 +177,15 @@ fn sorted_by_last_used() -> Vec<*mut buf_T> {
 struct Walk<'a> {
     sorted: Option<&'a [*mut buf_T]>,
     at: usize,
-    next: *mut buf_T,
+    next: Option<Buf>,
 }
 
 impl<'a> Walk<'a> {
     fn new(sorted: Option<&'a [*mut buf_T]>) -> Self {
         let next = match sorted {
-            Some(list) => list.first().copied().unwrap_or(ptr::null_mut()),
-            None => firstbuf.get(),
+            // SAFETY: every entry of the sorted array is a live buffer.
+            Some(list) => list.first().map(|&buf| unsafe { Buf::new(buf) }),
+            None => first_buffer(),
         };
         Walk {
             sorted,
@@ -197,15 +198,14 @@ impl<'a> Walk<'a> {
     /// has printed the line, which is where upstream's `for` increment
     /// reads it.
     fn step(&mut self) -> Option<Buf> {
-        // SAFETY: `firstbuf`, every `b_next` reached from it and every entry
-        // of the sorted array is a live buffer or null.
-        let buf = (!self.next.is_null()).then(|| unsafe { Buf::new(self.next) })?;
+        let buf = self.next?;
         self.next = match self.sorted {
             Some(list) => {
                 self.at += 1;
-                list.get(self.at).copied().unwrap_or(ptr::null_mut())
+                // SAFETY: as the constructor -- a live buffer.
+                list.get(self.at).map(|&buf| unsafe { Buf::new(buf) })
             }
-            None => buf.b_next,
+            None => buf.next(),
         };
         Some(buf)
     }

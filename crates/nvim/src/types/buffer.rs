@@ -13,6 +13,7 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::r#move::WinValid;
 use crate::undo::store::UndoStore;
+use crate::winlayer::BufId;
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -155,8 +156,12 @@ pub struct fcs_chars_T {
 pub struct file_buffer {
     pub handle: handle_T,
     pub b_ml: memline_T,
-    pub b_next: *mut buf_T,
-    pub b_prev: *mut buf_T,
+    /// The buffer list, `firstbuf`..`lastbuf`. A handle rather than an
+    /// address: the registry resolves it, so a link can never outlive what
+    /// it names, and the buffer stays movable. `winlayer::Buf::next`/`prev`
+    /// and `winlayer::buffers`/`buffers_back` are how it is walked.
+    pub(crate) b_next: Option<BufId>,
+    pub(crate) b_prev: Option<BufId>,
     pub b_nwindows: ::core::ffi::c_int,
     pub b_flags: BufFlags,
     pub b_locked: ::core::ffi::c_int,

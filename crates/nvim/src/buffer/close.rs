@@ -530,7 +530,7 @@ fn close_buffer_inner(
 
     // Remove the buffer from the list.  Do not wipe out the buffer if it is
     // used in a window, or if autocommands wiped out all other buffers.
-    let last_standing = buf.b_prev.is_null() && buf.b_next.is_null();
+    let last_standing = buf.b_prev.is_none() && buf.b_next.is_none();
     if how.wipe && buf.b_nwindows <= 0 && !last_standing {
         unlink_and_free(buf, clear_w_buf);
     } else {
@@ -634,15 +634,13 @@ fn unlink_and_free(mut buf: Buf, clear_w_buf: Option<Win>) {
         buf.b_sfname = ptr::null_mut();
     }
     xfree_clear(&mut buf.b_ffname);
-    match buf.b_prev.is_null() {
-        true => firstbuf.set(buf.b_next),
-        // SAFETY: a non-null `b_prev` of a live buffer is a live buffer.
-        false => unsafe { Buf::new(buf.b_prev) }.b_next = buf.b_next,
+    match buf.prev() {
+        None => firstbuf.set(buf.b_next),
+        Some(mut prev) => prev.b_next = buf.b_next,
     }
-    match buf.b_next.is_null() {
-        true => lastbuf.set(buf.b_prev),
-        // SAFETY: a non-null `b_next` of a live buffer is a live buffer.
-        false => unsafe { Buf::new(buf.b_next) }.b_prev = buf.b_prev,
+    match buf.next() {
+        None => lastbuf.set(buf.b_prev),
+        Some(mut next) => next.b_prev = buf.b_prev,
     }
     free_buffer(buf);
 }

@@ -14,7 +14,7 @@ use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::semsg_c;
 use crate::undo::UNDO_HASH_SIZE;
-use crate::winlayer::{Buf, Win, tab_windows};
+use crate::winlayer::{Buf, Win, first_buffer, tab_windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -145,8 +145,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
     did_check_timestamps.set(true);
     ALREADY_WARNED.set(false);
 
-    // SAFETY: `firstbuf` heads the editor's buffer list.
-    let mut cur = unsafe { Buf::from_raw(firstbuf.get()) };
+    let mut cur = first_buffer();
     while let Some(buf) = cur {
         // Only check buffers in a window.
         if buf.b_nwindows > 0 {
@@ -158,9 +157,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
                 // Autocommands have removed the buffer. Upstream's
                 // `buf = firstbuf; continue;` still runs the loop's own
                 // step, so this restarts at the *second* buffer.
-                //
-                // SAFETY: `firstbuf` heads the editor's buffer list.
-                cur = unsafe { Buf::from_raw(firstbuf.get()) }.and_then(Buf::next);
+                cur = first_buffer().and_then(Buf::next);
                 continue;
             }
         }

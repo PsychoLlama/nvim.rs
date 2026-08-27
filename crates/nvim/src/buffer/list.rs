@@ -190,9 +190,7 @@ fn current_win() -> Win {
 }
 
 fn current_last() -> Option<Buf> {
-    let last = lastbuf.get();
-    // SAFETY: `lastbuf` is null only before the first buffer is created.
-    (!last.is_null()).then(|| unsafe { Buf::new(last) })
+    last_buffer()
 }
 
 fn fire_buf_event(event: event_T, mut buf: Buf) -> bool {
@@ -436,24 +434,27 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
 /// Put a new buffer at the end of the buffer list, give it its number and
 /// hand its allocation to the registry, which owns it from here on.
 fn append_to_list(mut buf: Buf, owned: Owned<buf_T>) {
-    buf.b_next = ptr::null_mut();
-    match current_last() {
-        // The buffer list is empty.
-        None => {
-            buf.b_prev = ptr::null_mut();
-            firstbuf.set(buf.raw());
-        }
-        // Append the new buffer at the end of the list.
-        Some(mut last) => {
-            last.b_next = buf.raw();
-            buf.b_prev = last.raw();
-        }
-    }
-    lastbuf.set(buf.raw());
-
+    // The number and the registry entry come first, ahead of upstream's
+    // order: from here on `buf.id()` names the buffer, and the list links
+    // are made of exactly that. Nothing between the two reads either.
     buf.handle = top_file_num.get() as handle_T;
     top_file_num.set(top_file_num.get() + 1);
     register_buffer(buf.handle, owned);
+
+    buf.b_next = None;
+    match current_last() {
+        // The buffer list is empty.
+        None => {
+            buf.b_prev = None;
+            firstbuf.set(Some(buf.id()));
+        }
+        // Append the new buffer at the end of the list.
+        Some(mut last) => {
+            last.b_next = Some(buf.id());
+            buf.b_prev = Some(last.id());
+        }
+    }
+    lastbuf.set(Some(buf.id()));
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));
