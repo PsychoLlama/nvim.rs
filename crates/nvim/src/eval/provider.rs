@@ -83,19 +83,17 @@ pub unsafe fn common_job_callbacks(
     let err_cb: *mut Callback = err.field_ptr(offset_of!(CallbackReader, cb));
     // SAFETY: the caller's promise -- a live Dict and three callback slots,
     // two of which are the readers' own.
-    let ok = unsafe {
-        job_callback(vopts, c"on_stdout", out_cb)
-            && job_callback(vopts, c"on_stderr", err_cb)
-            && job_callback(vopts, c"on_exit", on_exit)
-    };
+    let ok = unsafe { job_callback(vopts, c"on_stdout", out_cb) }
+        && unsafe { job_callback(vopts, c"on_stderr", err_cb) }
+        && unsafe { job_callback(vopts, c"on_exit", on_exit) };
     if !ok {
         // SAFETY: as above; whatever was read into the three slots before
         // one of them failed is released here.
-        unsafe {
-            callback_reader_free(on_stdout);
-            callback_reader_free(on_stderr);
-            callback_free(on_exit);
-        };
+        unsafe { callback_reader_free(on_stdout) };
+        // SAFETY: as above.
+        unsafe { callback_reader_free(on_stderr) };
+        // SAFETY: as above.
+        unsafe { callback_free(on_exit) };
         return false;
     }
 
@@ -425,12 +423,13 @@ pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
     for i in (lnum_start + 1)..=lnum_last {
         // SAFETY: `full_text` is owned and NUL-terminated, `i` is a line of
         // the buffer, and each join frees what it consumed.
-        unsafe {
-            let half_text = concat_str(full_text, c"\n".as_ptr());
-            xfree(full_text as *mut c_void);
-            full_text = concat_str(half_text, ml_get_buf(buf.raw(), i));
-            xfree(half_text as *mut c_void);
-        };
+        let half_text = unsafe { concat_str(full_text, c"\n".as_ptr()) };
+        // SAFETY: the join copied what it needed.
+        unsafe { xfree(full_text as *mut c_void) };
+        // SAFETY: as above.
+        full_text = unsafe { concat_str(half_text, ml_get_buf(buf.raw(), i)) };
+        // SAFETY: as above.
+        unsafe { xfree(half_text as *mut c_void) };
     }
     full_text
 }
@@ -469,12 +468,13 @@ pub unsafe fn prompt_invoke_callback() {
         argv[1].v_type = VAR_UNKNOWN;
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
-        unsafe {
-            let cb = &raw mut (*cur_buf().raw()).b_prompt_callback;
-            callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv);
-            tv_clear(argv.as_mut_ptr());
-            tv_clear(&raw mut rettv);
-        };
+        let cb = unsafe { &raw mut (*cur_buf().raw()).b_prompt_callback };
+        // SAFETY: as above.
+        unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
+        // SAFETY: the argument array and the result are this frame's.
+        unsafe { tv_clear(argv.as_mut_ptr()) };
+        // SAFETY: as above.
+        unsafe { tv_clear(&raw mut rettv) };
     }
 
     // SAFETY: the current buffer is live.
@@ -500,10 +500,9 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
     got_int.set(false);
     // SAFETY: the callback is the current buffer's own, and the argument
     // array and result are this frame's.
-    let ret = unsafe {
-        let cb = &raw mut (*cur_buf().raw()).b_prompt_interrupt;
-        callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv)
-    };
+    let cb = unsafe { &raw mut (*cur_buf().raw()).b_prompt_interrupt };
+    // SAFETY: as above.
+    let ret = unsafe { callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv) };
     // SAFETY: `rettv` is this frame's.
     unsafe { tv_clear(&raw mut rettv) };
     ret as c_int != FAIL

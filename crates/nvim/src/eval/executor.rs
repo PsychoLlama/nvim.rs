@@ -79,19 +79,17 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
     // SAFETY: `b2` is live.
     let len = unsafe { (*b2).bv_ga.ga_len };
     if len > 0 {
-        // SAFETY: both Blobs are live; `ga` is the left-hand one's own
-        // array and `ga_grow` has made room for `len` bytes past `ga_len`
-        // before the move. `len > 0`, so the narrowing cannot lose a sign.
-        unsafe {
-            let ga = &raw mut (*b1).bv_ga;
-            ga_grow(ga, len);
-            let end = (*ga)
-                .ga_data
-                .cast::<uint8_t>()
-                .offset((*ga).ga_len as isize);
-            memmove(end.cast(), (*b2).bv_ga.ga_data, len.unsigned_abs() as usize);
-            (*ga).ga_len += len;
-        };
+        // SAFETY (every region below): both Blobs are live, `ga` is the
+        // left-hand one's own array, and `ga_grow` has made room for `len`
+        // bytes past `ga_len` before the move. `len > 0`, so the narrowing
+        // cannot lose a sign.
+        let ga = unsafe { &raw mut (*b1).bv_ga };
+        unsafe { ga_grow(ga, len) };
+        let at = unsafe { (*ga).ga_len } as isize;
+        let end = unsafe { (*ga).ga_data.cast::<uint8_t>().offset(at) };
+        let n = len.unsigned_abs() as usize;
+        unsafe { memmove(end.cast(), (*b2).bv_ga.ga_data, n) };
+        unsafe { (*ga).ga_len += len };
     }
     OK
 }

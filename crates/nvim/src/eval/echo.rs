@@ -212,14 +212,12 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             let owned = eap.cmdidx != CMD_execute;
             // SAFETY: `rettv` is this frame's, holding the value just
             // evaluated; each of the three renderings is NUL-terminated.
-            let argstr: *const c_char = unsafe {
-                if !owned {
-                    numbuf.string(&raw mut rettv)
-                } else if rettv.v_type == VAR_STRING {
-                    encode_tv2echo(&raw mut rettv, null_mut::<size_t>())
-                } else {
-                    encode_tv2string(&raw mut rettv, null_mut::<size_t>())
-                }
+            let argstr: *const c_char = if !owned {
+                unsafe { numbuf.string(&raw mut rettv) }
+            } else if rettv.v_type == VAR_STRING {
+                unsafe { encode_tv2echo(&raw mut rettv, null_mut::<size_t>()) }
+            } else {
+                unsafe { encode_tv2string(&raw mut rettv, null_mut::<size_t>()) }
             };
             // SAFETY: `argstr` is NUL-terminated, and `ga_grow` makes room
             // for the separator, the bytes and the terminator before any of
@@ -232,11 +230,10 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
                 unsafe { *(ga.ga_data as *mut c_char).offset(ga.ga_len as isize) = b' ' as c_char };
                 ga.ga_len += 1;
             }
+            // SAFETY: as above -- `ga_len` is inside the array.
+            let end = unsafe { (ga.ga_data as *mut c_char).offset(ga.ga_len as isize) };
             // SAFETY: as above -- `len + 1` bytes fit past `ga_len`.
-            unsafe {
-                let end = (ga.ga_data as *mut c_char).offset(ga.ga_len as isize);
-                memcpy(end as *mut c_void, argstr as *const c_void, len + 1);
-            };
+            unsafe { memcpy(end as *mut c_void, argstr as *const c_void, len + 1) };
             if owned {
                 // SAFETY: the two encoders hand back an owned string.
                 unsafe { xfree(argstr as *mut c_void) };
@@ -288,21 +285,23 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
 /// # Safety
 /// `varname` must be NUL-terminated.
 pub unsafe fn var_flavour(varname: *mut c_char) -> var_flavour_T {
-    // SAFETY: the caller's promise -- the walk below stops at the
-    // terminator, so it never leaves the string.
-    unsafe {
-        if !(*varname >= b'A' as c_char && *varname <= b'Z' as c_char) {
-            return VAR_FLAVOUR_DEFAULT;
+    // SAFETY: the caller's promise -- `varname` is NUL-terminated, so its
+    // first byte is readable.
+    let first = unsafe { *varname };
+    if !(first >= b'A' as c_char && first <= b'Z' as c_char) {
+        return VAR_FLAVOUR_DEFAULT;
+    }
+    let mut p = varname;
+    loop {
+        // SAFETY: the byte before this one was not the terminator, so this
+        // one is still inside the string.
+        p = unsafe { p.add(1) };
+        let c = unsafe { *p };
+        if c == 0 {
+            return VAR_FLAVOUR_SHADA;
         }
-        let mut p = varname;
-        loop {
-            p = p.add(1);
-            if *p == 0 {
-                return VAR_FLAVOUR_SHADA;
-            }
-            if *p >= b'a' as c_char && *p <= b'z' as c_char {
-                return VAR_FLAVOUR_SESSION;
-            }
+        if c >= b'a' as c_char && c <= b'z' as c_char {
+            return VAR_FLAVOUR_SESSION;
         }
     }
 }
@@ -338,12 +337,10 @@ pub unsafe fn last_set_msg(script_ctx: sctx_T) {
     let p = unsafe { get_scriptname(script_ctx, true) };
     msg_ext_skip_verbose.set(true);
     unsafe { verbose_enter() };
-    // SAFETY: every string below is NUL-terminated -- a literal, or the
-    // `CString` `p` that outlives the call.
-    unsafe {
-        msg_puts(gettext(c"\n\tLast set from ".as_ptr()));
-        msg_puts(p.as_ptr());
-    };
+    // SAFETY: the text is a NUL-terminated literal.
+    unsafe { msg_puts(gettext(c"\n\tLast set from ".as_ptr())) };
+    // SAFETY: the `CString` `p` outlives the call.
+    unsafe { msg_puts(p.as_ptr()) };
     if script_ctx.sc_lnum > 0 as linenr_T {
         // SAFETY: `line_msg` is a shared NUL-terminated message.
         unsafe { msg_puts(gettext(line_msg.as_ptr())) };

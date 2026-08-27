@@ -333,9 +333,9 @@ unsafe fn walk_shada_iterators() {
         };
         let mut name: c_char = NUL as c_char;
         let mut is_unnamed = false;
-        reg_iter = unsafe {
-            op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed)
-        };
+        let (n, r, u) = (&raw mut name, &raw mut reg, &raw mut is_unnamed);
+        // SAFETY: the caller's promise; the three are this frame's.
+        reg_iter = unsafe { op_global_reg_iter(reg_iter, n, r, u) };
         if reg_iter.is_null() {
             break;
         }
@@ -454,15 +454,13 @@ pub unsafe fn set_ref_in_ht(
                     && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
                 {
                     todo -= 1;
-                    abort = abort
-                        || unsafe {
-                            set_ref_in_item(
-                                &raw mut (*hi2di(hi)).di_tv,
-                                copy_id,
-                                &raw mut ht_stack,
-                                list_stack,
-                            )
-                        };
+                    // SAFETY: `hi` is a live entry, so the item its inline
+                    // key belongs to is live too; `ht_stack` is this
+                    // frame's and `list_stack` the caller's.
+                    let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
+                    let stack = &raw mut ht_stack;
+                    // SAFETY: as above.
+                    abort = abort || unsafe { set_ref_in_item(tv, copy_id, stack, list_stack) };
                 }
                 hi = unsafe { hi.add(1) };
             }
@@ -541,10 +539,9 @@ pub(crate) unsafe fn set_ref_in_item_dict(
     // Dict whose hashtab lives inside it.
     unsafe { (*newitem).ht = &raw mut (*dd).dv_hashtab };
     // SAFETY: the caller's promise about `ht_stack`, which this pushes on.
-    unsafe {
-        (*newitem).prev = *ht_stack;
-        *ht_stack = newitem;
-    };
+    unsafe { (*newitem).prev = *ht_stack };
+    // SAFETY: as above.
+    unsafe { *ht_stack = newitem };
 
     // The watchers' callbacks are marked only on this branch, which is
     // upstream's. A dictionary reached with no `ht_stack` — that is,
@@ -581,11 +578,11 @@ pub(crate) unsafe fn set_ref_in_item_list(
     // SAFETY: `xmalloc` never answers NULL, and the caller's promise about
     // `list_stack`, which this pushes the new entry onto.
     let newitem = unsafe { xmalloc(size_of::<list_stack_T>()) } as *mut list_stack_T;
-    unsafe {
-        (*newitem).list = ll;
-        (*newitem).prev = *list_stack;
-        *list_stack = newitem;
-    };
+    unsafe { (*newitem).list = ll };
+    // SAFETY: as above.
+    unsafe { (*newitem).prev = *list_stack };
+    // SAFETY: as above.
+    unsafe { *list_stack = newitem };
     false
 }
 
@@ -613,16 +610,13 @@ pub(crate) unsafe fn set_ref_in_item_partial(
         dtv.vval.v_dict = unsafe { (*pt).pt_dict };
         abort = abort || unsafe { set_ref_in_item(&raw mut dtv, copy_id, ht_stack, list_stack) };
     }
+    // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
+    // arguments and `pt_argv` names them.
     for i in 0..unsafe { (*pt).pt_argc } {
-        abort = abort
-            || unsafe {
-                set_ref_in_item(
-                    (*pt).pt_argv.offset(i as isize),
-                    copy_id,
-                    ht_stack,
-                    list_stack,
-                )
-            };
+        // SAFETY: as above -- `i` is one of them.
+        let arg = unsafe { (*pt).pt_argv.offset(i as isize) };
+        // SAFETY: as above; the stacks are the caller's.
+        abort = abort || unsafe { set_ref_in_item(arg, copy_id, ht_stack, list_stack) };
     }
     abort
 }
@@ -638,19 +632,19 @@ pub unsafe fn set_ref_in_item(
     ht_stack: *mut *mut ht_stack_T,
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
-    match unsafe { (*tv).v_type } {
-        VAR_DICT => unsafe {
-            set_ref_in_item_dict((*tv).vval.v_dict, copy_id, ht_stack, list_stack)
-        },
-        VAR_LIST => unsafe {
-            set_ref_in_item_list((*tv).vval.v_list, copy_id, ht_stack, list_stack)
-        },
+    // SAFETY: the caller's promise -- the typval outlives the call, and the
+    // union member each arm reads is the one its `v_type` names; the stacks
+    // are the caller's.
+    let tv = unsafe { Tv::new(tv) };
+    let (ht, ls) = (ht_stack, list_stack);
+    match tv.v_type {
+        // SAFETY: as above.
+        VAR_DICT => unsafe { set_ref_in_item_dict(tv.vval.v_dict, copy_id, ht, ls) },
+        VAR_LIST => unsafe { set_ref_in_item_list(tv.vval.v_list, copy_id, ht, ls) },
         // A Funcref names a function, which may be a closure holding a
         // scope of its own.
-        VAR_FUNC => unsafe { set_ref_in_func((*tv).vval.v_string, null_mut::<ufunc_T>(), copy_id) },
-        VAR_PARTIAL => unsafe {
-            set_ref_in_item_partial((*tv).vval.v_partial, copy_id, ht_stack, list_stack)
-        },
+        VAR_FUNC => unsafe { set_ref_in_func(tv.vval.v_string, null_mut::<ufunc_T>(), copy_id) },
+        VAR_PARTIAL => unsafe { set_ref_in_item_partial(tv.vval.v_partial, copy_id, ht, ls) },
         _ => false,
     }
 }
@@ -742,10 +736,9 @@ pub unsafe fn var_item_copy(
             } else if copy_id != 0 && unsafe { (*d).dv_copyID } == copy_id {
                 // SAFETY: as above -- the copy it was given under this id,
                 // which gains this reference.
-                unsafe {
-                    dst.vval.v_dict = (*d).dv_copydict;
-                    (*dst.vval.v_dict).dv_refcount.retain();
-                };
+                dst.vval.v_dict = unsafe { (*d).dv_copydict };
+                // SAFETY: as above -- the shared copy gains this reference.
+                unsafe { (*dst.vval.v_dict).dv_refcount.retain() };
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
                 dst.vval.v_dict = unsafe { tv_dict_copy(conv, d, deep, copy_id) };

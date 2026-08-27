@@ -150,15 +150,10 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
             // SAFETY: `arg` is one of the list's items.
             if unsafe { (*arg).li_tv.v_type } != VAR_STRING {
-                // SAFETY: the format takes one `int`.
-                unsafe {
-                    semsg_c!(
-                        gettext(
-                            c"E5010: List item %d of the second argument is not a string".as_ptr(),
-                        ),
-                        i as c_int,
-                    )
-                };
+                let msg = c"E5010: List item %d of the second argument is not a string";
+                // SAFETY: the message is a NUL-terminated literal whose
+                // format takes one `int`.
+                unsafe { semsg_c!(gettext(msg.as_ptr()), i as c_int) };
                 return;
             }
         }
@@ -176,10 +171,9 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let argvl = argsl as usize + 2;
     // SAFETY: `xmalloc` never answers NULL, and `argvl` slots are written
     // below before anything reads them.
-    let child_argv = unsafe {
-        let raw = xmalloc(size_of::<*mut c_char>() * argvl).cast::<*mut c_char>();
-        slice::from_raw_parts_mut(raw, argvl)
-    };
+    let raw = unsafe { xmalloc(size_of::<*mut c_char>() * argvl) }.cast::<*mut c_char>();
+    // SAFETY: as above -- `argvl` slots were allocated.
+    let child_argv = unsafe { slice::from_raw_parts_mut(raw, argvl) };
     // SAFETY: `prog` is a live NUL-terminated string.
     child_argv[0] = unsafe { xstrdup(prog) };
     let mut i = 1;
@@ -306,11 +300,13 @@ pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eva
 
     // SAFETY: `argv[1]` holds a live dictionary, either the caller's or the
     // one allocated above; `f_jobstart` takes the whole argument vector.
-    unsafe {
-        tv_dict_add_bool(argv[1].vval.v_dict, c"term".as_ptr(), 4, kBoolVarTrue);
-        f_jobstart(argvars, rettv, fptr);
-        if must_free {
-            tv_dict_free(argv[1].vval.v_dict);
-        }
+    let dict = unsafe { argv[1].vval.v_dict };
+    // SAFETY: as above -- `dict` is that dictionary.
+    unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
+    // SAFETY: as above -- the whole argument vector goes to `jobstart()`.
+    unsafe { f_jobstart(argvars, rettv, fptr) };
+    if must_free {
+        // SAFETY: the dictionary was borrowed for this call only.
+        unsafe { tv_dict_free(dict) };
     }
 }

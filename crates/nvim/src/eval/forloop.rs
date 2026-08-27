@@ -146,10 +146,9 @@ pub unsafe fn eval_for_line(
                 _ => {
                     // SAFETY: the message is a NUL-terminated literal, and
                     // `tv` is this frame's.
-                    unsafe {
-                        emsg(gettext(e_string_list_or_blob_required.as_ptr()));
-                        tv_clear(&raw mut tv);
-                    };
+                    unsafe { emsg(gettext(e_string_list_or_blob_required.as_ptr())) };
+                    // SAFETY: `tv` is this frame's.
+                    unsafe { tv_clear(&raw mut tv) };
                 }
             }
         }
@@ -241,10 +240,9 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
         // SAFETY: the watcher was added to this List by `eval_for_line`,
         // and the reference it took is released here.
-        unsafe {
-            tv_list_watch_remove(fi.fi_list, lw);
-            tv_list_unref(fi.fi_list);
-        };
+        unsafe { tv_list_watch_remove(fi.fi_list, lw) };
+        // SAFETY: as above -- this releases the reference `fi` held.
+        unsafe { tv_list_unref(fi.fi_list) };
     } else if !fi.fi_blob.is_null() {
         // SAFETY: the Blob is the copy `eval_for_line` took.
         unsafe { tv_blob_unref(fi.fi_blob) };

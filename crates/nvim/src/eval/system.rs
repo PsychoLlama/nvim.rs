@@ -215,16 +215,18 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     }
 
     if p_verbose.get() > 3 as OptInt {
-        // SAFETY: `argv` is the NULL-terminated vector built above, and
-        // every literal below is NUL-terminated.
-        unsafe {
-            let cmdstr = shell_argv_to_str(argv);
-            verbose_enter_scroll();
-            smsg_c!(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr);
-            msg_puts(c"\n\n".as_ptr());
-            verbose_leave_scroll();
-            xfree(cmdstr as *mut c_void);
-        };
+        // SAFETY: `argv` is the NULL-terminated vector built above.
+        let cmdstr = unsafe { shell_argv_to_str(argv) };
+        // SAFETY: the scroll bracket is the message area's own.
+        unsafe { verbose_enter_scroll() };
+        // SAFETY: the format takes the one NUL-terminated `cmdstr`.
+        unsafe { smsg_c!(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr) };
+        // SAFETY: the literal is NUL-terminated.
+        unsafe { msg_puts(c"\n\n".as_ptr()) };
+        // SAFETY: this closes the bracket opened above.
+        unsafe { verbose_leave_scroll() };
+        // SAFETY: `cmdstr` is the owned rendering.
+        unsafe { xfree(cmdstr as *mut c_void) };
     }
 
     let mut wait_time: proftime_T = 0;
@@ -264,9 +266,8 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         let mut keepempty = 0;
         // SAFETY: the builtin declares three slots, and the third is only
         // reached once the second turned out to be given.
-        let given = unsafe {
-            (*argvars.add(1)).v_type != VAR_UNKNOWN && (*argvars.add(2)).v_type != VAR_UNKNOWN
-        };
+        let given = unsafe { (*argvars.add(1)).v_type } != VAR_UNKNOWN
+            && unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN;
         if given {
             // SAFETY: as above.
             keepempty = unsafe { tv_get_number(argvars.add(2)) } as c_int;
@@ -303,6 +304,19 @@ pub unsafe fn f_systemlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     unsafe { get_system_output_as_rettv(argvars, rettv, true) }
 }
 
+/// Write `c` at `dest` and answer the byte after it.
+///
+/// # Safety
+/// `dest` must have room for one more byte.
+#[inline(always)]
+unsafe fn put(dest: *mut c_char, c: c_char) -> *mut c_char {
+    // SAFETY: the caller's promise -- one writable byte at `dest`.
+    unsafe {
+        *dest = c;
+        dest.add(1)
+    }
+}
+
 /// Copy the NUL-terminated string at `src` to `dest`, writing a NUL for
 /// every newline it holds, and answer the end of what was written.
 ///
@@ -321,16 +335,15 @@ unsafe fn copy_swapping_nl(src: *const c_char, dest: *mut c_char) -> *mut c_char
         if c as c_int == NUL {
             return dest;
         }
-        // SAFETY: the caller's promise -- one byte written per byte read.
-        unsafe {
-            *dest = if c == b'\n' as c_char {
-                NUL as c_char
-            } else {
-                c
-            };
-            dest = dest.add(1);
-            src = src.add(1);
+        let out = if c == b'\n' as c_char {
+            NUL as c_char
+        } else {
+            c
         };
+        // SAFETY: the caller's promise -- one byte written per byte read.
+        dest = unsafe { put(dest, out) };
+        // SAFETY: `c` was not the terminator, so the next byte is inside.
+        src = unsafe { src.add(1) };
     }
 }
 
@@ -414,11 +427,9 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     for lnum in 1..=buf.line_count() {
         // SAFETY: `lnum` is a line of the buffer, and the measurement above
         // left room for its bytes and one separator.
-        unsafe {
-            end = copy_swapping_nl(ml_get_buf(buf.raw(), lnum), end);
-            *end = b'\n' as c_char;
-            end = end.add(1);
-        };
+        end = unsafe { copy_swapping_nl(ml_get_buf(buf.raw(), lnum), end) };
+        // SAFETY: as above -- the separator's byte was measured in.
+        end = unsafe { put(end, b'\n' as c_char) };
     }
     // SAFETY: the terminator is the one byte the allocation added.
     unsafe { *end = NUL as c_char };
@@ -474,15 +485,13 @@ unsafe fn list_as_string(
             // SAFETY: `li` is a live item.
             let last = unsafe { (*li).li_next }.is_null();
             if endnl || !last {
-                // SAFETY: the measurement charged every item a separator.
-                unsafe {
-                    if crlf {
-                        *end = b'\r' as c_char;
-                        end = end.add(1);
-                    }
-                    *end = b'\n' as c_char;
-                    end = end.add(1);
-                };
+                if crlf {
+                    // SAFETY: the measurement charged every item `sep`
+                    // bytes, which is two when `crlf`.
+                    end = unsafe { put(end, b'\r' as c_char) };
+                }
+                // SAFETY: as above.
+                end = unsafe { put(end, b'\n' as c_char) };
             }
             // SAFETY: `li` is a live item.
             li = unsafe { (*li).li_next };

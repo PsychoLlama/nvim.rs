@@ -146,13 +146,12 @@ pub unsafe fn var2fpos(
             return None;
         }
 
-        // SAFETY: `pos.lnum` is a line of the buffer, checked above.
-        let len = unsafe {
-            if charcol {
-                mb_charlen(ml_get_buf(bp.raw(), pos.lnum))
-            } else {
-                ml_get_buf_len(bp.raw(), pos.lnum) as c_int
-            }
+        // SAFETY (both arms): `pos.lnum` is a line of the buffer, checked
+        // above, and a buffer line is NUL-terminated.
+        let len = if charcol {
+            unsafe { mb_charlen(ml_get_buf(bp.raw(), pos.lnum)) }
+        } else {
+            unsafe { ml_get_buf_len(bp.raw(), pos.lnum) as c_int }
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
@@ -259,13 +258,11 @@ pub unsafe fn var2fpos(
         } else {
             let lnum = wp.w_cursor.lnum;
             pos.lnum = lnum;
-            // SAFETY: the cursor is on a line of the buffer.
-            pos.col = unsafe {
-                if charcol {
-                    mb_charlen(ml_get_buf(bp.raw(), lnum))
-                } else {
-                    ml_get_buf_len(bp.raw(), lnum)
-                }
+            // SAFETY (both arms): the cursor is on a line of the buffer.
+            pos.col = if charcol {
+                unsafe { mb_charlen(ml_get_buf(bp.raw(), lnum)) }
+            } else {
+                unsafe { ml_get_buf_len(bp.raw(), lnum) }
             };
         }
         return Some(pos);

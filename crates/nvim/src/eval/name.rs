@@ -119,11 +119,9 @@ pub unsafe fn get_name_len(
     // string. The three bytes are compared in order, so the second and the
     // third are only read once the ones before them matched, which is what
     // keeps the reads inside the string.
-    let snr = unsafe {
-        *(*arg).add(0) == K_SPECIAL as c_char
-            && *(*arg).add(1) == KS_EXTRA as c_char
-            && *(*arg).add(2) == KE_SNR as c_char
-    };
+    let snr = unsafe { *(*arg).add(0) } == K_SPECIAL as c_char
+        && unsafe { *(*arg).add(1) } == KS_EXTRA as c_char
+        && unsafe { *(*arg).add(2) } == KE_SNR as c_char;
     if snr {
         // SAFETY: the prefix is three bytes of the same string.
         unsafe { *arg = (*arg).add(3) };
@@ -219,10 +217,9 @@ pub unsafe fn find_name_end(
     if !expr_start.is_null() {
         // SAFETY: the caller's promise -- both out-parameters are valid
         // when the first one is.
-        unsafe {
-            *expr_start = core::ptr::null();
-            *expr_end = core::ptr::null();
-        };
+        unsafe { *expr_start = core::ptr::null() };
+        // SAFETY: as above.
+        unsafe { *expr_end = core::ptr::null() };
     }
     // SAFETY: the caller's promise -- `arg` is NUL-terminated, so its first
     // byte is readable.
@@ -367,13 +364,13 @@ pub(crate) unsafe fn make_expanded_name(
     // become terminators — and put back before returning.
     // SAFETY: the caller's promise -- all four point into one writable
     // NUL-terminated string.
-    let c1 = unsafe {
-        *expr_start = NUL as c_char;
-        *expr_end = NUL as c_char;
-        let c1 = *in_end;
-        *in_end = NUL as c_char;
-        c1
-    };
+    let c1 = unsafe { *in_end };
+    // SAFETY: as above -- the three cuts, put back before returning.
+    unsafe { *expr_start = NUL as c_char };
+    // SAFETY: as above.
+    unsafe { *expr_end = NUL as c_char };
+    // SAFETY: as above.
+    unsafe { *in_end = NUL as c_char };
 
     let mut retval: *mut c_char = core::ptr::null_mut();
     // SAFETY: the text after the opening brace is its own NUL-terminated
@@ -382,12 +379,11 @@ pub(crate) unsafe fn make_expanded_name(
     if !temp_result.is_null() {
         // SAFETY: all four cursors are into the one string, and
         // `temp_result` is NUL-terminated.
-        let retvalsize = unsafe {
-            expr_start.offset_from(in_start) as size_t
-                + strlen(temp_result)
-                + in_end.offset_from(expr_end) as size_t
-                + 1
-        };
+        let before = unsafe { expr_start.offset_from(in_start) } as size_t;
+        // SAFETY: as above.
+        let after = unsafe { in_end.offset_from(expr_end) } as size_t;
+        // SAFETY: `temp_result` is NUL-terminated.
+        let retvalsize = before + unsafe { strlen(temp_result) } + after + 1;
         // SAFETY: `xmalloc` never answers NULL.
         retval = unsafe { xmalloc(retvalsize) as *mut c_char };
         // SAFETY: the tail begins after the closing brace.
@@ -400,11 +396,11 @@ pub(crate) unsafe fn make_expanded_name(
     unsafe { xfree(temp_result as *mut c_void) };
 
     // SAFETY: the three bytes cut out above are put back where they were.
-    unsafe {
-        *in_end = c1;
-        *expr_start = b'{' as c_char;
-        *expr_end = b'}' as c_char;
-    };
+    unsafe { *in_end = c1 };
+    // SAFETY: as above.
+    unsafe { *expr_start = b'{' as c_char };
+    // SAFETY: as above.
+    unsafe { *expr_end = b'}' as c_char };
 
     if !retval.is_null() {
         // The expansion may itself hold curly braces.
