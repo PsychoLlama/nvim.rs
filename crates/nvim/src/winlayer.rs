@@ -87,8 +87,8 @@
 //!
 //! Four shapes of the rule are in the tree and worth copying:
 //!
-//! * `BufRef` (`buffer::BufRef`, upstream's `bufref_T`) — `set_bufref` before,
-//!   `bufref_valid`/`BufRef::get` after. `buffer::enter` uses it twice around
+//! * `BufRef` (`buffer::BufRef`, upstream's `bufref_T`) — `BufRef::of`/`of_opt`
+//!   before, `BufRef::valid`/`get` after. `buffer::enter` uses it twice around
 //!   `BufLeave`.
 //! * A saved `handle_T` plus a registry lookup — `autocmd::aucmdwin`'s
 //!   `save_curwin_handle`/`save_prevwin_handle`.
@@ -352,6 +352,13 @@ impl Win {
     /// The buffer this window shows, or a null [`Buf`] for the moment between
     /// losing one and being given another — [`Win::buffer_or_none`] separates
     /// the two, and the callers that do not care only pass the address on.
+    ///
+    /// **Never write `Some(win.buffer())`.** An `Option<Buf>` parameter means
+    /// "the buffer, or none", and wrapping this in `Some` promises a buffer
+    /// that may not exist: the callee then reads through a null `Buf`. That
+    /// shipped once in this slice and crashed `window::close::is_prompt`
+    /// (`Test_BufUnload_close_other`). [`Win::buffer_or_none`] is the one to
+    /// hand an `Option<Buf>`, and the two names differ so the grep is easy.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
         Buf(self.w_buffer)

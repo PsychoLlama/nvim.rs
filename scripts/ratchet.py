@@ -453,7 +453,11 @@ CELL_COPY_OWNER = (
     "behind_pos",
     # the rest, one or a few sites each
     "curgrid",
-    "au_new_curbuf",
+    # `au_new_curbuf` left the list in phase 23's S11. It is a `bufref_T`,
+    # which is upstream's own *weak* reference -- the `br_buf_free_count`
+    # generation check exists precisely because the pointer is borrowed --
+    # and since S11 the buffer's owner is a named one, the buffer registry's
+    # `Owned<buf_T>`. A `get` on this cell copies a reference, not an owner.
     "dont_sync_undo",
     "old_sub",
     # ccline is done: `cmdline_block` and `restart_args` retired in phase 22's

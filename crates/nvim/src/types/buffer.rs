@@ -884,8 +884,9 @@ pub struct wline_T {
 }
 
 impl bufref_T {
-    /// The zeroed state `set_bufref` expects to be handed. Every caller
-    /// declares one of these as a local and immediately fills it in.
+    /// The "names nothing" state. `BufRef::NONE` is how the editor spells
+    /// it; the two remaining raw holders (`main::au_new_curbuf` and
+    /// `aco_save_T::new_curbuf`) start from this.
     ///
     /// A `const fn` as well as a [`Default`] because two of them are
     /// statics.
