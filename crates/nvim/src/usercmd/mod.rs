@@ -452,12 +452,12 @@ pub(crate) unsafe fn uc_add_command(
             )
         };
         // SAFETY: module contract; `steal` is a leaf.
-        let (rep, compl_arg, luarefs) = unsafe { table.with_mut(steal) };
+        let (old_rep, old_compl_arg, old_luarefs) = unsafe { table.with_mut(steal) };
         // SAFETY: the entry owned all five and no longer names any of them.
         unsafe {
-            xfree(rep.cast());
-            xfree(compl_arg.cast());
-            for mut luaref in luarefs {
+            xfree(old_rep.cast());
+            xfree(old_compl_arg.cast());
+            for mut luaref in old_luarefs {
                 free_luaref(&mut luaref);
             }
         }
