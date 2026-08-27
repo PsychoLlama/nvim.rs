@@ -46,7 +46,7 @@ use crate::window::{
     close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
     valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
 };
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, windows};
 
 /// The key a command-line window sends back to close itself, with the
 /// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
@@ -297,31 +297,25 @@ pub(crate) unsafe fn ex_close(eap: *mut exarg_T) {
 ///
 /// Unlike `window_at`, this counts from one and falls back to `lastwin`
 /// rather than stopping at the end.
-unsafe fn numbered_window(nr: linenr_T) -> *mut win_T {
-    unsafe {
-        let mut winnr = 0;
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            winnr += 1;
-            if winnr as linenr_T == nr {
-                return wp;
-            }
-            wp = (*wp).w_next;
+fn numbered_window(nr: linenr_T) -> *mut win_T {
+    let mut winnr = 0;
+    for wp in windows() {
+        winnr += 1;
+        if winnr as linenr_T == nr {
+            return wp.raw();
         }
-        lastwin.get()
     }
+    lastwin.get()
 }
 
 /// `:pclose` — close the preview window, wherever it is.
 pub(crate) unsafe fn ex_pclose(eap: *mut exarg_T) {
     unsafe {
-        let mut win = firstwin.get();
-        while !win.is_null() {
-            if (*win).w_onebuf_opt.wo_pvw != 0 {
-                ex_win_close((*eap).forceit, win, ptr::null_mut());
+        for win in windows() {
+            if win.w_onebuf_opt.wo_pvw != 0 {
+                ex_win_close((*eap).forceit, win.raw(), ptr::null_mut());
                 return;
             }
-            win = (*win).w_next;
         }
     }
 }

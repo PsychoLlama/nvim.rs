@@ -37,8 +37,8 @@ use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::hashtab::hash_removed;
 use crate::main::{
-    Columns, Rows, curtab, curwin, first_tabpage, firstbuf, firstwin, globaldir, p_shm, p_stal,
-    p_wh, p_wiw, topframe,
+    Columns, Rows, curtab, curwin, first_tabpage, firstwin, globaldir, p_shm, p_stal, p_wh, p_wiw,
+    topframe,
 };
 use crate::memory::xfree;
 use crate::options::{
@@ -53,7 +53,7 @@ use crate::types::{
     frame_T, hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, TabPage, Win, buffers, tabs, windows_in_tab};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -242,8 +242,7 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
     let opts = SessionOpts::Session;
     // SAFETY: caller contract; each buffer's window info is its own kvec.
     unsafe {
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
+        for buf in buffers().map(Buf::raw) {
             let wanted = !(only_save_windows && (*buf).b_nwindows == 0)
                 && !((*buf).b_help && !opts.has(kOptSsopFlagHelp))
                 && !(buf_is_terminal(Buf::from_raw(buf)) && !opts.has(kOptSsopFlagTerminal))
@@ -259,7 +258,6 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
                     return false;
                 }
             }
-            buf = (*buf).b_next;
         }
     }
     true
@@ -282,12 +280,10 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     // SAFETY: caller contract.
     unsafe {
         if with_tabs {
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                if !(*tp).tp_next.is_null() && !out.line(c"tabnew +setlocal\\ bufhidden=wipe") {
+            for tp in tabs() {
+                if tp.next().is_some() && !out.line(c"tabnew +setlocal\\ bufhidden=wipe") {
                     return false;
                 }
-                tp = (*tp).tp_next;
             }
             if !(*first_tabpage.get()).tp_next.is_null() && !out.line(c"tabrewind") {
                 return false;
@@ -319,12 +315,13 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 tp = curtab.get();
                 (firstwin.get(), topframe.get())
             };
+            // The same head `tab_firstwin` was just taken, said as a walk.
+            let tab = TabPage::new(tp);
 
             // Before creating the layout, try loading one file: if that is
             // aborted we do not end up with a pile of useless windows. This
             // may have side effects (a compressed or network file).
-            let mut wp = tab_firstwin;
-            while !wp.is_null() {
+            for wp in windows_in_tab(tab).map(Win::raw) {
                 if ses_do_win(wp)
                     && !(*(*wp).w_buffer).b_ffname.is_null()
                     && !buf_is_help(Buf::from_raw((*wp).w_buffer))
@@ -342,7 +339,6 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                     }
                     break;
                 }
-                wp = (*wp).w_next;
             }
             // No file got edited: create an empty tab page.
             if need_tabnext && !out.line(c"tabnext") {
@@ -364,8 +360,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             // omitted? And which window number is the current one?
             let mut nr = 0;
             let mut cnr = 1;
-            let mut wp = tab_firstwin;
-            while !wp.is_null() {
+            for wp in windows_in_tab(tab).map(Win::raw) {
                 if ses_do_win(wp) {
                     nr += 1;
                 } else if !(*wp).w_floating {
@@ -374,7 +369,6 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 if curwin.get() == wp {
                     cnr = nr;
                 }
-                wp = (*wp).w_next;
             }
 
             if !tab_firstwin.is_null() && !(*tab_firstwin).w_next.is_null() {
@@ -400,7 +394,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 }
                 *restore_height_width = true;
             }
-            if nr > 1 && !ses_winsizes(out, restore_size, tab_firstwin) {
+            if nr > 1 && !ses_winsizes(out, restore_size, tab) {
                 return false;
             }
 
@@ -414,8 +408,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             }
 
             // Each window's view.
-            let mut wp = tab_firstwin;
-            while !wp.is_null() {
+            for wp in windows_in_tab(tab).map(Win::raw) {
                 if ses_do_win(wp) {
                     if !put_view(out, wp, tp, wp != edited_win, opts, cur_arg_idx) {
                         return false;
@@ -425,7 +418,6 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                     }
                     next_arg_idx = (*wp).w_arg_idx;
                 }
-                wp = (*wp).w_next;
             }
             // The argument index is zero in the first tab page and has to be
             // set per window; for later tab pages it is the window the
@@ -439,7 +431,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             }
             // And restore the sizes again: jumping around gives the current
             // window a minimum size the others may not have.
-            if nr > 1 && !ses_winsizes(out, restore_size, tab_firstwin) {
+            if nr > 1 && !ses_winsizes(out, restore_size, tab) {
                 return false;
             }
 
@@ -457,16 +449,15 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 /// the sizes are just equalised instead.
 ///
 /// # Safety
-/// `tab_firstwin` heads a live window list.
-unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab_firstwin: *mut win_T) -> bool {
+/// `tab` is a live tab page.
+unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bool {
     if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
         return out.line(c"wincmd =");
     }
     // SAFETY: caller contract; `topframe` is the current tab's frame tree.
     unsafe {
         let mut n = 0;
-        let mut wp = tab_firstwin;
-        while !wp.is_null() {
+        for wp in windows_in_tab(tab).map(Win::raw) {
             if ses_do_win(wp) {
                 n += 1;
                 // Restore the height when the window is not full height.
@@ -493,7 +484,6 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab_firstwin: *mut 
                     return false;
                 }
             }
-            wp = (*wp).w_next;
         }
     }
     true

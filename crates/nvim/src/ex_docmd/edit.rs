@@ -34,8 +34,8 @@ use crate::lua::executor::ex_lua;
 use crate::main::{
     State, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2, e_invrange, e_secure,
     e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint, ex_normal_busy,
-    exec_from_reg, finish_op, firstwin, force_restart_edit, got_int, magic_overruled, main_loop,
-    msg_didout, msg_scroll, opcount, p_mmd, pending_end_reg_executing, reg_executing, restart_edit,
+    exec_from_reg, finish_op, force_restart_edit, got_int, magic_overruled, main_loop, msg_didout,
+    msg_scroll, opcount, p_mmd, pending_end_reg_executing, reg_executing, restart_edit,
     stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
@@ -70,7 +70,7 @@ use crate::types::{
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::undo::store::header_chain;
 use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, windows};
 use ::libc::strlen;
 
 /// `:print`, `:number` and `:list`.
@@ -119,35 +119,30 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         let mut vtopline: linenr_T = 1;
         if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
             vtopline = get_vtopline(Win::current()) as linenr_T;
-            let mut wp = firstwin.get();
-            while !wp.is_null() {
-                if (*wp).w_onebuf_opt.wo_scb != 0 && !(*wp).w_buffer.is_null() {
-                    let limit =
-                        plines_m_win_fill(Win::new(wp), 1, (*(*wp).w_buffer).b_ml.ml_line_count)
-                            as linenr_T
-                            - get_scrolloff_value(curwin.get()) as linenr_T;
+            for wp in windows() {
+                if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
+                    let limit = plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count)
+                        as linenr_T
+                        - get_scrolloff_value(curwin.get()) as linenr_T;
                     vtopline = vtopline.min(limit);
                 }
-                wp = (*wp).w_next;
             }
             vtopline = vtopline.max(1);
         }
 
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_scb != 0 {
-                let y = vtopline as c_int - get_vtopline(Win::new(wp));
+        for mut wp in windows() {
+            if wp.w_onebuf_opt.wo_scb != 0 {
+                let y = vtopline as c_int - get_vtopline(wp);
                 if y > 0 {
-                    scrollup(Win::new(wp), y as linenr_T, true);
+                    scrollup(wp, y as linenr_T, true);
                 } else {
-                    scrolldown(Win::new(wp), -(y as linenr_T), true);
+                    scrolldown(wp, -(y as linenr_T), true);
                 }
-                (*wp).w_scbind_pos = vtopline as c_int;
-                redraw_later(wp, UPD_VALID);
-                cursor_correct(Win::new(wp));
-                (*wp).w_redr_status = true;
+                wp.w_scbind_pos = vtopline as c_int;
+                redraw_later(wp.raw(), UPD_VALID);
+                cursor_correct(wp);
+                wp.w_redr_status = true;
             }
-            wp = (*wp).w_next;
         }
 
         if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
