@@ -75,7 +75,11 @@ use crate::types::{
     CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL,
     cmdidx_T, cstack_T, exarg_T, size_t, uint8_t,
 };
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Ea, Live, Win};
+
+/// The conditional stack the command is running under, whose caller has
+/// promised it outlives the value.
+type Cs = Live<cstack_T>;
 use ::libc::{strcpy, strlen};
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
@@ -650,7 +654,8 @@ pub(crate) unsafe fn profile_cmd(
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) {
-    let cs = &unsafe { *cstack };
+    // SAFETY: the caller's conditional stack, live for the command.
+    let cs = unsafe { Cs::new(cstack) };
     if do_profiling.get() != PROF_YES
         || !(unsafe { (*eap).skip } == 0
             || cs.cs_idx == 0

@@ -3,7 +3,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Ea, Live, Win};
+
+/// The completion context, whose caller has promised it outlives the value.
+type Xp = Live<expand_T>;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
@@ -217,7 +220,8 @@ pub unsafe fn expand_argopt(
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> c_int {
-    let x = &mut unsafe { *xp };
+    // SAFETY: the completion context is the caller's, live for the call.
+    let mut x = unsafe { Xp::new(xp) };
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
     if x.xp_pattern > x.xp_line && unsafe { *x.xp_pattern.offset(-1) } as c_int == '=' as c_int {

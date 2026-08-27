@@ -42,16 +42,31 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
+    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
+    size_t,
 };
 
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Live, Win};
+
+/// The debugger's saved exception environment, whose caller has promised it
+/// outlives the value: `save_dbg_stuff`/`restore_dbg_stuff` are handed a
+/// `dbg_stuff` the debugger's own frame owns.
+type Dbg = Live<dbg_stuff>;
+
+/// The exception `handle_did_throw` is reporting, live until it discards it.
+type Exc = Live<except_T>;
+
+/// The stored lines a `:while`/`:for` body is replayed from, owned by the
+/// frame running the loop.
+type Lc = Live<loop_cookie>;
+
 /// Take the whole exception environment out of the way, and answer it.
 ///
 /// Used only by the debugger: a `>quit` at a breakpoint must not be
 /// swallowed by whatever `:try` the script had open.
 pub(crate) unsafe fn save_dbg_stuff(dsp: *mut dbg_stuff) {
-    let d = &mut unsafe { *dsp };
+    // SAFETY: the caller's own `dbg_stuff`, live for the call.
+    let mut d = unsafe { Dbg::new(dsp) };
     d.trylevel = trylevel.get();
     trylevel.set(0);
     d.force_abort = force_abort.get() as c_int;
@@ -77,7 +92,8 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut dbg_stuff) {
 
 /// Put it all back.
 pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut dbg_stuff) {
-    let d = &unsafe { *dsp };
+    // SAFETY: as `save_dbg_stuff`.
+    let d = unsafe { Dbg::new(dsp) };
     suppress_errthrow.set(false);
     trylevel.set(d.trylevel);
     force_abort.set(d.force_abort != 0);
@@ -220,7 +236,9 @@ pub(crate) fn do_cmdline_end() {
 /// message is given elsewhere.
 pub unsafe fn handle_did_throw() {
     debug_assert!(!current_exception.get().is_null());
-    let exception = &mut unsafe { *current_exception.get() };
+    // SAFETY: non-null by the assert above, and live until
+    // `discard_current_exception` below.
+    let mut exception = unsafe { Exc::new(current_exception.get()) };
     let mut reported: *mut c_char = ptr::null_mut();
     let mut messages: *mut msglist_T = ptr::null_mut();
 
@@ -293,7 +311,9 @@ pub(crate) unsafe fn get_loop_line(
     indent: c_int,
     do_concat: bool,
 ) -> *mut c_char {
-    let cp = &mut unsafe { *(cookie as *mut loop_cookie) };
+    // SAFETY: the cookie is the `:while`/`:for` frame's own, live for as
+    // long as the loop it drives.
+    let mut cp = unsafe { Lc::new(cookie as *mut loop_cookie) };
     if cp.current_line + 1 >= unsafe { (*cp.lines_gap).ga_len } {
         // Past the end of what was stored. On a repeat pass that means
         // the loop body is over.
