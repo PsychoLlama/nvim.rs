@@ -334,7 +334,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
     // The address was released for a server that is not going to use it.
     if server_stopped && unsafe { server_start(listen_arg) } != 0 {
-        semsg_c!(c"couldn't resume listening on %s".as_ptr(), listen_arg);
+        unsafe { semsg_c!(c"couldn't resume listening on %s".as_ptr(), listen_arg) };
     }
 }
 
@@ -406,15 +406,15 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
         emsg(close_err);
         return;
     }
-    logmsg_c!(
+    unsafe { logmsg_c!(
         LOGLVL_INF,
         ptr::null(),
         c"ex_detach".as_ptr(),
         6019,
         true,
         c"detach current_ui=%ld".as_ptr(),
-        unsafe { (*chan).id },
-    );
+        (*chan).id,
+    ) };
 }
 
 /// `:connect` — attach this session's UI to another server, then detach

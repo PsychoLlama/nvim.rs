@@ -434,14 +434,14 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
     if args.v_type != VAR_LIST {
-        semsg_c!(
+        unsafe { semsg_c!(
             tr_bytes(&e_listarg),
             if sort {
                 c"sort()".as_ptr()
             } else {
                 c"uniq()".as_ptr()
             },
-        );
+        ) };
         return;
     }
 

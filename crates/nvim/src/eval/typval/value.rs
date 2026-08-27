@@ -103,7 +103,7 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
         }
         VAR_UNKNOWN => {
-            semsg_c!(tr_bytes(&e_intern2), c"tv_copy(UNKNOWN)".as_ptr(),);
+            unsafe { semsg_c!(tr_bytes(&e_intern2), c"tv_copy(UNKNOWN)".as_ptr(),) };
         }
         _ => {}
     }
@@ -247,11 +247,11 @@ pub unsafe fn value_check_lock(
         } else if name_len == TV_CSTRING as size_t {
             name_len = unsafe { strlen(name) };
         }
-        semsg_c!(
-            unsafe { gettext(error_message) },
+        unsafe { semsg_c!(
+            gettext(error_message),
             name_len as ::core::ffi::c_int,
             name
-        );
+        ) };
     }
 
     true

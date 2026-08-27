@@ -509,7 +509,7 @@ pub(crate) unsafe fn find_dup_item(
 /// The second startup pass, once the screen size is known.
 pub(crate) fn set_init_2(_headless: bool) {
     // SAFETY: the option table and the screen are the editor's own.
-    logmsg_c!(
+    unsafe { logmsg_c!(
         LOGLVL_INF,
         ptr::null(),
         c"set_init_2".as_ptr(),
@@ -517,7 +517,7 @@ pub(crate) fn set_init_2(_headless: bool) {
         true,
         c"startup runtimepath/packpath value: %s".as_ptr(),
         p_rtp.get(),
-    );
+    ) };
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.
     if !option_was_set(kOptScroll) {

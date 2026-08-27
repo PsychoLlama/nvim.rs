@@ -693,10 +693,10 @@ pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
         cpt_sources().set_index(idx + 1);
         return OK;
     }
-    semsg_c!(
-        unsafe { gettext(&raw const e_list_index_out_of_range_nr as *const c_char) },
+    unsafe { semsg_c!(
+        gettext(&raw const e_list_index_out_of_range_nr as *const c_char),
         idx,
-    );
+    ) };
     FAIL
 }
 

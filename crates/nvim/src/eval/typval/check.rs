@@ -28,7 +28,7 @@ fn arg_check(
     if ok {
         return OK;
     }
-    semsg_c!(unsafe { gettext(errmsg) }, idx + 1);
+    unsafe { semsg_c!(gettext(errmsg), idx + 1) };
     FAIL
 }
 
@@ -50,10 +50,10 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
         VAR_BOOL => c"E5299: Expected a Number or a String, Boolean found",
         VAR_SPECIAL => c"E5300: Expected a Number or a String",
         VAR_UNKNOWN => {
-            semsg_c!(
+            unsafe { semsg_c!(
                 tr_bytes(&e_intern2),
                 c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
-            );
+            ) };
             return false;
         }
         _ => unsafe { abort() },

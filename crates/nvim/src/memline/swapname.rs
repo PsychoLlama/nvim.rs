@@ -147,7 +147,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
         // other.
         depth += 1;
         if depth == 100 {
-            semsg_c!(tr(c"E773: Symlink loop for \"%s\""), fname);
+            unsafe { semsg_c!(tr(c"E773: Symlink loop for \"%s\""), fname) };
             return FAIL;
         }
 
@@ -570,11 +570,11 @@ pub(crate) unsafe fn findswapname(
             os_mkdir_recurse(dir_name, 0o755, &raw mut failed_dir, core::ptr::null_mut())
         };
         if ret != 0 {
-            semsg_c!(
+            unsafe { semsg_c!(
                 tr(c"E303: Unable to create directory \"%s\" for swap file, recovery impossible: %s"),
                 failed_dir,
-                unsafe { uv_strerror(ret) },
-            );
+                uv_strerror(ret),
+            ) };
             unsafe { xfree(failed_dir.cast()) };
         }
     }

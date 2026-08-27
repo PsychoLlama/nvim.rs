@@ -175,12 +175,6 @@ fn byte(p: *const c_char) -> c_int {
     unsafe { *p as c_int }
 }
 
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
-}
-
 /// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
 fn ubyte_at(p: *const c_char, i: isize) -> u8 {
     // SAFETY: an offset within the NUL-terminated string `p` points into.

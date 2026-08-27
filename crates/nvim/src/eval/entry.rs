@@ -237,7 +237,7 @@ pub(crate) unsafe fn eval1_emsg(
         && did_emsg.get() == did_emsg_before
         && called_emsg.get() == called_emsg_before
     {
-        semsg_c!(unsafe { gettext(e_invexpr2.as_ptr()) }, start);
+        unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), start) };
     }
     unsafe { clear_evalarg(&raw mut evalarg, eap) };
     ret
@@ -340,7 +340,7 @@ pub(crate) unsafe fn eval_expr_string(expr: *const typval_T, rettv: *mut typval_
     }
     if unsafe { *skipwhite(s) } as c_int != NUL {
         unsafe { tv_clear(rettv) };
-        semsg_c!(unsafe { gettext(e_invexpr2.as_ptr()) }, s);
+        unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), s) };
         return FAIL;
     }
     OK

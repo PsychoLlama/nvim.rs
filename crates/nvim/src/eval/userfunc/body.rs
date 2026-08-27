@@ -119,10 +119,10 @@ pub(crate) unsafe fn get_function_body(
             }
             if theline.is_null() {
                 if !skip_until.is_null() {
-                    semsg_c!(
-                        unsafe { gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()) },
+                    unsafe { semsg_c!(
+                        gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
                         skip_until,
-                    );
+                    ) };
                 } else {
                     unsafe { emsg(gettext(c"E126: Missing :endfunction".as_ptr())) };
                 }
@@ -199,11 +199,11 @@ pub(crate) unsafe fn get_function_body(
                     {
                         nextcmd = line_arg;
                     } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose.get() > 0 {
-                        swmsg_c!(
+                        unsafe { swmsg_c!(
                             true,
-                            unsafe { gettext(c"W22: Text found after :endfunction: %s".as_ptr()) },
+                            gettext(c"W22: Text found after :endfunction: %s".as_ptr()),
                             p,
-                        );
+                        ) };
                     }
                     if !nextcmd.is_null() {
                         // Another command follows.  If the line came from
@@ -239,8 +239,7 @@ pub(crate) unsafe fn get_function_body(
                     p = unsafe { p.offset(eval_fname_script(p) as isize) };
                     let (pp, no_dict) = (&raw mut p, ptr::null_mut());
                     let no_partial = ptr::null_mut();
-                    let nested =
-                        unsafe { trans_function_name(pp, true, 0, no_dict, no_partial) };
+                    let nested = unsafe { trans_function_name(pp, true, 0, no_dict, no_partial) };
                     unsafe { xfree(nested as *mut c_void) };
                     if unsafe { *skipwhite(p) } == b'(' as c_char {
                         if nesting == MAX_FUNC_NESTING - 1 {

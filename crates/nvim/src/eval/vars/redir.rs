@@ -93,9 +93,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     {
         unsafe { clear_lval(redir_lval.get()) };
         if trailing.is_some_and(|c| c != NUL as c_char) {
-            semsg_c!(translate(&e_trailing_arg), endp);
+            unsafe { semsg_c!(translate(&e_trailing_arg), endp) };
         } else {
-            semsg_c!(translate(&e_invarg2), name);
+            unsafe { semsg_c!(translate(&e_invarg2), name) };
         }
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());

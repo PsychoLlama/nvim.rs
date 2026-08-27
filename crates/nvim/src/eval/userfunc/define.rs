@@ -160,10 +160,10 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         // an exception.
         if !aborting() {
             if !fudi.fd_newkey.is_null() {
-                semsg_c!(
-                    unsafe { gettext(&raw const e_dictkey as *const c_char) },
+                unsafe { semsg_c!(
+                    gettext(&raw const e_dictkey as *const c_char),
                     fudi.fd_newkey,
-                );
+                ) };
             }
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
@@ -186,10 +186,10 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         p = unsafe { skipwhite(p) };
         if unsafe { *p } != b'(' as c_char {
             if ea.skip == 0 {
-                semsg_c!(
-                    unsafe { gettext(c"E124: Missing '(': %s".as_ptr()) },
+                unsafe { semsg_c!(
+                    gettext(c"E124: Missing '(': %s".as_ptr()),
                     ea.arg
-                );
+                ) };
                 break 'ret_free;
             }
             // Attempt to carry on by skipping some text.
@@ -299,10 +299,10 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         && ea.skip == 0
                         && did_emsg.get() == 0
                     {
-                        semsg_c!(
-                            unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
+                        unsafe { semsg_c!(
+                            gettext(&raw const e_trailing_arg as *const c_char),
                             p
-                        );
+                        ) };
                     }
 
                     if KeyTyped.get() {
@@ -443,7 +443,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             if j == FAIL {
                                 let mismatch =
                                     c"E746: Function name does not match script file name: %s";
-                                semsg_c!(unsafe { gettext(mismatch.as_ptr()) }, name);
+                                unsafe { semsg_c!(gettext(mismatch.as_ptr()), name) };
                                 break 'erret;
                             }
                         }

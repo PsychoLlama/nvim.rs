@@ -12,7 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use crate::winlayer::{Ea, Live, Win};
+use crate::winlayer::{Ea, Live};
 use core::ffi::{c_char, c_int};
 use core::ptr::{null_mut, write_bytes};
 
@@ -899,10 +899,4 @@ pub(crate) unsafe fn eval7_leader(
 
     unsafe { *end_leaderp = end_leader };
     ret
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

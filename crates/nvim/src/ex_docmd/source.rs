@@ -198,9 +198,9 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
     unsafe { verbose_enter_scroll() };
     if lnum == 0 {
-        smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd);
+        unsafe { smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd) };
     } else {
-        smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd);
+        unsafe { smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd) };
     }
     if msg_silent.get() == 0 {
         unsafe { msg_puts(c"\n".as_ptr()) };

@@ -83,15 +83,15 @@ pub(crate) unsafe fn eval_list(
                 continue;
             }
             let at = cur.get();
-            semsg_c!(
-                unsafe { gettext(c"E696: Missing comma in List: %s".as_ptr()) },
+            unsafe { semsg_c!(
+                gettext(c"E696: Missing comma in List: %s".as_ptr()),
                 at
-            );
+            ) };
             break 'items false;
         }
         if cur.byte() != b']' {
             let at = cur.get();
-            semsg_c!(unsafe { gettext(e_list_end.as_ptr()) }, at);
+            unsafe { semsg_c!(gettext(e_list_end.as_ptr()), at) };
             break 'items false;
         }
         cur.skip(1);
@@ -193,10 +193,10 @@ pub(crate) unsafe fn eval_dict(
             }
             if cur.byte() != b':' {
                 let at = cur.get();
-                semsg_c!(
-                    unsafe { gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()) },
+                unsafe { semsg_c!(
+                    gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()),
                     at
-                );
+                ) };
                 unsafe { tv_clear(&raw mut tvkey) };
                 break 'items false;
             }
@@ -218,10 +218,10 @@ pub(crate) unsafe fn eval_dict(
             }
             if evaluate {
                 if !unsafe { tv_dict_find(dict, key, -1 as ptrdiff_t) }.is_null() {
-                    semsg_c!(
-                        unsafe { gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()) },
+                    unsafe { semsg_c!(
+                        gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()),
                         key,
-                    );
+                    ) };
                     unsafe { tv_clear(&raw mut tvkey) };
                     unsafe { tv_clear(&raw mut tv) };
                     break 'items false;
@@ -248,16 +248,16 @@ pub(crate) unsafe fn eval_dict(
                 continue;
             }
             let at = cur.get();
-            semsg_c!(
-                unsafe { gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()) },
+            unsafe { semsg_c!(
+                gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()),
                 at
-            );
+            ) };
             break 'items false;
         }
         if cur.byte() != b'}' {
             let at = cur.get();
             let fmt = c"E723: Missing end of Dictionary '}': %s".as_ptr();
-            semsg_c!(unsafe { gettext(fmt) }, at);
+            unsafe { semsg_c!(gettext(fmt), at) };
             break 'items false;
         }
         cur.skip(1);

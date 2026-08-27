@@ -83,7 +83,7 @@ unsafe fn ex_unletlock(
             lv.ll_tv = ptr::null_mut();
             arg = unsafe { arg.add(1) };
             if unsafe { get_env_len(&raw mut arg as *mut *const c_char) } == 0 {
-                semsg_c!(translate(&e_invarg2), unsafe { arg.sub(1) });
+                unsafe { semsg_c!(translate(&e_invarg2), arg.sub(1)) };
                 return;
             }
             if !error && ea.skip == 0 && unsafe { callback(lvp, arg, eap, deep) } == FAIL {
@@ -104,7 +104,7 @@ unsafe fn ex_unletlock(
             if trailing.is_none_or(|c| !ascii_iswhite(c) && ends_excmd(c) == 0) {
                 if !name_end.is_null() {
                     emsg_severe.set(true);
-                    semsg_c!(translate(&e_trailing_arg), name_end,);
+                    unsafe { semsg_c!(translate(&e_trailing_arg), name_end,) };
                 }
                 if !(ea.skip != 0 || error) {
                     unsafe { clear_lval(lvp) };
@@ -312,7 +312,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
     if forceit {
         return OK;
     }
-    semsg_c!(translate_lit(c"E108: No such variable: \"%s\""), name);
+    unsafe { semsg_c!(translate_lit(c"E108: No such variable: \"%s\""), name) };
     FAIL
 }
 
@@ -339,7 +339,7 @@ unsafe fn do_lock_var(
         // SAFETY: a resolved lvalue's name is NUL-terminated.
         if unsafe { *name } == b'$' as c_char {
             // An environment variable has no lock to set.
-            semsg_c!(translate_lit(e_lock_unlock), name);
+            unsafe { semsg_c!(translate_lit(e_lock_unlock), name) };
             return FAIL;
         }
         let nil = ptr::null_mut();
@@ -356,7 +356,7 @@ unsafe fn do_lock_var(
             && di.di_tv.v_type != VAR_DICT
             && di.di_tv.v_type != VAR_LIST
         {
-            semsg_c!(translate_lit(e_lock_unlock), name);
+            unsafe { semsg_c!(translate_lit(e_lock_unlock), name) };
             return FAIL;
         }
         if lock {

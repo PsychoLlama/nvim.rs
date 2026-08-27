@@ -151,7 +151,7 @@ pub unsafe fn eval_variable(
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
         if !rettv.is_null() && verbose {
-            semsg_c!(translate_lit(c"E121: Undefined variable: %.*s"), len, name,);
+            unsafe { semsg_c!(translate_lit(c"E121: Undefined variable: %.*s"), len, name,) };
         }
         return FAIL;
     }

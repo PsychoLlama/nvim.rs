@@ -501,10 +501,10 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
     match error {
         FCERR_UNKNOWN => {
             if found_var {
-                semsg_c!(
-                    unsafe { gettext(&raw const e_not_callable_type_str as *const c_char) },
+                unsafe { semsg_c!(
+                    gettext(&raw const e_not_callable_type_str as *const c_char),
                     name,
-                );
+                ) };
             } else {
                 unsafe { emsg_funcname(&raw const e_unknown_function_str as *const c_char, name) };
             }

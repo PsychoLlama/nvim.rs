@@ -73,7 +73,7 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
-pub unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
+pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
     if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
         eap.bad_char = BAD_KEEP;
     } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
@@ -430,16 +430,14 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
         };
         return if answer == VIM_YES as c_int { OK } else { FAIL };
     }
-    semsg_c!(
-        unsafe {
-            ngettext(
+    unsafe { semsg_c!(
+        ngettext(
                 c"E173: %d more file to edit".as_ptr(),
                 c"E173: %d more files to edit".as_ptr(),
                 n as c_ulong,
-            )
-        },
+            ),
         n,
-    );
+    ) };
     quitmore.set(2);
     FAIL
 }
@@ -448,9 +446,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
-        semsg_c!(gettext(&raw const e_mkdir as *const c_char), name, unsafe {
-            uv_strerror(ret)
-        },);
+        unsafe { semsg_c!(gettext(&raw const e_mkdir as *const c_char), name, uv_strerror(ret),) };
         return FAIL;
     }
     OK
@@ -462,22 +458,22 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 /// command's `!`.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     if unsafe { os_isdir(fname) } {
-        semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname);
+        unsafe { semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname) };
         return ptr::null_mut();
     }
     if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {
-        semsg_c!(
+        unsafe { semsg_c!(
             gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
             fname,
-        );
+        ) };
         return ptr::null_mut();
     }
     let fd = unsafe { os_fopen(fname, mode) };
     if fd.is_null() {
-        semsg_c!(
+        unsafe { semsg_c!(
             gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
             fname,
-        );
+        ) };
     }
     fd
 }

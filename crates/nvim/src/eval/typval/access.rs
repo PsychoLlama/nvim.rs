@@ -223,15 +223,6 @@ impl Li {
     }
 }
 
-impl Di {
-    /// The item's value, as a handle: it lives exactly as long as the item.
-    #[inline(always)]
-    pub(crate) fn tv(self) -> Tv {
-        // SAFETY: `di_tv` is a field of the live item this handle names.
-        unsafe { Tv::new(self.field_ptr(::core::mem::offset_of!(dictitem_T, di_tv))) }
-    }
-}
-
 /// `_()`: the translation of a message, which is always a literal here.
 ///
 /// Safe by construction rather than by promise: the argument is a `&CStr`,
@@ -333,16 +324,6 @@ impl typval_T {
             v_type: VAR_DICT,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_dict },
-        }
-    }
-
-    /// A `VAR_BLOB`.  Takes no reference; the caller still owes a `retain`.
-    #[inline(always)]
-    pub(crate) const fn blob(v_blob: *mut blob_T) -> Self {
-        Self {
-            v_type: VAR_BLOB,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_blob },
         }
     }
 }

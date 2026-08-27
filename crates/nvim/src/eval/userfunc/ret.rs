@@ -162,10 +162,10 @@ unsafe fn ex_defer_inner(
     let mut argcount = 0;
 
     if current_funccal.get().is_null() {
-        semsg_c!(
-            unsafe { gettext(&raw const e_str_not_inside_function as *const c_char) },
+        unsafe { semsg_c!(
+            gettext(&raw const e_str_not_inside_function as *const c_char),
             c"defer".as_ptr(),
-        );
+        ) };
         return FAIL;
     }
 
@@ -232,10 +232,10 @@ unsafe fn ex_defer_inner(
 /// running.  Reports the error itself when it cannot.
 pub unsafe fn can_add_defer() -> bool {
     if unsafe { get_current_funccal() }.is_null() {
-        semsg_c!(
-            unsafe { gettext(&raw const e_str_not_inside_function as *const c_char) },
+        unsafe { semsg_c!(
+            gettext(&raw const e_str_not_inside_function as *const c_char),
             c"defer".as_ptr(),
-        );
+        ) };
         return false;
     }
     true
@@ -364,10 +364,10 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
     let tofree = unsafe { trans_function_name(argp, false, TFN_INT, dictp, partialp) };
     if !fudi.fd_newkey.is_null() {
         // Still need to give an error message for missing key.
-        semsg_c!(
-            unsafe { gettext(&raw const e_dictkey as *const c_char) },
+        unsafe { semsg_c!(
+            gettext(&raw const e_dictkey as *const c_char),
             fudi.fd_newkey,
-        );
+        ) };
         unsafe { xfree(fudi.fd_newkey as *mut c_void) };
     }
     if tofree.is_null() {
@@ -396,10 +396,10 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 
     let startarg = unsafe { skipwhite(arg) };
     if unsafe { *startarg } != b'(' as c_char {
-        semsg_c!(
-            unsafe { gettext(&raw const e_missingparen as *const c_char) },
+        unsafe { semsg_c!(
+            gettext(&raw const e_missingparen as *const c_char),
             ea.arg,
-        );
+        ) };
     } else {
         let failed = if ea.cmdidx == CMD_defer {
             arg = startarg;
@@ -424,10 +424,10 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
             if ends_excmd(unsafe { *arg } as c_int) == 0 {
                 if !failed && !aborting() {
                     emsg_severe.set(true);
-                    semsg_c!(
-                        unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
+                    unsafe { semsg_c!(
+                        gettext(&raw const e_trailing_arg as *const c_char),
                         arg
-                    );
+                    ) };
                 }
             } else {
                 ea.nextcmd = unsafe { check_nextcmd(arg) };

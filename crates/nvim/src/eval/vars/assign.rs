@@ -319,7 +319,7 @@ pub unsafe fn skip_var_list(
         let s = unsafe { skip_var_one(p) };
         if s == p {
             if !silent {
-                semsg_c!(translate(&e_invarg2), p);
+                unsafe { semsg_c!(translate(&e_invarg2), p) };
             }
             return ptr::null();
         }
@@ -338,7 +338,7 @@ pub unsafe fn skip_var_list(
             b',' => {}
             _ => {
                 if !silent {
-                    semsg_c!(translate(&e_invarg2), p);
+                    unsafe { semsg_c!(translate(&e_invarg2), p) };
                 }
                 return ptr::null();
             }
@@ -395,9 +395,9 @@ unsafe fn ex_let_env(
     let name = arg;
     let len = unsafe { get_env_len(&raw mut arg as *mut *const c_char) };
     if len == 0 {
-        semsg_c!(translate(&e_invarg2), unsafe { name.sub(1) });
+        unsafe { semsg_c!(translate(&e_invarg2), name.sub(1)) };
     } else if is_arithmetic(opch) {
-        semsg_c!(translate(&e_letwrong), op);
+        unsafe { semsg_c!(translate(&e_letwrong), op) };
     } else if !unsafe { ends_target(endchars, arg) } {
         emsg_lit(e_letunexp);
     } else if !check_secure() {
@@ -484,13 +484,13 @@ unsafe fn ex_let_option(
 
     'theend: {
         if curval.type_0 == kOptValTypeNil {
-            semsg_c!(translate(&e_unknown_option2), arg);
+            unsafe { semsg_c!(translate(&e_unknown_option2), arg) };
             break 'theend;
         }
         let compound = opch.is_some_and(|c| c != b'=');
         let is_string = curval.type_0 == kOptValTypeString;
         if compound && opch.is_some_and(|c| (c == b'.') != is_string) {
-            semsg_c!(translate(&e_letwrong), op);
+            unsafe { semsg_c!(translate(&e_letwrong), op) };
             break 'theend;
         }
 
@@ -598,7 +598,7 @@ unsafe fn ex_let_register(
     // SAFETY: `arg` points at the `@` of a NUL-terminated name.
     arg = unsafe { arg.add(1) };
     if is_arithmetic(opch) {
-        semsg_c!(translate(&e_letwrong), op);
+        unsafe { semsg_c!(translate(&e_letwrong), op) };
         return arg_end;
     }
     // SAFETY: the register name is one byte, so the byte past it is inside
@@ -667,7 +667,7 @@ unsafe fn ex_let_one(
         return unsafe { target(arg, tv, is_const, endchars, op) };
     }
     if !eval_isnamec1(c_int::from(sigil.cast_signed())) && sigil != b'{' {
-        semsg_c!(translate(&e_invarg2), arg);
+        unsafe { semsg_c!(translate(&e_invarg2), arg) };
         return ptr::null_mut();
     }
 

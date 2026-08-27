@@ -323,13 +323,13 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
     if fracs.is_some() || exps.is_some() {
         let got = unsafe { string2float(text, &raw mut tv.vval.v_float) };
         if want != got {
-            semsg_c!(
-                unsafe { gettext(E685_FLOAT.as_ptr()) },
+            unsafe { semsg_c!(
+                gettext(E685_FLOAT.as_ptr()),
                 want as c_int,
                 text,
                 got,
                 want
-            );
+            ) };
         }
         tv.v_type = VAR_FLOAT;
     } else {
@@ -341,13 +341,13 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         #[rustfmt::skip]
         unsafe { vim_str2nr(text, prep, &raw mut got, 0, &raw mut nr, unptr, maxlen, true, overflow) };
         if want as c_int != got {
-            semsg_c!(
-                unsafe { gettext(E685_INTEGER.as_ptr()) },
+            unsafe { semsg_c!(
+                gettext(E685_INTEGER.as_ptr()),
                 want as c_int,
                 text,
                 got,
                 want,
-            );
+            ) };
         }
         tv.vval.v_number = nr;
     }

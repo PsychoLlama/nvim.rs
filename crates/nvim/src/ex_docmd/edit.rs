@@ -170,7 +170,7 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
         unsafe { ex_lua(eap.raw()) };
     } else {
         eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
-        smsg_c!(0, c"%ld".as_ptr(), eap.line2 as int64_t);
+        unsafe { smsg_c!(0, c"%ld".as_ptr(), eap.line2 as int64_t) };
     }
 }
 
@@ -185,7 +185,7 @@ pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
-            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
+            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
             return;
         }
     }
@@ -560,7 +560,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
         }
     }
     if byte(p) != NUL {
-        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
+        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
         return;
     }
     undo_time(
@@ -583,7 +583,7 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
         return;
     }
     if byte_at(eap.arg, 1) != NUL {
-        semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), eap.arg,);
+        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), eap.arg,) };
         return;
     }
     // The mark is set at the first non-blank of the addressed line, so

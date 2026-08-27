@@ -161,10 +161,10 @@ pub unsafe fn get_lambda_tv(
 
         unsafe { *arg = skipwhite(*arg) };
         if unsafe { **arg } != b'}' as c_char {
-            semsg_c!(
-                unsafe { gettext(c"E451: Expected }: %s".as_ptr()) },
-                unsafe { *arg }
-            );
+            unsafe { semsg_c!(
+                gettext(c"E451: Expected }: %s".as_ptr()),
+                *arg
+            ) };
             break 'errret false;
         }
         unsafe { *arg = *arg.add(1) };

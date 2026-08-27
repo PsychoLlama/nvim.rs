@@ -316,7 +316,7 @@ pub unsafe fn tv_list_remove(
     }
     let item = unsafe { tv_list_find(l, idx as ::core::ffi::c_int) };
     if item.is_null() {
-        semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), idx,);
+        unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), idx,) };
         return;
     }
 
@@ -335,7 +335,7 @@ pub unsafe fn tv_list_remove(
     }
     let item2 = unsafe { tv_list_find(l, end as ::core::ffi::c_int) };
     if item2.is_null() {
-        semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), end,);
+        unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), end,) };
         return;
     }
 
@@ -508,7 +508,7 @@ pub unsafe fn tv_list_find_str(
 ) -> *const ::core::ffi::c_char {
     let li = unsafe { tv_list_find(l, n) };
     if li.is_null() {
-        semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), n as int64_t,);
+        unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), n as int64_t,) };
         return ::core::ptr::null();
     }
     unsafe { numbuf.string(&raw const (*li).li_tv) }

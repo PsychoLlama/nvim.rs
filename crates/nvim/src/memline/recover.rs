@@ -99,7 +99,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         mfp = unsafe { mf_open(fname_used, O_RDONLY) };
         fname_used = kept;
         if mfp.is_null() || unsafe { (*mfp).mf_fd } < 0 {
-            semsg_c!(tr(c"E306: Cannot open %s"), fname_used);
+            unsafe { semsg_c!(tr(c"E306: Cannot open %s"), fname_used) };
             break 'theend;
         }
         unsafe { (*buf).b_ml.ml_mfp = mfp };
@@ -134,10 +134,10 @@ pub unsafe fn ml_recover(checkext: bool) {
             break 'theend;
         }
         if !ml_check_b0_id(unsafe { &*b0p }) {
-            semsg_c!(
+            unsafe { semsg_c!(
                 tr(c"E307: %s does not look like a Nvim swap file"),
-                unsafe { mf_fname(mfp) },
-            );
+                mf_fname(mfp),
+            ) };
             break 'theend;
         }
         if b0_magic_wrong(unsafe { &*b0p }) {
@@ -205,7 +205,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
         let none = core::ptr::null();
         unsafe { home_replace(none, mf_fname(mfp), out, room, true) };
-        smsg_c!(0, tr(c"Using swap file \"%s\""), path.as_ptr());
+        unsafe { smsg_c!(0, tr(c"Using swap file \"%s\""), path.as_ptr()) };
         if !unsafe { buf_spname(curbuf.get()) }.is_null() {
             unsafe {
                 xstrlcpy(
@@ -220,7 +220,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             unsafe { home_replace(none, cur_buf().b_ffname, out, room, true) };
         }
         unsafe { msg_putchar('\n' as c_int) };
-        smsg_c!(0, tr(c"Original file \"%s\""), path.as_ptr());
+        unsafe { smsg_c!(0, tr(c"Original file \"%s\""), path.as_ptr()) };
         unsafe { msg_putchar('\n' as c_int) };
         msg_ext_skip_flush.set(false);
 
@@ -384,7 +384,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
     let (dir, out) = (core::ptr::null_mut(), core::ptr::null_mut());
     let count = unsafe { recover_names(fname, false, dir, 0, out) };
     if count == 0 {
-        semsg_c!(tr(c"E305: No swap file found for %s"), fname);
+        unsafe { semsg_c!(tr(c"E305: No swap file found for %s"), fname) };
         return None;
     }
     let nr = if count == 1 {
@@ -450,9 +450,7 @@ unsafe fn recover_lines(
             *hp = unsafe { mf_get(mfp, bnum, page_count) };
             if hp.is_null() {
                 if bnum == 1 {
-                    semsg_c!(tr(c"E309: Unable to read block 1 from %s"), unsafe {
-                        mf_fname(mfp)
-                    },);
+                    unsafe { semsg_c!(tr(c"E309: Unable to read block 1 from %s"), mf_fname(mfp),) };
                     return Err(());
                 }
                 error += 1;
@@ -560,10 +558,10 @@ unsafe fn recover_lines(
                 let dp = unsafe { (**hp).bh_data } as *mut DataBlock;
                 if unsafe { (*dp).db_id } != DATA_ID as uint16_t {
                     if bnum == 1 {
-                        semsg_c!(
+                        unsafe { semsg_c!(
                             tr(c"E310: Block 1 ID wrong (%s not a .swp file?)"),
-                            unsafe { mf_fname(mfp) },
-                        );
+                            mf_fname(mfp),
+                        ) };
                         return Err(());
                     }
                     error += 1;

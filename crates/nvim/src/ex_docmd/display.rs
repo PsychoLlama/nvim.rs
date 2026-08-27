@@ -45,10 +45,10 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
         if unsafe { load_colors(eap.arg) } == FAIL {
-            semsg_c!(
+            unsafe { semsg_c!(
                 gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
                 eap.arg,
-            );
+            ) };
         }
         return;
     }
@@ -127,7 +127,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         }
         if byte(arg) != NUL {
             redir_reg.set(0);
-            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
+            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
         close_redir();
@@ -140,7 +140,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
             redir_vname.set(true);
         }
     } else {
-        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
+        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
     }
     // Whichever form succeeded, output is being captured again.
     if !redir_fd.get().is_null() || redir_reg.get() != 0 || redir_vname.get() {

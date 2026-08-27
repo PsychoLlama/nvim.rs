@@ -47,7 +47,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             unsafe { emsg(gettext(num_errors[(*tv).v_type as usize])) };
         }
         VAR_UNKNOWN => {
-            semsg_c!(tr_bytes(&e_intern2), c"tv_get_number(UNKNOWN)".as_ptr(),);
+            unsafe { semsg_c!(tr_bytes(&e_intern2), c"tv_get_number(UNKNOWN)".as_ptr(),) };
         }
         _ => {}
     }
@@ -117,7 +117,7 @@ pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
         VAR_SPECIAL => c"E907: Using a special value as a Float",
         VAR_BLOB => c"E975: Using a Blob as a Float",
         VAR_UNKNOWN => {
-            semsg_c!(tr_bytes(&e_intern2), c"tv_get_float(UNKNOWN)".as_ptr(),);
+            unsafe { semsg_c!(tr_bytes(&e_intern2), c"tv_get_float(UNKNOWN)".as_ptr(),) };
             return 0.0;
         }
         _ => return 0.0,

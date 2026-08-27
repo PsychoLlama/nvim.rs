@@ -112,7 +112,7 @@ pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
     if unsafe { (*hi).is_kept() } {
         unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
     } else {
-        semsg_c!(tr_bytes(&e_intern2), c"tv_dict_item_remove()".as_ptr(),);
+        unsafe { semsg_c!(tr_bytes(&e_intern2), c"tv_dict_item_remove()".as_ptr(),) };
     }
     unsafe { tv_dict_item_free(item) };
 }
@@ -528,7 +528,7 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
                 }
             }
         } else if action == b'e' {
-            semsg_c!(tr(c"E737: Key already exists: %s"), di2_key);
+            unsafe { semsg_c!(tr(c"E737: Key already exists: %s"), di2_key) };
             break;
         } else if action == b'f' && di2 != di1 {
             if unsafe { value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len) } || {
@@ -713,7 +713,7 @@ pub unsafe fn tv_dict_remove(
 ) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        semsg_c!(tr_bytes(&e_toomanyarg), c"remove()".as_ptr(),);
+        unsafe { semsg_c!(tr_bytes(&e_toomanyarg), c"remove()".as_ptr(),) };
         return;
     }
 
@@ -728,7 +728,7 @@ pub unsafe fn tv_dict_remove(
     }
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
-        semsg_c!(tr_bytes(&e_dictkey), key,);
+        unsafe { semsg_c!(tr_bytes(&e_dictkey), key,) };
         return;
     }
     // SAFETY: the item the lookup just found in `d`.

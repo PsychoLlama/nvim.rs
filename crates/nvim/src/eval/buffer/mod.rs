@@ -90,14 +90,6 @@ pub(super) type Li = Live<listitem_T>;
 
 /// Argument `i` as a Number.
 ///
-/// Safe: [`Args`] carries the promise for the whole frame -- every index it
-/// answers is a live typval -- which is `tv_get_number`'s only precondition.
-/// The same goes for the four below it.
-pub(super) fn arg_number(args: Args<'_>, i: usize) -> varnumber_T {
-    // SAFETY: `Args` promises a live typval at every index.
-    unsafe { tv_get_number(args.ptr(i)) }
-}
-
 /// Argument `i` as a line number in the current buffer, reported and clamped.
 pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> linenr_T {
     // SAFETY: as [`arg_number`].

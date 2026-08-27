@@ -323,9 +323,9 @@ pub(crate) unsafe fn eval_index_inner(
             let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
-                    semsg_c!(unsafe { gettext(e_dictkey_len.as_ptr()) }, keylen, key);
+                    unsafe { semsg_c!(gettext(e_dictkey_len.as_ptr()), keylen, key) };
                 } else {
-                    semsg_c!(unsafe { gettext(e_dictkey.as_ptr()) }, key);
+                    unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), key) };
                 }
             }
             if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {
