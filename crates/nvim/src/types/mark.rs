@@ -30,6 +30,35 @@ pub struct fmarkv_T {
     pub topline_offset: linenr_T,
     pub skipcol: colnr_T,
 }
+
+impl fmarkv_T {
+    /// The view an unset mark carries: `topline_offset` at `MAXLNUM` means
+    /// "remember nothing", so `mark_view_restore` computes a topline far
+    /// below line 1 and gives up.
+    pub const NONE: Self = Self {
+        topline_offset: crate::pos::MAXLNUM.cast_signed(),
+        skipcol: 0,
+    };
+}
+
+impl fmark_T {
+    /// A mark that is not set.
+    ///
+    /// This is the value a caller lending `mark_get` (or `pos_to_mark`) a
+    /// slot starts that slot from: the lookups fill in `mark` and `fnum`, and
+    /// leave the remaining fields as they found them.
+    pub const UNSET: Self = Self {
+        mark: pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        fnum: 0,
+        timestamp: 0,
+        view: fmarkv_T::NONE,
+        additional_data: ::core::ptr::null_mut(),
+    };
+}
 /// Not `Copy`: an owned `fname` on top of [`fmark_T`]'s own.
 #[derive(Clone)]
 pub struct xfmark_T {

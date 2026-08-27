@@ -48,7 +48,6 @@ use core::ptr;
 
 use crate::main::namedfm;
 use crate::os::time::os_time;
-use crate::pos::MAXLNUM;
 use crate::types::{Timestamp, colnr_T, fmark_T, fmarkv_T, linenr_T, pos_T, xfmark_T};
 use crate::winlayer::{Buf, Win};
 
@@ -62,22 +61,14 @@ pub(super) const UNSET_POS: pos_T = pos_T {
     coladd: 0,
 };
 
-/// The view an unset mark carries: `topline_offset` at `MAXLNUM` means
-/// "remember nothing", which is what `mark_view_restore`'s `>= 0` test
-/// rejects.
-pub(super) const NO_VIEW: fmarkv_T = fmarkv_T {
-    topline_offset: MAXLNUM.cast_signed(),
-    skipcol: 0,
-};
+/// The view an unset mark carries. The module's spelling of
+/// [`fmarkv_T::NONE`], which is where the value itself lives — callers
+/// outside `mark` need it too, to initialise the slot they lend `mark_get`.
+pub(super) const NO_VIEW: fmarkv_T = fmarkv_T::NONE;
 
-/// An `fmark_T` that is not set, timestamped now by the caller.
-pub(super) const UNSET_FMARK: fmark_T = fmark_T {
-    mark: UNSET_POS,
-    fnum: 0,
-    timestamp: 0,
-    view: NO_VIEW,
-    additional_data: ptr::null_mut(),
-};
+/// An `fmark_T` that is not set, timestamped now by the caller. The module's
+/// spelling of [`fmark_T::UNSET`].
+pub(super) const UNSET_FMARK: fmark_T = fmark_T::UNSET;
 
 /// An `xfmark_T` that is not set.
 pub(super) const UNSET_XFMARK: xfmark_T = xfmark_T {
@@ -568,7 +559,7 @@ mod tests {
         assert!(!fm.is_set());
         assert_eq!(fm.fnum(), 0);
         assert_eq!(fm.timestamp(), 4242);
-        assert_eq!(fm.read().view.topline_offset, MAXLNUM.cast_signed());
+        assert_eq!(fm.read().view.topline_offset, NO_VIEW.topline_offset);
     }
 
     #[test]
