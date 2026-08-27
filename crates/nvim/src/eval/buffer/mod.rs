@@ -42,7 +42,7 @@ pub use prompt::{
 
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{
-    bt_nofilename, bt_prompt, buf_ensure_loaded, buflist_add, buflist_findlnum,
+    buf_ensure_loaded, buf_is_nofilename, buf_is_prompt, buflist_add, buflist_findlnum,
     buflist_findname_exp, buflist_new, find_buf,
 };
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};

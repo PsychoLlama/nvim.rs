@@ -8,7 +8,7 @@ use super::{
 };
 use crate::api::private::helpers::cstr_as_string;
 use crate::api::vim::nvim_feedkeys;
-use crate::buffer::bt_prompt;
+use crate::buffer::buf_is_prompt;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
 use crate::eval::typval::{
@@ -32,8 +32,7 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, buf_T, listitem_T, tasave_T, typval_T,
-    varnumber_T,
+    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, listitem_T, tasave_T, typval_T, varnumber_T,
 };
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -265,12 +264,11 @@ pub unsafe fn f_interrupt(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr:
 ///
 /// # Safety
 /// `arg` is a live typval.
-unsafe fn prompt_buffer(arg: *mut typval_T) -> Option<*mut buf_T> {
-    // SAFETY: the caller's obligation.
-    unsafe {
-        let buf = tv_get_buf_from_arg(arg);
-        (!buf.is_null() && bt_prompt(buf)).then_some(buf)
-    }
+unsafe fn prompt_buffer(arg: *mut typval_T) -> Option<Buf> {
+    // SAFETY: the caller's obligation -- `tv_get_buf_from_arg` answers a live
+    // buffer or null.
+    let buf = unsafe { Buf::from_raw(tv_get_buf_from_arg(arg)) };
+    buf.filter(|b| buf_is_prompt(Some(*b)))
 }
 
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
@@ -286,7 +284,7 @@ pub unsafe fn f_prompt_getprompt(
     // SAFETY: the frame is live and `rettv` owns the duplicate.
     unsafe {
         if let Some(buf) = prompt_buffer(args.ptr(0)) {
-            rettv.vval.v_string = xstrdup(buf_prompt_text(Buf::new(buf)));
+            rettv.vval.v_string = xstrdup(buf_prompt_text(buf));
         }
     }
 }
@@ -300,7 +298,7 @@ pub unsafe fn f_prompt_getinput(argvars: *mut typval_T, rettv: *mut typval_T, _f
     // allocation `rettv` then owns.
     unsafe {
         if let Some(buf) = prompt_buffer(args.ptr(0)) {
-            rettv.vval.v_string = prompt_get_input(buf);
+            rettv.vval.v_string = prompt_get_input(buf.raw());
         }
     }
 }

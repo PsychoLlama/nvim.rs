@@ -12,7 +12,7 @@ use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::buffer::bt_prompt;
+use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_add_tv, tv_dict_alloc, tv_free};
@@ -222,11 +222,12 @@ pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut C
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
 /// lets the prompt itself be backspaced over.
 pub(crate) fn can_bs(what: BsFlag) -> bool {
-    // SAFETY: `curbuf` is live; 'backspace' is a string option.
+    if what == BsFlag::START && buf_is_prompt(current_buf()) {
+        return false;
+    }
+    // SAFETY: 'backspace' is a string option, so it is a live, NUL-terminated
+    // string.
     unsafe {
-        if what == BsFlag::START && bt_prompt(curbuf.get()) {
-            return false;
-        }
         // The historic numeric spelling: 2 is everything but "nostop".
         if *p_bs.get() == b'2' as c_char {
             return what != BsFlag::NOSTOP;

@@ -103,17 +103,6 @@ fn parse_cindent_options(mut buf: Buf) {
     unsafe { parse_cino(buf) };
 }
 
-/// Whether this buffer has no readable file behind its name.
-fn no_file_to_read(mut buf: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_nofileread(buf.raw()) }
-}
-
-fn is_help_buffer(mut buf: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_help(buf.raw()) }
-}
-
 /// Populate `*local-additions*` in `help.txt`.
 fn collect_local_additions() {
     // SAFETY: reads the runtime path and the current buffer.
@@ -324,7 +313,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 
     // A buffer without an actual file should not use the buffer name to read
     // a file.
-    if no_file_to_read(buf) {
+    if buf_is_nofileread(Some(buf)) {
         flags |= READ_NOFILE as c_int;
     }
 
@@ -353,7 +342,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
             }
         }
         // Help buffer: populate *local-additions* in help.txt
-        if is_help_buffer(cur_buf()) {
+        if buf_is_help(Some(cur_buf())) {
             collect_local_additions();
         }
     } else if read_stdin {

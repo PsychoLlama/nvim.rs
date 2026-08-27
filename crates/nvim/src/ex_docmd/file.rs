@@ -10,7 +10,7 @@ use core::ptr;
 
 use crate::arglist::check_arg_idx;
 use crate::buffer::{
-    bt_prompt, buf_hide, goto_buffer, maketitle, otherfile, setaltfname, setfname,
+    buf_hide, buf_is_prompt, current_buf, goto_buffer, maketitle, otherfile, setaltfname, setfname,
 };
 use crate::change::deleted_lines_mark;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later};
@@ -303,7 +303,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
         {
             return;
         }
-        if bt_prompt(curbuf.get())
+        if buf_is_prompt(current_buf())
             && (*eap).cmdidx as c_int == CMD_edit as c_int
             && *(*eap).arg as c_int == NUL
         {

@@ -10,8 +10,9 @@ use crate::autocmd::{
     apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists, do_doautocmd,
 };
 use crate::buffer::{
-    BufFlags, bt_dontwrite, bt_nofilename, bt_normal, buf_contents_changed, buf_is_empty,
-    buflist_new, bufref_valid, do_modelines, set_bufref, setfname, wipe_buffer,
+    BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
+    buf_is_normal, buflist_new, bufref_valid, current_buf, do_modelines, set_bufref, setfname,
+    wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};

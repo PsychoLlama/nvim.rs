@@ -13,7 +13,7 @@
 use core::ffi::CStr;
 
 use super::*;
-use crate::buffer::bt_prompt;
+use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
 use crate::keycodes::{K_MOUSEDOWN, K_MOUSELEFT, K_MOUSERIGHT, K_MOUSEUP};
@@ -53,8 +53,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
             // previous one to stop insert there properly.
             curwin.set(old_curwin.raw());
             curbuf.set(old_curwin.buffer().raw());
-            // SAFETY: a live buffer.
-            if unsafe { bt_prompt(old_curwin.buffer().raw()) } {
+            if buf_is_prompt(Some(old_curwin.buffer())) {
                 // Restart Insert mode when re-entering the prompt buffer.
                 old_curwin.buffer().b_prompt_insert = 'A' as c_int;
             }

@@ -24,7 +24,7 @@ use super::{
     ses_put_fname,
 };
 use crate::arglist::global_arglist;
-use crate::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, find_buf};
+use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fold::put_folds;
 use crate::main::{curbuf, curwin, ssop_flags};
 use crate::mapping::makemap;
@@ -121,9 +121,10 @@ pub(crate) unsafe fn put_view(
         }
 
         // Folds, when 'buftype' is empty and for help files.
+        let buf = Win::new(wp).buffer();
         if opts.has(kOptSsopFlagFolds)
-            && !(*(*wp).w_buffer).b_ffname.is_null()
-            && (bt_normal((*wp).w_buffer) || bt_help((*wp).w_buffer))
+            && !buf.b_ffname.is_null()
+            && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
             && put_folds(out.raw(), Win::new(wp)) == FAIL
         {
             return false;
@@ -157,9 +158,10 @@ unsafe fn put_edit(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> Optio
     unsafe {
         let buf = (*wp).w_buffer;
         let fname_esc = ses_escape_fname(ses_get_fname(buf, opts));
-        let outcome = if bt_help(buf) {
+        let outcome = if buf_is_help(Buf::from_raw(buf)) {
             put_help_edit(out, wp).then_some(true)
-        } else if !(*buf).b_ffname.is_null() && (!bt_nofilename(buf) || !(*buf).terminal.is_null())
+        } else if !(*buf).b_ffname.is_null()
+            && (!buf_is_nofilename(Buf::from_raw(buf)) || !(*buf).terminal.is_null())
         {
             // Editing a file. This may have side effects -- a compressed or
             // network file -- and if a buffer for it already exists we
@@ -212,19 +214,19 @@ unsafe fn put_help_edit(out: SessionFile, wp: *mut win_T) -> bool {
 /// # Safety
 /// `wp` is live.
 unsafe fn put_alternate(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> bool {
-    // SAFETY: caller contract; `find_buf` answers a live buffer or
-    // null.
-    unsafe {
-        let alt = find_buf((*wp).w_alt_fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
-        let wanted = opts.is_session()
-            && !alt.is_null()
-            && !(*alt).b_fname.is_null()
-            && *(*alt).b_fname != NUL as c_char
-            && (*alt).b_p_bl != 0
-            // Not a terminal, unless terminals are in 'sessionoptions'.
-            && !(bt_terminal(alt) && ssop_flags.get() & kOptSsopFlagTerminal == 0);
-        !wanted || (out.puts(c"balt ") && ses_fname(out, alt, opts, true))
-    }
+    // SAFETY: caller contract; `find_buf` answers a live buffer or null.
+    let alt = unsafe { find_buf((*wp).w_alt_fnum) };
+    let restorable = alt.is_some_and(|b| {
+        // SAFETY: a live buffer's own file name, which is NUL-terminated.
+        !b.b_fname.is_null() && unsafe { *b.b_fname } != NUL as c_char && b.b_p_bl != 0
+    });
+    let wanted = opts.is_session()
+        && restorable
+        // Not a terminal, unless terminals are in 'sessionoptions'.
+        && !(buf_is_terminal(alt) && ssop_flags.get() & kOptSsopFlagTerminal == 0);
+    let raw = alt.map_or(core::ptr::null_mut(), Buf::raw);
+    // SAFETY: a live buffer or null, and a live session file.
+    !wanted || (out.puts(c"balt ") && unsafe { ses_fname(out, raw, opts, true) })
 }
 
 /// Write the window's local options or, when options are not wanted at all,

@@ -18,7 +18,7 @@ use core::ptr;
 
 use super::*;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_TABENTER, EVENT_WINENTER};
-use crate::buffer::{BufRef, bt_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
+use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
@@ -81,9 +81,8 @@ pub(crate) fn enter_window(win: Win) {
 }
 
 /// Whether `win` shows a prompt buffer.
-fn is_prompt(mut win: Win) -> bool {
-    // SAFETY: a live window's buffer.
-    unsafe { bt_prompt(win.buffer().raw()) }
+fn is_prompt(win: Win) -> bool {
+    buf_is_prompt(Some(win.buffer()))
 }
 
 pub unsafe fn win_init_empty(wp: *mut win_T) {
@@ -321,7 +320,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     reset_syntax(win);
     // When a quickfix or location list window is closed and its buffer is shown
     // in only one window, unlist the buffer.
-    if is_quickfix(Some(buf)) && buf.b_nwindows == 1 {
+    if buf_is_quickfix(Some(buf)) && buf.b_nwindows == 1 {
         buf.b_p_bl = 0;
     }
     // Close the link to the buffer.

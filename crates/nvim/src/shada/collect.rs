@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::siemsg_c;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 
@@ -30,14 +31,16 @@ use crate::types::{
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
 /// file is on removable media.
 pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: *mut Set_ptr_t) -> bool {
-    unsafe {
-        buf.is_null()
-            || (*buf).b_ffname.is_null()
-            || ((*buf).b_p_bl == 0 && (*buf).b_p_initialized)
-            || bt_quickfix(buf)
-            || bt_terminal(buf)
-            || set_has_ptr_t(removable_bufs, buf as ptr_t)
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    let Some(b) = (unsafe { Buf::from_raw(buf.cast_mut()) }) else {
+        return true;
+    };
+    b.b_ffname.is_null()
+        || (b.b_p_bl == 0 && b.b_p_initialized)
+        || buf_is_quickfix(Some(b))
+        || buf_is_terminal(Some(b))
+        // SAFETY: the caller's set, and the buffer is only compared.
+        || unsafe { set_has_ptr_t(removable_bufs, buf as ptr_t) }
 }
 
 /// Collect the buffers whose files are on removable media.

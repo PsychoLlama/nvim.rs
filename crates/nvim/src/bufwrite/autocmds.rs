@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::buffer::BufFlags;
+use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
@@ -76,13 +76,13 @@ unsafe fn apply_pre(
     eap: *mut exarg_T,
     overwriting: bool,
 ) -> bool {
-    unsafe {
-        if overwriting && bt_nofilename(curbuf.get()) {
-            return true;
-        }
-        apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap);
-        false
+    if overwriting && buf_is_nofilename(current_buf()) {
+        return true;
     }
+    // SAFETY: the caller's promise -- a live Ex-command argument and a
+    // NUL-terminated short file name.
+    unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
+    false
 }
 
 /// Apply the pre-write autocommands, and work out whether the write should

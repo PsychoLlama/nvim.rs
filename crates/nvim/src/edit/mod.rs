@@ -42,7 +42,9 @@ use crate::autocmd::{
     EVENT_INSERTENTER, EVENT_INSERTLEAVE, EVENT_INSERTLEAVEPRE, EVENT_TEXTCHANGEDI,
     EVENT_TEXTCHANGEDP, apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event,
 };
-use crate::buffer::{bt_prompt, bt_quickfix, buf_get_changedtick, buf_is_empty, buf_meta_total};
+use crate::buffer::{
+    buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
+};
 use crate::change::{
     appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
     ins_bytes_len, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,

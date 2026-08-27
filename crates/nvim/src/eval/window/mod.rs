@@ -47,7 +47,7 @@ pub use view::{
 };
 
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
-use crate::buffer::{bt_quickfix, bt_terminal, do_autochdir};
+use crate::buffer::{buf_is_quickfix, buf_is_terminal, do_autochdir};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::funcs::args::{Args, frame};
 use crate::eval::funcs::execute_common;

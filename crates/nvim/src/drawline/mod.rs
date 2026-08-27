@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::buffer::{bt_quickfix, buf_meta_total};
+use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
     byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex,
     transstr_buf, vim_isbreak, vim_isprintc,
@@ -60,7 +60,7 @@ use crate::options::{
 use crate::os::cshim::snprintf;
 use crate::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::pos::{MAXCOL, ltoreq};
-use crate::quickfix::qf_current_entry;
+use crate::quickfix::{is_qf_buffer, qf_current_entry};
 use crate::search::FORWARD;
 use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end};
 use crate::state::{MODE_INSERT, virtual_active};

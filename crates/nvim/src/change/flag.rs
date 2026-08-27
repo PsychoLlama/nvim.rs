@@ -101,8 +101,7 @@ pub unsafe fn changed(buf: Buf) {
 
         // Create a swap file if that is wanted; not for "nofile" and
         // "nowrite" buffers.
-        // SAFETY: a live buffer.
-        if buf.b_may_swap && !unsafe { bt_dontwrite(buf.raw()) } {
+        if buf.b_may_swap && !buf_is_dontwrite(Some(buf)) {
             let save_need_wait_return = need_wait_return.get();
             need_wait_return.set(false);
             // SAFETY: a live buffer.

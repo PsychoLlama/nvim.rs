@@ -181,7 +181,7 @@ unsafe fn escape_winfixbuf(
     // Try the previously used window, if it can take another buffer.
     if win_valid(prevwin.get())
         && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
-        && !unsafe { bt_quickfix((*prevwin.get()).w_buffer) }
+        && !buf_is_quickfix(unsafe { Buf::from_raw((*prevwin.get()).w_buffer) })
     {
         unsafe { win_goto(prevwin.get()) };
     }
@@ -354,7 +354,7 @@ unsafe fn qf_jump_open_window(
 
     // A `:helpgrep` entry wants a help window.
     if qf_ptr.qf_type == 1
-        && (!unsafe { bt_help(cur_win().w_buffer) } || cmdmod_tab() != 0)
+        && (!buf_is_help(cur_win().buffer_or_none()) || cmdmod_tab() != 0)
         && unsafe { jump_to_help_window(qi.raw(), newwin, opened_window) } == FAIL
     {
         return Jumped::Restore;
@@ -363,7 +363,7 @@ unsafe fn qf_jump_open_window(
         return Jumped::Aborted;
     }
 
-    if unsafe { bt_quickfix(curbuf.get()) } && !*opened_window {
+    if buf_is_quickfix(current_buf()) && !*opened_window {
         if qf_ptr.qf_fnum == 0 {
             return Jumped::Nowhere;
         }

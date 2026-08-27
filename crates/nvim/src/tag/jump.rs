@@ -420,7 +420,8 @@ impl Jump {
             // A `:ta` from a help file keeps the help flag set. For
             // `:ptag` it is the flag of the window we came from.
             keep_help_flag.set(if self.preview {
-                unsafe { bt_help((*self.saved_win).w_buffer) }
+                // SAFETY: the window the jump started from is live.
+                buf_is_help(unsafe { Buf::from_raw((*self.saved_win).w_buffer) })
             } else {
                 cur_buf().b_help
             });

@@ -9,7 +9,7 @@ use crate::api::private::helpers::{
     find_buffer_by_handle,
 };
 use crate::ascii::ascii_iswhite;
-use crate::buffer::{bt_prompt, bufref_valid, do_modelines, find_buf, set_bufref};
+use crate::buffer::{buf_is_prompt, bufref_valid, current_buf, do_modelines, find_buf, set_bufref};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::typval::{

@@ -22,19 +22,14 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
     let buf = wp.buffer();
-    let (dict, quickfix, terminal, textoff) = unsafe {
+    let (dict, textoff) = unsafe {
         // "botline" is one past the last displayed line, hence the -1; the
         // row and column counts are zero-based inside and one-based to
         // vimscript.
         validate_botline_win(wp);
-        let b = buf.raw();
-        (
-            tv_dict_alloc(),
-            bt_quickfix(b),
-            bt_terminal(b),
-            win_col_off(wp.raw()),
-        )
+        (tv_dict_alloc(), win_col_off(wp.raw()))
     };
+    let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
@@ -284,7 +279,7 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             c"popup"
         } else if wp.raw() == cmdwin_win.get() {
             c"command"
-        } else if bt_quickfix(wp.buffer().raw()) {
+        } else if buf_is_quickfix(Some(wp.buffer())) {
             if wp.w_llist_ref.is_null() {
                 c"quickfix"
             } else {

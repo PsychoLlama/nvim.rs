@@ -8,7 +8,7 @@ use crate::winlayer::{Buf, Win};
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
-use crate::buffer::{bt_prompt, buf_get_changedtick};
+use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
 use crate::cursor::{
     check_cursor, coladvance, coladvance_force, gchar_cursor, get_cursor_pos_len,
@@ -64,7 +64,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 unsafe fn prompt_refuses(cap: *mut cmdarg_T) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if unsafe { bt_prompt(curbuf.get()) } && !unsafe { prompt_curpos_editable() } {
+    if buf_is_prompt(current_buf()) && !unsafe { prompt_curpos_editable() } {
         clear_op_beep(ca.op());
         return true;
     }
@@ -636,7 +636,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
         }
         return;
     }
-    if unsafe { bt_prompt(curbuf.get()) } && !unsafe { prompt_curpos_editable() } {
+    if buf_is_prompt(current_buf()) && !unsafe { prompt_curpos_editable() } {
         // On the prompt's own line, put in front of the prompt text
         // rather than refusing.
         if win.w_cursor.lnum == cur_buf().b_prompt_start.mark.lnum {
@@ -771,7 +771,7 @@ pub(crate) unsafe fn nv_open(cap: *mut cmdarg_T) {
         unsafe { nv_diffgetput(false, ca.opcount as size_t) };
     } else if visual_active() {
         unsafe { v_swap_corners(ca.cmdchar) };
-    } else if unsafe { bt_prompt(curbuf.get()) }
+    } else if buf_is_prompt(current_buf())
         && cur_win().w_cursor.lnum < cur_buf().b_prompt_start.mark.lnum
     {
         clear_op_beep(ca.op());

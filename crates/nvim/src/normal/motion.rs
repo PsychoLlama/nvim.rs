@@ -7,7 +7,7 @@ use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_iswhite;
-use crate::buffer::{bt_prompt, bt_quickfix};
+use crate::buffer::{buf_is_prompt, buf_is_quickfix, current_buf};
 use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cursor::{coladvance, gchar_cursor, get_cursor_pos_ptr};
 use crate::decoration::{decor_conceal_line, win_lines_concealed};
@@ -19,7 +19,7 @@ use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::main::{
-    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf, ins_at_eol, mod_mask, p_sel, p_ww,
+    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, ins_at_eol, mod_mask, p_sel, p_ww,
     restart_edit,
 };
 use crate::mark::setpcmark;
@@ -481,7 +481,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
     // In three kinds of window `<CR>` means "act on this line" rather
     // than "move down".
     if ca.cmdchar == CAR {
-        if unsafe { bt_quickfix(curbuf.get()) } {
+        if buf_is_quickfix(current_buf()) {
             unsafe { qf_view_result(false) };
             return;
         }
@@ -489,9 +489,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
             cmdwin_result.set(CAR);
             return;
         }
-        if unsafe { bt_prompt(curbuf.get()) }
-            && cur_win().w_cursor.lnum == cur_buf().b_ml.ml_line_count
-        {
+        if buf_is_prompt(current_buf()) && cur_win().w_cursor.lnum == cur_buf().b_ml.ml_line_count {
             unsafe { prompt_invoke_callback() };
             if restart_edit.get() == 0 {
                 restart_edit.set('a' as c_int);

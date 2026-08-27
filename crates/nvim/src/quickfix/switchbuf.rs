@@ -276,7 +276,7 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     }
 
     let only_the_quickfix_window =
-        firstwin.get() == lastwin.get() && unsafe { bt_quickfix(curbuf.get()) };
+        firstwin.get() == lastwin.get() && buf_is_quickfix(current_buf());
     if only_the_quickfix_window || !usable_win || newwin {
         if unsafe { qf_open_new_file_win(ll_ref) } != OK {
             return FAIL;

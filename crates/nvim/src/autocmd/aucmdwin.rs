@@ -143,7 +143,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
             (*prevwin.get()).handle
         }
     };
-    if unsafe { bt_prompt(curbuf.get()) } {
+    if buf_is_prompt(current_buf()) {
         unsafe { (*aco).save_prompt_insert = cur_buf().b_prompt_insert };
     }
 
@@ -261,7 +261,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
         });
         curbuf.set(cur_win().w_buffer);
         unsafe { entering_window(curwin.get()) };
-        if unsafe { bt_prompt(curbuf.get()) } {
+        if buf_is_prompt(current_buf()) {
             cur_buf().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
         }
 

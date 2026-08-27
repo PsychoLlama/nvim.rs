@@ -342,7 +342,7 @@ unsafe fn pum_show_info(
             if !resized
                 && (*curbuf.get()).b_nwindows == 1
                 && (*curbuf.get()).b_fname.is_null()
-                && bt_nofile(curbuf.get())
+                && buf_is_nofile(current_buf())
                 && *(*curbuf.get()).b_p_bh == b'w' as c_char
             {
                 // Already a "wipeout" buffer: just empty it.

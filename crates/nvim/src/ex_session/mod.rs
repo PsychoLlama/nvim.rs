@@ -43,7 +43,7 @@ mod view;
 use crate::arglist::alist_name;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_SESSIONWRITEPOST, apply_autocmds};
-use crate::buffer::{bt_help, bt_nofilename, bt_terminal};
+use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::{open_exfile, vim_mkdir_emsg};
 use crate::ex_getln::vim_strsave_fnameescape;
@@ -73,6 +73,7 @@ use crate::types::{
     CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OptionSetFlags,
     Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
+use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
@@ -351,25 +352,24 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, gap: *mut garray_T, fullname
 /// `wp` is a live window.
 pub(crate) unsafe fn ses_do_win(wp: *mut win_T) -> bool {
     // SAFETY: caller contract; a window always has a buffer.
-    unsafe {
-        if (*wp).w_floating {
-            return false;
-        }
-        let buf = (*wp).w_buffer;
-        if (*buf).b_fname.is_null()
-            // The contents of a "nofile" buffer cannot be restored.
-            || ((*buf).terminal.is_null() && bt_nofilename(buf))
-        {
-            return ssop_flags.get() & kOptSsopFlagBlank != 0;
-        }
-        if bt_help(buf) {
-            return ssop_flags.get() & kOptSsopFlagHelp != 0;
-        }
-        if bt_terminal(buf) {
-            return ssop_flags.get() & kOptSsopFlagTerminal != 0;
-        }
-        true
+    let win = unsafe { Win::new(wp) };
+    if win.w_floating {
+        return false;
     }
+    let buf = win.buffer();
+    if buf.b_fname.is_null()
+        // The contents of a "nofile" buffer cannot be restored.
+        || (buf.terminal.is_null() && buf_is_nofilename(Some(buf)))
+    {
+        return ssop_flags.get() & kOptSsopFlagBlank != 0;
+    }
+    if buf_is_help(Some(buf)) {
+        return ssop_flags.get() & kOptSsopFlagHelp != 0;
+    }
+    if buf_is_terminal(Some(buf)) {
+        return ssop_flags.get() & kOptSsopFlagTerminal != 0;
+    }
+    true
 }
 
 // -- `:loadview` -----------------------------------------------------------

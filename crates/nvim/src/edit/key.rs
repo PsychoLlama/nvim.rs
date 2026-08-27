@@ -470,7 +470,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
-    if unsafe { bt_quickfix(curbuf.get()) } && s.c == CAR {
+    if buf_is_quickfix(current_buf()) && s.c == CAR {
         if cur_win().w_llist_ref.is_null() {
             unsafe { do_cmdline_cmd(c".cc".as_ptr()) };
         } else {
@@ -676,8 +676,7 @@ fn autoformat(prev_line: bool) {
 /// Is the current buffer a prompt buffer?
 #[inline(always)]
 fn in_prompt_buf() -> bool {
-    // SAFETY: `curbuf` is live for the whole session.
-    unsafe { bt_prompt(curbuf.get()) }
+    buf_is_prompt(current_buf())
 }
 
 /// Did `c` end an abbreviation?  If so it has been stuffed back along with

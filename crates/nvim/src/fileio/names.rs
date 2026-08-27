@@ -28,10 +28,10 @@ const S_IFLNK: u64 = 0o120000;
 /// # Safety
 /// `dirname` must be a NUL-terminated directory name.
 pub unsafe fn shorten_buf_fname(mut buf: Buf, dirname: *mut c_char, force: c_int) {
-    // SAFETY: a live buffer, and each name it holds is NUL-terminated; the
-    // null check ahead of `path_is_absolute` guards the name it reads.
+    // SAFETY: each name the buffer holds is NUL-terminated; the null check
+    // ahead of `path_is_absolute` guards the name it reads.
     if buf.b_fname.is_null()
-        || unsafe { bt_nofilename(buf.raw()) }
+        || buf_is_nofilename(Some(buf))
         || unsafe { path_with_url(buf.b_fname) } != 0
         || !(force != 0 || buf.b_sfname.is_null() || unsafe { path_is_absolute(buf.b_sfname) })
     {

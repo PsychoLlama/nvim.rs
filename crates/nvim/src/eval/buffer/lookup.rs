@@ -37,7 +37,7 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
                 buffers()
                     .find(|b| {
                         !b.b_fname.is_null()
-                            && (path_with_url(b.b_fname) != 0 || bt_nofilename(b.raw()))
+                            && (path_with_url(b.b_fname) != 0 || buf_is_nofilename(Some(*b)))
                             && strcmp(b.b_fname, name) == 0
                     })
                     .map_or(ptr::null_mut(), Buf::raw)

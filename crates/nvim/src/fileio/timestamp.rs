@@ -364,7 +364,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
     if !buf.terminal.is_null()
         || buf.b_ffname.is_null()
         || buf.b_ml.ml_mfp.is_null()
-        || !unsafe { bt_normal(buf.raw()) }
+        || !buf_is_normal(Some(buf))
         || buf.b_saving
         || BUSY.get()
     {

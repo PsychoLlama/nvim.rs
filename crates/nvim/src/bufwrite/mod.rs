@@ -14,7 +14,7 @@ use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf,
 };
 use crate::buffer::{
-    BufFlags, bt_nofilename, buf_get_changedtick, buf_set_file_id, bufref_valid, set_bufref,
+    BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id, bufref_valid, set_bufref,
 };
 use crate::change::unchanged;
 use crate::drawscreen::status_redraw_all;
@@ -330,7 +330,7 @@ pub unsafe fn buf_write(
             && req.reset_changed
             && whole
             && buf == curbuf.get()
-            && !bt_nofilename(buf)
+            && !buf_is_nofilename(Buf::from_raw(buf))
             && !req.filtering
             && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
             && cpo_has(CpoFlag::FNAMEW)

@@ -25,9 +25,9 @@ use crate::autocmd::{
     aucmd_restbuf, block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    bt_help, bt_normal, bt_quickfix, buf_valid, buflist_findname_exp, buflist_getfile, buflist_new,
-    bufref_valid, close_buffer, do_modelines, find_buf, no_write_message, set_bufref, setfname,
-    wipe_buffer,
+    buf_is_help, buf_is_normal, buf_is_quickfix, buf_valid, buflist_findname_exp, buflist_getfile,
+    buflist_new, bufref_valid, close_buffer, current_buf, do_modelines, find_buf, no_write_message,
+    set_bufref, setfname, wipe_buffer,
 };
 use crate::change::changed_lines;
 use crate::charset::{skipdigits, skipwhite, vim_isprintc};

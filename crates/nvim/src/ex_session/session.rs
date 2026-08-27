@@ -31,7 +31,7 @@ use super::{
     ses_put_fname,
 };
 use crate::arglist::global_arglist;
-use crate::buffer::{bt_help, bt_nofilename, bt_terminal};
+use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
@@ -53,6 +53,7 @@ use crate::types::{
     frame_T, hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
+use crate::winlayer::Buf;
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -245,7 +246,7 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
         while !buf.is_null() {
             let wanted = !(only_save_windows && (*buf).b_nwindows == 0)
                 && !((*buf).b_help && !opts.has(kOptSsopFlagHelp))
-                && !(bt_terminal(buf) && !opts.has(kOptSsopFlagTerminal))
+                && !(buf_is_terminal(Buf::from_raw(buf)) && !opts.has(kOptSsopFlagTerminal))
                 && !(*buf).b_fname.is_null()
                 && (*buf).b_p_bl != 0;
             if wanted {
@@ -326,8 +327,8 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             while !wp.is_null() {
                 if ses_do_win(wp)
                     && !(*(*wp).w_buffer).b_ffname.is_null()
-                    && !bt_help((*wp).w_buffer)
-                    && !bt_nofilename((*wp).w_buffer)
+                    && !buf_is_help(Buf::from_raw((*wp).w_buffer))
+                    && !buf_is_nofilename(Buf::from_raw((*wp).w_buffer))
                 {
                     if need_tabnext && !out.line(c"tabnext") {
                         return false;

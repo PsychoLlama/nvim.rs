@@ -22,7 +22,7 @@ use core::ops::{Deref, DerefMut};
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::buffer::bt_quickfix;
+use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
@@ -760,8 +760,7 @@ fn dispatch_action(a: Action, win: Win) {
 
     // SAFETY: `curbuf` is live from startup to exit.
     let buf = unsafe { Buf::current() };
-    // SAFETY: a live buffer.
-    let in_quickfix = unsafe { bt_quickfix(buf.raw()) };
+    let in_quickfix = buf_is_quickfix(Some(buf));
     let double_click = mods & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK;
     if (mods & MOD_MASK_CTRL != 0 || double_click) && in_quickfix {
         // Ctrl-Mouse click or double click in a quickfix window jumps to the

@@ -11,15 +11,14 @@
 use crate::winlayer::Win;
 use core::ptr;
 
-use crate::buffer::bt_prompt;
+use crate::buffer::{buf_is_prompt, current_buf};
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::main::{
-    VIsual_select_reg, arrow_used, cmdwin_type, curbuf, got_int, reg_executing, reg_recorded,
-    restart_edit,
+    VIsual_select_reg, arrow_used, cmdwin_type, got_int, reg_executing, reg_recorded, restart_edit,
 };
 use crate::message::emsg;
 use crate::normal::{
@@ -196,9 +195,7 @@ pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     let op_type = get_op_type(ca.cmdchar, ca.nchar);
     // A prompt buffer only lets its own last line be changed.
-    if unsafe { bt_prompt(curbuf.get()) }
-        && op_is_change(op_type)
-        && !unsafe { prompt_curpos_editable() }
+    if buf_is_prompt(current_buf()) && op_is_change(op_type) && !unsafe { prompt_curpos_editable() }
     {
         clear_op_beep(ca.op());
         return;

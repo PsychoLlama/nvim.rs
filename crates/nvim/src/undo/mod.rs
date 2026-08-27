@@ -12,7 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
-use crate::buffer::{bt_dontwrite, bt_prompt, buf_is_empty};
+use crate::buffer::{buf_is_dontwrite, buf_is_empty, buf_is_prompt};
 use crate::buffer_updates::{buf_updates_changedtick, buf_updates_unload};
 use crate::change::{
     change_warning, changed, changed_bytes, changed_lines, file_ff_differs, unchanged,
@@ -752,12 +752,10 @@ pub fn u_update_save_nr(buf: Buf) {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn buf_is_changed(buf: Buf) -> bool {
-    // SAFETY: a live buffer, by `Buf`'s contract — the whole of what the
-    // three `*mut buf_T` callees ask for.
-    if unsafe { bt_prompt(buf.raw()) } {
+    if buf_is_prompt(Some(buf)) {
         return buf.b_modified_was_set;
     }
-    !unsafe { bt_dontwrite(buf.raw()) } && (buf.b_changed != 0 || file_ff_differs(buf, true))
+    !buf_is_dontwrite(Some(buf)) && (buf.b_changed != 0 || file_ff_differs(buf, true))
 }
 
 /// Whether any buffer at all holds unsaved changes.

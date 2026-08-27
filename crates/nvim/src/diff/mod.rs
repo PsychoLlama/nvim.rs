@@ -37,8 +37,8 @@ use crate::autocmd::{
     block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    bt_prompt, buf_get_changedtick, buf_is_empty, buf_valid, buflist_findpat, bufref_valid,
-    find_buf, set_bufref,
+    buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_valid, buflist_findpat, bufref_valid,
+    current_buf, find_buf, set_bufref,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};

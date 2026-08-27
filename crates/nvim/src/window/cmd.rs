@@ -323,7 +323,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // quickfix window only: view the result under the cursor in a new split
         K_KENTER | CAR => {
-            if is_quickfix(Some(cur_buf())) {
+            if buf_is_quickfix(Some(cur_buf())) {
                 view_quickfix_result();
             }
         }
@@ -340,7 +340,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
 /// CTRL-W s / CTRL-W v. Splitting the quickfix window opens a new buffer in
 /// it rather than replicating the quickfix buffer.
 fn split_or_new(nchar: c_int, prenum: c_int, flags: c_int) {
-    if is_quickfix(Some(cur_buf())) {
+    if buf_is_quickfix(Some(cur_buf())) {
         new_window(nchar, prenum);
     } else {
         split(prenum, flags);

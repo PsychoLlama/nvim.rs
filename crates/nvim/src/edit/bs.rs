@@ -117,7 +117,7 @@ fn bs_blocked() -> bool {
     let start = Insstart_orig.get();
     (cursor.lnum == 1 && cursor.col == 0)
         || (!can_bs(BsFlag::START)
-            && ((arrow_used.get() && !unsafe { bt_prompt(curbuf.get()) })
+            && ((arrow_used.get() && !buf_is_prompt(current_buf()))
                 || (cursor.lnum == start.lnum && cursor.col <= start.col)))
         || (!can_bs(BsFlag::INDENT)
             && !arrow_used.get()

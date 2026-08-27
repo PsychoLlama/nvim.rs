@@ -60,7 +60,7 @@ fn replace_normal(state: c_int) -> bool {
 /// # Safety
 /// The cursor must be on a valid line of the current buffer.
 unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
-    if !unsafe { bt_prompt(curbuf.get()) }
+    if !buf_is_prompt(current_buf())
         || cur_win().w_cursor.lnum != cur_buf().b_prompt_start.mark.lnum
     {
         return ::core::ptr::null_mut();

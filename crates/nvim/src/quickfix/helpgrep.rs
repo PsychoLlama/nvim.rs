@@ -292,7 +292,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     qf_busy_end();
 
     if eap.cmdidx == CMD_lhelpgrep && new_qi {
-        if !unsafe { bt_help(cur_win().w_buffer) } || cur_win().w_llist == qi.raw() {
+        if !buf_is_help(cur_win().buffer_or_none()) || cur_win().w_llist == qi.raw() {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.
             let mut stack = qi.raw();

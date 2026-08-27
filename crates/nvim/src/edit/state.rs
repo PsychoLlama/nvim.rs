@@ -333,7 +333,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     if !key_available() {
         unsafe { fold_check_close() };
     }
-    if unsafe { bt_prompt(curbuf.get()) } {
+    if buf_is_prompt(current_buf()) {
         init_prompt(s.cmdchar_todo);
         s.cmdchar_todo = NUL;
     }

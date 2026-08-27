@@ -29,15 +29,14 @@ mod tags;
 
 use crate::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
-use crate::buffer::{bt_help, find_buf, set_buflisted, wipe_buffer};
+use crate::buffer::{buf_is_help, cur_win, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    Columns, KeyTyped, cmdmod, curbuf, curwin, e_noident, firstwin, p_hf, p_hh, p_hlg, p_sb,
-    restart_edit,
+    Columns, KeyTyped, cmdmod, curbuf, curwin, e_noident, p_hf, p_hh, p_hlg, p_sb, restart_edit,
 };
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::{emsg, emsg_multiline};
@@ -53,9 +52,10 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
     OptValData, OptionSetFlags, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString,
-    linenr_T, size_t, win_T,
+    linenr_T, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
+use crate::winlayer::windows;
 use crate::{semsg_c, smsg_c};
 use ::libc::{fclose, qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -354,29 +354,27 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
         empty_fnum: 0,
         alt_fnum: 0,
     };
+    // Re-use an existing help window; always open a new one for
+    // `:tab help`.
+    let same_tab = cmdmod.with(|m| m.cmod_tab) == 0;
+    if buf_is_help(cur_win().buffer_or_none()) && same_tab {
+        return Some(opened);
+    }
+    let existing = same_tab
+        .then(|| {
+            windows().find(|wp| {
+                buf_is_help(wp.buffer_or_none()) && !wp.w_config.hide && wp.w_config.focusable
+            })
+        })
+        .flatten();
+    if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows > 0) {
+        // SAFETY: a live window. Runs autocommands.
+        unsafe { win_enter(wp.raw(), true) };
+        return Some(opened);
+    }
+
     // SAFETY: the window list is a live intrusive list on the main thread.
     unsafe {
-        // Re-use an existing help window; always open a new one for
-        // `:tab help`.
-        if bt_help((*curwin.get()).w_buffer) && cmdmod.with(|m| m.cmod_tab) == 0 {
-            return Some(opened);
-        }
-        let mut wp = ptr::null_mut::<win_T>();
-        if cmdmod.with(|m| m.cmod_tab) == 0 {
-            let mut wp2 = firstwin.get();
-            while !wp2.is_null() {
-                if bt_help((*wp2).w_buffer) && !(*wp2).w_config.hide && (*wp2).w_config.focusable {
-                    wp = wp2;
-                    break;
-                }
-                wp2 = (*wp2).w_next;
-            }
-        }
-        if !wp.is_null() && (*(*wp).w_buffer).b_nwindows > 0 {
-            win_enter(wp, true);
-            return Some(opened);
-        }
-
         // No help window yet: check that 'helpfile' can be read at all.
         let helpfd = os_fopen(p_hf.get(), c"rb".as_ptr());
         if helpfd.is_null() {
@@ -430,17 +428,11 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
 /// # Safety
 /// `eap` is the current Ex command.
 pub(crate) unsafe fn ex_helpclose(eap: *mut exarg_T) {
-    // SAFETY: caller contract; the window list is live.
-    unsafe {
-        let mut win = firstwin.get();
-        while !win.is_null() {
-            if bt_help((*win).w_buffer) {
-                win_close(win, false, (*eap).forceit != 0);
-                return;
-            }
-            win = (*win).w_next;
-        }
-    }
+    let Some(win) = windows().find(|wp| buf_is_help(wp.buffer_or_none())) else {
+        return;
+    };
+    // SAFETY: caller contract; a live window.
+    unsafe { win_close(win.raw(), false, (*eap).forceit != 0) };
 }
 
 /// `:exusage`.

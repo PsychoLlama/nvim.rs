@@ -140,9 +140,8 @@ fn terminal_alive(mut buf: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.
     unsafe { terminal_running(buf.terminal) }
 }
-fn is_quickfix(mut buf: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_quickfix(buf.raw()) }
+fn is_quickfix(buf: Buf) -> bool {
+    buf_is_quickfix(Some(buf))
 }
 fn recover_swapfile() {
     // SAFETY: reads the current buffer; `false` is upstream's `checkext`.

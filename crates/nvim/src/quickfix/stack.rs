@@ -261,22 +261,19 @@ pub(crate) unsafe fn qf_stack_empty(qi: *const qf_info_T) -> bool {
 /// which: C's bare `bt_quickfix(wp->w_buffer)`.
 #[inline]
 pub(crate) fn is_qf_buffer(wp: Win) -> bool {
-    // SAFETY: `wp`'s promise carries to the buffer it is showing.
-    unsafe { bt_quickfix(wp.w_buffer) }
+    buf_is_quickfix(wp.buffer_or_none())
 }
 
 /// Whether `wp` shows a help file.
 #[inline]
 pub(crate) fn is_help_buffer(wp: Win) -> bool {
-    // SAFETY: as [`is_qf_buffer`].
-    unsafe { bt_help(wp.w_buffer) }
+    buf_is_help(wp.buffer_or_none())
 }
 
 /// Whether `wp` shows an ordinary file.
 #[inline]
 pub(crate) fn is_normal_buffer(wp: Win) -> bool {
-    // SAFETY: as [`is_qf_buffer`].
-    unsafe { bt_normal(wp.w_buffer) }
+    buf_is_normal(wp.buffer_or_none())
 }
 
 /// Whether `wp` *is* a location list window, i.e. shows another window's

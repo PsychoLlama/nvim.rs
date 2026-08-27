@@ -39,7 +39,7 @@ use core::ptr;
 
 use crate::api::private::helpers::{api_clear_error, api_set_error};
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
-use crate::buffer::{bt_quickfix, buf_hide};
+use crate::buffer::{buf_hide, buf_is_quickfix};
 use crate::cursor::check_cursor;
 use crate::drawscreen::redraw_all_later;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -538,13 +538,6 @@ fn beep() {
 fn hides(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     unsafe { buf_hide(buf.raw()) }
-}
-
-/// Whether `buf` is a quickfix or location list buffer.
-fn is_quickfix(buf: Option<Buf>) -> bool {
-    let raw = buf.map_or(ptr::null(), |b| b.raw() as *const buf_T);
-    // SAFETY: a live buffer, or the null the callers pass for "no buffer".
-    unsafe { bt_quickfix(raw) }
 }
 
 /// Clamp the cursor of `win` back into its buffer.

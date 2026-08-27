@@ -19,14 +19,14 @@ use core::ptr;
 
 use super::arith::NextCurwin;
 use super::*;
-use crate::buffer::bt_help;
+use crate::buffer::{buf_is_help, current_buf};
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::main::{
-    Columns, Rows, cmdline_row, curbuf, e_noroom, exiting, full_screen, msg_row, msg_scrolled,
-    p_ch, p_ls, p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
+    Columns, Rows, cmdline_row, e_noroom, exiting, full_screen, msg_row, msg_scrolled, p_ch, p_ls,
+    p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
 };
 use crate::mark::setmark;
 use crate::message::{msg_grid_validate, msg_grid_view};
@@ -832,8 +832,7 @@ pub unsafe fn only_one_window() -> bool {
             if wp.w_buffer.is_null() || is_autocmd_window(Some(*wp)) {
                 return false;
             }
-            // SAFETY: live buffers.
-            let (help, cur_help) = unsafe { (bt_help(wp.w_buffer), bt_help(curbuf.get())) };
+            let (help, cur_help) = (buf_is_help(wp.buffer_or_none()), buf_is_help(current_buf()));
             let skip = (help && !cur_help) || wp.w_floating || wp.w_onebuf_opt.wo_pvw != 0;
             !skip || wp.is_current()
         })

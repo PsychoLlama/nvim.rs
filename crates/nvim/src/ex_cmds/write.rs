@@ -23,8 +23,8 @@ use crate::autocmd::{
     EVENT_BUFADD, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, augroup_exists, do_doautocmd,
 };
 use crate::buffer::{
-    BufFlags, bt_dontwrite, bt_dontwrite_msg, bt_nofilename, buf_hide, buf_name_changed,
-    buflist_findname, buflist_new, bufref_valid, do_autochdir, do_modelines, fileinfo,
+    BufFlags, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename, buf_name_changed,
+    buflist_findname, buflist_new, bufref_valid, current_buf, do_autochdir, do_modelines, fileinfo,
     fname_expand, no_write_message, no_write_message_buf, otherfile, set_bufref, setaltfname,
     setfname,
 };
@@ -179,7 +179,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
 pub unsafe fn ex_update(eap: *mut exarg_T) {
     // SAFETY: caller's contract; `curbuf` is live.
     if curbuf_is_changed()
-        || (!unsafe { bt_nofilename(curbuf.get()) }
+        || (!buf_is_nofilename(current_buf())
             && !cur_buf().b_ffname.is_null()
             && !unsafe { os_path_exists(cur_buf().b_ffname) })
     {
@@ -377,7 +377,7 @@ unsafe fn cannot_write_curbuf(eap: *mut exarg_T) -> bool {
     // whole chain is one region so the short-circuiting is untouched -- a
     // block cannot lead a `||` chain in tail position anyway.
     unsafe {
-        bt_dontwrite_msg(curbuf.get())
+        buf_dontwrite_msg(current_buf())
             || check_fname() == FAIL
             || check_writable(cur_buf().b_ffname) == FAIL
             || check_readonly(&raw mut (*eap).forceit, cur_buf())
@@ -497,7 +497,7 @@ pub unsafe fn check_overwrite(
     // Write to another file or b_flags set or not writing the whole file.
     // SAFETY: a live buffer.
     let contested = other
-        || (!unsafe { bt_nofilename(buf.raw()) }
+        || (!buf_is_nofilename(Some(buf))
             && (buf.b_flags.has(BufFlags::NOTEDITED)
                 || buf.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
                 || buf.b_flags.has(BufFlags::READERR)));
@@ -687,7 +687,7 @@ unsafe fn write_one_buffer(
     {
         no_write_message_buf(buf);
         *error += 1;
-    } else if !buf_is_changed(buf) || unsafe { bt_dontwrite(buf.raw()) } {
+    } else if !buf_is_changed(buf) || buf_is_dontwrite(Some(buf)) {
         return WriteAll::Next;
     }
 

@@ -8,7 +8,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
 
-use crate::buffer::bt_prompt;
+use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
@@ -382,7 +382,7 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 /// `buf` must be valid.
 pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
     unsafe {
-        if !bt_prompt(buf) {
+        if !buf_is_prompt(Buf::from_raw(buf)) {
             return null_mut();
         }
         let lnum_start = (*buf).b_prompt_start.mark.lnum;

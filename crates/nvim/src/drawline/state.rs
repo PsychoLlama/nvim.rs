@@ -24,7 +24,7 @@
 use super::*;
 use crate::grid::linebuf;
 use crate::types::NUL;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 /// The variables `win_line` passes to the functions that draw parts of a line.
 ///
@@ -580,7 +580,7 @@ impl WinLineVars {
             if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
                 self.line_attr_lowprio = self.cursorline_attr;
             } else if State.get() & MODE_INSERT == 0
-                && bt_quickfix((*wp).w_buffer)
+                && buf_is_quickfix(Buf::from_raw((*wp).w_buffer))
                 && qf_current_entry(Win::new(wp)) == self.lnum
             {
                 // A quickfix window's current-entry highlight keeps its own

@@ -6,7 +6,7 @@ use crate::api::private::dispatch::{
 };
 use crate::api::private::helpers::{api_free_dict, api_free_string, copy_string, cstr_as_string};
 use crate::ascii::ascii_isdigit;
-use crate::buffer::{bt_quickfix, bt_terminal, buflist_new, buflist_setfpos, find_buf};
+use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfpos, find_buf};
 use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view};
 use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;

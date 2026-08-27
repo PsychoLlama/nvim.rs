@@ -73,7 +73,7 @@ pub unsafe fn f_prompt_appendbuf(
         let Some(buf) = Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) else {
             return;
         };
-        if !bt_prompt(buf.raw()) {
+        if !buf_is_prompt(Some(buf)) {
             return;
         }
         let lnum: linenr_T = (buf.b_prompt_start.mark.lnum - 1).max(0);
@@ -211,7 +211,7 @@ pub unsafe fn f_prompt_setprompt(
         };
         let new_prompt = numbuf.string(args.ptr(1));
         let new_prompt_len = len_as_int(strlen(new_prompt));
-        if bt_prompt(buf.raw()) && !buf.b_ml.ml_mfp.is_null() {
+        if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
             rewrite_prompt_line(buf, new_prompt, new_prompt_len);
         }
         xfree(buf.b_prompt_text.cast());

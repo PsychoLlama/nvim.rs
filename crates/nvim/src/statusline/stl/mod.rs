@@ -52,7 +52,7 @@ use core::{ptr, slice};
 use std::ffi::CString;
 
 use super::*;
-use crate::buffer::{append_arg_number, bt_quickfix, buf_spname, calc_percentage, get_rel_pos};
+use crate::buffer::{append_arg_number, buf_is_quickfix, buf_spname, calc_percentage, get_rel_pos};
 use crate::charset::{ptr2cells, trans_characters, vim_strsize};
 use crate::cstr;
 use crate::decoration::SIGN_WIDTH;
@@ -280,8 +280,7 @@ impl Env {
 
     /// `%q`: the quickfix or location list title, when this is one.
     pub(super) fn quickfix_title(&self, text: &mut Vec<u8>) {
-        // SAFETY: a live buffer.
-        if !unsafe { bt_quickfix(self.buf.raw()) } {
+        if !buf_is_quickfix(Some(self.buf)) {
             return;
         }
         let msg = if self.win.w_llist_ref.is_null() {

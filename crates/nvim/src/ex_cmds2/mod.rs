@@ -45,7 +45,7 @@ mod listdo;
 
 use crate::arglist::{ex_all, ex_rewind, set_arglist};
 use crate::buffer::{
-    bt_dontwrite, buf_hide, buf_set_name, buf_spname, bufref_valid, find_buf, no_write_message,
+    buf_hide, buf_is_dontwrite, buf_set_name, buf_spname, bufref_valid, find_buf, no_write_message,
     no_write_message_nobang, set_bufref, set_curbuf,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
@@ -278,7 +278,7 @@ pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
         if !(p_aw.get() != 0 || p_awa.get() != 0)
             || p_write.get() == 0
             // never autowrite a "nofile" or "nowrite" buffer
-            || bt_dontwrite(buf)
+            || buf_is_dontwrite(Buf::from_raw(buf))
             || (!forceit && (*buf).b_p_ro != 0)
             || (*buf).b_ffname.is_null()
         {
@@ -311,7 +311,8 @@ pub(crate) unsafe fn autowrite_all() {
     unsafe {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if buf_is_changed(Buf::new(buf)) && (*buf).b_p_ro == 0 && !bt_dontwrite(buf) {
+            let b = Buf::new(buf);
+            if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
                 let mut bufref = bufref_T::default();
                 set_bufref(&raw mut bufref, buf);
                 buf_write_all(buf, false);

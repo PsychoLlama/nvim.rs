@@ -8,7 +8,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
-use crate::buffer::{bt_nofile, buf_clear};
+use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
 use crate::charset::{ptr2cells, transstr, vim_strsize};
 use crate::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
 use crate::drawscreen::{

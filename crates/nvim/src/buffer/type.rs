@@ -8,10 +8,11 @@
 //! [`set_buflisted`] the `'buflisted'` half, and the `changedtick` pair the
 //! `b:changedtick` counter every change bumps.
 //!
-//! Every predicate here is a raw entry point taking `buf_T *`, and most
-//! accept null for "no buffer", so each begins by turning its pointer into
-//! an `Option<Buf>` -- one unchecked line apiece, after which the body is
-//! ordinary field access through [`Buf`]'s `Deref`.
+//! Upstream's predicates are the `bt_*` family and every one of them opens
+//! with `buf != NULL &&`.  Here they are `buf_is_*` and take an
+//! `Option<Buf>`, which puts that null test in the type and makes the whole
+//! family safe: the body is then ordinary field access through [`Buf`]'s
+//! `Deref`.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
@@ -51,16 +52,6 @@ fn tr(msg: &CStr) -> *mut c_char {
     tr_raw(msg.as_ptr())
 }
 
-/// The buffer behind a pointer the caller has promised is null or live.
-///
-/// # Safety
-/// `buf` is null or points at a live buffer.
-unsafe fn opt_buf(buf: *const buf_T) -> Option<Buf> {
-    // SAFETY: the caller's promise. Nothing below writes through the result,
-    // so dropping `const` costs nothing.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf.cast_mut()) })
-}
-
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
 fn buftype(buf: Option<Buf>) -> c_char {
@@ -87,53 +78,46 @@ const fn ch(byte: u8) -> c_char {
 
 // ---------------------------------------------------------------------------
 // The 'buftype' predicates
+//
+// Upstream spells these `bt_prompt`, `bt_help`, `bt_normal`, `bt_quickfix`,
+// `bt_terminal`, `bt_nofilename`, `bt_nofileread`, `bt_nofile`,
+// `bt_dontwrite` and `bt_dontwrite_msg`, and every one of them opens with
+// `buf != NULL &&`.  That test is the whole reason each takes an
+// `Option<Buf>`: the absence is in the type, so the predicates are safe and
+// answer `false` for "no buffer" exactly as the C does.
 
-pub unsafe fn bt_prompt(buf: *mut buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    buftype(unsafe { opt_buf(buf) }) == ch(b'p')
+/// `bt_prompt()`: a "prompt" buffer.
+pub(crate) fn buf_is_prompt(buf: Option<Buf>) -> bool {
+    buftype(buf) == ch(b'p')
 }
 
-/// [`bt_prompt`] over a buffer already wrapped.
-fn is_prompt(buf: Buf) -> bool {
-    buftype(Some(buf)) == ch(b'p')
+/// `bt_help()`: a help buffer.
+pub(crate) fn buf_is_help(buf: Option<Buf>) -> bool {
+    buf.is_some_and(|b| b.b_help)
 }
 
-pub unsafe fn bt_help(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    unsafe { opt_buf(buf) }.is_some_and(|b| b.b_help)
-}
-
-/// A normal buffer: `'buftype'` is empty.
-pub unsafe fn bt_normal(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    let buf = unsafe { opt_buf(buf) };
+/// `bt_normal()`: a normal buffer, `'buftype'` empty.
+pub(crate) fn buf_is_normal(buf: Option<Buf>) -> bool {
     buf.is_some() && buftype(buf) == 0
 }
 
-pub unsafe fn bt_quickfix(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    buftype(unsafe { opt_buf(buf) }) == ch(b'q')
+/// `bt_quickfix()`: the quickfix or location list buffer.
+pub(crate) fn buf_is_quickfix(buf: Option<Buf>) -> bool {
+    buftype(buf) == ch(b'q')
 }
 
-/// [`bt_quickfix`] over a buffer already wrapped, for the callers in this
-/// file.
-fn is_quickfix(buf: Buf) -> bool {
-    buftype(Some(buf)) == ch(b'q')
+/// `bt_terminal()`: a terminal buffer.
+pub(crate) fn buf_is_terminal(buf: Option<Buf>) -> bool {
+    buftype(buf) == ch(b't')
 }
 
-pub unsafe fn bt_terminal(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    buftype(unsafe { opt_buf(buf) }) == ch(b't')
+/// `bt_nofilename()`: a "nofile", "acwrite", terminal or "prompt" buffer.
+/// Its name may not be a file name, at least not one to write to.
+pub(crate) fn buf_is_nofilename(buf: Option<Buf>) -> bool {
+    buf.is_some_and(is_nofilename)
 }
 
-/// A "nofile", "acwrite", terminal or "prompt" buffer: its name may not be a
-/// file name, at least not one to write to.
-pub unsafe fn bt_nofilename(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    unsafe { opt_buf(buf) }.is_some_and(is_nofilename)
-}
-
-/// [`bt_nofilename`] over a buffer already wrapped.
+/// [`buf_is_nofilename`] over a buffer already in hand.
 fn is_nofilename(buf: Buf) -> bool {
     let bt = buftype(Some(buf));
     bt == ch(b'n') && buftype_2(buf) == ch(b'f')
@@ -142,48 +126,79 @@ fn is_nofilename(buf: Buf) -> bool {
         || bt == ch(b'p')
 }
 
-/// A "nofile", "quickfix", terminal or "prompt" buffer: not to be read from
-/// a file.
-pub(crate) unsafe fn bt_nofileread(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    let Some(buf) = (unsafe { opt_buf(buf) }) else {
-        return false;
-    };
-    let bt = buftype(Some(buf));
-    bt == ch(b'n') && buftype_2(buf) == ch(b'f')
-        || bt == ch(b't')
-        || bt == ch(b'q')
-        || bt == ch(b'p')
+/// `bt_nofileread()`: a "nofile", "quickfix", terminal or "prompt" buffer,
+/// not to be read from a file.
+pub(crate) fn buf_is_nofileread(buf: Option<Buf>) -> bool {
+    buf.is_some_and(|b| {
+        let bt = buftype(Some(b));
+        bt == ch(b'n') && buftype_2(b) == ch(b'f')
+            || bt == ch(b't')
+            || bt == ch(b'q')
+            || bt == ch(b'p')
+    })
 }
 
-pub unsafe fn bt_nofile(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    let Some(buf) = (unsafe { opt_buf(buf) }) else {
-        return false;
-    };
-    buftype(Some(buf)) == ch(b'n') && buftype_2(buf) == ch(b'f')
+/// `bt_nofile()`: a "nofile" buffer.
+pub(crate) fn buf_is_nofile(buf: Option<Buf>) -> bool {
+    buf.is_some_and(|b| buftype(Some(b)) == ch(b'n') && buftype_2(b) == ch(b'f'))
 }
 
-/// A "nowrite", "nofile", terminal or "prompt" buffer.
-pub unsafe fn bt_dontwrite(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    unsafe { opt_buf(buf) }.is_some_and(is_dontwrite)
+/// `bt_dontwrite()`: a "nowrite", "nofile", terminal or "prompt" buffer.
+pub(crate) fn buf_is_dontwrite(buf: Option<Buf>) -> bool {
+    buf.is_some_and(is_dontwrite)
 }
 
-/// [`bt_dontwrite`] over a buffer already wrapped.
+/// [`buf_is_dontwrite`] over a buffer already in hand.
 fn is_dontwrite(buf: Buf) -> bool {
     let bt = buftype(Some(buf));
     bt == ch(b'n') || has_terminal(buf) || bt == ch(b'p')
 }
 
-pub unsafe fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    if unsafe { opt_buf(buf) }.is_some_and(is_dontwrite) {
+/// `bt_dontwrite_msg()`: [`buf_is_dontwrite`], complaining when it is true.
+pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
+    if buf.is_some_and(is_dontwrite) {
         // SAFETY: a translated message literal.
         unsafe { emsg(tr(c"E382: Cannot write, 'buftype' option is set")) };
         return true;
     }
     false
+}
+
+// ---------------------------------------------------------------------------
+// The raw-pointer entry points still in use
+//
+// Slice p23-11 could not edit `mark/**`, `buffer/close.rs` or
+// `buffer/list.rs`, so these three keep the C's shape for them.  Each is one
+// line over the safe predicate above; delete it once its callers hand over a
+// buffer they already hold.
+
+/// `bt_prompt()` over a raw pointer.
+///
+/// # Safety
+/// `buf` is null or points at a live buffer.
+pub(crate) unsafe fn bt_prompt(buf: *mut buf_T) -> bool {
+    // SAFETY: the caller's promise -- null or a live buffer.
+    buf_is_prompt(unsafe { Buf::from_raw(buf) })
+}
+
+/// `bt_quickfix()` over a raw pointer.
+///
+/// # Safety
+/// `buf` is null or points at a live buffer.
+pub(crate) unsafe fn bt_quickfix(buf: *const buf_T) -> bool {
+    // SAFETY: the caller's promise -- null or a live buffer. Nothing below
+    // writes through the result, so dropping `const` costs nothing.
+    buf_is_quickfix(unsafe { Buf::from_raw(buf.cast_mut()) })
+}
+
+/// `bt_nofilename()` over a raw pointer.
+///
+/// # Safety
+/// `buf` is null or points at a live buffer.
+pub(crate) unsafe fn bt_nofilename(buf: *const buf_T) -> bool {
+    // SAFETY: the caller's promise -- null or a live buffer. Nothing below
+    // writes through the result, so dropping `const` costs nothing.
+    buf_is_nofilename(unsafe { Buf::from_raw(buf.cast_mut()) })
 }
 
 /// Whether the buffer should be hidden rather than unloaded, according to
@@ -207,20 +222,20 @@ pub unsafe fn buf_hide(buf: *const buf_T) -> bool {
 pub unsafe fn buf_spname(buf: *mut buf_T) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
-    if is_quickfix(b) {
+    if buf_is_quickfix(Some(b)) {
         if b.handle == qf_stack_get_bufnr() {
             return tr_raw(msg_qflist.get());
         }
         return tr_raw(msg_loclist.get());
     }
-    if is_nofilename(b) {
+    if buf_is_nofilename(Some(b)) {
         if !b.b_fname.is_null() {
             return b.b_fname;
         }
         if buf == cmdwin_buf.get() {
             return tr(c"[Command Line]");
         }
-        if is_prompt(b) {
+        if buf_is_prompt(Some(b)) {
             return tr(c"[Prompt]");
         }
         return tr(c"[Scratch]");

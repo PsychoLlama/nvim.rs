@@ -118,11 +118,6 @@ fn remembered_lnum(buf: Buf) -> linenr_T {
     unsafe { buflist_findlnum(buf) }
 }
 
-fn dont_write(mut buf: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_dontwrite(buf.raw()) }
-}
-
 // ---------------------------------------------------------------------------
 // :ls / :buffers
 
@@ -396,7 +391,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         out.put_home_replaced(help, name);
     }
 
-    let dontwrite = dont_write(buf);
+    let dontwrite = buf_is_dontwrite(Some(buf));
     let modified = curbuf_changed();
     out.put_flags([
         if modified {

@@ -19,7 +19,7 @@ use crate::autocmd::{
     EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABCLOSED, EVENT_TABCLOSEDPRE, EVENT_TABLEAVE,
     EVENT_WINCLOSED, EVENT_WINLEAVE, EVENT_WINNEWPRE, has_event,
 };
-use crate::buffer::{BufRef, bt_help, close_buffer};
+use crate::buffer::{BufRef, buf_is_help, close_buffer};
 use crate::diff::diffopt_closeoff;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_eval::aborting;
@@ -86,11 +86,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     // When closing the help window, try restoring a snapshot afterwards.
     // Otherwise clear the snapshot, which is now invalid.
-    let help_window = is_help(win.buffer_or_none());
+    let help_window = buf_is_help(win.buffer_or_none());
     if !help_window {
         drop_snapshot(cur_tab(), SNAP_HELP_IDX);
     }
-    let quickfix_window = is_quickfix(win.buffer_or_none());
+    let quickfix_window = buf_is_quickfix(win.buffer_or_none());
     if !quickfix_window {
         drop_snapshot(cur_tab(), SNAP_QUICKFIX_IDX);
     }
@@ -199,7 +199,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let close_curwin = was_current;
     if was_current {
         curwin.set(wp.raw());
-        if wp.w_onebuf_opt.wo_pvw != 0 || is_quickfix(wp.buffer_or_none()) {
+        if wp.w_onebuf_opt.wo_pvw != 0 || buf_is_quickfix(wp.buffer_or_none()) {
             wp = away_from_preview(wp);
         }
         curbuf.set(cur_win().w_buffer);
@@ -388,7 +388,7 @@ fn away_from_preview(wp: Win) -> Win {
             return wp;
         }
         let hidden = wp.w_floating && (wp.w_config.hide || !wp.w_config.focusable);
-        if wp.w_onebuf_opt.wo_pvw == 0 && !is_quickfix(wp.buffer_or_none()) && !hidden {
+        if wp.w_onebuf_opt.wo_pvw == 0 && !buf_is_quickfix(wp.buffer_or_none()) && !hidden {
             curwin.set(wp.raw());
             return wp;
         }
@@ -599,13 +599,6 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
 fn tab_last_win(tp: TabPage) -> Win {
     // SAFETY: the tail of a live window list is a live window.
     unsafe { Win::new(tp.tp_lastwin) }
-}
-
-/// Whether `buf` is a help buffer.
-fn is_help(buf: Option<Buf>) -> bool {
-    let raw = buf.map_or(ptr::null(), |b| b.raw() as *const buf_T);
-    // SAFETY: a live buffer, or the null the callers pass for "no buffer".
-    unsafe { bt_help(raw) }
 }
 
 /// Whether any autocommand is listening for `event`.

@@ -16,7 +16,7 @@ use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_TABNEWENTERED, apply_autocmds};
-use crate::buffer::{bt_quickfix, buf_spname};
+use crate::buffer::{buf_is_quickfix, buf_spname};
 use crate::charset::{getdigits, getdigits_int, skipwhite};
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
 use crate::ex_cmds::prepare_tagpreview;
@@ -156,11 +156,6 @@ fn cur_buf() -> Buf {
     unsafe { Buf::current() }
 }
 
-fn is_quickfix(buf: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { bt_quickfix(buf.raw()) }
-}
-
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
 fn edit(ea: Ex, old_curwin: *mut win_T) {
     // SAFETY: a live command, and a live window or null.
@@ -233,7 +228,7 @@ fn splitview(mut ea: Ex) {
 
     // Splitting a quickfix window gives a plain window, not a second
     // quickfix one — unless `:tab` asked for a tab page.
-    if is_quickfix(cur_buf()) && cmdmod.with(|m| m.cmod_tab) == 0 {
+    if buf_is_quickfix(Some(cur_buf())) && cmdmod.with(|m| m.cmod_tab) == 0 {
         if ea.is(CMD_split) {
             ea.cmdidx = CMD_new;
         }
