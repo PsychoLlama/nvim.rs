@@ -10,10 +10,15 @@
 use crate::semsg_c;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
 use crate::types::{FAIL, IOSIZE, NUL};
+
+/// One of the `list_*_vars` above: everything a bare `g:`/`b:`/`w:`/... on a
+/// `:let` line can name.
+type ScopeLister = unsafe fn(*mut c_int);
 
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
 ///
@@ -65,14 +70,10 @@ pub(crate) unsafe fn list_glob_vars(first: *mut c_int) {
 /// # Safety
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_buf_vars(first: *mut c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*cur_buf().b_vars).dv_hashtab,
-            c"b:".as_ptr(),
-            true,
-            first,
-        )
-    }
+    // SAFETY: the current buffer's own `b:` dictionary; `first` is the
+    // caller's obligation.
+    let ht = unsafe { &raw mut (*cur_buf().b_vars).dv_hashtab };
+    unsafe { list_hashtable_vars(ht, c"b:".as_ptr(), true, first) }
 }
 
 /// The current window's `w:` scope.
@@ -80,14 +81,9 @@ pub(crate) unsafe fn list_buf_vars(first: *mut c_int) {
 /// # Safety
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_win_vars(first: *mut c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*cur_win().w_vars).dv_hashtab,
-            c"w:".as_ptr(),
-            true,
-            first,
-        )
-    }
+    // SAFETY: the current window's own `w:` dictionary.
+    let ht = unsafe { &raw mut (*cur_win().w_vars).dv_hashtab };
+    unsafe { list_hashtable_vars(ht, c"w:".as_ptr(), true, first) }
 }
 
 /// The current tab page's `t:` scope.
@@ -95,14 +91,10 @@ pub(crate) unsafe fn list_win_vars(first: *mut c_int) {
 /// # Safety
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_tab_vars(first: *mut c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*(*curtab.get()).tp_vars).dv_hashtab,
-            c"t:".as_ptr(),
-            true,
-            first,
-        )
-    }
+    // SAFETY: `curtab` is set from startup to exit, and the tab page's own
+    // `t:` dictionary is live with it.
+    let ht = unsafe { &raw mut (*(*curtab.get()).tp_vars).dv_hashtab };
+    unsafe { list_hashtable_vars(ht, c"t:".as_ptr(), true, first) }
 }
 
 /// The `v:` scope.  `empty` is false: the `v:` variables that hold no string
@@ -121,14 +113,9 @@ pub(crate) unsafe fn list_vim_vars(first: *mut c_int) {
 pub(crate) unsafe fn list_script_vars(first: *mut c_int) {
     let sid = current_sctx.get().sc_sid;
     if script_id_valid(sid) {
-        unsafe {
-            list_hashtable_vars(
-                &raw mut (*script_sv(sid)).sv_dict.dv_hashtab,
-                c"s:".as_ptr(),
-                false,
-                first,
-            )
-        };
+        // SAFETY: a valid script id, whose own `s:` dictionary this lists.
+        let ht = unsafe { &raw mut (*script_sv(sid)).sv_dict.dv_hashtab };
+        unsafe { list_hashtable_vars(ht, c"s:".as_ptr(), false, first) };
     }
 }
 
@@ -148,16 +135,12 @@ pub(crate) unsafe fn list_arg_vars(
         if error || unsafe { (*eap).skip } != 0 {
             // Nothing is being printed any more; just check that what is
             // left parses as names.
-            arg = unsafe {
-                find_name_end(
-                    arg,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    FNE_INCL_BR | FNE_CHECK_START,
-                )
-            };
-            if !ascii_iswhite(unsafe { *arg } as c_int) && ends_excmd(unsafe { *arg } as c_int) == 0
-            {
+            let flags = FNE_INCL_BR | FNE_CHECK_START;
+            let (nil1, nil2) = (ptr::null_mut(), ptr::null_mut());
+            // SAFETY: the caller's obligation -- `arg` is NUL-terminated.
+            arg = unsafe { find_name_end(arg, nil1, nil2, flags) };
+            let c = c_int::from(unsafe { *arg });
+            if !ascii_iswhite(c) && ends_excmd(c) == 0 {
                 emsg_severe.set(true);
                 semsg_c!(
                     unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
@@ -209,20 +192,24 @@ pub(crate) unsafe fn list_arg_vars(
 
             if arg == arg_subsc && len == 2 && unsafe { *name.add(1) } == b':' as c_char {
                 // A bare scope name lists the whole scope.
-                match unsafe { *name } as u8 {
-                    b'g' => unsafe { list_glob_vars(first) },
-                    b'b' => unsafe { list_buf_vars(first) },
-                    b'w' => unsafe { list_win_vars(first) },
-                    b't' => unsafe { list_tab_vars(first) },
-                    b'v' => unsafe { list_vim_vars(first) },
-                    b's' => unsafe { list_script_vars(first) },
-                    b'l' => unsafe { list_func_vars(first) },
-                    _ => {
-                        semsg_c!(
-                            unsafe { gettext(c"E738: Can't list variables for %s".as_ptr()) },
-                            name
-                        );
-                    }
+                let lister: Option<ScopeLister> = match unsafe { *name } as u8 {
+                    b'g' => Some(list_glob_vars),
+                    b'b' => Some(list_buf_vars),
+                    b'w' => Some(list_win_vars),
+                    b't' => Some(list_tab_vars),
+                    b'v' => Some(list_vim_vars),
+                    b's' => Some(list_script_vars),
+                    b'l' => Some(list_func_vars),
+                    _ => None,
+                };
+                match lister {
+                    // SAFETY: `first` is the caller's obligation, and each
+                    // lister walks the editor's own scope dictionary.
+                    Some(lister) => unsafe { lister(first) },
+                    None => semsg_c!(
+                        unsafe { gettext(c"E738: Can't list variables for %s".as_ptr()) },
+                        name
+                    ),
                 }
             } else {
                 let s = unsafe { encode_tv2echo(&raw mut tv, ptr::null_mut()) };
@@ -235,16 +222,11 @@ pub(crate) unsafe fn list_arg_vars(
                 } else {
                     unsafe { arg.offset_from(used_name) }
                 };
-                unsafe {
-                    list_one_var_a(
-                        c"".as_ptr(),
-                        used_name,
-                        name_size,
-                        tv.v_type,
-                        if s.is_null() { c"".as_ptr() } else { s },
-                        first,
-                    )
-                };
+                let text = if s.is_null() { c"".as_ptr() } else { s };
+                let ty = tv.v_type;
+                // SAFETY: a NUL-terminated rendering, a name of `name_size`
+                // bytes, and the caller's `first`.
+                unsafe { list_one_var_a(c"".as_ptr(), used_name, name_size, ty, text, first) };
                 unsafe { xfree(s.cast()) };
             }
             unsafe { tv_clear(&raw mut tv) };
@@ -260,18 +242,16 @@ pub(crate) unsafe fn list_arg_vars(
 /// # Safety
 /// `v` is a live item, `prefix` a NUL-terminated string, `first` writable.
 unsafe fn list_one_var(v: *mut dictitem_T, prefix: *const c_char, first: *mut c_int) {
+    // SAFETY: the caller's obligation -- a live item, whose key and value
+    // are its own.
+    let item = unsafe { Di::new(v) };
     let key = unsafe { tv_dict_item_key(v) };
-    let s = unsafe { encode_tv2echo(&raw mut (*v).di_tv, ptr::null_mut()) };
-    unsafe {
-        list_one_var_a(
-            prefix,
-            key,
-            strlen(key) as ptrdiff_t,
-            (*v).di_tv.v_type,
-            if s.is_null() { c"".as_ptr() } else { s },
-            first,
-        )
-    };
+    let tv = item.field_ptr(offset_of!(dictitem_T, di_tv));
+    let s = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
+    let len = unsafe { strlen(key) } as ptrdiff_t;
+    let text = if s.is_null() { c"".as_ptr() } else { s };
+    let ty = item.di_tv.v_type;
+    unsafe { list_one_var_a(prefix, key, len, ty, text, first) };
     unsafe { xfree(s.cast()) };
 }
 
@@ -296,7 +276,11 @@ unsafe fn list_one_var_a(
     mut string: *const c_char,
     first: *mut c_int,
 ) {
-    if unsafe { *first } != 0 {
+    // SAFETY: the caller's obligation throughout -- `first` is writable,
+    // `prefix` and `string` are NUL-terminated, and `name` is `name_len`
+    // bytes or NULL. Every callee below writes to the message area.
+    let is_first = unsafe { *first } != 0;
+    if is_first {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         unsafe { msg_start() };
     } else {
@@ -330,7 +314,7 @@ unsafe fn list_one_var_a(
     if type_0 == VAR_FUNC || type_0 == VAR_PARTIAL {
         unsafe { msg_puts(c"()".as_ptr()) };
     }
-    if unsafe { *first } != 0 {
+    if is_first {
         unsafe { msg_clr_eos() };
         unsafe { *first = 0 };
     }

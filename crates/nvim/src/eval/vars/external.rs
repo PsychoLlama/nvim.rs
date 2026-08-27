@@ -21,6 +21,30 @@ use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
+/// Publish the `v:` strings an expression is meant to read.
+///
+/// One promise for the whole list rather than one per variable: every caller
+/// below has the same handful of NUL-terminated arguments to put in place.
+///
+/// # Safety
+/// Every value is NULL or NUL-terminated.
+unsafe fn set_vim_var_strings(vars: &[(Vv, *const c_char)]) {
+    for &(idx, val) in vars {
+        // SAFETY: the caller's obligation.
+        unsafe { set_vim_var_string(idx, val, -1) };
+    }
+}
+
+/// Blank the `v:` strings [`set_vim_var_strings`] put in place.
+///
+/// Safe: the null string reads no bytes.
+fn clear_vim_var_strings(vars: &[Vv]) {
+    for &idx in vars {
+        // SAFETY: the null string, which needs nothing readable.
+        unsafe { set_vim_var_string(idx, ptr::null(), -1) };
+    }
+}
+
 /// Evaluate `'charconvert'` to convert `fname_from` into `fname_to`.
 ///
 /// Answers `FAIL` both when the expression itself failed and when it
@@ -35,11 +59,21 @@ pub unsafe fn eval_charconvert(
     fname_from: *const c_char,
     fname_to: *const c_char,
 ) -> c_int {
+    const VARS: [Vv; 4] = [
+        Vv::CharconvertFrom,
+        Vv::CharconvertTo,
+        Vv::FnameIn,
+        Vv::FnameOut,
+    ];
     let saved_sctx = current_sctx.get();
-    unsafe { set_vim_var_string(Vv::CharconvertFrom, enc_from, -1) };
-    unsafe { set_vim_var_string(Vv::CharconvertTo, enc_to, -1) };
-    unsafe { set_vim_var_string(Vv::FnameIn, fname_from, -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, fname_to, -1) };
+    let named = [
+        (Vv::CharconvertFrom, enc_from),
+        (Vv::CharconvertTo, enc_to),
+        (Vv::FnameIn, fname_from),
+        (Vv::FnameOut, fname_to),
+    ];
+    // SAFETY: the caller's obligation -- four NUL-terminated strings.
+    unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptCharconvert));
 
     let mut err = false;
@@ -47,10 +81,7 @@ pub unsafe fn eval_charconvert(
         err = true;
     }
 
-    unsafe { set_vim_var_string(Vv::CharconvertFrom, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::CharconvertTo, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
 
     if err { FAIL } else { OK }
@@ -63,17 +94,20 @@ pub unsafe fn eval_charconvert(
 /// # Safety
 /// The three arguments are NUL-terminated strings.
 pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile: *const c_char) {
+    const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameNew, Vv::FnameOut];
     let saved_sctx = current_sctx.get();
-    unsafe { set_vim_var_string(Vv::FnameIn, origfile, -1) };
-    unsafe { set_vim_var_string(Vv::FnameNew, newfile, -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, outfile, -1) };
+    let named = [
+        (Vv::FnameIn, origfile),
+        (Vv::FnameNew, newfile),
+        (Vv::FnameOut, outfile),
+    ];
+    // SAFETY: the caller's obligation -- three NUL-terminated strings.
+    unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptDiffexpr));
 
     unsafe { tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true)) };
 
-    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameNew, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
 }
 
@@ -83,17 +117,20 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
 /// # Safety
 /// The three arguments are NUL-terminated strings.
 pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfile: *const c_char) {
+    const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameDiff, Vv::FnameOut];
     let saved_sctx = current_sctx.get();
-    unsafe { set_vim_var_string(Vv::FnameIn, origfile, -1) };
-    unsafe { set_vim_var_string(Vv::FnameDiff, difffile, -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, outfile, -1) };
+    let named = [
+        (Vv::FnameIn, origfile),
+        (Vv::FnameDiff, difffile),
+        (Vv::FnameOut, outfile),
+    ];
+    // SAFETY: the caller's obligation -- three NUL-terminated strings.
+    unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptPatchexpr));
 
     unsafe { tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true)) };
 
-    unsafe { set_vim_var_string(Vv::FnameIn, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameDiff, ptr::null(), -1) };
-    unsafe { set_vim_var_string(Vv::FnameOut, ptr::null(), -1) };
+    clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
 }
 
@@ -157,12 +194,9 @@ pub unsafe fn get_spellword(
     numbuf: &mut NumBuf,
 ) -> c_int {
     if unsafe { tv_list_len(list) } != 2 {
-        unsafe {
-            emsg(gettext(
-                c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values"
-                    .as_ptr(),
-            ))
-        };
+        let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
+        // SAFETY: a NUL-terminated literal.
+        unsafe { emsg(gettext(msg.as_ptr())) };
         return -1;
     }
     unsafe { *ret_word = tv_list_find_str(list, 0, numbuf) };

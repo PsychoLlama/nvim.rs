@@ -49,8 +49,10 @@ unsafe fn get_var_from(
     let do_change_curbuf = !buf.is_null() && htname == b'b' as c_int;
 
     let _no_emsg = Suppress::emsg();
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+    // SAFETY: the caller's obligation -- a writable value holding nothing.
+    let mut ret = unsafe { Tv::new(rettv) };
+    ret.v_type = VAR_STRING;
+    ret.vval.v_string = ptr::null_mut();
 
     if !varname.is_null()
         && !tp.is_null()
@@ -63,8 +65,10 @@ unsafe fn get_var_from(
         // and restored directly instead.
         let need_switch_win = !(tp == curtab.get() && win == curwin.get()) && !do_change_curbuf;
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
+        // SAFETY: `varname` is NUL-terminated and the handles are live.
+        let lead = unsafe { *varname } as u8;
         if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) } == OK {
-            if unsafe { *varname } == b'&' as c_char && htname != b't' as c_int {
+            if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
                 let save_curbuf = curbuf.get();
                 if do_change_curbuf {
@@ -81,7 +85,7 @@ unsafe fn get_var_from(
                     done = true;
                 }
                 curbuf.set(save_curbuf);
-            } else if unsafe { *varname } == NUL as c_char {
+            } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
                 let v: *const ScopeDictDictItem = match htname as u8 {
                     b'b' => unsafe { &raw mut (*buf).b_bufvar },
@@ -108,6 +112,7 @@ unsafe fn get_var_from(
         }
     }
 
+    // SAFETY: the caller's obligation -- a live default value.
     if !done && unsafe { (*deftv).v_type } != VAR_UNKNOWN {
         unsafe { tv_copy(deftv, rettv) };
     }
@@ -128,17 +133,11 @@ unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
     let win = unsafe { find_win_by_nr(argvars.offset(off as isize), TabPage::from_raw(tp)) }
         .map_or(ptr::null_mut(), Win::raw);
     let varname = unsafe { numbuf.string_chk(argvars.offset((off + 1) as isize)) };
-    unsafe {
-        get_var_from(
-            varname,
-            rettv,
-            argvars.offset((off + 2) as isize),
-            b'w' as c_int,
-            tp,
-            win,
-            ptr::null_mut(),
-        )
-    };
+    let deftv = unsafe { argvars.offset((off + 2) as isize) };
+    let nil = ptr::null_mut();
+    // SAFETY: the caller's obligation -- `off + 3` live values -- and the
+    // window and tab page the resolver answered.
+    unsafe { get_var_from(varname, rettv, deftv, b'w' as c_int, tp, win, nil) };
 }
 
 /// `tv` as the value of option `opt_idx`, or `NIL_OPTVAL` with `error` set.
@@ -157,6 +156,9 @@ pub(crate) unsafe fn tv_to_optval(
 ) -> OptVal {
     let mut nbuf = [0 as c_char; 65];
     let mut err = false;
+    // SAFETY: the caller's obligation -- a live value and a NUL-terminated
+    // option name.
+    let tvh = unsafe { Tv::new(tv) };
     let is_tty_opt = is_tty_option(unsafe { CStr::from_ptr(option) });
     let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
     let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
@@ -164,7 +166,7 @@ pub(crate) unsafe fn tv_to_optval(
 
     let value = if !is_tty_opt
         && get_option(opt_idx).flags & kOptFlagFunc as uint32_t != 0
-        && tv_is_func(unsafe { *tv })
+        && tv_is_func(*tvh)
     {
         // An option that takes a function reference or a lambda stores
         // the name of one.
@@ -185,8 +187,9 @@ pub(crate) unsafe fn tv_to_optval(
         // A String answers 0 both when it *is* zero and when it is not a
         // number at all, so a zero from a String has to be re-read: it
         // is only honest if the string is all '0's and nothing else.
-        if !err && unsafe { (*tv).v_type } == VAR_STRING && n == 0 {
-            let s = unsafe { (*tv).vval.v_string };
+        if !err && tvh.v_type == VAR_STRING && n == 0 {
+            // SAFETY: the type tag says the union holds the string arm.
+            let s = unsafe { tvh.vval.v_string };
             let mut idx = 0;
             while !s.is_null() && unsafe { *s.add(idx) } == b'0' as c_char {
                 idx += 1;
@@ -210,7 +213,7 @@ pub(crate) unsafe fn tv_to_optval(
         }
     } else if option_has_str {
         // Never set a string option to `v:true` or `v:null`.
-        if unsafe { (*tv).v_type } != VAR_BOOL && unsafe { (*tv).v_type } != VAR_SPECIAL {
+        if tvh.v_type != VAR_BOOL && tvh.v_type != VAR_SPECIAL {
             let strval = unsafe { tv_get_string_buf_chk(tv, nbuf.as_mut_ptr()) };
             err = strval.is_null();
             OptVal {
@@ -293,8 +296,10 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     let mut error = false;
     let value = unsafe { tv_to_optval(varp, opt_idx, varname, &raw mut error) };
     if !error {
-        let errmsg =
-            unsafe { set_option_value_handle_tty(varname, opt_idx, value, OptionSetFlags::LOCAL) };
+        let local = OptionSetFlags::LOCAL;
+        // SAFETY: the caller's obligation -- a NUL-terminated name matching
+        // the index the lookup above answered.
+        let errmsg = unsafe { set_option_value_handle_tty(varname, opt_idx, value, local) };
         if let Some(errmsg) = errmsg {
             unsafe { emsg(errmsg.as_ptr()) };
         }
@@ -365,17 +370,9 @@ pub unsafe fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let tp = find_tabpage(unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as c_int);
     // Any window of that tab page will do: only its `t:` scope is read.
     let win = any_window_of(unsafe { TabPage::from_raw(tp) });
-    unsafe {
-        get_var_from(
-            varname,
-            rettv,
-            argvars.add(2),
-            b't' as c_int,
-            tp,
-            win,
-            ptr::null_mut(),
-        )
-    };
+    let (deftv, nil) = (unsafe { argvars.add(2) }, ptr::null_mut());
+    // SAFETY: as a `VimLFunc` -- three live values -- and a live tab page.
+    unsafe { get_var_from(varname, rettv, deftv, b't' as c_int, tp, win, nil) };
 }
 
 /// `gettabwinvar()`.
@@ -402,17 +399,11 @@ pub unsafe fn f_getbufvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut numbuf = NumBuf::new();
     let varname = unsafe { numbuf.string_chk(argvars.add(1)) };
     let buf = unsafe { tv_get_buf_from_arg(argvars) };
-    unsafe {
-        get_var_from(
-            varname,
-            rettv,
-            argvars.add(2),
-            b'b' as c_int,
-            curtab.get(),
-            curwin.get(),
-            buf,
-        )
-    };
+    let deftv = unsafe { argvars.add(2) };
+    let (tp, win) = (curtab.get(), curwin.get());
+    // SAFETY: as a `VimLFunc`, and the two globals are set from startup to
+    // exit.
+    unsafe { get_var_from(varname, rettv, deftv, b'b' as c_int, tp, win, buf) };
 }
 
 /// `settabvar()`.

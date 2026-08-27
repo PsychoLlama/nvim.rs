@@ -11,6 +11,7 @@
 use crate::semsg_c;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
@@ -29,6 +30,8 @@ static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0);
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
+    // SAFETY: the caller's obligation -- a NUL-terminated name -- and the
+    // buffer below is grown to hold the prefix, the name and its NUL.
     let mut len = unsafe { strlen(name) } + 3;
     if len > varnamebuflen.get() {
         unsafe { xfree(varnamebuf.get().cast()) };
@@ -37,9 +40,11 @@ pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_c
         varnamebuflen.set(len);
     }
     let buf = varnamebuf.get();
-    unsafe { *buf = prefix as c_char };
-    unsafe { *buf.add(1) = b':' as c_char };
-    unsafe { strcpy(buf.add(2), name) };
+    unsafe {
+        *buf = prefix as c_char;
+        *buf.add(1) = b':' as c_char;
+        strcpy(buf.add(2), name);
+    }
     buf
 }
 
@@ -145,6 +150,8 @@ pub unsafe fn eval_variable(
     verbose: bool,
     no_autoload: bool,
 ) -> c_int {
+    // SAFETY: the caller's obligation -- `len` readable bytes, and `rettv`
+    // and `dip` writable or NULL.
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
         if !rettv.is_null() && verbose {
@@ -160,7 +167,8 @@ pub unsafe fn eval_variable(
         unsafe { *dip = v };
     }
     if !rettv.is_null() {
-        unsafe { tv_copy(&raw mut (*v).di_tv, rettv) };
+        let item = unsafe { Di::new(v) };
+        unsafe { tv_copy(item.field_ptr(offset_of!(dictitem_T, di_tv)), rettv) };
     }
     OK
 }
@@ -206,15 +214,15 @@ pub unsafe fn find_var(
         return ptr::null_mut();
     }
     let no_autoload = no_autoload || !htp.is_null();
-    let ret = unsafe {
-        find_var_in_ht(
-            ht,
+    // SAFETY: `varname` points inside `name`, so the subtraction cannot go
+    // negative; the scope's first character is what names it.
+    let (htname, vlen) = unsafe {
+        (
             *name as c_int,
-            varname,
             name_len - varname.offset_from(name) as size_t,
-            no_autoload,
         )
     };
+    let ret = unsafe { find_var_in_ht(ht, htname, varname, vlen, no_autoload) };
     if !ret.is_null() {
         return ret;
     }
@@ -292,32 +300,36 @@ pub(crate) unsafe fn find_var_ht_dict(
     varname: *mut *const c_char,
     d: *mut *mut dict_T,
 ) -> *mut hashtab_T {
-    unsafe { *d = ptr::null_mut() };
+    // SAFETY: the caller's obligation -- `name_len` readable bytes, and two
+    // writable out-parameters that are the caller's own locals.
+    let (mut dict, mut vname) = unsafe { (Live::new(d), Live::new(varname)) };
+    *dict = ptr::null_mut();
     if name_len == 0 {
         return ptr::null_mut();
     }
 
+    let lead = unsafe { *name };
     if name_len == 1 || unsafe { *name.add(1) } != b':' as c_char {
         // An implicit scope. The name must not start with a colon or a
         // '#'.
-        if unsafe { *name } == b':' as c_char || unsafe { *name } == AUTOLOAD_CHAR {
+        if lead == b':' as c_char || lead == AUTOLOAD_CHAR {
             return ptr::null_mut();
         }
-        unsafe { *varname = name };
+        *vname = name;
 
         // "version" is "v:version" in every scope.
         if unsafe { (*hash_find_len(get_compat_ht(), name, name_len)).is_kept() } {
             return get_compat_ht();
         }
 
-        unsafe { *d = unsafe { get_funccal_local_dict() } };
-        if unsafe { (*d).is_null() } {
-            unsafe { *d = get_globvar_dict() };
+        *dict = unsafe { get_funccal_local_dict() };
+        if dict.is_null() {
+            *dict = get_globvar_dict();
         }
     } else {
-        unsafe { *varname = unsafe { name.add(2) } };
-        if unsafe { *name } == b'g' as c_char {
-            unsafe { *d = get_globvar_dict() };
+        *vname = unsafe { name.add(2) };
+        if lead == b'g' as c_char {
+            *dict = get_globvar_dict();
         } else if name_len > 2
             && (!unsafe { memchr(name.add(2).cast(), b':' as c_int, name_len - 2) }.is_null()
                 || !unsafe { memchr(name.add(2).cast(), AUTOLOAD_CHAR as c_int, name_len - 2) }
@@ -327,13 +339,15 @@ pub(crate) unsafe fn find_var_ht_dict(
             return ptr::null_mut();
         }
 
-        match unsafe { *name } as u8 {
-            b'b' => unsafe { *d = cur_buf().b_vars },
-            b'w' => unsafe { *d = cur_win().w_vars },
-            b't' => unsafe { *d = unsafe { (*curtab.get()).tp_vars } },
-            b'v' => unsafe { *d = get_vimvar_dict() },
-            b'a' => unsafe { *d = unsafe { get_funccal_args_dict() } },
-            b'l' => unsafe { *d = unsafe { get_funccal_local_dict() } },
+        match lead as u8 {
+            b'b' => *dict = cur_buf().b_vars,
+            b'w' => *dict = cur_win().w_vars,
+            // SAFETY: `curtab` is set from startup to exit, and the two
+            // function-scope getters read the call stack the editor owns.
+            b't' => *dict = unsafe { (*curtab.get()).tp_vars },
+            b'v' => *dict = get_vimvar_dict(),
+            b'a' => *dict = unsafe { get_funccal_args_dict() },
+            b'l' => *dict = unsafe { get_funccal_local_dict() },
             b's' => {
                 // Both calls below fill `sctx` in, and neither reads the
                 // cell, so the round trip through a local is what the C's
@@ -350,14 +364,16 @@ pub(crate) unsafe fn find_var_ht_dict(
                         unsafe { new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid) };
                     }
                     current_sctx.set(sctx);
-                    unsafe { *d = unsafe { &raw mut (*script_sv(sctx.sc_sid)).sv_dict } };
+                    *dict = unsafe { &raw mut (*script_sv(sctx.sc_sid)).sv_dict };
                 }
             }
             _ => {}
         }
     }
 
-    unsafe { (*d).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
+    // SAFETY: the dictionary just chosen is live or NULL, and its hashtab
+    // is a field of it.
+    unsafe { (*dict).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
 }
 
 /// [`find_var_ht_dict`] without the dictionary.
@@ -382,11 +398,14 @@ pub unsafe fn find_var_ht(
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_char {
+    // SAFETY: the caller's obligation -- a NUL-terminated name; the answer
+    // borrows the item that was found or the caller's scratch.
     let v = unsafe { find_var(name, strlen(name), ptr::null_mut(), false) };
     if v.is_null() {
         return ptr::null_mut();
     }
-    unsafe { numbuf.string(&raw mut (*v).di_tv) as *mut c_char }
+    let tv = unsafe { Di::new(v) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    unsafe { numbuf.string(tv) as *mut c_char }
 }
 
 /// `exists()` over a variable name: whether `var` names something, including

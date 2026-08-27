@@ -20,18 +20,16 @@ use crate::types::{FAIL, NUL, OK};
 /// # Safety
 /// `gap` is a byte garray holding the message.
 pub unsafe fn assert_error(gap: *mut garray_T) {
-    let tv = unsafe { get_vim_var_tv(Vv::Errors) };
-    if unsafe { (*tv).v_type } != VAR_LIST || unsafe { (*tv).vval.v_list }.is_null() {
+    // SAFETY: `v:errors` is a table row, and `gap` is the caller's live
+    // byte garray.
+    let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
+    if tv.v_type != VAR_LIST || unsafe { tv.vval.v_list }.is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
         unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
     }
-    unsafe {
-        tv_list_append_string(
-            get_vim_var_list(Vv::Errors),
-            (*gap).ga_data as *const c_char,
-            (*gap).ga_len as ssize_t,
-        )
-    };
+    let text = unsafe { (*gap).ga_data } as *const c_char;
+    let len = unsafe { (*gap).ga_len } as ssize_t;
+    unsafe { tv_list_append_string(get_vim_var_list(Vv::Errors), text, len) };
 }
 
 /// The lvalue `:redir =>` is capturing into, its name (kept because the
@@ -46,6 +44,21 @@ static redir_lval: GlobalCell<*mut lval_T> = GlobalCell::new(ptr::null_mut());
 static redir_ga: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 static redir_endp: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static redir_varname: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+
+/// Resolve the saved `:redir =>` name into the saved lvalue, answering where
+/// the name ended.
+///
+/// Both halves of the redirection parse the same name into the same lvalue,
+/// and `var_redir_stop` has to do it again because a Dict or List entry may
+/// have moved since the start.
+///
+/// # Safety
+/// `redir_varname` and `redir_lval` are the ones `var_redir_start` set.
+unsafe fn resolve_redir_lval() -> *mut c_char {
+    let (name, lv) = (redir_varname.get(), redir_lval.get());
+    // SAFETY: the caller's obligation.
+    unsafe { get_lval(name, ptr::null_mut(), lv, false, false, 0, FNE_CHECK_START) }
+}
 
 /// Start capturing messages into the variable `name`, appending to it rather
 /// than replacing it when `append`.
@@ -70,24 +83,16 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     });
 
     // Parse the name, which may be a Dict or List entry.
-    redir_endp.set(unsafe {
-        get_lval(
-            redir_varname.get(),
-            ptr::null_mut(),
-            redir_lval.get(),
-            false,
-            false,
-            0,
-            FNE_CHECK_START,
-        )
-    });
+    // SAFETY: the copied name is NUL-terminated and the lvalue is the
+    // zeroed one just allocated, which lives until `var_redir_stop`.
+    redir_endp.set(unsafe { resolve_redir_lval() });
     let endp = redir_endp.get();
-    if endp.is_null()
+    let trailing = (!endp.is_null()).then(|| unsafe { *endp });
+    if trailing.is_none_or(|c| c != NUL as c_char)
         || unsafe { (*redir_lval.get()).ll_name }.is_null()
-        || unsafe { *endp } != NUL as c_char
     {
         unsafe { clear_lval(redir_lval.get()) };
-        if !endp.is_null() && unsafe { *endp } != NUL as c_char {
+        if trailing.is_some_and(|c| c != NUL as c_char) {
             semsg_c!(
                 unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
                 endp
@@ -116,16 +121,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         },
     };
     let op = if append { c"." } else { c"=" };
-    unsafe {
-        set_var_lval(
-            redir_lval.get(),
-            redir_endp.get(),
-            &raw mut tv,
-            true,
-            false,
-            op.as_ptr(),
-        )
-    };
+    let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut tv);
+    // SAFETY: the lvalue just resolved, and a live local value.
+    unsafe { set_var_lval(lv, endp, tvp, true, false, op.as_ptr()) };
     unsafe { clear_lval(redir_lval.get()) };
     if called_emsg.get() > called_emsg_before {
         redir_endp.set(ptr::null_mut());
@@ -189,28 +187,12 @@ pub unsafe fn var_redir_stop() {
             };
             // Resolve the name again: inside a Dict or List it may have
             // moved since.
-            redir_endp.set(unsafe {
-                get_lval(
-                    redir_varname.get(),
-                    ptr::null_mut(),
-                    redir_lval.get(),
-                    false,
-                    false,
-                    0,
-                    FNE_CHECK_START,
-                )
-            });
-            if !redir_endp.get().is_null() && !unsafe { (*redir_lval.get()).ll_name }.is_null() {
-                unsafe {
-                    set_var_lval(
-                        redir_lval.get(),
-                        redir_endp.get(),
-                        &raw mut tv,
-                        false,
-                        false,
-                        c".".as_ptr(),
-                    )
-                };
+            // SAFETY: as [`var_redir_start`] -- the saved name and lvalue.
+            redir_endp.set(unsafe { resolve_redir_lval() });
+            let (lv, endp) = (redir_lval.get(), redir_endp.get());
+            if !endp.is_null() && !unsafe { (*lv).ll_name }.is_null() {
+                let tvp = &raw mut tv;
+                unsafe { set_var_lval(lv, endp, tvp, false, false, c".".as_ptr()) };
             }
             unsafe { clear_lval(redir_lval.get()) };
         }

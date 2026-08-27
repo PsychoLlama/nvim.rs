@@ -179,6 +179,14 @@ pub(crate) type Tv = Live<typval_T>;
 /// every caller.
 pub(crate) type Vvr = Live<VimVar>;
 
+/// A resolved assignment target, whose caller has promised it outlives the
+/// value.
+///
+/// The promise is discharged by the frame that owns the `lval_T` and calls
+/// `clear_lval` on it: `get_lval` fills in a local of the caller's, and
+/// every callee below is handed a pointer to that local.
+pub(crate) type Lv = Live<lval_T>;
+
 pub const kGRegExprSrc: GRegFlags = 2;
 
 /// What `ex_unletlock` does to each argument it resolves: `do_unlet_var` or

@@ -30,6 +30,9 @@ pub unsafe fn eval_one_expr_in_str(
     gap: *mut garray_T,
     evaluate: bool,
 ) -> *mut c_char {
+    // SAFETY: the caller's obligation throughout -- `p` points at the `{`
+    // of a NUL-terminated string that is writable in place, and every walk
+    // below stops at that NUL.
     let block_start = unsafe { skipwhite(p.add(1)) };
     let mut block_end = block_start;
     if unsafe { *block_start } == NUL as c_char {
@@ -80,24 +83,24 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
     unsafe { ga_init(&raw mut ga, 1, 80) };
     let mut p = str;
 
+    // SAFETY: the caller's obligation throughout -- `str` is NUL-terminated
+    // and writable in place, and every walk below stops at that NUL.
     while unsafe { *p } != NUL as c_char {
         let mut escaped_brace = false;
 
         // Everything up to the next brace is literal.
         let lit_start = p;
-        while unsafe { *p } != b'{' as c_char
-            && unsafe { *p } != b'}' as c_char
-            && unsafe { *p } != NUL as c_char
-        {
+        while !matches!(unsafe { *p } as u8, b'{' | b'}' | 0) {
             p = unsafe { p.add(1) };
         }
 
-        if unsafe { *p } != NUL as c_char && unsafe { *p } == unsafe { *p.add(1) } {
+        let here = unsafe { *p } as u8;
+        if here != 0 && here == unsafe { *p.add(1) } as u8 {
             // A doubled brace: keep one of the pair in the literal part
             // and skip the other below.
             p = unsafe { p.add(1) };
             escaped_brace = true;
-        } else if unsafe { *p } == b'}' as c_char {
+        } else if here == b'}' {
             semsg_c!(
                 unsafe { gettext(&raw const e_stray_closing_curly_str as *const c_char) },
                 str,
@@ -106,8 +109,9 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             return ptr::null_mut();
         }
 
-        unsafe { ga_concat_len(&raw mut ga, lit_start, p.offset_from(lit_start) as size_t) };
-        if unsafe { *p } == NUL as c_char {
+        let lit_len = unsafe { p.offset_from(lit_start) } as size_t;
+        unsafe { ga_concat_len(&raw mut ga, lit_start, lit_len) };
+        if here == 0 {
             break;
         }
         if escaped_brace {
@@ -150,6 +154,9 @@ pub unsafe fn heredoc_get(
     mut cmd: *mut c_char,
     script_get: bool,
 ) -> *mut list_T {
+    // SAFETY: the caller's obligation -- a live command, which the
+    // `do_cmdline` frame that owns the `exarg_T` outlives.
+    let mut ea = unsafe { Ea::new(eap) };
     let mut marker_indent_len = 0;
     let mut text_indent_len = 0;
     let mut text_indent: *mut c_char = ptr::null_mut();
@@ -163,7 +170,7 @@ pub unsafe fn heredoc_get(
     if heredoc_in_string {
         line_arg = unsafe { nl_ptr.add(1) };
         unsafe { *nl_ptr = NUL as c_char };
-    } else if unsafe { (*eap).ea_getline }.is_none() {
+    } else if ea.ea_getline.is_none() {
         unsafe { emsg(gettext(e_cannot_use_heredoc_here.as_ptr())) };
         return ptr::null_mut();
     }
@@ -189,8 +196,9 @@ pub unsafe fn heredoc_get(
             // The end marker is matched with the `:let` line's own
             // indentation stripped; the body's comes from its first
             // line, which `text_indent_len == -1` asks for below.
-            let mut p = unsafe { *(*eap).cmdlinep };
-            while ascii_iswhite(unsafe { *p } as c_int) {
+            // SAFETY: a live command's own command line.
+            let mut p = unsafe { *ea.cmdlinep };
+            while ascii_iswhite(c_int::from(unsafe { *p })) {
                 p = unsafe { p.add(1) };
                 marker_indent_len += 1;
             }
@@ -205,10 +213,12 @@ pub unsafe fn heredoc_get(
 
     // The marker is the next word.
     let marker;
-    if unsafe { *cmd } != NUL as c_char && unsafe { *cmd } != COMMENT_CHAR {
+    let lead = unsafe { *cmd };
+    if lead != NUL as c_char && lead != COMMENT_CHAR {
         marker = unsafe { skipwhite(cmd) };
         let p = unsafe { skiptowhite(marker) };
-        if unsafe { *skipwhite(p) } != NUL as c_char && unsafe { *skipwhite(p) } != COMMENT_CHAR {
+        let after = unsafe { *skipwhite(p) };
+        if after != NUL as c_char && after != COMMENT_CHAR {
             semsg_c!(
                 unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
                 p
@@ -219,15 +229,10 @@ pub unsafe fn heredoc_get(
         // `islower` here is the locale's, not ASCII's: `_ISlower` is the
         // bit `__ctype_b_loc()`'s table sets, which in a non-C locale
         // covers more than a-z.
-        let lower = unsafe { *(*__ctype_b_loc()).offset(*marker as uint8_t as isize) } as c_int
-            & _ISlower as c_int
-            != 0;
-        if !script_get && lower {
-            unsafe {
-                emsg(gettext(
-                    c"E221: Marker cannot start with lower case letter".as_ptr(),
-                ))
-            };
+        let class = unsafe { *(*__ctype_b_loc()).offset(*marker as uint8_t as isize) };
+        if !script_get && c_int::from(class) & _ISlower as c_int != 0 {
+            let msg = c"E221: Marker cannot start with lower case letter";
+            unsafe { emsg(gettext(msg.as_ptr())) };
             return ptr::null_mut();
         }
     } else if script_get {
@@ -282,9 +287,8 @@ pub unsafe fn heredoc_get(
         // With `trim`, skip the indent matching the `:let` line before
         // looking for the marker.
         let mut mi = 0;
-        if marker_indent_len > 0
-            && unsafe { strncmp(theline, *(*eap).cmdlinep, marker_indent_len as size_t) } == 0
-        {
+        let indent = marker_indent_len as size_t;
+        if marker_indent_len > 0 && unsafe { strncmp(theline, *ea.cmdlinep, indent) } == 0 {
             mi = marker_indent_len;
         }
         if unsafe { strcmp(marker, theline.offset(mi as isize)) } == 0 {
@@ -301,7 +305,7 @@ pub unsafe fn heredoc_get(
             // The body's indent is the first non-empty line's.
             let mut p = theline;
             text_indent_len = 0;
-            while ascii_iswhite(unsafe { *p } as c_int) {
+            while ascii_iswhite(c_int::from(unsafe { *p })) {
                 p = unsafe { p.add(1) };
                 text_indent_len += 1;
             }
@@ -312,15 +316,14 @@ pub unsafe fn heredoc_get(
         let mut ti = 0;
         if !text_indent.is_null() {
             while ti < text_indent_len
-                && unsafe { *theline.offset(ti as isize) }
-                    == unsafe { *text_indent.offset(ti as isize) }
+                && unsafe { *theline.offset(ti as isize) == *text_indent.offset(ti as isize) }
             {
                 ti += 1;
             }
         }
 
         let str = unsafe { theline.offset(ti as isize) };
-        if evalstr && unsafe { (*eap).skip } == 0 {
+        if evalstr && ea.skip == 0 {
             let evaluated = unsafe { eval_all_expr_in_str(str) };
             if evaluated.is_null() {
                 eval_failed = true;
@@ -334,7 +337,7 @@ pub unsafe fn heredoc_get(
 
     if heredoc_in_string {
         // The next command follows the here-document in the string.
-        unsafe { (*eap).nextcmd = line_arg };
+        ea.nextcmd = line_arg;
     } else {
         unsafe { xfree(theline.cast()) };
     }

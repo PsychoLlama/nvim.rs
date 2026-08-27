@@ -9,6 +9,7 @@
 
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
@@ -21,12 +22,12 @@ use crate::types::{FAIL, NUL, OK};
 pub unsafe fn ex_unlet(eap: *mut exarg_T) {
     // `:unlet!` means "do not complain", which reaches `get_lval` as
     // GLV_QUIET and `do_unlet` as `forceit`.
-    let glv_flags = if unsafe { (*eap).forceit } != 0 {
-        GLV_QUIET
-    } else {
-        0
-    };
-    unsafe { ex_unletlock(eap, (*eap).arg, 0, glv_flags, do_unlet_var) };
+    // SAFETY: the caller's obligation -- a live command, which the
+    // `do_cmdline` frame that owns the `exarg_T` outlives.
+    let ea = unsafe { Ea::new(eap) };
+    let glv_flags = if ea.forceit != 0 { GLV_QUIET } else { 0 };
+    let arg = ea.arg;
+    unsafe { ex_unletlock(eap, arg, 0, glv_flags, do_unlet_var) };
 }
 
 /// `:lockvar` and `:unlockvar`.
@@ -34,13 +35,16 @@ pub unsafe fn ex_unlet(eap: *mut exarg_T) {
 /// # Safety
 /// `eap` is a live `:lockvar`/`:unlockvar` command.
 pub unsafe fn ex_lockvar(eap: *mut exarg_T) {
-    let mut arg = unsafe { (*eap).arg };
+    // SAFETY: the caller's obligation -- a live command whose argument text
+    // is NUL-terminated.
+    let ea = unsafe { Ea::new(eap) };
+    let mut arg = ea.arg;
     // Two levels by default: the variable and what it directly holds.
     // `!` is everything, and an explicit count says how deep.
     let mut deep = 2;
-    if unsafe { (*eap).forceit } != 0 {
+    if ea.forceit != 0 {
         deep = -1;
-    } else if ascii_isdigit(unsafe { *arg } as c_int) {
+    } else if ascii_isdigit(c_int::from(unsafe { *arg })) {
         deep = unsafe { getdigits_int(&raw mut arg, false, -1) };
         arg = unsafe { skipwhite(arg) };
     }
@@ -62,10 +66,14 @@ unsafe fn ex_unletlock(
     glv_flags: c_int,
     callback: ex_unletlock_callback,
 ) {
+    // SAFETY: the caller's obligation -- a live command and a NUL-terminated
+    // argument text, which `arg` and `name_end` both stay inside.
+    let mut ea = unsafe { Ea::new(eap) };
     let mut arg = argstart;
     let mut name_end;
     let mut error = false;
     let mut lv = LVAL_INITIAL_VALUE;
+    let lvp = &raw mut lv;
 
     loop {
         if unsafe { *arg } == b'$' as c_char {
@@ -81,33 +89,22 @@ unsafe fn ex_unletlock(
                 );
                 return;
             }
-            if !error
-                && unsafe { (*eap).skip } == 0
-                && unsafe { callback(&raw mut lv, arg, eap, deep) } == FAIL
-            {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, eap, deep) } == FAIL {
                 error = true;
             }
             name_end = arg;
         } else {
-            name_end = unsafe {
-                get_lval(
-                    arg,
-                    ptr::null_mut(),
-                    &raw mut lv,
-                    true,
-                    (*eap).skip != 0 || error,
-                    glv_flags,
-                    FNE_CHECK_START,
-                )
-            };
+            let quiet = ea.skip != 0 || error;
+            let nil = ptr::null_mut();
+            name_end = unsafe { get_lval(arg, nil, lvp, true, quiet, glv_flags, FNE_CHECK_START) };
             if lv.ll_name.is_null() {
                 // An error, but carry on parsing.
                 error = true;
             }
-            if name_end.is_null()
-                || (!ascii_iswhite(unsafe { *name_end } as c_int)
-                    && ends_excmd(unsafe { *name_end } as c_int) == 0)
-            {
+            // The byte is only read once `name_end` has proved not to be
+            // NULL, which is upstream's order.
+            let trailing = (!name_end.is_null()).then(|| c_int::from(unsafe { *name_end }));
+            if trailing.is_none_or(|c| !ascii_iswhite(c) && ends_excmd(c) == 0) {
                 if !name_end.is_null() {
                     emsg_severe.set(true);
                     semsg_c!(
@@ -115,29 +112,26 @@ unsafe fn ex_unletlock(
                         name_end,
                     );
                 }
-                if !(unsafe { (*eap).skip } != 0 || error) {
-                    unsafe { clear_lval(&raw mut lv) };
+                if !(ea.skip != 0 || error) {
+                    unsafe { clear_lval(lvp) };
                 }
                 break;
             }
 
-            if !error
-                && unsafe { (*eap).skip } == 0
-                && unsafe { callback(&raw mut lv, name_end, eap, deep) } == FAIL
-            {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, eap, deep) } == FAIL {
                 error = true;
             }
-            if unsafe { (*eap).skip } == 0 {
-                unsafe { clear_lval(&raw mut lv) };
+            if ea.skip == 0 {
+                unsafe { clear_lval(lvp) };
             }
         }
         arg = unsafe { skipwhite(name_end) };
-        if ends_excmd(unsafe { *arg } as c_int) != 0 {
+        if ends_excmd(c_int::from(unsafe { *arg })) != 0 {
             break;
         }
     }
 
-    unsafe { (*eap).nextcmd = check_nextcmd(arg) };
+    ea.nextcmd = unsafe { check_nextcmd(arg) };
 }
 
 /// `:unlet`'s callback: delete what `lp` names.
@@ -151,69 +145,71 @@ unsafe fn do_unlet_var(
     eap: *mut exarg_T,
     _deep: c_int,
 ) -> c_int {
-    if unsafe { (*lp).ll_tv }.is_null() {
+    // SAFETY: the caller's obligation -- a resolved lvalue and a live
+    // command, both of which outlive this call.
+    let lp = unsafe { Lv::new(lp) };
+    let ea = unsafe { Ea::new(eap) };
+    if lp.ll_tv.is_null() {
         // A whole variable: an environment variable, a plain name or an
         // expanded one.  Terminate the name in place, so that the error
         // does not quote the rest of the command.
+        // SAFETY: `name_end` points into the command line, and a resolved
+        // lvalue's name is NUL-terminated there.
         let cc = unsafe { *name_end };
         unsafe { *name_end = NUL as c_char };
-        let ret = if unsafe { *(*lp).ll_name } == b'$' as c_char {
-            unsafe { vim_unsetenv_ext((*lp).ll_name.add(1)) };
+        let ret = if unsafe { *lp.ll_name } == b'$' as c_char {
+            unsafe { vim_unsetenv_ext(lp.ll_name.add(1)) };
             OK
         } else {
-            unsafe { do_unlet((*lp).ll_name, (*lp).ll_name_len, (*eap).forceit != 0) }
+            unsafe { do_unlet(lp.ll_name, lp.ll_name_len, ea.forceit != 0) }
         };
         unsafe { *name_end = cc };
         return ret;
     }
 
     // `ll_list` is non-NULL whenever the lvalue *is* in a list; a NULL
-    // list yields E689 before reaching here.
-    if (!unsafe { (*lp).ll_list }.is_null()
-        && unsafe {
-            value_check_lock(
-                tv_list_locked((*lp).ll_list),
-                (*lp).ll_name,
-                (*lp).ll_name_len,
-            )
-        })
-        || (!unsafe { (*lp).ll_dict }.is_null()
-            && unsafe {
-                value_check_lock((*(*lp).ll_dict).dv_lock, (*lp).ll_name, (*lp).ll_name_len)
-            })
-    {
+    // list yields E689 before reaching here. Both tests are written out
+    // because `value_check_lock` reports, so the second must not run when
+    // the first already answered true.
+    // SAFETY: a resolved lvalue's list and dictionary are live or NULL.
+    let mut locked = false;
+    if !lp.ll_list.is_null() {
+        let lock = unsafe { tv_list_locked(lp.ll_list) };
+        locked = unsafe { value_check_lock(lock, lp.ll_name, lp.ll_name_len) };
+    }
+    if !locked && !lp.ll_dict.is_null() {
+        let lock = unsafe { (*lp.ll_dict).dv_lock };
+        locked = unsafe { value_check_lock(lock, lp.ll_name, lp.ll_name_len) };
+    }
+    if locked {
         return FAIL;
     }
 
-    if unsafe { (*lp).ll_range } {
-        unsafe {
-            tv_list_unlet_range(
-                (*lp).ll_list,
-                (*lp).ll_li,
-                (*lp).ll_n1,
-                !(*lp).ll_empty2,
-                (*lp).ll_n2,
-            )
-        };
-    } else if !unsafe { (*lp).ll_list }.is_null() {
+    if lp.ll_range {
+        let (n1, n2, to_end) = (lp.ll_n1, lp.ll_n2, !lp.ll_empty2);
+        // SAFETY: a resolved lvalue's list and the item it starts at.
+        unsafe { tv_list_unlet_range(lp.ll_list, lp.ll_li, n1, to_end, n2) };
+    } else if !lp.ll_list.is_null() {
         // One List item.
-        unsafe { tv_list_item_remove((*lp).ll_list, (*lp).ll_li) };
+        unsafe { tv_list_item_remove(lp.ll_list, lp.ll_li) };
     } else {
         // One Dict item.
-        let d = unsafe { (*lp).ll_dict };
+        let d = lp.ll_dict;
         debug_assert!(!d.is_null());
-        let di = unsafe { (*lp).ll_di };
+        // SAFETY: a resolved lvalue's item of that dictionary.
+        let di = unsafe { Di::new(lp.ll_di) };
         let watched = unsafe { tv_dict_is_watched(d) };
 
         let mut oldtv = TV_INITIAL_VALUE;
         let mut key: *mut c_char = ptr::null_mut();
         if watched {
-            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut oldtv) };
+            let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
+            unsafe { tv_copy(tv, &raw mut oldtv) };
             // The key has to be saved: removing the item frees it.
-            key = unsafe { xstrdup(tv_dict_item_key(di)) };
+            key = unsafe { xstrdup(tv_dict_item_key(di.raw())) };
         }
 
-        unsafe { tv_dict_item_remove(d, di) };
+        unsafe { tv_dict_item_remove(d, di.raw()) };
 
         if watched {
             unsafe { tv_dict_watcher_notify(d, key, ptr::null_mut(), &raw mut oldtv) };
@@ -284,10 +280,13 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             hi = unsafe { find_hi_in_scoped_ht(name, &raw mut ht) };
         }
         if !hi.is_null() && unsafe { (*hi).is_kept() } {
-            let di = unsafe { tv_dict_hi2di(hi) };
-            if unsafe { var_check_fixed((*di).di_flags as c_int, name, TV_CSTRING as size_t) }
-                || unsafe { var_check_ro((*di).di_flags as c_int, name, TV_CSTRING as size_t) }
-                || unsafe { value_check_lock((*d).dv_lock, name, TV_CSTRING as size_t) }
+            // SAFETY: a kept item of a live variable hashtab.
+            let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
+            let flags = di.di_flags as c_int;
+            let (len, lock) = (TV_CSTRING as size_t, unsafe { (*d).dv_lock });
+            if unsafe { var_check_fixed(flags, name, len) }
+                || unsafe { var_check_ro(flags, name, len) }
+                || unsafe { value_check_lock(lock, name, len) }
             {
                 return FAIL;
             }
@@ -295,14 +294,15 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             // only answer the same way -- nothing above it changes
             // `dv_lock` -- so the repetition is dead; kept because
             // deleting it is a change no gate could confirm.
-            if unsafe { value_check_lock((*d).dv_lock, name, TV_CSTRING as size_t) } {
+            if unsafe { value_check_lock((*d).dv_lock, name, len) } {
                 return FAIL;
             }
 
             let mut oldtv = TV_INITIAL_VALUE;
             let watched = unsafe { tv_dict_is_watched(dict) };
             if watched {
-                unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut oldtv) };
+                let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
+                unsafe { tv_copy(tv, &raw mut oldtv) };
             }
 
             unsafe { delete_var(ht, hi) };
@@ -336,57 +336,64 @@ unsafe fn do_lock_var(
     eap: *mut exarg_T,
     deep: c_int,
 ) -> c_int {
-    let lock = unsafe { (*eap).cmdidx } as c_int == CMD_lockvar as c_int;
+    // SAFETY: the caller's obligation -- a resolved lvalue and a live
+    // command, both of which outlive this call.
+    let mut lp = unsafe { Lv::new(lp) };
+    let ea = unsafe { Ea::new(eap) };
+    let lock = ea.cmdidx as c_int == CMD_lockvar as c_int;
+    let name = lp.ll_name;
 
-    if unsafe { (*lp).ll_tv }.is_null() {
+    if lp.ll_tv.is_null() {
         // A whole variable.
-        if unsafe { *(*lp).ll_name } == b'$' as c_char {
+        // SAFETY: a resolved lvalue's name is NUL-terminated.
+        if unsafe { *name } == b'$' as c_char {
             // An environment variable has no lock to set.
-            semsg_c!(unsafe { gettext(e_lock_unlock.as_ptr()) }, unsafe {
-                (*lp).ll_name
-            });
+            semsg_c!(unsafe { gettext(e_lock_unlock.as_ptr()) }, name);
             return FAIL;
         }
-        let di = unsafe { find_var((*lp).ll_name, (*lp).ll_name_len, ptr::null_mut(), true) };
+        let nil = ptr::null_mut();
+        // SAFETY: a resolved lvalue's name and its measured length.
+        let di = unsafe { find_var(name, lp.ll_name_len, nil, true) };
         if di.is_null() {
             return FAIL;
         }
+        // SAFETY: `find_var` answers a live item or NULL.
+        let mut di = unsafe { Di::new(di) };
+        let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
         // A fixed variable -- one of `v:` or a scope dictionary -- can
         // only be locked through the container it holds.
-        if unsafe { (*di).di_flags } & DI_FLAGS_FIX != 0
-            && unsafe { (*di).di_tv.v_type } != VAR_DICT
-            && unsafe { (*di).di_tv.v_type } != VAR_LIST
+        if di.di_flags & DI_FLAGS_FIX != 0
+            && di.di_tv.v_type != VAR_DICT
+            && di.di_tv.v_type != VAR_LIST
         {
-            semsg_c!(unsafe { gettext(e_lock_unlock.as_ptr()) }, unsafe {
-                (*lp).ll_name
-            });
+            semsg_c!(unsafe { gettext(e_lock_unlock.as_ptr()) }, name);
             return FAIL;
         }
         if lock {
-            unsafe { (*di).di_flags |= DI_FLAGS_LOCK };
+            di.di_flags |= DI_FLAGS_LOCK;
         } else {
-            unsafe { (*di).di_flags &= !DI_FLAGS_LOCK };
+            di.di_flags &= !DI_FLAGS_LOCK;
         }
         if deep != 0 {
-            unsafe { tv_item_lock(&raw mut (*di).di_tv, deep, lock, false) };
+            unsafe { tv_item_lock(tv, deep, lock, false) };
         }
     } else if deep != 0 {
-        if unsafe { (*lp).ll_range } {
+        if lp.ll_range {
             // A range of List items.
-            let mut li = unsafe { (*lp).ll_li };
-            while !li.is_null()
-                && (unsafe { (*lp).ll_empty2 } || unsafe { (*lp).ll_n2 } >= unsafe { (*lp).ll_n1 })
-            {
+            let mut li = lp.ll_li;
+            while !li.is_null() && (lp.ll_empty2 || lp.ll_n2 >= lp.ll_n1) {
+                // SAFETY: a resolved lvalue's items, walked to the end.
                 unsafe { tv_item_lock(&raw mut (*li).li_tv, deep, lock, false) };
                 li = unsafe { (*li).li_next };
-                unsafe { (*lp).ll_n1 += 1 };
+                lp.ll_n1 += 1;
             }
-        } else if !unsafe { (*lp).ll_list }.is_null() {
+        } else if !lp.ll_list.is_null() {
             // One List item.
-            unsafe { tv_item_lock(&raw mut (*(*lp).ll_li).li_tv, deep, lock, false) };
+            // SAFETY: a resolved lvalue's own item.
+            unsafe { tv_item_lock(&raw mut (*lp.ll_li).li_tv, deep, lock, false) };
         } else {
             // One Dict item.
-            unsafe { tv_item_lock(&raw mut (*(*lp).ll_di).di_tv, deep, lock, false) };
+            unsafe { tv_item_lock(&raw mut (*lp.ll_di).di_tv, deep, lock, false) };
         }
     }
     OK

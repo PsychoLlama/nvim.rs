@@ -20,14 +20,28 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::types::{NUL, OK};
 
+/// Row `i` of the `v:` table, for the walks that visit every one.
+///
+/// Total, and so a safe `fn`: the table is a `static` of `VIMVAR_COUNT`
+/// rows, which outlives every caller.
+pub(crate) fn vimvar_row(i: usize) -> Vvr {
+    debug_assert!(i < VIMVAR_COUNT, "v: table has no row {i}");
+    // SAFETY: a row of a live `static` table.
+    unsafe { Vvr::new(vimvar_table().add(i)) }
+}
+
+/// The key of a `v:` table row: its own `di_key`, which is the item the `v:`
+/// dictionary holds, rather than a copy of the name.
+pub(crate) fn vimvar_row_key(row: Vvr) -> *mut c_char {
+    row.field_ptr(offset_of!(VimVar, vv_di.di_key))
+}
+
 /// The `v:` table row `idx` names.
 ///
-/// Total, and so a safe `fn`: [`Vv`]'s discriminants are exactly the rows of
-/// the table, so there is no way to ask for one that is not there.
+/// Total for [`vimvar_row`]'s reason, with [`Vv`]'s discriminants being
+/// exactly the rows of the table.
 fn vimvar(idx: Vv) -> Vvr {
-    // SAFETY: `idx` is one of `VIMVAR_COUNT` rows of a `static` table, which
-    // outlives every caller.
-    unsafe { Vvr::new(vimvar_table().add(idx as usize)) }
+    vimvar_row(idx as usize)
 }
 
 /// The value of `v:` variable `idx`, without reading the row.
@@ -36,10 +50,9 @@ fn vimvar_val(idx: Vv) -> Tv {
     unsafe { Tv::new(vimvar(idx).field_ptr(offset_of!(VimVar, vv_di.di_tv))) }
 }
 
-/// The key of `v:` variable `idx`, as the hashtab spells it: the row's own
-/// `di_key`, which is what makes the item the dictionary holds this row.
+/// The key of `v:` variable `idx`, as the hashtab spells it.
 fn vimvar_key(idx: Vv) -> *mut c_char {
-    vimvar(idx).field_ptr(offset_of!(VimVar, vv_di.di_key))
+    vimvar_row_key(vimvar(idx))
 }
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the

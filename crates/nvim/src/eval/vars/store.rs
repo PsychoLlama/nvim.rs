@@ -15,6 +15,7 @@
 
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
@@ -68,7 +69,9 @@ pub unsafe fn set_var_const(
         di = unsafe { find_var_in_scoped_ht(name, name_len, true as c_int) };
     }
 
-    if tv_is_func(unsafe { *tv }) && unsafe { var_wrong_func_name(name, di.is_null()) } {
+    // SAFETY: the caller's obligation -- a live value.
+    let tvh = unsafe { Tv::new(tv) };
+    if tv_is_func(*tvh) && unsafe { var_wrong_func_name(name, di.is_null()) } {
         return;
     }
 
@@ -82,9 +85,12 @@ pub unsafe fn set_var_const(
         // The order is upstream's and is kept for backwards
         // compatibility: read-only first, then the value's lock, then
         // the variable's.
-        if unsafe { var_check_ro((*di).di_flags as c_int, name, name_len) }
-            || unsafe { value_check_lock((*di).di_tv.v_lock, name, name_len) }
-            || unsafe { var_check_lock((*di).di_flags as c_int, name, name_len) }
+        // SAFETY: `find_var_in_ht` answers a live item of a live scope.
+        let item = unsafe { Di::new(di) };
+        let (flags, lock) = (item.di_flags as c_int, item.di_tv.v_lock);
+        if unsafe { var_check_ro(flags, name, name_len) }
+            || unsafe { value_check_lock(lock, name, name_len) }
+            || unsafe { var_check_lock(flags, name, name_len) }
         {
             return;
         }
@@ -93,8 +99,8 @@ pub unsafe fn set_var_const(
         // a side effect on assignment; `before_set_vvar` is both, and it
         // answers false when it has already done the store itself.
         let mut type_error = false;
-        if ht == get_vimvar_ht()
-            && !unsafe { before_set_vvar(varname, di, tv, copy, watched, &raw mut type_error) }
+        let err = &raw mut type_error;
+        if ht == get_vimvar_ht() && !unsafe { before_set_vvar(varname, di, tv, copy, watched, err) }
         {
             if type_error {
                 semsg_c!(
@@ -105,10 +111,11 @@ pub unsafe fn set_var_const(
             return;
         }
 
+        let cur = item.field_ptr(offset_of!(dictitem_T, di_tv));
         if watched {
-            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut oldtv) };
+            unsafe { tv_copy(cur, &raw mut oldtv) };
         }
-        unsafe { tv_clear(&raw mut (*di).di_tv) };
+        unsafe { tv_clear(cur) };
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if ht == get_vimvar_ht() || ht == unsafe { get_funccal_args_ht() } {
@@ -133,29 +140,29 @@ pub unsafe fn set_var_const(
             unsafe { xfree(di.cast()) };
             return;
         }
-        unsafe { (*di).di_flags = DI_FLAGS_ALLOC as uint8_t };
+        // SAFETY: the item just allocated.
+        let mut item = unsafe { Di::new(di) };
+        item.di_flags = DI_FLAGS_ALLOC as uint8_t;
         if is_const {
-            unsafe { (*di).di_flags |= DI_FLAGS_LOCK as uint8_t };
+            item.di_flags |= DI_FLAGS_LOCK as uint8_t;
         }
     }
 
-    if copy || unsafe { (*tv).v_type } == VAR_NUMBER || unsafe { (*tv).v_type } == VAR_FLOAT {
-        unsafe { tv_copy(tv, &raw mut (*di).di_tv) };
+    // SAFETY: `di` is the item found or the one just added, and `tv` the
+    // caller's live value.
+    let mut item = unsafe { Di::new(di) };
+    let cur = item.field_ptr(offset_of!(dictitem_T, di_tv));
+    if copy || tvh.v_type == VAR_NUMBER || tvh.v_type == VAR_FLOAT {
+        unsafe { tv_copy(tv, cur) };
     } else {
-        unsafe { (*di).di_tv = *tv };
-        unsafe { (*di).di_tv.v_lock = VarLock::Unlocked };
+        item.di_tv = *tvh;
+        item.di_tv.v_lock = VarLock::Unlocked;
         unsafe { tv_init(tv) };
     }
 
     if watched {
-        unsafe {
-            tv_dict_watcher_notify(
-                dict,
-                tv_dict_item_key(di),
-                &raw mut (*di).di_tv,
-                &raw mut oldtv,
-            )
-        };
+        let key = unsafe { tv_dict_item_key(di) };
+        unsafe { tv_dict_watcher_notify(dict, key, cur, &raw mut oldtv) };
         unsafe { tv_clear(&raw mut oldtv) };
     }
 
@@ -163,7 +170,7 @@ pub unsafe fn set_var_const(
         // Like `:lockvar! name`: lock the value and what it contains,
         // but only where the reference count is one, so that only
         // literal values are locked.
-        unsafe { tv_item_lock(&raw mut (*di).di_tv, DICT_MAXNEST, true, true) };
+        unsafe { tv_item_lock(cur, DICT_MAXNEST, true, true) };
     }
 }
 
@@ -247,39 +254,33 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
-    let has_scope = unsafe { *name } != NUL as c_char && unsafe { *name.add(1) } == b':' as c_char;
+    // SAFETY: the caller's obligation -- a NUL-terminated name, so the
+    // second byte is only read once the first has proved not to be the NUL.
+    let lead = unsafe { *name } as u8;
+    let has_scope = lead != NUL as u8 && unsafe { *name.add(1) } == b':' as c_char;
     // The character the capital is wanted at: past a scope prefix, if
     // there is one.
-    let first = if has_scope {
-        unsafe { *name.add(2) }
-    } else {
-        unsafe { *name }
+    let first = match has_scope {
+        true => (unsafe { *name.add(2) }).cast_unsigned(),
+        false => lead,
     };
-    let func_scope =
-        has_scope && !unsafe { vim_strchr(c"wbst".as_ptr(), *name as uint8_t as c_int) }.is_null();
+    let scoped = unsafe { vim_strchr(c"wbst".as_ptr(), lead.into()) };
+    let func_scope = has_scope && !scoped.is_null();
 
     if !func_scope
-        && !(first as u8).is_ascii_uppercase()
+        && !first.is_ascii_uppercase()
         && unsafe { vim_strchr(name, b'#' as c_int) }.is_null()
     {
-        semsg_c!(
-            unsafe {
-                gettext(c"E704: Funcref variable name must start with a capital: %s".as_ptr())
-            },
-            name,
-        );
+        let msg = c"E704: Funcref variable name must start with a capital: %s";
+        semsg_c!(unsafe { gettext(msg.as_ptr()) }, name);
         return true;
     }
     // Don't allow hiding a function. With an existing variable this may
     // be assigning another function to the same one, whose type the
     // caller checks.
     if new_var && unsafe { function_exists(name, false) } {
-        semsg_c!(
-            unsafe {
-                gettext(c"E705: Variable name conflicts with existing function: %s".as_ptr())
-            },
-            name,
-        );
+        let msg = c"E705: Variable name conflicts with existing function: %s";
+        semsg_c!(unsafe { gettext(msg.as_ptr()) }, name);
         return true;
     }
     false
@@ -291,10 +292,13 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
 /// `varname` is a NUL-terminated string.
 pub unsafe fn valid_varname(varname: *const c_char) -> bool {
     let mut p = varname;
+    // SAFETY: the caller's obligation -- a NUL-terminated name, which the
+    // walk stops at.
     while unsafe { *p } != NUL as c_char {
-        if !eval_isnamec1(unsafe { *p } as uint8_t as c_int)
-            && (p == varname || !ascii_isdigit(unsafe { *p } as c_int))
-            && unsafe { *p } != AUTOLOAD_CHAR as c_char
+        let c = unsafe { *p };
+        if !eval_isnamec1(c_int::from(c.cast_unsigned()))
+            && (p == varname || !ascii_isdigit(c_int::from(c)))
+            && c != AUTOLOAD_CHAR as c_char
         {
             semsg_c!(
                 unsafe { gettext(&raw const e_illvar as *const c_char) },
