@@ -54,7 +54,7 @@ impl Cell {
     /// # Safety
     /// `args` is a live call frame.
     unsafe fn at(args: Args) -> Cell {
-        // SAFETY: the caller's obligation; the compositor always answers
+        // SAFETY throughout: the caller's obligation; the compositor always answers
         // with a live grid.
         // A coercion failure answers 0, which the -1 turns into an
         // out-of-range coordinate. The subtraction wraps because the C's
@@ -80,7 +80,6 @@ impl Cell {
     /// # Safety
     /// `self` is on the grid.
     unsafe fn schar(&self) -> schar_T {
-        // SAFETY: the caller has checked the bounds.
         grid_getchar(self.grid, self.row, self.col, None)
     }
 
@@ -177,7 +176,7 @@ pub unsafe fn f_screenstring(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
+    // SAFETY throughout: the frame is live.
     rettv.vval.v_number =
         unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
 }
@@ -186,7 +185,7 @@ pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 pub unsafe fn f_hlexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
+    // SAFETY throughout: the frame is live.
     rettv.vval.v_number =
         unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
 }
@@ -253,7 +252,7 @@ pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut color: HlColorText = [0; 20];
-    // SAFETY: the frame is live; `what` is the string an argument owns and
+    // SAFETY throughout: the frame is live; `what` is the string an argument owns and
     // outlives the `highlight_color` call, and `modebuf` outlives the string
     // `tv_get_string_buf` may park in it.
     let id = arg_number(args.get(0)) as c_int;
@@ -292,7 +291,7 @@ pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// buffer or when the `{trans}` argument does not coerce.
 pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live, and `curbuf`/`curwin` are live for the
+    // SAFETY throughout: the frame is live, and `curbuf`/`curwin` are live for the
     // whole call.
     let lnum = arg_lnum(args.get(0));
     // Wraps because the C's does; `col` is only used as a range test.
@@ -315,7 +314,7 @@ pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
 pub unsafe fn f_syn_id_trans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
+    // SAFETY throughout: the frame is live.
     let id = arg_number(args.get(0)) as c_int;
     rettv.vval.v_number = if id > 0 {
         unsafe { syn_get_final_id(id) }
@@ -330,7 +329,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let mut syntax_flags = SynFlags::NONE;
     let mut matchid = 0;
     let mut text = [0 as c_char; NUMBUFLEN];
-    // SAFETY: the frame is live; `curbuf`/`curwin` are live for the whole
+    // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole
     // call and `text` outlives the list it is copied into.
     // Cleared first: an out-of-range position answers an empty List,
     // not a three-item one.
@@ -380,7 +379,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// outermost first.
 pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; `curbuf`/`curwin` are live for the whole
+    // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole
     // call.
     // An out-of-range position answers an empty List, not a List of no
     // items.

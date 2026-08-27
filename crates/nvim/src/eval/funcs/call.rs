@@ -72,7 +72,7 @@ impl Drop for Owned {
 pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; every pointer below either belongs to an
+    // SAFETY throughout: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
     if check_arg(args, 1, tv_check_for_list_arg) == FAIL {
         return;
@@ -141,7 +141,7 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and `s` walks a string an argument owns.
+    // SAFETY throughout: the frame is live and `s` walks a string an argument owns.
     let mut s = arg_string_chk(&mut numbuf, args.get(0));
     if !s.is_null() {
         s = unsafe { skipwhite(s) };
@@ -219,7 +219,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
     let mut echo_output = false;
     let mut silence = true;
 
-    // SAFETY: the frame is live; `capture_local` outlives every command run
+    // SAFETY throughout: the frame is live; `capture_local` outlives every command run
     // below, and `rettv` adopts its allocation at the end.
     if check_secure() {
         return;
@@ -308,7 +308,7 @@ pub unsafe fn f_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and `p` walks a string an argument owns.
+    // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
     let mut p = arg_string(&mut numbuf, args.get(0));
     // Not a bool: the `:` arm answers 2 for an exact command name, and
     // that grading is part of `exists()`'s contract.
@@ -354,7 +354,7 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    // SAFETY: the frame is live; the partial built below owns every value
+    // SAFETY throughout: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
     let mut arg_pt = ptr::null_mut::<partial_T>();
     let mut use_string = false;
@@ -541,14 +541,12 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
 /// `funcref({name} [, {arglist}] [, {dict}])`
 pub unsafe fn f_funcref(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
     common_function(args, rettv, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
 pub unsafe fn f_function(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
     common_function(args, rettv, false);
 }
 
@@ -557,8 +555,6 @@ pub unsafe fn f_function(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_garbagecollect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, rettv);
     want_garbage_collect.set(true);
-    // SAFETY: the frame is live.
-    // Exactly 1, not "non-zero".
     if args.has(0) && arg_number(args.get(0)) == 1 {
         garbage_collect_at_exit.set(true);
     }
@@ -570,7 +566,7 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     if out_type != VAR_NUMBER {
         rettv.vval.v_string = ptr::null_mut();
     }
-    // SAFETY: the frame is live; the two names and the string argument are
+    // SAFETY throughout: the frame is live; the two names and the string argument are
     // owned by arguments and outlive the call.
     if check_secure() {
         return;
@@ -618,14 +614,12 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
 /// `libcall({lib}, {func}, {arg})`
 pub unsafe fn f_libcall(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
     libcall_common(args, rettv, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
 pub unsafe fn f_libcallnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
     libcall_common(args, rettv, VAR_NUMBER);
 }
 
@@ -633,7 +627,7 @@ pub unsafe fn f_libcallnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 pub unsafe fn f_luaeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and the chunk outlives the call.
+    // SAFETY throughout: the frame is live and the chunk outlives the call.
     let chunk = arg_string_chk(&mut numbuf, args.get(0));
     if chunk.is_null() {
         return;

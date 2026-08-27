@@ -62,7 +62,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut kind = VIM_GENERIC as c_int;
     let mut error = false;
 
-    // SAFETY: the frame is live; the two scratch buffers outlive the
+    // SAFETY throughout: the frame is live; the two scratch buffers outlive the
     // strings `tv_get_string_buf_chk` may park in them and the dialog runs
     // before they go out of scope.
     let message = arg_string_chk(&mut numbuf, args.get(0));
@@ -110,7 +110,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = FAIL as varnumber_T;
-    // SAFETY: the frame is live.
+    // SAFETY throughout: the frame is live.
     let pid = arg_number(args.get(0)) as c_int;
     if pid == 0 {
         unsafe { emsg(gettext(e_invarg.as_ptr())) };
@@ -124,7 +124,7 @@ pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, rettv);
     let mut mode_buf = NumBuf::new();
-    // SAFETY: the frame is live and both strings outlive the call.
+    // SAFETY throughout: the frame is live and both strings outlive the call.
     if check_secure() {
         return;
     }
@@ -157,7 +157,7 @@ pub unsafe fn f_inputdialog(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `inputsecret({prompt} [, {text}])`
 pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value; the two
+    // SAFETY throughout: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
     cmdline_star.set(cmdline_star.get() + 1);
     INPUTSECRET.set(true);
@@ -170,7 +170,7 @@ pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: 
 pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and the List is held by an argument for the
+    // SAFETY throughout: the frame is live and the List is held by an argument for the
     // whole call.
     if args.ty(0) != VAR_LIST {
         unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"inputlist()".as_ptr(),) };
@@ -233,7 +233,7 @@ pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         // SAFETY: filled by the `f_inputsave` that pushed it.
         unsafe { restore_typeahead(&raw mut saved) };
     } else if p_verbose.get() > 1 {
-        // SAFETY: a static message, and the caller's return value.
+        // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
         unsafe { verb_msg(gettext(msg.as_ptr())) };
         unsafe { (*rettv).vval.v_number = 1 };

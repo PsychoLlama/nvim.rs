@@ -44,7 +44,7 @@ unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
     typval_T {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
-        // SAFETY: the caller's obligation; `xmemdupz` copies and terminates.
+        // SAFETY throughout: the caller's obligation; `xmemdupz` copies and terminates.
         vval: typval_vval_union {
             v_string: unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char,
         },
@@ -65,7 +65,7 @@ const fn number_tv(n: varnumber_T) -> typval_T {
 /// # Safety
 /// `tv` is a live argument typval and `rettv` the cleared return value.
 unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
-    // SAFETY: the caller's obligation; the container is only read, and the
+    // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
     rettv.vval.v_number = 0;
@@ -189,7 +189,7 @@ unsafe fn fold_step(
     cleanup: Cleanup,
     called_emsg_start: c_int,
 ) -> bool {
-    // SAFETY: the caller's obligation. `argv` outlives the call, and
+    // SAFETY throughout: the caller's obligation. `argv` outlives the call, and
     // `rettv`'s old value moves into `argv[0]`.
     let mut argv = [EMPTY_TV; 3];
     argv[0] = *rettv;
@@ -250,7 +250,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 /// `args` is the call frame and `rettv` its cleared return value.
 unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation. `p` walks a NUL-terminated string
+    // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
     let mut p = arg_string(&mut numbuf, args.get(0));
     let called_emsg_start = called_emsg.get();
@@ -318,7 +318,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: everything read below is the frame's.
+    // SAFETY throughout: everything read below is the frame's.
     let ty = args.ty(0);
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
         unsafe { emsg(gettext(e_string_list_or_blob_required.as_ptr())) };

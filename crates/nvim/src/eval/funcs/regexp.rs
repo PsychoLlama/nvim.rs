@@ -108,7 +108,7 @@ impl Drop for Echoed {
 /// `args` is the call frame and `rettv` its cleared return value.
 unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchType) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation. Every pointer below either points
+    // SAFETY throughout: the caller's obligation. Every pointer below either points
     // into an argument (which outlives the call), into `patbuf`, or into
     // the string `tofree` owns.
     let _cpo = EmptyCpo::new();
@@ -389,7 +389,7 @@ unsafe fn get_matches_in_str(
 pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the buffer comes from the buffer list and is checked for a
+    // SAFETY throughout: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
@@ -518,7 +518,7 @@ pub unsafe fn f_matchstrpos(argvars: *mut typval_T, rettv: *mut typval_T, _f: Ev
 /// `matchstrlist({list}, {pat} [, {dict}])`.
 pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the List and its items outlive the call.
+    // SAFETY throughout: the List and its items outlive the call.
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
     let retlist = unsafe { rettv.vval.v_list };

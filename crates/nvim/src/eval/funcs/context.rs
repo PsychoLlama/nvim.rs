@@ -58,7 +58,7 @@ fn context_at(index: usize) -> Option<*mut Context> {
 /// `ctxget([{index}])` — the context at `index` as a Dictionary.
 pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arena and the error are owned here and freed on the way
+    // SAFETY throughout: the arena and the error are owned here and freed on the way
     // out; `object_to_vim` copies what it keeps out of the arena's dict.
     let arg = args.ptr(0);
     let Some(index) =
@@ -93,7 +93,7 @@ pub unsafe fn f_ctxpop(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
 /// editor state, or all of them when no list is given.
 pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: walks the argument list, whose items live for the call.
+    // SAFETY throughout: walks the argument list, whose items live for the call.
     let types = match args.ty(0) {
         VAR_LIST => {
             let mut types: c_int = 0;
@@ -131,7 +131,7 @@ pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
 /// `ctxset({context} [, {index}])` — replace the context at `index`.
 pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: the arena, the error and the scratch context are owned here;
+    // SAFETY throughout: the arena, the error and the scratch context are owned here;
     // `tmp` is either installed in place of `ctx` or freed.
     if args.ty(0) != VAR_DICT {
         semsg!("E475: Invalid argument: expected dictionary as first argument");

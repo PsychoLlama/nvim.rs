@@ -135,7 +135,7 @@ impl Drop for BufferSwap {
 /// the current buffer pointed at the one the positions name.
 fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation. `p1`/`p2` are locals the List parser
+    // SAFETY throughout: `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
     list_alloc_ret(rettv, kListLenMayKnow as isize);
@@ -235,7 +235,7 @@ fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
 /// # Safety
 /// `spec` is NUL-terminated.
 unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
-    // SAFETY: the caller's obligation; `getdigits_int` only walks forward
+    // SAFETY throughout: the caller's obligation; `getdigits_int` only walks forward
     // over `spec` and leaves `p` on the terminator when it consumed the
     // whole width.
     let bad = || {
@@ -288,7 +288,7 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
 /// `block_prep` reads per line.
 /// `p1` and `p2` name positions in the current buffer.
 fn block_oparg(p1: pos_T, p2: pos_T, is_select_exclusive: bool, block_width: c_int) -> oparg_T {
-    // SAFETY: the caller's obligation. 'linebreak' is turned off around
+    // SAFETY throughout: 'linebreak' is turned off around
     // the virtual-column measurements so that a wrapped line does not
     // change where the block's edges are.
     let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
@@ -327,11 +327,11 @@ fn block_oparg(p1: pos_T, p2: pos_T, is_select_exclusive: bool, block_width: c_i
 /// # Safety
 /// `bd` has been filled by one of the block-prep functions.
 unsafe fn block_def2str(bd: &block_def) -> String_0 {
-    // SAFETY: the caller's obligation. The allocation is exactly the three
+    // SAFETY throughout: the caller's obligation. The allocation is exactly the three
     // pieces plus a terminator, and each piece is written once in order.
     let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;
     let data = unsafe { xmalloc(size + 1) }.cast::<c_char>();
-    // SAFETY: `data` has room for the three runs written below, which is
+    // SAFETY throughout: `data` has room for the three runs written below, which is
     // what `size` was computed from, plus the terminator.
     let space = b' ' as c_int;
     unsafe { memset(data.cast::<c_void>(), space, bd.startspaces as usize) };
@@ -417,7 +417,7 @@ unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T,
             },
         );
     }
-    // SAFETY: the caller's obligation; `bd.textstart` points into `line`,
+    // SAFETY throughout: the caller's obligation; `bd.textstart` points into `line`,
     // so `mb_prevptr` stays inside it.
     let mut bd = NO_BLOCK;
     if r.region_type == kMTBlockWise {

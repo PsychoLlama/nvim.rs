@@ -32,8 +32,6 @@ pub unsafe fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
         return;
     }
     let mut error = false;
-    // SAFETY: `args.ptr(0)` is a live typval; the callee reports through
-    // `error` rather than returning a failure.
     let n = arg_number_chk(args.get(0), Some(&mut error));
     rettv.vval.v_number = if error {
         -1
@@ -72,8 +70,6 @@ pub unsafe fn f_invert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// Argument `i` as a Number, reporting its own error and reading as 0 when
 /// it cannot be coerced. The bitwise builtins' shared coercion.
 fn number(args: Args<'_>, i: usize) -> varnumber_T {
-    // SAFETY: `args.ptr(i)` is a live typval; a null error pointer is the
-    // documented "report and return 0" mode.
     arg_number_chk(args.get(i), None)
 }
 
@@ -229,7 +225,7 @@ fn as_float(args: Args<'_>, i: usize) -> Option<float_T> {
 /// clock mixed with the process id when the OS source is unavailable.
 fn init_srand() -> u32 {
     let mut bytes = [0u8; 4];
-    // SAFETY: a synchronous `uv_random` (null loop and request) fills
+    // SAFETY throughout: a synchronous `uv_random` (null loop and request) fills
     // `bytes`, whose length it is told; the callback is null because the
     // call is synchronous.
     let (out, len) = (bytes.as_mut_ptr().cast::<c_void>(), bytes.len());
@@ -238,7 +234,6 @@ fn init_srand() -> u32 {
     if rc == 0 {
         return u32::from_ne_bytes(bytes);
     }
-    // SAFETY: `os_get_pid` reads the process id; no arguments, no state.
     (os_hrtime() as u32) ^ (os_get_pid() as u32)
 }
 
@@ -291,7 +286,7 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // Kept on the variadic message call rather than moved to
             // `semsg!`: the argument is arbitrary user bytes, and a Rust
             // format string can only carry UTF-8.
-            // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
+            // SAFETY throughout: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
             let what = arg_string(&mut numbuf, args.get(0));
             unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
@@ -299,7 +294,7 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             rettv.vval.v_number = -1;
             return;
         };
-        // SAFETY: `seed_list` proved all four items are live Numbers.
+        // SAFETY throughout: `seed_list` proved all four items are live Numbers.
         let mut state = [
             unsafe { (*seed[0]).vval.v_number } as u32,
             unsafe { (*seed[1]).vval.v_number } as u32,
@@ -347,11 +342,10 @@ fn seed_list(tv: &typval_T) -> Option<[*mut typval_T; 4]> {
 /// Number handed in.
 pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: `rettv` is the dispatcher's cleared return value.
+    // SAFETY throughout: `rettv` is the dispatcher's cleared return value.
     list_alloc_ret(rettv, 4);
     let mut x = if args.has(0) {
         let mut error = false;
-        // SAFETY: `args.ptr(0)` is a live typval.
         let n = arg_number_chk(args.get(0), Some(&mut error));
         if error {
             // The list stays empty, as upstream leaves it.
@@ -406,7 +400,7 @@ pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         semsg!("E727: Start past end");
         return;
     }
-    // SAFETY: `rettv` is the dispatcher's cleared return value. The length
+    // SAFETY throughout: `rettv` is the dispatcher's cleared return value. The length
     // is upstream's estimate and only preallocates.
     let hint = (end as isize).wrapping_sub(start as isize) / stride as isize;
     let list = list_alloc_ret(rettv, hint);

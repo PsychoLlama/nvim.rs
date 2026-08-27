@@ -91,7 +91,7 @@ pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
         return;
@@ -111,7 +111,7 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
         return;
@@ -144,7 +144,7 @@ pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null, and `error` is a borrowed static message.
     if check_secure() {
         return;
@@ -174,7 +174,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `jobs` is an allocation this body owns for
+    // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
     // its whole length, and every channel in it holds a reference.
     if check_secure() {
         return;
@@ -400,7 +400,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `argv` is released on every path that does
+    // SAFETY throughout: the frame is live; `argv` is released on every path that does
     // not hand it to `channel_job_start`, which adopts it.
     if check_secure() {
         return;

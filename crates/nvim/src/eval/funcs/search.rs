@@ -177,7 +177,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     let mut options = SEARCH_KEEP as c_int;
     let mut use_skip = false;
 
-    // SAFETY: the frame's arguments and the current window are live for the
+    // SAFETY throughout: the frame's arguments and the current window are live for the
     // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
     // pointer and outlive it.
     let pat = arg_string(&mut numbuf, args.get(0));
@@ -347,7 +347,7 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // Default: FAIL.
     rettv.vval.v_number = 1;
 
-    // SAFETY: the frame's arguments are live typvals and `name` is the
+    // SAFETY throughout: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
     let name = arg_string_chk(&mut numbuf, args.get(0));
     if args.has(1) {
@@ -381,7 +381,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     let mut lnum_stop: linenr_T = 0;
     let mut time_limit: int64_t = 0;
 
-    // SAFETY: the frame's arguments are live typvals; the two scratch
+    // SAFETY throughout: the frame's arguments are live typvals; the two scratch
     // buffers outlive the strings `tv_get_string_buf_chk` may park in them,
     // and the three patterns outlive the `do_searchpair` call.
     let mut nbuf1 = NumBuf::new();
@@ -461,7 +461,7 @@ pub unsafe fn f_searchpairpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         coladd: 0,
     };
     let (mut lnum, mut col) = (0, 0);
-    // SAFETY: the frame is live and `rettv` is the cleared return value.
+    // SAFETY throughout: the frame is live and `rettv` is the cleared return value.
     let list = list_alloc_ret(rettv, 2);
     if unsafe { searchpair_cmn(args, Some(&mut match_pos)) } > 0 {
         lnum = match_pos.lnum as c_int;
@@ -558,7 +558,7 @@ pub unsafe fn do_searchpair(
     let mut nest = 1;
     let mut options = SEARCH_KEEP as c_int;
 
-    // SAFETY: the caller's obligation on the three patterns and `skip`; the
+    // SAFETY throughout: the caller's obligation on the three patterns and `skip`; the
     // current window is live for the whole call, and `pos`/`tm`/the two
     // pattern buffers are locals that outlive every `searchit` call.
     let mut tm = profile_setlimit(time_limit);

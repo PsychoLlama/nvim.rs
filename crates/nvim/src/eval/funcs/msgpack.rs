@@ -41,7 +41,7 @@ const EMPTY_TV: typval_T = typval_T {
 /// lines joined by NLs.
 pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: `tofree` owns whatever the List conversion allocated and is
+    // SAFETY throughout: `tofree` owns whatever the List conversion allocated and is
     // released on every path; `s` points into it or into `numbuf`, both of
     // which outlive the parse.
     let mut numbuf = NumBuf::new();
@@ -96,7 +96,7 @@ pub unsafe fn f_json_encode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the packer owns its buffer until `packer_take_string` hands
+    // SAFETY throughout: the packer owns its buffer until `packer_take_string` hands
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
     if args.ty(0) != VAR_LIST {
@@ -243,7 +243,7 @@ unsafe fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mut list_T) {
 /// `msgpackparse({data})` — the objects in a List of strings or a Blob.
 pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the argument and the freshly allocated result list are both
+    // SAFETY throughout: the argument and the freshly allocated result list are both
     // live for the call.
     if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
         unsafe { semsg_c!(gettext(e_listblobarg.as_ptr()), c"msgpackparse()".as_ptr(),) };

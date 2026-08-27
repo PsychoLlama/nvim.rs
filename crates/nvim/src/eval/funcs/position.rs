@@ -52,7 +52,7 @@ const NOWHERE: pos_T = pos_T {
 /// `byte2line({byte})` — which line a byte offset falls in.
 pub unsafe fn f_byte2line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: `args.ptr(0)` is a live typval and `curbuf` is the current
+    // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer; `boff` is a live local the callee reads and writes.
     let mut boff = arg_number(args.get(0)) as c_int - 1;
     rettv.vval.v_number = if boff < 0 {
@@ -66,7 +66,7 @@ pub unsafe fn f_byte2line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// past the end. One past the last line is allowed: it is the buffer size.
 pub unsafe fn f_line2byte(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: `args.ptr(0)` is a live typval and `curbuf` is the current
+    // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer.
     let lnum = arg_lnum(args.get(0));
     rettv.vval.v_number = if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } + 1 {
@@ -84,14 +84,12 @@ pub unsafe fn f_line2byte(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// `col({expr} [, {winid}])`.
 pub unsafe fn f_col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     get_col(args, rettv, false);
 }
 
 /// `charcol({expr} [, {winid}])` — as `col()` but counting characters.
 pub unsafe fn f_charcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     get_col(args, rettv, true);
 }
 
@@ -100,7 +98,6 @@ pub unsafe fn f_charcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// cursor is validated first. `None` means the id named no window, which
 /// every caller treats as "no answer".
 fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
-    // SAFETY: the caller's obligation; `tp` is a live local.
     if !args.has(idx) {
         return Some(curwin.get());
     }
@@ -110,7 +107,7 @@ fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
 }
 
 fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
-    // SAFETY: the caller's obligation; `fnum` is a live local and
+    // SAFETY throughout: `fnum` is a live local and
     // `var2fpos` hands back a pointer into the named window or buffer.
     if check_arg(args, 0, tv_check_for_string_or_list_arg) == FAIL
         || check_arg(args, 1, tv_check_for_opt_number_arg) == FAIL
@@ -158,7 +155,7 @@ fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
 unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> colnr_T {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(wp) };
-    // SAFETY: the caller's obligation; `p` points into the cursor's line
+    // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
     if !virtual_active(win) || fp != &raw mut win.w_cursor {
         return 0;
@@ -186,7 +183,7 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let (args, rettv) = frame!(argvars, rettv);
     let mut vcol_start: colnr_T = 0;
     let mut vcol_end: colnr_T = 0;
-    // SAFETY: the arguments and `rettv` are live typvals; `var2fpos` hands
+    // SAFETY throughout: the arguments and `rettv` are live typvals; `var2fpos` hands
     // back a pointer into the named window or buffer, which the clamp
     // below writes through — that is upstream's behaviour and is why a
     // position from a List argument is clamped in place.
@@ -270,21 +267,18 @@ pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// `getpos({expr})`.
 pub unsafe fn f_getpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     getpos_both(args, rettv, false, false);
 }
 
 /// `getcharpos({expr})` — as `getpos()` but with a character column.
 pub unsafe fn f_getcharpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     getpos_both(args, rettv, false, true);
 }
 
 /// `getcurpos([{winid}])` — the cursor, plus a fifth 'curswant' element.
 pub unsafe fn f_getcurpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     getpos_both(args, rettv, true, false);
 }
 
@@ -295,7 +289,6 @@ pub unsafe fn f_getcursorcharpos(
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     getpos_both(args, rettv, true, true);
 }
 
@@ -303,7 +296,8 @@ pub unsafe fn f_getcursorcharpos(
 /// window its argument names rather than resolving a position expression,
 /// and appends 'curswant'.
 fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: bool) {
-    // SAFETY: the caller's obligation.
+    // SAFETY throughout: `curwin` names a live window, and every pointer
+    // read below comes back from the position parser.
     let mut wp = curwin.get();
     let mut fnum: c_int = -1;
     let fp = if !getcurpos {
@@ -358,7 +352,7 @@ fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: b
 /// # Safety
 /// `l` is a live list and `wp` is a window pointer or null.
 unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
-    // SAFETY: the caller's obligation.
+    // SAFETY throughout: the caller's obligation.
     let cur = curwin.get();
     let saved_set_curswant = unsafe { (*cur).w_set_curswant };
     let saved_curswant = unsafe { (*cur).w_curswant };
@@ -366,7 +360,7 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
     if wp == cur {
         unsafe { update_curswant() };
     }
-    // SAFETY: `wp` is null or the window resolved above, and `l` the list
+    // SAFETY throughout: `wp` is null or the window resolved above, and `l` the list
     // being filled in.
     let curswant = if wp.is_null() {
         0
@@ -389,7 +383,6 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
 /// `cursor({lnum}, {col} [, {off}])` or `cursor({list})`.
 pub unsafe fn f_cursor(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     set_cursorpos(args, rettv, false);
 }
 
@@ -400,13 +393,12 @@ pub unsafe fn f_setcursorcharpos(
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     set_cursorpos(args, rettv, true);
 }
 
 fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation; `pos` and `curswant` are live
+    // SAFETY throughout: `pos` and `curswant` are live
     // locals the List parser fills.
     rettv.vval.v_number = -1;
     let mut set_curswant = true;
@@ -475,20 +467,18 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
 /// `setpos({expr}, {list})`.
 pub unsafe fn f_setpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     set_position(args, rettv, false);
 }
 
 /// `setcharpos({expr}, {list})` — as `setpos()` with a character column.
 pub unsafe fn f_setcharpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
     set_position(args, rettv, true);
 }
 
 fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation; `pos`, `fnum` and `curswant` are
+    // SAFETY throughout: `pos`, `fnum` and `curswant` are
     // live locals the List parser fills, and `name` is NUL-terminated.
     rettv.vval.v_number = -1;
     let name = arg_string_chk(&mut numbuf, args.get(0));
@@ -530,7 +520,7 @@ fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
 
 /// `getcharsearch()` — the state `;` and `,` repeat.
 pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the dispatcher's cleared return value; the three
+    // SAFETY throughout: `rettv` is the dispatcher's cleared return value; the three
     // readers answer from the process-wide character-search state.
     let csearch = last_csearch();
     unsafe { tv_dict_alloc_ret(rettv) };
@@ -547,7 +537,7 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
 pub unsafe fn f_setcharsearch(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: `args.ptr(0)` is a live typval; after the check the union
+    // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a Dict pointer, which may still be null.
     if check_arg(args, 0, tv_check_for_dict_arg) == FAIL {
         return;

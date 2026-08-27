@@ -241,7 +241,7 @@ fn has_wsl() -> bool {
             msg: ptr::null_mut(),
         };
         const PROBE: &str = "return vim.uv.os_uname()['release']:lower():match('microsoft')";
-        // SAFETY: `PROBE` outlives the call (it is a `'static`), the
+        // SAFETY throughout: `PROBE` outlives the call (it is a `'static`), the
         // argument list is empty, and `err` is a live out-parameter.
         let code = String_0::from_raw_parts(PROBE.as_ptr() as *mut c_char, PROBE.len());
         let no_args = Array {
@@ -264,7 +264,7 @@ fn has_wsl() -> bool {
 pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and `name` is the string an argument owns.
+    // SAFETY throughout: the frame is live and `name` is the string an argument owns.
     let name = arg_string(&mut numbuf, args.get(0));
     let known = unsafe { special_feature(name) }.or_else(|| {
         FEATURES
@@ -345,7 +345,7 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and `rettv` is the cleared return value.
+    // SAFETY throughout: the frame is live and `rettv` is the cleared return value.
     let list = list_alloc_ret(rettv, kListLenMayKnow as isize);
     // A non-String second argument is not an error: it just leaves the
     // mode set at "all".
@@ -436,7 +436,7 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// blank, or 0.
 pub unsafe fn f_nextnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live and `curbuf` is live for the whole call; the
+    // SAFETY throughout: the frame is live and `curbuf` is live for the whole call; the
     // loop only reads lines it has range-checked.
     let mut lnum = arg_lnum(args.get(0));
     loop {
@@ -456,7 +456,7 @@ pub unsafe fn f_nextnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// blank, or 0.
 pub unsafe fn f_prevnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: as `f_nextnonblank`.
+    // SAFETY throughout: as `f_nextnonblank`.
     let mut lnum = arg_lnum(args.get(0));
     if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
         lnum = 0;
@@ -477,7 +477,7 @@ pub unsafe fn f_pum_getpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `pumvisible()`
 pub unsafe fn f_pumvisible(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value.
+    // SAFETY throughout: `rettv` is the cleared return value.
     if pum_visible() {
         unsafe { (*rettv).vval.v_number = 1 };
     }
@@ -489,7 +489,7 @@ pub unsafe fn f_pumvisible(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_shiftwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live and `curbuf` is live for the call.
+    // SAFETY throughout: the frame is live and `curbuf` is live for the call.
     if args.has(0) {
         let col = arg_number_chk(args.get(0), None) as colnr_T;
         // A coercion failure answers 0, which passes; a negative column
@@ -507,7 +507,7 @@ pub unsafe fn f_shiftwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// window order.
 pub unsafe fn f_tabpagebuflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; the window chain walked below belongs to a
+    // SAFETY throughout: the frame is live; the window chain walked below belongs to a
     // tab page that is live for the whole call.
     let tab = if args.has(0) {
         unsafe { TabPage::from_raw(find_tabpage(arg_number(args.get(0)) as c_int)) }
@@ -532,7 +532,7 @@ pub unsafe fn f_tabpagebuflist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// non-zero.
 pub unsafe fn f_visualmode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live, `curbuf` is live for the call, and `rettv`
+    // SAFETY throughout: the frame is live, `curbuf` is live for the call, and `rettv`
     // owns the duplicate.
     let mode = [
         unsafe { (*curbuf.get()).b_visual_mode_eval } as c_char,
@@ -547,7 +547,7 @@ pub unsafe fn f_visualmode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `wildmenumode()`
 pub unsafe fn f_wildmenumode(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value.
+    // SAFETY throughout: `rettv` is the cleared return value.
     if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
         unsafe { (*rettv).vval.v_number = 1 };
     }

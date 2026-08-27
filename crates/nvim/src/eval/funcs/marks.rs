@@ -50,7 +50,7 @@ unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
 /// `getchangelist([{buf}])` — `[changes, index]`.
 pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; `curwin` and its
+    // SAFETY throughout: the arguments and `rettv` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
     let out = list_alloc_ret(rettv, 2);
     let buf: *const buf_T = if !args.has(0) {
@@ -96,7 +96,7 @@ pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
 pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals, and the jump
+    // SAFETY throughout: the arguments and `rettv` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
     let out = list_alloc_ret(rettv, kListLenMayKnow as isize);
     let wp = unsafe { find_tabwin(args.ptr(0), args.ptr(1)) }.map_or(ptr::null_mut(), Win::raw);
@@ -124,7 +124,7 @@ pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
 pub unsafe fn f_getmarklist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
+    // SAFETY throughout: the arguments and `rettv` are live typvals.
     let out = list_alloc_ret(rettv, kListLenMayKnow as isize);
     if !args.has(0) {
         unsafe { get_global_marks(out) };
@@ -140,7 +140,7 @@ pub unsafe fn f_getmarklist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `gettagstack([{winnr}])`.
 pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals. The dict is
+    // SAFETY throughout: the arguments and `rettv` are live typvals. The dict is
     // allocated before the window is resolved, so a bad window still
     // yields an empty dict rather than nothing.
     dict_alloc_ret(rettv);
@@ -210,7 +210,7 @@ pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; both strings are
+    // SAFETY throughout: the arguments and `rettv` are live typvals; both strings are
     // NUL-terminated and outlive the search.
     let pattern = arg_string(&mut numbuf, args.get(0));
     // An empty pattern answers 0 — a Number, not an empty List.

@@ -94,7 +94,7 @@ unsafe fn trailing_args(
     let mut out = ARRAY_DICT_INIT;
     out.capacity = MAX_FUNC_ARGS as usize;
     out.items = items.as_mut_ptr();
-    // SAFETY: the caller's obligation; the loop stops at the terminator,
+    // SAFETY throughout: the caller's obligation; the loop stops at the terminator,
     // which the dispatcher writes at or before `MAX_ARGS`.
     let mut i = first;
     while args.has(i) {
@@ -111,7 +111,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `error` is a borrowed static message.
+    // SAFETY throughout: the frame is live; `error` is a borrowed static message.
     if check_secure() {
         return;
     }
@@ -149,7 +149,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `input` is an allocation `channel_send`
+    // SAFETY throughout: the frame is live; `input` is an allocation `channel_send`
     // adopts.
     if check_secure() {
         return;
@@ -196,7 +196,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
-    // SAFETY: the frame is live; `items` outlives the `Array` that borrows
+    // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
     // it and the arena owns what the conversion allocates.
     if check_secure() {
         return;
@@ -249,7 +249,7 @@ impl ProviderScope {
     /// Called only when `provider_call_nesting` is non-zero, so that
     /// `provider_caller_scope` holds a live scope.
     unsafe fn enter() -> Self {
-        // SAFETY: the caller's obligation.
+        // SAFETY throughout: the caller's obligation.
         let mut saved = ProviderScope {
             sctx: current_sctx.get(),
             autocmd_fname: autocmd_fname.get(),
@@ -280,7 +280,7 @@ impl ProviderScope {
     /// `self` came from [`enter`](Self::enter) and nothing else has touched
     /// the execution stack since.
     unsafe fn leave(self) {
-        // SAFETY: the caller's obligation.
+        // SAFETY throughout: the caller's obligation.
         current_sctx.set(self.sctx);
         exestack.with_mut(|stack| {
             stack.pop();
@@ -303,7 +303,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // this call rather than anything the request goes on to do.
     let nesting = provider_call_nesting.get();
 
-    // SAFETY: the frame is live; `items` outlives the `Array` that borrows
+    // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
     // it, and both arenas own what they allocated until freed below.
     if check_secure() {
         return;
@@ -369,7 +369,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// peers Lua knows about when asked for them.
 pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; `addrs` is an allocation this body owns,
+    // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
     let mut n = 0usize;
     let addrs = unsafe { server_address_list(&raw mut n) };
@@ -442,7 +442,7 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
-    // SAFETY: the frame is live; `address` and `addrs` are allocations this
+    // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
     // body owns, bar the one entry handed to `rettv`.
     if check_secure() {
         return;
@@ -484,7 +484,7 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `serverstop({address})`
 pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live.
+    // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
     }
@@ -509,7 +509,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; `on_data` is moved into `channel_connect`,
+    // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
     if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
         unsafe { emsg(gettext(e_invarg.as_ptr())) };
@@ -560,7 +560,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// channel.
 pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the frame is live; `on_stdin` is moved into
+    // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.
     if args.ty(0) != VAR_DICT {
         unsafe { emsg(gettext(e_invarg.as_ptr())) };

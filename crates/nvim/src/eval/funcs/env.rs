@@ -44,7 +44,7 @@ use core::ptr;
 /// `environ()` — the process environment as a Dictionary.
 pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
-    // SAFETY: `env` is an array of `env_size` strings plus a NULL, filled by
+    // SAFETY throughout: `env` is an array of `env_size` strings plus a NULL, filled by
     // `os_copy_fullenv` and released by `os_free_fullenv`. Every string is
     // NUL-terminated and writable — the split below writes a NUL into one
     // and puts the original byte back.
@@ -100,7 +100,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
     rettv.v_type = VAR_STRING;
-    // SAFETY: `s` points into the argument, which outlives every call here;
+    // SAFETY throughout: `s` points into the argument, which outlives every call here;
     // `xpc` is cleared by `expand_init` before use and cleaned up after.
     // The `{list}` argument is only honoured when `{nosuf}` was given
     // too, because it is the third.
@@ -176,7 +176,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
-    // SAFETY: `cmdstr` is owned here and handed to the return value;
+    // SAFETY throughout: `cmdstr` is owned here and handed to the return value;
     // `expand_filename` may replace it with another owned string.
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
@@ -209,7 +209,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// `setenv({name}, {val})` — `v:null` unsets.
 pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: the two scratch buffers outlive the strings coerced into them.
+    // SAFETY throughout: the two scratch buffers outlive the strings coerced into them.
     let mut namebuf = NumBuf::new();
     let mut valbuf = NumBuf::new();
     // Coerced before the sandbox check, as upstream has it: the
@@ -231,7 +231,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
-    // SAFETY: both strings are coerced from the frame and NUL-terminated;
+    // SAFETY throughout: both strings are coerced from the frame and NUL-terminated;
     // the nine bytes read below are covered by the length check.
     let fname = arg_string_chk(&mut numbuf, args.get(0));
     if fname.is_null() {
@@ -296,7 +296,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
-    // SAFETY: `p` is coerced from the frame and NUL-terminated once the
+    // SAFETY throughout: `p` is coerced from the frame and NUL-terminated once the
     // null check has passed.
     let p = arg_string_chk(&mut numbuf, args.get(0));
     if p.is_null() {
@@ -324,7 +324,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// `swapfilelist()` — every swap file in 'directory'.
 pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
-    // SAFETY: `recover_names` appends to the list just allocated.
+    // SAFETY throughout: `recover_names` appends to the list just allocated.
     list_alloc_ret(rettv, kListLenUnknown as isize);
     let list = unsafe { rettv.vval.v_list };
     let (fname, dirp) = (ptr::null_mut(), ptr::null_mut());
@@ -335,7 +335,7 @@ pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the dict is allocated into the return value first, so
+    // SAFETY throughout: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
     dict_alloc_ret(rettv);
     unsafe { swapfile_dict(arg_string(&mut numbuf, args.get(0)), rettv.vval.v_dict) };

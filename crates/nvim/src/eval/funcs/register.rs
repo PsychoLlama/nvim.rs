@@ -44,7 +44,7 @@ type TypeBuf = [c_char; 67];
 /// `args.ptr(0)` is a live typval.
 unsafe fn regname(args: Args<'_>) -> Option<c_int> {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation; both sources are NUL-terminated.
+    // SAFETY throughout: the caller's obligation; both sources are NUL-terminated.
     let name = if args.has(0) {
         let name = arg_string_chk(&mut numbuf, args.get(0));
         if name.is_null() {
@@ -207,7 +207,7 @@ unsafe fn get_yank_type(
     yank_type: &mut MotionType,
     block_len: &mut c_int,
 ) -> c_int {
-    // SAFETY: the caller's obligation; `getdigits_int` only walks forward
+    // SAFETY throughout: the caller's obligation; `getdigits_int` only walks forward
     // and stops at the first non-digit.
     let mut p = *pp;
     match unsafe { *p } as u8 {
@@ -234,7 +234,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf4 = NumBuf::new();
     let mut numbuf5 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; every string
+    // SAFETY throughout: the arguments and `rettv` are live typvals; every string
     // read below is NUL-terminated and outlives its use.
     // Non-zero means "did not set anything", which is what every early
     // return leaves behind.

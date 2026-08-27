@@ -316,7 +316,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
 
-    // SAFETY: the caller's obligation; `xp_buf` is the context's own scratch
+    // SAFETY throughout: the caller's obligation; `xp_buf` is the context's own scratch
     // and every builtin name plus three bytes fits in it.
     if idx == 0 {
         BUILTIN_IDX.set(-1);
@@ -364,7 +364,7 @@ pub unsafe fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// functions are still being offered.
     static VAR_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
 
-    // SAFETY: the caller's obligation.
+    // SAFETY throughout: the caller's obligation.
     if idx == 0 {
         VAR_IDX.set(-1);
     }
@@ -423,7 +423,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
 pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value; the row's
+    // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     let mut f: float_T = 0.0;
     unsafe { (*rettv).v_type = VAR_FLOAT };
@@ -439,7 +439,7 @@ pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fpt
 /// The body every builtin that is really an API function shares. The
 /// generated table puts the RPC handler in the row's payload.
 pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value; `items`
+    // SAFETY throughout: the dispatcher's argument array and return value; `items`
     // outlives the `Array` that borrows it, and the arena owns what the
     // conversion allocates until it is freed below.
     if check_secure() {
@@ -550,7 +550,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
 /// `arg` is a live typval.
 pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation. The guard is what makes E158 the
+    // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
     let no_emsg = Suppress::emsg();
     let buf = unsafe { tv_get_buf(arg, 0) };

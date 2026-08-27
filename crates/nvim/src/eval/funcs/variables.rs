@@ -35,7 +35,7 @@ const NO_CALLBACK: Callback = Callback {
 pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: every callee below is a C entry point taking live typvals from
+    // SAFETY throughout: every callee below is a C entry point taking live typvals from
     // the frame; the callback is handed to the watcher, which takes it over.
     if check_secure() {
         return;
@@ -74,7 +74,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
 pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
-    // SAFETY: as `f_dictwatcheradd`; the callback built here is only used to
+    // SAFETY throughout: as `f_dictwatcheradd`; the callback built here is only used to
     // identify a watcher and is freed before returning.
     if check_secure() {
         return;
@@ -157,7 +157,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `va_list` handed in is a zeroed placeholder that is never read.
 pub unsafe fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the measuring call writes nothing; the second is handed a
+    // SAFETY throughout: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.
     let base = args.ptr(0);
     let fmt = c"%p".as_ptr();
