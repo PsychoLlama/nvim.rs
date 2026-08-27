@@ -40,11 +40,9 @@ pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_c
         varnamebuflen.set(len);
     }
     let buf = varnamebuf.get();
-    unsafe {
-        *buf = prefix as c_char;
-        *buf.add(1) = b':' as c_char;
-        strcpy(buf.add(2), name);
-    }
+    unsafe { *buf = prefix as c_char };
+    unsafe { *buf.add(1) = b':' as c_char };
+    unsafe { strcpy(buf.add(2), name) };
     buf
 }
 
@@ -107,17 +105,15 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // opened over, which is `prevwin` while the command-line window is
     // current.
     let win = unsafe { prevwin_curwin() };
-    if let Some(key) = step(&bdone, unsafe {
-        &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab
-    }) {
+    let bvars = unsafe { &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab };
+    if let Some(key) = step(&bdone, bvars) {
         return unsafe { cat_prefix_varname(b'b' as c_int, key) };
     }
     if let Some(key) = step(&wdone, unsafe { &raw const (*(*win).w_vars).dv_hashtab }) {
         return unsafe { cat_prefix_varname(b'w' as c_int, key) };
     }
-    if let Some(key) = step(&tdone, unsafe {
-        &raw const (*(*curtab.get()).tp_vars).dv_hashtab
-    }) {
+    let tvars = unsafe { &raw const (*(*curtab.get()).tp_vars).dv_hashtab };
+    if let Some(key) = step(&tdone, tvars) {
         return unsafe { cat_prefix_varname(b't' as c_int, key) };
     }
     let v = vidx.get();
@@ -155,11 +151,7 @@ pub unsafe fn eval_variable(
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
         if !rettv.is_null() && verbose {
-            semsg_c!(
-                unsafe { gettext(c"E121: Undefined variable: %.*s".as_ptr()) },
-                len,
-                name,
-            );
+            semsg_c!(translate_lit(c"E121: Undefined variable: %.*s"), len, name,);
         }
         return FAIL;
     }
@@ -216,12 +208,8 @@ pub unsafe fn find_var(
     let no_autoload = no_autoload || !htp.is_null();
     // SAFETY: `varname` points inside `name`, so the subtraction cannot go
     // negative; the scope's first character is what names it.
-    let (htname, vlen) = unsafe {
-        (
-            *name as c_int,
-            name_len - varname.offset_from(name) as size_t,
-        )
-    };
+    let htname = c_int::from(unsafe { *name });
+    let vlen = name_len - unsafe { varname.offset_from(name) } as size_t;
     let ret = unsafe { find_var_in_ht(ht, htname, varname, vlen, no_autoload) };
     if !ret.is_null() {
         return ret;
@@ -431,7 +419,7 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
             n = unsafe { handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) }
                 == OK;
             if n {
-                unsafe { tv_clear(&raw mut tv) };
+                clear_local(&mut tv);
             }
         }
     }

@@ -114,7 +114,7 @@ pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     rettv.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments and `rettv` are live typvals; the saved state is a
     // live local that `win_execute_after` is given whatever happens between.
-    let id = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+    let id = number_as_int(arg_number(args, 0));
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
         return;
     };
@@ -160,10 +160,8 @@ pub unsafe fn switch_win_noblock(
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
     // storage and nothing below can reach it, so the exclusive borrow is
     // sound; all-zero is a valid `switchwin_T`.
-    let switchwin = unsafe {
-        memset(switchwin.cast(), 0, size_of::<switchwin_T>());
-        &mut *switchwin
-    };
+    unsafe { memset(switchwin.cast(), 0, size_of::<switchwin_T>()) };
+    let switchwin = unsafe { &mut *switchwin };
     switchwin.sw_curwin = curwin.get();
     if win == curwin.get() {
         switchwin.sw_same_win = true;

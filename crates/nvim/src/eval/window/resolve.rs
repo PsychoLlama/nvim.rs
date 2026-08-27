@@ -133,13 +133,10 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
     } else {
         // SAFETY: the caller's obligation; `endp` is a live local and
         // `tv_get_string_chk` hands back a NUL-terminated string or NULL.
-        let resolved = unsafe {
-            let arg = numbuf.string_chk(argvar);
-            if arg.is_null() {
-                None
-            } else {
-                relative_win(tp, twin, arg)
-            }
+        let arg = unsafe { numbuf.string_chk(argvar) };
+        let resolved = match arg.is_null() {
+            true => None,
+            false => unsafe { relative_win(tp, twin, arg) },
         };
         match resolved {
             Some(wp) => twin = wp,
@@ -175,30 +172,28 @@ unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win
     }
     let mut endp: *mut c_char = ptr::null_mut();
     let count = number_as_int(unsafe { strtol(arg, &raw mut endp, 10) }).max(1);
-    let direction = (!endp.is_null() && c_int::from(unsafe { *endp }) != NUL).then(|| {
-        // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally;
-        // `count` says how many neighbours to step.
-        if unsafe { strequal(endp, c"j".as_ptr()) } {
-            Some(unsafe { win_vert_neighbor(tp.raw(), twin.raw(), false, count) })
-        } else if unsafe { strequal(endp, c"k".as_ptr()) } {
-            Some(unsafe { win_vert_neighbor(tp.raw(), twin.raw(), true, count) })
-        } else if unsafe { strequal(endp, c"h".as_ptr()) } {
-            Some(unsafe { win_horz_neighbor(tp.raw(), twin.raw(), true, count) })
-        } else if unsafe { strequal(endp, c"l".as_ptr()) } {
-            Some(unsafe { win_horz_neighbor(tp.raw(), twin.raw(), false, count) })
-        } else {
-            None
-        }
-    });
-    match direction.flatten() {
+    let rest = (!endp.is_null() && c_int::from(unsafe { *endp }) != NUL)
+        .then(|| unsafe { CStr::from_ptr(endp) });
+    // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally; `count`
+    // says how many neighbours to step. The comparison is `strequal`'s, which
+    // is a whole-string one.
+    let (tpr, twr) = (tp.raw(), twin.raw());
+    let direction = match rest.map(CStr::to_bytes) {
+        // SAFETY: a live tab page and window.
+        Some(b"j") => Some(unsafe { win_vert_neighbor(tpr, twr, false, count) }),
+        Some(b"k") => Some(unsafe { win_vert_neighbor(tpr, twr, true, count) }),
+        Some(b"h") => Some(unsafe { win_horz_neighbor(tpr, twr, true, count) }),
+        Some(b"l") => Some(unsafe { win_horz_neighbor(tpr, twr, false, count) }),
+        _ => None,
+    };
+    match direction {
         // The neighbour walks always answer a window, `twin` itself when
         // there is nothing that way.
         Some(wp) => Some(unsafe { Win::new(wp) }),
         None => {
-            crate::semsg!(
-                "E15: Invalid expression: \"{}\"",
-                unsafe { CStr::from_ptr(arg) }.to_string_lossy()
-            );
+            // SAFETY: the caller's obligation -- a NUL-terminated argument.
+            let text = unsafe { CStr::from_ptr(arg) }.to_string_lossy();
+            crate::semsg!("E15: Invalid expression: \"{}\"", text);
             None
         }
     }
@@ -212,7 +207,7 @@ pub unsafe fn f_win_getid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         rettv.vval.v_number = varnumber_T::from(cur_win().handle);
         return;
     }
-    let winnr = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+    let winnr = number_as_int(arg_number(args, 0));
     if winnr <= 0 {
         rettv.vval.v_number = 0;
         return;
@@ -223,7 +218,7 @@ pub unsafe fn f_win_getid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let tp = if !args.has(1) {
         cur_tab()
     } else {
-        match tabpage_by_nr(number_as_int(unsafe { tv_get_number(args.ptr(1)) })) {
+        match tabpage_by_nr(number_as_int(arg_number(args, 1))) {
             Some(tp) => tp,
             None => {
                 // Unlike every other failure here, a bad tab page
@@ -253,7 +248,7 @@ pub unsafe fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the two counters are
     // live locals the callee writes only when it finds the window.
-    let id: handle_T = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+    let id: handle_T = number_as_int(arg_number(args, 0));
     let (mut winnr, mut tabnr) = (1, 1);
     unsafe { win_get_tabwin(id, &raw mut tabnr, &raw mut winnr) };
     let list = unsafe { tv_list_alloc_ret(rettv, 2) };
@@ -288,7 +283,7 @@ pub unsafe fn f_win_findbuf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the arguments and `rettv` are live typvals, and the list stays
     // alive for the appends because `rettv` owns it.
     let list = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
-    let bufnr = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+    let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == bufnr) {
         unsafe { tv_list_append_number(list, varnumber_T::from(wp.handle)) };
     }
@@ -332,28 +327,27 @@ pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals; the tab page globals are set.
-    let nr = unsafe {
-        if !args.has(0) {
-            tabpage_index(curtab.get())
-        } else {
-            let arg = numbuf.string_chk(args.ptr(0));
-            if arg.is_null() {
-                0
-            } else if strcmp(arg, c"$".as_ptr()) == 0 {
-                // `tabpage_index(NULL)` counts one past the last tab page.
-                tabpage_index(ptr::null_mut()) - 1
-            } else if strcmp(arg, c"#".as_ptr()) == 0 {
+    let nr = if !args.has(0) {
+        tabpage_index(curtab.get())
+    } else {
+        // SAFETY: the arguments are live typvals, and `tv_get_string_chk`
+        // hands back a NUL-terminated string or NULL.
+        let arg = unsafe { numbuf.string_chk(args.ptr(0)) };
+        let word = (!arg.is_null()).then(|| unsafe { CStr::from_ptr(arg) });
+        match word.map(CStr::to_bytes) {
+            None => 0,
+            // `tabpage_index(NULL)` counts one past the last tab page.
+            Some(b"$") => tabpage_index(ptr::null_mut()) - 1,
+            Some(b"#") => {
                 let last = lastused_tabpage.get();
-                if valid_tabpage(last) {
-                    tabpage_index(last)
-                } else {
-                    0
+                match valid_tabpage(last) {
+                    true => tabpage_index(last),
+                    false => 0,
                 }
-            } else {
-                crate::semsg!(
-                    "E15: Invalid expression: \"{}\"",
-                    CStr::from_ptr(arg).to_string_lossy()
-                );
+            }
+            Some(_) => {
+                let text = word.unwrap_or(c"").to_string_lossy();
+                crate::semsg!("E15: Invalid expression: \"{}\"", text);
                 0
             }
         }
@@ -365,12 +359,11 @@ pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 pub unsafe fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
-    let nr = unsafe {
-        let tp = TabPage::from_raw(find_tabpage(number_as_int(tv_get_number(args.ptr(0)))));
-        match tp {
-            Some(tp) => get_winnr(tp, args.ptr(1)),
-            None => 0,
-        }
+    // SAFETY: the arguments are live typvals.
+    let n = number_as_int(arg_number(args, 0));
+    let nr = match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+        Some(tp) => unsafe { get_winnr(tp, args.ptr(1)) },
+        None => 0,
     };
     rettv.vval.v_number = varnumber_T::from(nr);
 }
@@ -379,7 +372,7 @@ pub unsafe fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_winbufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
-    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
+    let wp = arg_win(args, 0);
     rettv.vval.v_number = match wp {
         Some(wp) => varnumber_T::from(wp.buffer().handle),
         None => -1,

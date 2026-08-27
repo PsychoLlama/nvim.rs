@@ -36,10 +36,7 @@ pub unsafe fn eval_one_expr_in_str(
     let block_start = unsafe { skipwhite(p.add(1)) };
     let mut block_end = block_start;
     if unsafe { *block_start } == NUL as c_char {
-        semsg_c!(
-            unsafe { gettext(&raw const e_missing_close_curly_str as *const c_char) },
-            p,
-        );
+        semsg_c!(translate(&e_missing_close_curly_str), p,);
         return ptr::null_mut();
     }
     if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) } == FAIL {
@@ -47,10 +44,7 @@ pub unsafe fn eval_one_expr_in_str(
     }
     block_end = unsafe { skipwhite(block_end) };
     if unsafe { *block_end } != b'}' as c_char {
-        semsg_c!(
-            unsafe { gettext(&raw const e_missing_close_curly_str as *const c_char) },
-            p,
-        );
+        semsg_c!(translate(&e_missing_close_curly_str), p,);
         return ptr::null_mut();
     }
     if evaluate {
@@ -101,10 +95,7 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(1) };
             escaped_brace = true;
         } else if here == b'}' {
-            semsg_c!(
-                unsafe { gettext(&raw const e_stray_closing_curly_str as *const c_char) },
-                str,
-            );
+            semsg_c!(translate(&e_stray_closing_curly_str), str,);
             unsafe { ga_clear(&raw mut ga) };
             return ptr::null_mut();
         }
@@ -157,8 +148,8 @@ pub unsafe fn heredoc_get(
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `exarg_T` outlives.
     let mut ea = unsafe { Ea::new(eap) };
-    let mut marker_indent_len = 0;
-    let mut text_indent_len = 0;
+    let mut marker_indent_len: c_int = 0;
+    let mut text_indent_len: c_int = 0;
     let mut text_indent: *mut c_char = ptr::null_mut();
     let dot = [b'.' as c_char, NUL as c_char];
 
@@ -171,7 +162,7 @@ pub unsafe fn heredoc_get(
         line_arg = unsafe { nl_ptr.add(1) };
         unsafe { *nl_ptr = NUL as c_char };
     } else if ea.ea_getline.is_none() {
-        unsafe { emsg(gettext(e_cannot_use_heredoc_here.as_ptr())) };
+        emsg_lit(e_cannot_use_heredoc_here);
         return ptr::null_mut();
     }
 
@@ -180,10 +171,10 @@ pub unsafe fn heredoc_get(
     // block.
     let is_word = |at: *const c_char, word: &CStr| -> bool {
         debug_assert!(word.to_bytes().len() == 4);
-        unsafe {
-            strncmp(at, word.as_ptr(), 4) == 0
-                && (*at.add(4) == NUL as c_char || ascii_iswhite(*at.add(4) as c_int))
-        }
+        // SAFETY: `at` is NUL-terminated, so the fifth byte is only read
+        // once the first four have proved not to hold the terminator.
+        let same = unsafe { strncmp(at, word.as_ptr(), 4) } == 0;
+        same && ascii_iswhite_or_nul(c_int::from(unsafe { *at.add(4) }))
     };
 
     // The optional `trim` and `eval` words before the marker, in either
@@ -219,10 +210,7 @@ pub unsafe fn heredoc_get(
         let p = unsafe { skiptowhite(marker) };
         let after = unsafe { *skipwhite(p) };
         if after != NUL as c_char && after != COMMENT_CHAR {
-            semsg_c!(
-                unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
-                p
-            );
+            semsg_c!(translate(&e_trailing_arg), p);
             return ptr::null_mut();
         }
         unsafe { *p = NUL as c_char };
@@ -232,14 +220,14 @@ pub unsafe fn heredoc_get(
         let class = unsafe { *(*__ctype_b_loc()).offset(*marker as uint8_t as isize) };
         if !script_get && c_int::from(class) & _ISlower as c_int != 0 {
             let msg = c"E221: Marker cannot start with lower case letter";
-            unsafe { emsg(gettext(msg.as_ptr())) };
+            emsg_lit(msg);
             return ptr::null_mut();
         }
     } else if script_get {
         // An embedded script with no marker takes '.'.
         marker = dot.as_ptr() as *mut c_char;
     } else {
-        unsafe { emsg(gettext(c"E172: Missing marker".as_ptr())) };
+        emsg_lit(c"E172: Missing marker");
         return ptr::null_mut();
     }
 
@@ -250,10 +238,7 @@ pub unsafe fn heredoc_get(
         if heredoc_in_string {
             if unsafe { *line_arg } == NUL as c_char {
                 if !script_get {
-                    semsg_c!(
-                        unsafe { gettext(e_missing_end_marker_str.as_ptr()) },
-                        marker
-                    );
+                    semsg_c!(translate_lit(e_missing_end_marker_str), marker);
                 }
                 break;
             }
@@ -269,16 +254,11 @@ pub unsafe fn heredoc_get(
             unsafe { xfree(theline.cast()) };
             // SAFETY: a live command, whose line getter reads its own
             // cookie.
-            theline = unsafe {
-                let getline = (*eap).ea_getline.expect("non-null function pointer");
-                getline(NUL as c_int, (*eap).cookie, 0, false)
-            };
+            let getline = ea.ea_getline.expect("non-null function pointer");
+            theline = unsafe { getline(NUL as c_int, ea.cookie, 0, false) };
             if theline.is_null() {
                 if !script_get {
-                    semsg_c!(
-                        unsafe { gettext(e_missing_end_marker_str.as_ptr()) },
-                        marker
-                    );
+                    semsg_c!(translate_lit(e_missing_end_marker_str), marker);
                 }
                 break;
             }

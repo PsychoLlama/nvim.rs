@@ -197,7 +197,7 @@ pub(crate) unsafe fn tv_to_optval(
             if idx == 0 || unsafe { *s.add(idx) } != NUL as c_char {
                 err = true;
                 semsg_c!(
-                    unsafe { gettext(c"E521: Number required: &%s = '%s'".as_ptr()) },
+                    translate_lit(c"E521: Number required: &%s = '%s'"),
                     option,
                     if s.is_null() { c"".as_ptr() } else { s },
                 );
@@ -225,7 +225,7 @@ pub(crate) unsafe fn tv_to_optval(
         } else {
             if !is_tty_opt {
                 err = true;
-                unsafe { emsg(gettext(&raw const e_string_required as *const c_char)) };
+                emsg_static(&e_string_required);
             }
             NIL_OPTVAL
         }
@@ -287,10 +287,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
 unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     let opt_idx = find_option(unsafe { CStr::from_ptr(varname) });
     if opt_idx == kOptInvalid {
-        semsg_c!(
-            unsafe { gettext(&raw const e_unknown_option2 as *const c_char) },
-            varname,
-        );
+        semsg_c!(translate(&e_unknown_option2), varname,);
         return;
     }
     let mut error = false;

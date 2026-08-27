@@ -115,7 +115,7 @@ pub unsafe fn f_bufname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let buf = if args.has(0) {
         unsafe { Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) }
     } else {
-        Some(unsafe { Buf::current() })
+        Some(cur_buf())
     };
     if let Some(buf) = buf
         && !buf.b_fname.is_null()
@@ -140,7 +140,7 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         // The lookup itself must not report "no such buffer": a second
         // argument asks for the buffer to be created instead.
         let _no_emsg = Suppress::emsg();
-        unsafe { tv_get_buf(args.ptr(0), 0) }
+        arg_buf(args, 0, 0)
     };
     let mut error = false;
     if buf.is_null()
@@ -165,7 +165,7 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// The arguments and `rettv` must be live typvals.
 unsafe fn buf_win_common(args: Args<'_>, rettv: &mut typval_T, get_nr: bool) {
     // SAFETY: the caller's obligation.
-    let buf = unsafe { tv_get_buf_from_arg(args.ptr(0)) };
+    let buf = arg_buf_chk(args, 0);
     if buf.is_null() {
         rettv.vval.v_number = -1;
         return;

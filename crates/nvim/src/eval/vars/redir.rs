@@ -68,7 +68,7 @@ unsafe fn resolve_redir_lval() -> *mut c_char {
 pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     // Catch a bad name early.
     if !eval_isnamec1(unsafe { *name } as c_int) {
-        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        emsg_static(&e_invarg);
         return FAIL;
     }
 
@@ -93,15 +93,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     {
         unsafe { clear_lval(redir_lval.get()) };
         if trailing.is_some_and(|c| c != NUL as c_char) {
-            semsg_c!(
-                unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
-                endp
-            );
+            semsg_c!(translate(&e_trailing_arg), endp);
         } else {
-            semsg_c!(
-                unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-                name
-            );
+            semsg_c!(translate(&e_invarg2), name);
         }
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());
@@ -154,14 +148,11 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
     }
     // SAFETY: the caller's `value` is readable for `value_len` bytes, or is
     // NUL-terminated when the length is -1.
-    let bytes = unsafe {
-        let len = if value_len == -1 {
-            strlen(value)
-        } else {
-            value_len as size_t
-        };
-        slice::from_raw_parts(value.cast::<u8>(), len)
+    let len = match value_len == -1 {
+        true => unsafe { strlen(value) },
+        false => value_len as size_t,
     };
+    let bytes = unsafe { slice::from_raw_parts(value.cast::<u8>(), len) };
     redir_ga.with_mut(|text| text.extend_from_slice(bytes));
 }
 

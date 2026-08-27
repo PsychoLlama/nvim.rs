@@ -19,11 +19,9 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 pub unsafe fn f_getwinpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value, and the list it is given
     // stays alive for the two appends.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, 2);
-        tv_list_append_number(list, -1);
-        tv_list_append_number(list, -1);
-    };
+    let list = unsafe { tv_list_alloc_ret(rettv, 2) };
+    unsafe { tv_list_append_number(list, -1) };
+    unsafe { tv_list_append_number(list, -1) };
 }
 
 /// `getwinposx()` — always -1; there is no GUI window.
@@ -47,7 +45,7 @@ pub unsafe fn f_getwinposy(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// The arguments must be live typvals.
 unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
     // SAFETY: the caller's obligation.
-    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) }?;
+    let wp = arg_win(args, 0)?;
     if wp.w_floating {
         return None;
     }
@@ -55,7 +53,7 @@ unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
         crate::semsg!("E1308: Cannot resize a window in another tab page");
         return None;
     }
-    Some((wp, number_as_int(unsafe { tv_get_number(args.ptr(1)) })))
+    Some((wp, number_as_int(arg_number(args, 1))))
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
@@ -96,13 +94,11 @@ pub unsafe fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list stays
     // alive for the two appends because `rettv` owns it.
-    unsafe {
-        let list = tv_list_alloc_ret(rettv, 2);
-        let wp = find_win_by_nr_or_id(args.ptr(0));
-        let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
-        tv_list_append_number(list, varnumber_T::from(row));
-        tv_list_append_number(list, varnumber_T::from(col));
-    };
+    let list = unsafe { tv_list_alloc_ret(rettv, 2) };
+    let wp = arg_win(args, 0);
+    let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
+    unsafe { tv_list_append_number(list, varnumber_T::from(row)) };
+    unsafe { tv_list_append_number(list, varnumber_T::from(col)) };
 }
 
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the
@@ -120,7 +116,8 @@ unsafe fn splitmove_options(opts: *mut typval_T) -> (c_int, c_int) {
     }
     let di = unsafe { tv_dict_find(d, c"rightbelow".as_ptr(), -1) };
     if !di.is_null() {
-        flags |= if unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0 {
+        let below = unsafe { tv_get_number(&raw mut (*di).di_tv) };
+        flags |= if below != 0 {
             WSP_BELOW.cast_signed()
         } else {
             WSP_ABOVE.cast_signed()
@@ -139,8 +136,8 @@ pub unsafe fn f_win_splitmove(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
     // autocommand may close one under it.
-    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
-    let targetwin = unsafe { find_win_by_nr_or_id(args.ptr(1)) };
+    let wp = arg_win(args, 0);
+    let targetwin = arg_win(args, 1);
     let oldwin = cur_win();
     let (Some(wp), Some(targetwin)) = (wp, targetwin) else {
         crate::semsg!("E957: Invalid window number");
@@ -203,7 +200,7 @@ pub unsafe fn f_winline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_winheight(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
-    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
+    let wp = arg_win(args, 0);
     rettv.vval.v_number = wp.map_or(-1, |wp| varnumber_T::from(wp.w_view_height));
 }
 
@@ -211,7 +208,7 @@ pub unsafe fn f_winheight(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 pub unsafe fn f_winwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
-    let wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
+    let wp = arg_win(args, 0);
     rettv.vval.v_number = wp.map_or(-1, |wp| varnumber_T::from(wp.w_view_width));
 }
 
@@ -224,27 +221,18 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: `curtab` is set; `ga` and `buf` are live locals of this frame,
     // and the growarray's buffer is handed to `rettv` at the end rather than
     // freed.
-    let (mut buf, mut ga, tp) = unsafe {
-        let mut ga: garray_T = mem::zeroed();
-        // One byte per item: the answer is built as text.
-        ga_init(&raw mut ga, 1, 70);
-        ([0 as c_char; 50], ga, cur_tab())
-    };
+    let mut ga: garray_T = unsafe { mem::zeroed() };
+    // One byte per item: the answer is built as text.
+    unsafe { ga_init(&raw mut ga, 1, 70) };
+    let (mut buf, tp) = ([0 as c_char; 50], cur_tab());
     // Scoped so the growarray it borrows is free again for the tail below.
     {
         let mut emit = |format: &CStr, winnr: c_int, size: c_int| {
             // SAFETY: a NUL-terminated format with exactly the two `%d`s it
             // is given, formatted into a live local and appended to a live
             // growarray.
-            let len = unsafe {
-                vim_snprintf_safelen(
-                    buf.as_mut_ptr(),
-                    size_of_val(&buf),
-                    format.as_ptr(),
-                    winnr,
-                    size,
-                )
-            };
+            let (into, room, f) = (buf.as_mut_ptr(), size_of_val(&buf), format.as_ptr());
+            let len = unsafe { vim_snprintf_safelen(into, room, f, winnr, size) };
             unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), len) };
         };
         let numbered = || (1..).zip(windows_in_tab(tp).filter(|wp| wp.has_winnr(tp)));
@@ -267,12 +255,11 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// current value.
 pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and `curwin` is set.
-    let (dict, mut win) = unsafe {
-        if tv_check_for_nonnull_dict_arg(argvars, 0) == FAIL {
-            return;
-        }
-        ((*argvars).vval.v_dict, cur_win())
-    };
+    if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) } == FAIL {
+        return;
+    }
+    let dict = unsafe { (*argvars).vval.v_dict };
+    let mut win = cur_win();
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
         // entry of it or NULL.
@@ -342,10 +329,9 @@ fn restored_topline(topline: linenr_T, line_count: linenr_T) -> linenr_T {
 pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `rettv` owns it.
-    let (dict, win) = unsafe {
-        tv_dict_alloc_ret(rettv);
-        ((*rettv).vval.v_dict, cur_win())
-    };
+    unsafe { tv_dict_alloc_ret(rettv) };
+    let dict = unsafe { (*rettv).vval.v_dict };
+    let win = cur_win();
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };

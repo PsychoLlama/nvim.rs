@@ -558,7 +558,7 @@ pub unsafe fn before_set_vvar(
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
             unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
-            unsafe { tv_clear(&raw mut oldtv) };
+            clear_local(&mut oldtv);
         }
         return false;
     } else if di.di_tv.v_type == VAR_NUMBER {
@@ -580,7 +580,7 @@ pub unsafe fn before_set_vvar(
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
             unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
-            unsafe { tv_clear(&raw mut oldtv) };
+            clear_local(&mut oldtv);
         }
         return false;
     } else if di.di_tv.v_type != tv.v_type {
@@ -634,7 +634,7 @@ pub(crate) unsafe fn set_vvar_item(
         // SAFETY: this item's value, a live local, and the caller's `tv`.
         unsafe { tv_copy(cur, &raw mut tmp) };
         if unsafe { eexe_mod_op(&raw mut tmp, tv, op) } != OK {
-            unsafe { tv_clear(&raw mut tmp) };
+            clear_local(&mut tmp);
             return;
         }
         &raw mut tmp
@@ -652,12 +652,12 @@ pub(crate) unsafe fn set_vvar_item(
     if !typed {
         if type_error {
             semsg_c!(
-                unsafe { gettext(e_setting_v_str_to_value_with_wrong_type.as_ptr()) },
+                translate_lit(e_setting_v_str_to_value_with_wrong_type),
                 varname,
             );
         }
         // SAFETY: a live local.
-        unsafe { tv_clear(&raw mut tmp) };
+        clear_local(&mut tmp);
         return;
     }
 
@@ -684,10 +684,10 @@ pub(crate) unsafe fn set_vvar_item(
     if watched {
         // SAFETY: the `v:` dictionary, this item's value and a live local.
         unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
-        unsafe { tv_clear(&raw mut oldtv) };
+        clear_local(&mut oldtv);
     }
     // SAFETY: a live local.
-    unsafe { tv_clear(&raw mut tmp) };
+    clear_local(&mut tmp);
 }
 
 /// Blank the six `v:option_*` variables the `OptionSet` autocommand reads.

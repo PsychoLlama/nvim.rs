@@ -49,7 +49,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     // will be entered at.
     let lnum = if buf.raw() == curbuf.get() {
         // SAFETY: `curwin` is set from startup to exit.
-        unsafe { Win::current() }.w_cursor.lnum
+        cur_win().w_cursor.lnum
     } else {
         // SAFETY: the answer is a live mark.
         unsafe { buflist_findlnum(buf) }
@@ -68,14 +68,8 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     );
     nr(c"command", varnumber_T::from(buf.raw() == cmdwin_buf.get()));
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
-    unsafe {
-        tv_dict_add_dict(
-            dict,
-            c"variables".as_ptr(),
-            c"variables".count_bytes(),
-            buf.b_vars,
-        )
-    };
+    let vars = c"variables";
+    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buf.b_vars) };
 
     // The windows displaying this buffer.
     // SAFETY: the list is handed to the dictionary below, so it is not leaked.
@@ -124,7 +118,7 @@ pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             };
         }
     } else if args.ty(0) != VAR_UNKNOWN {
-        argbuf = unsafe { tv_get_buf_from_arg(args.ptr(0)) };
+        argbuf = arg_buf_chk(args, 0);
         if argbuf.is_null() {
             return;
         }

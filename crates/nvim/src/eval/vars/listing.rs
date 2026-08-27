@@ -16,10 +16,6 @@ use core::ptr;
 use super::*;
 use crate::types::{FAIL, IOSIZE, NUL};
 
-/// One of the `list_*_vars` above: everything a bare `g:`/`b:`/`w:`/... on a
-/// `:let` line can name.
-type ScopeLister = unsafe fn(*mut c_int);
-
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
 ///
 /// `empty` includes the variables holding the null string, which only the
@@ -142,10 +138,7 @@ pub(crate) unsafe fn list_arg_vars(
             let c = c_int::from(unsafe { *arg });
             if !ascii_iswhite(c) && ends_excmd(c) == 0 {
                 emsg_severe.set(true);
-                semsg_c!(
-                    unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
-                    arg
-                );
+                semsg_c!(translate(&e_trailing_arg), arg);
                 break;
             }
             arg = unsafe { skipwhite(arg) };
@@ -161,10 +154,7 @@ pub(crate) unsafe fn list_arg_vars(
             if len <= 0 {
                 if len < 0 && !aborting() {
                     emsg_severe.set(true);
-                    semsg_c!(
-                        unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-                        arg
-                    );
+                    semsg_c!(translate(&e_invarg2), arg);
                     unsafe { xfree(tofree.cast()) };
                     return arg;
                 }
@@ -206,10 +196,7 @@ pub(crate) unsafe fn list_arg_vars(
                     // SAFETY: `first` is the caller's obligation, and each
                     // lister walks the editor's own scope dictionary.
                     Some(lister) => unsafe { lister(first) },
-                    None => semsg_c!(
-                        unsafe { gettext(c"E738: Can't list variables for %s".as_ptr()) },
-                        name
-                    ),
+                    None => semsg_c!(translate_lit(c"E738: Can't list variables for %s"), name),
                 }
             } else {
                 let s = unsafe { encode_tv2echo(&raw mut tv, ptr::null_mut()) };
@@ -229,7 +216,7 @@ pub(crate) unsafe fn list_arg_vars(
                 unsafe { list_one_var_a(c"".as_ptr(), used_name, name_size, ty, text, first) };
                 unsafe { xfree(s.cast()) };
             }
-            unsafe { tv_clear(&raw mut tv) };
+            clear_local(&mut tv);
         }
         unsafe { xfree(tofree.cast()) };
         arg = unsafe { skipwhite(arg) };

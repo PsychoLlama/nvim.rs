@@ -22,13 +22,10 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
     let buf = wp.buffer();
-    let (dict, textoff) = unsafe {
-        // "botline" is one past the last displayed line, hence the -1; the
-        // row and column counts are zero-based inside and one-based to
-        // vimscript.
-        validate_botline_win(wp);
-        (tv_dict_alloc(), win_col_off(wp.raw()))
-    };
+    // "botline" is one past the last displayed line, hence the -1; the row
+    // and column counts are zero-based inside and one-based to vimscript.
+    validate_botline_win(wp);
+    let (dict, textoff) = unsafe { (tv_dict_alloc(), win_col_off(wp.raw())) };
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
@@ -56,14 +53,8 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
         varnumber_T::from(quickfix && !wp.w_llist_ref.is_null()),
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
-    unsafe {
-        tv_dict_add_dict(
-            dict,
-            c"variables".as_ptr(),
-            c"variables".count_bytes(),
-            wp.w_vars,
-        )
-    };
+    let vars = c"variables";
+    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), wp.w_vars) };
     dict
 }
 
@@ -76,16 +67,11 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
     // than freed here, so both stay alive for the appends below.
     // The keys go in in upstream's order: a dictionary's iteration order is
     // its hash table's, which insertion order can still perturb.
-    let (dict, windows) = unsafe {
-        let dict = tv_dict_alloc();
-        tv_dict_add_nr(
-            dict,
-            c"tabnr".as_ptr(),
-            c"tabnr".count_bytes(),
-            varnumber_T::from(tp_idx),
-        );
-        (dict, tv_list_alloc(kListLenMayKnow as ptrdiff_t))
-    };
+    let (nrkey, hint) = (c"tabnr", kListLenMayKnow as ptrdiff_t);
+    let nr = varnumber_T::from(tp_idx);
+    let dict = unsafe { tv_dict_alloc() };
+    unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
+    let windows = unsafe { tv_list_alloc(hint) };
     let append = |handle: handle_T| {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, varnumber_T::from(handle)) };
@@ -94,15 +80,9 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
         append(wp.handle);
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
-    unsafe { tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".count_bytes(), windows) };
-    unsafe {
-        tv_dict_add_dict(
-            dict,
-            c"variables".as_ptr(),
-            c"variables".count_bytes(),
-            tp.tp_vars,
-        )
-    };
+    let (wins, vars) = (c"windows", c"variables");
+    unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), windows) };
+    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp.tp_vars) };
     dict
 }
 
@@ -114,18 +94,16 @@ pub unsafe fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // The length hint is upstream's, and is the way round it looks: one entry
     // is expected when *no* tab page was named.
     let one = args.has(0);
-    let (list, wanted) = unsafe {
-        let list = tv_list_alloc_ret(rettv, if one { kListLenMayKnow as ptrdiff_t } else { 1 });
-        let wanted = if one {
-            let n = number_as_int(tv_get_number_chk(args.ptr(0), ptr::null_mut()));
-            match TabPage::from_raw(find_tabpage(n)) {
-                Some(tp) => Some(tp),
-                None => return,
-            }
-        } else {
-            None
-        };
-        (list, wanted)
+    let hint = if one { kListLenMayKnow as ptrdiff_t } else { 1 };
+    let list = unsafe { tv_list_alloc_ret(rettv, hint) };
+    let wanted = if one {
+        let n = number_as_int(arg_number_chk(args, 0));
+        match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+            Some(tp) => Some(tp),
+            None => return,
+        }
+    } else {
+        None
     };
     for (tpnr, tp) in (1..).zip(tabs()) {
         if wanted.is_some_and(|want| want != tp) {
@@ -150,17 +128,14 @@ pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk.
-    let (list, wanted) = unsafe {
-        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-        let wanted = if args.has(0) {
-            match win_by_id(number_as_int(tv_get_number(args.ptr(0)))) {
-                Some(wp) => Some(wp),
-                None => return,
-            }
-        } else {
-            None
-        };
-        (list, wanted)
+    let list = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+    let wanted = if args.has(0) {
+        match win_by_id(number_as_int(arg_number(args, 0))) {
+            Some(wp) => Some(wp),
+            None => return,
+        }
+    } else {
+        None
     };
     for (tabnr, tp) in (1..).zip(tabs()) {
         // The window number counts up across the whole tab page even when
@@ -191,16 +166,14 @@ pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
     // SAFETY: the caller's obligation; every list built here is appended to
     // its parent before anything else can fail, so none is leaked.
-    let fr_list = unsafe {
-        // The outer call writes into the caller's list; every nested one gets
-        // a two-element list of its own.
-        if outer {
-            l
-        } else {
-            let nested = tv_list_alloc(2);
-            tv_list_append_list(l, nested);
-            nested
-        }
+    // The outer call writes into the caller's list; every nested one gets a
+    // two-element list of its own.
+    let fr_list = if outer {
+        l
+    } else {
+        let nested = unsafe { tv_list_alloc(2) };
+        unsafe { tv_list_append_list(l, nested) };
+        nested
     };
     let word = |s: &CStr| {
         // SAFETY: a live list and a NUL-terminated string.
@@ -222,11 +195,8 @@ unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
         c"col"
     });
     // SAFETY: a live list, which the parent list takes over.
-    let win_list = unsafe {
-        let win_list = tv_list_alloc(kListLenUnknown as ptrdiff_t);
-        tv_list_append_list(fr_list, win_list);
-        win_list
-    };
+    let win_list = unsafe { tv_list_alloc(kListLenUnknown as ptrdiff_t) };
+    unsafe { tv_list_append_list(fr_list, win_list) };
     for child in fr.children() {
         // SAFETY: a live child frame and the live list just built.
         unsafe { get_framelayout(child, win_list, false) };
@@ -242,7 +212,7 @@ pub unsafe fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let tp = if !args.has(0) {
         cur_tab()
     } else {
-        let n = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
+        let n = number_as_int(arg_number(args, 0));
         match unsafe { TabPage::from_raw(find_tabpage(n)) } {
             Some(tp) => tp,
             None => return,
@@ -260,7 +230,7 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let wp = if !args.has(0) {
         cur_win()
     } else {
-        match unsafe { find_win_by_nr_or_id(args.ptr(0)) } {
+        match arg_win(args, 0) {
             Some(wp) => wp,
             None => {
                 rettv.vval.v_string = unsafe { xstrdup(c"unknown".as_ptr()) };

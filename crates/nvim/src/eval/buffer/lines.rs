@@ -13,6 +13,7 @@
 use super::*;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
+use core::mem::offset_of;
 
 /// Set or append lines in buffer `buf`, from `lines` — any type, converted to
 /// a string, or a List of them.
@@ -35,8 +36,11 @@ pub(crate) unsafe fn set_buffer_lines(
     let mut lnum: linenr_T = lnum_arg + linenr_T::from(append);
     let mut added: c_int = 0;
     let is_curbuf: bool = buf == curbuf.get();
+    // SAFETY: the caller's obligation -- live typvals, and a live buffer or
+    // NULL, which the test below tells apart.
+    let mut ret = unsafe { Tv::new(rettv) };
     if buf.is_null() || !is_curbuf && unsafe { (*buf).b_ml.ml_mfp }.is_null() || lnum < 1 {
-        unsafe { (*rettv).vval.v_number = 1 };
+        ret.vval.v_number = 1;
         return;
     }
     let mut cob = SavedBufferState::new();
@@ -46,14 +50,15 @@ pub(crate) unsafe fn set_buffer_lines(
     let append_lnum: linenr_T = if append {
         lnum - 1
     } else {
-        unsafe { Buf::current() }.line_count()
+        cur_buf().line_count()
     };
     let mut l: *mut list_T = ptr::null_mut();
     let mut li: *mut listitem_T = ptr::null_mut();
     let mut line: *mut c_char = ptr::null_mut();
+    let src = unsafe { Tv::new(lines) };
     '_cleanup: {
-        if unsafe { (*lines).v_type } == VAR_LIST {
-            l = unsafe { (*lines).vval.v_list };
+        if src.v_type == VAR_LIST {
+            l = unsafe { src.vval.v_list };
             if l.is_null() || unsafe { (*l).lv_len } == 0 {
                 break '_cleanup;
             }
@@ -62,35 +67,40 @@ pub(crate) unsafe fn set_buffer_lines(
             line = unsafe { typval_tostring(lines, false) };
         }
         loop {
-            if unsafe { (*lines).v_type } == VAR_LIST {
+            // Re-read, as upstream does: the type tag is the argument's own
+            // and the walk below can run user code.
+            if src.v_type == VAR_LIST {
                 if li.is_null() {
                     break;
                 }
+                let item = unsafe { Li::new(li) };
+                let itv = item.field_ptr(offset_of!(listitem_T, li_tv));
                 unsafe { xfree(line.cast()) };
-                line = unsafe { typval_tostring(&raw mut (*li).li_tv, false) };
-                li = unsafe { (*li).li_next };
+                line = unsafe { typval_tostring(itv, false) };
+                li = item.li_next;
             }
-            unsafe { (*rettv).vval.v_number = 1 };
-            if line.is_null() || lnum > unsafe { Buf::current() }.line_count() + 1 {
+            ret.vval.v_number = 1;
+            if line.is_null() || lnum > cur_buf().line_count() + 1 {
                 break;
             }
             if u_sync_once.get() == 2 {
                 u_sync_once.set(1);
                 u_sync(true);
             }
-            if !append && lnum <= unsafe { Buf::current() }.line_count() {
+            if !append && lnum <= cur_buf().line_count() {
                 let old_len = len_as_int(unsafe { strlen(ml_get(lnum)) });
                 if u_savesub(lnum) == OK && unsafe { ml_replace(lnum, line, true) } == OK {
-                    unsafe { inserted_bytes(lnum, 0, old_len, len_as_int(strlen(line))) };
-                    if is_curbuf && lnum == unsafe { Win::current() }.w_cursor.lnum {
-                        check_cursor_col(unsafe { Win::current() });
+                    let new_len = len_as_int(unsafe { strlen(line) });
+                    unsafe { inserted_bytes(lnum, 0, old_len, new_len) };
+                    if is_curbuf && lnum == cur_win().w_cursor.lnum {
+                        check_cursor_col(cur_win());
                     }
-                    unsafe { (*rettv).vval.v_number = 0 };
+                    ret.vval.v_number = 0;
                 }
             } else if added > 0 || u_save(lnum - 1, lnum) == OK {
                 added += 1;
                 if unsafe { ml_append(lnum - 1, line, 0, false) } == OK {
-                    unsafe { (*rettv).vval.v_number = 0 };
+                    ret.vval.v_number = 0;
                 }
             }
             if l.is_null() {
@@ -111,8 +121,8 @@ pub(crate) unsafe fn set_buffer_lines(
                     wp.w_cursor.lnum += added;
                 }
             }
-            check_cursor_col(unsafe { Win::current() });
-            update_topline(unsafe { Win::current() });
+            check_cursor_col(cur_win());
+            update_topline(cur_win());
         }
     }
     if !is_curbuf {
@@ -127,14 +137,14 @@ pub(crate) unsafe fn set_buffer_lines(
 unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut typval_T, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
-    let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf = arg_buf(args, 0, 0);
     if buf.is_null() {
         rettv.vval.v_number = 1;
         return;
     }
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
-    let lnum = unsafe { tv_get_lnum_buf(args.ptr(1), buf) };
+    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() == did_emsg_before {
         unsafe { set_buffer_lines(buf, lnum, append, args.ptr(2), rettv) };
     }
@@ -153,8 +163,9 @@ unsafe fn get_buffer_lines(
 ) {
     // SAFETY: the caller's obligation; every line index is clamped to the
     // buffer before `ml_get_buf` sees it.
-    unsafe { (*rettv).v_type = if retlist { VAR_LIST } else { VAR_STRING } };
-    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+    let mut ret = unsafe { Tv::new(rettv) };
+    ret.v_type = if retlist { VAR_LIST } else { VAR_STRING };
+    ret.vval.v_string = ptr::null_mut();
     if buf.is_null() || unsafe { (*buf).b_ml.ml_mfp }.is_null() || start < 0 || end < start {
         if retlist {
             unsafe { tv_list_alloc_ret(rettv, 0) };
@@ -166,14 +177,15 @@ unsafe fn get_buffer_lines(
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
         let line = (start >= 1 && start <= buf.line_count())
             .then(|| unsafe { xstrnsave(buf.line(start).raw(), len(buf.line_len(start))) });
-        unsafe { (*rettv).vval.v_string = line.unwrap_or(ptr::null_mut()) };
+        ret.vval.v_string = line.unwrap_or(ptr::null_mut());
         return;
     }
     start = start.max(1);
     end = end.min(buf.line_count());
     let list = unsafe { tv_list_alloc_ret(rettv, (end - start + 1) as ptrdiff_t) };
     for lnum in start..=end {
-        unsafe { tv_list_append_string(list, buf.line(lnum).raw(), buf.line_len(lnum) as ssize_t) };
+        let (text, len) = unsafe { (buf.line(lnum).raw(), buf.line_len(lnum) as ssize_t) };
+        unsafe { tv_list_append_string(list, text, len) };
     }
 }
 
@@ -184,13 +196,13 @@ unsafe fn get_buffer_lines(
 unsafe fn getbufline(args: Args<'_>, rettv: &mut typval_T, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
-    let buf = unsafe { tv_get_buf_from_arg(args.ptr(0)) };
-    let lnum = unsafe { tv_get_lnum_buf(args.ptr(1), buf) };
+    let buf = arg_buf_chk(args, 0);
+    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let end = if args.has(2) {
-        unsafe { tv_get_lnum_buf(args.ptr(2), buf) }
+        unsafe { arg_lnum_buf(args, 2, buf) }
     } else {
         lnum
     };
@@ -202,7 +214,7 @@ pub unsafe fn f_append(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
-    let lnum = unsafe { tv_get_lnum(args.ptr(0)) };
+    let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
         unsafe { set_buffer_lines(curbuf.get(), lnum, true, args.ptr(1), rettv) };
     }
@@ -227,7 +239,7 @@ pub unsafe fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
-    let lnum = unsafe { tv_get_lnum(args.ptr(0)) };
+    let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
         unsafe { set_buffer_lines(curbuf.get(), lnum, false, args.ptr(1), rettv) };
     }
@@ -237,10 +249,10 @@ pub unsafe fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 pub unsafe fn f_getline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
-    let lnum = unsafe { tv_get_lnum(args.ptr(0)) };
+    let lnum = arg_lnum(args, 0);
     // One argument answers a string, a range answers a list.
     let (end, retlist) = if args.has(1) {
-        (unsafe { tv_get_lnum(args.ptr(1)) }, true)
+        (arg_lnum(args, 1), true)
     } else {
         (lnum, false)
     };
@@ -268,24 +280,23 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     // SAFETY: the arguments and `rettv` are live typvals; `cob` is a live
     // local, restored on every path out of the change.
     let did_emsg_before = did_emsg.get();
-    let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf = arg_buf(args, 0, 0);
     if buf.is_null() {
         return;
     }
-    let first = unsafe { tv_get_lnum_buf(args.ptr(1), buf) };
+    let first = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let mut last = if args.has(2) {
-        unsafe { tv_get_lnum_buf(args.ptr(2), buf) }
+        unsafe { arg_lnum_buf(args, 2, buf) }
     } else {
         first
     };
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null()
-        || first < 1
-        || first > unsafe { (*buf).b_ml.ml_line_count }
-        || last < first
-    {
+    // SAFETY: `tv_get_buf` answers a live buffer or NULL, and the null was
+    // returned above.
+    let (mfp, count) = unsafe { ((*buf).b_ml.ml_mfp, (*buf).b_ml.ml_line_count) };
+    if mfp.is_null() || first < 1 || first > count || last < first {
         return;
     }
     let is_curbuf = buf == curbuf.get();
@@ -293,7 +304,7 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     if !is_curbuf {
         unsafe { cob.prepare(Buf::new(buf)) };
     }
-    last = last.min(unsafe { Buf::current() }.line_count());
+    last = last.min(cur_buf().line_count());
     let count = last - first + 1;
     if u_sync_once.get() == 2 {
         u_sync_once.set(1);
@@ -318,7 +329,7 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                 wp.w_cursor.lnum = line_count;
             }
         }
-        check_cursor_col(unsafe { Win::current() });
+        check_cursor_col(cur_win());
         unsafe { deleted_lines_mark(first, count) };
         rettv.vval.v_number = 0;
     }

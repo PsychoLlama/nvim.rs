@@ -167,7 +167,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         if rettv.v_type == VAR_LIST {
             list = unsafe { rettv.vval.v_list };
         } else {
-            unsafe { tv_clear(&raw mut rettv) };
+            clear_local(&mut rettv);
         }
     }
 
@@ -196,7 +196,7 @@ pub unsafe fn get_spellword(
     if unsafe { tv_list_len(list) } != 2 {
         let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
         // SAFETY: a NUL-terminated literal.
-        unsafe { emsg(gettext(msg.as_ptr())) };
+        emsg_lit(msg);
         return -1;
     }
     unsafe { *ret_word = tv_list_find_str(list, 0, numbuf) };

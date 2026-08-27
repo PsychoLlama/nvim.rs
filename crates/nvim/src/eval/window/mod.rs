@@ -62,7 +62,7 @@ use crate::garray::{ga_append, ga_concat_len, ga_init};
 use crate::main::{
     cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, p_acd, prevwin,
 };
-use crate::memory::{strequal, xfree, xmallocz, xstrdup};
+use crate::memory::{xfree, xmallocz, xstrdup};
 use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
     validate_cursor, win_col_off,
@@ -89,6 +89,29 @@ use crate::window::{
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
     win_valid, win_vert_neighbor,
 };
+/// Argument `i` as a Number.
+///
+/// Safe: [`Args`] carries the promise for the whole frame -- every index it
+/// answers is a live typval -- which is `tv_get_number`'s only precondition.
+/// The same goes for the two below it.
+pub(super) fn arg_number(args: Args<'_>, i: usize) -> varnumber_T {
+    // SAFETY: `Args` promises a live typval at every index.
+    unsafe { tv_get_number(args.ptr(i)) }
+}
+
+/// Argument `i` as a Number, answering 0 for a value that has none.
+pub(super) fn arg_number_chk(args: Args<'_>, i: usize) -> varnumber_T {
+    // SAFETY: as [`arg_number`].
+    unsafe { tv_get_number_chk(args.ptr(i), ptr::null_mut()) }
+}
+
+/// The window argument `i` names: an id in any tab page, or a number in the
+/// current one.
+pub(super) fn arg_win(args: Args<'_>, i: usize) -> Option<Win> {
+    // SAFETY: as [`arg_number`].
+    unsafe { find_win_by_nr_or_id(args.ptr(i)) }
+}
+
 /// The window the editor is working in.
 pub(super) fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.

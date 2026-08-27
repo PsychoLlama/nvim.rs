@@ -71,13 +71,13 @@ pub unsafe fn evalvars_init() {
         unsafe { tv_list_set_lock(type_list, VarLock::Fixed) };
         unsafe { tv_list_ref(type_list) };
         let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };
-        unsafe { (*di).di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX };
-        unsafe {
-            (*di).di_tv = typval_T {
-                v_type: VAR_LIST,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_list: type_list },
-            }
+        // SAFETY: the item just allocated.
+        let mut item = unsafe { Di::new(di) };
+        item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
+        item.di_tv = typval_T {
+            v_type: VAR_LIST,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_list: type_list },
         };
         type_lists[i] = type_list;
         if unsafe { tv_dict_add(msgpack_types_dict, di) } == FAIL {
@@ -163,11 +163,8 @@ pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
     let mut abort = false;
     for i in 1..=script_count() {
         // SAFETY: a live script id, whose own scope dictionary this marks.
-        abort = abort
-            || unsafe {
-                let ht = &raw mut (*script_sv(i)).sv_dict.dv_hashtab;
-                set_ref_in_ht(ht, copyID, ptr::null_mut())
-            };
+        let ht = unsafe { &raw mut (*script_sv(i)).sv_dict.dv_hashtab };
+        abort = abort || unsafe { set_ref_in_ht(ht, copyID, ptr::null_mut()) };
     }
     abort
 }

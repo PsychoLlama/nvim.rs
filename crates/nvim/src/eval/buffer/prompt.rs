@@ -15,6 +15,7 @@ use super::*;
 use crate::eval::typval::{NumBuf, kCallbackNone};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
+use core::mem::offset_of;
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
 /// to start a fresh line rather than extending this one.
@@ -37,11 +38,11 @@ unsafe fn list_last(lines: *mut typval_T) -> *mut listitem_T {
     // SAFETY: the caller's obligation; under `VAR_LIST` the union's live arm
     // is `v_list`, a live list or NULL.
     let l = unsafe { (*lines).vval.v_list };
-    if l.is_null() || unsafe { (*l).lv_len } == 0 {
-        ptr::null_mut()
-    } else {
-        unsafe { (*l).lv_last }
+    if l.is_null() {
+        return ptr::null_mut();
     }
+    let (len, last) = unsafe { ((*l).lv_len, (*l).lv_last) };
+    if len == 0 { ptr::null_mut() } else { last }
 }
 
 /// `prompt_appendbuf({buf}, {string/list})` — 0 when the text went in.
@@ -82,47 +83,52 @@ pub unsafe fn f_prompt_appendbuf(
         } else {
             c"".as_ptr()
         };
-        if unsafe { (*lines).v_type } == VAR_LIST {
-            let l = unsafe { (*lines).vval.v_list };
+        let mut tv = unsafe { Tv::new(lines) };
+        if tv.v_type == VAR_LIST {
+            let l = unsafe { tv.vval.v_list };
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
-                let li = unsafe { (*l).lv_first };
-                let joined = unsafe { concat_str(text, numbuf.string(&raw mut (*li).li_tv)) };
-                unsafe { tv_clear(&raw mut (*li).li_tv) };
-                unsafe { (*li).li_tv.v_type = VAR_STRING };
-                unsafe { (*li).li_tv.vval.v_string = joined };
+                let mut item = unsafe { Li::new((*l).lv_first) };
+                let itv = item.field_ptr(offset_of!(listitem_T, li_tv));
+                let joined = unsafe { concat_str(text, numbuf.string(itv)) };
+                unsafe { tv_clear(itv) };
+                item.li_tv.v_type = VAR_STRING;
+                item.li_tv.vval.v_string = joined;
                 did_concat = true;
             }
-        } else if unsafe { (*lines).v_type } == VAR_STRING {
+        } else if tv.v_type == VAR_STRING {
             let joined = unsafe { concat_str(text, numbuf2.string(lines)) };
             unsafe { tv_clear(lines) };
-            unsafe { (*lines).v_type = VAR_STRING };
-            unsafe { (*lines).vval.v_string = joined };
+            tv.v_type = VAR_STRING;
+            tv.vval.v_string = joined;
         }
     }
+    let tv = unsafe { Tv::new(lines) };
     if did_emsg.get() == did_emsg_before {
-        if did_concat && unsafe { (*(*lines).vval.v_list).lv_len } > 1 {
+        let split = did_concat && unsafe { (*tv.vval.v_list).lv_len } > 1;
+        if split {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked.
-            let l = unsafe { (*lines).vval.v_list };
+            let l = unsafe { tv.vval.v_list };
             let li = unsafe { (*l).lv_first };
-            unsafe { set_buffer_lines(buf.raw(), lnum, false, &raw mut (*li).li_tv, rettv) };
+            let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(listitem_T, li_tv));
+            unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, rettv) };
             if unsafe { rettv.vval.v_number } == 0 {
                 unsafe { tv_list_item_remove(l, li) };
                 unsafe { set_buffer_lines(buf.raw(), lnum, true, lines, rettv) };
             }
         } else {
-            unsafe {
-                set_buffer_lines(buf.raw(), lnum, buf.b_prompt_append_new_line, lines, rettv)
-            };
+            let fresh = buf.b_prompt_append_new_line;
+            unsafe { set_buffer_lines(buf.raw(), lnum, fresh, lines, rettv) };
         }
     }
     if unsafe { rettv.vval.v_number } == 0 {
         let mut buf = buf;
-        buf.b_prompt_append_new_line = if unsafe { (*lines).v_type } == VAR_LIST {
+        buf.b_prompt_append_new_line = if tv.v_type == VAR_LIST {
             let last = unsafe { list_last(lines) };
-            !last.is_null() && unsafe { ends_in_newline(numbuf3.string(&raw mut (*last).li_tv)) }
+            let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(listitem_T, li_tv));
+            !last.is_null() && unsafe { ends_in_newline(numbuf3.string(ltv)) }
         } else {
-            unsafe { (*lines).v_type == VAR_STRING && ends_in_newline(numbuf4.string(lines)) }
+            tv.v_type == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
         };
     }
 }
@@ -219,20 +225,18 @@ pub unsafe fn f_prompt_setprompt(
 /// NUL-terminated string of `new_prompt_len` bytes.
 unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_prompt_len: c_int) {
     // SAFETY: the caller's obligation.
-    if buf.b_prompt_start.mark.lnum < 1
-        || buf.b_prompt_start.mark.lnum > unsafe { Buf::current() }.line_count()
-    {
+    if buf.b_prompt_start.mark.lnum < 1 || buf.b_prompt_start.mark.lnum > cur_buf().line_count() {
         // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
         // because an empty buffer makes the two bounds cross.
         buf.b_prompt_start.mark.lnum = buf.b_prompt_start.mark.lnum.min(buf.line_count()).max(1);
-        unsafe { Buf::current() }.b_prompt_append_new_line = true;
+        cur_buf().b_prompt_append_new_line = true;
     }
     let prompt_lno = buf.b_prompt_start.mark.lnum;
     let old_prompt = buf_prompt_text(buf);
     let old_line = unsafe { buf.line(prompt_lno) }.raw();
     let old_line_len = unsafe { buf.line_len(prompt_lno) };
     let old_prompt_len = len_as_int(unsafe { strlen(old_prompt) });
-    let mut cursor_col = unsafe { Win::current() }.w_cursor.col;
+    let mut cursor_col = cur_win().w_cursor.col;
     let prompt_col = buf.b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the
     // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
@@ -242,54 +246,37 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
     // Does the line still start with the prompt it was given? When it
     // does, only the prompt itself is swapped; when it does not — the
     // user has edited it away — the whole line goes.
-    let intact = prompt_col >= old_prompt_len
-        && prompt_col <= old_line_len
+    let fits = prompt_col >= old_prompt_len && prompt_col <= old_line_len;
+    let at = |col: c_int| unsafe { old_line.add(offset(col)) };
+    let intact = fits
         && unsafe {
             strnequal(
                 old_prompt,
-                old_line.add(offset(prompt_col - old_prompt_len)),
+                at(prompt_col - old_prompt_len),
                 offset(old_prompt_len),
             )
         };
+    // The splice both arms report is the same shape: the whole of what was
+    // there, replaced by the new prompt.
+    let (raw, row) = (buf.raw(), prompt_lno - 1);
+    let splice = |old_len: c_int| {
+        // SAFETY: a live buffer and a line that is inside it.
+        unsafe { extmark_splice_cols(raw, row, 0, old_len, new_prompt_len, kExtmarkNoUndo) };
+    };
     if intact {
-        let new_line = unsafe { concat_str(new_prompt, old_line.add(offset(prompt_col))) };
-        if unsafe { ml_replace_buf(buf.raw(), prompt_lno, new_line, false, false) } != OK {
+        let new_line = unsafe { concat_str(new_prompt, at(prompt_col)) };
+        if unsafe { ml_replace_buf(raw, prompt_lno, new_line, false, false) } != OK {
             unsafe { xfree(new_line.cast()) };
         }
-        unsafe {
-            extmark_splice_cols(
-                buf.raw(),
-                prompt_lno - 1,
-                0,
-                prompt_col,
-                new_prompt_len,
-                kExtmarkNoUndo,
-            )
-        };
+        splice(prompt_col);
         cursor_col += new_prompt_len - prompt_col;
     } else {
-        unsafe {
-            ml_replace_buf(
-                buf.raw(),
-                prompt_lno,
-                new_prompt as *mut c_char,
-                true,
-                false,
-            )
-        };
-        unsafe {
-            extmark_splice_cols(
-                buf.raw(),
-                prompt_lno - 1,
-                0,
-                old_line_len,
-                new_prompt_len,
-                kExtmarkNoUndo,
-            )
-        };
+        let whole = new_prompt.cast_mut();
+        unsafe { ml_replace_buf(raw, prompt_lno, whole, true, false) };
+        splice(old_line_len);
         cursor_col = new_prompt_len;
     }
-    let mut win = unsafe { Win::current() };
+    let mut win = cur_win();
     if win.w_buffer == buf.raw() && win.w_cursor.lnum == prompt_lno {
         win.w_cursor.col = cursor_col;
         check_cursor_col(win);

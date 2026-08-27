@@ -76,7 +76,68 @@ pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
-use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
+use crate::winlayer::{Buf, Live, TabPage, Win, buffers, tab_windows, windows_in_tab};
+
+/// A value whose caller has promised it outlives the handle.
+///
+/// The builtins here are handed `typval_T`s and `listitem_T`s that belong to
+/// the evaluator's own argument frame, which outlives the call. Wrapping is
+/// the unsafe step, once; every `(*p).field` after it is checked code.
+pub(super) type Tv = Live<typval_T>;
+
+/// One item of a live list, whose caller has promised the list outlives it.
+pub(super) type Li = Live<listitem_T>;
+
+/// Argument `i` as a Number.
+///
+/// Safe: [`Args`] carries the promise for the whole frame -- every index it
+/// answers is a live typval -- which is `tv_get_number`'s only precondition.
+/// The same goes for the four below it.
+pub(super) fn arg_number(args: Args<'_>, i: usize) -> varnumber_T {
+    // SAFETY: `Args` promises a live typval at every index.
+    unsafe { tv_get_number(args.ptr(i)) }
+}
+
+/// Argument `i` as a line number in the current buffer, reported and clamped.
+pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> linenr_T {
+    // SAFETY: as [`arg_number`].
+    unsafe { tv_get_lnum(args.ptr(i)) }
+}
+
+/// Argument `i` as a line number in `buf`.
+///
+/// # Safety
+/// `buf` is a live buffer or NULL.
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut buf_T) -> linenr_T {
+    // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
+    unsafe { tv_get_lnum_buf(args.ptr(i), buf) }
+}
+
+/// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
+/// which takes a number, a name or a pattern.
+pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> *mut buf_T {
+    // SAFETY: as [`arg_number`].
+    unsafe { tv_get_buf(args.ptr(i), curtab_only) }
+}
+
+/// The buffer argument `i` names, reporting for a type that names none.
+pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut buf_T {
+    // SAFETY: as [`arg_number`].
+    unsafe { tv_get_buf_from_arg(args.ptr(i)) }
+}
+
+/// The window the editor is working in.
+pub(super) fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The buffer the editor is working in.
+pub(super) fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
 #[derive(Copy, Clone)]
@@ -110,8 +171,7 @@ impl SavedBufferState {
         curbuf.set(buf.raw());
         // SAFETY: `curbuf` was just set to the caller's live buffer.
         unsafe { find_win_for_curbuf() };
-        // SAFETY: `curwin` is set from startup to exit.
-        let current = unsafe { Win::current() };
+        let current = cur_win();
         if current.w_buffer != buf.raw() {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
@@ -134,7 +194,7 @@ impl SavedBufferState {
         } else {
             curwin.set(self.curwin_save);
             // SAFETY: the saved window is live and so is its buffer.
-            curbuf.set(unsafe { Win::current() }.w_buffer);
+            curbuf.set(cur_win().w_buffer);
         }
         set_visual_active(self.save_visual_active);
     }
@@ -150,7 +210,7 @@ unsafe fn find_win_for_curbuf() {
     // a window that has moved on, hence the second test.
     // SAFETY: `curbuf` is live and its window-info vector holds `size` live
     // entries.
-    let buf = unsafe { Buf::current() };
+    let buf = cur_buf();
     let wininfo = &buf.b_wininfo;
     for i in 0..wininfo.size {
         let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };
