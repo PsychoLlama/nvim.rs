@@ -84,13 +84,13 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
         unsafe { (*mfp).mf_fd = os_open(mf_fname(mfp), O_RDWR, 0) };
         if unsafe { (*mfp).mf_fd } < 0 {
             // Could not reopen the swap file. Nothing can be done.
-            unsafe { emsg(tr(c"E301: Oops, lost the swap file!!!")) };
+            complain(c"E301: Oops, lost the swap file!!!");
             return;
         }
         unsafe { os_set_cloexec((*mfp).mf_fd) };
     }
     if !success {
-        unsafe { emsg(tr(c"E302: Could not rename swap file")) };
+        complain(c"E302: Could not rename swap file");
     }
 }
 
@@ -279,7 +279,7 @@ unsafe fn attention_message(
 ) {
     debug_assert!(!unsafe { (*buf).b_fname.is_null() });
 
-    unsafe { emsg(tr(c"E325: ATTENTION")) };
+    complain(c"E325: ATTENTION");
     unsafe { kv_puts(msg, c"Found a swap file by the name \"") };
     unsafe { kv_do_printf(msg, c"%s\"\n".as_ptr(), fhname) };
     let swap_mtime = unsafe { swapfile_info(fname, msg) };
@@ -334,15 +334,9 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     allbuf_lock.set(allbuf_lock.get() + 1);
-    unsafe {
-        apply_autocmds(
-            EVENT_SWAPEXISTS,
-            (*buf).b_fname,
-            core::ptr::null_mut(),
-            false,
-            core::ptr::null_mut(),
-        )
-    };
+    let name = unsafe { (*buf).b_fname };
+    let (no_io, no_buf) = (core::ptr::null_mut(), core::ptr::null_mut());
+    unsafe { apply_autocmds(EVENT_SWAPEXISTS, name, no_io, false, no_buf) };
     allbuf_lock.set(allbuf_lock.get() - 1);
 
     unsafe { set_vim_var_string(Vv::Swapname, core::ptr::null(), -1) };
@@ -460,17 +454,10 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
         let run_but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
         let but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
         let running = proc_running.get() != 0;
-        choice = unsafe {
-            do_dialog(
-                VIM_WARNING as c_int,
-                tr(c"VIM - ATTENTION"),
-                msg.items,
-                if running { run_but } else { but },
-                1,
-                core::ptr::null(),
-                0,
-            )
-        } as sea_choice_T;
+        let buttons = if running { run_but } else { but };
+        let (title, warn) = (tr(c"VIM - ATTENTION"), VIM_WARNING as c_int);
+        let none = core::ptr::null();
+        choice = unsafe { do_dialog(warn, title, msg.items, buttons, 1, none, 0) } as sea_choice_T;
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add((running && choice >= 4) as sea_choice_T);
         // Pretend the screen did not scroll; it needs a redraw anyway.
@@ -478,15 +465,9 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
     } else {
         let mut need_clear = false;
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
-        unsafe {
-            msg_multiline(
-                String_0::from_raw_parts(msg.items, msg.size),
-                0,
-                false,
-                false,
-                &raw mut need_clear,
-            )
-        };
+        let text = String_0::from_raw_parts(msg.items, msg.size);
+        let clear = &raw mut need_clear;
+        unsafe { msg_multiline(text, 0, false, false, clear) };
     }
 
     drop(no_prompt);
@@ -569,7 +550,7 @@ pub(crate) unsafe fn findswapname(
         if unsafe { *fname.offset(n as isize - 1) } as u8 == b'a' {
             if unsafe { *fname.offset(n as isize - 2) } as u8 == b'a' {
                 // ".saa": tried enough, give up.
-                unsafe { emsg(tr(c"E326: Too many swap files found")) };
+                complain(c"E326: Too many swap files found");
                 unsafe { xfree(fname.cast()) };
                 fname = core::ptr::null_mut();
                 break;
@@ -600,6 +581,22 @@ pub(crate) unsafe fn findswapname(
 
     unsafe { xfree(dir_name.cast()) };
     fname
+}
+
+/// Every file matching one of `pats`, into `files`.
+///
+/// The flags are the same at both call sites and are what makes this a
+/// lookup rather than an expansion the user sees: keep everything, files
+/// only, and say nothing about a pattern that matches none.
+fn expanded(
+    n: c_int,
+    pats: *mut *mut c_char,
+    count: *mut c_int,
+    files: *mut *mut *mut c_char,
+) -> c_int {
+    let how = ExpandFlags::KEEPALL | ExpandFlags::FILE | ExpandFlags::SILENT;
+    // SAFETY: the caller's array of `n` patterns and its two out-parameters.
+    unsafe { expand_wildcards(n, pats, count, files, how) }
 }
 
 /// Find the swap files in the current directory and in every directory of
@@ -636,7 +633,7 @@ pub unsafe fn recover_names(
     if do_list {
         // Use msg() to start the scrolling properly.
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        unsafe { msg(tr(c"Swap files found:"), 0) };
+        tell(c"Swap files found:", 0);
         unsafe { msg_putchar('\n' as c_int) };
     }
 
@@ -698,15 +695,12 @@ pub unsafe fn recover_names(
         let mut num_files = 0;
         let mut files: *mut *mut c_char = core::ptr::null_mut();
         if num_names != 0
-            && unsafe {
-                expand_wildcards(
-                    num_names,
-                    names.as_mut_ptr(),
-                    &raw mut num_files,
-                    &raw mut files,
-                    ExpandFlags::KEEPALL | ExpandFlags::FILE | ExpandFlags::SILENT,
-                )
-            } == FAIL
+            && expanded(
+                num_names,
+                names.as_mut_ptr(),
+                &raw mut num_files,
+                &raw mut files,
+            ) == FAIL
         {
             num_files = 0;
         }
@@ -773,18 +767,18 @@ pub unsafe fn recover_names(
         } else if do_list {
             if current_dir {
                 if fname.is_null() {
-                    unsafe { msg_puts(tr(c"   In current directory:\n")) };
+                    say(c"   In current directory:\n");
                 } else {
-                    unsafe { msg_puts(tr(c"   Using specified name:\n")) };
+                    say(c"   Using specified name:\n");
                 }
             } else {
-                unsafe { msg_puts(tr(c"   In directory ")) };
+                say(c"   In directory ");
                 unsafe { msg_home_replace(dir_name.data()) };
                 unsafe { msg_puts(c":\n".as_ptr()) };
             }
 
             if num_files == 0 {
-                unsafe { msg_puts(tr(c"      -- none --\n")) };
+                say(c"      -- none --\n");
             } else {
                 for i in 0..num_files {
                     file_count += 1;
@@ -800,15 +794,9 @@ pub unsafe fn recover_names(
                         unsafe { xrealloc(msg_buf.items.cast(), msg_buf.capacity) }.cast();
                     unsafe { swapfile_info(*files.offset(i as isize), &raw mut msg_buf) };
                     let mut need_clear = false;
-                    unsafe {
-                        msg_multiline(
-                            String_0::from_raw_parts(msg_buf.items, msg_buf.size),
-                            0,
-                            false,
-                            false,
-                            &raw mut need_clear,
-                        )
-                    };
+                    let text = String_0::from_raw_parts(msg_buf.items, msg_buf.size);
+                    let clear = &raw mut need_clear;
+                    unsafe { msg_multiline(text, 0, false, false, clear) };
                     unsafe { xfree(msg_buf.items.cast()) }; // kv_destroy(msg)
                 }
             }

@@ -273,15 +273,8 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
         // buffer, which is trouble for a buffer that has only one. The
         // mark has to come along.
         let marked = unsafe { *db_index(dp).wrapping_offset(idx as isize) } & DB_MARKED != 0;
-        unsafe {
-            ml_append_int(
-                buf,
-                lnum,
-                new_line,
-                new_len,
-                if marked { ML_APPEND_MARK as c_int } else { 0 },
-            )
-        };
+        let mark = if marked { ML_APPEND_MARK as c_int } else { 0 };
+        unsafe { ml_append_int(buf, lnum, new_line, new_len, mark) };
         unsafe { ml_delete_int(buf, lnum, 0) };
         return;
     }
@@ -467,17 +460,13 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         }
 
         let top = unsafe { ml_add_stack(buf) };
-        unsafe {
-            (*buf).b_ml.stack_set(
-                top,
-                infoptr_T {
-                    ip_bnum: bnum,
-                    ip_low: low,
-                    ip_high: high,
-                    ip_index: -1, // index not known yet
-                },
-            )
+        let frame = infoptr_T {
+            ip_bnum: bnum,
+            ip_low: low,
+            ip_high: high,
+            ip_index: -1, // index not known yet
         };
+        unsafe { (*buf).b_ml.stack_set(top, frame) };
 
         let mut dirty = false;
         let count = unsafe { (*pp).pb_count } as c_int;

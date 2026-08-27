@@ -10,6 +10,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::mem::offset_of;
+
 use crate::api::private::helpers::cstr_as_string;
 use crate::autocmd::{
     EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_SWAPEXISTS, apply_autocmds, has_autocmd,
@@ -249,6 +251,36 @@ fn tr(text: &::core::ffi::CStr) -> *mut ::core::ffi::c_char {
     unsafe { gettext(text.as_ptr()) }
 }
 
+/// One translated static message on the report, in `hl_id`.
+///
+/// These four exist for the same reason [`tr`] does: the message layer asks
+/// only for a live NUL-terminated string, and a `CStr` is one, so the
+/// forty-odd reports `recover.rs` and `swapname.rs` print need not each be
+/// an `unsafe` region -- and most of them went vertical, one line per
+/// argument, because the argument list did not fit.
+fn note(text: &::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
+    // SAFETY: `tr` answers a live NUL-terminated string.
+    unsafe { msg_puts_hl(tr(text), hl_id, true) };
+}
+
+/// [`note`], appended to the message being built.
+fn say(text: &::core::ffi::CStr) {
+    // SAFETY: as [`note`].
+    unsafe { msg_puts(tr(text)) };
+}
+
+/// [`note`], as an error.
+fn complain(text: &::core::ffi::CStr) {
+    // SAFETY: as [`note`].
+    unsafe { emsg(tr(text)) };
+}
+
+/// [`note`], as a message of its own.
+fn tell(text: &::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
+    // SAFETY: as [`note`].
+    unsafe { msg(tr(text), hl_id) };
+}
+
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
 /// `ml_firstmarked` need not start its search at line one.
 static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0);
@@ -322,16 +354,13 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
     unsafe { (*b0p).b0_magic_int = B0_MAGIC_INT as ::core::ffi::c_int };
     unsafe { (*b0p).b0_magic_short = B0_MAGIC_SHORT as int16_t };
     unsafe { (*b0p).b0_magic_char = B0_MAGIC_CHAR as ::core::ffi::c_char };
-    unsafe {
-        xstrlcpy(
-            xstpcpy(
-                (&raw mut (*b0p).b0_version).cast::<::core::ffi::c_char>(),
-                c"VIM ".as_ptr(),
-            ),
-            min_vim_version_name().as_ptr(),
-            6,
-        )
-    };
+    let version = b0p
+        .wrapping_byte_add(offset_of!(ZeroBlock, b0_version))
+        .cast::<::core::ffi::c_char>();
+    let name = min_vim_version_name().as_ptr();
+    // SAFETY: the field is ten bytes, which is what "VIM " and a five-byte
+    // version name plus its terminator need.
+    unsafe { xstrlcpy(xstpcpy(version, c"VIM ".as_ptr()), name, 6) };
     let page_size = unsafe { (*mfp).mf_page_size } as ::core::ffi::c_long;
     // SAFETY: block zero is the page `hp` holds. The borrow lasts only for
     // the store -- `&mut unsafe { .. }` would write into a discarded copy

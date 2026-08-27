@@ -185,15 +185,8 @@ pub unsafe fn ml_append_buf(
     if b.b_ml.ml_mfp.is_null() {
         return FAIL;
     }
-    unsafe {
-        ml_append_flush(
-            buf,
-            lnum,
-            line,
-            len,
-            if newfile { ML_APPEND_NEW } else { 0 },
-        )
-    }
+    let flags = if newfile { ML_APPEND_NEW } else { 0 };
+    unsafe { ml_append_flush(buf, lnum, line, len, flags) }
 }
 
 /// Book `len` bytes at `ptr` as deleted from the current buffer, for the

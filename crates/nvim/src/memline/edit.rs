@@ -196,13 +196,13 @@ unsafe fn ml_insert_in_block(
             unsafe { db_line_start(dp, db_idx) as c_int }
         };
         let txt_start = unsafe { (*dp).db_txt_start } as isize;
-        unsafe {
-            core::ptr::copy(
-                db_byte(dp, txt_start + len as isize),
-                db_byte(dp, txt_start),
-                (offset as usize).wrapping_sub(((*dp).db_txt_start as usize) + len as usize),
-            )
-        };
+        let (src, dst) = (
+            db_byte(dp, txt_start + len as isize),
+            db_byte(dp, txt_start),
+        );
+        let start = unsafe { (*dp).db_txt_start } as usize;
+        let n = (offset as usize).wrapping_sub(start + len as usize);
+        unsafe { core::ptr::copy(src, dst, n) };
         let mut i = line_count - 1;
         while i > db_idx {
             unsafe {
@@ -312,48 +312,41 @@ unsafe fn ml_split_data_block(
     // The new line may go into the right/new block.
     if !in_left {
         unsafe { (*dp_right).db_txt_start = (*dp_right).db_txt_start.wrapping_sub(len as c_uint) };
-        unsafe {
-            (*dp_right).db_free = (*dp_right)
-                .db_free
-                .wrapping_sub(len as c_uint + INDEX_SIZE as c_uint)
-        };
+        let room =
+            unsafe { (*dp_right).db_free }.wrapping_sub(len as c_uint + INDEX_SIZE as c_uint);
+        unsafe { (*dp_right).db_free = room };
         let slot = db_index(dp_right);
         unsafe { *slot = (*dp_right).db_txt_start };
         if flags & ML_APPEND_MARK != 0 {
             unsafe { *slot |= DB_MARKED };
         }
-        unsafe {
-            core::ptr::copy(
-                line,
-                db_byte(dp_right, (*dp_right).db_txt_start as isize),
-                len as usize,
-            )
-        };
+        let at = unsafe { (*dp_right).db_txt_start } as isize;
+        let (src, dst) = (line, db_byte(dp_right, at));
+        let n = len as usize;
+        unsafe { core::ptr::copy(src, dst, n) };
         line_count_right += 1;
     }
 
     // Lines after the insertion point move from the left/old block to the
     // right/new one.
     if lines_moved != 0 {
-        unsafe {
-            (*dp_right).db_txt_start = (*dp_right).db_txt_start.wrapping_sub(data_moved as c_uint)
-        };
+        let room = unsafe { (*dp_right).db_txt_start }.wrapping_sub(data_moved as c_uint);
+        unsafe { (*dp_right).db_txt_start = room };
         unsafe { (*dp_right).db_free = (*dp_right).db_free.wrapping_sub(total_moved as c_uint) };
-        unsafe {
-            core::ptr::copy(
-                db_byte(dp_left, (*dp_left).db_txt_start as isize),
-                db_byte(dp_right, (*dp_right).db_txt_start as isize),
-                data_moved as usize,
-            )
-        };
+        let (from, to) = unsafe { ((*dp_left).db_txt_start, (*dp_right).db_txt_start) };
+        let (src, dst) = (
+            db_byte(dp_left, from as isize),
+            db_byte(dp_right, to as isize),
+        );
+        let n = data_moved as usize;
+        unsafe { core::ptr::copy(src, dst, n) };
         // How far the text shifted, and so how much every index entry
         // that came with it has to shift.
         let offset = unsafe { *dp_right }
             .db_txt_start
             .wrapping_sub(unsafe { (*dp_left).db_txt_start }) as c_int;
-        unsafe {
-            (*dp_left).db_txt_start = (*dp_left).db_txt_start.wrapping_add(data_moved as c_uint)
-        };
+        let room = unsafe { (*dp_left).db_txt_start }.wrapping_add(data_moved as c_uint);
+        unsafe { (*dp_left).db_txt_start = room };
         unsafe { (*dp_left).db_free = (*dp_left).db_free.wrapping_add(total_moved as c_uint) };
 
         let mut to = line_count_right;
@@ -373,23 +366,17 @@ unsafe fn ml_split_data_block(
     // The new line may go into the left (old or new) block.
     if in_left {
         unsafe { (*dp_left).db_txt_start = (*dp_left).db_txt_start.wrapping_sub(len as c_uint) };
-        unsafe {
-            (*dp_left).db_free = (*dp_left)
-                .db_free
-                .wrapping_sub(len as c_uint + INDEX_SIZE as c_uint)
-        };
+        let room = unsafe { (*dp_left).db_free }.wrapping_sub(len as c_uint + INDEX_SIZE as c_uint);
+        unsafe { (*dp_left).db_free = room };
         let slot = db_index(dp_left).wrapping_offset(line_count_left as isize);
         unsafe { *slot = (*dp_left).db_txt_start };
         if flags & ML_APPEND_MARK != 0 {
             unsafe { *slot |= DB_MARKED };
         }
-        unsafe {
-            core::ptr::copy(
-                line,
-                db_byte(dp_left, (*dp_left).db_txt_start as isize),
-                len as usize,
-            )
-        };
+        let at = unsafe { (*dp_left).db_txt_start } as isize;
+        let (src, dst) = (line, db_byte(dp_left, at));
+        let n = len as usize;
+        unsafe { core::ptr::copy(src, dst, n) };
         line_count_left += 1;
     }
 
@@ -481,13 +468,12 @@ unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut Sp
         // there are none, the new entry itself goes there.
         let total_moved = unsafe { (*pp).pb_count } as c_int - pb_idx - 1;
         if total_moved != 0 {
-            unsafe {
-                core::ptr::copy(
-                    pb_entries(pp).wrapping_offset((pb_idx + 1) as isize),
-                    pb_entries(pp_new),
-                    total_moved as usize,
-                )
-            };
+            let (src, dst) = (
+                pb_entries(pp).wrapping_offset((pb_idx + 1) as isize),
+                pb_entries(pp_new),
+            );
+            let n = total_moved as usize;
+            unsafe { core::ptr::copy(src, dst, n) };
             unsafe { (*pp_new).pb_count = total_moved as uint16_t };
             unsafe { (*pp).pb_count = ((*pp).pb_count as c_int - (total_moved - 1)) as uint16_t };
             let right = pb_entries(pp).wrapping_offset((pb_idx + 1) as isize);
@@ -565,13 +551,12 @@ unsafe fn ml_pointer_add_entry(
     let mfp = b.b_ml.ml_mfp;
     let pp = unsafe { (*hp).bh_data } as *mut PointerBlock;
     if pb_idx + 1 < unsafe { (*pp).pb_count } as c_int {
-        unsafe {
-            core::ptr::copy(
-                pb_entries(pp).wrapping_offset((pb_idx + 1) as isize),
-                pb_entries(pp).wrapping_offset((pb_idx + 2) as isize),
-                ((*pp).pb_count as c_int - pb_idx - 1) as usize,
-            )
-        };
+        let (src, dst) = (
+            pb_entries(pp).wrapping_offset((pb_idx + 1) as isize),
+            pb_entries(pp).wrapping_offset((pb_idx + 2) as isize),
+        );
+        let n = (unsafe { (*pp).pb_count } as c_int - pb_idx - 1) as usize;
+        unsafe { core::ptr::copy(src, dst, n) };
     }
     unsafe { (*pp).pb_count = (*pp).pb_count.wrapping_add(1) };
 
@@ -734,13 +719,12 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
         // Move the text of the following lines forward over the deleted
         // one, and their index entries back over its entry.
         let text_start = unsafe { (*dp).db_txt_start } as isize;
-        unsafe {
-            core::ptr::copy(
-                db_byte(dp, text_start),
-                db_byte(dp, text_start + line_size as isize),
-                (line_start - text_start as c_int) as usize,
-            )
-        };
+        let (src, dst) = (
+            db_byte(dp, text_start),
+            db_byte(dp, text_start + line_size as isize),
+        );
+        let n = (line_start - text_start as c_int) as usize;
+        unsafe { core::ptr::copy(src, dst, n) };
         for i in idx..count - 1 {
             unsafe {
                 *db_index(dp).wrapping_offset(i as isize) = (*db_index(dp)
@@ -749,11 +733,9 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
             };
         }
 
-        unsafe {
-            (*dp).db_free = (*dp)
-                .db_free
-                .wrapping_add(line_size as c_uint + INDEX_SIZE as c_uint)
-        };
+        let room =
+            unsafe { (*dp).db_free }.wrapping_add(line_size as c_uint + INDEX_SIZE as c_uint);
+        unsafe { (*dp).db_free = room };
         unsafe { (*dp).db_txt_start = (*dp).db_txt_start.wrapping_add(line_size as c_uint) };
         unsafe { (*dp).db_line_count -= 1 };
 
@@ -813,13 +795,12 @@ unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr
 
         if count != idx {
             // Move the entries after the deleted one down.
-            unsafe {
-                core::ptr::copy(
-                    pb_entries(pp).wrapping_offset((idx + 1) as isize),
-                    pb_entries(pp).wrapping_offset(idx as isize),
-                    (count - idx) as usize,
-                )
-            };
+            let (src, dst) = (
+                pb_entries(pp).wrapping_offset((idx + 1) as isize),
+                pb_entries(pp).wrapping_offset(idx as isize),
+            );
+            let n = (count - idx) as usize;
+            unsafe { core::ptr::copy(src, dst, n) };
         }
         unsafe { mf_put(mfp, hp, true, false) };
 

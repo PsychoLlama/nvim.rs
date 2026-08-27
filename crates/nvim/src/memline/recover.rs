@@ -27,6 +27,18 @@ use crate::winlayer::{Buf, Win};
 ///
 /// `checkext`: whether the buffer's own name may itself be a swap file name,
 /// as it is for `nvim -r file.swp`.
+/// Read the original file into `curbuf`, starting after line `from`.
+///
+/// Both callers name `curbuf`'s own full path and pass no `:read` command,
+/// which is the whole of `readfile`'s precondition; they differ only in the
+/// range and in whether the buffer is new.
+fn read_original(from: linenr_T, skip: linenr_T, lines: linenr_T, flags: c_int) -> c_int {
+    let (name, short) = (cur_buf().b_ffname, core::ptr::null_mut());
+    let no_cmd = core::ptr::null_mut();
+    // SAFETY: the name is the buffer's own, and a null `eap` is "no command".
+    unsafe { readfile(name, short, from, skip, lines, no_cmd, flags, false) }
+}
+
 pub unsafe fn ml_recover(checkext: bool) {
     // The recovery report runs autocommands between the calls that fill this,
     // so it is this frame's rather than the shared `NameBuff`.
@@ -103,15 +115,12 @@ pub unsafe fn ml_recover(checkext: bool) {
         hp = unsafe { mf_get(mfp, 0, 1) };
         if hp.is_null() {
             unsafe { msg_start() };
-            unsafe { msg_puts_hl(tr(c"Unable to read block 0 from "), hl_id, true) };
+            note(c"Unable to read block 0 from ", hl_id);
             unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
-            unsafe {
-                msg_puts_hl(
-                    tr(c"\nMaybe no changes were made or Nvim did not update the swap file."),
-                    hl_id,
-                    true,
-                )
-            };
+            note(
+                c"\nMaybe no changes were made or Nvim did not update the swap file.",
+                hl_id,
+            );
             unsafe { msg_end() };
             break 'theend;
         }
@@ -119,8 +128,8 @@ pub unsafe fn ml_recover(checkext: bool) {
         if unsafe { strncmp((*b0p).b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) } == 0 {
             unsafe { msg_start() };
             unsafe { msg_outtrans(mf_fname(mfp), 0, true) };
-            unsafe { msg_puts_hl(tr(c" cannot be used with this version of Nvim.\n"), 0, true) };
-            unsafe { msg_puts_hl(tr(c"Use Vim version 3.0.\n"), 0, true) };
+            note(c" cannot be used with this version of Nvim.\n", 0);
+            note(c"Use Vim version 3.0.\n", 0);
             unsafe { msg_end() };
             break 'theend;
         }
@@ -134,13 +143,13 @@ pub unsafe fn ml_recover(checkext: bool) {
         if b0_magic_wrong(unsafe { &*b0p }) {
             unsafe { msg_start() };
             unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
-            unsafe { msg_puts_hl(tr(c" cannot be used on this computer.\n"), hl_id, true) };
-            unsafe { msg_puts_hl(tr(c"The file was created on "), hl_id, true) };
+            note(c" cannot be used on this computer.\n", hl_id);
+            note(c"The file was created on ", hl_id);
             // Terminate the name field, so that printing the host name
             // cannot run off the end of a corrupted one.
             unsafe { (*b0p).b0_fname[0] = NUL as c_char };
             unsafe { msg_puts_hl((*b0p).b0_hname.as_ptr(), hl_id, true) };
-            unsafe { msg_puts_hl(tr(c",\nor the file has been damaged."), hl_id, true) };
+            note(c",\nor the file has been damaged.", hl_id);
             unsafe { msg_end() };
             break 'theend;
         }
@@ -154,13 +163,10 @@ pub unsafe fn ml_recover(checkext: bool) {
             if unsafe { (*mfp).mf_page_size } < previous_page_size {
                 unsafe { msg_start() };
                 unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
-                unsafe {
-                    msg_puts_hl(
-                        tr(c" has been damaged (page size is smaller than minimum value).\n"),
-                        hl_id,
-                        true,
-                    )
-                };
+                note(
+                    c" has been damaged (page size is smaller than minimum value).\n",
+                    hl_id,
+                );
                 unsafe { msg_end() };
                 break 'theend;
             }
@@ -196,15 +202,9 @@ pub unsafe fn ml_recover(checkext: bool) {
 
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
         msg_ext_skip_flush.set(true);
-        unsafe {
-            home_replace(
-                core::ptr::null(),
-                mf_fname(mfp),
-                path.as_mut_ptr(),
-                MAXPATHL as size_t,
-                true,
-            )
-        };
+        let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
+        let none = core::ptr::null();
+        unsafe { home_replace(none, mf_fname(mfp), out, room, true) };
         smsg_c!(0, tr(c"Using swap file \"%s\""), path.as_ptr());
         if !unsafe { buf_spname(curbuf.get()) }.is_null() {
             unsafe {
@@ -215,15 +215,9 @@ pub unsafe fn ml_recover(checkext: bool) {
                 )
             };
         } else {
-            unsafe {
-                home_replace(
-                    core::ptr::null(),
-                    cur_buf().b_ffname,
-                    path.as_mut_ptr(),
-                    MAXPATHL as size_t,
-                    true,
-                )
-            };
+            let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
+            let none = core::ptr::null();
+            unsafe { home_replace(none, cur_buf().b_ffname, out, room, true) };
         }
         unsafe { msg_putchar('\n' as c_int) };
         smsg_c!(0, tr(c"Original file \"%s\""), path.as_ptr());
@@ -240,7 +234,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
                 || org_file_info.stat.st_mtim.tv_sec != mtime as _)
         {
-            unsafe { emsg(tr(c"E308: Warning: Original file may have been changed")) };
+            complain(c"E308: Warning: Original file may have been changed");
         }
         unsafe { ui_flush() };
 
@@ -276,18 +270,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = NOTDONE;
         if !cur_buf().b_ffname.is_null() {
-            orig_file_status = unsafe {
-                readfile(
-                    cur_buf().b_ffname,
-                    core::ptr::null_mut(),
-                    0,
-                    0,
-                    MAXLNUM as linenr_T,
-                    core::ptr::null_mut(),
-                    READ_NEW as c_int,
-                    false,
-                )
-            };
+            orig_file_status = read_original(0, 0, MAXLNUM as linenr_T, READ_NEW as c_int);
         }
 
         // What the swap file recorded wins over what the file suggests.
@@ -369,24 +352,10 @@ pub unsafe fn ml_recover(checkext: bool) {
     if serious_error && called_from_main {
         unsafe { ml_close(curbuf.get(), 1) };
     } else {
-        unsafe {
-            apply_autocmds(
-                EVENT_BUFREADPOST,
-                core::ptr::null_mut(),
-                cur_buf().b_fname,
-                false,
-                curbuf.get(),
-            )
-        };
-        unsafe {
-            apply_autocmds(
-                EVENT_BUFWINENTER,
-                core::ptr::null_mut(),
-                cur_buf().b_fname,
-                false,
-                curbuf.get(),
-            )
-        };
+        let (name, buf) = (cur_buf().b_fname, curbuf.get());
+        let none = core::ptr::null_mut();
+        unsafe { apply_autocmds(EVENT_BUFREADPOST, none, name, false, buf) };
+        unsafe { apply_autocmds(EVENT_BUFWINENTER, none, name, false, buf) };
     }
 }
 
@@ -412,15 +381,8 @@ unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
 ///
 /// Returns the allocated name, or `None` to give up.
 unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
-    let count = unsafe {
-        recover_names(
-            fname,
-            false,
-            core::ptr::null_mut(),
-            0,
-            core::ptr::null_mut(),
-        )
-    };
+    let (dir, out) = (core::ptr::null_mut(), core::ptr::null_mut());
+    let count = unsafe { recover_names(fname, false, dir, 0, out) };
     if count == 0 {
         semsg_c!(tr(c"E305: No swap file found for %s"), fname);
         return None;
@@ -512,7 +474,7 @@ unsafe fn recover_lines(
                     unsafe { (*pp).pb_count = (*pp).pb_count_max };
                 }
                 if ptr_block_error {
-                    unsafe { emsg(tr(c"E1364: Warning: Pointer block corrupted")) };
+                    complain(c"E1364: Warning: Pointer block corrupted");
                 }
 
                 // The first time down this block, its entries should
@@ -545,18 +507,7 @@ unsafe fn recover_lines(
                             // of them unchecked.
                             if line_count <= 0
                                 || pe.pe_old_lnum < 1
-                                || unsafe {
-                                    readfile(
-                                        cur_buf().b_ffname,
-                                        core::ptr::null_mut(),
-                                        lnum,
-                                        pe.pe_old_lnum - 1,
-                                        line_count,
-                                        core::ptr::null_mut(),
-                                        0,
-                                        false,
-                                    )
-                                } != OK
+                                || read_original(lnum, pe.pe_old_lnum - 1, line_count, 0) != OK
                             {
                                 cannot_open = true;
                             } else {
@@ -573,17 +524,13 @@ unsafe fn recover_lines(
 
                     // One block deeper in the tree.
                     let top = unsafe { ml_add_stack(buf) };
-                    unsafe {
-                        (*buf).b_ml.stack_set(
-                            top,
-                            infoptr_T {
-                                ip_bnum: bnum,
-                                ip_low: 0,
-                                ip_high: 0,
-                                ip_index: idx,
-                            },
-                        )
+                    let frame = infoptr_T {
+                        ip_bnum: bnum,
+                        ip_low: 0,
+                        ip_high: 0,
+                        ip_index: idx,
                     };
+                    unsafe { (*buf).b_ml.stack_set(top, frame) };
 
                     bnum = pe.pe_bnum;
                     line_count = pe.pe_line_count;
@@ -711,7 +658,7 @@ unsafe fn recover_lines(
 /// Say how it went, and what the user should do next.
 unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *const c_char) {
     if got_int.get() {
-        unsafe { emsg(tr(c"E311: Recovery Interrupted")) };
+        complain(c"E311: Recovery Interrupted");
         return;
     }
     if error != 0 {
@@ -725,19 +672,17 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
         };
         drop(no_prompt);
         unsafe { msg_putchar('\n' as c_int) };
-        unsafe { msg(tr(c"See \":help E312\" for more information."), 0) };
+        tell(c"See \":help E312\" for more information.", 0);
         unsafe { msg(c"\n>>>>>>>>>>>>>".as_ptr(), 0) };
         return;
     }
 
     unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
     if cur_buf().b_changed != 0 {
-        unsafe {
-            msg(
-                tr(c"Recovery completed. You should check if everything is OK."),
-                0,
-            )
-        };
+        tell(
+            c"Recovery completed. You should check if everything is OK.",
+            0,
+        );
         unsafe {
             msg_puts(tr(
                 c"\n(You might want to write out this file under another name\n",
@@ -749,18 +694,16 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
             ))
         };
     } else {
-        unsafe {
-            msg(
-                tr(c"Recovery completed. Buffer contents equals file contents."),
-                0,
-            )
-        };
+        tell(
+            c"Recovery completed. Buffer contents equals file contents.",
+            0,
+        );
     }
-    unsafe { msg_puts(tr(c"\nYou may want to delete the .swp file now.")) };
+    say(c"\nYou may want to delete the .swp file now.");
     if swapfile_proc_running(unsafe { &*b0p }, fname_used) != 0 {
         // There may be a live Nvim on the same file; the user may want to
         // go and kill it.
-        unsafe { msg_puts(tr(c"\nNote: process STILL RUNNING: ")) };
+        say(c"\nNote: process STILL RUNNING: ");
         unsafe { msg_outnum((*b0p).pid() as c_int) };
     }
     if !ui_has(kUIMessages) {
@@ -804,20 +747,17 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
             if unsafe { (*buf.b_ml.ml_mfp).mf_dirty } == MfDirty::Yes {
                 // Best effort: `ml_sync_all` writes what it can and
                 // leaves the rest dirty.
-                let _ = unsafe {
-                    mf_sync(
-                        buf.b_ml.ml_mfp,
-                        (if check_char != 0 {
-                            MFS_STOP as c_int
-                        } else {
-                            0
-                        }) | (if do_fsync && buf_is_changed(buf) {
-                            MFS_FLUSH as c_int
-                        } else {
-                            0
-                        }),
-                    )
+                let stop = if check_char != 0 {
+                    MFS_STOP as c_int
+                } else {
+                    0
                 };
+                let flush = if do_fsync && buf_is_changed(buf) {
+                    MFS_FLUSH as c_int
+                } else {
+                    0
+                };
+                let _ = unsafe { mf_sync(buf.b_ml.ml_mfp, stop | flush) };
                 if check_char != 0 && os_char_avail() {
                     break; // a character is available now
                 }
@@ -835,7 +775,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
     let mfp = unsafe { (*buf).b_ml.ml_mfp };
     if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
         if message {
-            unsafe { emsg(tr(c"E313: Cannot preserve, there is no swap file")) };
+            complain(c"E313: Cannot preserve, there is no swap file");
         }
         return;
     }
@@ -881,9 +821,9 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
 
     if message {
         if status == OK {
-            unsafe { msg(tr(c"File preserved"), 0) };
+            tell(c"File preserved", 0);
         } else {
-            unsafe { emsg(tr(c"E314: Preserve failed")) };
+            complain(c"E314: Preserve failed");
         }
     }
 }

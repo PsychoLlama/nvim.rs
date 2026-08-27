@@ -154,15 +154,9 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
         // has to be of the field itself: `&mut unsafe { .. }` copies the
         // 900 bytes and every write below lands in the copy.
         let name = unsafe { &mut (*b0p).b0_fname };
-        unsafe {
-            home_replace(
-                core::ptr::null::<buf_T>(),
-                (*buf).b_ffname,
-                name.as_mut_ptr(),
-                B0_FNAME_SIZE_CRYPT as size_t,
-                true,
-            )
-        };
+        let (out, room) = (name.as_mut_ptr(), B0_FNAME_SIZE_CRYPT as size_t);
+        let none = core::ptr::null::<buf_T>();
+        unsafe { home_replace(none, (*buf).b_ffname, out, room, true) };
         if name[0] as c_int == '~' as c_int {
             let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
             let named = unsafe { os_get_username(uname.as_mut_ptr(), B0_UNAME_SIZE as size_t) };
