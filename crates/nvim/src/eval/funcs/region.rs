@@ -150,24 +150,14 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     }
     let (mut p1, mut p2) = (NOWHERE, NOWHERE);
     let (mut fnum1, mut fnum2) = (-1, -1);
-    if unsafe {
-        list2fpos(
-            args.ptr(0),
-            &raw mut p1,
-            &raw mut fnum1,
-            ptr::null_mut(),
-            false,
-        )
-    } != OK
-        || unsafe {
-            list2fpos(
-                args.ptr(1),
-                &raw mut p2,
-                &raw mut fnum2,
-                ptr::null_mut(),
-                false,
-            )
-        } != OK
+    let (out1, buf1) = (&raw mut p1, &raw mut fnum1);
+    let (out2, buf2) = (&raw mut p2, &raw mut fnum2);
+    let nul = ptr::null_mut();
+    // SAFETY: both arguments are live typvals and the four out-parameters
+    // are locals. The second is only read when the first parsed, as
+    // upstream's short-circuit has it.
+    if unsafe { list2fpos(args.ptr(0), out1, buf1, nul, false) } != OK
+        || unsafe { list2fpos(args.ptr(1), out2, buf2, nul, false) } != OK
         || fnum1 != fnum2
     {
         return None;
@@ -323,24 +313,11 @@ unsafe fn block_oparg(
     // change where the block's edges are.
     let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
     let lbr_saved = reset_lbr();
-    unsafe {
-        getvvcol(
-            cur_win(),
-            &raw const p1 as *mut pos_T,
-            &raw mut sc1,
-            ptr::null_mut(),
-            &raw mut ec1,
-        )
-    };
-    unsafe {
-        getvvcol(
-            cur_win(),
-            &raw const p2 as *mut pos_T,
-            &raw mut sc2,
-            ptr::null_mut(),
-            &raw mut ec2,
-        )
-    };
+    let (at1, at2) = (&raw const p1 as *mut pos_T, &raw const p2 as *mut pos_T);
+    let nul = ptr::null_mut();
+    // SAFETY: the two positions and the four out-parameters are locals.
+    unsafe { getvvcol(cur_win(), at1, &raw mut sc1, nul, &raw mut ec1) };
+    unsafe { getvvcol(cur_win(), at2, &raw mut sc2, nul, &raw mut ec2) };
     restore_lbr(lbr_saved);
     let start_vcol = sc1.min(sc2);
     oparg_T {
@@ -374,29 +351,16 @@ unsafe fn block_def2str(bd: &block_def) -> String_0 {
     // pieces plus a terminator, and each piece is written once in order.
     let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;
     let data = unsafe { xmalloc(size + 1) }.cast::<c_char>();
-    unsafe {
-        memset(
-            data.cast::<c_void>(),
-            b' ' as c_int,
-            bd.startspaces as usize,
-        )
-    };
+    // SAFETY: `data` has room for the three runs written below, which is
+    // what `size` was computed from, plus the terminator.
+    let space = b' ' as c_int;
+    unsafe { memset(data.cast::<c_void>(), space, bd.startspaces as usize) };
     let mut at = bd.startspaces as usize;
-    unsafe {
-        memmove(
-            data.add(at).cast::<c_void>(),
-            bd.textstart.cast::<c_void>(),
-            bd.textlen as usize,
-        )
-    };
+    let (dst, src) = unsafe { (data.add(at).cast::<c_void>(), bd.textstart.cast()) };
+    unsafe { memmove(dst, src, bd.textlen as usize) };
     at += bd.textlen as usize;
-    unsafe {
-        memset(
-            data.add(at).cast::<c_void>(),
-            b' ' as c_int,
-            bd.endspaces as usize,
-        )
-    };
+    let dst = unsafe { data.add(at).cast::<c_void>() };
+    unsafe { memset(dst, space, bd.endspaces as usize) };
     at += bd.endspaces as usize;
     unsafe { *data.add(at) = NUL as c_char };
     String_0::from_raw_parts(data, at)

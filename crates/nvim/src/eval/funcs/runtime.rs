@@ -165,14 +165,9 @@ unsafe fn same_name(name: *const c_char, want: &CStr) -> bool {
 /// # Safety
 /// `name` is a NUL-terminated string at least as long as it claims.
 unsafe fn starts_with(name: *const c_char, prefix: &CStr) -> bool {
+    let (a, b) = (name as *mut c_char, prefix.as_ptr() as *mut c_char);
     // SAFETY: `strncasecmp` stops at the terminator of either operand.
-    unsafe {
-        strncasecmp(
-            name as *mut c_char,
-            prefix.as_ptr() as *mut c_char,
-            prefix.count_bytes(),
-        ) == 0
-    }
+    unsafe { strncasecmp(a, b, prefix.count_bytes()) == 0 }
 }
 
 /// `has("patch…")` — the two spellings, `patch-M.m.PPPP` for a Vim version
@@ -248,20 +243,15 @@ fn has_wsl() -> bool {
         const PROBE: &str = "return vim.uv.os_uname()['release']:lower():match('microsoft')";
         // SAFETY: `PROBE` outlives the call (it is a `'static`), the
         // argument list is empty, and `err` is a live out-parameter.
-        let o: Object = unsafe {
-            nlua_exec(
-                String_0::from_raw_parts(PROBE.as_ptr() as *mut c_char, PROBE.len()),
-                ptr::null(),
-                Array {
-                    size: 0,
-                    capacity: 0,
-                    items: ptr::null_mut(),
-                },
-                kRetNilBool,
-                ptr::null_mut::<Arena>(),
-                &raw mut err,
-            )
+        let code = String_0::from_raw_parts(PROBE.as_ptr() as *mut c_char, PROBE.len());
+        let no_args = Array {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut(),
         };
+        let arena = ptr::null_mut::<Arena>();
+        let out = &raw mut err;
+        let o: Object = unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena, out) };
         debug_assert!(err.type_0 == kErrorTypeNone);
         // SAFETY: the union member is the one the type tag names.
         let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == 1;
@@ -360,24 +350,18 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // A non-String second argument is not an error: it just leaves the
     // mode set at "all".
     let modes = if args.ty(1) == VAR_STRING {
-        unsafe {
-            get_menu_cmd_modes(
-                arg_string(&mut numbuf, args.get(1)),
-                false,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        }
+        let which = arg_string(&mut numbuf, args.get(1));
+        let noremap = ptr::null_mut();
+        let unmenu = ptr::null_mut();
+        // SAFETY: `which` is the NUL-terminated argument.
+        unsafe { get_menu_cmd_modes(which, false, noremap, unmenu) }
     } else {
         MENU_ALL_MODES as c_int
     };
-    unsafe {
-        menu_get(
-            arg_string(&mut numbuf2, args.get(0)) as *mut c_char,
-            modes,
-            list,
-        )
-    };
+    let path = arg_string(&mut numbuf2, args.get(0)) as *mut c_char;
+    // SAFETY: `path` is the NUL-terminated argument and `list` the list
+    // allocated into `rettv`.
+    unsafe { menu_get(path, modes, list) };
 }
 
 /// `mode([{expr}])` — one character, or the full mode string when `{expr}`

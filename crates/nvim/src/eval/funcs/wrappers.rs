@@ -290,13 +290,10 @@ pub unsafe fn call_internal_method(
     let out = argv.as_mut_ptr();
     unsafe { ptr::copy_nonoverlapping(argvars, out, base_index as usize) };
     unsafe { *out.add(base_index as usize) = *basetv };
-    unsafe {
-        ptr::copy_nonoverlapping(
-            argvars.add(base_index as usize),
-            out.add(base_index as usize + 1),
-            (argcount - base_index) as usize,
-        )
-    };
+    let from = unsafe { argvars.add(base_index as usize) };
+    let to = unsafe { out.add(base_index as usize + 1) };
+    let rest = (argcount - base_index) as usize;
+    unsafe { ptr::copy_nonoverlapping(from, to, rest) };
     unsafe { (*out.add(argcount as usize + 1)).v_type = VAR_UNKNOWN };
 
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
@@ -415,9 +412,8 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         VAR_FLOAT => unsafe { *ret_f = (*tv).vval.v_float },
         VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
         _ => {
-            semsg_c!(c"%s".as_ptr(), unsafe {
-                gettext(c"E808: Number or Float required".as_ptr())
-            },);
+            let msg = c"E808: Number or Float required";
+            semsg_c!(c"%s".as_ptr(), unsafe { gettext(msg.as_ptr()) });
             return false;
         }
     }
@@ -431,13 +427,13 @@ pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fpt
     // payload is the float function for exactly these rows.
     let mut f: float_T = 0.0;
     unsafe { (*rettv).v_type = VAR_FLOAT };
-    unsafe {
-        (*rettv).vval.v_float = if tv_get_float_chk(argvars, &raw mut f) {
-            fptr.float_func.expect("non-null function pointer")(f)
-        } else {
-            0.0
-        }
+    let value = if unsafe { tv_get_float_chk(argvars, &raw mut f) } {
+        let op = unsafe { fptr.float_func }.expect("non-null function pointer");
+        op(f)
+    } else {
+        0.0
     };
+    unsafe { (*rettv).vval.v_float = value };
 }
 
 /// The body every builtin that is really an API function shares. The
@@ -472,14 +468,10 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
         type_0: kErrorTypeNone,
         msg: ptr::null_mut(),
     };
-    let mut result = unsafe {
-        handler.fn_0.expect("non-null function pointer")(
-            VIML_INTERNAL_CALL,
-            args,
-            &raw mut arena,
-            &raw mut err,
-        )
-    };
+    let call = handler.fn_0.expect("non-null function pointer");
+    let (mem, out) = (&raw mut arena, &raw mut err);
+    // SAFETY: `args` is the Array built above and both are locals.
+    let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, out) };
     if err.type_0 != kErrorTypeNone {
         semsg_multiline_c!(c"emsg".as_ptr(), e_api_error.as_ptr(), err.msg,);
     } else {
@@ -524,9 +516,10 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     let save_cpo = p_cpo.get();
     p_magic.set(1);
     p_cpo.set(empty_option());
-    let found = find_buf(unsafe {
-        buflist_findpat(name, name.add(strlen(name)), true, false, curtab_only != 0)
-    });
+    let end = unsafe { name.add(strlen(name)) };
+    let only = curtab_only != 0;
+    let buf = unsafe { buflist_findpat(name, end, true, false, only) };
+    let found = find_buf(buf);
     p_magic.set(save_magic);
     p_cpo.set(save_cpo);
 

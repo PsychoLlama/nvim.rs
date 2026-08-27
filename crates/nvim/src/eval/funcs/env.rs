@@ -115,17 +115,12 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         let no_emsg = quiet.then(Suppress::emsg);
         let mut len: usize = 0;
         let mut errormsg: *const c_char = ptr::null();
-        let result = unsafe {
-            eval_vars(
-                s as *mut c_char,
-                s,
-                &raw mut len,
-                ptr::null_mut(),
-                &raw mut errormsg,
-                ptr::null_mut(),
-                false,
-            )
-        };
+        let src = s as *mut c_char;
+        let (used, msg) = (&raw mut len, &raw mut errormsg);
+        let nul = ptr::null_mut();
+        // SAFETY: `s` is the NUL-terminated argument and the two
+        // out-parameters are locals.
+        let result = unsafe { eval_vars(src, s, used, nul, msg, nul, false) };
         drop(no_emsg);
         if !quiet && !errormsg.is_null() {
             unsafe { emsg(errormsg) };
@@ -155,30 +150,21 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         options |= WildOpts::ICASE;
     }
     if rettv.v_type == VAR_STRING {
-        rettv.vval.v_string = unsafe {
-            expand_one(
-                &raw mut xpc,
-                s as *mut c_char,
-                ptr::null_mut(),
-                options,
-                WildMode::All,
-            )
-        };
+        let (xp, pat) = (&raw mut xpc, s as *mut c_char);
+        let nul = ptr::null_mut();
+        // SAFETY: `xpc` is a local the `expand_cleanup` below tidies, and
+        // `s` is the NUL-terminated argument.
+        rettv.vval.v_string = unsafe { expand_one(xp, pat, nul, options, WildMode::All) };
     } else {
-        unsafe {
-            expand_one(
-                &raw mut xpc,
-                s as *mut c_char,
-                ptr::null_mut(),
-                options,
-                WildMode::AllKeep,
-            )
-        };
+        let (xp, pat) = (&raw mut xpc, s as *mut c_char);
+        let nul = ptr::null_mut();
+        // SAFETY: as above.
+        unsafe { expand_one(xp, pat, nul, options, WildMode::AllKeep) };
         list_alloc_ret(rettv, xpc.xp_numfiles as isize);
         for i in 0..xpc.xp_numfiles {
-            unsafe {
-                tv_list_append_string(rettv.vval.v_list, *xpc.xp_files.offset(i as isize), -1)
-            };
+            let list = unsafe { rettv.vval.v_list };
+            let name = unsafe { *xpc.xp_files.offset(i as isize) };
+            unsafe { tv_list_append_string(list, name, -1) };
         }
         unsafe { expand_cleanup(&raw mut xpc) };
     }
@@ -194,14 +180,13 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // `expand_filename` may replace it with another owned string.
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
-    let quiet = !(args.ty(1) == VAR_DICT
-        && unsafe {
-            tv_dict_get_bool(
-                args.get(1).vval.v_dict,
-                c"errmsg".as_ptr(),
-                kBoolVarFalse as c_int,
-            )
-        } != 0);
+    let errmsg = args.ty(1) == VAR_DICT && {
+        // SAFETY: the tag says the union holds a Dict pointer.
+        let d = unsafe { args.get(1).vval.v_dict };
+        let no = kBoolVarFalse as c_int;
+        unsafe { tv_dict_get_bool(d, c"errmsg".as_ptr(), no) != 0 }
+    };
+    let quiet = !errmsg;
     let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) };
     let mut eap: exarg_T = unsafe { core::mem::zeroed() };
     eap.arg = cmdstr;
@@ -291,15 +276,11 @@ unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
     loop {
         let mut dir_len: usize = 0;
         let mut dir: *const c_char = ptr::null();
-        iter = unsafe {
-            vim_env_iter(
-                ENV_SEPCHAR as c_char,
-                dirs,
-                iter,
-                &raw mut dir,
-                &raw mut dir_len,
-            )
-        };
+        let (out, out_len) = (&raw mut dir, &raw mut dir_len);
+        let sep = ENV_SEPCHAR as c_char;
+        // SAFETY: `dirs` is NUL-terminated, `iter` is null or a position in
+        // it, and the two out-parameters are locals.
+        iter = unsafe { vim_env_iter(sep, dirs, iter, out, out_len) };
         if !dir.is_null() && dir_len > 0 {
             let dir = unsafe { xmemdupz(dir as *const c_void, dir_len) } as *mut c_char;
             let path = unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) };
@@ -351,15 +332,9 @@ pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY: `recover_names` appends to the list just allocated.
     list_alloc_ret(rettv, kListLenUnknown as isize);
-    unsafe {
-        recover_names(
-            ptr::null_mut(),
-            false,
-            rettv.vval.v_list,
-            0,
-            ptr::null_mut(),
-        )
-    };
+    let list = unsafe { rettv.vval.v_list };
+    let (fname, dirp) = (ptr::null_mut(), ptr::null_mut());
+    unsafe { recover_names(fname, false, list, 0, dirp) };
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.

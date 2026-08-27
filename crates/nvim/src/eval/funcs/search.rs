@@ -31,7 +31,7 @@ use crate::search::{
 use crate::semsg_c;
 use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, OptionSetFlags, VAR_UNKNOWN, int64_t,
-    linenr_T, pos_T, searchit_arg_T, typval_T, varnumber_T,
+    linenr_T, pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
 };
 use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
@@ -41,6 +41,32 @@ use core::ptr;
 /// The size of a `tv_get_string_buf_chk` scratch buffer. `NUMBUFLEN` in the
 /// C: enough for the decimal spelling of any Number.
 const NUMBUFLEN: usize = 65;
+
+/// One `searchit` over the window the editor is in, which is the only shape
+/// the search builtins ask for: one match, forward or back from `at`, with
+/// no end position wanted and the pattern read as a search pattern.
+///
+/// The eleven-argument call is written once here rather than at each site,
+/// which is also what keeps it out of the callers' unchecked lines.
+///
+/// # Safety
+/// `at` is a live position, `pat` a pattern of `patlen` bytes, and `sa` a
+/// live search-argument block.
+unsafe fn search_here(
+    at: *mut pos_T,
+    dir: Direction,
+    pat: *mut c_char,
+    len: size_t,
+    opts: c_int,
+    sa: *mut searchit_arg_T,
+) -> c_int {
+    // SAFETY: `curwin`/`curbuf` name live objects from startup to exit;
+    // everything else is the caller's obligation, handed straight on.
+    let win = Some(unsafe { Win::current() });
+    let buf = unsafe { Buf::current() };
+    let (nul, re) = (ptr::null_mut(), RE_SEARCH as c_int);
+    unsafe { searchit(win, buf, at, nul, dir, pat, len, 1, opts, re, sa) }
+}
 
 /// Accept a match at the cursor's own position ('c').
 const SP_START: c_int = 0x10;
@@ -219,21 +245,11 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     // Repeat until {skip} answers false.
     let mut subpatnum;
     loop {
-        subpatnum = unsafe {
-            searchit(
-                Some(Win::current()),
-                Buf::current(),
-                &raw mut pos,
-                ptr::null_mut(),
-                dir as Direction,
-                pat as *mut c_char,
-                patlen,
-                1,
-                options,
-                RE_SEARCH as c_int,
-                &raw mut sia,
-            )
-        };
+        let at = &raw mut pos;
+        let sa = &raw mut sia;
+        let text = pat as *mut c_char;
+        // SAFETY: `pos` and `sia` are locals and `pat` is `patlen` bytes.
+        subpatnum = unsafe { search_here(at, dir as Direction, text, patlen, options, sa) };
         // Coming back to the first match means every match was skipped.
         if firstpos.lnum != 0 && equalpos(pos, firstpos) {
             subpatnum = FAIL;
@@ -343,15 +359,11 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         }
     }
     if !error && !name.is_null() {
-        let found = unsafe {
-            find_decl(
-                name as *mut c_char,
-                strlen(name),
-                locally,
-                thisblock,
-                SEARCH_KEEP as c_int,
-            )
-        };
+        let word = name as *mut c_char;
+        // SAFETY: `name` is the NUL-terminated argument.
+        let len = unsafe { strlen(name) };
+        let keep = SEARCH_KEEP as c_int;
+        let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
         rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
     }
 }
@@ -433,19 +445,11 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
         args.ptr(4) as *const typval_T
     };
 
-    unsafe {
-        do_searchpair(
-            spat,
-            mpat,
-            epat,
-            dir,
-            skip,
-            flags,
-            match_pos.map_or(ptr::null_mut(), |p| p as *mut pos_T),
-            lnum_stop,
-            time_limit,
-        )
-    }
+    let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut pos_T);
+    let (stop, tm) = (lnum_stop, time_limit);
+    // SAFETY: the three patterns are NUL-terminated, `skip` is null or
+    // argument 4, and `at` is null or the caller's position.
+    unsafe { do_searchpair(spat, mpat, epat, dir, skip, flags, at, stop, tm) }
 }
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
@@ -607,21 +611,11 @@ pub unsafe fn do_searchpair(
             sa_timed_out: 0,
             sa_wrapped: 0,
         };
-        let n = unsafe {
-            searchit(
-                Some(Win::current()),
-                Buf::current(),
-                &raw mut pos,
-                ptr::null_mut(),
-                dir as Direction,
-                pat.as_ptr() as *mut c_char,
-                pat.len() - 1,
-                1,
-                options,
-                RE_SEARCH as c_int,
-                &raw mut sia,
-            )
-        };
+        let at = &raw mut pos;
+        let sa = &raw mut sia;
+        let (text, len) = (pat.as_ptr() as *mut c_char, pat.len() - 1);
+        // SAFETY: `pos` and `sia` are locals and `pat` is NUL-terminated.
+        let n = unsafe { search_here(at, dir as Direction, text, len, options, sa) };
         // No match, or back at the first one: the walk is done.
         if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
             break;

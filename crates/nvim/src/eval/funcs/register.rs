@@ -140,15 +140,11 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         kMTLineWise => buf[0] = b'V' as c_char,
         kMTCharWise => buf[0] = b'v' as c_char,
         kMTBlockWise => {
-            unsafe {
-                vim_snprintf(
-                    buf.as_mut_ptr(),
-                    buf.len(),
-                    c"%c%d".as_ptr(),
-                    Ctrl_V,
-                    reglen + 1,
-                )
-            };
+            let (out, cap) = (buf.as_mut_ptr(), buf.len());
+            let fmt = c"%c%d".as_ptr();
+            // SAFETY: `buf` is the caller's, `cap` bytes long, and the two
+            // operands match the two conversions.
+            unsafe { vim_snprintf(out, cap, fmt, Ctrl_V, reglen + 1) };
         }
         // `kMTUnknown` cannot come back for a register that has
         // contents, which the null check above established.
@@ -164,14 +160,8 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         unsafe { tv_dict_add_str(dict, c"points_to".as_ptr(), 9, buf.as_ptr()) };
     } else {
         let unnamed = regname == buf[0] as c_int;
-        unsafe {
-            tv_dict_add_bool(
-                dict,
-                c"isunnamed".as_ptr(),
-                9,
-                if unnamed { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue,
-            )
-        };
+        let flag = if unnamed { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
+        unsafe { tv_dict_add_bool(dict, c"isunnamed".as_ptr(), 9, flag) };
     }
 }
 
@@ -268,9 +258,9 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         // An empty dict clears the register outright.
         if unsafe { tv_dict_len(d) } == 0 {
             let mut empty: [*mut c_char; 2] = [ptr::null_mut(); 2];
-            unsafe {
-                write_reg_contents_lst(regname as c_int, empty.as_mut_ptr(), false, kMTUnknown, -1)
-            };
+            let lines = empty.as_mut_ptr();
+            let reg = regname as c_int;
+            unsafe { write_reg_contents_lst(reg, lines, false, kMTUnknown, -1) };
             return;
         }
         let di = unsafe { tv_dict_find(d, c"regcontents".as_ptr(), -1) };
@@ -335,30 +325,16 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     }
 
     if !regcontents.is_null() && unsafe { (*regcontents).v_type } == VAR_LIST {
-        unsafe {
-            write_list(
-                regname,
-                (*regcontents).vval.v_list,
-                append,
-                yank_type,
-                block_len,
-            )
-        };
+        let list = unsafe { (*regcontents).vval.v_list };
+        unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {
         let strval = unsafe { numbuf5.string_chk(regcontents) };
         if strval.is_null() {
             return;
         }
-        unsafe {
-            write_reg_contents_ex(
-                regname as c_int,
-                strval,
-                strlen(strval) as isize,
-                append,
-                yank_type,
-                block_len,
-            )
-        };
+        let reg = regname as c_int;
+        let len = unsafe { strlen(strval) } as isize;
+        unsafe { write_reg_contents_ex(reg, strval, len, append, yank_type, block_len) };
     }
     if pointreg != 0 {
         unsafe { get_yank_register(pointreg as c_int, YREG_YANK as c_int) };
