@@ -175,15 +175,11 @@ unsafe fn set_mouse_vars() {
         let (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
 
         // Upstream stops this walk on `win` itself rather than on the end of
-        // the list; `win` came out of a walk of the same list, so it is in it.
-        let mut winnr: varnumber_T = 1;
-        for wp in windows() {
-            if wp.raw() == win.raw() {
-                break;
-            }
-            winnr += 1;
-        }
-        set_vim_var_nr(Vv::MouseWin, winnr);
+        // the list, and `v:mouse_win` is one more than the number of windows
+        // before it. `win` came out of a walk of the same list, so the "not
+        // in it" arm upstream walks into a null pointer on is unreachable.
+        let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
+        set_vim_var_nr(Vv::MouseWin, winnr as varnumber_T);
         set_vim_var_nr(Vv::MouseWinid, win.handle as varnumber_T);
         set_vim_var_nr(Vv::MouseLnum, lnum as varnumber_T);
         set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as varnumber_T);
