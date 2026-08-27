@@ -4,8 +4,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use crate::winlayer::Win;
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::buffer::buf_is_prompt;
@@ -19,12 +20,12 @@ use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
 };
 use crate::eval::vars::eval_variable;
-use crate::eval::{FUNCEXE_INIT, callback_call, kChannelStreamProc};
+use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
 use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf, current_sctx, curwin,
+    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx,
     e_fast_api_disabled, e_invarg, e_invchan, e_invchanjob, got_int, p_lpl, provider_call_nesting,
     provider_caller_scope,
 };
@@ -40,7 +41,7 @@ use crate::types::{
     ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::undo::u_clearallandblockfree;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Live};
 use ::libc::strlen;
 
 /// A freshly declared typval.
@@ -52,6 +53,9 @@ const UNSET_TV: typval_T = typval_T {
 
 /// The scratch a provider function name is rendered into.
 const NAMEBUF: usize = 256;
+
+/// A job's output reader, whose caller has promised it outlives the value.
+type Reader = Live<CallbackReader>;
 
 /// The top of the execution stack, which is where a provider records who
 /// called it.
@@ -73,43 +77,54 @@ pub unsafe fn common_job_callbacks(
     on_stderr: *mut CallbackReader,
     on_exit: *mut Callback,
 ) -> bool {
-    unsafe {
-        let ok = tv_dict_get_callback(
-            vopts,
-            c"on_stdout".as_ptr(),
-            c"on_stdout".count_bytes() as ptrdiff_t,
-            &raw mut (*on_stdout).cb,
-        ) && tv_dict_get_callback(
-            vopts,
-            c"on_stderr".as_ptr(),
-            c"on_stderr".count_bytes() as ptrdiff_t,
-            &raw mut (*on_stderr).cb,
-        ) && tv_dict_get_callback(
-            vopts,
-            c"on_exit".as_ptr(),
-            c"on_exit".count_bytes() as ptrdiff_t,
-            on_exit,
-        );
-        if !ok {
+    // SAFETY: the caller's promise -- both readers outlive the call.
+    let (mut out, mut err) = unsafe { (Reader::new(on_stdout), Reader::new(on_stderr)) };
+    let out_cb: *mut Callback = out.field_ptr(offset_of!(CallbackReader, cb));
+    let err_cb: *mut Callback = err.field_ptr(offset_of!(CallbackReader, cb));
+    // SAFETY: the caller's promise -- a live Dict and three callback slots,
+    // two of which are the readers' own.
+    let ok = unsafe {
+        job_callback(vopts, c"on_stdout", out_cb)
+            && job_callback(vopts, c"on_stderr", err_cb)
+            && job_callback(vopts, c"on_exit", on_exit)
+    };
+    if !ok {
+        // SAFETY: as above; whatever was read into the three slots before
+        // one of them failed is released here.
+        unsafe {
             callback_reader_free(on_stdout);
             callback_reader_free(on_stderr);
             callback_free(on_exit);
-            return false;
-        }
-
-        (*on_stdout).buffered = tv_dict_get_number(vopts, c"stdout_buffered".as_ptr()) != 0;
-        (*on_stderr).buffered = tv_dict_get_number(vopts, c"stderr_buffered".as_ptr()) != 0;
-        // Buffered output with no callback is collected into the options
-        // Dict itself, which is why it becomes the reader's `self`.
-        if (*on_stdout).buffered && (*on_stdout).cb.type_0 == kCallbackNone {
-            (*on_stdout).self_0 = vopts;
-        }
-        if (*on_stderr).buffered && (*on_stderr).cb.type_0 == kCallbackNone {
-            (*on_stderr).self_0 = vopts;
-        }
-        (*vopts).dv_refcount.retain();
-        true
+        };
+        return false;
     }
+
+    // SAFETY: the caller's promise -- `vopts` is a live Dict.
+    out.buffered = unsafe { tv_dict_get_number(vopts, c"stdout_buffered".as_ptr()) } != 0;
+    // SAFETY: as above.
+    err.buffered = unsafe { tv_dict_get_number(vopts, c"stderr_buffered".as_ptr()) } != 0;
+    // Buffered output with no callback is collected into the options
+    // Dict itself, which is why it becomes the reader's `self`.
+    if out.buffered && out.cb.type_0 == kCallbackNone {
+        out.self_0 = vopts;
+    }
+    if err.buffered && err.cb.type_0 == kCallbackNone {
+        err.self_0 = vopts;
+    }
+    // SAFETY: as above; this is the reference the readers now share.
+    unsafe { (*vopts).dv_refcount.retain() };
+    true
+}
+
+/// One `on_*` callback out of the options Dict, by name.
+///
+/// # Safety
+/// `vopts` must be a live Dict and `into` a valid callback slot.
+unsafe fn job_callback(vopts: *mut dict_T, key: &CStr, into: *mut Callback) -> bool {
+    let len = key.count_bytes() as ptrdiff_t;
+    // SAFETY: the caller's promise; `key` is a NUL-terminated literal of
+    // `len` bytes.
+    unsafe { tv_dict_get_callback(vopts, key.as_ptr(), len, into) }
 }
 
 /// The channel a job id names, or null.
@@ -117,24 +132,27 @@ pub unsafe fn common_job_callbacks(
 /// # Safety
 /// Called with the channel table initialised.
 pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
-    unsafe {
-        let data = find_channel(id);
-        if !data.is_null()
-            && (*data).streamtype == kChannelStreamProc
-            && !proc_is_stopped(&*channel_proc(data))
-        {
-            return data;
-        }
-        if show_error {
-            // A channel that exists but is not a job gets its own message.
-            if !data.is_null() && (*data).streamtype != kChannelStreamProc {
-                emsg(gettext(e_invchanjob.as_ptr()));
-            } else {
-                emsg(gettext(e_invchan.as_ptr()));
-            }
-        }
-        null_mut()
+    let data = find_channel(id);
+    // SAFETY: a non-null channel is live, and a proc channel has a proc.
+    let running = !data.is_null()
+        && unsafe { (*data).streamtype } == kChannelStreamProc
+        && !unsafe { proc_is_stopped(&*channel_proc(data)) };
+    if running {
+        return data;
     }
+    if show_error {
+        // A channel that exists but is not a job gets its own message.
+        // SAFETY: a non-null channel is live.
+        let wrong_kind = !data.is_null() && unsafe { (*data).streamtype } != kChannelStreamProc;
+        if wrong_kind {
+            // SAFETY: a shared NUL-terminated message.
+            unsafe { emsg(gettext(e_invchanjob.as_ptr())) };
+        } else {
+            // SAFETY: as above.
+            unsafe { emsg(gettext(e_invchan.as_ptr())) };
+        }
+    }
+    null_mut()
 }
 
 /// `py3eval()` and its relatives: hand one expression to a script host.
@@ -142,18 +160,24 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 /// # Safety
 /// `name` must be NUL-terminated; `argvars` and `rettv` valid.
 pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv: *mut typval_T) {
-    unsafe {
-        if check_secure() {
-            return;
-        }
-        if (*argvars).v_type != VAR_STRING {
-            emsg(gettext(e_invarg.as_ptr()));
-            return;
-        }
-        let args: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
-        tv_list_append_string(args, (*argvars).vval.v_string, -1 as ssize_t);
-        *rettv = eval_call_provider(name, c"eval".as_ptr() as *mut c_char, args, false);
+    if check_secure() {
+        return;
     }
+    // SAFETY: the caller's promise -- both typvals outlive the call.
+    let (arg, mut ret) = unsafe { (Tv::new(argvars), Tv::new(rettv)) };
+    if arg.v_type != VAR_STRING {
+        // SAFETY: `e_invarg` is a shared NUL-terminated message.
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        return;
+    }
+    // SAFETY: the List is fresh and this frame's.
+    let args: *mut list_T = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
+    // -1 asks the callee to measure it.
+    unsafe { tv_list_append_string(args, arg.vval.v_string, -1 as ssize_t) };
+    let method = c"eval".as_ptr() as *mut c_char;
+    // SAFETY: `name` and `method` are NUL-terminated and `args` is live.
+    *ret = unsafe { eval_call_provider(name, method, args, false) };
 }
 
 /// Call `provider#<name>#Call(method, arguments)`.
@@ -171,86 +195,106 @@ pub unsafe fn eval_call_provider(
     arguments: *mut list_T,
     discard: bool,
 ) -> typval_T {
-    unsafe {
-        if !eval_has_provider(provider, false) {
-            semsg_c!(
-                c"E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"".as_ptr(),
-                provider,
-            );
-            return typval_T {
-                v_type: VAR_NUMBER,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_number: 0 },
-            };
-        }
-
-        let mut func: [c_char; NAMEBUF] = [0; NAMEBUF];
-        let name_len = snprintf(
-            func.as_mut_ptr(),
-            size_of::<[c_char; NAMEBUF]>(),
-            c"provider#%s#Call".as_ptr(),
-            provider,
-        );
-
-        let saved_provider_caller_scope = provider_caller_scope.get();
-        provider_caller_scope.set(caller_scope {
-            script_ctx: current_sctx.get(),
-            es_entry: top_estack(),
-            autocmd_fname: autocmd_fname.get(),
-            autocmd_match: autocmd_match.get(),
-            autocmd_fname_full: autocmd_fname_full.get(),
-            autocmd_bufnr: autocmd_bufnr.get(),
-            funccalp: get_current_funccal() as *mut c_void,
-        });
-        let mut funccal_entry = funccal_entry_T {
-            top_funccal: null_mut(),
-            next: null_mut(),
+    // SAFETY: the caller's promise -- `provider` is NUL-terminated.
+    if !unsafe { eval_has_provider(provider, false) } {
+        let fmt = c"E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"".as_ptr();
+        // SAFETY: the format takes one NUL-terminated string.
+        unsafe { semsg_c!(fmt, provider) };
+        return typval_T {
+            v_type: VAR_NUMBER,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_number: 0 },
         };
-        save_funccal(&raw mut funccal_entry);
-        provider_call_nesting.set(provider_call_nesting.get() + 1);
-
-        let mut argvars: [typval_T; 3] = [
-            typval_T {
-                v_type: VAR_STRING,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_string: method },
-            },
-            typval_T {
-                v_type: VAR_LIST,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_list: arguments },
-            },
-            UNSET_TV,
-        ];
-        let mut rettv = UNSET_TV;
-        // The argument array borrows the List, so the reference is taken
-        // for the duration of the call and given back after it.
-        tv_list_ref(arguments);
-
-        let mut funcexe: funcexe_T = FUNCEXE_INIT;
-        funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
-        funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
-        funcexe.fe_evaluate = true;
-        call_func(
-            func.as_mut_ptr(),
-            name_len,
-            &raw mut rettv,
-            2,
-            argvars.as_mut_ptr(),
-            &raw mut funcexe,
-        );
-
-        tv_list_unref(arguments);
-        restore_funccal();
-        provider_caller_scope.set(saved_provider_caller_scope);
-        provider_call_nesting.set(provider_call_nesting.get() - 1);
-        debug_assert!(provider_call_nesting.get() >= 0);
-
-        if discard {
-            tv_clear(&raw mut rettv);
-        }
-        rettv
     }
+
+    let mut func: [c_char; NAMEBUF] = [0; NAMEBUF];
+    let size = size_of::<[c_char; NAMEBUF]>();
+    let fmt = c"provider#%s#Call".as_ptr();
+    // SAFETY: `func` is this frame's and `size` is its length; the format
+    // takes the one NUL-terminated string `provider`.
+    let name_len = unsafe { snprintf(func.as_mut_ptr(), size, fmt, provider) };
+
+    let saved_provider_caller_scope = provider_caller_scope.get();
+    // SAFETY: the frame pointer is only stashed, never read through here.
+    let funccalp = unsafe { get_current_funccal() } as *mut c_void;
+    provider_caller_scope.set(caller_scope {
+        script_ctx: current_sctx.get(),
+        es_entry: top_estack(),
+        autocmd_fname: autocmd_fname.get(),
+        autocmd_match: autocmd_match.get(),
+        autocmd_fname_full: autocmd_fname_full.get(),
+        autocmd_bufnr: autocmd_bufnr.get(),
+        funccalp,
+    });
+    let mut funccal_entry = funccal_entry_T {
+        top_funccal: null_mut(),
+        next: null_mut(),
+    };
+    // SAFETY: `funccal_entry` is this frame's and outlives the save.
+    unsafe { save_funccal(&raw mut funccal_entry) };
+    provider_call_nesting.set(provider_call_nesting.get() + 1);
+
+    let mut argvars: [typval_T; 3] = [
+        typval_T {
+            v_type: VAR_STRING,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_string: method },
+        },
+        typval_T {
+            v_type: VAR_LIST,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_list: arguments },
+        },
+        UNSET_TV,
+    ];
+    let mut rettv = UNSET_TV;
+    // The argument array borrows the List, so the reference is taken
+    // for the duration of the call and given back after it.
+    // SAFETY: the caller's promise -- `arguments` is a live List.
+    unsafe { tv_list_ref(arguments) };
+
+    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    funcexe.fe_firstline = cur_win().w_cursor.lnum;
+    funcexe.fe_lastline = cur_win().w_cursor.lnum;
+    funcexe.fe_evaluate = true;
+    let (name, args) = (func.as_mut_ptr(), argvars.as_mut_ptr());
+    // SAFETY: `name` is the NUL-terminated name rendered above, `args` the
+    // two argument typvals, and `rettv` and `funcexe` are this frame's.
+    unsafe { call_func(name, name_len, &raw mut rettv, 2, args, &raw mut funcexe) };
+
+    // SAFETY: this gives back the reference taken above.
+    unsafe { tv_list_unref(arguments) };
+    // SAFETY: this undoes the save above.
+    unsafe { restore_funccal() };
+    provider_caller_scope.set(saved_provider_caller_scope);
+    provider_call_nesting.set(provider_call_nesting.get() - 1);
+    debug_assert!(provider_call_nesting.get() >= 0);
+
+    if discard {
+        // SAFETY: `rettv` is this frame's.
+        unsafe { tv_clear(&raw mut rettv) };
+    }
+    rettv
+}
+
+/// `g:loaded_<name>_provider`, into `buf`.
+///
+/// # Safety
+/// Both buffers must be valid, and `buf` must hold `NAMEBUF` bytes.
+unsafe fn loaded_var(buf: *mut c_char, name: *mut c_char) -> c_int {
+    let fmt = c"g:loaded_%s_provider".as_ptr();
+    // SAFETY: the caller's promise about both buffers.
+    unsafe { snprintf(buf, size_of::<[c_char; NAMEBUF]>(), fmt, name) }
+}
+
+/// `provider#<name>#<what>`, into `buf`.
+///
+/// # Safety
+/// As [`loaded_var`].
+unsafe fn provider_fn(buf: *mut c_char, name: *mut c_char, what: &CStr) -> c_int {
+    // SAFETY: the caller's promise about both buffers; `what` is a
+    // NUL-terminated literal.
+    unsafe { snprintf(buf, size_of::<[c_char; NAMEBUF]>(), what.as_ptr(), name) }
 }
 
 /// Is this provider both known and usable? Loads its autoload script if it
@@ -259,105 +303,80 @@ pub unsafe fn eval_call_provider(
 /// # Safety
 /// `feat` must be NUL-terminated.
 pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool {
-    unsafe {
-        const KNOWN: [&core::ffi::CStr; 7] = [
-            c"clipboard",
-            c"python3",
-            c"python3_compiled",
-            c"python3_dynamic",
-            c"perl",
-            c"ruby",
-            c"node",
-        ];
-        if !KNOWN.iter().any(|k| strequal(feat, k.as_ptr())) {
-            return false;
-        }
-        if throw_if_fast && !nlua_is_deferred_safe() {
-            semsg_c!(e_fast_api_disabled.as_ptr(), c"Vimscript function".as_ptr(),);
-            return false;
-        }
-
-        // The variable and function names use the part before the first
-        // `_`: "python3_dynamic" asks about "python3".
-        let mut name: [c_char; 32] = [0; 32];
-        snprintf(
-            name.as_mut_ptr(),
-            size_of::<[c_char; 32]>(),
-            c"%s".as_ptr(),
-            feat,
-        );
-        strchrsub(name.as_mut_ptr(), b'_' as c_char, NUL as c_char);
-
-        let mut buf: [c_char; NAMEBUF] = [0; NAMEBUF];
-        let mut tv = UNSET_TV;
-
-        /// `g:loaded_<name>_provider`, into `buf`.
-        ///
-        /// # Safety
-        /// Both buffers must be valid.
-        unsafe fn loaded_var(buf: *mut c_char, name: *mut c_char) -> c_int {
-            unsafe {
-                snprintf(
-                    buf,
-                    size_of::<[c_char; NAMEBUF]>(),
-                    c"g:loaded_%s_provider".as_ptr(),
-                    name,
-                )
-            }
-        }
-
-        let mut len = loaded_var(buf.as_mut_ptr(), name.as_mut_ptr());
-        if eval_variable(buf.as_mut_ptr(), len, &raw mut tv, null_mut(), false, true) == FAIL {
-            // Not loaded yet: sourcing any function in the provider's
-            // autoload namespace is what pulls the script in.
-            len = snprintf(
-                buf.as_mut_ptr(),
-                size_of::<[c_char; NAMEBUF]>(),
-                c"provider#%s#bogus".as_ptr(),
-                name.as_mut_ptr(),
-            );
-            script_autoload(buf.as_mut_ptr(), len as size_t, false);
-
-            len = loaded_var(buf.as_mut_ptr(), name.as_mut_ptr());
-            if eval_variable(buf.as_mut_ptr(), len, &raw mut tv, null_mut(), false, true) == FAIL {
-                snprintf(
-                    buf.as_mut_ptr(),
-                    size_of::<[c_char; NAMEBUF]>(),
-                    c"provider#%s#Call".as_ptr(),
-                    name.as_mut_ptr(),
-                );
-                if !find_func(buf.as_mut_ptr()).is_null() && p_lpl.get() != 0 {
-                    semsg_c!(
-                        c"provider: %s: missing required variable g:loaded_%s_provider".as_ptr(),
-                        name.as_mut_ptr(),
-                        name.as_mut_ptr(),
-                    );
-                }
-                return false;
-            }
-        }
-
-        // 2 is the "working" value; 1 means the provider declined.
-        let mut ok = tv.v_type == VAR_NUMBER && tv.vval.v_number == 2 as varnumber_T;
-        if ok {
-            snprintf(
-                buf.as_mut_ptr(),
-                size_of::<[c_char; NAMEBUF]>(),
-                c"provider#%s#Call".as_ptr(),
-                name.as_mut_ptr(),
-            );
-            if find_func(buf.as_mut_ptr()).is_null() {
-                semsg_c!(
-                    c"provider: %s: g:loaded_%s_provider=2 but %s is not defined".as_ptr(),
-                    name.as_mut_ptr(),
-                    name.as_mut_ptr(),
-                    buf.as_mut_ptr(),
-                );
-                ok = false;
-            }
-        }
-        ok
+    const KNOWN: [&CStr; 7] = [
+        c"clipboard",
+        c"python3",
+        c"python3_compiled",
+        c"python3_dynamic",
+        c"perl",
+        c"ruby",
+        c"node",
+    ];
+    // SAFETY: the caller's promise -- `feat` is NUL-terminated, as is every
+    // name it is compared with.
+    if !KNOWN.iter().any(|k| unsafe { strequal(feat, k.as_ptr()) }) {
+        return false;
     }
+    // SAFETY: the check only reads the Lua scheduler's state.
+    if throw_if_fast && !unsafe { nlua_is_deferred_safe() } {
+        let what = c"Vimscript function".as_ptr();
+        // SAFETY: the format takes one NUL-terminated string.
+        unsafe { semsg_c!(e_fast_api_disabled.as_ptr(), what) };
+        return false;
+    }
+
+    // The variable and function names use the part before the first
+    // `_`: "python3_dynamic" asks about "python3".
+    let mut name: [c_char; 32] = [0; 32];
+    let size = size_of::<[c_char; 32]>();
+    // SAFETY: `name` is this frame's and `size` its length; the format
+    // takes the one NUL-terminated string `feat`.
+    unsafe { snprintf(name.as_mut_ptr(), size, c"%s".as_ptr(), feat) };
+    // SAFETY: `name` now holds a NUL-terminated copy of `feat`.
+    unsafe { strchrsub(name.as_mut_ptr(), b'_' as c_char, NUL as c_char) };
+
+    let mut buf: [c_char; NAMEBUF] = [0; NAMEBUF];
+    let mut tv = UNSET_TV;
+    let (nm, bp) = (name.as_mut_ptr(), buf.as_mut_ptr());
+
+    // SAFETY (every call below): `bp` names this frame's `NAMEBUF` bytes,
+    // `nm` the NUL-terminated provider name, and `tv` is this frame's.
+    let mut len = unsafe { loaded_var(bp, nm) };
+    if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) } == FAIL {
+        // Not loaded yet: sourcing any function in the provider's
+        // autoload namespace is what pulls the script in.
+        len = unsafe { provider_fn(bp, nm, c"provider#%s#bogus") };
+        unsafe { script_autoload(bp, len as size_t, false) };
+
+        len = unsafe { loaded_var(bp, nm) };
+        if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) } == FAIL {
+            unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
+            // SAFETY: `bp` holds the NUL-terminated function name.
+            let defined = !unsafe { find_func(bp) }.is_null();
+            if defined && p_lpl.get() != 0 {
+                let fmt = c"provider: %s: missing required variable g:loaded_%s_provider".as_ptr();
+                // SAFETY: the format takes two NUL-terminated strings.
+                unsafe { semsg_c!(fmt, nm, nm) };
+            }
+            return false;
+        }
+    }
+
+    // 2 is the "working" value; 1 means the provider declined.
+    // SAFETY: `VAR_NUMBER` says `v_number` is the union's live member.
+    let mut ok = tv.v_type == VAR_NUMBER && unsafe { tv.vval.v_number } == 2 as varnumber_T;
+    if ok {
+        // SAFETY: as above.
+        unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
+        // SAFETY: `bp` holds the NUL-terminated function name just built.
+        if unsafe { find_func(bp) }.is_null() {
+            let fmt = c"provider: %s: g:loaded_%s_provider=2 but %s is not defined".as_ptr();
+            // SAFETY: the format takes three NUL-terminated strings.
+            unsafe { semsg_c!(fmt, nm, nm, bp) };
+            ok = false;
+        }
+    }
+    ok
 }
 
 /// `"<script>:<line>"` for the innermost execution-stack entry.
@@ -365,13 +384,13 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
 /// # Safety
 /// `buf` must hold `bufsize` writable bytes.
 pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
-    unsafe {
-        let top = top_estack();
-        if top.es_name.is_null() {
-            snprintf(buf, bufsize, c"?".as_ptr());
-        } else {
-            snprintf(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum);
-        }
+    let top = top_estack();
+    if top.es_name.is_null() {
+        // SAFETY: the caller's promise about `buf` and `bufsize`.
+        unsafe { snprintf(buf, bufsize, c"?".as_ptr()) };
+    } else {
+        // SAFETY: as above; the entry's name is NUL-terminated.
+        unsafe { snprintf(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum) };
     }
 }
 
@@ -381,28 +400,39 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 /// # Safety
 /// `buf` must be valid.
 pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
-    unsafe {
-        if !buf_is_prompt(Buf::from_raw(buf)) {
-            return null_mut();
-        }
-        let lnum_start = (*buf).b_prompt_start.mark.lnum;
-        let lnum_last = (*buf).b_ml.ml_line_count;
+    // SAFETY: the caller's promise -- a live buffer.
+    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+        return null_mut();
+    };
+    if !buf_is_prompt(Some(buf)) {
+        return null_mut();
+    }
+    let lnum_start = buf.b_prompt_start.mark.lnum;
+    let lnum_last = buf.line_count();
 
-        let mut text = ml_get_buf(buf, lnum_start);
-        // The prompt itself is skipped, unless the line is shorter than
-        // the recorded column.
-        if strlen(text) as c_int >= (*buf).b_prompt_start.mark.col {
-            text = text.offset((*buf).b_prompt_start.mark.col as isize);
-        }
-        let mut full_text = xstrdup(text);
-        for i in (lnum_start + 1)..=lnum_last {
+    // SAFETY: the prompt's line is a line of the buffer.
+    let mut text = unsafe { ml_get_buf(buf.raw(), lnum_start) };
+    // The prompt itself is skipped, unless the line is shorter than
+    // the recorded column.
+    let col = buf.b_prompt_start.mark.col;
+    // SAFETY: a buffer line is NUL-terminated.
+    if unsafe { strlen(text) } as c_int >= col {
+        // SAFETY: `col` is inside the line, measured just above.
+        text = unsafe { text.offset(col as isize) };
+    }
+    // SAFETY: `text` is NUL-terminated.
+    let mut full_text = unsafe { xstrdup(text) };
+    for i in (lnum_start + 1)..=lnum_last {
+        // SAFETY: `full_text` is owned and NUL-terminated, `i` is a line of
+        // the buffer, and each join frees what it consumed.
+        unsafe {
             let half_text = concat_str(full_text, c"\n".as_ptr());
             xfree(full_text as *mut c_void);
-            full_text = concat_str(half_text, ml_get_buf(buf, i));
+            full_text = concat_str(half_text, ml_get_buf(buf.raw(), i));
             xfree(half_text as *mut c_void);
-        }
-        full_text
+        };
     }
+    full_text
 }
 
 /// The user pressed Enter in a prompt buffer: open the next line and hand
@@ -412,41 +442,45 @@ pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
 /// Called from the prompt-buffer key handling, with a prompt buffer
 /// current.
 pub unsafe fn prompt_invoke_callback() {
-    unsafe {
-        let lnum = (*curbuf.get()).b_ml.ml_line_count;
-        let user_input = prompt_get_input(curbuf.get());
-        if user_input.is_null() {
-            return;
-        }
+    let lnum = cur_buf().line_count();
+    // SAFETY: the current buffer is live.
+    let user_input = unsafe { prompt_get_input(cur_buf().raw()) };
+    if user_input.is_null() {
+        return;
+    }
 
-        ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as colnr_T, false);
-        appended_lines_mark(lnum, 1);
-        (*curwin.get()).w_cursor.lnum = lnum + 1;
-        (*curwin.get()).w_cursor.col = 0;
-        (*curbuf.get()).b_prompt_start.mark.lnum = lnum + 1;
+    // SAFETY: `lnum` is the buffer's last line, and the literal is
+    // NUL-terminated.
+    unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as colnr_T, false) };
+    // SAFETY: the line was just appended.
+    unsafe { appended_lines_mark(lnum, 1) };
+    cur_win().w_cursor.lnum = lnum + 1;
+    cur_win().w_cursor.col = 0;
+    cur_buf().b_prompt_start.mark.lnum = lnum + 1;
 
-        if (*curbuf.get()).b_prompt_callback.type_0 == kCallbackNone {
-            xfree(user_input as *mut c_void);
-        } else {
-            let mut rettv = UNSET_TV;
-            let mut argv = [UNSET_TV; 2];
-            argv[0].v_type = VAR_STRING;
-            argv[0].vval.v_string = user_input;
-            argv[1].v_type = VAR_UNKNOWN;
-            callback_call(
-                &raw mut (*curbuf.get()).b_prompt_callback,
-                1,
-                argv.as_mut_ptr(),
-                &raw mut rettv,
-            );
+    if cur_buf().b_prompt_callback.type_0 == kCallbackNone {
+        // SAFETY: nothing took the input over.
+        unsafe { xfree(user_input as *mut c_void) };
+    } else {
+        let mut rettv = UNSET_TV;
+        let mut argv = [UNSET_TV; 2];
+        argv[0].v_type = VAR_STRING;
+        argv[0].vval.v_string = user_input;
+        argv[1].v_type = VAR_UNKNOWN;
+        // SAFETY: the callback is the current buffer's own, and the
+        // argument array and result are this frame's.
+        unsafe {
+            let cb = &raw mut (*cur_buf().raw()).b_prompt_callback;
+            callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv);
             tv_clear(argv.as_mut_ptr());
             tv_clear(&raw mut rettv);
-        }
-
-        u_clearallandblockfree(Buf::current());
-        (*curbuf.get()).b_prompt_start.mark.lnum = (*curbuf.get()).b_ml.ml_line_count;
-        (*curbuf.get()).b_prompt_append_new_line = true;
+        };
     }
+
+    // SAFETY: the current buffer is live.
+    unsafe { u_clearallandblockfree(Buf::current()) };
+    cur_buf().b_prompt_start.mark.lnum = cur_buf().line_count();
+    cur_buf().b_prompt_append_new_line = true;
 }
 
 /// CTRL-C in a prompt buffer. Answers whether the buffer had an interrupt
@@ -455,23 +489,34 @@ pub unsafe fn prompt_invoke_callback() {
 /// # Safety
 /// As `prompt_invoke_callback`.
 pub unsafe fn invoke_prompt_interrupt() -> bool {
-    unsafe {
-        if (*curbuf.get()).b_prompt_interrupt.type_0 == kCallbackNone {
-            return false;
-        }
-        let mut rettv = UNSET_TV;
-        let mut argv = [UNSET_TV; 1];
-        argv[0].v_type = VAR_UNKNOWN;
-        // The interrupt is consumed here; the callback decides what to do
-        // about it.
-        got_int.set(false);
-        let ret = callback_call(
-            &raw mut (*curbuf.get()).b_prompt_interrupt,
-            0,
-            argv.as_mut_ptr(),
-            &raw mut rettv,
-        );
-        tv_clear(&raw mut rettv);
-        ret as c_int != FAIL
+    if cur_buf().b_prompt_interrupt.type_0 == kCallbackNone {
+        return false;
     }
+    let mut rettv = UNSET_TV;
+    let mut argv = [UNSET_TV; 1];
+    argv[0].v_type = VAR_UNKNOWN;
+    // The interrupt is consumed here; the callback decides what to do
+    // about it.
+    got_int.set(false);
+    // SAFETY: the callback is the current buffer's own, and the argument
+    // array and result are this frame's.
+    let ret = unsafe {
+        let cb = &raw mut (*cur_buf().raw()).b_prompt_interrupt;
+        callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv)
+    };
+    // SAFETY: `rettv` is this frame's.
+    unsafe { tv_clear(&raw mut rettv) };
+    ret as c_int != FAIL
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
