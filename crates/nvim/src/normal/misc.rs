@@ -3,7 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
 use crate::buffer::{buflist_getfile, fileinfo};
@@ -19,8 +19,8 @@ use crate::help::ex_help;
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, K_COMMAND, K_IGNORE, K_LUA};
 use crate::main::{
     KeyTyped, clear_cmdline, cmdwin_result, cmdwin_type, curwin, did_emsg, ex_normal_busy,
-    finish_op, firstwin, got_int, may_garbage_collect, mode_displayed, redraw_mode,
-    restart_VIsual_select, restart_edit, typebuf_was_empty,
+    finish_op, got_int, may_garbage_collect, mode_displayed, redraw_mode, restart_VIsual_select,
+    restart_edit, typebuf_was_empty,
 };
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
@@ -164,10 +164,10 @@ pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
     unsafe { syn_stack_free_all(cur_win().w_s) };
     // Upstream walks `firstwin` -- the *current* tab page's windows --
     // even though the loop reads as if it might walk another one's.
-    let mut wp = firstwin.get();
-    while !wp.is_null() {
-        unsafe { (*(*wp).w_s).b_syn_slow = false };
-        wp = unsafe { (*wp).w_next };
+    for wp in windows() {
+        let block = wp.w_s;
+        // SAFETY: a live window's syntax block.
+        unsafe { (*block).b_syn_slow = false };
     }
     unsafe { redraw_later(curwin.get(), UPD_CLEAR) };
 }

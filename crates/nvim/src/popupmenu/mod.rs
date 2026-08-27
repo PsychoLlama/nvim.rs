@@ -39,9 +39,9 @@ use crate::keycodes::{
 };
 use crate::main::{
     Columns, PumWant, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win,
-    cmdwin_type, curbuf, curtab, curwin, e_menu_only_exists_in_another_mode, firstwin,
-    g_do_tagpreview, hl_attr_active, mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync,
-    p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid, pum_want,
+    cmdwin_type, curbuf, curtab, curwin, e_menu_only_exists_in_another_mode, g_do_tagpreview,
+    hl_attr_active, mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, p_mousemev, p_pb,
+    p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
@@ -76,7 +76,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
-use crate::winlayer::Win;
+use crate::winlayer::{Win, windows};
 use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
@@ -305,20 +305,11 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         }
 
         // A preview window takes its space away from the menu.
-        let mut pvwin = ::core::ptr::null_mut::<win_T>();
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_pvw != 0 {
-                pvwin = wp;
-                break;
-            }
-            wp = (*wp).w_next;
-        }
-        if !pvwin.is_null() {
-            if (*pvwin).w_winrow < (*win).w_winrow {
-                above_row = (*pvwin).w_winrow + (*pvwin).w_height;
-            } else if (*pvwin).w_winrow > (*win).w_winrow + (*win).w_height {
-                below_row = (*pvwin).w_winrow;
+        if let Some(pvwin) = windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
+            if pvwin.w_winrow < (*win).w_winrow {
+                above_row = pvwin.w_winrow + pvwin.w_height;
+            } else if pvwin.w_winrow > (*win).w_winrow + (*win).w_height {
+                below_row = pvwin.w_winrow;
             }
         }
 

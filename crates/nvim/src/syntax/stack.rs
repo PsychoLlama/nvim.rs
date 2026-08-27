@@ -21,7 +21,7 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::winlayer::Win;
+use crate::winlayer::windows;
 
 /// The state stack of one cached entry, whether it is short enough to live
 /// inline in the entry or long enough to need a growarray.
@@ -65,12 +65,10 @@ pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
         syn_stack_free_block(block);
 
         // With 'foldmethod' "syntax", every fold has to be recomputed too.
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_s == block && foldmethod_is_syntax(Win::new(wp)) {
-                fold_update_all(Win::new(wp));
+        for wp in windows() {
+            if wp.w_s == block && foldmethod_is_syntax(wp) {
+                fold_update_all(wp);
             }
-            wp = (*wp).w_next;
         }
     }
 }
@@ -151,12 +149,10 @@ pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
     unsafe {
         syn_stack_apply_changes_block(&raw mut (*buf).b_s, buf);
 
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_buffer == buf && (*wp).w_s != &raw mut (*buf).b_s {
-                syn_stack_apply_changes_block((*wp).w_s, buf);
+        for wp in windows() {
+            if wp.w_buffer == buf && wp.w_s != &raw mut (*buf).b_s {
+                syn_stack_apply_changes_block(wp.w_s, buf);
             }
-            wp = (*wp).w_next;
         }
     }
 }

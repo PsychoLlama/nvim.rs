@@ -12,6 +12,7 @@ use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::winlayer::windows;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -173,14 +174,17 @@ unsafe fn set_mouse_vars() {
         };
         let (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
 
-        let mut winnr = 1;
-        let mut wp = firstwin.get();
-        while wp != win.raw() {
+        // Upstream stops this walk on `win` itself rather than on the end of
+        // the list; `win` came out of a walk of the same list, so it is in it.
+        let mut winnr: varnumber_T = 1;
+        for wp in windows() {
+            if wp.raw() == win.raw() {
+                break;
+            }
             winnr += 1;
-            wp = (*wp).w_next;
         }
-        set_vim_var_nr(Vv::MouseWin, winnr as varnumber_T);
-        set_vim_var_nr(Vv::MouseWinid, (*wp).handle as varnumber_T);
+        set_vim_var_nr(Vv::MouseWin, winnr);
+        set_vim_var_nr(Vv::MouseWinid, win.handle as varnumber_T);
         set_vim_var_nr(Vv::MouseLnum, lnum as varnumber_T);
         set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as varnumber_T);
     }

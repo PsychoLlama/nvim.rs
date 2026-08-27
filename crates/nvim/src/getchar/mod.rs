@@ -34,7 +34,7 @@ use crate::main::{
     cmd_silent, cmdline_row, cmdline_star, cmdwin_type, ctrl_c_interrupts, curbuf, curwin,
     debug_did_msg, did_ai, did_emsg, did_outofmem_msg, did_swapwrite_msg, e_invarg2, e_invargNval,
     e_nesting, e_notopen_2, e_toocompl, emsg_silent, ex_normal_busy, exmode_active, finish_op,
-    firstwin, got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
+    got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
     may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col,
     msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping,
     no_zero_mapping, p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm,

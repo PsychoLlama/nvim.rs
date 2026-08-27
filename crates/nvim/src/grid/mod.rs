@@ -40,8 +40,8 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::main::{
-    default_grid, exmode_active, firstwin, full_screen, hl_attr_active, p_arshape, p_tbidi,
-    rdb_flags, resizing_screen,
+    default_grid, exmode_active, full_screen, hl_attr_active, p_arshape, p_tbidi, rdb_flags,
+    resizing_screen,
 };
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
@@ -62,6 +62,7 @@ use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
 };
+use crate::winlayer::{Win, windows};
 use ::libc::{abort, memcpy, strlen, strnlen};
 
 use core::ffi::{c_char, c_int, c_void};
@@ -451,16 +452,11 @@ pub fn grid_del_lines(
 ///
 /// # Safety
 /// The window list must be consistent.
+///
+/// The walk keeps that promise itself now; the signature stays `unsafe`
+/// because every caller still spells the call out that way.
 pub unsafe fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T {
-    unsafe {
-        // FOR_ALL_WINDOWS_IN_TAB over curtab, which always starts at firstwin.
-        let mut wp = firstwin.get();
-        while !wp.is_null() {
-            if (*wp).w_grid_alloc.handle == handle {
-                return wp;
-            }
-            wp = (*wp).w_next;
-        }
-        ::core::ptr::null_mut()
-    }
+    windows()
+        .find(|wp| wp.w_grid_alloc.handle == handle)
+        .map_or(::core::ptr::null_mut(), Win::raw)
 }
