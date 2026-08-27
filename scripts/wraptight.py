@@ -48,7 +48,33 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import ratchet  # noqa: E402
+
 CHECK = ["cargo", "check", "-p", "neovim", "--message-format=json"]
+
+
+def masked(raw: bytes) -> bytes:
+    """`raw` with every comment, string and char literal blanked to spaces.
+
+    **Every scan in this file must run over this, not over the source.** The
+    passes below look for the `;` that ends a statement, the `}` that closes a
+    block and the `(` that opens a group, and a Rust literal may hold any of
+    them: `\',\'` ended a statement one byte into a char literal and
+    `wraptight` planted a brace inside it (`option/defaults.rs`, S16), which
+    is the benign version -- a `}` inside a string would have made `unnest`
+    delete a region that was never a block.
+
+    Byte offsets are preserved so a rustc span indexes this exactly as it
+    indexes `raw`; `ratchet.mask` works in characters, so a multi-byte one it
+    blanks is re-emitted as that many spaces.
+    """
+    text = raw.decode("utf-8")
+    out = bytearray()
+    for src, dst in zip(text, ratchet.mask(text)):
+        encoded = src.encode("utf-8")
+        out += encoded if dst == src else b" " * len(encoded)
+    return bytes(out)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +282,8 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
     the `as` guard below.
     """
     edits = set()
-    for match in DEREF_WRAP.finditer(raw):
+    scan = masked(raw)
+    for match in DEREF_WRAP.finditer(scan):
         if ends_in_call(match.group(1)):
             # The wrapped expression ends in a *call*, so it is already a
             # value and the `.field` after it is a read of a temporary --
@@ -268,21 +295,22 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
             # the brace past it is a syntax error at best.
             continue
         close = match.end() - 1
-        edits.add((close, chain_end(raw, close + 1), match.start(1)))
+        edits.add((close, chain_end(scan, close + 1), match.start(1)))
     for span in spans or []:
-        close = enclosing_unsafe(raw, span["byte_start"])
-        if close is not None and raw[close + 1 : close + 2] in (b".", b"["):
-            edits.add((close, chain_end(raw, close + 1), open_of(raw, close)))
+        close = enclosing_unsafe(scan, span["byte_start"])
+        if close is not None and scan[close + 1 : close + 2] in (b".", b"["):
+            edits.add((close, chain_end(scan, close + 1), open_of(scan, close)))
     for close, end, start in sorted(edits, reverse=True):
         if end <= close + 1:
             continue  # nothing to move the brace past
         inner = raw[start:close].rstrip()
+        group = scan[start:close].rstrip()
         # `unsafe { *p }.f` must become `unsafe { (*p).f }`, never
         # `unsafe { *p .f }` -- the latter is `*(p.f)`, a different program
         # that compiles whenever `p.f` is itself a pointer. c2rust writes
         # `(*p).f` so the parentheses are usually already there, which is
         # exactly why this hole stayed open.
-        if not balanced_group(inner):
+        if not balanced_group(group):
             raw = (
                 raw[:start]
                 + b"("
@@ -315,15 +343,16 @@ def balanced_group(text: bytes) -> bool:
 def reparen(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     """E0609 on a pointer base: `unsafe { *p.f }` -> `unsafe { (*p).f }`."""
     edits = set()
+    scan = masked(raw)
     for span in spans:
         at = span["byte_start"]
-        i = raw.rfind(b"unsafe {", 0, at)
+        i = scan.rfind(b"unsafe {", 0, at)
         if i < 0:
             continue
-        star = raw.index(b"{", i) + 1
-        while raw[star : star + 1].isspace():
+        star = scan.index(b"{", i) + 1
+        while scan[star : star + 1].isspace():
             star += 1
-        if raw[star : star + 1] != b"*" or raw[at - 1 : at] != b".":
+        if scan[star : star + 1] != b"*" or scan[at - 1 : at] != b".":
             continue
         edits.add((star, at - 1))
     for star, dot in sorted(edits, reverse=True):
@@ -342,13 +371,14 @@ def line_offsets(raw: bytes) -> list[int]:
 def fixtail(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     """A block that stopped at an operator: grow it to the statement's end."""
     offs = line_offsets(raw)
+    scan = masked(raw)
     edits = set()
     for span in spans:
         at = offs[span["line_start"] - 1] + span["column_start"] - 1
-        close = raw.rfind(b"}", 0, at)
-        if close < 0 or raw[close + 1 : at].strip():
+        close = scan.rfind(b"}", 0, at)
+        if close < 0 or scan[close + 1 : at].strip():
             continue
-        end = statement_end(raw, at)
+        end = statement_end(scan, at)
         if end is not None:
             edits.add((close, end))
     for close, end in sorted(edits, reverse=True):
@@ -363,13 +393,14 @@ def unnest(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     the block, so the brace has to be matched forward from there.
     """
     offs = line_offsets(raw)
+    scan = masked(raw)
     edits = []
     for span in spans:
         at = offs[span["line_start"] - 1] + span["column_start"] - 1
         if raw[at : at + 6] != b"unsafe":
             continue
-        open_at = raw.find(b"{", at)
-        close = closing_brace(raw, open_at) if open_at >= 0 else None
+        open_at = scan.find(b"{", at)
+        close = closing_brace(scan, open_at) if open_at >= 0 else None
         if close is None:
             continue
         edits.append((at, open_at, close))
@@ -381,14 +412,15 @@ def unnest(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
 def deparen(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     """Drop parentheses rustc calls unnecessary around a block's value."""
     offs = line_offsets(raw)
+    scan = masked(raw)
     edits = set()
     for span in spans:
         at = offs[span["line_start"] - 1] + span["column_start"] - 1
         if raw[at : at + 1] != b"(":
             continue
         depth = 0
-        for k in range(at, len(raw)):
-            c = raw[k : k + 1]
+        for k in range(at, len(scan)):
+            c = scan[k : k + 1]
             if c == b"(":
                 depth += 1
             elif c == b")":
