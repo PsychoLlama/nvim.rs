@@ -25,7 +25,7 @@
 
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -50,6 +50,7 @@ use crate::eval::{
     e_cannot_slice_dictionary, e_dot_can_only_be_used_on_dictionary_str, e_missbrac, eval_isnamec,
     eval_isnamec1, eval1, find_name_end, glv_status_T, make_expanded_name, tv_init, tv_is_luafunc,
 };
+use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::main::{
@@ -66,6 +67,7 @@ use crate::types::{
     dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T,
 };
+use crate::winlayer::Live;
 use ::libc::{memset, strlen};
 
 /// A freshly declared typval.
@@ -86,23 +88,34 @@ const NAMESPACES: &core::ffi::CStr = c"bgstvw";
 /// # Safety
 /// `arg` must be NUL-terminated.
 pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *const c_char {
-    unsafe {
-        if !eval_isnamec1(*arg as c_int) {
-            return arg;
+    // SAFETY: the caller's promise -- `arg` is NUL-terminated, so its first byte is readable.
+    let first = unsafe { *arg };
+    if !eval_isnamec1(first as c_int) {
+        return arg;
+    }
+    // SAFETY: a name character is not the terminator, so the byte after it is inside the string.
+    let start = unsafe { arg.add(1) };
+    let mut p = start;
+    loop {
+        // SAFETY: `p` walks the string and every step stops at the terminator.
+        let c = unsafe { *p };
+        if c as c_int == NUL || !eval_isnamec(c as c_int) {
+            break;
         }
-        let mut p = arg.add(1);
-        while *p as c_int != NUL && eval_isnamec(*p as c_int) {
-            if *p == b':' as c_char
-                && (p != arg.add(1)
-                    || !use_namespace
-                    || vim_strchr(NAMESPACES.as_ptr(), *arg as c_int).is_null())
-            {
+        if c == b':' as c_char {
+            // A `:` continues the name only as the one namespace letter.
+            // SAFETY: `NAMESPACES` is a NUL-terminated literal.
+            let namespaced = use_namespace
+                && p == start
+                && !unsafe { vim_strchr(NAMESPACES.as_ptr(), first as c_int) }.is_null();
+            if !namespaced {
                 break;
             }
-            p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
         }
-        p
+        // SAFETY: `c` is not the terminator, so `p` is on a character.
+        p = unsafe { p.offset(utfc_ptr2len(p as *mut c_char) as isize) };
     }
+    p
 }
 
 /// Resolve one `.key` or `[key]` subscript against the Dictionary in
@@ -127,102 +140,129 @@ pub(crate) unsafe fn get_lval_dict_item(
     rettv: *mut typval_T,
 ) -> glv_status_T {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        let quiet = flags & GLV_QUIET as c_int != 0;
-        let p = *key_end;
-        // "[key]": the key is `var1`'s string, which is a Number or String.
-        let key = if len == -1 {
-            numbuf.string(var1) as *mut c_char
-        } else {
-            key
-        };
-        (*lp).ll_list = null_mut::<list_T>();
+    let quiet = flags & GLV_QUIET as c_int != 0;
+    // SAFETY: the caller's promise; `key_end` holds a cursor into `name`.
+    let (mut lp, p) = unsafe { (Lv::new(lp), *key_end) };
+    // SAFETY: the caller's promise: `ll_tv` holds a Dict, so `v_dict` is live.
+    let mut container = unsafe { Tv::new(lp.ll_tv) };
+    // "[key]": the key is `var1`'s string, which is a Number or String.
+    let key = if len == -1 {
+        // SAFETY: `var1` is the caller's, and `numbuf` outlives the string rendered into it.
+        unsafe { numbuf.string(var1) as *mut c_char }
+    } else {
+        key
+    };
+    lp.ll_list = null_mut::<list_T>();
 
-        // A null Dict is an empty Dict; allocate one now.
-        if (*(*lp).ll_tv).vval.v_dict.is_null() {
-            (*(*lp).ll_tv).vval.v_dict = tv_dict_alloc();
-            (*(*(*lp).ll_tv).vval.v_dict).dv_refcount.retain();
-        }
-        (*lp).ll_dict = (*(*lp).ll_tv).vval.v_dict;
-        (*lp).ll_di = tv_dict_find((*lp).ll_dict, key, len as ptrdiff_t);
+    // A null Dict is an empty Dict; allocate one now.
+    // SAFETY: as above.
+    if unsafe { container.vval.v_dict }.is_null() {
+        // SAFETY: `tv_dict_alloc` never answers NULL.
+        container.vval.v_dict = unsafe { tv_dict_alloc() };
+        // SAFETY: the typval now holds the reference this takes.
+        unsafe { (*container.vval.v_dict).dv_refcount.retain() };
+    }
+    // SAFETY: as above.
+    lp.ll_dict = unsafe { container.vval.v_dict };
+    // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
+    lp.ll_di = unsafe { tv_dict_find(lp.ll_dict, key, len as ptrdiff_t) };
+    // SAFETY: `ll_dict` is the live Dict just resolved.
+    let dict = unsafe { Live::<dict_T>::new(lp.ll_dict) };
 
-        // Assigning into a scope dictionary: check that the name is a valid
-        // variable name, and a valid *function* name too unless the scope is
-        // `l:` or `g:`. Overwriting a builtin function is not allowed.
-        if !rettv.is_null() && (*(*lp).ll_dict).dv_scope != 0 {
-            // The two checks want a NUL-terminated key, so a `.key` is
-            // terminated in place and put back.
-            let prevval = if len != -1 {
+    // Assigning into a scope dictionary: check that the name is a valid
+    // variable name, and a valid *function* name too unless the scope is
+    // `l:` or `g:`. Overwriting a builtin function is not allowed.
+    if !rettv.is_null() && dict.dv_scope != 0 {
+        // The two checks want a NUL-terminated key, so a `.key` is
+        // terminated in place and put back.
+        let prevval = if len != -1 {
+            // SAFETY: a `.key`'s `len` bytes are inside the writable `name`.
+            unsafe {
                 let c = *key.offset(len as isize);
                 *key.offset(len as isize) = NUL as c_char;
                 c
-            } else {
-                0
-            };
-            let wrong = ((*(*lp).ll_dict).dv_scope == VAR_DEF_SCOPE
+            }
+        } else {
+            0
+        };
+        // SAFETY: `rettv` is the caller's, and `key` is NUL-terminated either way now.
+        let wrong = unsafe {
+            (dict.dv_scope == VAR_DEF_SCOPE
                 && tv_is_func(*rettv)
-                && var_wrong_func_name(key, (*lp).ll_di.is_null()))
-                || !valid_varname(key);
-            if len != -1 {
-                *key.offset(len as isize) = prevval;
-            }
-            if wrong {
-                return GLV_FAIL;
-            }
+                && var_wrong_func_name(key, lp.ll_di.is_null()))
+                || !valid_varname(key)
+        };
+        if len != -1 {
+            // SAFETY: as above -- the byte cut out is put back.
+            unsafe { *key.offset(len as isize) = prevval };
         }
-
-        if !(*lp).ll_di.is_null()
-            && tv_is_luafunc(&raw mut (*(*lp).ll_di).di_tv)
-            && len == -1
-            && rettv.is_null()
-        {
-            semsg_c!(e_illvar.as_ptr(), c"v:['lua']".as_ptr());
+        if wrong {
             return GLV_FAIL;
         }
+    }
 
-        if (*lp).ll_di.is_null() {
-            // A "v:" or "a:" variable cannot be added.
-            if (*lp).ll_dict == get_vimvar_dict()
-                || &raw mut (*(*lp).ll_dict).dv_hashtab == get_funccal_args_ht()
-            {
-                semsg_c!(gettext(e_illvar.as_ptr()), name);
-                return GLV_FAIL;
+    // SAFETY: a non-null `ll_di` is a live dictionary item.
+    let lua_key = !lp.ll_di.is_null()
+        && unsafe { tv_is_luafunc(&raw mut (*lp.ll_di).di_tv) }
+        && len == -1
+        && rettv.is_null();
+    if lua_key {
+        let what = c"v:['lua']".as_ptr();
+        // SAFETY: the format takes one NUL-terminated string.
+        unsafe { semsg_c!(e_illvar.as_ptr(), what) };
+        return GLV_FAIL;
+    }
+
+    if lp.ll_di.is_null() {
+        // A "v:" or "a:" variable cannot be added.
+        // SAFETY: naming a live Dict's hashtab reads nothing.
+        let ht = unsafe { &raw mut (*lp.ll_dict).dv_hashtab };
+        // SAFETY: the function-call stack is the editor's own.
+        let args_ht = unsafe { get_funccal_args_ht() };
+        if lp.ll_dict == get_vimvar_dict() || ht == args_ht {
+            // SAFETY: the format takes one NUL-terminated string.
+            unsafe { semsg_c!(gettext(e_illvar.as_ptr()), name) };
+            return GLV_FAIL;
+        }
+        // The key does not exist. It may be added — unless something
+        // follows it to subscript, or this is an `:unlet`.
+        // SAFETY: `p` is a cursor into the NUL-terminated `name`.
+        let after = unsafe { *p };
+        if after == b'[' as c_char || after == b'.' as c_char || unlet {
+            if !quiet {
+                // SAFETY: the format takes one NUL-terminated string.
+                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), key) };
             }
-            // The key does not exist. It may be added — unless something
-            // follows it to subscript, or this is an `:unlet`.
-            if *p == b'[' as c_char || *p == b'.' as c_char || unlet {
-                if !quiet {
-                    semsg_c!(gettext(e_dictkey.as_ptr()), key);
-                }
-                return GLV_FAIL;
-            }
-            (*lp).ll_newkey = if len == -1 {
+            return GLV_FAIL;
+        }
+        // SAFETY: `key` is NUL-terminated when `len` is -1, and `len` bytes long otherwise.
+        lp.ll_newkey = unsafe {
+            if len == -1 {
                 xstrdup(key)
             } else {
                 xmemdupz(key as *const c_void, len as size_t) as *mut c_char
-            };
-            *key_end = p;
-            return GLV_STOP;
-        }
-
-        // An existing item: check it may be changed.
-        if flags & GLV_READ_ONLY as c_int == 0
-            && (var_check_ro(
-                (*(*lp).ll_di).di_flags as c_int,
-                name,
-                p.offset_from(name) as size_t,
-            ) || var_check_lock(
-                (*(*lp).ll_di).di_flags as c_int,
-                name,
-                p.offset_from(name) as size_t,
-            ))
-        {
-            return GLV_FAIL;
-        }
-
-        (*lp).ll_tv = &raw mut (*(*lp).ll_di).di_tv;
-        GLV_OK
+            }
+        };
+        // SAFETY: the caller's promise about `key_end`.
+        unsafe { *key_end = p };
+        return GLV_STOP;
     }
+
+    // An existing item: check it may be changed.
+    // SAFETY: `ll_di` is a live item, and `p` and `name` are cursors into the one string.
+    let refused = flags & GLV_READ_ONLY as c_int == 0
+        && unsafe {
+            let di_flags = (*lp.ll_di).di_flags as c_int;
+            let name_len = p.offset_from(name) as size_t;
+            var_check_ro(di_flags, name, name_len) || var_check_lock(di_flags, name, name_len)
+        };
+    if refused {
+        return GLV_FAIL;
+    }
+
+    // SAFETY: `ll_di` is a live item, whose typval is the target.
+    lp.ll_tv = unsafe { &raw mut (*lp.ll_di).di_tv };
+    GLV_OK
 }
 
 /// Resolve a `[n]` or `[n:m]` subscript against the Blob in `lp->ll_tv`.
@@ -237,32 +277,34 @@ pub(crate) unsafe fn get_lval_blob(
     empty1: bool,
     quiet: bool,
 ) -> c_int {
-    unsafe {
-        let bloblen = tv_blob_len((*(*lp).ll_tv).vval.v_blob);
-        (*lp).ll_n1 = if empty1 {
-            0
-        } else {
-            tv_get_number(var1) as c_int
-        };
-        if tv_blob_check_index(bloblen, (*lp).ll_n1 as varnumber_T, quiet) == FAIL {
+    // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
+    let mut lp = unsafe { Lv::new(lp) };
+    // SAFETY: as above.
+    let bloblen = unsafe { tv_blob_len(Tv::new(lp.ll_tv).vval.v_blob) };
+    lp.ll_n1 = if empty1 {
+        0
+    } else {
+        // SAFETY: `var1` is the caller's index expression.
+        unsafe { tv_get_number(var1) as c_int }
+    };
+    let n1 = lp.ll_n1 as varnumber_T;
+    // SAFETY: the index is checked against the length measured above.
+    if unsafe { tv_blob_check_index(bloblen, n1, quiet) } == FAIL {
+        return FAIL;
+    }
+    if lp.ll_range && !lp.ll_empty2 {
+        // SAFETY: `var2` is the caller's second index expression.
+        lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
+        let n2 = lp.ll_n2 as varnumber_T;
+        // SAFETY: as above.
+        if unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) } == FAIL {
             return FAIL;
         }
-        if (*lp).ll_range && !(*lp).ll_empty2 {
-            (*lp).ll_n2 = tv_get_number(var2) as c_int;
-            if tv_blob_check_range(
-                bloblen,
-                (*lp).ll_n1 as varnumber_T,
-                (*lp).ll_n2 as varnumber_T,
-                quiet,
-            ) == FAIL
-            {
-                return FAIL;
-            }
-        }
-        (*lp).ll_blob = (*(*lp).ll_tv).vval.v_blob;
-        (*lp).ll_tv = null_mut();
-        OK
     }
+    // SAFETY: as above -- the typval still holds the Blob.
+    lp.ll_blob = unsafe { Tv::new(lp.ll_tv).vval.v_blob };
+    lp.ll_tv = null_mut();
+    OK
 }
 
 /// Resolve a `[n]` or `[n:m]` subscript against the List in `lp->ll_tv`,
@@ -278,34 +320,38 @@ pub(crate) unsafe fn get_lval_list(
     _flags: c_int,
     quiet: bool,
 ) -> c_int {
-    unsafe {
-        (*lp).ll_n1 = if empty1 {
-            0
-        } else {
-            tv_get_number(var1) as c_int
-        };
-        (*lp).ll_dict = null_mut::<dict_T>();
-        (*lp).ll_list = (*(*lp).ll_tv).vval.v_list;
-        (*lp).ll_li = tv_list_check_range_index_one((*lp).ll_list, &raw mut (*lp).ll_n1, quiet);
-        if (*lp).ll_li.is_null() {
+    // SAFETY: the caller's promise: `ll_tv` holds a List.
+    let mut lp = unsafe { Lv::new(lp) };
+    lp.ll_n1 = if empty1 {
+        0
+    } else {
+        // SAFETY: `var1` is the caller's index expression.
+        unsafe { tv_get_number(var1) as c_int }
+    };
+    lp.ll_dict = null_mut::<dict_T>();
+    // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
+    lp.ll_list = unsafe { Tv::new(lp.ll_tv).vval.v_list };
+    // The two indexes are `lp`'s own fields; naming their addresses reads
+    // nothing, which is what `Live::field_ptr` is for.
+    let n1: *mut c_int = lp.field_ptr(offset_of!(lval_T, ll_n1));
+    // SAFETY: `ll_list` is the typval's List and `n1` is `lp`'s own field.
+    lp.ll_li = unsafe { tv_list_check_range_index_one(lp.ll_list, n1, quiet) };
+    if lp.ll_li.is_null() {
+        return FAIL;
+    }
+    if lp.ll_range && !lp.ll_empty2 {
+        // SAFETY: `var2` is the caller's second index expression.
+        lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
+        let n2: *mut c_int = lp.field_ptr(offset_of!(lval_T, ll_n2));
+        let (list, li) = (lp.ll_list, lp.ll_li);
+        // SAFETY: `li` is the item index one selected; both are `lp`'s fields.
+        if unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) } == FAIL {
             return FAIL;
         }
-        if (*lp).ll_range && !(*lp).ll_empty2 {
-            (*lp).ll_n2 = tv_get_number(var2) as c_int;
-            if tv_list_check_range_index_two(
-                (*lp).ll_list,
-                &raw mut (*lp).ll_n1,
-                (*lp).ll_li,
-                &raw mut (*lp).ll_n2,
-                quiet,
-            ) == FAIL
-            {
-                return FAIL;
-            }
-        }
-        (*lp).ll_tv = &raw mut (*(*lp).ll_li).li_tv;
-        OK
     }
+    // SAFETY: `ll_li` is a live item, whose typval is the target.
+    lp.ll_tv = unsafe { &raw mut (*lp.ll_li).li_tv };
+    OK
 }
 
 /// Walk every `[idx]` and `.key` following the name, descending `lp->ll_tv`
@@ -327,178 +373,191 @@ pub(crate) unsafe fn get_lval_subscript(
     flags: c_int,
 ) -> *mut c_char {
     let mut evalarg = EVALARG_EVALUATE;
-    unsafe {
-        let quiet = flags & GLV_QUIET as c_int != 0;
-        // The two index expressions. They are cleared and reset at the end
-        // of every pass, so an early `return` below never leaks one.
-        let mut var1 = UNSET_TV;
-        let mut var2 = UNSET_TV;
-        let mut empty1 = false;
-        let mut rc = FAIL;
+    let quiet = flags & GLV_QUIET as c_int != 0;
+    // SAFETY, for every region in this body: the caller's promise is that
+    // `lp` outlives the call with `ll_tv` on a live typval, and that `p` is
+    // a cursor into the NUL-terminated `name` — which the walk below keeps
+    // true, because it never steps past a byte it has not first seen is not
+    // the terminator. Each union member read is the one the `v_type` just
+    // tested names; `var1`, `var2`, `evalarg` and `p` are this frame's; and
+    // every message named is a NUL-terminated literal or one of the shared
+    // `e_*` texts. The notes below add only what is local to a site.
+    let mut lp = unsafe { Lv::new(lp) };
+    // The two index expressions. They are cleared and reset at the end
+    // of every pass, so an early `return` below never leaks one.
+    let mut var1 = UNSET_TV;
+    let mut var2 = UNSET_TV;
+    let mut empty1 = false;
+    let mut rc = FAIL;
 
-        'done: {
-            while *p == b'[' as c_char
-                || (*p == b'.' as c_char
-                    && *p.add(1) != b'=' as c_char
-                    && *p.add(1) != b'.' as c_char)
-            {
-                if *p == b'.' as c_char && (*(*lp).ll_tv).v_type != VAR_DICT {
-                    if !quiet {
-                        semsg_c!(
-                            gettext(e_dot_can_only_be_used_on_dictionary_str.as_ptr()),
-                            name,
-                        );
-                    }
-                    return null_mut();
-                }
-                if (*(*lp).ll_tv).v_type != VAR_LIST
-                    && (*(*lp).ll_tv).v_type != VAR_DICT
-                    && (*(*lp).ll_tv).v_type != VAR_BLOB
-                {
-                    if !quiet {
-                        emsg(gettext(
-                            c"E689: Can only index a List, Dictionary or Blob".as_ptr(),
-                        ));
-                    }
-                    return null_mut();
-                }
-
-                // A null List or Blob works like an empty one; allocate now.
-                if (*(*lp).ll_tv).v_type == VAR_LIST && (*(*lp).ll_tv).vval.v_list.is_null() {
-                    tv_list_alloc_ret((*lp).ll_tv, kListLenUnknown as ptrdiff_t);
-                } else if (*(*lp).ll_tv).v_type == VAR_BLOB && (*(*lp).ll_tv).vval.v_blob.is_null()
-                {
-                    tv_blob_alloc_ret((*lp).ll_tv);
-                }
-
-                if (*lp).ll_range {
-                    if !quiet {
-                        emsg(gettext(c"E708: [:] must come last".as_ptr()));
-                    }
-                    break 'done;
-                }
-
-                let mut len: c_int = -1;
-                let mut key: *mut c_char = null_mut();
-                if *p == b'.' as c_char {
-                    key = p.add(1);
-                    len = 0;
-                    while {
-                        let b = *key.offset(len as isize) as u8;
-                        b.is_ascii_alphabetic()
-                            || ascii_isdigit(*key.offset(len as isize) as c_int)
-                            || b == b'_'
-                    } {
-                        len += 1;
-                    }
-                    if len == 0 {
-                        if !quiet {
-                            emsg(gettext(c"E713: Cannot use empty key after .".as_ptr()));
-                        }
-                        return null_mut();
-                    }
-                    p = key.offset(len as isize);
-                } else {
-                    // The index `[expr]`, or the first of `[expr : expr]`.
-                    p = skipwhite(p.add(1));
-                    if *p == b':' as c_char {
-                        empty1 = true;
-                    } else {
-                        empty1 = false;
-                        if eval1(&raw mut p, &raw mut var1, &raw mut evalarg) == FAIL {
-                            break 'done;
-                        }
-                        if !tv_check_str(&raw mut var1) {
-                            break 'done;
-                        }
-                        p = skipwhite(p);
-                    }
-
-                    if *p == b':' as c_char {
-                        if (*(*lp).ll_tv).v_type == VAR_DICT {
-                            if !quiet {
-                                emsg(gettext(e_cannot_slice_dictionary.as_ptr()));
-                            }
-                            break 'done;
-                        }
-                        // The value being assigned has to be sliceable too.
-                        if !rettv.is_null()
-                            && !((*rettv).v_type == VAR_LIST && !(*rettv).vval.v_list.is_null())
-                            && !((*rettv).v_type == VAR_BLOB && !(*rettv).vval.v_blob.is_null())
-                        {
-                            if !quiet {
-                                emsg(gettext(c"E709: [:] requires a List or Blob value".as_ptr()));
-                            }
-                            break 'done;
-                        }
-                        p = skipwhite(p.add(1));
-                        if *p == b']' as c_char {
-                            (*lp).ll_empty2 = true;
-                        } else {
-                            (*lp).ll_empty2 = false;
-                            if eval1(&raw mut p, &raw mut var2, &raw mut evalarg) == FAIL {
-                                break 'done;
-                            }
-                            if !tv_check_str(&raw mut var2) {
-                                break 'done;
-                            }
-                        }
-                        (*lp).ll_range = true;
-                    } else {
-                        (*lp).ll_range = false;
-                    }
-
-                    if *p != b']' as c_char {
-                        if !quiet {
-                            emsg(gettext(e_missbrac.as_ptr()));
-                        }
-                        break 'done;
-                    }
-                    p = p.add(1);
-                }
-
-                if (*(*lp).ll_tv).v_type == VAR_DICT {
-                    match get_lval_dict_item(
-                        lp,
-                        name,
-                        key,
-                        len,
-                        &raw mut p,
-                        &raw mut var1,
-                        flags,
-                        unlet,
-                        rettv,
-                    ) {
-                        GLV_FAIL => break 'done,
-                        // The key is new: `ll_newkey` holds it and there is
-                        // nothing left to descend into.
-                        GLV_STOP => break,
-                        _ => {}
-                    }
-                } else if (*(*lp).ll_tv).v_type == VAR_BLOB {
-                    if get_lval_blob(lp, &raw mut var1, &raw mut var2, empty1, quiet) == FAIL {
-                        break 'done;
-                    }
-                    // A Blob byte is never a container, so this is the end.
-                    break;
-                } else if get_lval_list(lp, &raw mut var1, &raw mut var2, empty1, flags, quiet)
-                    == FAIL
-                {
-                    break 'done;
-                }
-
-                tv_clear(&raw mut var1);
-                tv_clear(&raw mut var2);
-                var1.v_type = VAR_UNKNOWN;
-                var2.v_type = VAR_UNKNOWN;
+    'done: {
+        loop {
+            let c = unsafe { *p };
+            let subscript = c == b'[' as c_char
+                || (c == b'.' as c_char
+                    && unsafe { *p.add(1) } != b'=' as c_char
+                    && unsafe { *p.add(1) } != b'.' as c_char);
+            if !subscript {
+                break;
             }
-            rc = OK;
-        }
+            let mut container = unsafe { Tv::new(lp.ll_tv) };
+            if c == b'.' as c_char && container.v_type != VAR_DICT {
+                if !quiet {
+                    unsafe {
+                        let fmt = gettext(e_dot_can_only_be_used_on_dictionary_str.as_ptr());
+                        semsg_c!(fmt, name);
+                    };
+                }
+                return null_mut();
+            }
+            if container.v_type != VAR_LIST
+                && container.v_type != VAR_DICT
+                && container.v_type != VAR_BLOB
+            {
+                if !quiet {
+                    let msg = c"E689: Can only index a List, Dictionary or Blob".as_ptr();
+                    unsafe { emsg(gettext(msg)) };
+                }
+                return null_mut();
+            }
 
-        tv_clear(&raw mut var1);
-        tv_clear(&raw mut var2);
-        if rc == OK { p } else { null_mut() }
+            // A null List or Blob works like an empty one; allocate now.
+            if container.v_type == VAR_LIST && unsafe { container.vval.v_list }.is_null() {
+                unsafe { tv_list_alloc_ret(lp.ll_tv, kListLenUnknown as ptrdiff_t) };
+            } else if container.v_type == VAR_BLOB && unsafe { container.vval.v_blob }.is_null() {
+                unsafe { tv_blob_alloc_ret(lp.ll_tv) };
+            }
+
+            if lp.ll_range {
+                if !quiet {
+                    unsafe { emsg(gettext(c"E708: [:] must come last".as_ptr())) };
+                }
+                break 'done;
+            }
+
+            let mut len: c_int = -1;
+            let mut key: *mut c_char = null_mut();
+            if c == b'.' as c_char {
+                key = unsafe { p.add(1) };
+                len = 0;
+                loop {
+                    let b = unsafe { *key.offset(len as isize) } as u8;
+                    if !(b.is_ascii_alphabetic() || ascii_isdigit(b.into()) || b == b'_') {
+                        break;
+                    }
+                    len += 1;
+                }
+                if len == 0 {
+                    if !quiet {
+                        let msg = c"E713: Cannot use empty key after .".as_ptr();
+                        unsafe { emsg(gettext(msg)) };
+                    }
+                    return null_mut();
+                }
+                p = unsafe { key.offset(len as isize) };
+            } else {
+                // The index `[expr]`, or the first of `[expr : expr]`.
+                p = unsafe { skipwhite(p.add(1)) };
+                if unsafe { *p } == b':' as c_char {
+                    empty1 = true;
+                } else {
+                    empty1 = false;
+                    if unsafe { eval1(&raw mut p, &raw mut var1, &raw mut evalarg) } == FAIL {
+                        break 'done;
+                    }
+                    if !unsafe { tv_check_str(&raw mut var1) } {
+                        break 'done;
+                    }
+                    p = unsafe { skipwhite(p) };
+                }
+
+                if unsafe { *p } == b':' as c_char {
+                    if container.v_type == VAR_DICT {
+                        if !quiet {
+                            unsafe { emsg(gettext(e_cannot_slice_dictionary.as_ptr())) };
+                        }
+                        break 'done;
+                    }
+                    // The value being assigned has to be sliceable too.
+                    // A null `rettv` is `:unlet`, which assigns nothing.
+                    // SAFETY: `rettv` is non-null here; `v_type` names the member read.
+                    let sliceable = rettv.is_null()
+                        || unsafe {
+                            ((*rettv).v_type == VAR_LIST && !(*rettv).vval.v_list.is_null())
+                                || ((*rettv).v_type == VAR_BLOB && !(*rettv).vval.v_blob.is_null())
+                        };
+                    if !sliceable {
+                        if !quiet {
+                            let msg = c"E709: [:] requires a List or Blob value".as_ptr();
+                            unsafe { emsg(gettext(msg)) };
+                        }
+                        break 'done;
+                    }
+                    p = unsafe { skipwhite(p.add(1)) };
+                    if unsafe { *p } == b']' as c_char {
+                        lp.ll_empty2 = true;
+                    } else {
+                        lp.ll_empty2 = false;
+                        let ev = unsafe { eval1(&raw mut p, &raw mut var2, &raw mut evalarg) };
+                        if ev == FAIL {
+                            break 'done;
+                        }
+                        if !unsafe { tv_check_str(&raw mut var2) } {
+                            break 'done;
+                        }
+                    }
+                    lp.ll_range = true;
+                } else {
+                    lp.ll_range = false;
+                }
+
+                if unsafe { *p } != b']' as c_char {
+                    if !quiet {
+                        unsafe { emsg(gettext(e_missbrac.as_ptr())) };
+                    }
+                    break 'done;
+                }
+                p = unsafe { p.add(1) };
+            }
+
+            container = unsafe { Tv::new(lp.ll_tv) };
+            if container.v_type == VAR_DICT {
+                let (rec, end, idx) = (lp.raw(), &raw mut p, &raw mut var1);
+                let status = unsafe {
+                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, rettv)
+                };
+                match status {
+                    GLV_FAIL => break 'done,
+                    // The key is new: `ll_newkey` holds it and there is
+                    // nothing left to descend into.
+                    GLV_STOP => break,
+                    _ => {}
+                }
+            } else if container.v_type == VAR_BLOB {
+                let (a, b) = (&raw mut var1, &raw mut var2);
+                if unsafe { get_lval_blob(lp.raw(), a, b, empty1, quiet) } == FAIL {
+                    break 'done;
+                }
+                // A Blob byte is never a container, so this is the end.
+                break;
+            } else {
+                let (a, b) = (&raw mut var1, &raw mut var2);
+                if unsafe { get_lval_list(lp.raw(), a, b, empty1, flags, quiet) } == FAIL {
+                    break 'done;
+                }
+            }
+
+            unsafe { tv_clear(&raw mut var1) };
+            unsafe { tv_clear(&raw mut var2) };
+            var1.v_type = VAR_UNKNOWN;
+            var2.v_type = VAR_UNKNOWN;
+        }
+        rc = OK;
     }
+
+    unsafe { tv_clear(&raw mut var1) };
+    unsafe { tv_clear(&raw mut var2) };
+    if rc == OK { p } else { null_mut() }
 }
 
 /// Resolve the left-hand side of an assignment or an `:unlet` into `lp`,
@@ -516,95 +575,109 @@ pub unsafe fn get_lval(
     flags: c_int,
     fne_flags: c_int,
 ) -> *mut c_char {
-    unsafe {
-        let quiet = flags & GLV_QUIET as c_int != 0;
-        memset(lp as *mut c_void, 0, size_of::<lval_T>());
+    let quiet = flags & GLV_QUIET as c_int != 0;
+    // SAFETY: the caller's promise; every field is written before it is read.
+    let mut lp = unsafe { Lv::new(lp) };
+    // SAFETY: as above -- the whole record is the caller's.
+    unsafe { memset(lp.raw() as *mut c_void, 0, size_of::<lval_T>()) };
 
-        if skip {
-            // Only the name matters; nothing is resolved.
-            (*lp).ll_name = name;
-            return find_name_end(name, null_mut(), null_mut(), FNE_INCL_BR | fne_flags)
-                as *mut c_char;
+    if skip {
+        // Only the name matters; nothing is resolved.
+        lp.ll_name = name;
+        let fne = FNE_INCL_BR | fne_flags;
+        // SAFETY: `name` is NUL-terminated and the walk wants no braces.
+        return unsafe { find_name_end(name, null_mut(), null_mut(), fne) } as *mut c_char;
+    }
+
+    // `find_name_end` writes `*const` and `make_expanded_name` wants
+    // `*mut`; the two spell the same bytes of `name`, which is writable.
+    let mut expr_start: *mut c_char = null_mut();
+    let mut expr_end: *mut c_char = null_mut();
+    let (starts, ends) = (
+        (&raw mut expr_start).cast::<*const c_char>(),
+        (&raw mut expr_end).cast::<*const c_char>(),
+    );
+    // SAFETY: `name` is NUL-terminated and the two out-parameters are this frame's.
+    let mut p = unsafe { find_name_end(name, starts, ends, fne_flags) } as *mut c_char;
+
+    if !expr_start.is_null() {
+        // A curly-braces name: expand it.
+        // SAFETY: `p` is a cursor into the NUL-terminated `name`.
+        let after = unsafe { *p };
+        if unlet
+            && !ascii_iswhite(after as c_int)
+            && ends_excmd(after as c_int) == 0
+            && after != b'[' as c_char
+            && after != b'.' as c_char
+        {
+            // SAFETY: the format takes one NUL-terminated string.
+            unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
+            return null_mut();
         }
-
-        // `find_name_end` writes `*const` and `make_expanded_name` wants
-        // `*mut`; the two spell the same bytes of `name`, which is writable.
-        let mut expr_start: *mut c_char = null_mut();
-        let mut expr_end: *mut c_char = null_mut();
-        let mut p = find_name_end(
-            name,
-            (&raw mut expr_start).cast::<*const c_char>(),
-            (&raw mut expr_end).cast::<*const c_char>(),
-            fne_flags,
-        ) as *mut c_char;
-
-        if !expr_start.is_null() {
-            // A curly-braces name: expand it.
-            if unlet
-                && !ascii_iswhite(*p as c_int)
-                && ends_excmd(*p as c_int) == 0
-                && *p != b'[' as c_char
-                && *p != b'.' as c_char
-            {
-                semsg_c!(gettext(e_trailing_arg.as_ptr()), p);
+        // SAFETY: all four cursors are into the one writable string.
+        lp.ll_exp_name = unsafe { make_expanded_name(name, expr_start, expr_end, p) };
+        lp.ll_name = lp.ll_exp_name;
+        if lp.ll_exp_name.is_null() {
+            if !aborting() && !quiet {
+                emsg_severe.set(true);
+                // SAFETY: the format takes one NUL-terminated string.
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), name) };
                 return null_mut();
             }
-            (*lp).ll_exp_name = make_expanded_name(name, expr_start, expr_end, p);
-            (*lp).ll_name = (*lp).ll_exp_name;
-            if (*lp).ll_exp_name.is_null() {
-                if !aborting() && !quiet {
-                    emsg_severe.set(true);
-                    semsg_c!(gettext(e_invarg2.as_ptr()), name);
-                    return null_mut();
-                }
-                (*lp).ll_name_len = 0 as size_t;
-            } else {
-                (*lp).ll_name_len = strlen((*lp).ll_name);
-            }
+            lp.ll_name_len = 0 as size_t;
         } else {
-            (*lp).ll_name = name;
-            (*lp).ll_name_len = p.offset_from((*lp).ll_name) as size_t;
+            // SAFETY: the expansion is NUL-terminated.
+            lp.ll_name_len = unsafe { strlen(lp.ll_name) };
         }
-
-        // Nothing is subscripted: the name is the whole left-hand side.
-        if (*p != b'[' as c_char && *p != b'.' as c_char) || (*lp).ll_name.is_null() {
-            return p;
-        }
-
-        let mut ht: *mut hashtab_T = null_mut();
-        let v = find_var(
-            (*lp).ll_name,
-            (*lp).ll_name_len,
-            if flags & GLV_READ_ONLY as c_int != 0 {
-                null_mut()
-            } else {
-                &raw mut ht
-            },
-            flags & GLV_NO_AUTOLOAD as c_int != 0,
-        );
-        if v.is_null() {
-            if !quiet {
-                semsg_c!(
-                    gettext(c"E121: Undefined variable: %.*s".as_ptr()),
-                    (*lp).ll_name_len as c_int,
-                    (*lp).ll_name,
-                );
-            }
-            return null_mut();
-        }
-
-        (*lp).ll_tv = &raw mut (*v).di_tv;
-        if tv_is_luafunc((*lp).ll_tv) {
-            return p;
-        }
-
-        p = get_lval_subscript(lp, p, name, rettv, ht, v, unlet, flags);
-        if p.is_null() {
-            return null_mut();
-        }
-        (*lp).ll_name_len = p.offset_from((*lp).ll_name) as size_t;
-        p
+    } else {
+        lp.ll_name = name;
+        // SAFETY: `p` and the name are cursors into the one string.
+        lp.ll_name_len = unsafe { p.offset_from(lp.ll_name) } as size_t;
     }
+
+    // Nothing is subscripted: the name is the whole left-hand side.
+    // SAFETY: `p` is a cursor into the NUL-terminated `name`.
+    let after = unsafe { *p };
+    if (after != b'[' as c_char && after != b'.' as c_char) || lp.ll_name.is_null() {
+        return p;
+    }
+
+    let mut ht: *mut hashtab_T = null_mut();
+    let htp = if flags & GLV_READ_ONLY as c_int != 0 {
+        null_mut()
+    } else {
+        &raw mut ht
+    };
+    let no_autoload = flags & GLV_NO_AUTOLOAD as c_int != 0;
+    // SAFETY: the name is NUL-terminated and `ht` is this frame's.
+    let v = unsafe { find_var(lp.ll_name, lp.ll_name_len, htp, no_autoload) };
+    if v.is_null() {
+        if !quiet {
+            let (n, s) = (lp.ll_name_len as c_int, lp.ll_name);
+            // SAFETY: the format takes a length and the string it bounds.
+            unsafe {
+                let fmt = gettext(c"E121: Undefined variable: %.*s".as_ptr());
+                semsg_c!(fmt, n, s);
+            };
+        }
+        return null_mut();
+    }
+
+    // SAFETY: `v` is the live dictionary item the name resolved to.
+    lp.ll_tv = unsafe { &raw mut (*v).di_tv };
+    // SAFETY: `ll_tv` is that item's typval.
+    if unsafe { tv_is_luafunc(lp.ll_tv) } {
+        return p;
+    }
+
+    // SAFETY: `lp` has `ll_tv` set, `p` points into `name`, and `ht` and `v` are this frame's.
+    p = unsafe { get_lval_subscript(lp.raw(), p, name, rettv, ht, v, unlet, flags) };
+    if p.is_null() {
+        return null_mut();
+    }
+    // SAFETY: `p` and the name are cursors into the one string.
+    lp.ll_name_len = unsafe { p.offset_from(lp.ll_name) } as size_t;
+    p
 }
 
 /// Release what `get_lval` allocated into `lp`.
@@ -612,10 +685,12 @@ pub unsafe fn get_lval(
 /// # Safety
 /// `lp` must be valid.
 pub unsafe fn clear_lval(lp: *mut lval_T) {
+    // SAFETY: the caller's promise; both strings are `get_lval`'s own.
     unsafe {
-        xfree((*lp).ll_exp_name as *mut c_void);
-        xfree((*lp).ll_newkey as *mut c_void);
-    }
+        let lp = Lv::new(lp);
+        xfree(lp.ll_exp_name as *mut c_void);
+        xfree(lp.ll_newkey as *mut c_void);
+    };
 }
 
 /// Perform the assignment `get_lval` resolved. `endp` is the cursor after
@@ -633,133 +708,156 @@ pub unsafe fn set_var_lval(
     is_const: bool,
     op: *const c_char,
 ) {
-    unsafe {
-        if (*lp).ll_tv.is_null() {
-            set_whole_var(lp, endp, rettv, copy, is_const, op);
-            return;
-        }
+    // SAFETY, for every region in this body and in the two helpers below:
+    // the caller's promise is that `lp` is the record `get_lval` filled in
+    // and outlives the call, that `rettv` is the value being assigned, and
+    // that `endp` points into the same writable NUL-terminated string. Each
+    // union member read is the one the `v_type` just tested names; a
+    // non-null `op` is NUL-terminated; `oldtv` and `tv` are frame locals;
+    // and every message named is a literal or a shared `e_*` text. The
+    // notes below add only what is local to a site.
+    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
+    if lp.ll_tv.is_null() {
+        // SAFETY: as above; `endp` points into the same writable string.
+        unsafe { set_whole_var(lp.raw(), endp, rettv, copy, is_const, op) };
+        return;
+    }
 
-        // A locked container refuses the write; the lock to test is the
-        // Dict's own when a key is being added to it.
-        let lock = if (*lp).ll_newkey.is_null() {
-            (*(*lp).ll_tv).v_lock
+    // A locked container refuses the write; the lock to test is the
+    // Dict's own when a key is being added to it.
+    // SAFETY: a pending new key means `ll_tv` holds the Dict it goes into.
+    let lock = unsafe {
+        let target = Tv::new(lp.ll_tv);
+        if lp.ll_newkey.is_null() {
+            target.v_lock
         } else {
-            (*(*(*lp).ll_tv).vval.v_dict).dv_lock
-        };
-        if value_check_lock(lock, (*lp).ll_name, TV_CSTRING as size_t) {
-            return;
+            (*target.vval.v_dict).dv_lock
         }
+    };
+    if unsafe { value_check_lock(lock, lp.ll_name, TV_CSTRING as size_t) } {
+        return;
+    }
 
-        if (*lp).ll_range {
-            if is_const {
-                emsg(gettext(c"E996: Cannot lock a range".as_ptr()));
-                return;
-            }
-            // Crash fix, upstream reads the union the wrong way here: the
-            // lval resolver accepts a Blob value for a `[:]` because the
-            // *target* may be a Blob, but a Blob target leaves `ll_tv`
-            // null and never reaches this branch. So a Blob reaching it
-            // means a List target, and upstream hands its `v_blob` to
-            // `tv_list_assign_range` through `vval.v_list` — walking a
-            // `blob_T` as a `list_T`. `let l = [1,2] | let l[0:] = 0z11`
-            // is enough. Report what the assignment actually needs.
-            if (*rettv).v_type != VAR_LIST {
-                emsg(gettext(e_listreq.as_ptr()));
-                return;
-            }
-            tv_list_assign_range(
-                (*lp).ll_list,
-                (*rettv).vval.v_list,
-                (*lp).ll_n1,
-                (*lp).ll_n2,
-                (*lp).ll_empty2,
-                op,
-                (*lp).ll_name,
-            );
-            return;
-        }
-
-        // The value the watchers are told the key used to have. It stays
-        // unset for a key that did not exist, and that is how the
-        // notification below tells the two cases apart — see the module
-        // docs. It must never be the same typval as the new value.
-        let mut oldtv = UNSET_TV;
-        let dict = (*lp).ll_dict;
-        let watched = tv_dict_is_watched(dict);
-
+    if lp.ll_range {
         if is_const {
-            emsg(gettext(c"E996: Cannot lock a list or dict".as_ptr()));
+            unsafe { emsg(gettext(c"E996: Cannot lock a range".as_ptr())) };
             return;
         }
-
-        // Writing an *existing* key of the `v:` scope dictionary is a write
-        // to a `v:` variable, and has to pass the same type enforcement the
-        // unsubscripted spelling does. Upstream stores straight into the
-        // item, which permanently re-types the variable and, for
-        // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
-        // cannot happen here: `get_lval` refuses to add one to `v:`.
-        if dict == get_vimvar_dict() && (*lp).ll_newkey.is_null() {
-            set_vvar_item((*lp).ll_di, rettv, copy, op);
+        // Crash fix, upstream reads the union the wrong way here: the
+        // lval resolver accepts a Blob value for a `[:]` because the
+        // *target* may be a Blob, but a Blob target leaves `ll_tv`
+        // null and never reaches this branch. So a Blob reaching it
+        // means a List target, and upstream hands its `v_blob` to
+        // `tv_list_assign_range` through `vval.v_list` — walking a
+        // `blob_T` as a `list_T`. `let l = [1,2] | let l[0:] = 0z11`
+        // is enough. Report what the assignment actually needs.
+        if value.v_type != VAR_LIST {
+            unsafe { emsg(gettext(e_listreq.as_ptr())) };
             return;
         }
-
-        'notify: {
-            if !(*lp).ll_newkey.is_null() {
-                // The key has to be added to the Dictionary first.
-                if !op.is_null() && *op != b'=' as c_char {
-                    semsg_c!(gettext(e_dictkey.as_ptr()), (*lp).ll_newkey);
-                    return;
-                }
-                if tv_dict_wrong_func_name((*(*lp).ll_tv).vval.v_dict, rettv, (*lp).ll_newkey) != 0
-                {
-                    return;
-                }
-                let di = tv_dict_item_alloc((*lp).ll_newkey);
-                if tv_dict_add((*(*lp).ll_tv).vval.v_dict, di) == FAIL {
-                    xfree(di as *mut c_void);
-                    return;
-                }
-                (*lp).ll_tv = &raw mut (*di).di_tv;
-            } else {
-                if watched {
-                    tv_copy((*lp).ll_tv, &raw mut oldtv);
-                }
-                if !op.is_null() && *op != b'=' as c_char {
-                    // `+=` and friends modify in place; there is nothing to
-                    // assign afterwards.
-                    eexe_mod_op((*lp).ll_tv, rettv, op);
-                    break 'notify;
-                }
-                tv_clear((*lp).ll_tv);
-            }
-
-            if copy {
-                tv_copy(rettv, (*lp).ll_tv);
-            } else {
-                *(*lp).ll_tv = *rettv;
-                (*(*lp).ll_tv).v_lock = VarLock::Unlocked;
-                tv_init(rettv);
-            }
-        }
-
-        if !watched {
-            return;
-        }
-        if oldtv.v_type == VAR_UNKNOWN {
-            // Nothing was saved, so this is the new-key case.
-            debug_assert!(!(*lp).ll_newkey.is_null());
-            tv_dict_watcher_notify(dict, (*lp).ll_newkey, (*lp).ll_tv, null_mut());
-        } else {
-            let di = (*lp).ll_di;
-            debug_assert!(!(&raw mut (*di).di_key as *mut c_char).is_null());
-            tv_dict_watcher_notify(
-                dict,
-                &raw mut (*di).di_key as *mut c_char,
-                (*lp).ll_tv,
-                &raw mut oldtv,
+        // SAFETY: `VAR_LIST` says `v_list` is live; `ll_list` is the target.
+        unsafe {
+            tv_list_assign_range(
+                lp.ll_list,
+                value.vval.v_list,
+                lp.ll_n1,
+                lp.ll_n2,
+                lp.ll_empty2,
+                op,
+                lp.ll_name,
             );
-            tv_clear(&raw mut oldtv);
+        };
+        return;
+    }
+
+    // The value the watchers are told the key used to have. It stays
+    // unset for a key that did not exist, and that is how the
+    // notification below tells the two cases apart — see the module
+    // docs. It must never be the same typval as the new value.
+    let mut oldtv = UNSET_TV;
+    let dict = lp.ll_dict;
+    let watched = unsafe { tv_dict_is_watched(dict) };
+
+    if is_const {
+        unsafe { emsg(gettext(c"E996: Cannot lock a list or dict".as_ptr())) };
+        return;
+    }
+
+    // Writing an *existing* key of the `v:` scope dictionary is a write
+    // to a `v:` variable, and has to pass the same type enforcement the
+    // unsubscripted spelling does. Upstream stores straight into the
+    // item, which permanently re-types the variable and, for
+    // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
+    // cannot happen here: `get_lval` refuses to add one to `v:`.
+    if dict == get_vimvar_dict() && lp.ll_newkey.is_null() {
+        // SAFETY: `ll_di` is the existing item, and `rettv` the caller's.
+        unsafe { set_vvar_item(lp.ll_di, rettv, copy, op) };
+        return;
+    }
+
+    'notify: {
+        if !lp.ll_newkey.is_null() {
+            // The key has to be added to the Dictionary first.
+            if !op.is_null() && unsafe { *op } != b'=' as c_char {
+                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), lp.ll_newkey) };
+                return;
+            }
+            // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
+            let target = unsafe { Tv::new(lp.ll_tv).vval.v_dict };
+            if unsafe { tv_dict_wrong_func_name(target, rettv, lp.ll_newkey) } != 0 {
+                return;
+            }
+            let di = unsafe { tv_dict_item_alloc(lp.ll_newkey) };
+            if unsafe { tv_dict_add(target, di) } == FAIL {
+                unsafe { xfree(di as *mut c_void) };
+                return;
+            }
+            // SAFETY: `di` belongs to the Dict; its typval is the target.
+            lp.ll_tv = unsafe { &raw mut (*di).di_tv };
+        } else {
+            if watched {
+                // SAFETY: `oldtv` is this frame's separate record of the old value.
+                unsafe { tv_copy(lp.ll_tv, &raw mut oldtv) };
+            }
+            if !op.is_null() && unsafe { *op } != b'=' as c_char {
+                // `+=` and friends modify in place; there is nothing to
+                // assign afterwards.
+                // SAFETY: `ll_tv` is the live target and `rettv` the caller's value.
+                unsafe { eexe_mod_op(lp.ll_tv, rettv, op) };
+                break 'notify;
+            }
+            unsafe { tv_clear(lp.ll_tv) };
         }
+
+        if copy {
+            unsafe { tv_copy(rettv, lp.ll_tv) };
+        } else {
+            // SAFETY: the value moves out of `rettv`, which is reset after it.
+            unsafe {
+                let mut target = Tv::new(lp.ll_tv);
+                *target = *rettv;
+                target.v_lock = VarLock::Unlocked;
+                tv_init(rettv);
+            };
+        }
+    }
+
+    if !watched {
+        return;
+    }
+    if oldtv.v_type == VAR_UNKNOWN {
+        // Nothing was saved, so this is the new-key case.
+        debug_assert!(!lp.ll_newkey.is_null());
+        // SAFETY: the watched Dict, its new key, and the value just written.
+        unsafe { tv_dict_watcher_notify(dict, lp.ll_newkey, lp.ll_tv, null_mut()) };
+    } else {
+        let di = lp.ll_di;
+        // SAFETY: the key is inline, so naming its address reads nothing.
+        let key = unsafe { &raw mut (*di).di_key } as *mut c_char;
+        debug_assert!(!key.is_null());
+        // SAFETY: the watched Dict, its key, the new value and the old copy.
+        unsafe { tv_dict_watcher_notify(dict, key, lp.ll_tv, &raw mut oldtv) };
+        unsafe { tv_clear(&raw mut oldtv) };
     }
 }
 
@@ -776,60 +874,66 @@ unsafe fn set_whole_var(
     is_const: bool,
     op: *const c_char,
 ) {
-    unsafe {
-        // Terminate the left-hand side in place: the messages below name the
-        // variable and would otherwise print the rest of the command too.
+    let lp = unsafe { Lv::new(lp) };
+    // Terminate the left-hand side in place: the messages below name the
+    // variable and would otherwise print the rest of the command too.
+    // SAFETY: the caller's promise -- `endp` points into the same writable NUL-terminated string.
+    let cc = unsafe {
         let cc = *endp;
         *endp = NUL as c_char;
+        cc
+    };
 
-        if !(*lp).ll_blob.is_null() {
-            // Upstream's three early returns here leave the left-hand side
-            // terminated in place rather than putting `cc` back. Preserved:
-            // anything that reads the command line after a rejected Blob
-            // assignment sees the truncated form.
-            if !set_blob_var(lp, rettv, op) {
-                return;
-            }
-        } else if !op.is_null() && *op != b'=' as c_char {
-            // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
-            if is_const {
-                emsg(gettext(e_cannot_mod.as_ptr()));
-                *endp = cc;
-                return;
-            }
-            let mut tv = UNSET_TV;
-            let mut di: *mut dictitem_T = null_mut();
-            if eval_variable(
-                (*lp).ll_name,
-                (*lp).ll_name_len as c_int,
+    if !lp.ll_blob.is_null() {
+        // Upstream's three early returns here leave the left-hand side
+        // terminated in place rather than putting `cc` back. Preserved:
+        // anything that reads the command line after a rejected Blob
+        // assignment sees the truncated form.
+        // SAFETY: `lp` has `ll_blob` set, and `rettv` is the caller's.
+        if !unsafe { set_blob_var(lp.raw(), rettv, op) } {
+            return;
+        }
+    } else if !op.is_null() && unsafe { *op } != b'=' as c_char {
+        // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
+        if is_const {
+            unsafe { emsg(gettext(e_cannot_mod.as_ptr())) };
+            unsafe { *endp = cc };
+            return;
+        }
+        let mut tv = UNSET_TV;
+        let mut di: *mut dictitem_T = null_mut();
+        let (name, name_len) = (lp.ll_name, lp.ll_name_len);
+        // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
+        let found = unsafe {
+            eval_variable(
+                name,
+                name_len as c_int,
                 &raw mut tv,
                 &raw mut di,
                 true,
                 false,
-            ) == OK
-            {
-                if (di.is_null()
-                    || (!var_check_ro(
-                        (*di).di_flags as c_int,
-                        (*lp).ll_name,
-                        TV_CSTRING as size_t,
-                    ) && !tv_check_lock(
-                        &raw mut (*di).di_tv,
-                        (*lp).ll_name,
-                        TV_CSTRING as size_t,
-                    )))
-                    && eexe_mod_op(&raw mut tv, rettv, op) == OK
-                {
-                    set_var((*lp).ll_name, (*lp).ll_name_len, &raw mut tv, false);
-                }
-                tv_clear(&raw mut tv);
+            )
+        };
+        if found == OK {
+            // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
+            let writable = unsafe {
+                di.is_null()
+                    || (!var_check_ro((*di).di_flags as c_int, name, TV_CSTRING as size_t)
+                        && !tv_check_lock(&raw mut (*di).di_tv, name, TV_CSTRING as size_t))
+            };
+            if writable && unsafe { eexe_mod_op(&raw mut tv, rettv, op) } == OK {
+                // SAFETY: as above -- the folded value goes back by name.
+                unsafe { set_var(name, name_len, &raw mut tv, false) };
             }
-        } else {
-            set_var_const((*lp).ll_name, (*lp).ll_name_len, rettv, copy, is_const);
+            unsafe { tv_clear(&raw mut tv) };
         }
-
-        *endp = cc;
+    } else {
+        let (name, name_len) = (lp.ll_name, lp.ll_name_len);
+        // SAFETY: the name is the one `get_lval` resolved, and `rettv` is the caller's value.
+        unsafe { set_var_const(name, name_len, rettv, copy, is_const) };
     }
+
+    unsafe { *endp = cc };
 }
 
 /// Write a byte or a byte range into the Blob `lp` resolved. Answers
@@ -839,44 +943,42 @@ unsafe fn set_whole_var(
 /// # Safety
 /// As `set_var_lval`, with `lp->ll_blob` set.
 unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char) -> bool {
-    unsafe {
-        if !op.is_null() && *op != b'=' as c_char {
-            semsg_c!(gettext(e_letwrong.as_ptr()), op);
-            return false;
-        }
-        if value_check_lock(
-            (*(*lp).ll_blob).bv_lock,
-            (*lp).ll_name,
-            TV_CSTRING as size_t,
-        ) {
-            return false;
-        }
-
-        if (*lp).ll_range && (*rettv).v_type == VAR_BLOB {
-            if (*lp).ll_empty2 {
-                (*lp).ll_n2 = tv_blob_len((*lp).ll_blob) - 1;
-            }
-            if tv_blob_set_range(
-                (*lp).ll_blob,
-                (*lp).ll_n1 as varnumber_T,
-                (*lp).ll_n2 as varnumber_T,
-                rettv,
-            ) == FAIL
-            {
-                return false;
-            }
-            return true;
-        }
-
-        let mut error = false;
-        let val = tv_get_number_chk(rettv, &raw mut error);
-        if !error {
-            if !(0..=255).contains(&val) {
-                semsg_c!(gettext(e_invalid_value_for_blob_nr.as_ptr()), val);
-            } else {
-                tv_blob_set_append((*lp).ll_blob, (*lp).ll_n1, val as uint8_t);
-            }
-        }
-        true
+    // SAFETY: the caller's promise -- both outlive the call.
+    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
+    if !op.is_null() && unsafe { *op } != b'=' as c_char {
+        unsafe { semsg_c!(gettext(e_letwrong.as_ptr()), op) };
+        return false;
     }
+    // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
+    let locked = unsafe {
+        let lock = (*lp.ll_blob).bv_lock;
+        value_check_lock(lock, lp.ll_name, TV_CSTRING as size_t)
+    };
+    if locked {
+        return false;
+    }
+
+    if lp.ll_range && value.v_type == VAR_BLOB {
+        if lp.ll_empty2 {
+            lp.ll_n2 = unsafe { tv_blob_len(lp.ll_blob) } - 1;
+        }
+        let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as varnumber_T, lp.ll_n2 as varnumber_T);
+        // SAFETY: as above; `rettv` holds the Blob being assigned.
+        if unsafe { tv_blob_set_range(blob, n1, n2, rettv) } == FAIL {
+            return false;
+        }
+        return true;
+    }
+
+    let mut error = false;
+    let val = unsafe { tv_get_number_chk(rettv, &raw mut error) };
+    if !error {
+        if !(0..=255).contains(&val) {
+            unsafe { semsg_c!(gettext(e_invalid_value_for_blob_nr.as_ptr()), val) };
+        } else {
+            // SAFETY: `ll_blob` is the live Blob and `ll_n1` a byte of it.
+            unsafe { tv_blob_set_append(lp.ll_blob, lp.ll_n1, val as uint8_t) };
+        }
+    }
+    true
 }
