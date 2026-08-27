@@ -52,7 +52,7 @@ use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
     Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, MultiQueue, Proc,
-    PtyProc, RStream, RpcState, Stream, size_t, uint64_t,
+    PtyProc, RStream, RefcountSize, RpcState, Stream, size_t, uint64_t,
 };
 use ::libc::freopen;
 
@@ -262,7 +262,7 @@ pub unsafe fn channel_init() {
 fn blank_channel(id: uint64_t, type_0: ChannelStreamType, events: *mut MultiQueue) -> Channel {
     Channel {
         id,
-        refcount: 1,
+        refcount: RefcountSize::ONE,
         events,
         streamtype: type_0,
         // SAFETY: `Channel_stream` is a union of plain data; each transport's
@@ -337,7 +337,7 @@ pub unsafe fn channel_teardown() {
 /// `chan` is a live channel the caller already holds a reference to.
 pub unsafe fn channel_incref(chan: *mut Channel) {
     // SAFETY: the caller's live channel.
-    unsafe { (*chan).refcount += 1 };
+    unsafe { (*chan).refcount.retain() };
 }
 
 /// Drops a reference, scheduling the free once the last one goes.
@@ -349,10 +349,7 @@ pub unsafe fn channel_incref(chan: *mut Channel) {
 /// `chan` is live and the caller owns the reference it is dropping.
 pub unsafe fn channel_decref(chan: *mut Channel) {
     // SAFETY: the caller's live, owned reference.
-    let last = unsafe {
-        (*chan).refcount -= 1;
-        (*chan).refcount == 0
-    };
+    let last = unsafe { (*chan).refcount.release() == 0 };
     if last {
         // SAFETY: the main queue is live and takes ownership of the event.
         unsafe {
@@ -414,8 +411,8 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
         );
         let _ = channels.with_mut(|chans| chans.remove((*chan).id));
         (*chan).id = 0;
-        (*chan).refcount -= 1;
-        assert!((*chan).refcount == 0, "channel was already referenced");
+        let left = (*chan).refcount.release();
+        assert!(left == 0, "channel was already referenced");
         multiqueue_put_event(
             main_loop_events(),
             one_arg_event(Some(free_channel_event), chan.cast()),

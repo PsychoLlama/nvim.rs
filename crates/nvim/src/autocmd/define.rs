@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, RefcountSize};
 use crate::winlayer::{Live, Win, tabs};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
@@ -389,7 +389,7 @@ pub unsafe fn autocmd_register(
             }
         }
 
-        new_pat.refcount = 0;
+        new_pat.refcount = RefcountSize::ZERO;
         new_pat.pat = unsafe { xmemdupz(pat.cast::<::core::ffi::c_void>(), patlen as size_t) }
             .cast::<::core::ffi::c_char>();
         new_pat.patlen = patlen;
@@ -434,7 +434,7 @@ pub unsafe fn autocmd_register(
     // SAFETY: either the pattern found above or the one just allocated;
     // both are live for the rest of this call.
     let mut pat_entry = unsafe { Live::new(ap) };
-    pat_entry.refcount = pat_entry.refcount.wrapping_add(1);
+    pat_entry.refcount.retain();
 
     // `kv_pushp`: append an `AutoCmd` at the end of the event's vector.
     // SAFETY: `acs` is the event's vector, whose array and size are grown

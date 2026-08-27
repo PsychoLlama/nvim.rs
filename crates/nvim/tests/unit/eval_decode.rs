@@ -10,7 +10,7 @@ use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
 use neovim::main::emsg_silent;
 use neovim::memory::{xfree, xmemdup};
-use neovim::types::{VAR_UNKNOWN, VAR_UNLOCKED, typval_T, typval_vval_union};
+use neovim::types::{VAR_UNKNOWN, VarLock, typval_T, typval_vval_union};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};
@@ -41,7 +41,7 @@ impl Drop for Silent {
 fn unset() -> typval_T {
     typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }
 }

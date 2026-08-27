@@ -48,8 +48,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, Timestamp, WinInfo, colnr_T, dictitem_T, fmark_T, fmarkv_T, garray_T, handle_T,
-    hashtab_T, linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, Refcount, Timestamp, WinInfo, colnr_T, dictitem_T, fmark_T, fmarkv_T, garray_T,
+    handle_T, hashtab_T, linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -809,7 +809,7 @@ fn free_buffer(mut buf: Buf) {
     // b:changedtick uses an item in buf_T.
     free_buffer_stuff(buf, kBffClearWinInfo as c_int);
     // SAFETY: a live buffer's variable dictionary is live.
-    if unsafe { (*buf.b_vars).dv_refcount } > DO_NOT_FREE_CNT as c_int {
+    if unsafe { (*buf.b_vars).dv_refcount } > Refcount::new(DO_NOT_FREE_CNT as c_int) {
         rescue_changedtick(buf);
     }
     release_vars(buf);

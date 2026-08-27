@@ -9,9 +9,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::types::{
-    ExArgt, ExpandContext, FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-};
+use crate::types::{ExArgt, ExpandContext, FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -110,7 +108,7 @@ pub unsafe fn get_user_input(
         let mut cancelreturn: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
         let mut cancelreturn_strarg2 = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();

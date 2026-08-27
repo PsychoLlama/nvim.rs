@@ -40,7 +40,7 @@ use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, o
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::semsg_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, kCdScopeGlobal,
+    CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VarLock, kCdScopeGlobal,
     kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T, typval_T,
     typval_vval_union, uint64_t, varnumber_T, win_T,
 };
@@ -564,7 +564,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
     let how = unsafe { xstrdup(how.as_ptr()) };
     let string = |s| typval_T {
         v_type: VAR_STRING,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_string: s },
     };
     let mut tv = [string(created), string(how)];

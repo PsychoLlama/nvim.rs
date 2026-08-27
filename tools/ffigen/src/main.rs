@@ -199,6 +199,39 @@ fn c_name(rust: &str) -> String {
     rust.to_string()
 }
 
+/// The single field of a `#[repr(transparent)]` newtype over an integer,
+/// if the item is one.
+///
+/// The crate uses these to give a bare `int` a name and an API --
+/// [`Refcount`] is the reference count every refcounted object carries --
+/// and on the C side they *are* the integer, exactly as a `flag_set!`
+/// family or a `#[repr(u32)]` enum is. So they emit as an alias; without
+/// this the name reaches the emitter undefined and every struct that has
+/// a field of one goes out referring to a type nothing declares.
+///
+/// [`Refcount`]: ../../../crates/nvim/src/types/typval.rs
+fn transparent_newtype(item: &syn::ItemStruct) -> Option<syn::Type> {
+    let transparent = item.attrs.iter().any(|attr| {
+        attr.path().is_ident("repr") && {
+            let mut found = false;
+            let _ = attr.parse_nested_meta(|meta| {
+                found |= meta.path.is_ident("transparent");
+                Ok(())
+            });
+            found
+        }
+    });
+    if !transparent {
+        return None;
+    }
+    let syn::Fields::Unnamed(fields) = &item.fields else {
+        return None;
+    };
+    let mut it = fields.unnamed.iter();
+    let first = it.next()?;
+    it.next().is_none().then(|| first.ty.clone())
+}
+
 fn repr_of(attrs: &[syn::Attribute]) -> (bool, Option<u64>) {
     let mut is_c = false;
     let mut align = None;
@@ -489,6 +522,15 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     for item in ast.items {
         match item {
             syn::Item::Struct(s) if s.generics.params.is_empty() => {
+                if let Some(inner) = transparent_newtype(&s) {
+                    add(
+                        world,
+                        s.ident.to_string(),
+                        Kind::Alias(Box::new(inner)),
+                        None,
+                    );
+                    continue;
+                }
                 let (is_c, align) = repr_of(&s.attrs);
                 if is_c {
                     if let syn::Fields::Named(named) = &s.fields {

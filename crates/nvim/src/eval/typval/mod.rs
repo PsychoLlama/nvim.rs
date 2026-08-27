@@ -35,12 +35,11 @@ use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
     MPConvPartialStage, MPConvStackValType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T, dict_T,
-    dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T,
-    ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
-    varnumber_T, vimconv_T,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, blob_T, buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T,
+    hashitem_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, linenr_T,
+    list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t, ssize_t, staticList10_T,
+    typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
 };
 use ::libc::{abort, memcmp, memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strlen, strtod};
 
@@ -193,7 +192,7 @@ pub const GARRAY_EMPTY: garray_T = garray_T {
 /// of.  c2rust wrote the designated initialiser out at every use site.
 pub const TV_INITIAL_VALUE: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);

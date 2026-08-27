@@ -12,7 +12,7 @@ use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
 use crate::types::{
     ExpandContext, FAIL, MAXPATHL, NUL, OK, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED,
+    VAR_UNKNOWN, VarLock,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -256,7 +256,7 @@ pub(crate) unsafe fn call_user_expand_func(
     unsafe {
         let mut args = [typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         }; 4];
         let save_current_sctx = current_sctx.get();
@@ -456,7 +456,7 @@ pub(crate) unsafe fn expand_user_lua(
     unsafe {
         let mut rettv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         nlua_call_user_expand_func(xp, &raw mut rettv);

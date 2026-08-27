@@ -366,14 +366,14 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     // SAFETY: a live buffer's own change counter.
     buf.b_last_changedtick_i = buf_get_changedtick(buf);
 
-    s.term.refcount += 1;
+    s.term.refcount.retain();
     let none = ::core::ptr::null_mut();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
     unsafe { apply_autocmds(EVENT_TERMENTER, none, none, false, buf.raw()) };
     // SAFETY: reports the mode change, which can run autocommands too.
     unsafe { may_trigger_modechanged() };
-    s.term.refcount -= 1;
+    s.term.refcount.release();
     if s.term.buf_handle == 0 {
         s.close = true;
     }
@@ -413,12 +413,12 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     // TermLeave can reach the terminal, so hold it open even though it is
     // about to be destroyed.
     if s.close {
-        s.term.refcount += 1;
+        s.term.refcount.retain();
     }
     // SAFETY: TermLeave against a live buffer, as above.
     unsafe { apply_autocmds(EVENT_TERMLEAVE, none, none, false, current_buf().raw()) };
     if s.close {
-        s.term.refcount -= 1;
+        s.term.refcount.release();
         let buf_handle = s.term.buf_handle;
         s.term.destroy = true;
         // Read out before the call: the channel's close callback is free to
@@ -527,7 +527,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     validate_cursor(current_win());
 
     // TextChangedT observers can close the terminal.
-    s.term.refcount += 1;
+    s.term.refcount.retain();
     // SAFETY: reads the editor's own event table.
     let observed = has_event(EVENT_TEXTCHANGEDT);
     let mut buf = current_buf();
@@ -543,7 +543,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     }
     // SAFETY: reports scrolls and resizes, which run autocommands.
     unsafe { may_trigger_win_scrolled_resized() };
-    s.term.refcount -= 1;
+    s.term.refcount.release();
     if s.term.buf_handle == 0 {
         s.close = true;
     }
@@ -606,10 +606,10 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
         }
         K_EVENT => {
             // An event handler can close the terminal.
-            s.term.refcount += 1;
+            s.term.refcount.retain();
             // SAFETY: runs whatever the main loop had queued.
             unsafe { state_handle_k_event() };
-            s.term.refcount -= 1;
+            s.term.refcount.release();
             if s.term.buf_handle == 0 {
                 s.close = true;
             }

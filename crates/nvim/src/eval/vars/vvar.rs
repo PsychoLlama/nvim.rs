@@ -254,7 +254,7 @@ pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
         if val.is_null() {
             return;
         }
-        (*val).dv_refcount += 1;
+        (*val).dv_refcount.retain();
         tv_dict_set_keys_readonly(val);
     }
 }
@@ -614,7 +614,7 @@ pub(crate) unsafe fn set_vvar_item(
             tv_copy(val, &raw mut (*di).di_tv);
         } else {
             (*di).di_tv = *val;
-            (*di).di_tv.v_lock = VAR_UNLOCKED;
+            (*di).di_tv.v_lock = VarLock::Unlocked;
             tv_init(val);
         }
         if watched {

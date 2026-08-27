@@ -32,15 +32,15 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
     EvalFuncData, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
-    dictitem_T, evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
+    evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -553,7 +553,7 @@ pub(crate) unsafe fn handle_subscript(
                 selfdict = if (*rettv).v_type == VAR_DICT {
                     let d = (*rettv).vval.v_dict;
                     if !d.is_null() {
-                        (*d).dv_refcount += 1;
+                        (*d).dv_refcount.retain();
                     }
                     d
                 } else {

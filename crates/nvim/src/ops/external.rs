@@ -164,7 +164,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
     };
     let mut argv: [typval_T; 2] = [typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }; 2];
     argv[0].v_type = VAR_STRING;
@@ -179,7 +179,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
 
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let args = &raw mut argv as *mut typval_T;

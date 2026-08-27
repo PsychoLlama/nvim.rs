@@ -11,7 +11,8 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg_c;
 use crate::types::{
-    NUL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    NUL, Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    kListLenMayKnow,
 };
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
@@ -129,7 +130,7 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
                 return true;
             }
             let shown = win.w_llist_ref;
-            if is_ll_window(win) && (*shown).qf_refcount == 1 {
+            if is_ll_window(win) && (*shown).qf_refcount == Refcount::ONE {
                 return mark_quickfix_ctx(shown, copy_id)
                     || mark_quickfix_user_data(shown, copy_id);
             }

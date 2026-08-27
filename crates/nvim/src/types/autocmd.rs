@@ -24,7 +24,7 @@ pub struct AutoCmd {
 }
 #[derive(Copy, Clone)]
 pub struct AutoPat {
-    pub refcount: size_t,
+    pub refcount: RefcountSize,
     pub pat: *mut ::core::ffi::c_char,
     pub reg_prog: *mut regprog_T,
     pub group: ::core::ffi::c_int,

@@ -21,7 +21,7 @@ use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::os::cshim::{gettext, memmove};
 use crate::types::{
-    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
     blob_T, kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
 use crate::{semsg, semsg_c};
@@ -33,7 +33,7 @@ use core::ptr;
 /// A cleared typval, the shape the decoders write their result into.
 const EMPTY_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 

@@ -30,14 +30,14 @@ use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    NUL, OK, VAR_BLOB, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    evalarg_T, exarg_T, listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    NUL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
+    listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -147,7 +147,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
             }
             let mut tv = UNSET_TV;
             tv.v_type = VAR_NUMBER;
-            tv.v_lock = VAR_FIXED;
+            tv.v_lock = VarLock::Fixed;
             tv.vval.v_number = tv_blob_get((*fi).fi_blob, (*fi).fi_bi) as varnumber_T;
             (*fi).fi_bi += 1;
             return assign(fi, arg, &raw mut tv);
@@ -160,7 +160,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
             }
             let mut tv = UNSET_TV;
             tv.v_type = VAR_STRING;
-            tv.v_lock = VAR_FIXED;
+            tv.v_lock = VarLock::Fixed;
             tv.vval.v_string = xmemdupz(
                 (*fi).fi_string.offset((*fi).fi_byte_idx as isize) as *const c_void,
                 len as size_t,

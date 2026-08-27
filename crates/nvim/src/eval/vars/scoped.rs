@@ -250,7 +250,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
     unsafe {
         let mut rettv = typval_T {
             v_type: VAR_SPECIAL,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_special: kSpecialVarNull,
             },

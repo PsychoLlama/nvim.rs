@@ -428,7 +428,7 @@ pub struct timer_T {
     pub tw: TimeWatcher,
     pub timer_id: ::core::ffi::c_int,
     pub repeat_count: ::core::ffi::c_int,
-    pub refcount: ::core::ffi::c_int,
+    pub refcount: Refcount,
     pub emsg_count: ::core::ffi::c_int,
     pub timeout: int64_t,
     pub stopped: bool,

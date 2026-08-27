@@ -100,7 +100,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         did_emsg.set(0);
         let mut tv = typval_T {
             v_type: VAR_STRING,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_string: c"".as_ptr() as *mut c_char,
             },
@@ -172,7 +172,7 @@ pub unsafe fn var_redir_stop() {
                 text.push(NUL as u8);
                 let mut tv = typval_T {
                     v_type: VAR_STRING,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_string: text.as_mut_ptr().cast::<c_char>(),
                     },

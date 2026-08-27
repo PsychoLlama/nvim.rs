@@ -33,7 +33,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
     FAIL, LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    VarLock, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
     typval_vval_union, varnumber_T,
 };
@@ -96,7 +96,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
         let new_dict = |tv: *mut typval_T, ref_: LuaRef| {
             (*tv).v_type = VAR_DICT;
             (*tv).vval.v_dict = tv_dict_alloc();
-            (*(*tv).vval.v_dict).dv_refcount += 1;
+            (*(*tv).vval.v_dict).dv_refcount.retain();
             (*(*tv).vval.v_dict).lua_table_ref = ref_;
         };
 
@@ -171,7 +171,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
             debug_assert!(!cur.container);
             *cur.tv = typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             };
             'converted: {
@@ -321,7 +321,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
             tv_clear(ret_tv);
             *ret_tv = typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             };
             lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);

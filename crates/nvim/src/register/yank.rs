@@ -463,7 +463,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
             let line = *(*reg).y_array.add(i);
             tv_list_append_string(list, line.data(), line.len() as c_int as ssize_t);
         }
-        tv_list_set_lock(list, VAR_FIXED);
+        tv_list_set_lock(list, VarLock::Fixed);
         list
     };
     // SAFETY: `dict` is `v:event`'s, the key is a literal of the length given.

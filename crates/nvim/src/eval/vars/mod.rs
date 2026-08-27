@@ -79,11 +79,11 @@ use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
     BoolVarValue, CMD_const, CMD_lockvar, EvalFuncData, GRegFlags, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, VAR_BLOB,
-    VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
+    OptValData, OptValType, QUEUE, Refcount, ScopeDictDictItem, ScopeType, SpecialVarValue,
+    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
     VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
     VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, VarType, VimVarFlags, Vv, aco_save_T, buf_T, dict_T, dictitem_T,
+    VAR_UNKNOWN, VarLock, VarType, VimVarFlags, Vv, aco_save_T, buf_T, dict_T, dictitem_T,
     evalarg_T, exarg_T, expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse,
     kBoolVarTrue, kListLenUnknown, kSpecialVarNull, list_T, listitem_T, lval_T, partial_T,
     ptrdiff_t, scid_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
@@ -248,9 +248,9 @@ const EMPTY_HASHTAB: hashtab_T = hashtab_T {
 
 /// A scope dictionary before `init_var_dict`.
 const EMPTY_SCOPE_DICT: dict_T = dict_T {
-    dv_lock: VAR_UNLOCKED,
+    dv_lock: VarLock::Unlocked,
     dv_scope: VAR_NO_SCOPE,
-    dv_refcount: 0,
+    dv_refcount: Refcount::ZERO,
     dv_copyID: 0,
     dv_hashtab: EMPTY_HASHTAB,
     dv_copydict: ::core::ptr::null_mut(),
@@ -285,7 +285,7 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
         vv_di: VimVarItem {
             di_tv: typval_T {
                 v_type,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             },
             di_flags: 0,

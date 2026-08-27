@@ -25,8 +25,8 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::highlight::hl_add_url;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    Event, Object, String_0, VTermStateFallbacks, VTermStringFragment, VTermTerminator, VTermValue,
-    Vv, exarg_T, handle_T, ptrdiff_t, size_t,
+    Event, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
+    VTermTerminator, VTermValue, Vv, exarg_T, handle_T, ptrdiff_t, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
 use crate::winlayer::Buf;
@@ -128,7 +128,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
 
     // The handler can close the terminal; hold it open across the call so
     // the writes below still have somewhere to go.
-    term.refcount += 1;
+    term.refcount.retain();
     // Pre-bound so that the eight-argument call still fits on one line.
     let mut event = data.object();
     let (data, none) = (&mut event, ::core::ptr::null_mut());
@@ -137,7 +137,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     unsafe { apply_autocmds_group(EVENT_TERMREQUEST, none, none, true, group, buf, exarg, data) };
-    term.refcount -= 1;
+    term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or
     // it would be appended to the buffer it is being read from.
@@ -153,7 +153,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
         term.pending.send = held;
     }
 
-    if term.buf_handle == 0 && term.refcount == 0 {
+    if term.buf_handle == 0 && term.refcount == RefcountSize::ZERO {
         term.destroy = true;
         // Read out before the call: the channel's close callback is free to
         // free the terminal.

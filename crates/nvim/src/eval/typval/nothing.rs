@@ -28,8 +28,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
-    VAR_PARTIAL, VAR_UNLOCKED, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
-    tv_empty_string, tv_list_unref,
+    VAR_PARTIAL, VarLock, func_unref, partial_unref, tv_blob_unref, tv_dict_unref, tv_empty_string,
+    tv_list_unref,
 };
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
@@ -52,28 +52,28 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_nil(&mut self, tv: *mut typval_T) {
         unsafe {
             (*tv).vval.v_special = kSpecialVarNull;
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
     }
 
     unsafe fn conv_bool(&mut self, tv: *mut typval_T, _num: bool) {
         unsafe {
             (*tv).vval.v_bool = kBoolVarFalse;
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
     }
 
     unsafe fn conv_number(&mut self, tv: *mut typval_T, _num: int64_t) {
         unsafe {
             (*tv).vval.v_number = 0;
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
     }
 
     unsafe fn conv_float(&mut self, tv: *mut typval_T, _flt: float_T) -> Flow {
         unsafe {
             (*tv).vval.v_float = 0.0;
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
         Flow::Go
     }
@@ -82,7 +82,7 @@ impl TypvalSink for NothingSink {
         unsafe {
             xfree(buf.cast::<c_void>());
             (*tv).vval.v_string = ptr::null_mut();
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
         Flow::Go
     }
@@ -115,7 +115,7 @@ impl TypvalSink for NothingSink {
         unsafe {
             tv_blob_unref((*tv).vval.v_blob);
             (*tv).vval.v_blob = ptr::null_mut();
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
     }
 
@@ -130,11 +130,11 @@ impl TypvalSink for NothingSink {
         _path: &ConvPath,
     ) -> Flow {
         unsafe {
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
             if (*tv).v_type == VAR_PARTIAL {
                 let pt = (*tv).vval.v_partial;
-                if !pt.is_null() && (*pt).pt_refcount > 1 {
-                    (*pt).pt_refcount -= 1;
+                if !pt.is_null() && (*pt).pt_refcount.is_shared() {
+                    (*pt).pt_refcount.release();
                     (*tv).vval.v_partial = ptr::null_mut();
                     return Flow::Stop;
                 }
@@ -163,10 +163,10 @@ impl TypvalSink for NothingSink {
             debug_assert!((*pt).pt_dict.is_null() || (*(*pt).pt_dict).dv_copyID == copyid);
             (*pt).pt_dict = ptr::null_mut();
             (*pt).pt_argc = 0;
-            debug_assert!((*pt).pt_refcount <= 1);
+            debug_assert!(!(*pt).pt_refcount.is_shared());
             partial_unref(pt);
             (*tv).vval.v_partial = ptr::null_mut();
-            debug_assert!((*tv).v_lock == VAR_UNLOCKED);
+            debug_assert!((*tv).v_lock == VarLock::Unlocked);
         }
     }
 
@@ -184,7 +184,7 @@ impl TypvalSink for NothingSink {
         unsafe {
             tv_list_unref((*tv).vval.v_list);
             (*tv).vval.v_list = ptr::null_mut();
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
         }
     }
 
@@ -198,7 +198,7 @@ impl TypvalSink for NothingSink {
                 *dictp = ptr::null_mut();
             }
             if !tv.is_null() {
-                (*tv).v_lock = VAR_UNLOCKED;
+                (*tv).v_lock = VarLock::Unlocked;
             }
         }
     }
@@ -213,10 +213,10 @@ impl TypvalSink for NothingSink {
     ) -> Flow {
         unsafe {
             debug_assert!(!tv.is_null());
-            (*tv).v_lock = VAR_UNLOCKED;
+            (*tv).v_lock = VarLock::Unlocked;
             let list = (*tv).vval.v_list;
-            if (*list).lv_refcount > 1 {
-                (*list).lv_refcount -= 1;
+            if (*list).lv_refcount.is_shared() {
+                (*list).lv_refcount.release();
                 (*tv).vval.v_list = ptr::null_mut();
                 // Always a `List`: the walk calls this straight after pushing
                 // one for this very value.
@@ -250,12 +250,12 @@ impl TypvalSink for NothingSink {
     ) -> Flow {
         unsafe {
             if !tv.is_null() {
-                (*tv).v_lock = VAR_UNLOCKED;
+                (*tv).v_lock = VarLock::Unlocked;
             }
             if let Some(dictp) = dictp
-                && (**dictp).dv_refcount > 1
+                && (**dictp).dv_refcount.is_shared()
             {
-                (**dictp).dv_refcount -= 1;
+                (**dictp).dv_refcount.release();
                 *dictp = ptr::null_mut();
                 if let Frame::Dict { todo, .. } = &mut frame.frame {
                     *todo = 0;

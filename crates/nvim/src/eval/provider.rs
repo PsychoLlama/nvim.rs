@@ -36,8 +36,8 @@ use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, buf_T, caller_scope, colnr_T, dict_T, estack_T, funccal_entry_T, funcexe_T,
-    list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    VarLock, buf_T, caller_scope, colnr_T, dict_T, estack_T, funccal_entry_T, funcexe_T, list_T,
+    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::Buf;
@@ -46,7 +46,7 @@ use ::libc::strlen;
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -107,7 +107,7 @@ pub unsafe fn common_job_callbacks(
         if (*on_stderr).buffered && (*on_stderr).cb.type_0 == kCallbackNone {
             (*on_stderr).self_0 = vopts;
         }
-        (*vopts).dv_refcount += 1;
+        (*vopts).dv_refcount.retain();
         true
     }
 }
@@ -179,7 +179,7 @@ pub unsafe fn eval_call_provider(
             );
             return typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             };
         }
@@ -212,12 +212,12 @@ pub unsafe fn eval_call_provider(
         let mut argvars: [typval_T; 3] = [
             typval_T {
                 v_type: VAR_STRING,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_string: method },
             },
             typval_T {
                 v_type: VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: arguments },
             },
             UNSET_TV,

@@ -17,7 +17,7 @@ use crate::eval::{EVAL_EVALUATE, NOTDONE, e_list_end, eval1};
 use crate::memory::xmemdupz;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
+    FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, evalarg_T,
     kListLenShouldKnow, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 
@@ -27,7 +27,7 @@ const NUMBUFLEN: usize = 65;
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn eval_list(
                     break 'items false;
                 }
                 if evaluate {
-                    tv.v_lock = VAR_UNLOCKED;
+                    tv.v_lock = VarLock::Unlocked;
                     tv_list_append_owned_tv(list, tv);
                 }
                 let had_comma = **arg == b',' as c_char;
@@ -213,7 +213,7 @@ pub(crate) unsafe fn eval_dict(
                     }
                     let item: *mut dictitem_T = tv_dict_item_alloc(key);
                     (*item).di_tv = tv;
-                    (*item).di_tv.v_lock = VAR_UNLOCKED;
+                    (*item).di_tv.v_lock = VarLock::Unlocked;
                     if tv_dict_add(dict, item) == FAIL {
                         tv_dict_item_free(item);
                     }

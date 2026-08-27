@@ -65,7 +65,7 @@ use crate::os::shell::shell_free_argv;
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::types::{
-    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Stream, uv_loop_t, uv_timer_t,
+    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -322,11 +322,11 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
             (*stream).internal_data = child.as_ptr().cast();
             (*stream).internal_close_cb = Some(on_proc_stream_close);
         }
-        child.refcount += 1;
+        child.refcount.retain();
     }
     child.internal_exit_cb = Some(on_proc_exit);
     child.internal_close_cb = Some(decref);
-    child.refcount += 1;
+    child.refcount.retain();
 
     // SAFETY: the child's loop, which keeps the list of live children.
     unsafe { (*loop_children(child.loop_0)).push(child.as_ptr()) };
@@ -404,7 +404,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
     // SAFETY: the caller's promise.
     let mut child = unsafe { Child::new(proc) };
 
-    if child.refcount == 0 {
+    if child.refcount == Refcount::ZERO {
         // Read the status before draining: an event may free the child.
         let status = child.status;
         // SAFETY: the child's loop and its own queue.
@@ -418,8 +418,8 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
 
     // Hold a reference of our own so the exit callback cannot free the child
     // before its status has been read.
-    child.refcount += 1;
-    let interrupted_or_last = move || got_int.get() || child.refcount == 1;
+    child.refcount.retain();
+    let interrupted_or_last = move || got_int.get() || child.refcount == Refcount::ONE;
     // SAFETY: the child's loop, and the caller's queue.
     unsafe { process_events_until(child.loop_0, events, i64::from(ms), interrupted_or_last) };
 
@@ -430,7 +430,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
         unsafe { proc_stop(child.as_ptr()) };
         if ms == -1 {
             // Returning is only safe once every handle is closed too.
-            let last = move || child.refcount == 1;
+            let last = move || child.refcount == Refcount::ONE;
             // SAFETY: the child's loop, and the caller's queue.
             unsafe { process_events_until(child.loop_0, events, -1, last) };
         } else {
@@ -440,7 +440,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
         child.status = -2;
     }
 
-    if child.refcount == 1 {
+    if child.refcount == Refcount::ONE {
         // SAFETY: a live child holding the reference taken above.
         unsafe { decref(child.as_ptr()) };
         if !child.events.is_null() {
@@ -449,7 +449,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue)
             unsafe { multiqueue_process_events(child.events) };
         }
     } else {
-        child.refcount -= 1;
+        child.refcount.release();
     }
     child.status
 }
@@ -628,8 +628,7 @@ unsafe extern "C" fn proc_close_event(argv: *mut *mut c_void) {
 unsafe fn decref(proc: *mut Proc) {
     // SAFETY: the caller's promise.
     let mut child = unsafe { Child::new(proc) };
-    child.refcount -= 1;
-    if child.refcount != 0 {
+    if child.refcount.release() != 0 {
         return;
     }
     // SAFETY: the child's loop keeps the list, and this child is on it.

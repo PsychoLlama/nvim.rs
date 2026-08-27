@@ -19,16 +19,15 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dictitem_T, typval_T,
-    typval_vval_union, varnumber_T,
+    EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 
 /// A cleared typval.
 const EMPTY_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -43,7 +42,7 @@ const DI_KEY_OFFSET: isize = 17;
 unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
     typval_T {
         v_type: VAR_STRING,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         // SAFETY: the caller's obligation; `xmemdupz` copies and terminates.
         vval: typval_vval_union {
             v_string: unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char,
@@ -55,7 +54,7 @@ unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
 const fn number_tv(n: varnumber_T) -> typval_T {
     typval_T {
         v_type: VAR_NUMBER,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: n },
     }
 }
@@ -243,7 +242,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
             return;
         }
         let prev_locked = tv_list_locked(l);
-        tv_list_set_lock(l, VAR_FIXED);
+        tv_list_set_lock(l, VarLock::Fixed);
         while !li.is_null() {
             if !fold_step(expr, rettv, (*li).li_tv, LIST_CLEANUP, called_emsg_start) {
                 break;

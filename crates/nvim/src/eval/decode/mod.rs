@@ -24,7 +24,7 @@ use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
 use crate::types::{
-    MessagePackType, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNLOCKED, dictitem_T, list_T, ptrdiff_t,
+    MessagePackType, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, dictitem_T, list_T, ptrdiff_t,
     size_t, typval_T, typval_vval_union,
 };
 use ::libc::memchr;
@@ -62,7 +62,7 @@ pub(crate) unsafe fn create_special_dict(
         let type_di: *mut dictitem_T =
             tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len());
         (*type_di).di_tv.v_type = VAR_LIST;
-        (*type_di).di_tv.v_lock = VAR_UNLOCKED;
+        (*type_di).di_tv.v_lock = VarLock::Unlocked;
         (*type_di).di_tv.vval.v_list = msgpack_type_list(type_);
         tv_list_ref((*type_di).di_tv.vval.v_list);
         tv_dict_add(dict, type_di);
@@ -72,10 +72,10 @@ pub(crate) unsafe fn create_special_dict(
         (*val_di).di_tv = val;
         tv_dict_add(dict, val_di);
 
-        (*dict).dv_refcount += 1;
+        (*dict).dv_refcount.retain();
         *rettv = typval_T {
             v_type: VAR_DICT,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_dict: dict },
         };
     }
@@ -99,7 +99,7 @@ pub unsafe fn decode_create_map_special_dict(ret_tv: *mut typval_T, len: ptrdiff
             kMPMap,
             typval_T {
                 v_type: VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: list },
             },
         );
@@ -144,7 +144,7 @@ pub unsafe fn decode_string(
         }
         typval_T {
             v_type: VAR_STRING,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_string: if s.is_null() || s_allocated {
                     s as *mut c_char

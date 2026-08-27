@@ -64,10 +64,10 @@ use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, MarkAdjustMode, Object, OptVal, OptValData,
-    OptValType, OptionSetFlags, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
-    dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil, kObjectTypeString,
-    linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    OptValType, OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor,
+    VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
+    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil,
+    kObjectTypeString, linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -472,7 +472,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
         if let Some(mut buf) = buf {
             buf.terminal = ::core::ptr::null_mut();
         }
-        if term.refcount == 0 {
+        if term.refcount == RefcountSize::ZERO {
             term.destroy = true;
             // Read out before the call: the channel's close callback is free
             // to free the terminal.
@@ -612,7 +612,7 @@ pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
         term.buf_handle = 0 as handle_T;
         buf.terminal = ::core::ptr::null_mut();
     }
-    if term.refcount != 0 {
+    if term.refcount != RefcountSize::ZERO {
         return;
     }
     let (raw, vt, events) = (term.raw(), term.vt, term.pending.events);

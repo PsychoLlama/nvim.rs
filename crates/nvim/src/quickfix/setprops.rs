@@ -10,7 +10,7 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg_c;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -93,7 +93,7 @@ unsafe fn qf_add_entry_from_dict(
         }
         let mut user_data = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data);

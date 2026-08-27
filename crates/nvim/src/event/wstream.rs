@@ -23,7 +23,7 @@ use crate::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
 use crate::event::stream::{Conn, close_handle, stream_init};
 use crate::os::uv_error::{UV_ENOMEM, UV_UNKNOWN};
 use crate::types::{
-    Loop, Stream, WBuffer, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t,
+    Loop, RefcountSize, Stream, WBuffer, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t,
     wbuffer_data_finalizer,
 };
 use core::ffi::{c_char, c_int, c_void};
@@ -181,7 +181,7 @@ pub fn wstream_new_buffer(
 ) -> *mut WBuffer {
     Box::into_raw(Box::new(WBuffer {
         size,
-        refcount,
+        refcount: RefcountSize::new(refcount),
         data,
         cb,
     }))
@@ -222,10 +222,7 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
 /// `buffer` is a reference the caller owns, and gives up here.
 pub unsafe fn wstream_release_wbuffer(buffer: *mut WBuffer) {
     // SAFETY: the caller's reference.
-    let last = unsafe {
-        (*buffer).refcount -= 1;
-        (*buffer).refcount == 0
-    };
+    let last = unsafe { (*buffer).refcount.release() == 0 };
     if last {
         // SAFETY: nothing else holds a reference now, and
         // `wstream_new_buffer` boxed it.

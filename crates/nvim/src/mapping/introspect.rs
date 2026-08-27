@@ -11,7 +11,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
 use crate::types::builders::static_cstring;
-use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
+use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -347,7 +347,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
                 );
                 let mut d = typval_T {
                     v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_number: 0 },
                 };
                 let mut obj = Object::dict(dict);

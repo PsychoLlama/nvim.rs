@@ -23,8 +23,8 @@ use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, pr
 use crate::semsg;
 use crate::types::{
     Callback, Callback_data, EvalFuncData, FAIL, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, float_T, int32_t, kListLenUnknown,
-    proftime_T, time_t, typval_T, typval_vval_union, varnumber_T,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, proftime_T,
+    time_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::ui::ui_flush;
 use ::libc::time;
@@ -34,7 +34,7 @@ use core::ptr;
 /// A cleared typval, the shape the evaluator's out-parameters start in.
 const EMPTY_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -255,7 +255,7 @@ pub unsafe fn f_timer_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         let timer = find_timer_by_nr(tv_get_number(args.ptr(0)));
         // A stopped timer is still reported while a callback holds a
         // reference to it.
-        if !timer.is_null() && (!(*timer).stopped || (*timer).refcount > 1) {
+        if !timer.is_null() && (!(*timer).stopped || (*timer).refcount.is_shared()) {
             add_timer_info(rettv, timer);
         }
     }

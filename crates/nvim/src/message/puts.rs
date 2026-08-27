@@ -12,7 +12,7 @@ use super::*;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::types::builders::static_cstring;
-use crate::types::{Callback, NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{Callback, NUL, VAR_STRING, VAR_UNKNOWN, VarLock};
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
 
@@ -423,14 +423,14 @@ pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
         if (*on_print_cb()).type_0 != kCallbackNone as c_uint {
             let mut argv = [typval_T {
                 v_type: VAR_STRING,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {
                     v_string: str.cast_mut(),
                 },
             }];
             let mut rettv = typval_T {
                 v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             };
             callback_call(on_print_cb(), 1, argv.as_mut_ptr(), &raw mut rettv);

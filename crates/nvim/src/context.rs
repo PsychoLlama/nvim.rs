@@ -37,9 +37,9 @@ use crate::shada::{
 };
 use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
-    hashitem_T, kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString,
-    key_value_pair, object, object_data, size_t, typval_T, typval_vval_union, uint8_t,
+    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, hashitem_T,
+    kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair,
+    object, object_data, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -351,7 +351,7 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
     let mut sbuf = String_0::NULL;
     let mut list_tv = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     // SAFETY: the caller's array and error; `list_tv` owns the conversion

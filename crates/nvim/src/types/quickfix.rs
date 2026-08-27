@@ -15,7 +15,7 @@ pub type qf_info_T = qf_info_S;
 pub struct qf_info_S {
     /// How many windows point at this stack. Meaningless for the quickfix
     /// stack, which is never freed.
-    pub qf_refcount: ::core::ffi::c_int,
+    pub qf_refcount: Refcount,
     /// How many of [`qf_lists`](Self::qf_lists) hold a list. The rest are
     /// zeroed and unused.
     pub qf_listcount: ::core::ffi::c_int,
@@ -38,7 +38,7 @@ impl qf_info_S {
     /// [`qf_alloc_stack`]: ../quickfix/stack/fn.qf_alloc_stack.html
     pub const fn new(qfl_type: qfltype_T) -> Self {
         qf_info_S {
-            qf_refcount: 0,
+            qf_refcount: Refcount::ZERO,
             qf_listcount: 0,
             qf_curlist: 0,
             qf_lists: Vec::new(),

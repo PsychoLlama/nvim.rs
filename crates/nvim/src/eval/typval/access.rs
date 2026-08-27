@@ -78,7 +78,7 @@ pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
 #[inline(always)]
 pub unsafe fn tv_list_ref(l: *mut list_T) {
     if let Some(l) = unsafe { l.as_mut() } {
-        l.lv_refcount += 1;
+        l.lv_refcount.retain();
     }
 }
 
@@ -96,25 +96,25 @@ pub unsafe fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
     }
 }
 
-/// Lock status of `l`; a NULL list reads as `VAR_FIXED`.
+/// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
 ///
 /// # Safety
 /// `l` is null or points at a live list.
 #[inline]
-pub unsafe fn tv_list_locked(l: *const list_T) -> VarLockStatus {
-    unsafe { l.as_ref() }.map_or(VAR_FIXED, |l| l.lv_lock)
+pub unsafe fn tv_list_locked(l: *const list_T) -> VarLock {
+    unsafe { l.as_ref() }.map_or(VarLock::Fixed, |l| l.lv_lock)
 }
 
-/// Set the lock status of `l`.  A NULL list may only be "set" to `VAR_FIXED`.
+/// Set the lock status of `l`.  A NULL list may only be "set" to `VarLock::Fixed`.
 ///
 /// # Safety
 /// `l` is null or points at a live list. A null list can only be "set" to
-/// `VAR_FIXED`, which is what a `debug_assert` here checks.
+/// `VarLock::Fixed`, which is what a `debug_assert` here checks.
 #[inline]
-pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
+pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLock) {
     match unsafe { l.as_mut() } {
         Some(l) => l.lv_lock = lock,
-        None => debug_assert!(lock == VAR_FIXED),
+        None => debug_assert!(lock == VarLock::Fixed),
     }
 }
 
@@ -233,7 +233,7 @@ pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
         (*tv).v_type = VAR_DICT;
         (*tv).vval.v_dict = d;
         if let Some(d) = d.as_mut() {
-            d.dv_refcount += 1;
+            d.dv_refcount.retain();
         }
     }
 }
@@ -372,7 +372,7 @@ pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
         (*tv).v_type = VAR_BLOB;
         (*tv).vval.v_blob = b;
         if let Some(b) = b.as_mut() {
-            b.bv_refcount += 1;
+            b.bv_refcount.retain();
         }
     }
 }

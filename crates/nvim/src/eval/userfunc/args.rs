@@ -295,7 +295,7 @@ pub(crate) unsafe fn add_nr_var(
             (&raw mut (*v).di_key) as *mut c_char,
         );
         (*v).di_tv.v_type = VAR_NUMBER;
-        (*v).di_tv.v_lock = VAR_FIXED;
+        (*v).di_tv.v_lock = VarLock::Fixed;
         (*v).di_tv.vval.v_number = nr;
     }
 }

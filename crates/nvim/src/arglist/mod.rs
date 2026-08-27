@@ -273,8 +273,7 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
     }
     // SAFETY: caller contract; the list is ours to free once its last
     // reference goes.
-    al.al_refcount -= 1;
-    if al.al_refcount <= 0 {
+    if al.al_refcount.release() <= 0 {
         unsafe { alist_clear(al.raw()) };
         unsafe { xfree(al.raw().cast()) };
     }
@@ -289,7 +288,7 @@ fn alist_new() {
     // SAFETY: curwin is valid; the new list starts out owned by it alone.
     let al = unsafe { xmalloc(size_of::<alist_T>()) } as *mut alist_T;
     cur_win().w_alist = al;
-    unsafe { (*al).al_refcount = 1 };
+    unsafe { (*al).al_refcount = Refcount::ONE };
     unsafe { (*al).id = max_alist_id.get() };
     unsafe { alist_init(al) };
 }

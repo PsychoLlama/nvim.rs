@@ -35,7 +35,7 @@ use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::semsg_c;
 use crate::types::{
-    EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNLOCKED, blob_T, list_T,
+    EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, blob_T, list_T,
     listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
@@ -331,7 +331,7 @@ fn defer_delete(fname: &CStr) {
     let full = unsafe { full_name_save(fname.as_ptr(), false) };
     let mut tv = typval_T {
         v_type: VAR_STRING,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_string: full },
     };
     let name = c"delete".as_ptr().cast_mut();

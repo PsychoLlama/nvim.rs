@@ -49,7 +49,7 @@ use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
     Callback, Callback_data, EvalFuncData, FAIL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow,
+    VAR_UNKNOWN, VarLock, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow,
     kListLenUnknown, linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
 };
 
@@ -62,7 +62,7 @@ pub(crate) const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 /// An unset typval, as `VAR_UNKNOWN` spells it.
 const TV_UNKNOWN: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -729,11 +729,11 @@ unsafe fn item_string(
             Source::Callback(cb) => {
                 // The callback is handed the dict, which it must not be able
                 // to free out from under this loop.
-                (*(*tv).vval.v_dict).dv_refcount += 1;
+                (*(*tv).vval.v_dict).dv_refcount.retain();
                 let mut argv = [
                     typval_T {
                         v_type: VAR_DICT,
-                        v_lock: VAR_UNLOCKED,
+                        v_lock: VarLock::Unlocked,
                         vval: typval_vval_union {
                             v_dict: (*tv).vval.v_dict,
                         },

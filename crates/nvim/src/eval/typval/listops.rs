@@ -126,7 +126,7 @@ pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
             l,
             typval_T {
                 v_type: VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: itemlist },
             },
         );
@@ -145,12 +145,12 @@ pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
             l,
             typval_T {
                 v_type: VAR_DICT,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_dict: dict },
             },
         );
         if let Some(dict) = dict.as_mut() {
-            dict.dv_refcount += 1;
+            dict.dv_refcount.retain();
         }
     }
 }
@@ -189,7 +189,7 @@ pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::
             l,
             typval_T {
                 v_type: VAR_STRING,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_string: str },
             },
         );
@@ -206,7 +206,7 @@ pub unsafe fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
             l,
             typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: n },
             },
         );
@@ -319,7 +319,7 @@ pub unsafe fn tv_list_concat(
 ) -> ::core::ffi::c_int {
     unsafe {
         (*tv).v_type = VAR_LIST;
-        (*tv).v_lock = VAR_UNLOCKED;
+        (*tv).v_lock = VarLock::Unlocked;
         let l = if l1.is_null() && l2.is_null() {
             ::core::ptr::null_mut()
         } else if l1.is_null() {

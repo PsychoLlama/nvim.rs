@@ -40,8 +40,9 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
+    EvalFuncData, FAIL, NUL, OK, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t,
+    varnumber_T,
 };
 use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -522,18 +523,18 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         if dict_idx > 0 {
             // Bound explicitly, so `pt_auto` stays false.
             (*pt).pt_dict = args.get(dict_idx as usize).vval.v_dict;
-            (*(*pt).pt_dict).dv_refcount += 1;
+            (*(*pt).pt_dict).dv_refcount.retain();
         } else if !arg_pt.is_null() {
             // A dict bound automatically stays bound automatically. This
             // is what makes `function(dict.func, [], dict)` keep `dict`.
             (*pt).pt_dict = (*arg_pt).pt_dict;
             (*pt).pt_auto = (*arg_pt).pt_auto;
             if !(*pt).pt_dict.is_null() {
-                (*(*pt).pt_dict).dv_refcount += 1;
+                (*(*pt).pt_dict).dv_refcount.retain();
             }
         }
 
-        (*pt).pt_refcount = 1;
+        (*pt).pt_refcount = Refcount::ONE;
         if !arg_pt.is_null() && !(*arg_pt).pt_func.is_null() {
             (*pt).pt_func = (*arg_pt).pt_func;
             func_ptr_ref((*pt).pt_func);

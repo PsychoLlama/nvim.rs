@@ -216,7 +216,7 @@ pub unsafe fn ex_let_vars(
                 }
                 let mut ltv = typval_T {
                     v_type: VAR_LIST,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_list: rest_list },
                 };
                 tv_list_ref(rest_list);

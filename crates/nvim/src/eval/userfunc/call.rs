@@ -17,7 +17,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
 /// and terminated with a newline.
@@ -118,9 +118,9 @@ pub unsafe fn call_user_func(
             let v = take_fixvar(&mut fixvar_idx);
             add_fix_var(v, &raw mut (*fc).fc_l_vars.dv_hashtab, c"self");
             (*v).di_tv.v_type = VAR_DICT;
-            (*v).di_tv.v_lock = VAR_UNLOCKED;
+            (*v).di_tv.v_lock = VarLock::Unlocked;
             (*v).di_tv.vval.v_dict = selfdict;
-            (*selfdict).dv_refcount += 1;
+            (*selfdict).dv_refcount.retain();
         }
 
         // Init the a: variables, unless the function body is known to use
@@ -140,18 +140,18 @@ pub unsafe fn call_user_func(
                 (argcount - (*fp).uf_args.ga_len).max(0) as varnumber_T,
             );
         }
-        (*fc).fc_l_avars.dv_lock = VAR_FIXED;
+        (*fc).fc_l_avars.dv_lock = VarLock::Fixed;
         if has_args {
             // Set a:000 to the list of the extra arguments, whose items are
             // the funccall's own `fc_l_listitems` slots.
             let v = take_fixvar(&mut fixvar_idx);
             add_fix_var(v, &raw mut (*fc).fc_l_avars.dv_hashtab, c"000");
             (*v).di_tv.v_type = VAR_LIST;
-            (*v).di_tv.v_lock = VAR_FIXED;
+            (*v).di_tv.v_lock = VarLock::Fixed;
             (*v).di_tv.vval.v_list = &raw mut (*fc).fc_l_varlist;
         }
         tv_list_init_static(&raw mut (*fc).fc_l_varlist);
-        tv_list_set_lock(&raw mut (*fc).fc_l_varlist, VAR_FIXED);
+        tv_list_set_lock(&raw mut (*fc).fc_l_varlist, VarLock::Fixed);
         if has_args {
             // Set a:firstline and a:lastline.
             add_nr_var(
@@ -242,7 +242,7 @@ pub unsafe fn call_user_func(
             } else {
                 *argvars.offset(i as isize)
             };
-            (*v).di_tv.v_lock = VAR_FIXED;
+            (*v).di_tv.v_lock = VarLock::Fixed;
             if isdefault {
                 tv_to_free[tv_to_free_len] = &raw mut (*v).di_tv;
                 tv_to_free_len += 1;
@@ -262,7 +262,7 @@ pub unsafe fn call_user_func(
                 // listitem storage.
                 let li = (&raw mut (*fc).fc_l_listitems as *mut listitem_T).offset(ai as isize);
                 (*li).li_tv = *argvars.offset(i as isize);
-                (*li).li_tv.v_lock = VAR_FIXED;
+                (*li).li_tv.v_lock = VarLock::Fixed;
                 tv_list_append(&raw mut (*fc).fc_l_varlist, li);
             }
             i += 1;
@@ -449,7 +449,7 @@ pub unsafe fn call_user_func(
 
         (*fp).uf_calls -= 1;
         // Free the function when it was deleted while it was running.
-        if (*fp).uf_calls <= 0 && (*fp).uf_refcount <= 0 {
+        if (*fp).uf_calls <= 0 && (*fp).uf_refcount <= Refcount::ZERO {
             func_clear_free(fp, false);
         }
 

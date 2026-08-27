@@ -59,7 +59,7 @@ pub struct terminal {
     /// vterm hands over, terminator excluded.
     pub termrequest_buffer: Vec<u8>,
     pub termrequest_terminator: VTermTerminator,
-    pub refcount: size_t,
+    pub refcount: RefcountSize,
 }
 impl terminal {
     /// A terminal with everything at rest, for `terminal_alloc` to fill in.
@@ -110,7 +110,7 @@ impl terminal {
             selection: Vec::new(),
             termrequest_buffer: Vec::new(),
             termrequest_terminator: 0,
-            refcount: 0,
+            refcount: RefcountSize::ZERO,
         }
     }
 }

@@ -21,7 +21,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
-    FAIL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, typval_T,
+    FAIL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, float_T, typval_T,
     typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
@@ -109,7 +109,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut typval_T, tv2: *mut typval_T) -> boo
     unsafe {
         let mut joined = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         if tv_list_concat((*tv1).vval.v_list, (*tv2).vval.v_list, &raw mut joined) == FAIL {

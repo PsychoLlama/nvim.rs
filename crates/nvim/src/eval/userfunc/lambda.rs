@@ -14,7 +14,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, Refcount};
 
 /// Give `fp` the funccall that is running as its scope, so that the locals it
 /// closed over stay alive for as long as it does.
@@ -29,7 +29,7 @@ pub(crate) unsafe fn register_closure(fp: *mut ufunc_T) {
         funccal_unref((*fp).uf_scoped, fp, false);
         let fc = current_funccal.get();
         (*fp).uf_scoped = fc;
-        (*fc).fc_refcount += 1;
+        (*fc).fc_refcount.retain();
         ga_grow(&raw mut (*fc).fc_ufuncs, 1);
         let ufuncs = &raw mut (*fc).fc_ufuncs;
         *((*ufuncs).ga_data as *mut *mut ufunc_T).offset((*ufuncs).ga_len as isize) = fp;
@@ -214,7 +214,7 @@ pub unsafe fn get_lambda_tv(
                     flags |= FC_NOARGS;
                 }
 
-                (*fp).uf_refcount = 1;
+                (*fp).uf_refcount = Refcount::ONE;
                 func_table().add(uf_name_ptr(fp));
                 (*fp).uf_args = newargs;
                 ga_init(
@@ -243,7 +243,7 @@ pub unsafe fn get_lambda_tv(
                 (*fp).uf_script_ctx.sc_lnum += sourcing_lnum() - newlines.ga_len as linenr_T;
 
                 (*pt).pt_func = fp;
-                (*pt).pt_refcount = 1;
+                (*pt).pt_refcount = Refcount::ONE;
                 (*rettv).vval.v_partial = pt;
                 (*rettv).v_type = VAR_PARTIAL;
             }
@@ -311,9 +311,9 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
             return;
         }
         let pt = xcalloc(1, size_of::<partial_T>()) as *mut partial_T;
-        (*pt).pt_refcount = 1;
+        (*pt).pt_refcount = Refcount::ONE;
         (*pt).pt_dict = selfdict;
-        (*selfdict).dv_refcount += 1;
+        (*selfdict).dv_refcount.retain();
         (*pt).pt_auto = true;
         if (*rettv).v_type == VAR_FUNC || (*rettv).v_type == VAR_STRING {
             // Just a function: take over the function name and use selfdict.
@@ -358,7 +358,7 @@ pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
     unsafe {
         let name = get_lambda_name(&mut lambda_buf);
         let fp = alloc_ufunc(name.data(), name.len());
-        (*fp).uf_refcount = 1;
+        (*fp).uf_refcount = Refcount::ONE;
         (*fp).uf_varargs = 1;
         (*fp).uf_flags = FC_LUAREF;
         (*fp).uf_calls = 0;

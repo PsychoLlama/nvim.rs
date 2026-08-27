@@ -19,8 +19,7 @@ use super::{
 use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{
-    EvalFuncData, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNLOCKED, int64_t, typval_T,
-    typval_vval_union, uint8_t,
+    EvalFuncData, VAR_DICT, VAR_LIST, VarLock, int64_t, typval_T, typval_vval_union, uint8_t,
 };
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
@@ -30,8 +29,8 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
         unreachable!("dispatched on VAR_DICT")
     };
     if d1.is_null() {
-        // A NULL Dict is `VAR_FIXED`, so this always reports E742.
-        let locked = check_lock(VAR_FIXED, arg_errmsg);
+        // A NULL Dict is `VarLock::Fixed`, so this always reports E742.
+        let locked = check_lock(VarLock::Fixed, arg_errmsg);
         debug_assert!(locked, "locked == true");
         return;
     }
@@ -80,7 +79,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
     if is_new {
         *rettv = typval_T {
             v_type: VAR_DICT,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_dict: d1.raw() },
         };
     } else {
@@ -136,7 +135,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
     if is_new {
         *rettv = typval_T {
             v_type: VAR_LIST,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: l1.raw() },
         };
     } else {

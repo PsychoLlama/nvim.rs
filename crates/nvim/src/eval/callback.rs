@@ -22,7 +22,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Callback, CallbackReader, Error, FAIL, NUL, OK, Object, OptInt, VAR_DICT, VAR_FUNC,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, funcexe_T,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, funcexe_T,
     ht_stack_T, kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::{memcmp, strlen};
@@ -30,7 +30,7 @@ use ::libc::{memcmp, strlen};
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -48,7 +48,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
         let mut r = OK;
         if (*arg).v_type == VAR_PARTIAL && !(*arg).vval.v_partial.is_null() {
             (*callback).data.partial = (*arg).vval.v_partial;
-            (*(*callback).data.partial).pt_refcount += 1;
+            (*(*callback).data.partial).pt_refcount.retain();
             (*callback).type_0 = kCallbackPartial;
         } else if (*arg).v_type == VAR_STRING
             && !(*arg).vval.v_string.is_null()

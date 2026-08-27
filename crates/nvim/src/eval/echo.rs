@@ -33,9 +33,9 @@ use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, FAIL, NUL, OK, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, evalarg_T,
-    exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T,
-    typval_vval_union, var_flavour_T,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
+    funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T, typval_vval_union,
+    var_flavour_T,
 };
 use crate::ui::ui_has;
 use ::libc::{memcpy, strlen};
@@ -43,7 +43,7 @@ use ::libc::{memcpy, strlen};
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 

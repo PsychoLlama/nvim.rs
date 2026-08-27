@@ -45,7 +45,7 @@ use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
     FAIL, IOSIZE, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
-    VAR_UNLOCKED, garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    VarLock, garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use ::libc::{abort, strlen};
 
@@ -280,7 +280,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     };
                     let mut key_tv = typval_T {
                         v_type: VAR_STRING,
-                        v_lock: VAR_UNLOCKED,
+                        v_lock: VarLock::Unlocked,
                         vval: typval_vval_union {
                             v_string: (*hi).hi_key,
                         },

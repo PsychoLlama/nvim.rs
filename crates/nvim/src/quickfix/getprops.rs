@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenMayKnow};
+use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -528,7 +528,7 @@ unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(
         }
         let mut tv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         callback_put(&raw mut (*qfl).qf_qftf_cb, &raw mut tv);

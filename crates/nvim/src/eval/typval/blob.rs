@@ -32,11 +32,10 @@ pub unsafe fn tv_blob_free(b: *mut blob_T) {
 /// Drop a reference to `b`, freeing it when the last one goes.
 pub unsafe fn tv_blob_unref(b: *mut blob_T) {
     unsafe {
-        if let Some(blob) = b.as_mut() {
-            blob.bv_refcount -= 1;
-            if blob.bv_refcount <= 0 {
-                tv_blob_free(b);
-            }
+        if let Some(blob) = b.as_mut()
+            && blob.bv_refcount.release() <= 0
+        {
+            tv_blob_free(b);
         }
     }
 }
@@ -404,7 +403,7 @@ pub unsafe fn tv_blob_alloc_ret(ret_tv: *mut typval_T) -> *mut blob_T {
 pub unsafe fn tv_blob_copy(from: *mut blob_T, to: *mut typval_T) {
     unsafe {
         (*to).v_type = VAR_BLOB;
-        (*to).v_lock = VAR_UNLOCKED;
+        (*to).v_lock = VarLock::Unlocked;
         if from.is_null() {
             (*to).vval.v_blob = ::core::ptr::null_mut();
             return;

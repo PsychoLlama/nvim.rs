@@ -43,7 +43,7 @@ use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    NUL, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, funcexe_T, linenr_T,
+    NUL, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, funcexe_T, linenr_T,
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
 use ::libc::{strcpy, strlen};
@@ -528,7 +528,7 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
         // `fill_submatch_list` fills this in place if the function takes an
         // argument at all, so it must outlive the call.
         let mut match_list: staticList10_T = core::mem::zeroed();
-        match_list.sl_list.lv_lock = VAR_FIXED;
+        match_list.sl_list.lv_lock = VarLock::Fixed;
         let mut argv: [typval_T; 2] = core::mem::zeroed();
         argv[0].v_type = VAR_LIST;
         argv[0].vval.v_list = &raw mut match_list.sl_list;

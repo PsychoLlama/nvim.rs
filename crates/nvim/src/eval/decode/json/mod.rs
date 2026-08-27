@@ -24,7 +24,7 @@ use crate::eval::typval::{
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, OK, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse,
+    FAIL, OK, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock, kBoolVarFalse,
     kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union,
 };
@@ -69,7 +69,7 @@ const E474_UNEXPECTED_END: &CStr = c"E474: Unexpected end of input: %.*s";
 
 const NULL_TV: typval_T = typval_T {
     v_type: VAR_SPECIAL,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union {
         v_special: kSpecialVarNull,
     },
@@ -78,7 +78,7 @@ const NULL_TV: typval_T = typval_T {
 const fn bool_tv(value: bool) -> typval_T {
     typval_T {
         v_type: VAR_BOOL,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
             v_bool: if value { kBoolVarTrue } else { kBoolVarFalse },
         },
@@ -285,7 +285,7 @@ pub unsafe fn json_decode_string(
                             tv_list_ref(list);
                             let tv = typval_T {
                                 v_type: VAR_LIST,
-                                v_lock: VAR_UNLOCKED,
+                                v_lock: VarLock::Unlocked,
                                 vval: typval_vval_union { v_list: list },
                             };
                             dec.open(tv, ::core::ptr::null_mut(), p);
@@ -301,10 +301,10 @@ pub unsafe fn json_decode_string(
                                 );
                             } else {
                                 let dict = tv_dict_alloc();
-                                (*dict).dv_refcount += 1;
+                                (*dict).dv_refcount.retain();
                                 tv = typval_T {
                                     v_type: VAR_DICT,
-                                    v_lock: VAR_UNLOCKED,
+                                    v_lock: VarLock::Unlocked,
                                     vval: typval_vval_union { v_dict: dict },
                                 };
                             }

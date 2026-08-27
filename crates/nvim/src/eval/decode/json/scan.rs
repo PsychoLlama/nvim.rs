@@ -20,8 +20,8 @@ use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
 use crate::os::cshim::gettext;
 use crate::types::{
-    NUL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, typval_T, typval_vval_union,
-    uvarnumber_T, varnumber_T,
+    NUL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarLock, typval_T, typval_vval_union, uvarnumber_T,
+    varnumber_T,
 };
 use ::libc::abort;
 
@@ -327,7 +327,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         let want = p - s;
         let mut tv = typval_T {
             v_type: VAR_NUMBER,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         if fracs.is_some() || exps.is_some() {

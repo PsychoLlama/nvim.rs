@@ -37,7 +37,7 @@ use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, CpoFlag, FAIL,
     MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
 use ::libc::strcmp;
@@ -72,13 +72,13 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         let saved_sctx: sctx_T = current_sctx.get();
         let mut args: [typval_T; 3] = core::mem::zeroed();
         args[0].v_type = VAR_STRING;
-        args[0].v_lock = VAR_UNLOCKED;
+        args[0].v_lock = VarLock::Unlocked;
         args[0].vval.v_string = pat;
         args[1].v_type = VAR_BOOL;
-        args[1].v_lock = VAR_UNLOCKED;
+        args[1].v_lock = VarLock::Unlocked;
         args[1].vval.v_bool = cmdcomplete;
         args[2].v_type = VAR_UNKNOWN;
-        args[2].v_lock = VAR_UNLOCKED;
+        args[2].v_lock = VarLock::Unlocked;
 
         let locked = Lock::text();
         // Errors are reported against the script that *set* the option, not

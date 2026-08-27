@@ -43,18 +43,18 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dict_T,
-    evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString, list_T,
-    object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint8_t, varnumber_T, win_T,
+    Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, exarg_T,
+    funccal_entry_T, funcexe_T, garray_T, kObjectTypeString, list_T, object_data, partial_T,
+    ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
+    varnumber_T, win_T,
 };
 use ::libc::{atol, memcmp, memset, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -766,10 +766,10 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
 pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
     unsafe {
         let l: *mut list_T = tv_list_alloc(argc as ptrdiff_t);
-        tv_list_set_lock(l, VAR_FIXED);
+        tv_list_set_lock(l, VarLock::Fixed);
         for i in 0..argc {
             tv_list_append_string(l, *argv.offset(i as isize) as *const c_char, -1 as ssize_t);
-            (*tv_list_last(l)).li_tv.v_lock = VAR_FIXED;
+            (*tv_list_last(l)).li_tv.v_lock = VarLock::Fixed;
         }
         set_vim_var_list(Vv::Argv, l);
     }

@@ -80,7 +80,7 @@ pub struct proc {
     pub data: *mut ::core::ffi::c_void,
     pub pid: ::core::ffi::c_int,
     pub status: ::core::ffi::c_int,
-    pub refcount: ::core::ffi::c_int,
+    pub refcount: Refcount,
     pub exit_signal: uint8_t,
     pub stopped_time: uint64_t,
     pub cwd: *const ::core::ffi::c_char,
@@ -246,7 +246,7 @@ impl time_watcher {
 #[derive(Copy, Clone)]
 pub struct wbuffer {
     pub size: size_t,
-    pub refcount: size_t,
+    pub refcount: RefcountSize,
     pub data: *mut ::core::ffi::c_char,
     pub cb: wbuffer_data_finalizer,
 }

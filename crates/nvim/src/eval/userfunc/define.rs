@@ -14,7 +14,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, NUL, OK, Refcount};
 
 /// Whether the function table changed under a listing, which means the
 /// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.
@@ -370,10 +370,10 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                     );
                                     break 'errret_keep;
                                 }
-                                if (*fp).uf_refcount > 1 {
+                                if (*fp).uf_refcount.is_shared() {
                                     // Referenced somewhere: don't redefine
                                     // it, create a new one beside it.
-                                    (*fp).uf_refcount -= 1;
+                                    (*fp).uf_refcount.release();
                                     (*fp).uf_flags |= FC_REMOVED;
                                     fp = ptr::null_mut();
                                     overwrite = true;
@@ -489,7 +489,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                 free_fp = true;
                                 break 'erret;
                             }
-                            (*fp).uf_refcount = 1;
+                            (*fp).uf_refcount = Refcount::ONE;
                         }
 
                         (*fp).uf_args = newargs;

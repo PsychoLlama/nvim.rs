@@ -11,7 +11,7 @@ use core::ptr;
 
 use super::*;
 use crate::types::MessagePackType;
-use crate::types::{FAIL, NUL};
+use crate::types::{FAIL, NUL, Refcount};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
@@ -22,7 +22,7 @@ pub unsafe fn evalvars_init() {
     unsafe {
         init_var_dict(get_globvar_dict(), globvar_scope_item(), VAR_DEF_SCOPE);
         init_var_dict(get_vimvar_dict(), vimvar_scope_item(), VAR_SCOPE);
-        (*get_vimvar_dict()).dv_lock = VAR_FIXED;
+        (*get_vimvar_dict()).dv_lock = VarLock::Fixed;
         hash_init(get_compat_ht());
 
         for i in 0..VIMVAR_COUNT {
@@ -65,13 +65,13 @@ pub unsafe fn evalvars_init() {
         let mut type_lists = eval_msgpack_type_lists.get();
         for (i, name) in msgpack_type_names.iter().enumerate() {
             let type_list = tv_list_alloc(0);
-            tv_list_set_lock(type_list, VAR_FIXED);
+            tv_list_set_lock(type_list, VarLock::Fixed);
             tv_list_ref(type_list);
             let di = tv_dict_item_alloc(name.as_ptr());
             (*di).di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
             (*di).di_tv = typval_T {
                 v_type: VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: type_list },
             };
             type_lists[i] = type_list;
@@ -81,11 +81,11 @@ pub unsafe fn evalvars_init() {
             }
         }
         eval_msgpack_type_lists.set(type_lists);
-        (*msgpack_types_dict).dv_lock = VAR_FIXED;
+        (*msgpack_types_dict).dv_lock = VarLock::Fixed;
         set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict);
 
-        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
-        set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed));
+        set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VarLock::Fixed));
         set_vim_var_list(Vv::Errors, tv_list_alloc(kListLenUnknown as ptrdiff_t));
         set_vim_var_nr(Vv::Stderr, CHAN_STDERR as varnumber_T);
         set_vim_var_nr(Vv::Searchforward, 1);
@@ -122,7 +122,7 @@ pub unsafe fn evalvars_init() {
         let vvlua_partial = xcalloc(1, ::core::mem::size_of::<partial_T>()) as *mut partial_T;
         // The name should never be printed, but do not crash if it is.
         (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char;
-        (*vvlua_partial).pt_refcount += 1;
+        (*vvlua_partial).pt_refcount.retain();
         set_vim_var_partial(Vv::Lua, vvlua_partial);
 
         // The default for v:register is not 0 but '"'.
@@ -173,7 +173,7 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
     unsafe {
         let mut tv = typval_T {
             v_type: VAR_STRING,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_string: value },
         };
         set_var(name, strlen(name), &raw mut tv, true);
@@ -271,13 +271,13 @@ pub unsafe fn new_script_vars(id: scid_T) {
 pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem, scope: ScopeType) {
     unsafe {
         hash_init(&raw mut (*dict).dv_hashtab);
-        (*dict).dv_lock = VAR_UNLOCKED;
+        (*dict).dv_lock = VarLock::Unlocked;
         (*dict).dv_scope = scope;
-        (*dict).dv_refcount = DO_NOT_FREE_CNT;
+        (*dict).dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
         (*dict).dv_copyID = 0;
         (*dict_var).di_tv.vval.v_dict = dict;
         (*dict_var).di_tv.v_type = VAR_DICT;
-        (*dict_var).di_tv.v_lock = VAR_FIXED;
+        (*dict_var).di_tv.v_lock = VarLock::Fixed;
         (*dict_var).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
         (*dict_var).di_key[0] = NUL as c_char;
         queue_init(&raw mut (*dict).watchers);
@@ -292,7 +292,7 @@ pub unsafe fn unref_var_dict(dict: *mut dict_T) {
     unsafe {
         // The reference count is what kept the scope alive; take it back to
         // the one reference the caller holds.
-        (*dict).dv_refcount -= DO_NOT_FREE_CNT - 1;
+        (*dict).dv_refcount.release_many(DO_NOT_FREE_CNT - 1);
         tv_dict_unref(dict);
     }
 }

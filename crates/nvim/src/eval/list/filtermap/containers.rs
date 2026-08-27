@@ -37,8 +37,8 @@ use crate::eval::list::{
 use crate::garray::Gap;
 use crate::main::{did_emsg, e_invalblob, e_string_required};
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_LOCKED, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, Vv,
-    garray_T, typval_T, typval_vval_union, varnumber_T,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, Vv, garray_T,
+    typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A byte-item `garray_T`, the way `ga_init(&ga, sizeof(char), 80)` leaves
@@ -75,8 +75,8 @@ pub(crate) fn filter_map_dict(
     let d_ret = (filtermap == FilterMap::MapNew).then(|| Dict::alloc_ret(rettv));
 
     let prev_lock = d.lock();
-    if prev_lock == VAR_UNLOCKED {
-        d.set_lock(VAR_LOCKED);
+    if prev_lock == VarLock::Unlocked {
+        d.set_lock(VarLock::Locked);
     }
     d.hash_lock();
     for di in d.items() {
@@ -153,8 +153,8 @@ pub(crate) fn filter_map_blob(
     set_key_type(VAR_NUMBER);
 
     let prev_lock = b.lock();
-    if prev_lock == VAR_UNLOCKED {
-        b.set_lock(VAR_LOCKED);
+    if prev_lock == VarLock::Unlocked {
+        b.set_lock(VarLock::Locked);
     }
 
     let mut i = 0;
@@ -163,7 +163,7 @@ pub(crate) fn filter_map_blob(
         let val = varnumber_T::from(b.byte(i));
         let mut tv = typval_T {
             v_type: VAR_NUMBER,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: val },
         };
         set_key_nr(idx);
@@ -288,8 +288,8 @@ pub(crate) fn filter_map_list(
     set_key_type(VAR_NUMBER);
 
     let prev_lock = l.locked();
-    if prev_lock == VAR_UNLOCKED {
-        l.set_lock(VAR_LOCKED);
+    if prev_lock == VarLock::Unlocked {
+        l.set_lock(VarLock::Locked);
     }
 
     let mut idx = 0;

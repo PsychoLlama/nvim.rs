@@ -247,7 +247,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     if qi.qfl_type == QFLT_LOCATION {
         // The location list window references the stack it shows.
         new.w_llist_ref = qi.raw();
-        qi.qf_refcount += 1;
+        qi.qf_refcount.retain();
     }
 
     // Don't store info when the split above left us in another window.

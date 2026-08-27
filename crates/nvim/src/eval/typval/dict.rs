@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{CONV_NONE, FAIL, NUL, OK};
+use crate::types::{CONV_NONE, FAIL, NUL, OK, Refcount};
 
 /// The dictionary already has an entry under that key — or, in a scope
 /// dictionary, the key would shadow a builtin function — so nothing was
@@ -60,7 +60,7 @@ pub unsafe fn tv_dict_item_alloc_len(
         memcpy(di_key.cast(), key.cast(), key_len);
         *di_key.add(key_len) = NUL as ::core::ffi::c_char;
         (*di).di_flags = DI_FLAGS_ALLOC as uint8_t;
-        (*di).di_tv.v_lock = VAR_UNLOCKED;
+        (*di).di_tv.v_lock = VarLock::Unlocked;
         (*di).di_tv.v_type = VAR_UNKNOWN;
         di
     }
@@ -149,9 +149,9 @@ pub unsafe fn tv_dict_alloc() -> *mut dict_T {
         gc_first_dict.set(d);
 
         hash_init(&raw mut (*d).dv_hashtab);
-        (*d).dv_lock = VAR_UNLOCKED;
+        (*d).dv_lock = VarLock::Unlocked;
         (*d).dv_scope = VAR_NO_SCOPE;
-        (*d).dv_refcount = 0;
+        (*d).dv_refcount = Refcount::ZERO;
         (*d).dv_copyID = 0;
         queue_init(&raw mut (*d).watchers);
         (*d).lua_table_ref = LUA_NOREF as LuaRef;
@@ -243,11 +243,10 @@ pub unsafe fn tv_dict_free(d: *mut dict_T) {
 /// `d` again.
 pub unsafe fn tv_dict_unref(d: *mut dict_T) {
     unsafe {
-        if let Some(dict) = d.as_mut() {
-            dict.dv_refcount -= 1;
-            if dict.dv_refcount <= 0 {
-                tv_dict_free(d);
-            }
+        if let Some(dict) = d.as_mut()
+            && dict.dv_refcount.release() <= 0
+        {
+            tv_dict_free(d);
         }
     }
 }
@@ -325,7 +324,7 @@ pub unsafe fn tv_dict_add_dict(
         let item = tv_dict_item_alloc_len(key, key_len);
         (*item).di_tv.v_type = VAR_DICT;
         (*item).di_tv.vval.v_dict = dict;
-        (*dict).dv_refcount += 1;
+        (*dict).dv_refcount.retain();
         add_or_free(d, item)
     }
 }
@@ -713,7 +712,7 @@ pub unsafe fn tv_dict_copy(
             }
         }
 
-        (*copy).dv_refcount += 1;
+        (*copy).dv_refcount.retain();
         if got_int.get() {
             tv_dict_unref(copy);
             copy = ::core::ptr::null_mut();
@@ -740,7 +739,7 @@ pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
 /// # Safety
 /// As [`tv_dict_alloc`]: the caller owns `gc_first_dict`, and the result
 /// arrives with a reference count of zero.
-pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
+pub unsafe fn tv_dict_alloc_lock(lock: VarLock) -> *mut dict_T {
     unsafe {
         let d = tv_dict_alloc();
         (*d).dv_lock = lock;
@@ -755,7 +754,7 @@ pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
 /// whatever was there is overwritten, not cleared.
 pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
     unsafe {
-        let d = tv_dict_alloc_lock(VAR_UNLOCKED);
+        let d = tv_dict_alloc_lock(VarLock::Unlocked);
         tv_dict_set_ret(ret_tv, d);
     }
 }

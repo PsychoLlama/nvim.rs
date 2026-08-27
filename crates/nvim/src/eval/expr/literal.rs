@@ -34,15 +34,15 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
     FAIL, NUL, OK, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union,
-    uint8_t, varnumber_T,
+    VAR_UNKNOWN, VarLock, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t,
+    varnumber_T,
 };
 use ::libc::{strlen, strtod, toupper};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -661,7 +661,7 @@ pub(crate) unsafe fn eval_env_var(
 
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = string;
-        (*rettv).v_lock = VAR_UNLOCKED;
+        (*rettv).v_lock = VarLock::Unlocked;
         OK
     }
 }

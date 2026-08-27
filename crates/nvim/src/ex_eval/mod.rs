@@ -65,7 +65,7 @@ use crate::main::{
 use crate::memory::xfree;
 use crate::semsg_c;
 use crate::types::{
-    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, OK, VAR_UNKNOWN, VAR_UNLOCKED, cstack_T,
+    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, OK, VAR_UNKNOWN, VarLock, cstack_T,
     eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -238,7 +238,7 @@ pub(crate) fn aborted_in_try() -> bool {
 pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
     let mut tv = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let mut evalarg = evalarg_T {

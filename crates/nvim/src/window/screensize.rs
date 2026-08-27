@@ -35,7 +35,7 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, OK, OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, dict_T, garray_T, linenr_T, list_T,
+    FAIL, OK, OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, garray_T, linenr_T, list_T,
     ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
@@ -156,7 +156,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
     for (key, value) in keys.iter().zip(deltas) {
         let mut tv = typval_T {
             v_type: VAR_NUMBER,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_number: value as varnumber_T,
             },
@@ -178,7 +178,7 @@ fn new_dict() -> *mut dict_T {
     // SAFETY: `tv_dict_alloc` answers a fresh live dictionary.
     unsafe {
         let d = tv_dict_alloc();
-        (*d).dv_refcount = 1;
+        (*d).dv_refcount = Refcount::ONE;
         d
     }
 }
@@ -192,7 +192,7 @@ fn unref_dict(d: *mut dict_T) {
 /// Give up the caller's reference once the dictionary has an owner.
 fn hand_over(d: *mut dict_T) {
     // SAFETY: as [`unref_dict`]; the new owner holds the other reference.
-    unsafe { (*d).dv_refcount -= 1 };
+    unsafe { (*d).dv_refcount.release() };
 }
 
 /// What [`scan_windows`] is collecting on this pass: the counts and first
@@ -233,7 +233,7 @@ fn scan_windows(what: &mut Scan) {
                 Scan::Winlist(list) => {
                     let tv = typval_T {
                         v_type: VAR_NUMBER,
-                        v_lock: VAR_UNLOCKED,
+                        v_lock: VarLock::Unlocked,
                         vval: typval_vval_union {
                             v_number: wp.handle as varnumber_T,
                         },

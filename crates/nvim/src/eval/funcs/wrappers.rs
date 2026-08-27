@@ -32,8 +32,8 @@ use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
-    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, expand_T,
-    float_T, kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
+    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, expand_T, float_T,
+    kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use crate::{semsg_c, semsg_multiline_c};
@@ -44,7 +44,7 @@ use core::{ptr, slice};
 /// A cleared typval, which is what an unfilled argument slot holds.
 const EMPTY_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 

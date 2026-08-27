@@ -58,7 +58,7 @@ pub struct CallbackReader {
 }
 pub struct Channel {
     pub id: uint64_t,
-    pub refcount: size_t,
+    pub refcount: RefcountSize,
     pub events: *mut MultiQueue,
     pub streamtype: ChannelStreamType,
     pub stream: Channel_stream,

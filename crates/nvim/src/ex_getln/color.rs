@@ -11,7 +11,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::smsg_c;
-use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
+use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kErrorTypeNone};
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
@@ -158,14 +158,14 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         let mut arg_allocated = false;
         let mut arg = typval_T {
             v_type: VAR_STRING,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_string: colored_ccline.text(),
             },
         };
         let mut tv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
 

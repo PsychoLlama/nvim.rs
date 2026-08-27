@@ -138,7 +138,7 @@ pub unsafe fn set_var_const(
             tv_copy(tv, &raw mut (*di).di_tv);
         } else {
             (*di).di_tv = *tv;
-            (*di).di_tv.v_lock = VAR_UNLOCKED;
+            (*di).di_tv.v_lock = VarLock::Unlocked;
             tv_init(tv);
         }
 

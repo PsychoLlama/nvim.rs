@@ -18,7 +18,7 @@ use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
-    FAIL, NUL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
 };
 use crate::winlayer::Buf;
 
@@ -62,7 +62,7 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut dict_T 
     unsafe {
         // { word, abbr, menu, kind, info, user_data } — the same keys and the
         // same order `complete_info()` fills in, minus its "match" flag.
-        let dict = tv_dict_alloc_lock(VAR_FIXED);
+        let dict = tv_dict_alloc_lock(VarLock::Fixed);
         fill_complete_info_dict(dict, match_0, false);
         dict
     }

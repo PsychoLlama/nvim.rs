@@ -160,7 +160,7 @@ unsafe fn arg_index_for_window(
             // file from it.
             unsafe { alist_unlink(wp.w_alist) };
             wp.w_alist = aall.alist;
-            unsafe { (*aall.alist).al_refcount += 1 };
+            unsafe { (*aall.alist).al_refcount.retain() };
         }
         return i;
     }
@@ -473,7 +473,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // here keeps it alive across every autocommand below.
     setpcmark();
     let alist = win_alist(cur_win());
-    unsafe { (*alist).al_refcount += 1 };
+    unsafe { (*alist).al_refcount.retain() };
     let opened = unsafe { xcalloc(argcount() as size_t, 1) }.cast::<uint8_t>();
     let mut aall = ArgAllState {
         alist,

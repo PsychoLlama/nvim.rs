@@ -33,7 +33,7 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Callback, Callback_data, FAIL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown,
+    Callback, Callback_data, FAIL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown,
     listitem_T, listwatch_T, ptrdiff_t,
 };
 
@@ -176,7 +176,7 @@ fn freeing_a_dict_item_frees_its_value_first() {
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         log.check(&[alloc::di(di, 0)]);
         (*di).di_tv.v_type = VAR_STRING;
-        (*di).di_tv.v_lock = VAR_UNLOCKED;
+        (*di).di_tv.v_lock = VarLock::Unlocked;
         (*di).di_tv.vval.v_string = value;
 
         tv_dict_item_free(di);
@@ -202,7 +202,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         let value = xstrdup(cstr("test").as_ptr());
         (*di).di_tv.v_type = VAR_STRING;
-        (*di).di_tv.v_lock = VAR_UNLOCKED;
+        (*di).di_tv.v_lock = VarLock::Unlocked;
         (*di).di_tv.vval.v_string = value;
         log.check(&[alloc::di(di, 0), alloc::string(value, 4)]);
 

@@ -9,6 +9,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_char;
+
 use super::*;
 use crate::semsg_c;
 
@@ -71,7 +73,7 @@ pub unsafe fn tv_free(tv: *mut typval_T) {
 pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
     unsafe {
         (*to).v_type = (*from).v_type;
-        (*to).v_lock = VAR_UNLOCKED;
+        (*to).v_lock = VarLock::Unlocked;
         (*to).vval = (*from).vval;
 
         match (*from).v_type {
@@ -85,18 +87,18 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
             VAR_PARTIAL => {
                 if let Some(pt) = (*to).vval.v_partial.as_mut() {
-                    pt.pt_refcount += 1;
+                    pt.pt_refcount.retain();
                 }
             }
             VAR_BLOB => {
                 if !(*from).vval.v_blob.is_null() {
-                    (*(*to).vval.v_blob).bv_refcount += 1;
+                    (*(*to).vval.v_blob).bv_refcount.retain();
                 }
             }
             VAR_LIST => tv_list_ref((*to).vval.v_list),
             VAR_DICT => {
                 if !(*from).vval.v_dict.is_null() {
-                    (*(*to).vval.v_dict).dv_refcount += 1;
+                    (*(*to).vval.v_dict).dv_refcount.retain();
                 }
             }
             VAR_UNKNOWN => {
@@ -107,21 +109,6 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
             _ => {}
         }
-    }
-}
-
-/// Upstream's `CHANGE_LOCK`: what a lock status becomes under `:lockvar` /
-/// `:unlockvar`.
-///
-/// `VAR_FIXED` never changes — that is a slot that cannot be unlocked at all,
-/// not merely one that is locked.  c2rust rendered the macro's designated-index
-/// array literal at each of its four use sites.
-#[inline]
-fn change_lock(lock: bool, var: VarLockStatus) -> VarLockStatus {
-    match var {
-        VAR_FIXED => VAR_FIXED,
-        _ if lock => VAR_LOCKED,
-        _ => VAR_UNLOCKED,
     }
 }
 
@@ -151,19 +138,19 @@ pub unsafe fn tv_item_lock(
         recurse.set(recurse.get() + 1);
 
         // lock/unlock the item itself
-        (*tv).v_lock = change_lock(lock, (*tv).v_lock);
+        (*tv).v_lock = (*tv).v_lock.changed(lock);
 
         match (*tv).v_type {
             VAR_BLOB => {
                 let b = (*tv).vval.v_blob;
-                if !b.is_null() && !(check_refcount && (*b).bv_refcount > 1) {
-                    (*b).bv_lock = change_lock(lock, (*b).bv_lock);
+                if !b.is_null() && !(check_refcount && (*b).bv_refcount.is_shared()) {
+                    (*b).bv_lock = (*b).bv_lock.changed(lock);
                 }
             }
             VAR_LIST => {
                 let l = (*tv).vval.v_list;
-                if !l.is_null() && !(check_refcount && (*l).lv_refcount > 1) {
-                    (*l).lv_lock = change_lock(lock, (*l).lv_lock);
+                if !l.is_null() && !(check_refcount && (*l).lv_refcount.is_shared()) {
+                    (*l).lv_lock = (*l).lv_lock.changed(lock);
                     if !(0..=1).contains(&deep) {
                         // Recursive: lock/unlock the items the List contains.
                         for li in tv_list_iter(l.as_ref()) {
@@ -174,8 +161,8 @@ pub unsafe fn tv_item_lock(
             }
             VAR_DICT => {
                 let d = (*tv).vval.v_dict;
-                if !d.is_null() && !(check_refcount && (*d).dv_refcount > 1) {
-                    (*d).dv_lock = change_lock(lock, (*d).dv_lock);
+                if !d.is_null() && !(check_refcount && (*d).dv_refcount.is_shared()) {
+                    (*d).dv_lock = (*d).dv_lock.changed(lock);
                     if !(0..=1).contains(&deep) {
                         // recursive: lock/unlock the items the Dict contains
                         for hi in tv_dict_iter(&*d) {
@@ -196,11 +183,11 @@ pub unsafe fn tv_item_lock(
 /// Whether `tv` is locked, either itself or as the container it names.
 pub unsafe fn tv_islocked(tv: *const typval_T) -> bool {
     unsafe {
-        (*tv).v_lock == VAR_LOCKED
-            || ((*tv).v_type == VAR_LIST && tv_list_locked((*tv).vval.v_list) == VAR_LOCKED)
+        (*tv).v_lock == VarLock::Locked
+            || ((*tv).v_type == VAR_LIST && tv_list_locked((*tv).vval.v_list) == VarLock::Locked)
             || ((*tv).v_type == VAR_DICT
                 && !(*tv).vval.v_dict.is_null()
-                && (*(*tv).vval.v_dict).dv_lock == VAR_LOCKED)
+                && (*(*tv).vval.v_dict).dv_lock == VarLock::Locked)
     }
 }
 
@@ -219,40 +206,40 @@ pub unsafe extern "C" fn tv_check_lock(
                 .vval
                 .v_blob
                 .as_ref()
-                .map_or(VAR_UNLOCKED, |b| b.bv_lock),
+                .map_or(VarLock::Unlocked, |b| b.bv_lock),
             VAR_LIST => (*tv)
                 .vval
                 .v_list
                 .as_ref()
-                .map_or(VAR_UNLOCKED, |l| l.lv_lock),
+                .map_or(VarLock::Unlocked, |l| l.lv_lock),
             VAR_DICT => (*tv)
                 .vval
                 .v_dict
                 .as_ref()
-                .map_or(VAR_UNLOCKED, |d| d.dv_lock),
-            _ => VAR_UNLOCKED,
+                .map_or(VarLock::Unlocked, |d| d.dv_lock),
+            _ => VarLock::Unlocked,
         };
         value_check_lock((*tv).v_lock, name, name_len)
-            || (lock != VAR_UNLOCKED && value_check_lock(lock, name, name_len))
+            || (lock.is_locked() && value_check_lock(lock, name, name_len))
     }
 }
 
 /// Whether `lock` forbids a change, raising the matching error if so.
 pub unsafe fn value_check_lock(
-    lock: VarLockStatus,
+    lock: VarLock,
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,
 ) -> bool {
     unsafe {
-        // The two `_` arms are `VAR_FIXED`, the only status left. Upstream
-        // asserts the message was set, which is vacuous once the arms are
-        // exhaustive.
+        // Upstream asserts the message was set; with `VarLock` an enum the
+        // match is exhaustive over three named states and the assertion is
+        // the compiler's.
         let error_message = match (lock, name.is_null()) {
-            (VAR_UNLOCKED, _) => return false,
-            (VAR_LOCKED, true) => &raw const e_value_is_locked as *const ::core::ffi::c_char,
-            (VAR_LOCKED, false) => &raw const e_value_is_locked_str as *const ::core::ffi::c_char,
-            (_, true) => &raw const e_cannot_change_value as *const ::core::ffi::c_char,
-            (_, false) => &raw const e_cannot_change_value_of_str as *const ::core::ffi::c_char,
+            (VarLock::Unlocked, _) => return false,
+            (VarLock::Locked, true) => &raw const e_value_is_locked as *const c_char,
+            (VarLock::Locked, false) => &raw const e_value_is_locked_str as *const c_char,
+            (VarLock::Fixed, true) => &raw const e_cannot_change_value as *const c_char,
+            (VarLock::Fixed, false) => &raw const e_cannot_change_value_of_str as *const c_char,
         };
 
         if name.is_null() {

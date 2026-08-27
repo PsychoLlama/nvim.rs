@@ -47,7 +47,7 @@ pub(crate) fn qf_find_win_with_normal_buf() -> Option<Win> {
 pub(crate) fn win_set_loclist(mut wp: Win, mut qi: Qi) {
     debug_assert!(wp.w_llist.is_null(), "the window already holds a list");
     wp.w_llist = qi.raw();
-    qi.qf_refcount += 1;
+    qi.qf_refcount.retain();
 }
 
 /// Find a help window, or split one off, and enter it.

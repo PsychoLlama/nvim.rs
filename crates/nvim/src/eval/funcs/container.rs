@@ -23,11 +23,11 @@ use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
-    VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
-    VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, blob_T, kBoolVarTrue, kSpecialVarNull, list_T,
-    listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
+    BoolVarValue, EvalFuncData, FAIL, NUL, Refcount, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
+    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
+    VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, Vv, blob_T, kBoolVarTrue,
+    kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
@@ -36,7 +36,7 @@ use core::ptr;
 /// A cleared typval, the shape both dispatchers start every slot from.
 const NIL: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -280,7 +280,7 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
     // call and is never stored.
     unsafe {
         let mut fref = partial_T {
-            pt_refcount: 0,
+            pt_refcount: Refcount::ZERO,
             pt_copyID: 0,
             pt_name: ptr::null_mut(),
             pt_func: ptr::null_mut(),

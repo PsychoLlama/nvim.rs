@@ -35,9 +35,8 @@ use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::types::{
-    EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t,
-    kListLenUnknown, list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union,
-    uint64_t,
+    EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VarLock, blob_T, int64_t, kListLenUnknown,
+    list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
 };
 use ::libc::{fclose, fileno, fread, fseeko, memcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -163,7 +162,7 @@ impl Lines {
     fn push(self, s: *mut c_char) {
         let tv = typval_T {
             v_type: VAR_STRING,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_string: s },
         };
         // SAFETY: a live list, and `tv` an owned String the list takes over.

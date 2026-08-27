@@ -61,12 +61,50 @@ pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub type SpecialVarValue = ::core::ffi::c_uint;
 /// The only `VAR_SPECIAL` value: `v:null`.
 pub const kSpecialVarNull: SpecialVarValue = 0;
-pub type VarLockStatus = ::core::ffi::c_uint;
-/// `v_lock`: `:lockvar` sets `VAR_LOCKED`; `VAR_FIXED` is a slot that
-/// cannot be unlocked at all (`v:` variables, `a:` arguments).
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
+/// `v_lock`, `dv_lock`, `lv_lock`, `bv_lock`: whether a value may be
+/// changed.
+///
+/// Three states, so an enumeration rather than an `int` -- p22's `flags.rs`
+/// ruling, one level down. A `VarLockStatus` that is neither 0, 1 nor 2 was
+/// always unreachable; saying so in the type means the two `_` arms of
+/// `value_check_lock` really are [`Fixed`](Self::Fixed) and the compiler
+/// knows it.
+///
+/// `#[repr(u32)]` because it *is* the `unsigned int` C declared -- these
+/// fields sit in `#[repr(C)]` structs the FFI edge reads, and the zero
+/// pattern a `calloc`'d one starts life with is [`Unlocked`](Self::Unlocked).
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default, Hash)]
+#[repr(u32)]
+pub enum VarLock {
+    /// Changeable.
+    #[default]
+    Unlocked = 0,
+    /// `:lockvar` set this, and `:unlockvar` can clear it.
+    Locked = 1,
+    /// A slot that cannot be unlocked at all: `v:` variables, `a:`
+    /// arguments, and the static lists `tv_list_init_static` hands out.
+    Fixed = 2,
+}
+
+impl VarLock {
+    /// Whether a change is forbidden -- either lock state answers yes.
+    pub const fn is_locked(self) -> bool {
+        !matches!(self, VarLock::Unlocked)
+    }
+
+    /// Upstream's `CHANGE_LOCK`: what this status becomes under
+    /// `:lockvar` (`lock`) or `:unlockvar`.
+    ///
+    /// [`Fixed`](Self::Fixed) never changes -- that is a slot that cannot
+    /// be unlocked at all, not merely one that is locked.
+    pub const fn changed(self, lock: bool) -> VarLock {
+        match self {
+            VarLock::Fixed => VarLock::Fixed,
+            _ if lock => VarLock::Locked,
+            _ => VarLock::Unlocked,
+        }
+    }
+}
 pub type VarType = ::core::ffi::c_uint;
 /// `typval_T::v_type` — which arm of `typval_T::vval` is live.
 pub const VAR_UNKNOWN: VarType = 0;
@@ -95,12 +133,213 @@ pub const VAR_TYPE_SPECIAL: VarTypeCode = 7;
 pub const VAR_TYPE_BLOB: VarTypeCode = 10;
 /// Longest variable name `eval_variable` will look up without allocating.
 pub const VAR_SHORT_LEN: ::core::ffi::c_uint = 20;
+/// A reference count.
+///
+/// Every refcounted object in the tree -- lists, dictionaries, blobs,
+/// partials, user functions, funccalls, argument lists, location-list
+/// stacks -- counts its owners in one of these. On the wire it is still
+/// the `int` C declared: `#[repr(transparent)]`, so no struct's layout
+/// moves and the FFI edge sees an integer.
+///
+/// What it does **not** have is arithmetic operators. `+= 1` scattered
+/// across eighty-two call sites is how a port leaks and double-frees;
+/// naming the two directions [`retain`](Self::retain) and
+/// [`release`](Self::release) puts every one of them through four lines
+/// of code, and makes a stray increment a compile error rather than a
+/// bug that shows up as a use-after-free three commands later.
+///
+/// [`release`](Self::release) answers what is left, because *every*
+/// caller of it asks: the point of decrementing is to find out whether
+/// this was the last owner.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+#[repr(transparent)]
+pub struct Refcount(::core::ffi::c_int);
+
+impl Refcount {
+    /// Nobody owns this yet. What `xcalloc` leaves behind, and what a
+    /// dictionary allocated for a scope that is about to adopt it holds
+    /// until the adoption.
+    pub const ZERO: Refcount = Refcount(0);
+    /// Exactly one owner: what an allocator hands back.
+    pub const ONE: Refcount = Refcount(1);
+
+    /// A count of `n` owners, for the handful of places that seed one
+    /// with something other than 0 or 1 (`DO_NOT_FREE_CNT`).
+    pub const fn new(n: ::core::ffi::c_int) -> Self {
+        Refcount(n)
+    }
+
+    /// The count as an integer, for messages and assertions. Not for
+    /// arithmetic -- there is no way to write the result back.
+    pub const fn get(self) -> ::core::ffi::c_int {
+        self.0
+    }
+
+    /// One more owner.
+    pub fn retain(&mut self) {
+        self.0 += 1;
+    }
+
+    /// One fewer owner; answers how many are left. Zero means the caller
+    /// released the last reference and now owes the object its teardown.
+    pub fn release(&mut self) -> ::core::ffi::c_int {
+        self.0 -= 1;
+        self.0
+    }
+
+    /// Release `n` owners at once. Only `unref_var_dict` needs it: a
+    /// scope dictionary is seeded with `DO_NOT_FREE_CNT` so nothing can
+    /// free it mid-scope, and giving it up is one bulk release.
+    pub fn release_many(&mut self, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
+        self.0 -= n;
+        self.0
+    }
+
+    /// Whether somebody other than the caller holds a reference, so
+    /// dropping the caller's cannot free the object.
+    pub const fn is_shared(self) -> bool {
+        self.0 > 1
+    }
+}
+
+/// [`Refcount`] for the objects the event loop counts in a `size_t`:
+/// processes, channels, terminals, write buffers and autocommand
+/// patterns. A separate type only because the width is: an over-release
+/// wraps to `SIZE_MAX` here and to `-1` there, and one of those two
+/// behaviours is what each of these objects already had.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+#[repr(transparent)]
+pub struct RefcountSize(size_t);
+
+impl RefcountSize {
+    /// Nobody owns this yet.
+    pub const ZERO: RefcountSize = RefcountSize(0);
+    /// Exactly one owner.
+    pub const ONE: RefcountSize = RefcountSize(1);
+
+    /// A count of `n` owners. `wstream_new_buffer` takes the number of
+    /// writers that will share the payload as an argument, so this one
+    /// is not always 0 or 1.
+    pub const fn new(n: size_t) -> Self {
+        RefcountSize(n)
+    }
+
+    /// The count as an integer, for messages and assertions.
+    pub const fn get(self) -> size_t {
+        self.0
+    }
+
+    /// One more owner.
+    pub fn retain(&mut self) {
+        self.0 += 1;
+    }
+
+    /// One fewer owner; answers how many are left. The subtraction is
+    /// checked, not wrapping: releasing a reference nobody holds is a
+    /// bug, and a debug build should say so where it happens rather
+    /// than hand back `SIZE_MAX` for the caller to compare against 0.
+    pub fn release(&mut self) -> size_t {
+        self.0 -= 1;
+        self.0
+    }
+
+    /// Whether somebody other than the caller holds a reference.
+    pub const fn is_shared(self) -> bool {
+        self.0 > 1
+    }
+}
+
+#[cfg(test)]
+mod refcount_tests {
+    use super::*;
+
+    /// The FFI edge reads these fields through `unit-cdefs.h`, where
+    /// `Refcount` is a `typedef` for `int` and `VarLock` one for `unsigned
+    /// int`. A newtype that stopped being the integer it wraps would put
+    /// every `#[repr(C)]` struct that has one out of step with the header
+    /// silently, so say it here.
+    #[test]
+    fn the_wrappers_are_still_the_integers_they_wrap() {
+        assert_eq!(
+            size_of::<Refcount>(),
+            size_of::<::core::ffi::c_int>(),
+            "Refcount must stay ABI-identical to int"
+        );
+        assert_eq!(align_of::<Refcount>(), align_of::<::core::ffi::c_int>());
+        assert_eq!(size_of::<RefcountSize>(), size_of::<size_t>());
+        assert_eq!(align_of::<RefcountSize>(), align_of::<size_t>());
+        assert_eq!(size_of::<VarLock>(), size_of::<::core::ffi::c_uint>());
+        assert_eq!(align_of::<VarLock>(), align_of::<::core::ffi::c_uint>());
+    }
+
+    /// Zeroed memory is what `xcalloc` hands the allocators, and every
+    /// refcounted object is filled in from there. Both wrappers and the
+    /// lock have to read as their at-rest value out of it, or a freshly
+    /// allocated dictionary starts life locked or already referenced.
+    #[test]
+    fn zeroed_memory_reads_as_the_at_rest_value() {
+        assert_eq!(Refcount::default(), Refcount::ZERO);
+        assert_eq!(RefcountSize::default(), RefcountSize::ZERO);
+        assert_eq!(VarLock::default(), VarLock::Unlocked);
+        assert_eq!(Refcount::ZERO.get(), 0);
+        assert_eq!(VarLock::Unlocked as u32, 0);
+        assert_eq!(VarLock::Locked as u32, 1);
+        assert_eq!(VarLock::Fixed as u32, 2);
+    }
+
+    /// `release` answers what is left, which is the whole reason callers
+    /// stopped writing the decrement themselves: the question every one of
+    /// them asks is "was that the last owner".
+    #[test]
+    fn release_answers_what_is_left() {
+        let mut count = Refcount::ONE;
+        count.retain();
+        assert_eq!(count.get(), 2);
+        assert!(count.is_shared());
+        assert_eq!(count.release(), 1);
+        assert!(!count.is_shared());
+        assert_eq!(count.release(), 0);
+        assert_eq!(count, Refcount::ZERO);
+
+        let mut sized = RefcountSize::ONE;
+        sized.retain();
+        assert!(sized.is_shared());
+        assert_eq!(sized.release(), 1);
+        assert_eq!(sized.release(), 0);
+        assert_eq!(sized, RefcountSize::ZERO);
+    }
+
+    /// `unref_var_dict`'s bulk release: a scope dictionary is seeded with
+    /// `DO_NOT_FREE_CNT` and gives all but one of them up at once.
+    #[test]
+    fn release_many_gives_up_a_run_of_references() {
+        let mut count = Refcount::new(1_073_741_823);
+        assert_eq!(count.release_many(1_073_741_822), 1);
+        assert_eq!(count, Refcount::ONE);
+    }
+
+    /// `CHANGE_LOCK`: `:unlockvar` cannot reach a `VAR_FIXED` slot, which
+    /// is what keeps `v:` variables and `a:` arguments read-only.
+    #[test]
+    fn fixed_survives_both_lockvar_and_unlockvar() {
+        assert_eq!(VarLock::Unlocked.changed(true), VarLock::Locked);
+        assert_eq!(VarLock::Locked.changed(false), VarLock::Unlocked);
+        assert_eq!(VarLock::Locked.changed(true), VarLock::Locked);
+        assert_eq!(VarLock::Fixed.changed(true), VarLock::Fixed);
+        assert_eq!(VarLock::Fixed.changed(false), VarLock::Fixed);
+
+        assert!(!VarLock::Unlocked.is_locked());
+        assert!(VarLock::Locked.is_locked());
+        assert!(VarLock::Fixed.is_locked());
+    }
+}
+
 pub type blob_T = blobvar_S;
 #[derive(Copy, Clone)]
 pub struct blobvar_S {
     pub bv_ga: garray_T,
-    pub bv_refcount: ::core::ffi::c_int,
-    pub bv_lock: VarLockStatus,
+    pub bv_refcount: Refcount,
+    pub bv_lock: VarLock,
 }
 pub type dict_T = dictvar_S;
 /// A `dict_T`.
@@ -109,9 +348,9 @@ pub type dict_T = dictvar_S;
 /// queue and a Lua table reference.
 #[derive(Clone)]
 pub struct dictvar_S {
-    pub dv_lock: VarLockStatus,
+    pub dv_lock: VarLock,
     pub dv_scope: ScopeType,
-    pub dv_refcount: ::core::ffi::c_int,
+    pub dv_refcount: Refcount,
     pub dv_copyID: ::core::ffi::c_int,
     pub dv_hashtab: hashtab_T,
     pub dv_copydict: *mut dict_T,
@@ -139,7 +378,7 @@ pub struct funccall_S {
     pub fc_defer: garray_T,
     pub fc_prof_child: proftime_T,
     pub fc_caller: *mut funccall_T,
-    pub fc_refcount: ::core::ffi::c_int,
+    pub fc_refcount: Refcount,
     pub fc_copyID: ::core::ffi::c_int,
     pub fc_ufuncs: garray_T,
 }
@@ -182,11 +421,11 @@ pub struct listvar_S {
     pub lv_copylist: *mut list_T,
     pub lv_used_next: *mut list_T,
     pub lv_used_prev: *mut list_T,
-    pub lv_refcount: ::core::ffi::c_int,
+    pub lv_refcount: Refcount,
     pub lv_len: ::core::ffi::c_int,
     pub lv_idx: ::core::ffi::c_int,
     pub lv_copyID: ::core::ffi::c_int,
-    pub lv_lock: VarLockStatus,
+    pub lv_lock: VarLock,
     pub lua_table_ref: LuaRef,
 }
 /// Not `Copy`: a node of the intrusive watcher list a `:for` loop links
@@ -204,7 +443,7 @@ pub type listwatch_T = listwatch_S;
 /// `partial_unref` is what releases them.
 #[derive(Clone)]
 pub struct partial_S {
-    pub pt_refcount: ::core::ffi::c_int,
+    pub pt_refcount: Refcount,
     pub pt_copyID: ::core::ffi::c_int,
     pub pt_name: *mut ::core::ffi::c_char,
     pub pt_func: *mut ufunc_T,
@@ -270,7 +509,7 @@ pub struct staticList10_T {
 #[repr(C)]
 pub struct typval_T {
     pub v_type: VarType,
-    pub v_lock: VarLockStatus,
+    pub v_lock: VarLock,
     pub vval: typval_vval_union,
 }
 #[derive(Copy, Clone)]
@@ -312,7 +551,7 @@ pub struct ufunc_S {
     pub uf_tml_idx: ::core::ffi::c_int,
     pub uf_tml_execed: ::core::ffi::c_int,
     pub uf_script_ctx: sctx_T,
-    pub uf_refcount: ::core::ffi::c_int,
+    pub uf_refcount: Refcount,
     pub uf_scoped: *mut funccall_T,
     pub uf_name_exp: *mut ::core::ffi::c_char,
     pub uf_namelen: size_t,

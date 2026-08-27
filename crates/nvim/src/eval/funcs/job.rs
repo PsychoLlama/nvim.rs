@@ -46,8 +46,8 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, IOSIZE,
-    Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED,
-    Vv, buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
+    Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, Vv,
+    buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
     typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -335,7 +335,7 @@ unsafe fn create_environment(
             // to turn `environ` into a Dict.
             let mut inherited = typval_T {
                 v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
             };
             f_environ(

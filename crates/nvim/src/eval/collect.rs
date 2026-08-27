@@ -70,8 +70,8 @@ use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, CONV_NONE, DictWatcher, FAIL, NUL, OK, OptInt, QUEUE, String_0, VAR_BLOB,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T,
-    hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t, typval_T,
+    VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T,
+    ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t, typval_T,
     typval_vval_union, ufunc_T, vimconv_T, xfmark_T, yankreg_T,
 };
 use crate::winlayer::{buffers, tab_windows, tabs};
@@ -79,7 +79,7 @@ use crate::winlayer::{buffers, tab_windows, tabs};
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -648,7 +648,7 @@ pub unsafe fn var_item_copy(
                     tv_copy(from, to);
                 } else {
                     (*to).v_type = VAR_STRING;
-                    (*to).v_lock = VAR_UNLOCKED;
+                    (*to).v_lock = VarLock::Unlocked;
                     (*to).vval.v_string = string_convert(
                         conv as *mut vimconv_T,
                         (*from).vval.v_string,
@@ -662,7 +662,7 @@ pub unsafe fn var_item_copy(
             }
             VAR_LIST => {
                 (*to).v_type = VAR_LIST;
-                (*to).v_lock = VAR_UNLOCKED;
+                (*to).v_lock = VarLock::Unlocked;
                 if (*from).vval.v_list.is_null() {
                     (*to).vval.v_list = null_mut::<list_T>();
                 } else if copy_id != 0 && tv_list_copyid((*from).vval.v_list) == copy_id {
@@ -678,12 +678,12 @@ pub unsafe fn var_item_copy(
             }
             VAR_DICT => {
                 (*to).v_type = VAR_DICT;
-                (*to).v_lock = VAR_UNLOCKED;
+                (*to).v_lock = VarLock::Unlocked;
                 if (*from).vval.v_dict.is_null() {
                     (*to).vval.v_dict = null_mut::<dict_T>();
                 } else if copy_id != 0 && (*(*from).vval.v_dict).dv_copyID == copy_id {
                     (*to).vval.v_dict = (*(*from).vval.v_dict).dv_copydict;
-                    (*(*to).vval.v_dict).dv_refcount += 1;
+                    (*(*to).vval.v_dict).dv_refcount.retain();
                 } else {
                     (*to).vval.v_dict = tv_dict_copy(conv, (*from).vval.v_dict, deep, copy_id);
                 }

@@ -28,9 +28,8 @@ pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
 
     let pat = unsafe { (*ac).pat };
     if !pat.is_null() {
-        unsafe { (*pat).refcount = (*pat).refcount.wrapping_sub(1) };
         // The last autocommand on a pattern takes the pattern with it.
-        if unsafe { (*pat).refcount } == 0 {
+        if unsafe { (*pat).refcount.release() } == 0 {
             xfree_clear(unsafe { &raw mut (*pat).pat });
             unsafe { vim_regfree((*pat).reg_prog) };
             unsafe { xfree(pat.cast::<::core::ffi::c_void>()) };

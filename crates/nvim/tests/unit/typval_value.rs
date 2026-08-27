@@ -18,9 +18,9 @@ use neovim::main::{curwin, kTVCstring};
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
-    VAR_BOOL, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarType, kBoolVarFalse,
-    kBoolVarTrue, kSpecialVarNull, typval_T, typval_vval_union, win_T,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    typval_T, typval_vval_union, win_T,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -38,7 +38,7 @@ fn f(n: f64) -> Tv {
 fn raw(v_type: VarType, vval: typval_vval_union) -> typval_T {
     typval_T {
         v_type,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval,
     }
 }
@@ -121,14 +121,14 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         log.check(&[alloc::list(l), alloc::li((*l).lv_first)]);
         tv_clear(&raw mut tv);
         log.check(&[]);
-        assert_eq!((*l).lv_refcount, 1);
+        assert_eq!((*l).lv_refcount.get(), 1);
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
         let d = tv.vval.v_dict;
         log.check(&[alloc::dict(d), alloc::di(tv::first_di(d), "dd".len())]);
         tv_clear(&raw mut tv);
         log.check(&[]);
-        assert_eq!((*d).dv_refcount, 1);
+        assert_eq!((*d).dv_refcount.get(), 1);
     }
 }
 
@@ -166,7 +166,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         tv_copy(&raw const from, &raw mut to);
         assert_eq!(tv::read(&raw const to), Tv::Dict(vec![]));
         log.check(&[]);
-        assert_eq!((*to.vval.v_dict).dv_refcount, 2);
+        assert_eq!((*to.vval.v_dict).dv_refcount.get(), 2);
         assert_eq!(to.vval.v_dict, from.vval.v_dict);
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
@@ -178,7 +178,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         tv_copy(&raw const from, &raw mut to);
         assert_eq!(tv::read(&raw const to), Tv::List(vec![]));
         log.check(&[]);
-        assert_eq!((*to.vval.v_list).lv_refcount, 2);
+        assert_eq!((*to.vval.v_list).lv_refcount.get(), 2);
         assert_eq!(to.vval.v_list, from.vval.v_list);
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
@@ -213,13 +213,13 @@ fn locking_a_partial_leaves_its_dict_alone() {
         }))
         .build();
         tv_item_lock(&raw mut p_tv, -1, true, false);
-        assert_eq!((*(*p_tv.vval.v_partial).pt_dict).dv_lock, VAR_UNLOCKED);
+        assert_eq!((*(*p_tv.vval.v_partial).pt_dict).dv_lock, VarLock::Unlocked);
         tv_clear(&raw mut p_tv);
     }
 }
 
-/// The same `describe`'s `itp('does not change VAR_FIXED values')`, spec
-/// line 2801: `VAR_FIXED` outranks both locking and unlocking.
+/// The same `describe`'s `itp('does not change VarLock::Fixed values')`, spec
+/// line 2801: `VarLock::Fixed` outranks both locking and unlocking.
 #[test]
 fn locking_never_moves_a_fixed_value() {
     let log = AllocLog::start();
@@ -228,18 +228,18 @@ fn locking_never_moves_a_fixed_value() {
         let mut d_tv = Tv::Dict(vec![]).build();
         let mut l_tv = Tv::List(vec![]).build();
         log.clear();
-        d_tv.v_lock = VAR_FIXED;
-        (*d_tv.vval.v_dict).dv_lock = VAR_FIXED;
-        l_tv.v_lock = VAR_FIXED;
-        (*l_tv.vval.v_list).lv_lock = VAR_FIXED;
+        d_tv.v_lock = VarLock::Fixed;
+        (*d_tv.vval.v_dict).dv_lock = VarLock::Fixed;
+        l_tv.v_lock = VarLock::Fixed;
+        (*l_tv.vval.v_list).lv_lock = VarLock::Fixed;
 
         for lock in [true, false] {
             tv_item_lock(&raw mut d_tv, 1, lock, false);
             tv_item_lock(&raw mut l_tv, 1, lock, false);
-            assert_eq!(d_tv.v_lock, VAR_FIXED);
-            assert_eq!(l_tv.v_lock, VAR_FIXED);
-            assert_eq!((*d_tv.vval.v_dict).dv_lock, VAR_FIXED);
-            assert_eq!((*l_tv.vval.v_list).lv_lock, VAR_FIXED);
+            assert_eq!(d_tv.v_lock, VarLock::Fixed);
+            assert_eq!(l_tv.v_lock, VarLock::Fixed);
+            assert_eq!((*d_tv.vval.v_dict).dv_lock, VarLock::Fixed);
+            assert_eq!((*l_tv.vval.v_list).lv_lock, VarLock::Fixed);
         }
         log.check(&[]);
 
@@ -268,7 +268,7 @@ fn locking_a_null_container_locks_the_value_itself() {
         assert_eq!(tv::read(&raw const tvs[1]), Tv::NullDict);
         assert_eq!(tv::read(&raw const tvs[2]), Tv::NullStr);
         for tv in &tvs {
-            assert_eq!(tv.v_lock, VAR_LOCKED);
+            assert_eq!(tv.v_lock, VarLock::Locked);
         }
         log.check(&[]);
     }
@@ -290,7 +290,7 @@ fn a_null_container_is_not_locked() {
 }
 
 /// The same `describe`'s `itp('works')`, spec line 2847: `tv_islocked` is
-/// `VAR_LOCKED` on the value *or* on the container, and `VAR_FIXED` counts
+/// `VarLock::Locked` on the value *or* on the container, and `VarLock::Fixed` counts
 /// as neither.
 #[test]
 fn a_value_is_locked_by_its_own_lock_or_its_containers() {
@@ -311,45 +311,45 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
         );
 
         // The container's lock alone.
-        (*d).dv_lock = VAR_LOCKED;
-        (*l).lv_lock = VAR_LOCKED;
+        (*d).dv_lock = VarLock::Locked;
+        (*l).lv_lock = VarLock::Locked;
         assert_eq!((locked(&l_tv), locked(&d_tv)), (true, true));
 
         // And the value's own, which holds whatever the container says.
-        tv.v_lock = VAR_LOCKED;
-        d_tv.v_lock = VAR_LOCKED;
-        l_tv.v_lock = VAR_LOCKED;
+        tv.v_lock = VarLock::Locked;
+        d_tv.v_lock = VarLock::Locked;
+        l_tv.v_lock = VarLock::Locked;
         assert_eq!(
             (locked(&tv), locked(&l_tv), locked(&d_tv)),
             (true, true, true)
         );
-        (*d).dv_lock = VAR_UNLOCKED;
-        (*l).lv_lock = VAR_UNLOCKED;
+        (*d).dv_lock = VarLock::Unlocked;
+        (*l).lv_lock = VarLock::Unlocked;
         assert_eq!(
             (locked(&tv), locked(&l_tv), locked(&d_tv)),
             (true, true, true)
         );
 
-        // `VAR_FIXED` is not "locked" to this question.
-        tv.v_lock = VAR_FIXED;
-        d_tv.v_lock = VAR_FIXED;
-        l_tv.v_lock = VAR_FIXED;
+        // `VarLock::Fixed` is not "locked" to this question.
+        tv.v_lock = VarLock::Fixed;
+        d_tv.v_lock = VarLock::Fixed;
+        l_tv.v_lock = VarLock::Fixed;
         assert_eq!(
             (locked(&tv), locked(&l_tv), locked(&d_tv)),
             (false, false, false)
         );
-        (*d).dv_lock = VAR_LOCKED;
-        (*l).lv_lock = VAR_LOCKED;
+        (*d).dv_lock = VarLock::Locked;
+        (*l).lv_lock = VarLock::Locked;
         assert_eq!((locked(&l_tv), locked(&d_tv)), (true, true));
-        (*d).dv_lock = VAR_FIXED;
-        (*l).lv_lock = VAR_FIXED;
+        (*d).dv_lock = VarLock::Fixed;
+        (*l).lv_lock = VarLock::Fixed;
         assert_eq!((locked(&l_tv), locked(&d_tv)), (false, false));
         log.check(&[]);
 
-        (*d).dv_lock = VAR_UNLOCKED;
-        (*l).lv_lock = VAR_UNLOCKED;
-        d_tv.v_lock = VAR_UNLOCKED;
-        l_tv.v_lock = VAR_UNLOCKED;
+        (*d).dv_lock = VarLock::Unlocked;
+        (*l).lv_lock = VarLock::Unlocked;
+        d_tv.v_lock = VarLock::Unlocked;
+        l_tv.v_lock = VarLock::Unlocked;
         tv_clear(&raw mut d_tv);
         tv_clear(&raw mut l_tv);
     }
@@ -371,39 +371,39 @@ fn checking_a_lock_names_what_is_locked() {
             check_emsg(log.editor(), || value_check_lock(lock, name, len), msg)
         };
 
-        assert!(!check(VAR_UNLOCKED, test.as_ptr(), 3, None));
+        assert!(!check(VarLock::Unlocked, test.as_ptr(), 3, None));
         assert!(check(
-            VAR_LOCKED,
+            VarLock::Locked,
             test.as_ptr(),
             3,
             Some("E741: Value is locked: tes")
         ));
         assert!(check(
-            VAR_FIXED,
+            VarLock::Fixed,
             test.as_ptr(),
             3,
             Some("E742: Cannot change value of tes")
         ));
         assert!(check(
-            VAR_LOCKED,
+            VarLock::Locked,
             ptr::null(),
             0,
             Some("E741: Value is locked")
         ));
         assert!(check(
-            VAR_FIXED,
+            VarLock::Fixed,
             ptr::null(),
             0,
             Some("E742: Cannot change value")
         ));
         assert!(check(
-            VAR_LOCKED,
+            VarLock::Locked,
             ptr::null(),
             cstring,
             Some("E741: Value is locked")
         ));
         assert!(check(
-            VAR_FIXED,
+            VarLock::Fixed,
             test.as_ptr(),
             cstring,
             Some("E742: Cannot change value of test")
@@ -523,11 +523,11 @@ fn comparing_dict_values_folds_values_but_never_keys() {
 
         let mut d1 = Tv::Dict(vec![]).build();
         log.check(&[alloc::dict(d1.vval.v_dict)]);
-        assert_eq!((*d1.vval.v_dict).dv_refcount, 1);
+        assert_eq!((*d1.vval.v_dict).dv_refcount.get(), 1);
         assert!(tv_equal(&raw mut nd, &raw mut d1, false));
         assert!(tv_equal(&raw mut d1, &raw mut nd, false));
         assert!(tv_equal(&raw mut d1, &raw mut d1, false));
-        assert_eq!((*d1.vval.v_dict).dv_refcount, 1);
+        assert_eq!((*d1.vval.v_dict).dv_refcount.get(), 1);
         log.check(&[]);
 
         let build = |key: &str, value: &str| {

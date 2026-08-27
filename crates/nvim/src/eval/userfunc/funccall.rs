@@ -16,7 +16,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::NUL;
+use crate::types::{NUL, Refcount};
 
 /// A handle on the global user-function table.
 ///
@@ -164,11 +164,11 @@ unsafe fn free_funccal_contents(fc: *mut funccall_T) {
 pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
     let mut free_fc = true;
     unsafe {
-        let may_free_fc = (*fc).fc_refcount <= 0;
+        let may_free_fc = (*fc).fc_refcount <= Refcount::ZERO;
         current_funccal.set((*fc).fc_caller);
 
         // Free all l: variables if not referred to.
-        if may_free_fc && (*fc).fc_l_vars.dv_refcount == DO_NOT_FREE_CNT {
+        if may_free_fc && (*fc).fc_l_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
             vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab);
         } else {
             free_fc = false;
@@ -176,7 +176,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
 
         // If the a:000 list and the l: and a: dicts are not referenced and no
         // closure is using them, the funccall_T and what is in it can go.
-        if may_free_fc && (*fc).fc_l_avars.dv_refcount == DO_NOT_FREE_CNT {
+        if may_free_fc && (*fc).fc_l_avars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
             vars_clear_ext(&raw mut (*fc).fc_l_avars.dv_hashtab, false);
         } else {
             free_fc = false;
@@ -187,7 +187,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
             }
         }
 
-        if may_free_fc && (*fc).fc_l_varlist.lv_refcount == DO_NOT_FREE_CNT {
+        if may_free_fc && (*fc).fc_l_varlist.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
             (*fc).fc_l_varlist.lv_first = ptr::null_mut();
         } else {
             free_fc = false;
@@ -236,12 +236,8 @@ pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force:
             return;
         }
 
-        (*fc).fc_refcount -= 1;
-        let unused = if force {
-            (*fc).fc_refcount <= 0
-        } else {
-            !fc_referenced(fc)
-        };
+        let left = (*fc).fc_refcount.release();
+        let unused = if force { left <= 0 } else { !fc_referenced(fc) };
         if unused && unlink_parked_funccals(|parked| parked == fc) {
             return;
         }
@@ -425,10 +421,10 @@ pub unsafe fn func_ptr_unref(fp: *mut ufunc_T) {
         if fp.is_null() {
             return;
         }
-        (*fp).uf_refcount -= 1;
+        (*fp).uf_refcount.release();
         // Only delete it when it is not running; otherwise that is done when
         // `uf_calls` reaches zero.
-        if (*fp).uf_refcount <= 0 && (*fp).uf_calls == 0 {
+        if (*fp).uf_refcount <= Refcount::ZERO && (*fp).uf_calls == 0 {
             func_clear_free(fp, false);
         }
     }
@@ -445,7 +441,7 @@ pub unsafe fn func_ref(name: *mut c_char) {
         }
         let fp = find_func(name);
         if !fp.is_null() {
-            (*fp).uf_refcount += 1;
+            (*fp).uf_refcount.retain();
         } else if (*name as u8).is_ascii_digit() {
             // Only give an error for a numbered function; fail silently when
             // a named or lambda function isn't found.
@@ -461,7 +457,7 @@ pub unsafe fn func_ref(name: *mut c_char) {
 pub unsafe fn func_ptr_ref(fp: *mut ufunc_T) {
     unsafe {
         if !fp.is_null() {
-            (*fp).uf_refcount += 1;
+            (*fp).uf_refcount.retain();
         }
     }
 }
@@ -475,10 +471,10 @@ pub unsafe fn func_ptr_ref(fp: *mut ufunc_T) {
 /// `fc` is a live funccall.
 unsafe fn fc_referenced(fc: *const funccall_T) -> bool {
     unsafe {
-        (*fc).fc_l_varlist.lv_refcount != DO_NOT_FREE_CNT
-            || (*fc).fc_l_vars.dv_refcount != DO_NOT_FREE_CNT
-            || (*fc).fc_l_avars.dv_refcount != DO_NOT_FREE_CNT
-            || (*fc).fc_refcount > 0
+        (*fc).fc_l_varlist.lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || (*fc).fc_l_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || (*fc).fc_l_avars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || (*fc).fc_refcount > Refcount::ZERO
     }
 }
 
@@ -571,7 +567,8 @@ pub unsafe fn get_funccal() -> *mut funccall_T {
 /// Whether there is a `l:` scope to read at all.
 unsafe fn have_funccal_scope() -> bool {
     unsafe {
-        !current_funccal.get().is_null() && (*current_funccal.get()).fc_l_vars.dv_refcount != 0
+        !current_funccal.get().is_null()
+            && (*current_funccal.get()).fc_l_vars.dv_refcount != Refcount::ZERO
     }
 }
 
@@ -645,7 +642,9 @@ pub unsafe fn get_funccal_args_var() -> *mut dictitem_T {
 /// `first` is writable.
 pub unsafe fn list_func_vars(first: *mut c_int) {
     unsafe {
-        if !current_funccal.get().is_null() && (*current_funccal.get()).fc_l_vars.dv_refcount > 0 {
+        if !current_funccal.get().is_null()
+            && (*current_funccal.get()).fc_l_vars.dv_refcount > Refcount::ZERO
+        {
             list_hashtable_vars(
                 &raw mut (*current_funccal.get()).fc_l_vars.dv_hashtab,
                 c"l:".as_ptr(),

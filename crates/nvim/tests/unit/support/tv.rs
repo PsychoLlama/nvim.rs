@@ -32,11 +32,11 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
-    Callback, Callback_data, CallbackType, DictWatcher, Object, VAR_BOOL, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union,
+    Callback, Callback_data, CallbackType, DictWatcher, Object, Refcount, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VarLock, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union,
 };
 
 use super::cstr;
@@ -168,7 +168,7 @@ impl Tv {
             ),
             Tv::List(items) => {
                 let l = unsafe { tv_list_alloc(items.len() as isize) };
-                unsafe { (*l).lv_refcount = 1 };
+                unsafe { (*l).lv_refcount = Refcount::ONE };
                 path.push(Container::List(l));
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
@@ -181,7 +181,7 @@ impl Tv {
             }
             Tv::Dict(entries) => {
                 let d = unsafe { tv_dict_alloc() };
-                unsafe { (*d).dv_refcount = 1 };
+                unsafe { (*d).dv_refcount = Refcount::ONE };
                 path.push(Container::Dict(d));
                 for (key, value) in entries {
                     let di = unsafe { tv_dict_item_alloc(cstr(key.clone()).as_ptr()) };
@@ -209,11 +209,11 @@ impl Tv {
                 // The container is already live and gains a reference.
                 match path[*up] {
                     Container::List(l) => {
-                        unsafe { (*l).lv_refcount += 1 };
+                        unsafe { (*l).lv_refcount.retain() };
                         (VAR_LIST, typval_vval_union { v_list: l })
                     }
                     Container::Dict(d) => {
-                        unsafe { (*d).dv_refcount += 1 };
+                        unsafe { (*d).dv_refcount.retain() };
                         (VAR_DICT, typval_vval_union { v_dict: d })
                     }
                 }
@@ -221,7 +221,7 @@ impl Tv {
             Tv::Copied(from) => {
                 let mut to = typval_T {
                     v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_number: 0 },
                 };
                 unsafe { tv_copy(*from, &raw mut to) };
@@ -230,7 +230,7 @@ impl Tv {
         };
         typval_T {
             v_type,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval,
         }
     }
@@ -258,7 +258,7 @@ impl Pt {
             }
         };
         unsafe {
-            (*pt).pt_refcount = 1;
+            (*pt).pt_refcount = Refcount::ONE;
             (*pt).pt_name = xmemdupz(self.value.as_ptr().cast(), self.value.len()).cast();
             (*pt).pt_auto = self.auto;
             (*pt).pt_argc = c_int::try_from(self.args.len()).expect("a small argument count");
@@ -429,7 +429,7 @@ pub(crate) unsafe fn li_alloc() -> *mut listitem_T {
         (*li).li_prev = ptr::null_mut();
         (*li).li_tv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
     }
@@ -648,7 +648,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
 
     let mut tv = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let mut evalarg = evalarg_T {

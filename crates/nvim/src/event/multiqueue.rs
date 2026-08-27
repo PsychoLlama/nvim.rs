@@ -32,7 +32,7 @@
 )]
 
 use crate::types::multiqueue_list::{Item, ItemList};
-use crate::types::{Event, MultiQueue, PutCallback, multiqueue, size_t};
+use crate::types::{Event, MultiQueue, PutCallback, Refcount, multiqueue, size_t};
 use core::ffi::c_void;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -48,7 +48,7 @@ const NIL_EVENT: Event = Event {
 struct MulticastEvent {
     event: Event,
     fired: bool,
-    refcount: ::core::ffi::c_int,
+    refcount: Refcount,
 }
 
 /// A queue, reached through the raw pointer its callers hand around.
@@ -321,7 +321,7 @@ pub fn event_create_oneshot(event: Event, num: ::core::ffi::c_int) -> Event {
     let data = Box::into_raw(Box::new(MulticastEvent {
         event,
         fired: false,
-        refcount: num,
+        refcount: Refcount::new(num),
     }));
     Event::new(Some(multiqueue_oneshot_event), [data.cast::<c_void>()])
 }
@@ -345,10 +345,7 @@ unsafe extern "C" fn multiqueue_oneshot_event(argv: *mut *mut c_void) {
         unsafe { handler((&raw mut (*data).event.argv).cast()) };
     }
     // SAFETY: this queue's reference, and it is this call that gives it up.
-    let last = unsafe {
-        (*data).refcount -= 1;
-        (*data).refcount == 0
-    };
+    let last = unsafe { (*data).refcount.release() == 0 };
     if last {
         // SAFETY: no queue holds a reference any more.
         drop(unsafe { Box::from_raw(data) });

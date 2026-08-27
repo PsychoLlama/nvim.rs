@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, OK, VAR_FIXED};
+use crate::types::{FAIL, NUL, OK, VarLock};
 
 /// Free the four `cptext` strings a caller handed to [`ins_compl_add`].
 #[inline]
@@ -551,7 +551,7 @@ pub unsafe fn ins_compl_clear() {
         compl_autocomplete.set(false);
         compl_from_nonkeyword.set(false);
         compl_num_bests.set(0);
-        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed));
     }
 }
 

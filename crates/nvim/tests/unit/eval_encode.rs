@@ -9,7 +9,7 @@ use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
-use neovim::types::{VAR_UNLOCKED, list_T, typval_T, typval_vval_union};
+use neovim::types::{Refcount, VarLock, list_T, typval_T, typval_vval_union};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Tv};
@@ -107,7 +107,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
 
         for row in rows {
             let l = tv_list_alloc(0);
-            (*l).lv_refcount = 1;
+            (*l).lv_refcount = Refcount::ONE;
             for (chunk, expected) in row {
                 write(l, chunk);
                 assert_eq!(
@@ -118,7 +118,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
             }
             let mut tv = typval_T {
                 v_type: neovim::types::VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: l },
             };
             tv_clear(&raw mut tv);
@@ -139,13 +139,13 @@ unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
     // SAFETY: the caller's.
     unsafe {
         let outer = tv_list_alloc(n as isize);
-        (*outer).lv_refcount = 1;
+        (*outer).lv_refcount = Refcount::ONE;
         let inner_tv = inner.build();
         for i in 0..n {
             if i > 0 {
                 match inner_tv.v_type {
-                    neovim::types::VAR_LIST => (*inner_tv.vval.v_list).lv_refcount += 1,
-                    _ => (*inner_tv.vval.v_dict).dv_refcount += 1,
+                    neovim::types::VAR_LIST => (*inner_tv.vval.v_list).lv_refcount.retain(),
+                    _ => (*inner_tv.vval.v_dict).dv_refcount.retain(),
                 }
             }
             let li = tv::list_item_alloc();
@@ -156,7 +156,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
         }
         typval_T {
             v_type: neovim::types::VAR_LIST,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: outer },
         }
     }
@@ -184,7 +184,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[1]),
             alloc::li(lis[2]),
         ]);
-        assert_eq!((*inner).lv_refcount, 3);
+        assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&raw mut tv);
         log.check(&[
             alloc::freed(inner_li),
@@ -207,7 +207,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[1]),
             alloc::li(lis[2]),
         ]);
-        assert_eq!((*inner).lv_refcount, 3);
+        assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&raw mut tv);
         log.check(&[
             alloc::freed(inner),
@@ -228,7 +228,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[0]),
             alloc::li(lis[1]),
         ]);
-        assert_eq!((*inner).dv_refcount, 2);
+        assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&raw mut tv);
         log.check(&[
             alloc::freed(inner),
@@ -250,7 +250,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[0]),
             alloc::li(lis[1]),
         ]);
-        assert_eq!((*inner).dv_refcount, 2);
+        assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&raw mut tv);
         log.check(&[
             alloc::freed(di),

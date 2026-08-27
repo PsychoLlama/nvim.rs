@@ -95,7 +95,7 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
             kCallbackPartial => {
                 (*tv).v_type = VAR_PARTIAL;
                 (*tv).vval.v_partial = (*cb).data.partial;
-                (*(*cb).data.partial).pt_refcount += 1;
+                (*(*cb).data.partial).pt_refcount.retain();
             }
             kCallbackFuncref => {
                 (*tv).v_type = VAR_FUNC;
@@ -118,7 +118,7 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
         match (*src).type_0 {
             kCallbackPartial => {
                 (*dest).data.partial = (*src).data.partial;
-                (*(*dest).data.partial).pt_refcount += 1;
+                (*(*dest).data.partial).pt_refcount.retain();
             }
             kCallbackFuncref => {
                 (*dest).data.funcref = xstrdup((*src).data.funcref);
@@ -251,15 +251,15 @@ pub unsafe fn tv_dict_watcher_notify(
     unsafe {
         let mut argv = [TV_INITIAL_VALUE; 3];
         argv[0].v_type = VAR_DICT;
-        argv[0].v_lock = VAR_UNLOCKED;
+        argv[0].v_lock = VarLock::Unlocked;
         argv[0].vval.v_dict = dict;
         argv[1].v_type = VAR_STRING;
-        argv[1].v_lock = VAR_UNLOCKED;
+        argv[1].v_lock = VarLock::Unlocked;
         argv[1].vval.v_string = xstrdup(key);
         argv[2].v_type = VAR_DICT;
-        argv[2].v_lock = VAR_UNLOCKED;
+        argv[2].v_lock = VarLock::Unlocked;
         argv[2].vval.v_dict = tv_dict_alloc();
-        (*argv[2].vval.v_dict).dv_refcount += 1;
+        (*argv[2].vval.v_dict).dv_refcount.retain();
 
         // `tv_dict_item_alloc_len` copies exactly the length given and appends
         // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
@@ -279,7 +279,7 @@ pub unsafe fn tv_dict_watcher_notify(
         let mut any_needs_free = false;
         // Hold the dictionary across the callbacks: one of them may drop the
         // last other reference to it.
-        (*dict).dv_refcount += 1;
+        (*dict).dv_refcount.retain();
         // QUEUE_FOREACH: the next node is read before the body, so a callback
         // that unlinks the current watcher does not strand the walk.
         let mut w = (*dict).watchers.next;

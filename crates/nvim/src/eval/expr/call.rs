@@ -28,15 +28,15 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dict_T, evalarg_T,
-    funcexe_T, partial_T, size_t, typval_T, typval_vval_union,
+    FAIL, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, funcexe_T,
+    partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -291,7 +291,7 @@ pub(crate) unsafe fn eval_method(
                     if evaluate {
                         (*rettv).v_type = VAR_PARTIAL;
                         (*rettv).vval.v_partial = get_vim_var_partial(Vv::Lua);
-                        (*(*rettv).vval.v_partial).pt_refcount += 1;
+                        (*(*rettv).vval.v_partial).pt_refcount.retain();
                     }
                     ret = call_func_rettv(
                         arg,
@@ -371,8 +371,7 @@ pub(crate) unsafe fn partial_unref(pt: *mut partial_T) {
         if pt.is_null() {
             return;
         }
-        (*pt).pt_refcount -= 1;
-        if (*pt).pt_refcount <= 0 {
+        if (*pt).pt_refcount.release() <= 0 {
             partial_free(pt);
         }
     }

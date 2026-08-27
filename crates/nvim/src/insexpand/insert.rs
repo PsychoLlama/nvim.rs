@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, OK, VAR_FIXED};
+use crate::types::{FAIL, NUL, OK, VarLock};
 use crate::winlayer::Win;
 
 /// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
@@ -203,7 +203,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         // causes flicker, thus we can't do that.
         changed_cline_bef_curs(Win::current());
         // Clear v:completed_item.
-        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed));
     }
 }
 

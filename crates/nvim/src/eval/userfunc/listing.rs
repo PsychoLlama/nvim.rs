@@ -335,7 +335,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         // one that returned `a:000`, or that a closure captured -- holds one
         // of its own until the garbage collector frees it, which is why this
         // arm is reachable at all (see the docket's O-B14-13).
-        if (*fp).uf_refcount > 2 {
+        if (*fp).uf_refcount.get() > 2 {
             semsg_c!(
                 gettext(c"Cannot delete function %s: It is being used internally".as_ptr()),
                 (*eap).arg,
@@ -357,9 +357,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         } else {
             1
         };
-        if (*fp).uf_refcount > held {
+        if (*fp).uf_refcount.get() > held {
             if func_remove(fp) {
-                (*fp).uf_refcount -= 1;
+                (*fp).uf_refcount.release();
             }
             (*fp).uf_flags |= FC_DELETED;
         } else {

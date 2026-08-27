@@ -35,7 +35,7 @@ use crate::memory::xstrdup;
 use crate::types::{
     Arena, Array, BoolVarValue, Dict, Error, Float, Integer, KeyValuePair, LuaRef, Object,
     String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse,
+    VAR_UNKNOWN, VarLock, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse,
     kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
     kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t,
@@ -423,7 +423,7 @@ pub unsafe fn object_to_vim_take_luaref(
 ) {
     unsafe {
         (*tv).v_type = VAR_UNKNOWN;
-        (*tv).v_lock = VAR_UNLOCKED;
+        (*tv).v_lock = VarLock::Unlocked;
         match (*obj).type_0 as ::core::ffi::c_uint {
             kObjectTypeNil => {
                 (*tv).v_type = VAR_SPECIAL;
@@ -455,7 +455,7 @@ pub unsafe fn object_to_vim_take_luaref(
                 while (i as size_t) < (*obj).data.array.size {
                     let mut li_tv: typval_T = typval_T {
                         v_type: VAR_UNKNOWN,
-                        v_lock: VAR_UNLOCKED,
+                        v_lock: VarLock::Unlocked,
                         vval: typval_vval_union { v_number: 0 },
                     };
                     object_to_vim_take_luaref(
@@ -487,7 +487,7 @@ pub unsafe fn object_to_vim_take_luaref(
                     tv_dict_add(dict, di);
                     i_0 = i_0.wrapping_add(1);
                 }
-                (*dict).dv_refcount += 1;
+                (*dict).dv_refcount.retain();
                 (*tv).v_type = VAR_DICT;
                 (*tv).vval.v_dict = dict;
             }

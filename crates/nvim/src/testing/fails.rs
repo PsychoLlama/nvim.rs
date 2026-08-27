@@ -29,7 +29,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::{gettext, strstr};
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, Vv, list_T, typval_T,
+    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, Vv, list_T, typval_T,
     typval_vval_union, varnumber_T,
 };
 
@@ -222,21 +222,21 @@ unsafe fn report_fails_mismatch(
         let mut actual_tv = match mismatch.index {
             3 => typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {
                     v_number: emsg_assert_fails_lnum.get() as varnumber_T,
                 },
             },
             4 => typval_T {
                 v_type: VAR_STRING,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {
                     v_string: emsg_assert_fails_context.get(),
                 },
             },
             _ => typval_T {
                 v_type: VAR_STRING,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {
                     v_string: mismatch.actual,
                 },

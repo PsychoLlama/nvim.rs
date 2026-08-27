@@ -62,16 +62,16 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
-    VarLockStatus, dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t,
-    size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, dict_T,
+    dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{memset, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -141,7 +141,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         // A null Dict is an empty Dict; allocate one now.
         if (*(*lp).ll_tv).vval.v_dict.is_null() {
             (*(*lp).ll_tv).vval.v_dict = tv_dict_alloc();
-            (*(*(*lp).ll_tv).vval.v_dict).dv_refcount += 1;
+            (*(*(*lp).ll_tv).vval.v_dict).dv_refcount.retain();
         }
         (*lp).ll_dict = (*(*lp).ll_tv).vval.v_dict;
         (*lp).ll_di = tv_dict_find((*lp).ll_dict, key, len as ptrdiff_t);
@@ -642,9 +642,9 @@ pub unsafe fn set_var_lval(
         // A locked container refuses the write; the lock to test is the
         // Dict's own when a key is being added to it.
         let lock = if (*lp).ll_newkey.is_null() {
-            (*(*lp).ll_tv).v_lock as VarLockStatus
+            (*(*lp).ll_tv).v_lock
         } else {
-            (*(*(*lp).ll_tv).vval.v_dict).dv_lock as VarLockStatus
+            (*(*(*lp).ll_tv).vval.v_dict).dv_lock
         };
         if value_check_lock(lock, (*lp).ll_name, TV_CSTRING as size_t) {
             return;
@@ -737,7 +737,7 @@ pub unsafe fn set_var_lval(
                 tv_copy(rettv, (*lp).ll_tv);
             } else {
                 *(*lp).ll_tv = *rettv;
-                (*(*lp).ll_tv).v_lock = VAR_UNLOCKED;
+                (*(*lp).ll_tv).v_lock = VarLock::Unlocked;
                 tv_init(rettv);
             }
         }

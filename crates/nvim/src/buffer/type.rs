@@ -31,8 +31,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CmdModFlags, VAR_FIXED, VAR_NUMBER, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T,
-    varnumber_T,
+    CmdModFlags, VAR_NUMBER, VarLock, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,
 };
 use crate::winlayer::Buf;
 
@@ -293,8 +292,8 @@ fn check_changedtick_item(buf: Buf) {
         "changedtick_di->di_tv.v_type == VAR_NUMBER"
     );
     assert!(
-        item.di_tv.v_lock == VAR_FIXED as _,
-        "changedtick_di->di_tv.v_lock == VAR_FIXED"
+        item.di_tv.v_lock == VarLock::Fixed,
+        "changedtick_di->di_tv.v_lock == VarLock::Fixed"
     );
     assert!(
         item.di_flags as c_int == DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int,

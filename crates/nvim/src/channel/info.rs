@@ -26,10 +26,10 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN,
-    VAR_UNLOCKED, event_T, hashtab_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data,
-    save_v_event_T, typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN, VarLock,
+    event_T, hashtab_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data, save_v_event_T, typval_T,
+    typval_vval_union, uint64_t,
 };
 
 use super::known::*;
@@ -100,7 +100,7 @@ fn literal_obj(text: &'static CStr) -> Object {
 pub(super) fn unknown_tv() -> typval_T {
     typval_T {
         v_type: VAR_UNKNOWN as _,
-        v_lock: VAR_UNLOCKED as _,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }
 }

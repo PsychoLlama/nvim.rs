@@ -47,7 +47,7 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, ShmFlag, Terminal, VAR_FIXED, VAR_NUMBER,
+    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, ShmFlag, Terminal, VAR_NUMBER, VarLock,
     colnr_T, dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;
@@ -518,7 +518,7 @@ pub(crate) fn buf_init_changedtick(mut buf: Buf) {
     buf.changedtick_di = ChangedtickDictItem {
         di_tv: typval_T {
             v_type: VAR_NUMBER,
-            v_lock: VAR_FIXED,
+            v_lock: VarLock::Fixed,
             vval: typval_vval_union {
                 // SAFETY: a live buffer.
                 v_number: buf_get_changedtick(buf),

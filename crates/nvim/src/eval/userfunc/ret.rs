@@ -391,7 +391,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
         // Increase the reference on the dictionary, it could get deleted when
         // evaluating the arguments.
         if !fudi.fd_dict.is_null() {
-            (*fudi.fd_dict).dv_refcount += 1;
+            (*fudi.fd_dict).dv_refcount.retain();
         }
 
         // If it is the name of a variable of type VAR_FUNC or VAR_PARTIAL use

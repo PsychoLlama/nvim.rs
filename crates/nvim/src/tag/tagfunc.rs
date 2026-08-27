@@ -10,8 +10,8 @@
 use super::*;
 use crate::hashtab::hash_removed;
 use crate::types::{
-    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, kSpecialVarNull,
+    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    kSpecialVarNull,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -148,7 +148,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         }
     }
 
-    let info = unsafe { tv_dict_alloc_lock(VAR_FIXED) };
+    let info = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
     if flags & TAG_INS_COMP as c_int == 0
         && let Some(from) = from
         && !from.user_data.is_null()
@@ -160,11 +160,11 @@ pub(crate) unsafe fn find_tagfunc_tags(
     }
     // Held alive for the call: the dict is ours, not the argument
     // list's.
-    unsafe { (*info).dv_refcount += 1 };
+    unsafe { (*info).dv_refcount.retain() };
 
     let mut args = [typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }; 4];
     args[0].v_type = VAR_STRING;
@@ -176,7 +176,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
 
     let mut rettv = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let save_pos = cur_win().w_cursor;
@@ -192,7 +192,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // that no longer exists.
     cur_win().w_cursor = save_pos;
     check_cursor(unsafe { Win::current() });
-    unsafe { (*info).dv_refcount -= 1 };
+    unsafe { (*info).dv_refcount.release() };
 
     if result == FAIL {
         return FAIL;

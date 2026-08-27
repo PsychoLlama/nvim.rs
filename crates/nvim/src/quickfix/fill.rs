@@ -15,8 +15,7 @@ use crate::eval::typval::NumBuf;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{
-    FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
-    bcount_t,
+    FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, bcount_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -270,7 +269,7 @@ unsafe fn call_qftf_func(
     }
     RECURSIVE.set(true);
 
-    let dict = unsafe { tv_dict_alloc_lock(VAR_FIXED) };
+    let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
     let add = |key: &CStr, value: varnumber_T| {
         unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
@@ -282,16 +281,16 @@ unsafe fn call_qftf_func(
     add(c"id", qfl.qf_id as varnumber_T);
     add(c"start_idx", start_idx as varnumber_T);
     add(c"end_idx", end_idx as varnumber_T);
-    unsafe { (*dict).dv_refcount += 1 };
+    unsafe { (*dict).dv_refcount.retain() };
 
     let mut args = [typval_T {
         v_type: VAR_DICT,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_dict: dict },
     }];
     let mut rettv = typval_T {
         v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let mut answer = ptr::null_mut::<list_T>();

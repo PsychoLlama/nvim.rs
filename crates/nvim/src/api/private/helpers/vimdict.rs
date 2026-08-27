@@ -14,9 +14,8 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::types::{
-    Arena, Error, Object, String_0, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, typval_T,
-    typval_vval_union,
+    Arena, Error, Object, String_0, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use core::ffi::c_int;
 use core::ptr;
@@ -86,7 +85,7 @@ pub(crate) unsafe fn dict_check_writable(
                     key.data(),
                 );
             }
-        } else if (*dict).dv_lock as u64 != 0 {
+        } else if (*dict).dv_lock.is_locked() {
             api_set_error(err, kErrorTypeException, c"Dict is locked".as_ptr());
         } else if key.is_empty() {
             api_set_error(err, kErrorTypeValidation, c"Key name is empty".as_ptr());
@@ -139,7 +138,7 @@ pub(crate) unsafe fn dict_set_var(
 
         let mut tv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
         object_to_vim(value, &raw mut tv, err);
@@ -147,7 +146,7 @@ pub(crate) unsafe fn dict_set_var(
         // unset value for a key that did not.
         let mut oldtv = typval_T {
             v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
 

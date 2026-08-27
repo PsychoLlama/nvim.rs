@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::types::event_T;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, Refcount};
 use crate::winlayer::{Buf, Ea, Live, Win, windows};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -459,8 +459,7 @@ unsafe fn ll_release(qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    qi.qf_refcount -= 1;
-    if qi.qf_refcount < 1 {
+    if qi.qf_refcount.release() < 1 {
         unsafe { wipe_qf_buffer(qi.raw()) };
         unsafe { qf_free_lists(qi.raw()) };
     }
@@ -519,7 +518,7 @@ fn qf_alloc_list_stack(n: c_int) -> Vec<qf_list_T> {
 pub(crate) fn qf_alloc_stack(qfltype: qfltype_T, n: c_int) -> *mut qf_info_T {
     debug_assert_ne!(qfltype, QFLT_QUICKFIX);
     let mut stack = Box::new(qf_info_T::new(qfltype));
-    stack.qf_refcount = 1;
+    stack.qf_refcount = Refcount::ONE;
     stack.qf_bufnr = INVALID_QFBUFNR;
     stack.qf_lists = qf_alloc_list_stack(n);
     Box::into_raw(stack)
@@ -787,7 +786,7 @@ mod tests {
         // SAFETY: `qf_alloc_stack` leaked the box a statement ago and the
         // pointer has not left this test, so this is the last reference.
         let owned = unsafe { Box::from_raw(stack) };
-        assert_eq!(owned.qf_refcount, 1);
+        assert_eq!(owned.qf_refcount, Refcount::ONE);
         assert_eq!(owned.qfl_type, QFLT_LOCATION);
         assert_eq!(owned.qf_bufnr, INVALID_QFBUFNR);
         assert_eq!(owned.qf_listcount, 0);

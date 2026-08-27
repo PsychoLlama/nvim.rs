@@ -30,7 +30,7 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::registry::SlotTable;
 use crate::types::{
-    Callback, FAIL, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T,
+    Callback, FAIL, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
     int64_t, list_T, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t,
     varnumber_T,
 };
@@ -42,7 +42,7 @@ const MAX_ERRORS: c_int = 3;
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -101,7 +101,7 @@ pub unsafe fn add_timer_info_all(rettv: *mut typval_T) {
         for timer in live {
             // A stopped timer is still listed while something else holds a
             // reference to it — its own callback, for instance.
-            if !(*timer).stopped || (*timer).refcount > 1 {
+            if !(*timer).stopped || (*timer).refcount.is_shared() {
                 add_timer_info(rettv, timer);
             }
         }
@@ -124,7 +124,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
 
         // The reference is what keeps the timer alive if its own callback
         // stops it.
-        (*timer).refcount += 1;
+        (*timer).refcount.retain();
         if (*timer).repeat_count >= 0 && {
             (*timer).repeat_count -= 1;
             (*timer).repeat_count == 0
@@ -176,7 +176,7 @@ pub unsafe fn timer_start(
 ) -> uint64_t {
     unsafe {
         let timer = xmalloc(size_of::<timer_T>()) as *mut timer_T;
-        (*timer).refcount = 1;
+        (*timer).refcount = Refcount::ONE;
         (*timer).stopped = false;
         (*timer).paused = false;
         (*timer).emsg_count = 0;
@@ -239,8 +239,7 @@ pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
 /// `timer` must be valid and hold a reference this call takes over.
 pub(crate) unsafe fn timer_decref(timer: *mut timer_T) {
     unsafe {
-        (*timer).refcount -= 1;
-        if (*timer).refcount == 0 {
+        if (*timer).refcount.release() == 0 {
             xfree(timer as *mut c_void);
         }
     }

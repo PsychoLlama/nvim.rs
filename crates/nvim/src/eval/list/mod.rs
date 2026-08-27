@@ -64,9 +64,9 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::reverse_text;
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    VarLockStatus, VarType, Vv, blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T,
-    listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
+    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Vv,
+    blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
+    typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
 };
 use ::libc::strlen;
 
@@ -92,7 +92,7 @@ static e_argument_of_str_must_be_list_string_dictionary_or_blob: [c_char; 65] =
 /// its per-item result from.
 pub(crate) const UNKNOWN_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -159,7 +159,7 @@ impl Container {
 /// A `list_T` the evaluator handed us: live, or NULL.
 ///
 /// NULL is not an error state: `v:_null_list` reaches every builtin here, and
-/// every helper reads it as an empty, `VAR_FIXED` list.
+/// every helper reads it as an empty, `VarLock::Fixed` list.
 #[derive(Clone, Copy)]
 pub(crate) struct List(*mut list_T);
 
@@ -182,15 +182,15 @@ impl List {
         self.0
     }
 
-    /// The lock status; a NULL list reads as `VAR_FIXED`.
+    /// The lock status; a NULL list reads as `VarLock::Fixed`.
     #[inline(always)]
-    pub(crate) fn locked(self) -> VarLockStatus {
-        self.get().map_or(VAR_FIXED, |l| l.lv_lock)
+    pub(crate) fn locked(self) -> VarLock {
+        self.get().map_or(VarLock::Fixed, |l| l.lv_lock)
     }
 
-    /// Set the lock status.  A NULL list already reads as `VAR_FIXED`.
+    /// Set the lock status.  A NULL list already reads as `VarLock::Fixed`.
     #[inline(always)]
-    pub(crate) fn set_lock(self, lock: VarLockStatus) {
+    pub(crate) fn set_lock(self, lock: VarLock) {
         if let Some(l) = self.get() {
             l.lv_lock = lock;
         }
@@ -318,7 +318,7 @@ impl Item {
     }
 
     #[inline(always)]
-    pub(crate) fn lock(self) -> VarLockStatus {
+    pub(crate) fn lock(self) -> VarLock {
         self.get().li_tv.v_lock
     }
 
@@ -333,7 +333,7 @@ impl Item {
     /// Replace the item's value with `newtv`, clearing what was there.
     #[inline(always)]
     pub(crate) fn set_tv(self, mut newtv: typval_T) {
-        newtv.v_lock = VAR_UNLOCKED;
+        newtv.v_lock = VarLock::Unlocked;
         let li = self.get();
         clear_tv(&mut li.li_tv);
         li.li_tv = newtv;
@@ -374,12 +374,12 @@ impl Dict {
     }
 
     #[inline(always)]
-    pub(crate) fn lock(self) -> VarLockStatus {
-        self.get().map_or(VAR_FIXED, |d| d.dv_lock)
+    pub(crate) fn lock(self) -> VarLock {
+        self.get().map_or(VarLock::Fixed, |d| d.dv_lock)
     }
 
     #[inline(always)]
-    pub(crate) fn set_lock(self, lock: VarLockStatus) {
+    pub(crate) fn set_lock(self, lock: VarLock) {
         if let Some(d) = self.get() {
             d.dv_lock = lock;
         }
@@ -502,7 +502,7 @@ impl DictItem {
     }
 
     #[inline(always)]
-    pub(crate) fn lock(self) -> VarLockStatus {
+    pub(crate) fn lock(self) -> VarLock {
         self.get().di_tv.v_lock
     }
 
@@ -515,7 +515,7 @@ impl DictItem {
     /// Replace the value with `newtv`, clearing what was there.
     #[inline(always)]
     pub(crate) fn set_tv(self, mut newtv: typval_T) {
-        newtv.v_lock = VAR_UNLOCKED;
+        newtv.v_lock = VarLock::Unlocked;
         let di = self.get();
         clear_tv(&mut di.di_tv);
         di.di_tv = newtv;
@@ -550,12 +550,12 @@ impl Blob {
     }
 
     #[inline(always)]
-    pub(crate) fn lock(self) -> VarLockStatus {
-        self.get().map_or(VAR_FIXED, |b| b.bv_lock)
+    pub(crate) fn lock(self) -> VarLock {
+        self.get().map_or(VarLock::Fixed, |b| b.bv_lock)
     }
 
     #[inline(always)]
-    pub(crate) fn set_lock(self, lock: VarLockStatus) {
+    pub(crate) fn set_lock(self, lock: VarLock) {
         if let Some(b) = self.get() {
             b.bv_lock = lock;
         }
@@ -726,7 +726,7 @@ pub(crate) fn cstr_of_chk<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> Option<
 pub(crate) fn string_tv(bytes: &[u8]) -> typval_T {
     typval_T {
         v_type: VAR_STRING,
-        v_lock: VAR_UNLOCKED,
+        v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
             // SAFETY: `xmemdupz` reads `bytes` and appends the NUL itself.
             v_string: unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() },
@@ -736,7 +736,7 @@ pub(crate) fn string_tv(bytes: &[u8]) -> typval_T {
 
 /// Whether `lock` forbids a change, reporting `E741`/`E742` naming `what`.
 #[inline(always)]
-pub(crate) fn check_lock(lock: VarLockStatus, what: &CStr) -> bool {
+pub(crate) fn check_lock(lock: VarLock, what: &CStr) -> bool {
     // SAFETY: `what` is NUL-terminated, and `TV_TRANSLATE` asks for it to be
     // translated and measured.
     unsafe { value_check_lock(lock, what.as_ptr(), TV_TRANSLATE) }

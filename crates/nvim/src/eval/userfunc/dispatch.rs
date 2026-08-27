@@ -114,7 +114,7 @@ pub unsafe fn func_call(
                     break 'skip_call;
                 }
                 // Copy each argument, so that `v_lock` can be set to
-                // VAR_FIXED in the copy without changing the original list.
+                // VarLock::Fixed in the copy without changing the original list.
                 tv_copy(
                     &raw mut (*item).li_tv,
                     argv.as_mut_ptr().offset(argc as isize),

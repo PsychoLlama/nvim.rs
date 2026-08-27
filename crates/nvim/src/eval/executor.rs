@@ -71,7 +71,7 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
             // Appending to an unallocated blob shares the right-hand one
             // rather than copying it.
             (*tv1).vval.v_blob = b2;
-            (*b2).bv_refcount += 1;
+            (*b2).bv_refcount.retain();
             return OK;
         }
         let len = (*b2).bv_ga.ga_len;
@@ -107,7 +107,7 @@ unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
             // Appending to an unallocated list shares the right-hand one
             // rather than copying it.
             (*tv1).vval.v_list = l2;
-            (*l2).lv_refcount += 1;
+            (*l2).lv_refcount.retain();
         } else {
             tv_list_extend(l1, l2, ::core::ptr::null_mut::<listitem_T>());
         }

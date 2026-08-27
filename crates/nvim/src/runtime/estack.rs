@@ -324,10 +324,10 @@ unsafe fn stacktrace_push_item(
     // allocated, so every `tv_dict_add_*` writes into memory we own until the
     // final append hands the dict to the list.
     unsafe {
-        let d = tv_dict_alloc_lock(VAR_FIXED);
+        let d = tv_dict_alloc_lock(VarLock::Fixed);
         let mut tv = typval_T {
             v_type: VAR_DICT,
-            v_lock: VAR_LOCKED,
+            v_lock: VarLock::Locked,
             vval: typval_vval_union { v_dict: d },
         };
         if !fp.is_null() {

@@ -164,7 +164,7 @@ pub(crate) unsafe fn item_compare2(
         };
 
         // Copy the values.  This is needed to be able to set v_lock to
-        // VAR_FIXED in the copy without changing the original list items.
+        // VarLock::Fixed in the copy without changing the original list items.
         let mut argv = [TV_INITIAL_VALUE; 3];
         tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut argv[0]);
         tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut argv[1]);

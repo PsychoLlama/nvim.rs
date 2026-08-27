@@ -68,7 +68,7 @@ use crate::types::{
     Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyValuePair, MHPutStatus, Map_cstr_t_ptr_t, MapHash, MarkGet,
     MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
-    String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VAR_UNLOCKED, bln_values,
+    String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VarLock, bln_values,
     buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T, int64_t, kObjectTypeInteger,
     kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, typval_T,
     typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
@@ -529,7 +529,7 @@ static sd_default_values: ConstTable<[ShadaEntry; 12]> = ConstTable::new([
                 name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 value: typval_T {
                     v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     },

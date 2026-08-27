@@ -19,6 +19,6 @@ pub struct aentry_T {
 #[derive(Copy, Clone)]
 pub struct alist_T {
     pub al_ga: garray_T,
-    pub al_refcount: ::core::ffi::c_int,
+    pub al_refcount: Refcount,
     pub id: ::core::ffi::c_int,
 }

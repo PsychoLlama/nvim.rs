@@ -43,7 +43,7 @@ use crate::os::cshim::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T,
+    VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T,
     funcexe_T, kBoolVarFalse, kBoolVarTrue, partial_T, size_t, typval_T, typval_vval_union,
     varnumber_T,
 };
@@ -52,7 +52,7 @@ use crate::types::{
 /// operand as.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
@@ -791,7 +791,7 @@ pub(crate) unsafe fn eval7(
                     if (*rettv).v_type == VAR_UNKNOWN && strnequal(name, c"v:lua.".as_ptr(), 6) {
                         (*rettv).v_type = VAR_PARTIAL;
                         (*rettv).vval.v_partial = get_vim_var_partial(Vv::Lua);
-                        (*(*rettv).vval.v_partial).pt_refcount += 1;
+                        (*(*rettv).vval.v_partial).pt_refcount.retain();
                     }
                     ret = OK;
                 }

@@ -39,9 +39,8 @@ use crate::mpack::mpack_core::{
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
     FAIL, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
-    list_T, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union,
-    varnumber_T,
+    VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T,
+    mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::{abort, memcpy, strlen};
 
@@ -65,7 +64,7 @@ unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
         if val <= VARNUMBER_MAX {
             *rettv = typval_T {
                 v_type: VAR_NUMBER,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {
                     v_number: val as varnumber_T,
                 },
@@ -79,7 +78,7 @@ unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
             kMPInteger,
             typval_T {
                 v_type: VAR_LIST,
-                v_lock: VAR_UNLOCKED,
+                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: list },
             },
         );
@@ -143,7 +142,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             MPACK_TOKEN_NIL => {
                 *result = typval_T {
                     v_type: VAR_SPECIAL,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_special: kSpecialVarNull,
                     },
@@ -152,7 +151,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             MPACK_TOKEN_BOOLEAN => {
                 *result = typval_T {
                     v_type: VAR_BOOL,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_bool: if mpack_unpack_boolean((*node).tok) {
                             kBoolVarTrue
@@ -165,7 +164,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             MPACK_TOKEN_SINT => {
                 *result = typval_T {
                     v_type: VAR_NUMBER,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_number: mpack_unpack_sint((*node).tok),
                     },
@@ -177,7 +176,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             MPACK_TOKEN_FLOAT => {
                 *result = typval_T {
                     v_type: VAR_FLOAT,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union {
                         v_float: mpack_unpack_float_fast((*node).tok),
                     },
@@ -200,7 +199,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
                 tv_list_ref(list);
                 *result = typval_T {
                     v_type: VAR_LIST,
-                    v_lock: VAR_UNLOCKED,
+                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_list: list },
                 };
                 (*node).data[1].p = list.cast();
@@ -263,10 +262,10 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
         }
 
         let dict = tv_dict_alloc();
-        (*dict).dv_refcount += 1;
+        (*dict).dv_refcount.retain();
         *result = typval_T {
             v_type: VAR_DICT,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_dict: dict },
         };
 
@@ -324,7 +323,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
                     kMPExt,
                     typval_T {
                         v_type: VAR_LIST,
-                        v_lock: VAR_UNLOCKED,
+                        v_lock: VarLock::Unlocked,
                         vval: typval_vval_union { v_list: list },
                     },
                 );

@@ -81,7 +81,7 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, Vv, colnr_T, int64_t, linenr_T,
+    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, Vv, colnr_T, int64_t, linenr_T,
     schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
@@ -722,7 +722,7 @@ pub unsafe fn build_stl_str_hl(
     let usefmt = if fmt_bytes.starts_with(b"%!") {
         let mut winid = typval_T {
             v_type: VAR_NUMBER,
-            v_lock: VAR_UNLOCKED,
+            v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_number: win.handle as varnumber_T,
             },
