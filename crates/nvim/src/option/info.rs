@@ -36,22 +36,23 @@ unsafe fn push(dict: &mut Dict, key: &'static core::ffi::CStr, value: Object) {
         *dict.items.add(dict.size) = key_value_pair {
             key: cstr_as_string(key.as_ptr().cast_mut()),
             value,
-        };
-    }
+        }
+    };
     dict.size += 1;
 }
 
-/// A `String` value, from a NUL-terminated C string the arena does not own.
+/// A `String` value naming one of the option table's static strings.
 ///
-/// # Safety
-///
-/// `s` must be NUL-terminated or null.
-unsafe fn str_value(s: *const c_char) -> Object {
+/// Every `*const c_char` this module hands over comes from the generated
+/// table or from a `c"..."` literal, so it is a live NUL-terminated string
+/// for the whole run — which is the whole of `cstr_as_string`'s promise, and
+/// why it is paid once here rather than at each of the four keys below.
+fn name_value(name: *const c_char) -> Object {
     object {
         type_0: kObjectTypeString,
-        // SAFETY: the caller's string is NUL-terminated.
+        // SAFETY: a static NUL-terminated string.
         data: object_data {
-            string: unsafe { cstr_as_string(s.cast_mut()) },
+            string: unsafe { cstr_as_string(name) },
         },
     }
 }
@@ -86,18 +87,16 @@ pub(crate) unsafe fn get_vimoption(
     err: *mut Error,
 ) -> Dict {
     // SAFETY: the caller's pointers are live.
-    unsafe {
-        let opt_idx: OptIndex = find_option_len(name.as_bytes());
-        if opt_idx == kOptInvalid {
-            api_err_invalid(err, c"option (not found)".as_ptr(), name.data(), 0, true);
-            return Dict {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ptr::null_mut::<KeyValuePair>(),
-            };
-        }
-        vimoption2dict(opt_idx, opt_flags, buf, win, arena)
+    let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
+    if opt_idx == kOptInvalid {
+        unsafe { api_err_invalid(err, c"option (not found)".as_ptr(), name.data(), 0, true) };
+        return Dict {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ptr::null_mut::<KeyValuePair>(),
+        };
     }
+    unsafe { vimoption2dict(opt_idx, opt_flags, buf, win, arena) }
 }
 
 /// Every option's info dictionary, keyed by full name.
@@ -108,27 +107,24 @@ pub(crate) unsafe fn get_vimoption(
 pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
-    unsafe {
-        let mut retval = arena_dict(arena, kOptCount as size_t);
-        for opt_idx in kOptAleph..kOptCount {
-            let opt_dict = vimoption2dict(
-                opt_idx,
-                OptionSetFlags::GLOBAL,
-                curbuf.get(),
-                curwin.get(),
-                arena,
-            );
-            *retval.items.add(retval.size) = key_value_pair {
-                key: cstr_as_string(get_option(opt_idx).fullname),
-                value: object {
-                    type_0: kObjectTypeDict,
-                    data: object_data { dict: opt_dict },
-                },
-            };
-            retval.size += 1;
-        }
-        retval
+    let mut retval = arena_dict(arena, kOptCount as size_t);
+    for opt_idx in kOptAleph..kOptCount {
+        let (scope, buf, win) = (OptionSetFlags::GLOBAL, curbuf.get(), curwin.get());
+        // SAFETY: the caller's arena, and `curbuf`/`curwin` are live.
+        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win, arena) };
+        let pair = key_value_pair {
+            // SAFETY: the option table's names are static C strings.
+            key: unsafe { cstr_as_string(get_option(opt_idx).fullname) },
+            value: object {
+                type_0: kObjectTypeDict,
+                data: object_data { dict: opt_dict },
+            },
+        };
+        // SAFETY: the dictionary was asked for exactly `kOptCount` pairs.
+        unsafe { *retval.items.add(retval.size) = pair };
+        retval.size += 1;
     }
+    retval
 }
 
 /// Which script last set the option, for the scope `opt_flags` names. A
@@ -148,23 +144,23 @@ unsafe fn last_set(
 ) -> sctx_T {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live for the scopes reached below.
-    unsafe {
-        if opt_flags == OptionSetFlags::GLOBAL {
-            return option_last_set(opt_idx);
-        }
-        let mut script_ctx = sctx_T::NONE;
-        if option_has_scope(opt_idx, kOptScopeBuf) {
-            script_ctx = (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize];
-        }
-        if option_has_scope(opt_idx, kOptScopeWin) {
-            script_ctx =
-                (*win).w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize];
-        }
-        if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
-            script_ctx = option_last_set(opt_idx);
-        }
-        script_ctx
+    if opt_flags == OptionSetFlags::GLOBAL {
+        return option_last_set(opt_idx);
     }
+    let mut script_ctx = sctx_T::NONE;
+    if option_has_scope(opt_idx, kOptScopeBuf) {
+        script_ctx =
+            unsafe { (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize] };
+    }
+    if option_has_scope(opt_idx, kOptScopeWin) {
+        script_ctx = unsafe {
+            (*win).w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize]
+        };
+    }
+    if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
+        script_ctx = option_last_set(opt_idx);
+    }
+    script_ctx
 }
 
 /// The thirteen keys `nvim_get_option_info` reports for one option.
@@ -182,72 +178,44 @@ pub(crate) unsafe fn vimoption2dict(
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live, and the dictionary is asked
     // for exactly the thirteen slots pushed below.
-    unsafe {
-        let mut dict = arena_dict(arena, 13 as size_t);
+    let mut dict = arena_dict(arena, 13 as size_t);
 
-        push(&mut dict, c"name", str_value(opt.fullname));
-        push(&mut dict, c"shortname", str_value(opt.shortname));
+    // An option in more than one scope reports the narrowest.
+    let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
+        c"buf"
+    } else if option_has_scope(opt_idx, kOptScopeWin) {
+        c"win"
+    } else {
+        c"global"
+    };
+    let script_ctx = unsafe { last_set(opt_idx, opt_flags, buf, win) };
+    let type_name = optval_type_name(option_get_type(opt_idx));
 
-        // An option in more than one scope reports the narrowest.
-        let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
-            c"buf"
-        } else if option_has_scope(opt_idx, kOptScopeWin) {
-            c"win"
-        } else {
-            c"global"
-        };
-        push(&mut dict, c"scope", str_value(scope.as_ptr()));
-
-        push(
-            &mut dict,
-            c"global_local",
-            bool_value(option_is_global_local(opt_idx)),
-        );
-        push(
-            &mut dict,
-            c"commalist",
-            bool_value(opt.flags & kOptFlagComma != 0),
-        );
-        push(
-            &mut dict,
-            c"flaglist",
-            bool_value(opt.flags & kOptFlagFlagList != 0),
-        );
-        push(&mut dict, c"was_set", bool_value(option_was_set(opt_idx)));
-
-        let script_ctx = last_set(opt_idx, opt_flags, buf, win);
-        push(
-            &mut dict,
-            c"last_set_sid",
-            int_value(script_ctx.sc_sid as Integer),
-        );
-        push(
-            &mut dict,
-            c"last_set_linenr",
-            int_value(script_ctx.sc_lnum as Integer),
-        );
-        push(
-            &mut dict,
-            c"last_set_chan",
-            int_value(script_ctx.sc_chan as int64_t),
-        );
-
-        push(
-            &mut dict,
-            c"type",
-            str_value(optval_type_name(option_get_type(opt_idx)).as_ptr()),
-        );
-        push(
-            &mut dict,
-            c"default",
-            optval_as_object(option_default(opt_idx)),
-        );
-        push(
-            &mut dict,
+    // The thirteen keys, in the order the API reports them. Building the
+    // values first and pushing afterwards is the same sequence: an array
+    // evaluates left to right, and `push` only writes into the dictionary.
+    let entries = [
+        (c"name", name_value(opt.fullname)),
+        (c"shortname", name_value(opt.shortname)),
+        (c"scope", name_value(scope.as_ptr())),
+        (c"global_local", bool_value(option_is_global_local(opt_idx))),
+        (c"commalist", bool_value(opt.flags & kOptFlagComma != 0)),
+        (c"flaglist", bool_value(opt.flags & kOptFlagFlagList != 0)),
+        (c"was_set", bool_value(option_was_set(opt_idx))),
+        (c"last_set_sid", int_value(script_ctx.sc_sid as Integer)),
+        (c"last_set_linenr", int_value(script_ctx.sc_lnum as Integer)),
+        (c"last_set_chan", int_value(script_ctx.sc_chan as int64_t)),
+        (c"type", name_value(type_name.as_ptr())),
+        (c"default", optval_as_object(option_default(opt_idx))),
+        (
             c"allows_duplicates",
             bool_value(opt.flags & kOptFlagNoDup == 0),
-        );
-
-        dict
+        ),
+    ];
+    // SAFETY: the dictionary was asked for exactly these thirteen slots.
+    for (key, value) in entries {
+        unsafe { push(&mut dict, key, value) };
     }
+
+    dict
 }

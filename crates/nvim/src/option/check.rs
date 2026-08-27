@@ -76,49 +76,47 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: `curbuf` is live.
-    unsafe {
-        let buf = curbuf.get();
-        if newval {
-            if !oldval {
-                if local {
-                    (*buf).b_p_tw_nobin = (*buf).b_p_tw;
-                    (*buf).b_p_wm_nobin = (*buf).b_p_wm;
-                    (*buf).b_p_ml_nobin = (*buf).b_p_ml;
-                    (*buf).b_p_et_nobin = (*buf).b_p_et;
-                }
-                if global {
-                    p_tw_nobin.set(p_tw.get());
-                    p_wm_nobin.set(p_wm.get());
-                    p_ml_nobin.set(p_ml.get());
-                    p_et_nobin.set(p_et.get());
-                }
-            }
+    let buf = curbuf.get();
+    if newval {
+        if !oldval {
             if local {
-                (*buf).b_p_tw = 0;
-                (*buf).b_p_wm = 0;
-                (*buf).b_p_ml = 0;
-                (*buf).b_p_et = 0;
+                unsafe { (*buf).b_p_tw_nobin = (*buf).b_p_tw };
+                unsafe { (*buf).b_p_wm_nobin = (*buf).b_p_wm };
+                unsafe { (*buf).b_p_ml_nobin = (*buf).b_p_ml };
+                unsafe { (*buf).b_p_et_nobin = (*buf).b_p_et };
             }
             if global {
-                p_tw.set(0);
-                p_wm.set(0);
-                p_ml.set(0);
-                p_et.set(0);
-                p_bin.set(1);
+                p_tw_nobin.set(p_tw.get());
+                p_wm_nobin.set(p_wm.get());
+                p_ml_nobin.set(p_ml.get());
+                p_et_nobin.set(p_et.get());
             }
-        } else if oldval {
-            if local {
-                (*buf).b_p_tw = (*buf).b_p_tw_nobin;
-                (*buf).b_p_wm = (*buf).b_p_wm_nobin;
-                (*buf).b_p_ml = (*buf).b_p_ml_nobin;
-                (*buf).b_p_et = (*buf).b_p_et_nobin;
-            }
-            if global {
-                p_tw.set(p_tw_nobin.get());
-                p_wm.set(p_wm_nobin.get());
-                p_ml.set(p_ml_nobin.get());
-                p_et.set(p_et_nobin.get());
-            }
+        }
+        if local {
+            unsafe { (*buf).b_p_tw = 0 };
+            unsafe { (*buf).b_p_wm = 0 };
+            unsafe { (*buf).b_p_ml = 0 };
+            unsafe { (*buf).b_p_et = 0 };
+        }
+        if global {
+            p_tw.set(0);
+            p_wm.set(0);
+            p_ml.set(0);
+            p_et.set(0);
+            p_bin.set(1);
+        }
+    } else if oldval {
+        if local {
+            unsafe { (*buf).b_p_tw = (*buf).b_p_tw_nobin };
+            unsafe { (*buf).b_p_wm = (*buf).b_p_wm_nobin };
+            unsafe { (*buf).b_p_ml = (*buf).b_p_ml_nobin };
+            unsafe { (*buf).b_p_et = (*buf).b_p_et_nobin };
+        }
+        if global {
+            p_tw.set(p_tw_nobin.get());
+            p_wm.set(p_wm_nobin.get());
+            p_ml.set(p_ml_nobin.get());
+            p_et.set(p_et_nobin.get());
         }
     }
     // The four overridden options were not set by the user, so they take
@@ -130,26 +128,24 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
 /// finally are, before any window or buffer has been shown.
 pub(crate) fn didset_options() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
-    unsafe {
-        init_chartab();
-        didset_string_options();
-        spell_check_msm();
-        spell_check_sps();
-        compile_cap_prog((*curwin.get()).w_s);
-        did_set_spell_option();
-        did_set_cedit(ptr::null_mut::<optset_T>());
-        did_set_breakat(ptr::null_mut::<optset_T>());
-        didset_window_options(curwin.get(), true);
-    }
+    unsafe { init_chartab() };
+    unsafe { didset_string_options() };
+    spell_check_msm();
+    unsafe { spell_check_sps() };
+    unsafe { compile_cap_prog(cur_win().w_s) };
+    unsafe { did_set_spell_option() };
+    unsafe { did_set_cedit(ptr::null_mut::<optset_T>()) };
+    unsafe { did_set_breakat(ptr::null_mut::<optset_T>()) };
+    unsafe { didset_window_options(curwin.get(), true) };
 }
 
 /// The second startup sweep: what needs highlight groups, and the option
 /// values that are cached as parsed arrays.
 pub(crate) fn didset_options2() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
+    unsafe { highlight_changed() };
+    let win = curwin.get();
     unsafe {
-        highlight_changed();
-        let win = curwin.get();
         set_chars_option(
             win,
             (*win).w_onebuf_opt.wo_fcs,
@@ -157,7 +153,9 @@ pub(crate) fn didset_options2() {
             true,
             ptr::null_mut::<c_char>(),
             0 as size_t,
-        );
+        )
+    };
+    unsafe {
         set_chars_option(
             win,
             (*win).w_onebuf_opt.wo_lcs,
@@ -165,14 +163,14 @@ pub(crate) fn didset_options2() {
             true,
             ptr::null_mut::<c_char>(),
             0 as size_t,
-        );
-        check_opt_wim();
-        let buf = curbuf.get();
-        xfree((*buf).b_p_vsts_array.cast::<c_void>());
-        tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array);
-        xfree((*buf).b_p_vts_array.cast::<c_void>());
-        tabstop_set((*buf).b_p_vts, &raw mut (*buf).b_p_vts_array);
-    }
+        )
+    };
+    unsafe { check_opt_wim() };
+    let buf = curbuf.get();
+    unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
+    unsafe { tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array) };
+    unsafe { xfree((*buf).b_p_vts_array.cast::<c_void>()) };
+    unsafe { tabstop_set((*buf).b_p_vts, &raw mut (*buf).b_p_vts_array) };
 }
 
 /// Replace a null string option with the shared empty string, for every
@@ -180,11 +178,9 @@ pub(crate) fn didset_options2() {
 pub(crate) fn check_options() {
     // SAFETY: `get_varp` hands back the variable of a string option, which
     // is a `*mut c_char`.
-    unsafe {
-        for opt_idx in kOptAleph..kOptCount {
-            if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
-                check_string_option(get_varp(opt_idx).string_var());
-            }
+    for opt_idx in kOptAleph..kOptCount {
+        if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
+            unsafe { check_string_option(get_varp(opt_idx).string_var()) };
         }
     }
 }
@@ -265,18 +261,16 @@ pub(crate) unsafe fn insecure_flag(
     let own: *mut uint32_t = if opt_flags.has(OptionSetFlags::LOCAL) {
         debug_assert!(!wp.is_null());
         // SAFETY: the caller's window, and its buffer, are live.
-        unsafe {
-            match opt_idx {
-                kOptWrap => &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,
-                kOptStatusline => &raw mut (*wp).w_onebuf_opt.wo_stl_flags,
-                kOptWinbar => &raw mut (*wp).w_onebuf_opt.wo_wbr_flags,
-                kOptFoldexpr => &raw mut (*wp).w_onebuf_opt.wo_fde_flags,
-                kOptFoldtext => &raw mut (*wp).w_onebuf_opt.wo_fdt_flags,
-                kOptIndentexpr => &raw mut (*(*wp).w_buffer).b_p_inde_flags,
-                kOptFormatexpr => &raw mut (*(*wp).w_buffer).b_p_fex_flags,
-                kOptIncludeexpr => &raw mut (*(*wp).w_buffer).b_p_inex_flags,
-                _ => ptr::null_mut(),
-            }
+        match opt_idx {
+            kOptWrap => unsafe { &raw mut (*wp).w_onebuf_opt.wo_wrap_flags },
+            kOptStatusline => unsafe { &raw mut (*wp).w_onebuf_opt.wo_stl_flags },
+            kOptWinbar => unsafe { &raw mut (*wp).w_onebuf_opt.wo_wbr_flags },
+            kOptFoldexpr => unsafe { &raw mut (*wp).w_onebuf_opt.wo_fde_flags },
+            kOptFoldtext => unsafe { &raw mut (*wp).w_onebuf_opt.wo_fdt_flags },
+            kOptIndentexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_inde_flags },
+            kOptFormatexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_fex_flags },
+            kOptIncludeexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_inex_flags },
+            _ => ptr::null_mut(),
         }
     } else if !wp.is_null() {
         // The global value of a window-local option lives in the window's
@@ -284,13 +278,11 @@ pub(crate) unsafe fn insecure_flag(
         // assert the local branch has; the null test above leaves a caller
         // that passes none on the shared mark instead.
         // SAFETY: the caller's window is live.
-        unsafe {
-            match opt_idx {
-                kOptWrap => &raw mut (*wp).w_allbuf_opt.wo_wrap_flags,
-                kOptFoldexpr => &raw mut (*wp).w_allbuf_opt.wo_fde_flags,
-                kOptFoldtext => &raw mut (*wp).w_allbuf_opt.wo_fdt_flags,
-                _ => ptr::null_mut(),
-            }
+        match opt_idx {
+            kOptWrap => unsafe { &raw mut (*wp).w_allbuf_opt.wo_wrap_flags },
+            kOptFoldexpr => unsafe { &raw mut (*wp).w_allbuf_opt.wo_fde_flags },
+            kOptFoldtext => unsafe { &raw mut (*wp).w_allbuf_opt.wo_fdt_flags },
+            _ => ptr::null_mut(),
         }
     } else {
         ptr::null_mut()
@@ -328,9 +320,9 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 pub(crate) unsafe fn check_blending(wp: *mut win_T) {
     // SAFETY: the caller's window is live.
     unsafe {
-        (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt
-            || ((*wp).w_floating && (*wp).w_config.shadow);
-    }
+        (*wp).w_grid_alloc.blending =
+            (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt || ((*wp).w_floating && (*wp).w_config.shadow)
+    };
 }
 
 /// Parse 'winhighlight' — a comma-separated list of `from:to` group pairs —
@@ -344,86 +336,88 @@ pub(crate) unsafe fn check_blending(wp: *mut win_T) {
 /// be live.
 pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
     // SAFETY: the caller's string is NUL-terminated and its window is live.
-    unsafe {
-        let mut p: *const c_char = if !winhl.is_null() {
-            winhl
-        } else if !wp.is_null() {
-            (*wp).w_onebuf_opt.wo_winhl
-        } else {
-            empty_option()
-        };
+    let mut p: *const c_char = if !winhl.is_null() {
+        winhl
+    } else if !wp.is_null() {
+        unsafe { (*wp).w_onebuf_opt.wo_winhl }
+    } else {
+        empty_option()
+    };
 
-        if *p == 0 {
-            // An empty value drops the window's namespace, but only while it
-            // is still the one 'winhighlight' made.
-            if !wp.is_null() && (*wp).w_ns_hl_winhl > 0 && (*wp).w_ns_hl == (*wp).w_ns_hl_winhl {
-                (*wp).w_ns_hl = 0;
-                (*wp).w_hl_needs_update = true;
-            }
-            return true;
+    if unsafe { *p } == 0 {
+        // An empty value drops the window's namespace, but only while it
+        // is still the one 'winhighlight' made.
+        if !wp.is_null()
+            && unsafe { (*wp).w_ns_hl_winhl } > 0
+            && unsafe { (*wp).w_ns_hl } == unsafe { (*wp).w_ns_hl_winhl }
+        {
+            unsafe { (*wp).w_ns_hl = 0 };
+            unsafe { (*wp).w_hl_needs_update = true };
         }
-
-        let mut ns_hl: c_int = 0;
-        if !wp.is_null() {
-            if (*wp).w_ns_hl_winhl == 0 {
-                (*wp).w_ns_hl_winhl = nvim_create_namespace(String_0::NULL) as c_int;
-            } else {
-                // Reusing the namespace: bump the generation so attributes
-                // cached against it are re-resolved.
-                let dp: *mut DecorProvider = get_decor_provider((*wp).w_ns_hl_winhl as NS, true);
-                (*dp).hl_valid += 1;
-            }
-            ns_hl = (*wp).w_ns_hl_winhl;
-            if (*wp).w_ns_hl <= 0 {
-                (*wp).w_ns_hl = (*wp).w_ns_hl_winhl;
-            }
-        }
-
-        while *p != 0 {
-            let colon = strchr(p, ':' as c_int);
-            if colon.is_null() {
-                return false;
-            }
-            let from_len = colon.offset_from(p) as size_t;
-            let to = colon.add(1);
-            let comma = xstrchrnul(to, ',' as c_char);
-            let to_len = comma.offset_from(to) as size_t;
-
-            // An empty target means "no highlight at all", spelled -1.
-            let hl_id = if to_len != 0 {
-                syn_check_group(to, to_len)
-            } else {
-                -1
-            };
-            if hl_id == 0 {
-                return false;
-            }
-            let hl_id_link = if from_len != 0 {
-                syn_check_group(p, from_len)
-            } else {
-                0
-            };
-            if hl_id_link == 0 {
-                return false;
-            }
-
-            if !wp.is_null() {
-                let mut attrs: HlAttrs = HLATTRS_INIT;
-                attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
-                ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None);
-            }
-            p = if *comma != 0 {
-                comma.add(1)
-            } else {
-                c"".as_ptr()
-            };
-        }
-
-        if !wp.is_null() {
-            (*wp).w_hl_needs_update = true;
-        }
-        true
+        return true;
     }
+
+    let mut ns_hl: c_int = 0;
+    if !wp.is_null() {
+        if unsafe { (*wp).w_ns_hl_winhl } == 0 {
+            unsafe { (*wp).w_ns_hl_winhl = nvim_create_namespace(String_0::NULL) as c_int };
+        } else {
+            // Reusing the namespace: bump the generation so attributes
+            // cached against it are re-resolved.
+            let dp: *mut DecorProvider =
+                unsafe { get_decor_provider((*wp).w_ns_hl_winhl as NS, true) };
+            unsafe { (*dp).hl_valid += 1 };
+        }
+        ns_hl = unsafe { (*wp).w_ns_hl_winhl };
+        if unsafe { (*wp).w_ns_hl } <= 0 {
+            unsafe { (*wp).w_ns_hl = (*wp).w_ns_hl_winhl };
+        }
+    }
+
+    while unsafe { *p } != 0 {
+        let colon = unsafe { strchr(p, ':' as c_int) };
+        if colon.is_null() {
+            return false;
+        }
+        let from_len = unsafe { colon.offset_from(p) } as size_t;
+        let to = unsafe { colon.add(1) };
+        let comma = unsafe { xstrchrnul(to, ',' as c_char) };
+        let to_len = unsafe { comma.offset_from(to) } as size_t;
+
+        // An empty target means "no highlight at all", spelled -1.
+        let hl_id = if to_len != 0 {
+            unsafe { syn_check_group(to, to_len) }
+        } else {
+            -1
+        };
+        if hl_id == 0 {
+            return false;
+        }
+        let hl_id_link = if from_len != 0 {
+            unsafe { syn_check_group(p, from_len) }
+        } else {
+            0
+        };
+        if hl_id_link == 0 {
+            return false;
+        }
+
+        if !wp.is_null() {
+            let mut attrs: HlAttrs = HLATTRS_INIT;
+            attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
+            unsafe { ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None) };
+        }
+        p = if unsafe { *comma } != 0 {
+            unsafe { comma.add(1) }
+        } else {
+            c"".as_ptr()
+        };
+    }
+
+    if !wp.is_null() {
+        unsafe { (*wp).w_hl_needs_update = true };
+    }
+    true
 }
 
 /// Ask for whatever the option's redraw flags say has to be redrawn.
@@ -435,26 +429,24 @@ pub(crate) unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: u
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     // SAFETY: the caller's buffer and window are live.
-    unsafe {
-        if flags & kOptFlagRedrStat != 0 || all {
-            status_redraw_all();
+    if flags & kOptFlagRedrStat != 0 || all {
+        unsafe { status_redraw_all() };
+    }
+    if flags & kOptFlagRedrTabl != 0 || all {
+        redraw_tabline.set(true);
+    }
+    if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
+        if flags & kOptFlagHLOnly != 0 {
+            unsafe { redraw_later(win, UPD_NOT_VALID) };
+        } else {
+            changed_window_setting(unsafe { Win::new(win) });
         }
-        if flags & kOptFlagRedrTabl != 0 || all {
-            redraw_tabline.set(true);
-        }
-        if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
-            if flags & kOptFlagHLOnly != 0 {
-                redraw_later(win, UPD_NOT_VALID);
-            } else {
-                changed_window_setting(Win::new(win));
-            }
-        }
-        if flags & kOptFlagRedrBuf != 0 {
-            redraw_buf_later(buf, UPD_NOT_VALID);
-        }
-        if all {
-            redraw_all_later(UPD_NOT_VALID);
-        }
+    }
+    if flags & kOptFlagRedrBuf != 0 {
+        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+    }
+    if all {
+        unsafe { redraw_all_later(UPD_NOT_VALID) };
     }
 }
 
@@ -462,4 +454,10 @@ pub(crate) unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: u
 pub(crate) fn check_redraw(flags: uint32_t) {
     // SAFETY: `curbuf`/`curwin` are live.
     unsafe { check_redraw_for(curbuf.get(), curwin.get(), flags) }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

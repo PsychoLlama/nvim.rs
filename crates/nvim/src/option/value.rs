@@ -116,22 +116,22 @@ pub(crate) fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
         return false;
     }
     // SAFETY: the tags agree, so both payloads are the field being read.
-    unsafe {
-        match o1.type_0 {
-            kOptValTypeNil => true,
-            kOptValTypeBoolean => o1.data.boolean == o2.data.boolean,
-            kOptValTypeNumber => o1.data.number == o2.data.number,
-            kOptValTypeString => {
-                o1.data.string.len() == o2.data.string.len()
-                    && (o1.data.string.data() == o2.data.string.data()
-                        || strnequal(
+    match o1.type_0 {
+        kOptValTypeNil => true,
+        kOptValTypeBoolean => (unsafe { o1.data.boolean }) == unsafe { o2.data.boolean },
+        kOptValTypeNumber => (unsafe { o1.data.number }) == unsafe { o2.data.number },
+        kOptValTypeString => {
+            unsafe { o1.data.string }.len() == unsafe { o2.data.string }.len()
+                && (unsafe { o1.data.string }.data() == unsafe { o2.data.string }.data()
+                    || unsafe {
+                        strnequal(
                             o1.data.string.data(),
                             o2.data.string.data(),
                             o1.data.string.len(),
-                        ))
-            }
-            _ => unreachable!("option value type {}", o1.type_0),
+                        )
+                    })
         }
+        _ => unreachable!("option value type {}", o1.type_0),
     }
 }
 
@@ -196,13 +196,11 @@ pub(crate) unsafe fn set_option_varp(
     // SAFETY: the slot's arm and the value's tag are the same type — the
     // table asserts it for every row at compile time, and the assertion
     // above ties this value to the same row.
-    unsafe {
-        match (slot, value.type_0) {
-            (OptSlot::Boolean(var), kOptValTypeBoolean) => *var = value.data.boolean,
-            (OptSlot::Number(var), kOptValTypeNumber) => *var = value.data.number,
-            (OptSlot::String(var), kOptValTypeString) => *var = value.data.string.data(),
-            _ => unreachable!("an option's slot is not the type its value is"),
-        }
+    match (slot, value.type_0) {
+        (OptSlot::Boolean(var), kOptValTypeBoolean) => unsafe { *var = value.data.boolean },
+        (OptSlot::Number(var), kOptValTypeNumber) => unsafe { *var = value.data.number },
+        (OptSlot::String(var), kOptValTypeString) => unsafe { *var = value.data.string.data() },
+        _ => unreachable!("an option's slot is not the type its value is"),
     }
 }
 
@@ -210,29 +208,29 @@ pub(crate) unsafe fn set_option_varp(
 /// message: a string is quoted, a boolean spelled out. The caller owns it.
 pub(crate) fn optval_to_cstr(value: OptVal) -> *mut c_char {
     // SAFETY: each arm reads the payload its own tag selected.
-    unsafe {
-        match value.type_0 {
-            kOptValTypeNil => xstrdup(c"".as_ptr()),
-            kOptValTypeBoolean => xstrdup(if value.data.boolean != 0 {
+    match value.type_0 {
+        kOptValTypeNil => unsafe { xstrdup(c"".as_ptr()) },
+        kOptValTypeBoolean => unsafe {
+            xstrdup(if value.data.boolean != 0 {
                 c"true".as_ptr()
             } else {
                 c"false".as_ptr()
-            }),
-            kOptValTypeNumber => {
-                let len = NUMBUFLEN as size_t;
-                let buf = xmalloc(len).cast::<c_char>();
-                snprintf(buf, len, c"%ld".as_ptr(), value.data.number);
-                buf
-            }
-            kOptValTypeString => {
-                // Two quotes and the terminator.
-                let len = value.data.string.len().wrapping_add(3);
-                let buf = xmalloc(len).cast::<c_char>();
-                snprintf(buf, len, c"\"%s\"".as_ptr(), value.data.string.data());
-                buf
-            }
-            _ => unreachable!("option value type {}", value.type_0),
+            })
+        },
+        kOptValTypeNumber => {
+            let len = NUMBUFLEN as size_t;
+            let buf = unsafe { xmalloc(len) }.cast::<c_char>();
+            unsafe { snprintf(buf, len, c"%ld".as_ptr(), value.data.number) };
+            buf
         }
+        kOptValTypeString => {
+            // Two quotes and the terminator.
+            let len = unsafe { value.data.string }.len().wrapping_add(3);
+            let buf = unsafe { xmalloc(len) }.cast::<c_char>();
+            unsafe { snprintf(buf, len, c"\"%s\"".as_ptr(), value.data.string.data()) };
+            buf
+        }
+        _ => unreachable!("option value type {}", value.type_0),
     }
 }
 
@@ -244,32 +242,30 @@ pub(crate) fn optval_as_object(value: OptVal) -> Object {
         data: object_data { boolean: false },
     };
     // SAFETY: each arm reads the payload its own tag selected.
-    unsafe {
-        match value.type_0 {
-            kOptValTypeNil => nil,
-            kOptValTypeBoolean => match optval_boolean(value.data) {
-                Some(boolean) => object {
-                    type_0: kObjectTypeBoolean,
-                    data: object_data { boolean },
-                },
-                // A global-local option with no local value has no API
-                // spelling but nil.
-                None => nil,
+    match value.type_0 {
+        kOptValTypeNil => nil,
+        kOptValTypeBoolean => match unsafe { optval_boolean(value.data) } {
+            Some(boolean) => object {
+                type_0: kObjectTypeBoolean,
+                data: object_data { boolean },
             },
-            kOptValTypeNumber => object {
-                type_0: kObjectTypeInteger,
-                data: object_data {
-                    integer: value.data.number,
-                },
+            // A global-local option with no local value has no API
+            // spelling but nil.
+            None => nil,
+        },
+        kOptValTypeNumber => object {
+            type_0: kObjectTypeInteger,
+            data: object_data {
+                integer: unsafe { value.data.number },
             },
-            kOptValTypeString => object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: value.data.string,
-                },
+        },
+        kOptValTypeString => object {
+            type_0: kObjectTypeString,
+            data: object_data {
+                string: unsafe { value.data.string },
             },
-            _ => unreachable!("option value type {}", value.type_0),
-        }
+        },
+        _ => unreachable!("option value type {}", value.type_0),
     }
 }
 
@@ -277,25 +273,23 @@ pub(crate) fn optval_as_object(value: OptVal) -> Object {
 /// hold. The result borrows the object's string rather than copying it.
 pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
     // SAFETY: each arm reads the payload the object's own tag selected.
-    unsafe {
-        Some(match o.type_0 {
-            kObjectTypeNil => NIL_OPTVAL,
-            kObjectTypeBoolean => boolean_optval(Some(o.data.boolean)),
-            kObjectTypeInteger => OptVal {
-                type_0: kOptValTypeNumber,
-                data: OptValData {
-                    number: o.data.integer,
-                },
+    Some(match o.type_0 {
+        kObjectTypeNil => NIL_OPTVAL,
+        kObjectTypeBoolean => boolean_optval(Some(unsafe { o.data.boolean })),
+        kObjectTypeInteger => OptVal {
+            type_0: kOptValTypeNumber,
+            data: OptValData {
+                number: unsafe { o.data.integer },
             },
-            kObjectTypeString => OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: o.data.string,
-                },
+        },
+        kObjectTypeString => OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { o.data.string },
             },
-            _ => return None,
-        })
-    }
+        },
+        _ => return None,
+    })
 }
 
 /// Whether the option still holds the default the table gives it. A hidden

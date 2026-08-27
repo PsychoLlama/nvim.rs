@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -92,17 +93,15 @@ pub(crate) fn set_option_sctx(
     }
     // SAFETY: `curbuf`/`curwin` are live for as long as the editor is, and
     // the scope index the table gives is in range of the per-scope array.
-    unsafe {
-        if option_has_scope(opt_idx, kOptScopeBuf) {
-            let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
-            (*curbuf.get()).b_p_script_ctx[at] = script_ctx;
-        } else if option_has_scope(opt_idx, kOptScopeWin) {
-            let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
-            (*curwin.get()).w_onebuf_opt.wo_script_ctx[at] = script_ctx;
-            if both {
-                // A bare `:set` also writes the "all buffers" copy.
-                (*curwin.get()).w_allbuf_opt.wo_script_ctx[at] = script_ctx;
-            }
+    if option_has_scope(opt_idx, kOptScopeBuf) {
+        let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
+        cur_buf().b_p_script_ctx[at] = script_ctx;
+    } else if option_has_scope(opt_idx, kOptScopeWin) {
+        let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
+        cur_win().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
+        if both {
+            // A bare `:set` also writes the "all buffers" copy.
+            cur_win().w_allbuf_opt.wo_script_ctx[at] = script_ctx;
         }
     }
 }
@@ -120,67 +119,71 @@ fn apply_optionset_autocmd(
     newval: OptVal,
 ) {
     // SAFETY: all of these only read globals or the values handed in.
+    if starting.get() != 0 || unsafe { *get_vim_var_str(Vv::OptionType) } != NUL as c_char {
+        return;
+    }
+
+    let mut oldval_tv = unsafe { optval_as_tv(oldval, false) };
+    let mut oldval_g_tv = unsafe { optval_as_tv(oldval_g, false) };
+    let mut oldval_l_tv = unsafe { optval_as_tv(oldval_l, false) };
+    let mut newval_tv = unsafe { optval_as_tv(newval, false) };
+
+    unsafe { set_vim_var_tv(Vv::OptionOld, &raw mut oldval_tv) };
+    unsafe { set_vim_var_tv(Vv::OptionNew, &raw mut newval_tv) };
+
+    let type_str: &CStr = if opt_flags.has(OptionSetFlags::LOCAL) {
+        c"local"
+    } else {
+        c"global"
+    };
     unsafe {
-        if starting.get() != 0 || *get_vim_var_str(Vv::OptionType) != NUL as c_char {
-            return;
-        }
-
-        let mut oldval_tv = optval_as_tv(oldval, false);
-        let mut oldval_g_tv = optval_as_tv(oldval_g, false);
-        let mut oldval_l_tv = optval_as_tv(oldval_l, false);
-        let mut newval_tv = optval_as_tv(newval, false);
-
-        set_vim_var_tv(Vv::OptionOld, &raw mut oldval_tv);
-        set_vim_var_tv(Vv::OptionNew, &raw mut newval_tv);
-
-        let type_str: &CStr = if opt_flags.has(OptionSetFlags::LOCAL) {
-            c"local"
-        } else {
-            c"global"
-        };
         set_vim_var_string(
             Vv::OptionType,
             type_str.as_ptr(),
             type_str.count_bytes() as ptrdiff_t,
-        );
+        )
+    };
 
-        // The command spellings are not exclusive: `:setlocal` on a
-        // global-local option arrives with both scope bits clear only for a
-        // bare `:set`, and a modeline overrides whatever came before it.
-        let mut command = |name: &CStr| {
+    // The command spellings are not exclusive: `:setlocal` on a
+    // global-local option arrives with both scope bits clear only for a
+    // bare `:set`, and a modeline overrides whatever came before it.
+    let mut command = |name: &CStr| {
+        unsafe {
             set_vim_var_string(
                 Vv::OptionCommand,
                 name.as_ptr(),
                 name.count_bytes() as ptrdiff_t,
-            );
+            )
         };
-        if opt_flags.has(OptionSetFlags::LOCAL) {
-            command(c"setlocal");
-            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv);
-        }
-        if opt_flags.has(OptionSetFlags::GLOBAL) {
-            command(c"setglobal");
-            set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_tv);
-        }
-        if !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL) {
-            command(c"set");
-            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_l_tv);
-            set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_g_tv);
-        }
-        if opt_flags.has(OptionSetFlags::MODELINE) {
-            command(c"modeline");
-            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv);
-        }
+    };
+    if opt_flags.has(OptionSetFlags::LOCAL) {
+        command(c"setlocal");
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv) };
+    }
+    if opt_flags.has(OptionSetFlags::GLOBAL) {
+        command(c"setglobal");
+        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_tv) };
+    }
+    if !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL) {
+        command(c"set");
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_l_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_g_tv) };
+    }
+    if opt_flags.has(OptionSetFlags::MODELINE) {
+        command(c"modeline");
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv) };
+    }
 
+    unsafe {
         apply_autocmds(
             EVENT_OPTIONSET,
             get_option(opt_idx).fullname,
             ptr::null_mut(),
             false,
             ptr::null_mut(),
-        );
-        reset_v_option_vars();
-    }
+        )
+    };
+    unsafe { reset_v_option_vars() };
 }
 
 /// Whether the name is one of the terminal options nvim keeps only to stay
@@ -298,12 +301,7 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
     }
     // SAFETY: `opt` points into the option table, which is what both of
     // these want.
-    unsafe {
-        optval_copy(optval_from_varp(
-            opt_idx,
-            get_varp_scope(opt_idx, opt_flags),
-        ))
-    }
+    optval_copy(unsafe { optval_from_varp(opt_idx, get_varp_scope(opt_idx, opt_flags)) })
 }
 
 /// The option table's row for an option: everything the option *is*, all
@@ -402,145 +400,143 @@ pub(crate) unsafe fn did_set_option(
 
     // SAFETY: the caller's `varp` is this option's variable, `opt` a row of
     // the table, and `errbuf` writable for `errbuflen` bytes.
-    unsafe {
-        let mut args = optset_T {
-            os_varp: varp,
-            os_idx: opt_idx,
-            os_flags: opt_flags,
-            os_oldval: old_value.data,
-            os_newval: new_value.data,
-            os_value_checked: false,
-            os_value_changed: false,
-            os_restore_chartab: false,
-            os_errbuf: errbuf,
-            os_errbuflen: errbuflen,
-            os_win: curwin.get().cast::<c_void>(),
-            os_buf: curbuf.get().cast::<c_void>(),
+    let mut args = optset_T {
+        os_varp: varp,
+        os_idx: opt_idx,
+        os_flags: opt_flags,
+        os_oldval: old_value.data,
+        os_newval: new_value.data,
+        os_value_checked: false,
+        os_value_changed: false,
+        os_restore_chartab: false,
+        os_errbuf: errbuf,
+        os_errbuflen: errbuflen,
+        os_win: curwin.get().cast::<c_void>(),
+        os_buf: curbuf.get().cast::<c_void>(),
+    };
+
+    if direct {
+        // Nothing to vet: the caller is putting a value back.
+    } else if opt.immutable && !optval_equal(old_value, new_value) {
+        errmsg = e_unsupportedoption.as_ptr();
+    } else if (secure.get() != 0 || sandbox.get() != 0)
+        && opt.flags & kOptFlagSecure as uint32_t != 0
+    {
+        errmsg = e_secure.as_ptr();
+    } else if new_value.type_0 == kOptValTypeString
+        && check_illegal_path_names(unsafe { CStr::from_ptr(*varp.string_var()) }, opt.flags)
+    {
+        errmsg = e_invarg.as_ptr();
+    } else if let Some(did_set_cb) = opt.opt_did_set_cb {
+        errmsg = unsafe { did_set_cb(&raw mut args) };
+        // 'filetype' and 'syntax' report whether the value really moved;
+        // they, 'keymap' and the character-class options report whether
+        // they have vetted it themselves; and the character-class
+        // options leave the table needing a rebuild if they failed.
+        value_changed = args.os_value_changed;
+        value_checked = args.os_value_checked;
+        restore_chartab = args.os_restore_chartab;
+    }
+
+    if !errmsg.is_null() {
+        unsafe { set_option_varp(opt_idx, varp, old_value, true) };
+        if restore_chartab {
+            unsafe { buf_init_chartab(curbuf.get(), true) };
+        }
+        return errmsg;
+    }
+
+    // The callback may have freed or rewritten what it was handed, so
+    // read the value back rather than trusting `new_value`.
+    let new_value = unsafe { optval_from_varp(opt_idx, varp) };
+
+    if set_sid != SID_NONE {
+        let script_ctx = if set_sid == 0 {
+            current_sctx.get()
+        } else {
+            sctx_T {
+                sc_sid: set_sid,
+                sc_seq: 0,
+                sc_lnum: 0,
+                sc_chan: 0,
+            }
         };
+        set_option_sctx(opt_idx, opt_flags, script_ctx);
+    }
 
-        if direct {
-            // Nothing to vet: the caller is putting a value back.
-        } else if opt.immutable && !optval_equal(old_value, new_value) {
-            errmsg = e_unsupportedoption.as_ptr();
-        } else if (secure.get() != 0 || sandbox.get() != 0)
-            && opt.flags & kOptFlagSecure as uint32_t != 0
-        {
-            errmsg = e_secure.as_ptr();
-        } else if new_value.type_0 == kOptValTypeString
-            && check_illegal_path_names(CStr::from_ptr(*varp.string_var()), opt.flags)
-        {
-            errmsg = e_invarg.as_ptr();
-        } else if let Some(did_set_cb) = opt.opt_did_set_cb {
-            errmsg = did_set_cb(&raw mut args);
-            // 'filetype' and 'syntax' report whether the value really moved;
-            // they, 'keymap' and the character-class options report whether
-            // they have vetted it themselves; and the character-class
-            // options leave the table needing a rebuild if they failed.
-            value_changed = args.os_value_changed;
-            value_checked = args.os_value_checked;
-            restore_chartab = args.os_restore_chartab;
+    optval_free(old_value);
+
+    let scope_both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
+    if scope_both {
+        if option_is_global_local(opt_idx) {
+            // A bare `:set` on a global-local option drops the local
+            // value rather than assigning it too.
+            let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
+            let unset = optval_copy(get_option_unset_value(opt_idx));
+            unsafe { set_option_varp(opt_idx, varp_local, unset, true) };
+        } else {
+            let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
+            unsafe { set_option_varp(opt_idx, varp_global, optval_copy(new_value), true) };
         }
+    }
 
-        if !errmsg.is_null() {
-            set_option_varp(opt_idx, varp, old_value, true);
-            if restore_chartab {
-                buf_init_chartab(curbuf.get(), true);
-            }
-            return errmsg;
+    if direct {
+        return errmsg;
+    }
+
+    // The autocommands go last, once every flag they might read is set.
+    match opt_idx {
+        kOptSyntax => unsafe { do_syntax_autocmd(curbuf.get(), value_changed) },
+        // A modeline only forces the FileType autocommand when the
+        // filetype really changed.
+        kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
+            do_filetype_autocmd(unsafe { Buf::current() }, value_changed);
         }
+        kOptSpelllang => unsafe { do_spelllang_source(curwin.get()) },
+        _ => {}
+    }
 
-        // The callback may have freed or rewritten what it was handed, so
-        // read the value back rather than trusting `new_value`.
-        let new_value = optval_from_varp(opt_idx, varp);
+    // 'ruler', 'showcmd', 'columns' and 'laststatus' all move it.
+    unsafe { comp_col() };
 
-        if set_sid != SID_NONE {
-            let script_ctx = if set_sid == 0 {
-                current_sctx.get()
-            } else {
-                sctx_T {
-                    sc_sid: set_sid,
-                    sc_seq: 0,
-                    sc_lnum: 0,
-                    sc_chan: 0,
-                }
-            };
-            set_option_sctx(opt_idx, opt_flags, script_ctx);
+    match opt_idx {
+        kOptMouse => setmouse(),
+        // 'formatlistpat' is what 'breakindentopt' list mode indents by.
+        kOptFormatlistpat if cur_win().w_briopt_list != 0 => {
+            unsafe { redraw_all_later(UPD_NOT_VALID) };
         }
+        kOptWinbar => set_winbar(true),
+        _ => {}
+    }
 
-        optval_free(old_value);
+    if cur_win().w_curswant != MAXCOL as c_int
+        && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
+        && opt.flags & kOptFlagHLOnly as uint32_t == 0
+    {
+        cur_win().w_set_curswant = true;
+    }
 
-        let scope_both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
-        if scope_both {
-            if option_is_global_local(opt_idx) {
-                // A bare `:set` on a global-local option drops the local
-                // value rather than assigning it too.
-                let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-                let unset = optval_copy(get_option_unset_value(opt_idx));
-                set_option_varp(opt_idx, varp_local, unset, true);
-            } else {
-                let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
-                set_option_varp(opt_idx, varp_global, optval_copy(new_value), true);
-            }
+    check_redraw(opt.flags);
+
+    mark_option_was_set(opt_idx);
+
+    // Anything set from a modeline, from the sandbox or in secure mode
+    // is insecure unless the callback vetted it; replacing a value
+    // outright clears the mark again.
+    let flagsp = unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) };
+    let flagsp_local =
+        scope_both.then(|| unsafe { insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) });
+    if !value_checked
+        && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
+    {
+        flagsp.set(true);
+        if let Some(local) = flagsp_local {
+            local.set(true);
         }
-
-        if direct {
-            return errmsg;
-        }
-
-        // The autocommands go last, once every flag they might read is set.
-        match opt_idx {
-            kOptSyntax => do_syntax_autocmd(curbuf.get(), value_changed),
-            // A modeline only forces the FileType autocommand when the
-            // filetype really changed.
-            kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
-                do_filetype_autocmd(Buf::current(), value_changed);
-            }
-            kOptSpelllang => do_spelllang_source(curwin.get()),
-            _ => {}
-        }
-
-        // 'ruler', 'showcmd', 'columns' and 'laststatus' all move it.
-        comp_col();
-
-        match opt_idx {
-            kOptMouse => setmouse(),
-            // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-            kOptFormatlistpat if (*curwin.get()).w_briopt_list != 0 => {
-                redraw_all_later(UPD_NOT_VALID);
-            }
-            kOptWinbar => set_winbar(true),
-            _ => {}
-        }
-
-        if (*curwin.get()).w_curswant != MAXCOL as c_int
-            && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
-            && opt.flags & kOptFlagHLOnly as uint32_t == 0
-        {
-            (*curwin.get()).w_set_curswant = true;
-        }
-
-        check_redraw(opt.flags);
-
-        mark_option_was_set(opt_idx);
-
-        // Anything set from a modeline, from the sandbox or in secure mode
-        // is insecure unless the callback vetted it; replacing a value
-        // outright clears the mark again.
-        let flagsp = insecure_flag(curwin.get(), opt_idx, opt_flags);
-        let flagsp_local =
-            scope_both.then(|| insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL));
-        if !value_checked
-            && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
-        {
-            flagsp.set(true);
-            if let Some(local) = flagsp_local {
-                local.set(true);
-            }
-        } else if value_replaced {
-            flagsp.set(false);
-            if let Some(local) = flagsp_local {
-                local.set(false);
-            }
+    } else if value_replaced {
+        flagsp.set(false);
+        if let Some(local) = flagsp_local {
+            local.set(false);
         }
     }
 
@@ -589,54 +585,54 @@ pub(crate) unsafe fn set_option(
 
     // SAFETY: every pointer below comes from the option table, and `errbuf`
     // is the caller's writable buffer.
-    unsafe {
-        // `:set opt=val` on a global-local option resets the local value, so
-        // it is the global variable that is being written.
-        let varp = if scope_both && option_is_global_local(opt_idx) {
-            option_var(opt_idx)
-        } else {
-            get_varp_scope(opt_idx, opt_flags)
-        };
-        let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-        let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
+    // `:set opt=val` on a global-local option resets the local value, so
+    // it is the global variable that is being written.
+    let varp = if scope_both && option_is_global_local(opt_idx) {
+        option_var(opt_idx)
+    } else {
+        get_varp_scope(opt_idx, opt_flags)
+    };
+    let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
+    let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
 
-        let old_value = optval_from_varp(opt_idx, varp);
-        let old_global_value = optval_from_varp(opt_idx, varp_global);
-        // An unset local value reads as the global one.
-        let old_local_value = if is_opt_local_unset {
-            old_global_value
-        } else {
-            optval_from_varp(opt_idx, varp_local)
-        };
-        // What was actually in effect, which is what `OptionSet` reports as
-        // `v:option_old`: for `:setlocal` on a global-local option with no
-        // local value, that is whatever the option reads through.
-        let used_old_value = if scope_local && is_opt_local_unset {
-            optval_from_varp(opt_idx, get_varp(opt_idx))
-        } else {
-            old_value
-        };
+    let old_value = unsafe { optval_from_varp(opt_idx, varp) };
+    let old_global_value = unsafe { optval_from_varp(opt_idx, varp_global) };
+    // An unset local value reads as the global one.
+    let old_local_value = if is_opt_local_unset {
+        old_global_value
+    } else {
+        unsafe { optval_from_varp(opt_idx, varp_local) }
+    };
+    // What was actually in effect, which is what `OptionSet` reports as
+    // `v:option_old`: for `:setlocal` on a global-local option with no
+    // local value, that is whatever the option reads through.
+    let used_old_value = if scope_local && is_opt_local_unset {
+        unsafe { optval_from_varp(opt_idx, get_varp(opt_idx)) }
+    } else {
+        old_value
+    };
 
-        // The autocommand may close the buffer these live in, so it gets
-        // copies that outlive the variables.
-        let saved_used_value = optval_copy(used_old_value);
-        let saved_old_global_value = optval_copy(old_global_value);
-        let saved_old_local_value = optval_copy(old_local_value);
-        let saved_new_value = optval_copy(value);
+    // The autocommand may close the buffer these live in, so it gets
+    // copies that outlive the variables.
+    let saved_used_value = optval_copy(used_old_value);
+    let saved_old_global_value = optval_copy(old_global_value);
+    let saved_old_local_value = optval_copy(old_local_value);
+    let saved_new_value = optval_copy(value);
 
-        let insecure = insecure_flag(curwin.get(), opt_idx, opt_flags).is_set();
-        let secure_saved = secure.get();
-        // Deal with the side effects of a modeline, of the sandbox, or of a
-        // value amended rather than replaced, in secure mode.
-        if opt_flags.has(OptionSetFlags::MODELINE)
-            || sandbox.get() != 0
-            || (!value_replaced && insecure)
-        {
-            secure.set(1);
-        }
+    let insecure = unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) }.is_set();
+    let secure_saved = secure.get();
+    // Deal with the side effects of a modeline, of the sandbox, or of a
+    // value amended rather than replaced, in secure mode.
+    if opt_flags.has(OptionSetFlags::MODELINE)
+        || sandbox.get() != 0
+        || (!value_replaced && insecure)
+    {
+        secure.set(1);
+    }
 
-        set_option_varp(opt_idx, varp, value, false);
-        let errmsg = did_set_option(
+    unsafe { set_option_varp(opt_idx, varp, value, false) };
+    let errmsg = unsafe {
+        did_set_option(
             opt_idx,
             varp,
             old_value,
@@ -647,36 +643,36 @@ pub(crate) unsafe fn set_option(
             value_replaced,
             errbuf,
             errbuflen,
-        );
+        )
+    };
 
-        secure.set(secure_saved);
+    secure.set(secure_saved);
 
-        if errmsg.is_null() && !direct {
-            if starting.get() == 0 {
-                apply_optionset_autocmd(
-                    opt_idx,
-                    opt_flags,
-                    saved_used_value,
-                    saved_old_global_value,
-                    saved_old_local_value,
-                    saved_new_value,
-                );
-            }
-            if opt.flags & kOptFlagUIOption as uint32_t != 0 {
-                ui_call_option_set(
-                    cstr_as_string(opt.fullname),
-                    super::optval_as_object(saved_new_value),
-                );
-            }
+    if errmsg.is_null() && !direct {
+        if starting.get() == 0 {
+            apply_optionset_autocmd(
+                opt_idx,
+                opt_flags,
+                saved_used_value,
+                saved_old_global_value,
+                saved_old_local_value,
+                saved_new_value,
+            );
         }
-
-        optval_free(saved_used_value);
-        optval_free(saved_old_local_value);
-        optval_free(saved_old_global_value);
-        optval_free(saved_new_value);
-
-        errmsg
+        if opt.flags & kOptFlagUIOption as uint32_t != 0 {
+            ui_call_option_set(
+                unsafe { cstr_as_string(opt.fullname) },
+                super::optval_as_object(saved_new_value),
+            );
+        }
     }
+
+    optval_free(saved_used_value);
+    optval_free(saved_old_local_value);
+    optval_free(saved_old_global_value);
+    optval_free(saved_new_value);
+
+    errmsg
 }
 
 /// Write a value with no side effects at all: no callback, no autocommand,
@@ -797,13 +793,11 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     let mut errbuf = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller's `name` is NUL-terminated, and `errbuf` is
     // `IOSIZE` writable bytes.
-    unsafe {
-        if is_tty_option(CStr::from_ptr(name)) {
-            return None;
-        }
-        let fmt = gettext(e_unknown_option2.as_ptr());
-        snprintf(errbuf.as_mut_ptr(), IOSIZE as size_t, fmt, name);
+    if is_tty_option(unsafe { CStr::from_ptr(name) }) {
+        return None;
     }
+    let fmt = unsafe { gettext(e_unknown_option2.as_ptr()) };
+    unsafe { snprintf(errbuf.as_mut_ptr(), IOSIZE as size_t, fmt, name) };
     Some(cstr::in_chars(&errbuf).to_owned())
 }
 
@@ -825,4 +819,16 @@ pub(crate) fn didset_options_sctx(opt_flags: OptionSetFlags, opts: &[OptIndex]) 
     for &opt_idx in opts {
         set_option_sctx(opt_idx, opt_flags, current_sctx.get());
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

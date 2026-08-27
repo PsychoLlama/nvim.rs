@@ -52,13 +52,11 @@ use super::{
 /// Both are C strings.
 unsafe fn room_for(arg: *const c_char, origval: *const c_char, op: set_op_T) -> size_t {
     // SAFETY: the caller guarantees C strings.
-    unsafe {
-        let mut room = strlen(arg) + 1;
-        if op != OP_NONE {
-            room += strlen(origval) + 1;
-        }
-        room
+    let mut room = unsafe { strlen(arg) } + 1;
+    if op != OP_NONE {
+        room += unsafe { strlen(origval) } + 1;
     }
+    room
 }
 
 /// Copy the `:set` argument into a buffer of its own, dropping the
@@ -79,23 +77,21 @@ pub(crate) unsafe fn stropt_copy_value(
     _flags: uint32_t,
 ) -> *mut c_char {
     // SAFETY: the caller's cursor and value.
-    unsafe {
-        let mut arg = *argp;
-        let newval = xmalloc(room_for(arg, origval, op)).cast::<c_char>();
-        let mut s = newval;
-        while c_int::from(*arg) != NUL && !ascii_iswhite(c_int::from(*arg)) {
-            if *arg == b'\\' as c_char && c_int::from(*arg.add(1)) != NUL {
-                arg = arg.add(1); // Remove the backslash.
-            }
-            let len = utfc_ptr2len(arg) as usize;
-            memmove(s.cast::<c_void>(), arg.cast::<c_void>(), len);
-            arg = arg.add(len);
-            s = s.add(len);
+    let mut arg = unsafe { *argp };
+    let newval = unsafe { xmalloc(room_for(arg, origval, op)) }.cast::<c_char>();
+    let mut s = newval;
+    while c_int::from(unsafe { *arg }) != NUL && !ascii_iswhite(c_int::from(unsafe { *arg })) {
+        if unsafe { *arg } == b'\\' as c_char && c_int::from(unsafe { *arg.add(1) }) != NUL {
+            arg = unsafe { arg.add(1) }; // Remove the backslash.
         }
-        *s = NUL as c_char;
-        *argp = arg;
-        newval
+        let len = unsafe { utfc_ptr2len(arg) } as usize;
+        unsafe { memmove(s.cast::<c_void>(), arg.cast::<c_void>(), len) };
+        arg = unsafe { arg.add(len) };
+        s = unsafe { s.add(len) };
     }
+    unsafe { *s = NUL as c_char };
+    unsafe { *argp = arg };
+    newval
 }
 
 /// Expand any environment variables the value names, into a buffer sized by
@@ -114,16 +110,14 @@ pub(crate) unsafe fn stropt_expand_envvar(
 ) -> *mut c_char {
     // SAFETY: `option_expand` reads the value and answers an owned copy,
     // or `None` when nothing expanded.
-    unsafe {
-        let Some(expanded) = option_expand(opt_idx, newval) else {
-            return newval;
-        };
-        xfree(newval.cast::<c_void>());
-        let room = room_for(expanded.as_ptr(), origval, op);
-        let grown = xmalloc(room).cast::<c_char>();
-        strcpy(grown, expanded.as_ptr());
-        grown
-    }
+    let Some(expanded) = (unsafe { option_expand(opt_idx, newval) }) else {
+        return newval;
+    };
+    unsafe { xfree(newval.cast::<c_void>()) };
+    let room = unsafe { room_for(expanded.as_ptr(), origval, op) };
+    let grown = unsafe { xmalloc(room) }.cast::<c_char>();
+    unsafe { strcpy(grown, expanded.as_ptr()) };
+    grown
 }
 
 /// Join the current value and the new one in place, with a comma between
@@ -143,42 +137,44 @@ pub(crate) unsafe fn stropt_concat_with_comma(
     flags: uint32_t,
 ) {
     // SAFETY: the caller's buffer and value, as documented above.
-    unsafe {
-        let separated = flags & kOptFlagComma as uint32_t != 0
-            && c_int::from(*origval) != NUL
-            && c_int::from(*newval) != NUL;
-        let comma = usize::from(separated);
-        let len = if op == OP_ADDING {
-            let mut len = strlen(origval);
-            if separated
-                && len > 1
-                && flags & kOptFlagOneComma as uint32_t == kOptFlagOneComma as uint32_t
-                && *origval.add(len - 1) == b',' as c_char
-                && *origval.add(len - 2) != b'\\' as c_char
-            {
-                len -= 1;
-            }
-            // Shift the new part along and put the current value in front.
+    let separated = flags & kOptFlagComma as uint32_t != 0
+        && c_int::from(unsafe { *origval }) != NUL
+        && c_int::from(unsafe { *newval }) != NUL;
+    let comma = usize::from(separated);
+    let len = if op == OP_ADDING {
+        let mut len = unsafe { strlen(origval) };
+        if separated
+            && len > 1
+            && flags & kOptFlagOneComma as uint32_t == kOptFlagOneComma as uint32_t
+            && unsafe { *origval.add(len - 1) } == b',' as c_char
+            && unsafe { *origval.add(len - 2) } != b'\\' as c_char
+        {
+            len -= 1;
+        }
+        // Shift the new part along and put the current value in front.
+        unsafe {
             memmove(
                 newval.add(len + comma).cast::<c_void>(),
                 newval.cast::<c_void>(),
                 strlen(newval) + 1,
-            );
-            memmove(newval.cast::<c_void>(), origval.cast::<c_void>(), len);
-            len
-        } else {
-            // Prepending: the new part is already in front.
-            let len = strlen(newval);
+            )
+        };
+        unsafe { memmove(newval.cast::<c_void>(), origval.cast::<c_void>(), len) };
+        len
+    } else {
+        // Prepending: the new part is already in front.
+        let len = unsafe { strlen(newval) };
+        unsafe {
             memmove(
                 newval.add(len + comma).cast::<c_void>(),
                 origval.cast::<c_void>(),
                 strlen(origval) + 1,
-            );
-            len
+            )
         };
-        if separated {
-            *newval.add(len) = b',' as c_char;
-        }
+        len
+    };
+    if separated {
+        unsafe { *newval.add(len) = b',' as c_char };
     }
 }
 
@@ -200,29 +196,29 @@ pub(crate) unsafe fn stropt_remove_val(
     len: c_int,
 ) {
     // SAFETY: the caller's buffer and value, as documented above.
-    unsafe {
-        strcpy(newval, origval);
-        if c_int::from(*strval) == NUL {
-            return;
-        }
-        let (mut strval, mut len) = (strval, len as usize);
-        if flags & kOptFlagComma as uint32_t != 0 {
-            if strval == origval {
-                if *strval.add(len) == b',' as c_char {
-                    len += 1;
-                }
-            } else {
-                strval = strval.sub(1);
+    unsafe { strcpy(newval, origval) };
+    if c_int::from(unsafe { *strval }) == NUL {
+        return;
+    }
+    let (mut strval, mut len) = (strval, len as usize);
+    if flags & kOptFlagComma as uint32_t != 0 {
+        if strval == origval {
+            if unsafe { *strval.add(len) } == b',' as c_char {
                 len += 1;
             }
+        } else {
+            strval = unsafe { strval.sub(1) };
+            len += 1;
         }
-        let at = strval.offset_from(origval) as usize;
+    }
+    let at = unsafe { strval.offset_from(origval) } as usize;
+    unsafe {
         memmove(
             newval.add(at).cast::<c_void>(),
             strval.add(len).cast::<c_void>(),
             strlen(strval.add(len)) + 1,
-        );
-    }
+        )
+    };
 }
 
 /// Find the item of `src` that opens with `key`, and report how long it is.
@@ -240,19 +236,19 @@ pub(crate) unsafe fn find_key_item(
     itemlenp: *mut isize,
 ) -> *mut c_char {
     // SAFETY: the caller's strings, walked to the terminator.
-    unsafe {
-        let mut p = src;
-        while c_int::from(*p) != NUL {
-            if (p == src || *p.sub(1) == b',' as c_char) && strncmp(p, key, keylen as size_t) == 0 {
-                let mut end = vim_strchr(p, c_int::from(b','));
-                if end.is_null() {
-                    end = p.add(strlen(p));
-                }
-                *itemlenp = end.offset_from(p);
-                return p;
+    let mut p = src;
+    while c_int::from(unsafe { *p }) != NUL {
+        if (p == src || unsafe { *p.sub(1) } == b',' as c_char)
+            && unsafe { strncmp(p, key, keylen as size_t) } == 0
+        {
+            let mut end = unsafe { vim_strchr(p, c_int::from(b',')) };
+            if end.is_null() {
+                end = unsafe { p.add(strlen(p)) };
             }
-            p = p.add(1);
+            unsafe { *itemlenp = end.offset_from(p) };
+            return p;
         }
+        p = unsafe { p.add(1) };
     }
     ptr::null_mut()
 }
@@ -264,24 +260,26 @@ pub(crate) unsafe fn find_key_item(
 /// `item` points at `itemlen` bytes inside the C string starting at `str`.
 pub(crate) unsafe fn remove_comma_item(str: *const c_char, item: *mut c_char, itemlen: isize) {
     // SAFETY: the caller's string, as documented above.
-    unsafe {
-        let after = item.offset(itemlen);
-        if *after == b',' as c_char {
+    let after = unsafe { item.offset(itemlen) };
+    if unsafe { *after } == b',' as c_char {
+        unsafe {
             memmove(
                 item.cast::<c_void>(),
                 after.add(1).cast::<c_void>(),
                 strlen(after.add(1)) + 1,
-            );
-        } else if item > str.cast_mut() && *item.sub(1) == b',' as c_char {
+            )
+        };
+    } else if item > str.cast_mut() && unsafe { *item.sub(1) } == b',' as c_char {
+        unsafe {
             memmove(
                 item.sub(1).cast::<c_void>(),
                 after.cast::<c_void>(),
                 strlen(after) + 1,
-            );
-        } else {
-            // The only item there was.
-            *item = NUL as c_char;
-        }
+            )
+        };
+    } else {
+        // The only item there was.
+        unsafe { *item = NUL as c_char };
     }
 }
 
@@ -296,27 +294,25 @@ pub(crate) unsafe fn remove_key_item(
     skip: *const c_char,
 ) {
     // SAFETY: the caller's strings, as documented above.
-    unsafe {
-        loop {
-            let mut itemlen: isize = 0;
-            let mut found = find_key_item(str, key, keylen, &raw mut itemlen);
+    loop {
+        let mut itemlen: isize = 0;
+        let mut found = unsafe { find_key_item(str, key, keylen, &raw mut itemlen) };
+        if found.is_null() {
+            return;
+        }
+        if found == skip.cast_mut() {
+            // Look past the one being kept, for a second with the same
+            // key.
+            let mut next = unsafe { found.offset(itemlen) };
+            if unsafe { *next } == b',' as c_char {
+                next = unsafe { next.add(1) };
+            }
+            found = unsafe { find_key_item(next, key, keylen, &raw mut itemlen) };
             if found.is_null() {
                 return;
             }
-            if found == skip.cast_mut() {
-                // Look past the one being kept, for a second with the same
-                // key.
-                let mut next = found.offset(itemlen);
-                if *next == b',' as c_char {
-                    next = next.add(1);
-                }
-                found = find_key_item(next, key, keylen, &raw mut itemlen);
-                if found.is_null() {
-                    return;
-                }
-            }
-            remove_comma_item(str, found, itemlen);
         }
+        unsafe { remove_comma_item(str, found, itemlen) };
     }
 }
 
@@ -327,19 +323,19 @@ pub(crate) unsafe fn remove_key_item(
 /// terminator; `item` has at least `item_len` bytes.
 pub(crate) unsafe fn append_item(str: *mut c_char, item: *mut c_char, item_len: isize) {
     // SAFETY: the caller's buffer, as documented above.
+    let mut len = unsafe { strlen(str) } as isize;
+    if len > 0 {
+        unsafe { *str.offset(len) = b',' as c_char };
+        len += 1;
+    }
     unsafe {
-        let mut len = strlen(str) as isize;
-        if len > 0 {
-            *str.offset(len) = b',' as c_char;
-            len += 1;
-        }
         memmove(
             str.offset(len).cast::<c_void>(),
             item.cast::<c_void>(),
             item_len as size_t,
-        );
-        *str.offset(len + item_len) = NUL as c_char;
-    }
+        )
+    };
+    unsafe { *str.offset(len + item_len) = NUL as c_char };
 }
 
 /// Add `item` to the front of a comma-separated value in place.
@@ -348,22 +344,24 @@ pub(crate) unsafe fn append_item(str: *mut c_char, item: *mut c_char, item_len: 
 /// As [`append_item`].
 pub(crate) unsafe fn prepend_item(str: *mut c_char, item: *mut c_char, item_len: isize) {
     // SAFETY: the caller's buffer, as documented above.
+    let len = unsafe { strlen(str) };
+    let comma = usize::from(len > 0);
     unsafe {
-        let len = strlen(str);
-        let comma = usize::from(len > 0);
         memmove(
             str.offset(item_len).add(comma).cast::<c_void>(),
             str.cast::<c_void>(),
             len + 1,
-        );
+        )
+    };
+    unsafe {
         memmove(
             str.cast::<c_void>(),
             item.cast::<c_void>(),
             item_len as size_t,
-        );
-        if comma != 0 {
-            *str.offset(item_len) = b',' as c_char;
-        }
+        )
+    };
+    if comma != 0 {
+        unsafe { *str.offset(item_len) = b',' as c_char };
     }
 }
 
@@ -388,78 +386,79 @@ pub(crate) unsafe fn stropt_handle_keymatch(
     _flags: uint32_t,
 ) -> bool {
     // SAFETY: the caller's buffer and value, as documented above.
-    unsafe {
-        if vim_strchr(newval, c_int::from(b':')).is_null()
-            && vim_strchr(newval, c_int::from(b',')).is_null()
-        {
-            return false;
-        }
-        let argument = xstrdup(newval);
-        strcpy(newval, origval);
+    if unsafe { vim_strchr(newval, c_int::from(b':')) }.is_null()
+        && unsafe { vim_strchr(newval, c_int::from(b',')) }.is_null()
+    {
+        return false;
+    }
+    let argument = unsafe { xstrdup(newval) };
+    unsafe { strcpy(newval, origval) };
 
-        let mut item_start = argument;
-        loop {
-            let next = vim_strchr(item_start, c_int::from(b','));
-            let item_len = if next.is_null() {
-                strlen(item_start) as isize
-            } else {
-                next.offset_from(item_start)
-            };
-            if item_len > 0 {
-                let colon = vim_strchr(item_start, c_int::from(b':'));
-                let keyed = !colon.is_null() && colon < item_start.offset(item_len);
-                if keyed {
-                    // The key is everything up to and including the colon.
-                    let keylen = colon.offset_from(item_start) + 1;
-                    match op {
-                        OP_ADDING | OP_PREPENDING => {
-                            let mut old_itemlen: isize = 0;
-                            let found =
-                                find_key_item(newval, item_start, keylen, &raw mut old_itemlen);
-                            if found.is_null() {
-                                place(newval, item_start, item_len, op);
-                            } else if old_itemlen == item_len
-                                && strncmp(found, item_start, item_len as size_t) == 0
-                            {
-                                // The same item already: keep it where it
-                                // is, and drop any later duplicate.
-                                remove_key_item(newval, item_start, keylen, found);
-                            } else {
-                                remove_key_item(newval, item_start, keylen, ptr::null());
-                                place(newval, item_start, item_len, op);
-                            }
+    let mut item_start = argument;
+    loop {
+        let next = unsafe { vim_strchr(item_start, c_int::from(b',')) };
+        let item_len = if next.is_null() {
+            unsafe { strlen(item_start) as isize }
+        } else {
+            unsafe { next.offset_from(item_start) }
+        };
+        if item_len > 0 {
+            let colon = unsafe { vim_strchr(item_start, c_int::from(b':')) };
+            let keyed = !colon.is_null() && colon < unsafe { item_start.offset(item_len) };
+            if keyed {
+                // The key is everything up to and including the colon.
+                let keylen = unsafe { colon.offset_from(item_start) } + 1;
+                match op {
+                    OP_ADDING | OP_PREPENDING => {
+                        let mut old_itemlen: isize = 0;
+                        let found = unsafe {
+                            find_key_item(newval, item_start, keylen, &raw mut old_itemlen)
+                        };
+                        if found.is_null() {
+                            unsafe { place(newval, item_start, item_len, op) };
+                        } else if old_itemlen == item_len
+                            && unsafe { strncmp(found, item_start, item_len as size_t) } == 0
+                        {
+                            // The same item already: keep it where it
+                            // is, and drop any later duplicate.
+                            unsafe { remove_key_item(newval, item_start, keylen, found) };
+                        } else {
+                            unsafe { remove_key_item(newval, item_start, keylen, ptr::null()) };
+                            unsafe { place(newval, item_start, item_len, op) };
                         }
-                        OP_REMOVING => {
-                            remove_key_item(newval, item_start, keylen, ptr::null());
-                        }
-                        _ => {}
                     }
-                } else {
-                    // An item with no key of its own is matched whole.
-                    let found = find_dup_item(
+                    OP_REMOVING => {
+                        unsafe { remove_key_item(newval, item_start, keylen, ptr::null()) };
+                    }
+                    _ => {}
+                }
+            } else {
+                // An item with no key of its own is matched whole.
+                let found = unsafe {
+                    find_dup_item(
                         newval,
                         item_start,
                         item_len as size_t,
                         kOptFlagComma as uint32_t,
-                    );
-                    match op {
-                        OP_ADDING | OP_PREPENDING if found.is_null() => {
-                            place(newval, item_start, item_len, op);
-                        }
-                        OP_REMOVING if !found.is_null() => {
-                            remove_comma_item(newval, found.cast_mut(), item_len);
-                        }
-                        _ => {}
+                    )
+                };
+                match op {
+                    OP_ADDING | OP_PREPENDING if found.is_null() => {
+                        unsafe { place(newval, item_start, item_len, op) };
                     }
+                    OP_REMOVING if !found.is_null() => {
+                        unsafe { remove_comma_item(newval, found.cast_mut(), item_len) };
+                    }
+                    _ => {}
                 }
             }
-            if next.is_null() {
-                break;
-            }
-            item_start = next.add(1);
         }
-        xfree(argument.cast::<c_void>());
+        if next.is_null() {
+            break;
+        }
+        item_start = unsafe { next.add(1) };
     }
+    unsafe { xfree(argument.cast::<c_void>()) };
     true
 }
 
@@ -469,12 +468,10 @@ pub(crate) unsafe fn stropt_handle_keymatch(
 /// As [`append_item`].
 unsafe fn place(str: *mut c_char, item: *mut c_char, item_len: isize, op: set_op_T) {
     // SAFETY: the caller's buffer.
-    unsafe {
-        if op == OP_PREPENDING {
-            prepend_item(str, item, item_len);
-        } else {
-            append_item(str, item, item_len);
-        }
+    if op == OP_PREPENDING {
+        unsafe { prepend_item(str, item, item_len) };
+    } else {
+        unsafe { append_item(str, item, item_len) };
     }
 }
 
@@ -490,24 +487,27 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
     let comma_list = flags & kOptFlagComma as uint32_t != 0;
     // SAFETY: the caller's string, walked to the terminator; each cut moves
     // the tail (including its terminator) down over the letter dropped.
-    unsafe {
-        let mut s = newval;
-        while *s != 0 {
-            let letter = c_int::from(*s as u8);
-            let drop = if one_comma {
-                *s != b',' as c_char
-                    && *s.add(1) == b',' as c_char
-                    && !vim_strchr(s.add(2), letter).is_null()
-            } else {
-                (!comma_list || *s != b',' as c_char) && !vim_strchr(s.add(1), letter).is_null()
-            };
-            if !drop {
-                s = s.add(1);
-                continue;
-            }
-            let past = if one_comma { s.add(2) } else { s.add(1) };
-            memmove(s.cast::<c_void>(), past.cast::<c_void>(), strlen(past) + 1);
+    let mut s = newval;
+    while unsafe { *s } != 0 {
+        let letter = c_int::from(unsafe { *s } as u8);
+        let drop = if one_comma {
+            (unsafe { *s }) != b',' as c_char
+                && unsafe { *s.add(1) } == b',' as c_char
+                && !unsafe { vim_strchr(s.add(2), letter) }.is_null()
+        } else {
+            (!comma_list || unsafe { *s } != b',' as c_char)
+                && !unsafe { vim_strchr(s.add(1), letter) }.is_null()
+        };
+        if !drop {
+            s = unsafe { s.add(1) };
+            continue;
         }
+        let past = if one_comma {
+            unsafe { s.add(2) }
+        } else {
+            unsafe { s.add(1) }
+        };
+        unsafe { memmove(s.cast::<c_void>(), past.cast::<c_void>(), strlen(past) + 1) };
     }
 }
 
@@ -535,60 +535,58 @@ pub(crate) unsafe fn stropt_get_newval(
     // copy, which is how it goes back to reading the global one.
     let global_kp = opt_idx == kOptKeywordprg && varp == option_var(opt_idx);
     // SAFETY: the caller's cursor, variable and value, as documented above.
-    unsafe {
-        // Past the '=' or the operator's second character.
-        let mut arg = (*argp).add(1);
-        let mut op = *op_arg;
+    // Past the '=' or the operator's second character.
+    let mut arg = unsafe { (*argp).add(1) };
+    let mut op = unsafe { *op_arg };
 
-        let bare = c_int::from(*arg) == NUL || *arg == b' ' as c_char;
-        let save_arg = if global_kp && bare {
-            let save = arg;
-            arg = c":help".as_ptr().cast_mut();
-            Some(save)
-        } else {
-            None
-        };
+    let bare = c_int::from(unsafe { *arg }) == NUL || unsafe { *arg } == b' ' as c_char;
+    let save_arg = if global_kp && bare {
+        let save = arg;
+        arg = c":help".as_ptr().cast_mut();
+        Some(save)
+    } else {
+        None
+    };
 
-        let mut newval = stropt_copy_value(origval, &raw mut arg, op, flags);
-        // Only a whole value or a comma-separated one is expanded; a `+=`
-        // on a non-list option would expand the concatenation.
-        if op == OP_NONE || flags & kOptFlagComma as uint32_t != 0 {
-            newval = stropt_expand_envvar(opt_idx, origval, newval, op);
-        }
-
-        let keyed = flags & kOptFlagComma as uint32_t != 0
-            && flags & kOptFlagColon as uint32_t != 0
-            && op != OP_NONE;
-        if !(keyed && stropt_handle_keymatch(origval, newval, op, flags)) {
-            let mut len = 0;
-            let mut at: *const c_char = ptr::null();
-            if op == OP_REMOVING || flags & kOptFlagNoDup as uint32_t != 0 {
-                len = strlen(newval) as c_int;
-                at = find_dup_item(origval, newval, len as size_t, flags);
-                // Adding something already there changes nothing.
-                if (op == OP_ADDING || op == OP_PREPENDING) && !at.is_null() {
-                    op = OP_NONE;
-                    strcpy(newval, origval);
-                }
-                if at.is_null() {
-                    // Removing something that is not there cuts an empty
-                    // span off the end.
-                    at = origval.add(strlen(origval));
-                }
-            }
-            if op == OP_ADDING || op == OP_PREPENDING {
-                stropt_concat_with_comma(origval, newval, op, flags);
-            } else if op == OP_REMOVING {
-                stropt_remove_val(origval, newval, flags, at, len);
-            }
-        }
-
-        if flags & kOptFlagFlagList as uint32_t != 0 {
-            stropt_remove_dupflags(newval, flags);
-        }
-
-        *argp = save_arg.unwrap_or(arg);
-        *op_arg = op;
-        newval
+    let mut newval = unsafe { stropt_copy_value(origval, &raw mut arg, op, flags) };
+    // Only a whole value or a comma-separated one is expanded; a `+=`
+    // on a non-list option would expand the concatenation.
+    if op == OP_NONE || flags & kOptFlagComma as uint32_t != 0 {
+        newval = unsafe { stropt_expand_envvar(opt_idx, origval, newval, op) };
     }
+
+    let keyed = flags & kOptFlagComma as uint32_t != 0
+        && flags & kOptFlagColon as uint32_t != 0
+        && op != OP_NONE;
+    if !(keyed && unsafe { stropt_handle_keymatch(origval, newval, op, flags) }) {
+        let mut len = 0;
+        let mut at: *const c_char = ptr::null();
+        if op == OP_REMOVING || flags & kOptFlagNoDup as uint32_t != 0 {
+            len = unsafe { strlen(newval) } as c_int;
+            at = unsafe { find_dup_item(origval, newval, len as size_t, flags) };
+            // Adding something already there changes nothing.
+            if (op == OP_ADDING || op == OP_PREPENDING) && !at.is_null() {
+                op = OP_NONE;
+                unsafe { strcpy(newval, origval) };
+            }
+            if at.is_null() {
+                // Removing something that is not there cuts an empty
+                // span off the end.
+                at = unsafe { origval.add(strlen(origval)) };
+            }
+        }
+        if op == OP_ADDING || op == OP_PREPENDING {
+            unsafe { stropt_concat_with_comma(origval, newval, op, flags) };
+        } else if op == OP_REMOVING {
+            unsafe { stropt_remove_val(origval, newval, flags, at, len) };
+        }
+    }
+
+    if flags & kOptFlagFlagList as uint32_t != 0 {
+        unsafe { stropt_remove_dupflags(newval, flags) };
+    }
+
+    unsafe { *argp = save_arg.unwrap_or(arg) };
+    unsafe { *op_arg = op };
+    newval
 }

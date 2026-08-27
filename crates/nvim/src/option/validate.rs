@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -91,57 +92,58 @@ pub(crate) unsafe fn check_num_option_bounds(
     let mut errmsg: *const c_char = ptr::null();
     // SAFETY: the caller's `errbuf` has room for `errbuflen` bytes, and
     // `curwin` is live.
-    unsafe {
-        match opt_idx {
-            kOptLines => {
-                let least = min_rows_for_all_tabpages();
-                if *newval < least as OptInt && full_screen.get() {
+    match opt_idx {
+        kOptLines => {
+            let least = min_rows_for_all_tabpages();
+            if *newval < least as OptInt && full_screen.get() {
+                unsafe {
                     vim_snprintf(
                         errbuf,
                         errbuflen,
                         gettext(c"E593: Need at least %d lines".as_ptr()),
                         least,
-                    );
-                    errmsg = errbuf;
-                    *newval = least as OptInt;
-                }
-                *newval = (*newval).min(INT_MAX as OptInt);
+                    )
+                };
+                errmsg = errbuf;
+                *newval = least as OptInt;
             }
-            kOptColumns => {
-                if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
+            *newval = (*newval).min(INT_MAX as OptInt);
+        }
+        kOptColumns => {
+            if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
+                unsafe {
                     vim_snprintf(
                         errbuf,
                         errbuflen,
                         gettext(c"E594: Need at least %d columns".as_ptr()),
                         MIN_COLUMNS as c_int,
-                    );
-                    errmsg = errbuf;
-                    *newval = MIN_COLUMNS as OptInt;
-                }
-                *newval = (*newval).min(INT_MAX as OptInt);
+                    )
+                };
+                errmsg = errbuf;
+                *newval = MIN_COLUMNS as OptInt;
             }
-            // 'pumblend' saturates silently rather than reporting.
-            kOptPumblend => *newval = (*newval).clamp(0, 100),
-            kOptScrolljump => {
-                if (*newval < -100 || *newval >= Rows.get() as OptInt) && full_screen.get() {
-                    errmsg = e_scroll.as_ptr();
-                    *newval = 1;
-                }
-            }
-            kOptScroll => {
-                let height = (*curwin.get()).w_view_height;
-                if (*newval <= 0 || (*newval > height as OptInt && height > 0)) && full_screen.get()
-                {
-                    // Zero is how `:set scroll=0` asks for the default, so
-                    // it is corrected without a message.
-                    if *newval != 0 {
-                        errmsg = e_scroll.as_ptr();
-                    }
-                    *newval = win_default_scroll(curwin.get());
-                }
-            }
-            _ => {}
+            *newval = (*newval).min(INT_MAX as OptInt);
         }
+        // 'pumblend' saturates silently rather than reporting.
+        kOptPumblend => *newval = (*newval).clamp(0, 100),
+        kOptScrolljump => {
+            if (*newval < -100 || *newval >= Rows.get() as OptInt) && full_screen.get() {
+                errmsg = e_scroll.as_ptr();
+                *newval = 1;
+            }
+        }
+        kOptScroll => {
+            let height = cur_win().w_view_height;
+            if (*newval <= 0 || (*newval > height as OptInt && height > 0)) && full_screen.get() {
+                // Zero is how `:set scroll=0` asks for the default, so
+                // it is corrected without a message.
+                if *newval != 0 {
+                    errmsg = e_scroll.as_ptr();
+                }
+                *newval = unsafe { win_default_scroll(curwin.get()) };
+            }
+        }
+        _ => {}
     }
     errmsg
 }
@@ -244,25 +246,25 @@ pub(crate) unsafe fn validate_option_value(
 ) -> *const c_char {
     // SAFETY: the caller's `errbuf` has room, and the option table is a
     // plain array.
-    unsafe {
-        // `:setlocal` writing a global-local option's sentinel is how it is
-        // unset; nothing else needs to look at the value.
-        if option_is_global_local(opt_idx)
-            && opt_flags.has(OptionSetFlags::LOCAL)
-            && optval_equal(*newval, get_option_unset_value(opt_idx))
-        {
-            return ptr::null();
+    // `:setlocal` writing a global-local option's sentinel is how it is
+    // unset; nothing else needs to look at the value.
+    if option_is_global_local(opt_idx)
+        && opt_flags.has(OptionSetFlags::LOCAL)
+        && optval_equal(*newval, get_option_unset_value(opt_idx))
+    {
+        return ptr::null();
+    }
+    let opt = get_option(opt_idx);
+    if newval.type_0 == kOptValTypeNil {
+        // A global value has no "unset" state to fall back to.
+        if opt_flags == OptionSetFlags::GLOBAL {
+            return unsafe { gettext(c"Cannot unset global option value".as_ptr()) };
         }
-        let opt = get_option(opt_idx);
-        if newval.type_0 == kOptValTypeNil {
-            // A global value has no "unset" state to fall back to.
-            if opt_flags == OptionSetFlags::GLOBAL {
-                return gettext(c"Cannot unset global option value".as_ptr());
-            }
-            *newval = optval_copy(get_option_unset_value(opt_idx));
-            ptr::null()
-        } else if !option_has_type(opt_idx, newval.type_0) {
-            let rep = optval_to_cstr(*newval);
+        *newval = optval_copy(get_option_unset_value(opt_idx));
+        ptr::null()
+    } else if !option_has_type(opt_idx, newval.type_0) {
+        let rep = optval_to_cstr(*newval);
+        unsafe {
             snprintf(
                 errbuf,
                 IOSIZE as size_t,
@@ -271,13 +273,19 @@ pub(crate) unsafe fn validate_option_value(
                 optval_type_name(opt.type_0).as_ptr(),
                 optval_type_name(newval.type_0).as_ptr(),
                 rep,
-            );
-            xfree(rep.cast::<c_void>());
-            errbuf
-        } else if newval.type_0 == kOptValTypeNumber {
-            validate_num_option(opt_idx, &mut newval.data.number, errbuf, errbuflen)
-        } else {
-            ptr::null()
-        }
+            )
+        };
+        unsafe { xfree(rep.cast::<c_void>()) };
+        errbuf
+    } else if newval.type_0 == kOptValTypeNumber {
+        unsafe { validate_num_option(opt_idx, &mut newval.data.number, errbuf, errbuflen) }
+    } else {
+        ptr::null()
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

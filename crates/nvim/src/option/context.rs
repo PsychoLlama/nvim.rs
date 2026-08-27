@@ -21,6 +21,7 @@ use crate::types::{
     kErrorTypeException, kErrorTypeNone, scid_T, switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
+use crate::winlayer::Win;
 
 use super::{
     NIL_OPTVAL, get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct,
@@ -52,7 +53,7 @@ pub(crate) unsafe fn set_option_direct_for(
         kOptScopeWin => {
             curwin.set(from.cast::<win_T>());
             // SAFETY: the caller's `from` is a live window.
-            curbuf.set(unsafe { (*curwin.get()).w_buffer });
+            curbuf.set(cur_win().w_buffer);
         }
         kOptScopeBuf => curbuf.set(from.cast::<buf_T>()),
         _ => {}
@@ -101,35 +102,37 @@ impl OptionContext {
     /// and `err` a valid error slot.
     pub(crate) unsafe fn enter(&mut self, from: *mut c_void, err: *mut Error) -> bool {
         // SAFETY: the caller's `from` matches the scope, and `err` is valid.
-        unsafe {
-            match self {
-                OptionContext::Global => false,
-                OptionContext::Win(switchwin) => {
-                    let win = from.cast::<win_T>();
-                    if win == curwin.get() {
-                        return false;
-                    }
-                    if switch_win_noblock(switchwin, win, win_find_tabpage(win), true) == FAIL {
-                        restore_win_noblock(switchwin, true);
-                        if (*err).type_0 == kErrorTypeNone {
+        match self {
+            OptionContext::Global => false,
+            OptionContext::Win(switchwin) => {
+                let win = from.cast::<win_T>();
+                if win == curwin.get() {
+                    return false;
+                }
+                if unsafe { switch_win_noblock(switchwin, win, win_find_tabpage(win), true) }
+                    == FAIL
+                {
+                    unsafe { restore_win_noblock(switchwin, true) };
+                    if unsafe { (*err).type_0 } == kErrorTypeNone {
+                        unsafe {
                             api_set_error(
                                 err,
                                 kErrorTypeException,
                                 c"Problem while switching windows".as_ptr(),
-                            );
-                        }
-                        return false;
+                            )
+                        };
                     }
-                    true
+                    return false;
                 }
-                OptionContext::Buf(aco) => {
-                    let buf = from.cast::<buf_T>();
-                    if buf == curbuf.get() {
-                        return false;
-                    }
-                    aucmd_prepbuf(aco, buf);
-                    true
+                true
+            }
+            OptionContext::Buf(aco) => {
+                let buf = from.cast::<buf_T>();
+                if buf == curbuf.get() {
+                    return false;
                 }
+                unsafe { aucmd_prepbuf(aco, buf) };
+                true
             }
         }
     }
@@ -142,12 +145,10 @@ impl OptionContext {
     /// the current window or buffer.
     pub(crate) unsafe fn leave(&mut self) {
         // SAFETY: the caller has just entered this context.
-        unsafe {
-            match self {
-                OptionContext::Global => {}
-                OptionContext::Win(switchwin) => restore_win_noblock(switchwin, true),
-                OptionContext::Buf(aco) => aucmd_restbuf(aco),
-            }
+        match self {
+            OptionContext::Global => {}
+            OptionContext::Win(switchwin) => unsafe { restore_win_noblock(switchwin, true) },
+            OptionContext::Buf(aco) => unsafe { aucmd_restbuf(aco) },
         }
     }
 }
@@ -213,4 +214,10 @@ pub(crate) unsafe fn set_option_value_for(
         // SAFETY: `enter` reported a switch and nothing has moved since.
         unsafe { ctx.leave() };
     }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

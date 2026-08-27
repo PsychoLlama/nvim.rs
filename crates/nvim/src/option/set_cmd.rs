@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
@@ -31,8 +32,7 @@ use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::keycodes::{K_ZERO, find_special_key};
 use crate::main::{
-    curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox,
-    silent_mode,
+    curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox, silent_mode,
 };
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
@@ -80,18 +80,16 @@ enum Prefix {
 /// `eap` must be the command's own argument block.
 pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
     // SAFETY: the caller's argument block.
-    unsafe {
-        let mut flags = match (*eap).cmdidx as CMD_index {
-            CMD_setlocal => OptionSetFlags::LOCAL,
-            CMD_setglobal => OptionSetFlags::GLOBAL,
-            _ => OptionSetFlags::NONE,
-        };
-        // `:set!` lists one option per line.
-        if (*eap).forceit != 0 {
-            flags |= OptionSetFlags::ONECOLUMN;
-        }
-        do_set((*eap).arg, flags);
+    let mut flags = match unsafe { (*eap).cmdidx } as CMD_index {
+        CMD_setlocal => OptionSetFlags::LOCAL,
+        CMD_setglobal => OptionSetFlags::GLOBAL,
+        _ => OptionSetFlags::NONE,
+    };
+    // `:set!` lists one option per line.
+    if unsafe { (*eap).forceit } != 0 {
+        flags |= OptionSetFlags::ONECOLUMN;
     }
+    unsafe { do_set((*eap).arg, flags) };
 }
 
 /// The operator at `arg`, if the two characters there are one.
@@ -102,16 +100,14 @@ pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
 unsafe fn get_op(arg: *const c_char) -> set_op_T {
     // SAFETY: the caller's string; the second read only happens once the
     // first byte is known not to be the terminator.
-    unsafe {
-        if *arg == NUL as c_char || *arg.add(1) as c_int != '=' as c_int {
-            return OP_NONE;
-        }
-        match *arg as u8 {
-            b'+' => OP_ADDING,
-            b'^' => OP_PREPENDING,
-            b'-' => OP_REMOVING,
-            _ => OP_NONE,
-        }
+    if unsafe { *arg } == NUL as c_char || unsafe { *arg.add(1) } as c_int != '=' as c_int {
+        return OP_NONE;
+    }
+    match unsafe { *arg } as u8 {
+        b'+' => OP_ADDING,
+        b'^' => OP_PREPENDING,
+        b'-' => OP_REMOVING,
+        _ => OP_NONE,
     }
 }
 
@@ -122,13 +118,11 @@ unsafe fn get_op(arg: *const c_char) -> set_op_T {
 /// `*argp` must be NUL-terminated.
 unsafe fn get_option_prefix(argp: &mut *mut c_char) -> Prefix {
     // SAFETY: the caller's string.
-    unsafe {
-        for (spelling, prefix) in [(c"no", Prefix::No), (c"inv", Prefix::Inv)] {
-            let len = spelling.count_bytes();
-            if strncmp(*argp, spelling.as_ptr(), len) == 0 {
-                *argp = argp.add(len);
-                return prefix;
-            }
+    for (spelling, prefix) in [(c"no", Prefix::No), (c"inv", Prefix::Inv)] {
+        let len = spelling.count_bytes();
+        if unsafe { strncmp(*argp, spelling.as_ptr(), len) } == 0 {
+            *argp = unsafe { argp.add(len) };
+            return prefix;
         }
     }
     Prefix::None
@@ -194,37 +188,35 @@ unsafe fn validate_opt_idx(
 pub(crate) unsafe fn find_tty_option_end(arg: *const c_char) -> *const c_char {
     // SAFETY: the caller's string. Every read below is guarded by the one
     // before it, so the walk stops at the terminator.
-    unsafe {
-        for name in [c"term", c"ttytype"] {
-            if strequal(arg, name.as_ptr()) {
-                return arg.add(name.count_bytes());
-            }
+    for name in [c"term", c"ttytype"] {
+        if unsafe { strequal(arg, name.as_ptr()) } {
+            return unsafe { arg.add(name.count_bytes()) };
         }
-
-        let mut p = arg;
-        let delimit = *arg as c_int == '<' as c_int;
-        if delimit {
-            p = p.add(1);
-        }
-        if *p as c_int == 't' as c_int
-            && *p.add(1) as c_int == '_' as c_int
-            && *p.add(2) != 0
-            && *p.add(3) != 0
-        {
-            p = p.add(4);
-        } else if delimit {
-            while *p != NUL as c_char && *p as c_int != '>' as c_int {
-                p = p.add(1);
-            }
-        }
-        if delimit {
-            if *p as c_int != '>' as c_int {
-                return ptr::null();
-            }
-            p = p.add(1);
-        }
-        if arg == p { ptr::null() } else { p }
     }
+
+    let mut p = arg;
+    let delimit = unsafe { *arg } as c_int == '<' as c_int;
+    if delimit {
+        p = unsafe { p.add(1) };
+    }
+    if unsafe { *p } as c_int == 't' as c_int
+        && unsafe { *p.add(1) } as c_int == '_' as c_int
+        && unsafe { *p.add(2) } != 0
+        && unsafe { *p.add(3) } != 0
+    {
+        p = unsafe { p.add(4) };
+    } else if delimit {
+        while unsafe { *p } != NUL as c_char && unsafe { *p } as c_int != '>' as c_int {
+            p = unsafe { p.add(1) };
+        }
+    }
+    if delimit {
+        if unsafe { *p } as c_int != '>' as c_int {
+            return ptr::null();
+        }
+        p = unsafe { p.add(1) };
+    }
+    if arg == p { ptr::null() } else { p }
 }
 
 /// The end of the option name at `arg`, and the option it names. A terminal
@@ -236,26 +228,26 @@ pub(crate) unsafe fn find_tty_option_end(arg: *const c_char) -> *const c_char {
 /// `arg` must be NUL-terminated, and `opt_idxp` writable.
 pub(crate) unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *const c_char {
     // SAFETY: the caller's string and out-parameter.
+    let tty_end = unsafe { find_tty_option_end(arg) };
+    if !tty_end.is_null() {
+        unsafe { *opt_idxp = kOptInvalid };
+        return tty_end;
+    }
+    let mut p = arg;
+    while (unsafe { *p } as u8).is_ascii_alphabetic() {
+        p = unsafe { p.add(1) };
+    }
+    if p == arg {
+        unsafe { *opt_idxp = kOptInvalid };
+        return ptr::null();
+    }
     unsafe {
-        let tty_end = find_tty_option_end(arg);
-        if !tty_end.is_null() {
-            *opt_idxp = kOptInvalid;
-            return tty_end;
-        }
-        let mut p = arg;
-        while (*p as u8).is_ascii_alphabetic() {
-            p = p.add(1);
-        }
-        if p == arg {
-            *opt_idxp = kOptInvalid;
-            return ptr::null();
-        }
         *opt_idxp = super::find_option_len(slice::from_raw_parts(
             arg.cast::<u8>(),
             p.offset_from(arg) as usize,
-        ));
-        p
-    }
+        ))
+    };
+    p
 }
 
 /// The value `nextchar` and what follows it ask for, in the option's own
@@ -289,86 +281,87 @@ unsafe fn get_option_newval(
 
     // SAFETY: the caller's `varp` is this option's variable, and `*argp` is
     // NUL-terminated.
-    unsafe {
-        // Setting the local value of a global-local option amends whatever
-        // it is currently reading through, which may be the global value.
-        let oldval_is_global =
-            option_is_global_local(opt_idx) && opt_flags.has(OptionSetFlags::LOCAL);
-        let oldval = optval_from_varp(
+    // Setting the local value of a global-local option amends whatever
+    // it is currently reading through, which may be the global value.
+    let oldval_is_global = option_is_global_local(opt_idx) && opt_flags.has(OptionSetFlags::LOCAL);
+    let oldval = unsafe {
+        optval_from_varp(
             opt_idx,
             if oldval_is_global {
                 get_varp(opt_idx)
             } else {
                 varp
             },
-        );
+        )
+    };
 
-        // `:set opt&`. Deliberately `OptionSetFlags::GLOBAL` rather than `opt_flags`, so
-        // that a `:setlocal opt&` on a global-local option gets the real
-        // default rather than the unset marker.
-        if nextchar == '&' as c_int {
-            return optval_copy(get_option_default(opt_idx, global, &mut expansion));
+    // `:set opt&`. Deliberately `OptionSetFlags::GLOBAL` rather than `opt_flags`, so
+    // that a `:setlocal opt&` on a global-local option gets the real
+    // default rather than the unset marker.
+    if nextchar == '&' as c_int {
+        return optval_copy(get_option_default(opt_idx, global, &mut expansion));
+    }
+    // `:set opt<` resets to the global value; `:setlocal opt<` copies it
+    // into the local one.
+    if nextchar == '<' as c_int {
+        if option_is_global_local(opt_idx) && !opt_flags.has(OptionSetFlags::LOCAL) {
+            unset_option_local_value(opt_idx);
         }
-        // `:set opt<` resets to the global value; `:setlocal opt<` copies it
-        // into the local one.
-        if nextchar == '<' as c_int {
-            if option_is_global_local(opt_idx) && !opt_flags.has(OptionSetFlags::LOCAL) {
-                unset_option_local_value(opt_idx);
-            }
-            return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
-        }
+        return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
+    }
 
-        match oldval.type_0 {
-            kOptValTypeBoolean => {
-                let boolean = if nextchar == '!' as c_int {
-                    // `:set opt!` inverts, leaving an unset global-local
-                    // value unset.
-                    optval_boolean(oldval.data).map(|b| !b)
-                } else if prefix == Prefix::Inv {
-                    Some(*varp.boolean_var() == 0)
-                } else {
-                    Some(prefix != Prefix::No)
-                };
-                boolean_optval(boolean)
+    match oldval.type_0 {
+        kOptValTypeBoolean => {
+            let boolean = if nextchar == '!' as c_int {
+                // `:set opt!` inverts, leaving an unset global-local
+                // value unset.
+                unsafe { optval_boolean(oldval.data) }.map(|b| !b)
+            } else if prefix == Prefix::Inv {
+                Some(unsafe { *varp.boolean_var() } == 0)
+            } else {
+                Some(prefix != Prefix::No)
+            };
+            boolean_optval(boolean)
+        }
+        kOptValTypeNumber => {
+            let oldval_num = unsafe { oldval.data.number };
+            let arg = unsafe { argp.add(1) };
+            let Some(newval_num) = (unsafe { take_number(opt_idx, arg, errmsg) }) else {
+                return nil;
+            };
+            let number = match op {
+                OP_ADDING => oldval_num + newval_num,
+                // `^=` on a number multiplies; there is nothing to
+                // prepend to.
+                OP_PREPENDING => oldval_num * newval_num,
+                OP_REMOVING => oldval_num - newval_num,
+                _ => newval_num,
+            };
+            OptVal {
+                type_0: kOptValTypeNumber,
+                data: OptValData { number },
             }
-            kOptValTypeNumber => {
-                let oldval_num = oldval.data.number;
-                let arg = argp.add(1);
-                let Some(newval_num) = take_number(opt_idx, arg, errmsg) else {
-                    return nil;
-                };
-                let number = match op {
-                    OP_ADDING => oldval_num + newval_num,
-                    // `^=` on a number multiplies; there is nothing to
-                    // prepend to.
-                    OP_PREPENDING => oldval_num * newval_num,
-                    OP_REMOVING => oldval_num - newval_num,
-                    _ => newval_num,
-                };
-                OptVal {
-                    type_0: kOptValTypeNumber,
-                    data: OptValData { number },
-                }
-            }
-            kOptValTypeString => {
-                let mut op = op;
-                let newval_str = stropt_get_newval(
+        }
+        kOptValTypeString => {
+            let mut op = op;
+            let newval_str = unsafe {
+                stropt_get_newval(
                     opt_idx,
                     argp,
                     varp,
                     oldval.data.string.data(),
                     &raw mut op,
                     flags,
-                );
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string(newval_str),
-                    },
-                }
+                )
+            };
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: unsafe { cstr_as_string(newval_str) },
+                },
             }
-            _ => unreachable!("an option with no type has no value to set"),
         }
+        _ => unreachable!("an option with no type has no value to set"),
     }
 }
 
@@ -387,28 +380,28 @@ unsafe fn take_number(
     errmsg: &mut *const c_char,
 ) -> Option<OptInt> {
     // SAFETY: the caller's variable and string.
-    unsafe {
-        let is_key_option = matches!(opt_idx, kOptWildchar | kOptWildcharm);
-        let looks_like_key = *arg as c_int == '<' as c_int
-            || *arg as c_int == '^' as c_int
-            || (*arg != NUL as c_char
-                && (*arg.add(1) == 0 || ascii_iswhite(*arg.add(1) as c_int))
-                && !ascii_isdigit(*arg as c_int));
-        if is_key_option && looks_like_key {
-            let key = string_to_key(arg) as OptInt;
-            if key == 0 {
-                *errmsg = e_invarg.as_ptr();
-                return None;
-            }
-            return Some(key);
-        }
-
-        if *arg as c_int != '-' as c_int && !ascii_isdigit(*arg as c_int) {
-            *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
+    let is_key_option = matches!(opt_idx, kOptWildchar | kOptWildcharm);
+    let looks_like_key = unsafe { *arg } as c_int == '<' as c_int
+        || unsafe { *arg } as c_int == '^' as c_int
+        || (unsafe { *arg } != NUL as c_char
+            && (unsafe { *arg.add(1) } == 0 || ascii_iswhite(unsafe { *arg.add(1) } as c_int))
+            && !ascii_isdigit(unsafe { *arg } as c_int));
+    if is_key_option && looks_like_key {
+        let key = unsafe { string_to_key(arg) } as OptInt;
+        if key == 0 {
+            *errmsg = e_invarg.as_ptr();
             return None;
         }
-        let mut len: c_int = 0;
-        let mut number: OptInt = 0;
+        return Some(key);
+    }
+
+    if unsafe { *arg } as c_int != '-' as c_int && !ascii_isdigit(unsafe { *arg } as c_int) {
+        *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
+        return None;
+    }
+    let mut len: c_int = 0;
+    let mut number: OptInt = 0;
+    unsafe {
         vim_str2nr(
             arg,
             ptr::null_mut(),
@@ -419,16 +412,16 @@ unsafe fn take_number(
             0,
             true,
             ptr::null_mut::<bool>(),
-        );
-        if len == 0
-            || (*arg.offset(len as isize) != NUL as c_char
-                && !ascii_iswhite(*arg.offset(len as isize) as c_int))
-        {
-            *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
-            return None;
-        }
-        Some(number)
+        )
+    };
+    if len == 0
+        || (unsafe { *arg.offset(len as isize) } != NUL as c_char
+            && !ascii_iswhite(unsafe { *arg.offset(len as isize) } as c_int))
+    {
+        *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
+        return None;
     }
+    Some(number)
 }
 
 /// Parse and apply one `:set` argument, advancing `*argp` past the value.
@@ -449,104 +442,109 @@ unsafe fn do_one_set_option(
     let arg = *argp;
 
     // SAFETY: the caller's string and error buffer.
-    unsafe {
-        let mut opt_idx: OptIndex = kOptAleph;
-        let option_end = find_option_end(arg, &raw mut opt_idx);
-        if opt_idx == kOptInvalid {
-            // A terminal option is accepted and discarded.
-            if !is_tty_option(CStr::from_ptr(arg)) {
-                *errmsg = E_UNKNOWN_OPTION.as_ptr();
-            }
-            return;
+    let mut opt_idx: OptIndex = kOptAleph;
+    let option_end = unsafe { find_option_end(arg, &raw mut opt_idx) };
+    if opt_idx == kOptInvalid {
+        // A terminal option is accepted and discarded.
+        if !is_tty_option(unsafe { CStr::from_ptr(arg) }) {
+            *errmsg = E_UNKNOWN_OPTION.as_ptr();
         }
-        debug_assert!(option_end >= arg);
+        return;
+    }
+    debug_assert!(option_end >= arg);
 
-        // What ends the name decides whether a trailing character is an
-        // error; `:set ai  ?` is allowed, `:set ai?x` is not.
-        let afterchar = *option_end as uint8_t;
-        let mut p = option_end as *mut c_char;
-        while ascii_iswhite(*p as c_int) {
-            p = p.add(1);
-        }
-        let op = get_op(p);
-        if op != OP_NONE {
-            p = p.add(1);
-        }
-        let nextchar = *p as uint8_t as c_int;
+    // What ends the name decides whether a trailing character is an
+    // error; `:set ai  ?` is allowed, `:set ai?x` is not.
+    let afterchar = unsafe { *option_end } as uint8_t;
+    let mut p = option_end as *mut c_char;
+    while ascii_iswhite(unsafe { *p } as c_int) {
+        p = unsafe { p.add(1) };
+    }
+    let op = unsafe { get_op(p) };
+    if op != OP_NONE {
+        p = unsafe { p.add(1) };
+    }
+    let nextchar = unsafe { *p } as uint8_t as c_int;
 
-        let flags = get_option(opt_idx).flags;
-        let varp = get_varp_scope(opt_idx, opt_flags);
+    let flags = get_option(opt_idx).flags;
+    let varp = get_varp_scope(opt_idx, opt_flags);
 
-        if validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
-            return;
-        }
+    if unsafe { validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) } == FAIL
+    {
+        return;
+    }
 
-        if !vim_strchr(c"?=:!&<".as_ptr(), nextchar).is_null() {
-            *argp = p;
-            // `:set opt&vi` and `:set opt&vim` both mean `:set opt&` here;
-            // nvim has no separate Vi default.
-            if nextchar == '&' as c_int
-                && *argp.add(1) as c_int == 'v' as c_int
-                && *argp.add(2) as c_int == 'i' as c_int
-            {
-                *argp = argp.add(if *argp.add(3) as c_int == 'm' as c_int {
+    if !unsafe { vim_strchr(c"?=:!&<".as_ptr(), nextchar) }.is_null() {
+        *argp = p;
+        // `:set opt&vi` and `:set opt&vim` both mean `:set opt&` here;
+        // nvim has no separate Vi default.
+        if nextchar == '&' as c_int
+            && unsafe { *argp.add(1) } as c_int == 'v' as c_int
+            && unsafe { *argp.add(2) } as c_int == 'i' as c_int
+        {
+            *argp = unsafe {
+                argp.add(if *argp.add(3) as c_int == 'm' as c_int {
                     3
                 } else {
                     2
-                });
-            }
-            // Nothing may follow the ones that take no value.
-            if !vim_strchr(c"?!&<".as_ptr(), nextchar).is_null()
-                && *argp.add(1) != NUL as c_char
-                && !ascii_iswhite(*argp.add(1) as c_int)
-            {
-                *errmsg = e_trailing.as_ptr();
-                return;
-            }
+                })
+            };
         }
-
-        // `:set opt?`, and a bare `:set opt` for anything but a boolean,
-        // shows the value rather than setting it.
-        let showing = nextchar == '?' as c_int
-            || (prefix == Prefix::None
-                && vim_strchr(c"=:&<".as_ptr(), nextchar).is_null()
-                && !option_has_type(opt_idx, kOptValTypeBoolean));
-        if showing {
-            show_one(opt_idx, opt_flags, varp, did_show);
-            if nextchar != '?' as c_int
-                && nextchar != NUL as c_int
-                && !ascii_iswhite(afterchar as c_int)
-            {
-                *errmsg = e_trailing.as_ptr();
-            }
+        // Nothing may follow the ones that take no value.
+        if !unsafe { vim_strchr(c"?!&<".as_ptr(), nextchar) }.is_null()
+            && unsafe { *argp.add(1) } != NUL as c_char
+            && !ascii_iswhite(unsafe { *argp.add(1) } as c_int)
+        {
+            *errmsg = e_trailing.as_ptr();
             return;
         }
+    }
 
-        if option_has_type(opt_idx, kOptValTypeBoolean) {
-            // A boolean takes no value, and nothing may follow it.
-            if !vim_strchr(c"=:".as_ptr(), nextchar).is_null() {
-                *errmsg = e_invarg.as_ptr();
-                return;
-            }
-            if vim_strchr(c"!&<".as_ptr(), nextchar).is_null()
-                && nextchar != NUL as c_int
-                && !ascii_iswhite(afterchar as c_int)
-            {
-                *errmsg = e_trailing.as_ptr();
-                return;
-            }
-        } else if vim_strchr(c"=:&<".as_ptr(), nextchar).is_null() {
+    // `:set opt?`, and a bare `:set opt` for anything but a boolean,
+    // shows the value rather than setting it.
+    let showing = nextchar == '?' as c_int
+        || (prefix == Prefix::None
+            && unsafe { vim_strchr(c"=:&<".as_ptr(), nextchar) }.is_null()
+            && !option_has_type(opt_idx, kOptValTypeBoolean));
+    if showing {
+        unsafe { show_one(opt_idx, opt_flags, varp, did_show) };
+        if nextchar != '?' as c_int
+            && nextchar != NUL as c_int
+            && !ascii_iswhite(afterchar as c_int)
+        {
+            *errmsg = e_trailing.as_ptr();
+        }
+        return;
+    }
+
+    if option_has_type(opt_idx, kOptValTypeBoolean) {
+        // A boolean takes no value, and nothing may follow it.
+        if !unsafe { vim_strchr(c"=:".as_ptr(), nextchar) }.is_null() {
             *errmsg = e_invarg.as_ptr();
             return;
         }
-
-        let newval = get_option_newval(
-            opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errmsg,
-        );
-        if newval.type_0 == kOptValTypeNil || !errmsg.is_null() {
+        if unsafe { vim_strchr(c"!&<".as_ptr(), nextchar) }.is_null()
+            && nextchar != NUL as c_int
+            && !ascii_iswhite(afterchar as c_int)
+        {
+            *errmsg = e_trailing.as_ptr();
             return;
         }
-        *errmsg = set_option(
+    } else if unsafe { vim_strchr(c"=:&<".as_ptr(), nextchar) }.is_null() {
+        *errmsg = e_invarg.as_ptr();
+        return;
+    }
+
+    let newval = unsafe {
+        get_option_newval(
+            opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errmsg,
+        )
+    };
+    if newval.type_0 == kOptValTypeNil || !errmsg.is_null() {
+        return;
+    }
+    *errmsg = unsafe {
+        set_option(
             opt_idx,
             newval,
             opt_flags,
@@ -557,8 +555,8 @@ unsafe fn do_one_set_option(
             op == OP_NONE,
             errbuf,
             errbuflen,
-        );
-    }
+        )
+    };
 }
 
 /// Show one option's value, on its own line, opening the message area the
@@ -575,30 +573,28 @@ unsafe fn show_one(
 ) {
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
     // array.
-    unsafe {
-        if *did_show {
-            msg_putchar('\n' as c_int);
-        } else {
-            msg_ext_set_kind(c"list_cmd".as_ptr());
-            gotocmdline(true);
-            *did_show = true;
-        }
-        showoneopt(opt_idx, opt_flags);
+    if *did_show {
+        unsafe { msg_putchar('\n' as c_int) };
+    } else {
+        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        unsafe { gotocmdline(true) };
+        *did_show = true;
+    }
+    unsafe { showoneopt(opt_idx, opt_flags) };
 
-        // With 'verbose' set, say where the value came from — from the
-        // script context of the scope the value is being read from.
-        if p_verbose.get() <= 0 {
-            return;
-        }
-        if varp == option_var(opt_idx) {
-            last_set_msg(option_last_set(opt_idx));
-        } else if option_has_scope(opt_idx, kOptScopeWin) {
-            let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
-            last_set_msg((*curwin.get()).w_onebuf_opt.wo_script_ctx[at]);
-        } else if option_has_scope(opt_idx, kOptScopeBuf) {
-            let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
-            last_set_msg((*curbuf.get()).b_p_script_ctx[at]);
-        }
+    // With 'verbose' set, say where the value came from — from the
+    // script context of the scope the value is being read from.
+    if p_verbose.get() <= 0 {
+        return;
+    }
+    if varp == option_var(opt_idx) {
+        unsafe { last_set_msg(option_last_set(opt_idx)) };
+    } else if option_has_scope(opt_idx, kOptScopeWin) {
+        let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
+        unsafe { last_set_msg(cur_win().w_onebuf_opt.wo_script_ctx[at]) };
+    } else if option_has_scope(opt_idx, kOptScopeBuf) {
+        let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
+        unsafe { last_set_msg(cur_buf().b_p_script_ctx[at]) };
     }
 }
 
@@ -616,34 +612,34 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
     let mut arg = arg;
 
     // SAFETY: the caller's string.
-    unsafe {
-        if *arg == NUL as c_char {
-            showoptions(false, opt_flags);
-            did_show = true;
-        }
-        while *arg != NUL as c_char {
-            // "all" is only the keyword when it is a whole word, and never
-            // in a modeline.
-            let is_all = strncmp(arg, c"all".as_ptr(), 3) == 0
-                && !(*arg.add(3) as u8).is_ascii_alphabetic()
-                && !opt_flags.has(OptionSetFlags::MODELINE);
-            if is_all {
-                arg = arg.add(3);
-                if *arg as c_int == '&' as c_int {
-                    arg = arg.add(1);
-                    set_options_default(opt_flags);
-                    didset_options();
-                    didset_options2();
-                    ui_refresh_options();
-                    redraw_all_later(UPD_CLEAR);
-                } else {
-                    showoptions(true, opt_flags);
-                    did_show = true;
-                }
+    if unsafe { *arg } == NUL as c_char {
+        unsafe { showoptions(false, opt_flags) };
+        did_show = true;
+    }
+    while unsafe { *arg } != NUL as c_char {
+        // "all" is only the keyword when it is a whole word, and never
+        // in a modeline.
+        let is_all = unsafe { strncmp(arg, c"all".as_ptr(), 3) } == 0
+            && !(unsafe { *arg.add(3) } as u8).is_ascii_alphabetic()
+            && !opt_flags.has(OptionSetFlags::MODELINE);
+        if is_all {
+            arg = unsafe { arg.add(3) };
+            if unsafe { *arg } as c_int == '&' as c_int {
+                arg = unsafe { arg.add(1) };
+                set_options_default(opt_flags);
+                didset_options();
+                didset_options2();
+                ui_refresh_options();
+                unsafe { redraw_all_later(UPD_CLEAR) };
             } else {
-                let startarg = arg;
-                let mut errmsg: *const c_char = ptr::null();
-                let mut errbuf: [c_char; 80] = [0; 80];
+                unsafe { showoptions(true, opt_flags) };
+                did_show = true;
+            }
+        } else {
+            let startarg = arg;
+            let mut errmsg: *const c_char = ptr::null();
+            let mut errbuf: [c_char; 80] = [0; 80];
+            unsafe {
                 do_one_set_option(
                     opt_flags,
                     &mut arg,
@@ -651,33 +647,33 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
                     errbuf.as_mut_ptr(),
                     errbuf.len(),
                     &mut errmsg,
-                );
-                // Step over the value, and over an `=` that starts another
-                // one — twice at most, which is what `:set opt=a=b` needs.
-                for _ in 0..2 {
-                    arg = skiptowhite_esc(arg);
-                    arg = skipwhite(arg);
-                    if *arg as c_int != '=' as c_int {
-                        break;
-                    }
-                }
-                if !errmsg.is_null() {
-                    report(errmsg, startarg, arg);
-                    return FAIL;
+                )
+            };
+            // Step over the value, and over an `=` that starts another
+            // one — twice at most, which is what `:set opt=a=b` needs.
+            for _ in 0..2 {
+                arg = unsafe { skiptowhite_esc(arg) };
+                arg = unsafe { skipwhite(arg) };
+                if unsafe { *arg } as c_int != '=' as c_int {
+                    break;
                 }
             }
-            arg = skipwhite(arg);
+            if !errmsg.is_null() {
+                unsafe { report(errmsg, startarg, arg) };
+                return FAIL;
+            }
         }
+        arg = unsafe { skipwhite(arg) };
+    }
 
-        // `-s` suppresses messages, but a `:set` that was asked to show
-        // something still ends its listing with a newline.
-        if silent_mode.get() && did_show {
-            silent_mode.set(false);
-            info_message.set(true);
-            msg_putchar('\n' as c_int);
-            silent_mode.set(true);
-            info_message.set(false);
-        }
+    // `-s` suppresses messages, but a `:set` that was asked to show
+    // something still ends its listing with a newline.
+    if silent_mode.get() && did_show {
+        silent_mode.set(false);
+        info_message.set(true);
+        unsafe { msg_putchar('\n' as c_int) };
+        silent_mode.set(true);
+        info_message.set(false);
     }
     OK
 }
@@ -694,32 +690,34 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
 unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     let mut report = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller's strings, and `report` is `IOSIZE` writable bytes.
-    unsafe {
-        let buf = report.as_mut_ptr();
-        // Two past the message, leaving room for the ": " written back over
-        // its terminator.
-        let at = vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext(errmsg)) + 2;
-        debug_assert!(end >= start);
-        let arglen = end.offset_from(start);
-        if at as isize + arglen < IOSIZE as isize {
+    let buf = report.as_mut_ptr();
+    // Two past the message, leaving room for the ": " written back over
+    // its terminator.
+    let at = unsafe { vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext(errmsg)) } + 2;
+    debug_assert!(end >= start);
+    let arglen = unsafe { end.offset_from(start) };
+    if at as isize + arglen < IOSIZE as isize {
+        unsafe {
             xstrlcpy(
                 buf.offset(at as isize - 2),
                 c": ".as_ptr(),
                 (IOSIZE - at + 2) as size_t,
-            );
+            )
+        };
+        unsafe {
             memmove(
                 buf.offset(at as isize).cast::<c_void>(),
                 start.cast::<c_void>(),
                 arglen as size_t,
-            );
-            *buf.offset(at as isize + arglen) = NUL as c_char;
-        }
-        trans_characters(buf, IOSIZE);
-        // The message is the whole report; do not make the user acknowledge
-        // the half of it that has already scrolled past.
-        let _no_prompt = Suppress::wait_return();
-        emsg(buf);
+            )
+        };
+        unsafe { *buf.offset(at as isize + arglen) = NUL as c_char };
     }
+    unsafe { trans_characters(buf, IOSIZE) };
+    // The message is the whole report; do not make the user acknowledge
+    // the half of it that has already scrolled past.
+    let _no_prompt = Suppress::wait_return();
+    unsafe { emsg(buf) };
 }
 
 /// The key `arg` names, given that it is `len` bytes long and, with
@@ -730,32 +728,35 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
 /// `arg` must be readable for `len` bytes.
 unsafe fn find_key_len(arg: *const c_char, len: size_t, has_lt: bool) -> c_int {
     // SAFETY: the caller's string.
-    unsafe {
-        if len >= 4 && *arg as c_int == 't' as c_int && *arg.add(1) as c_int == '_' as c_int {
-            // A `t_xx` termcap name, which is two bytes packed into one
-            // negative key code.
-            if !has_lt || *arg.add(4) as c_int == '>' as c_int {
-                return -(*arg.add(2) as uint8_t as c_int
-                    + ((*arg.add(3) as uint8_t as c_int) << 8));
-            }
-            return 0;
+    if len >= 4
+        && unsafe { *arg } as c_int == 't' as c_int
+        && unsafe { *arg.add(1) } as c_int == '_' as c_int
+    {
+        // A `t_xx` termcap name, which is two bytes packed into one
+        // negative key code.
+        if !has_lt || unsafe { *arg.add(4) } as c_int == '>' as c_int {
+            return -(unsafe { *arg.add(2) } as uint8_t as c_int
+                + ((unsafe { *arg.add(3) } as uint8_t as c_int) << 8));
         }
-        if !has_lt {
-            return 0;
-        }
-        // Back up over the `<` that `has_lt` says was there.
-        let mut p = arg.sub(1);
-        let mut modifiers = 0;
-        let key = find_special_key(
+        return 0;
+    }
+    if !has_lt {
+        return 0;
+    }
+    // Back up over the `<` that `has_lt` says was there.
+    let mut p = unsafe { arg.sub(1) };
+    let mut modifiers = 0;
+    let key = unsafe {
+        find_special_key(
             &raw mut p,
             len.wrapping_add(1),
             &raw mut modifiers,
             FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int,
             ptr::null_mut::<bool>(),
-        );
-        // A key with a modifier left over does not fit in one option value.
-        if modifiers != 0 { 0 } else { key }
-    }
+        )
+    };
+    // A key with a modifier left over does not fit in one option value.
+    if modifiers != 0 { 0 } else { key }
 }
 
 /// The key a 'wildchar'-like option's value names: `<xx>`, `^x`, or the
@@ -767,15 +768,25 @@ unsafe fn find_key_len(arg: *const c_char, len: size_t, has_lt: bool) -> c_int {
 pub(crate) unsafe fn string_to_key(arg: *mut c_char) -> c_int {
     // SAFETY: the caller's string; the second byte is only read once the
     // first is known not to be the terminator.
-    unsafe {
-        if *arg as c_int == '<' as c_int && *arg.add(1) != 0 {
-            return find_key_len(arg.add(1), strlen(arg), true);
-        }
-        if *arg as c_int == '^' as c_int && *arg.add(1) != 0 {
-            // CTRL-x, where NUL would be ambiguous with "no key".
-            let key = ((*arg.add(1) as u8).to_ascii_uppercase() as c_int) ^ 0x40;
-            return if key == 0 { K_ZERO } else { key };
-        }
-        *arg as uint8_t as c_int
+    if unsafe { *arg } as c_int == '<' as c_int && unsafe { *arg.add(1) } != 0 {
+        return unsafe { find_key_len(arg.add(1), strlen(arg), true) };
     }
+    if unsafe { *arg } as c_int == '^' as c_int && unsafe { *arg.add(1) } != 0 {
+        // CTRL-x, where NUL would be ambiguous with "no key".
+        let key = ((unsafe { *arg.add(1) } as u8).to_ascii_uppercase() as c_int) ^ 0x40;
+        return if key == 0 { K_ZERO } else { key };
+    }
+    unsafe { *arg as uint8_t as c_int }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

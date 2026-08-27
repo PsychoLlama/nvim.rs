@@ -114,21 +114,19 @@ pub(crate) fn set_init_tablocal() {
 /// the value is a command line rather than a file name.
 fn set_init_default_shell() {
     // SAFETY: `os_getenv` hands back an owned NUL-terminated string.
-    unsafe {
-        let shell = os_getenv(c"SHELL".as_ptr());
-        if shell.is_null() {
-            return;
-        }
-        if vim_strchr(shell, ' ' as c_int).is_null() {
-            set_string_default(kOptShell, shell, false);
-        } else {
-            let len = strlen(shell).wrapping_add(3);
-            let quoted = xmalloc(len).cast::<c_char>();
-            snprintf(quoted, len, c"\"%s\"".as_ptr(), shell);
-            set_string_default(kOptShell, quoted, true);
-        }
-        xfree(shell.cast::<c_void>());
+    let shell = unsafe { os_getenv(c"SHELL".as_ptr()) };
+    if shell.is_null() {
+        return;
     }
+    if unsafe { vim_strchr(shell, ' ' as c_int) }.is_null() {
+        unsafe { set_string_default(kOptShell, shell, false) };
+    } else {
+        let len = unsafe { strlen(shell) }.wrapping_add(3);
+        let quoted = unsafe { xmalloc(len) }.cast::<c_char>();
+        unsafe { snprintf(quoted, len, c"\"%s\"".as_ptr(), shell) };
+        unsafe { set_string_default(kOptShell, quoted, true) };
+    }
+    unsafe { xfree(shell.cast::<c_void>()) };
 }
 
 /// 'backupskip' defaults to a `*` pattern under each temporary directory the
@@ -146,53 +144,55 @@ fn set_init_default_backupskip() {
     };
     // SAFETY: the garray is ours, and every string here is either a literal
     // or an owned result of `vim_getenv`.
-    unsafe {
-        ga_init(&raw mut ga, 1, 100);
-        let flags = get_option(kOptBackupskip).flags;
+    unsafe { ga_init(&raw mut ga, 1, 100) };
+    let flags = get_option(kOptBackupskip).flags;
 
-        for name in SOURCES {
-            let (dir, mut dirlen, owned) = if name.is_empty() {
-                (c"/tmp".as_ptr() as *mut c_char, 4 as size_t, false)
+    for name in SOURCES {
+        let (dir, mut dirlen, owned) = if name.is_empty() {
+            (c"/tmp".as_ptr() as *mut c_char, 4 as size_t, false)
+        } else {
+            (unsafe { vim_getenv(name.as_ptr()) }, 0, true)
+        };
+        if !dir.is_null() && unsafe { *dir } != NUL as c_char {
+            let mut trailing_sep = false;
+            if dirlen == 0 {
+                dirlen = unsafe { strlen(dir) };
+                trailing_sep = unsafe { after_pathsep(dir, dir.add(dirlen)) } != 0;
+            }
+            let itemsize = dirlen + usize::from(!trailing_sep) + 2;
+            let item = unsafe { xmalloc(itemsize) }.cast::<c_char>();
+            let sep = if trailing_sep {
+                c"".as_ptr()
             } else {
-                (vim_getenv(name.as_ptr()), 0, true)
+                PATHSEPSTR.as_ptr()
             };
-            if !dir.is_null() && *dir != NUL as c_char {
-                let mut trailing_sep = false;
-                if dirlen == 0 {
-                    dirlen = strlen(dir);
-                    trailing_sep = after_pathsep(dir, dir.add(dirlen)) != 0;
-                }
-                let itemsize = dirlen + usize::from(!trailing_sep) + 2;
-                let item = xmalloc(itemsize).cast::<c_char>();
-                let sep = if trailing_sep {
-                    c"".as_ptr()
-                } else {
-                    PATHSEPSTR.as_ptr()
-                };
-                let itemlen = vim_snprintf(item, itemsize, c"%s%s*".as_ptr(), dir, sep) as size_t;
+            let itemlen =
+                unsafe { vim_snprintf(item, itemsize, c"%s%s*".as_ptr(), dir, sep) } as size_t;
 
-                if find_dup_item(ga.ga_data.cast::<c_char>(), item, itemlen, flags).is_null() {
-                    let seplen = size_t::from(ga.ga_len != 0);
-                    ga_grow(&raw mut ga, (seplen + itemlen + 1) as c_int);
-                    let comma = if seplen > 0 { c"," } else { c"" };
-                    ga.ga_len += vim_snprintf(
+            if unsafe { find_dup_item(ga.ga_data.cast::<c_char>(), item, itemlen, flags) }.is_null()
+            {
+                let seplen = size_t::from(ga.ga_len != 0);
+                unsafe { ga_grow(&raw mut ga, (seplen + itemlen + 1) as c_int) };
+                let comma = if seplen > 0 { c"," } else { c"" };
+                ga.ga_len += unsafe {
+                    vim_snprintf(
                         ga.ga_data.cast::<c_char>().offset(ga.ga_len as isize),
                         seplen + itemlen + 1,
                         c"%s%s".as_ptr(),
                         comma.as_ptr(),
                         item,
-                    );
-                }
-                xfree(item.cast::<c_void>());
+                    )
+                };
             }
-            if owned {
-                xfree(dir.cast::<c_void>());
-            }
+            unsafe { xfree(item.cast::<c_void>()) };
         }
+        if owned {
+            unsafe { xfree(dir.cast::<c_void>()) };
+        }
+    }
 
-        if !ga.ga_data.is_null() {
-            set_string_default(kOptBackupskip, ga.ga_data.cast::<c_char>(), true);
-        }
+    if !ga.ga_data.is_null() {
+        unsafe { set_string_default(kOptBackupskip, ga.ga_data.cast::<c_char>(), true) };
     }
 }
 
@@ -203,33 +203,33 @@ fn set_init_default_cdpath() {
     // SAFETY: `vim_getenv` hands back an owned NUL-terminated string, and
     // the buffer below is two bytes per source byte plus the comma and the
     // terminator, which is the most the escaping can need.
-    unsafe {
-        let cdpath = vim_getenv(c"CDPATH".as_ptr());
-        if cdpath.is_null() {
-            return;
-        }
-        let buf = xmalloc(2usize.wrapping_mul(strlen(cdpath)).wrapping_add(2)).cast::<c_char>();
-        *buf = ',' as c_char;
-        let mut at = 1isize;
-        let mut src = cdpath;
-        while *src != NUL as c_char {
-            if vim_ispathlistsep(*src as c_int) {
-                *buf.offset(at) = ',' as c_char;
-                at += 1;
-            } else {
-                if *src as c_int == ' ' as c_int || *src as c_int == ',' as c_int {
-                    *buf.offset(at) = '\\' as c_char;
-                    at += 1;
-                }
-                *buf.offset(at) = *src;
+    let cdpath = unsafe { vim_getenv(c"CDPATH".as_ptr()) };
+    if cdpath.is_null() {
+        return;
+    }
+    let buf =
+        unsafe { xmalloc(2usize.wrapping_mul(strlen(cdpath)).wrapping_add(2)) }.cast::<c_char>();
+    unsafe { *buf = ',' as c_char };
+    let mut at = 1isize;
+    let mut src = cdpath;
+    while unsafe { *src } != NUL as c_char {
+        if vim_ispathlistsep(unsafe { *src } as c_int) {
+            unsafe { *buf.offset(at) = ',' as c_char };
+            at += 1;
+        } else {
+            if unsafe { *src } as c_int == ' ' as c_int || unsafe { *src } as c_int == ',' as c_int
+            {
+                unsafe { *buf.offset(at) = '\\' as c_char };
                 at += 1;
             }
-            src = src.add(1);
+            unsafe { *buf.offset(at) = *src };
+            at += 1;
         }
-        *buf.offset(at) = NUL as c_char;
-        change_option_default(kOptCdpath, owned(buf));
-        xfree(cdpath.cast::<c_void>());
+        src = unsafe { src.add(1) };
     }
+    unsafe { *buf.offset(at) = NUL as c_char };
+    change_option_default(kOptCdpath, unsafe { owned(buf) });
+    unsafe { xfree(cdpath.cast::<c_void>()) };
 }
 
 /// Expand the environment variables in every string default, in the option
@@ -237,38 +237,36 @@ fn set_init_default_cdpath() {
 fn set_init_expand_env() {
     // SAFETY: the option table is a plain array, and each `var` is the
     // option's own variable.
-    unsafe {
-        for opt_idx in all_options() {
-            let opt = get_option(opt_idx);
-            if opt.flags & kOptFlagNoDefExp as uint32_t != 0 {
-                continue;
-            }
-            // A `kOptFlagGettext` default is a translatable message rather
-            // than a path; there is nothing in it to expand.
-            let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
-            let expansion = (!translated).then(|| option_expand(opt_idx, ptr::null()));
-            let expanded = match &expansion {
-                None => gettext(*option_var(opt_idx).string_var()),
-                Some(Some(expanded)) => expanded.as_ptr(),
-                Some(None) => continue,
-            };
-            let value = OptVal {
+    for opt_idx in all_options() {
+        let opt = get_option(opt_idx);
+        if opt.flags & kOptFlagNoDefExp as uint32_t != 0 {
+            continue;
+        }
+        // A `kOptFlagGettext` default is a translatable message rather
+        // than a path; there is nothing in it to expand.
+        let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
+        let expansion = (!translated).then(|| unsafe { option_expand(opt_idx, ptr::null()) });
+        let expanded = match &expansion {
+            None => unsafe { gettext(*option_var(opt_idx).string_var()) },
+            Some(Some(expanded)) => expanded.as_ptr(),
+            Some(None) => continue,
+        };
+        let value = OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { cstr_to_string(expanded) },
+            },
+        };
+        unsafe { set_option_varp(opt_idx, option_var(opt_idx), value, true) };
+        change_option_default(
+            opt_idx,
+            OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
-                    string: cstr_to_string(expanded),
+                    string: unsafe { cstr_to_string(expanded) },
                 },
-            };
-            set_option_varp(opt_idx, option_var(opt_idx), value, true);
-            change_option_default(
-                opt_idx,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_to_string(expanded),
-                    },
-                },
-            );
-        }
+            },
+        );
     }
 }
 
@@ -276,13 +274,11 @@ fn set_init_expand_env() {
 /// the locale.
 fn set_init_fenc_default() {
     // SAFETY: both branches produce an owned NUL-terminated string.
-    unsafe {
-        let mut enc = enc_locale();
-        if enc.is_null() {
-            enc = xmemdupz(c"utf-8".as_ptr().cast::<c_void>(), 5).cast::<c_char>();
-        }
-        fenc_default.set(enc);
+    let mut enc = unsafe { enc_locale() };
+    if enc.is_null() {
+        enc = unsafe { xmemdupz(c"utf-8".as_ptr().cast::<c_void>(), 5) }.cast::<c_char>();
     }
+    fenc_default.set(enc);
 }
 
 /// The first startup pass: compute every default that depends on the
@@ -295,80 +291,83 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     // SAFETY: this runs on the main thread before anything else can touch
     // an option, and every string handed to `set_string_default` below is a
     // fresh allocation it takes ownership of.
+    langmap_init();
+    alloc_options_default();
+
+    set_init_default_shell();
+    set_init_default_backupskip();
+    set_init_default_cdpath();
+
+    // 'backupdir' is the state directory's backup subdirectory, with
+    // "." in front of it so a backup lands next to the file when it can.
+    let subpath = unsafe { stdpaths_user_state_subpath(c"backup".as_ptr(), 2, true) };
+    let len = unsafe { strlen(subpath) };
+    let backupdir =
+        unsafe { xrealloc(subpath.cast::<c_void>(), len.wrapping_add(3)) }.cast::<c_char>();
     unsafe {
-        langmap_init();
-        alloc_options_default();
-
-        set_init_default_shell();
-        set_init_default_backupskip();
-        set_init_default_cdpath();
-
-        // 'backupdir' is the state directory's backup subdirectory, with
-        // "." in front of it so a backup lands next to the file when it can.
-        let subpath = stdpaths_user_state_subpath(c"backup".as_ptr(), 2, true);
-        let len = strlen(subpath);
-        let backupdir = xrealloc(subpath.cast::<c_void>(), len.wrapping_add(3)).cast::<c_char>();
         memmove(
             backupdir.add(2).cast::<c_void>(),
             backupdir.cast::<c_void>(),
             len.wrapping_add(1),
-        );
+        )
+    };
+    unsafe {
         memmove(
             backupdir.cast::<c_void>(),
             c".,".as_ptr().cast::<c_void>(),
             2,
-        );
-        set_string_default(kOptBackupdir, backupdir, true);
+        )
+    };
+    unsafe { set_string_default(kOptBackupdir, backupdir, true) };
 
-        for (opt_idx, name) in [
-            (kOptViewdir, c"view"),
-            (kOptDirectory, c"swap"),
-            (kOptUndodir, c"undo"),
-        ] {
-            let dir = stdpaths_user_state_subpath(name.as_ptr(), 2, true);
-            set_string_default(opt_idx, dir, true);
-        }
-
-        let rtp = runtimepath_default(clean_arg);
-        if !rtp.is_null() {
-            // 'packpath' gets its own copy: `set_string_default` only takes
-            // ownership when told to.
-            set_string_default(kOptRuntimepath, rtp, true);
-            set_string_default(kOptPackpath, rtp, false);
-        }
-
-        set_options_default(OptionSetFlags::NONE);
-
-        (*curbuf.get()).b_p_initialized = true;
-        // The four global-local options the first buffer starts unset.
-        (*curbuf.get()).b_p_ac = -1;
-        (*curbuf.get()).b_p_ar = -1;
-        (*curbuf.get()).b_p_fs = -1;
-        (*curbuf.get()).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-
-        check_buf_options(curbuf.get());
-        check_win_options(curwin.get());
-        check_options();
-        last_status(false);
-        didset_options();
-        init_spell_chartab();
-
-        set_init_expand_env();
-
-        if os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) {
-            set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
-        }
-        save_file_ff(Buf::current());
-        if os_env_exists(c"MLTERM".as_ptr(), false) {
-            set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
-        }
-
-        didset_options2();
-        lang_init();
-        set_init_fenc_default();
-        bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc.get());
-        set_helplang_default(get_mess_lang());
+    for (opt_idx, name) in [
+        (kOptViewdir, c"view"),
+        (kOptDirectory, c"swap"),
+        (kOptUndodir, c"undo"),
+    ] {
+        let dir = unsafe { stdpaths_user_state_subpath(name.as_ptr(), 2, true) };
+        unsafe { set_string_default(opt_idx, dir, true) };
     }
+
+    let rtp = unsafe { runtimepath_default(clean_arg) };
+    if !rtp.is_null() {
+        // 'packpath' gets its own copy: `set_string_default` only takes
+        // ownership when told to.
+        unsafe { set_string_default(kOptRuntimepath, rtp, true) };
+        unsafe { set_string_default(kOptPackpath, rtp, false) };
+    }
+
+    set_options_default(OptionSetFlags::NONE);
+
+    cur_buf().b_p_initialized = true;
+    // The four global-local options the first buffer starts unset.
+    cur_buf().b_p_ac = -1;
+    cur_buf().b_p_ar = -1;
+    cur_buf().b_p_fs = -1;
+    cur_buf().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+
+    unsafe { check_buf_options(curbuf.get()) };
+    unsafe { check_win_options(curwin.get()) };
+    check_options();
+    last_status(false);
+    didset_options();
+    init_spell_chartab();
+
+    set_init_expand_env();
+
+    if unsafe { os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) } {
+        set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
+    }
+    save_file_ff(unsafe { Buf::current() });
+    if unsafe { os_env_exists(c"MLTERM".as_ptr(), false) } {
+        set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
+    }
+
+    didset_options2();
+    lang_init();
+    set_init_fenc_default();
+    unsafe { bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc.get()) };
+    unsafe { set_helplang_default(get_mess_lang()) };
 }
 
 /// The default `:set opt&` would install: the table's, with the environment
@@ -394,17 +393,15 @@ pub(crate) fn get_option_default(
     }
     let default = option_default(opt_idx);
     // SAFETY: the string arm is only read once the type has been tested.
-    unsafe {
-        if !option_has_type(opt_idx, kOptValTypeString)
-            || get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0
-        {
-            return default;
-        }
-        match option_expand(opt_idx, default.data.string.data()) {
-            None => default,
-            // Borrowed: the bytes are `expansion`'s, and nothing frees this.
-            Some(e) => owned(expansion.insert(e).as_ptr().cast_mut()),
-        }
+    if !option_has_type(opt_idx, kOptValTypeString)
+        || get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0
+    {
+        return default;
+    }
+    match unsafe { option_expand(opt_idx, default.data.string.data()) } {
+        None => default,
+        // Borrowed: the bytes are `expansion`'s, and nothing frees this.
+        Some(e) => unsafe { owned(expansion.insert(e).as_ptr().cast_mut()) },
     }
 }
 
@@ -432,17 +429,15 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     let def_val = get_option_default(opt_idx, opt_flags, &mut expansion);
     // SAFETY: `current_sctx`, `curwin` and the option table are the
     // editor's own.
-    unsafe {
-        set_option_direct(opt_idx, def_val, opt_flags, current_sctx.get().sc_sid);
-        // 'scroll' is half the window height, which the option table cannot
-        // know.
-        if opt_idx == kOptScroll {
-            win_comp_scroll(curwin.get());
-        }
-        insecure_flag(curwin.get(), opt_idx, opt_flags).set(false);
-        if both {
-            insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL).set(false);
-        }
+    set_option_direct(opt_idx, def_val, opt_flags, current_sctx.get().sc_sid);
+    // 'scroll' is half the window height, which the option table cannot
+    // know.
+    if opt_idx == kOptScroll {
+        unsafe { win_comp_scroll(curwin.get()) };
+    }
+    unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) }.set(false);
+    if both {
+        unsafe { insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
     }
 }
 
@@ -450,18 +445,16 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
 /// that have already been given a computed value and must keep it.
 pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     // SAFETY: the option table and the window lists are the editor's own.
-    unsafe {
-        for opt_idx in all_options() {
-            if get_option(opt_idx).flags & kOptFlagNoDefault as uint32_t == 0 {
-                set_option_default(opt_idx, opt_flags);
-            }
+    for opt_idx in all_options() {
+        if get_option(opt_idx).flags & kOptFlagNoDefault as uint32_t == 0 {
+            set_option_default(opt_idx, opt_flags);
         }
-        // 'scroll' again, this time for every window there is.
-        for wp in winlayer::tab_windows() {
-            win_comp_scroll(wp.raw());
-        }
-        parse_cino(Buf::current());
     }
+    // 'scroll' again, this time for every window there is.
+    for wp in winlayer::tab_windows() {
+        unsafe { win_comp_scroll(wp.raw()) };
+    }
+    unsafe { parse_cino(Buf::current()) };
 }
 
 /// Replace a string option's default. With `allocated` the default takes
@@ -502,30 +495,29 @@ pub(crate) unsafe fn find_dup_item(
     let mut bs = 0;
 
     // SAFETY: the caller's strings.
-    unsafe {
-        let mut s = origval;
-        while *s != NUL as c_char {
-            let starts_item = !comma_list
-                || s == origval
-                || (*s.offset(-1) as c_int == ',' as c_int && bs & 1 == 0);
-            // The tail test must stay behind the comparison: only a match
-            // proves `s` has `newvallen` bytes, and so that `s[newvallen]`
-            // is at worst the terminator rather than past it.
-            let ends_item = || {
-                !comma_list
-                    || *s.add(newvallen) as c_int == ',' as c_int
-                    || *s.add(newvallen) == NUL as c_char
-            };
-            if starts_item && strncmp(s, newval, newvallen) == 0 && ends_item() {
-                return s;
-            }
-            let escaping = (s > origval.add(1)
-                && *s.offset(-1) as c_int == '\\' as c_int
-                && *s.offset(-2) as c_int != ',' as c_int)
-                || (s == origval.add(1) && *s.offset(-1) as c_int == '\\' as c_int);
-            bs = if escaping { bs + 1 } else { 0 };
-            s = s.add(1);
+    let mut s = origval;
+    while unsafe { *s } != NUL as c_char {
+        let starts_item = !comma_list
+            || s == origval
+            || (unsafe { *s.offset(-1) } as c_int == ',' as c_int && bs & 1 == 0);
+        // The tail test must stay behind the comparison: only a match
+        // proves `s` has `newvallen` bytes, and so that `s[newvallen]`
+        // is at worst the terminator rather than past it.
+        let ends_item = || {
+            !comma_list
+                || unsafe { *s.add(newvallen) } as c_int == ',' as c_int
+                || unsafe { *s.add(newvallen) } == NUL as c_char
+        };
+        if starts_item && unsafe { strncmp(s, newval, newvallen) } == 0 && ends_item() {
+            return s;
         }
+        let escaping = (s > unsafe { origval.add(1) }
+            && unsafe { *s.offset(-1) } as c_int == '\\' as c_int
+            && unsafe { *s.offset(-2) } as c_int != ',' as c_int)
+            || (s == unsafe { origval.add(1) }
+                && unsafe { *s.offset(-1) } as c_int == '\\' as c_int);
+        bs = if escaping { bs + 1 } else { 0 };
+        s = unsafe { s.add(1) };
     }
     ptr::null()
 }
@@ -533,23 +525,21 @@ pub(crate) unsafe fn find_dup_item(
 /// The second startup pass, once the screen size is known.
 pub(crate) fn set_init_2(_headless: bool) {
     // SAFETY: the option table and the screen are the editor's own.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"set_init_2".as_ptr(),
-            613,
-            true,
-            c"startup runtimepath/packpath value: %s".as_ptr(),
-            p_rtp.get(),
-        );
-        // 'scroll' is half the window height, so it could not be defaulted
-        // before there was a window.
-        if !option_was_set(kOptScroll) {
-            set_option_default(kOptScroll, OptionSetFlags::LOCAL);
-        }
-        comp_col();
+    logmsg_c!(
+        LOGLVL_INF,
+        ptr::null(),
+        c"set_init_2".as_ptr(),
+        613,
+        true,
+        c"startup runtimepath/packpath value: %s".as_ptr(),
+        p_rtp.get(),
+    );
+    // 'scroll' is half the window height, so it could not be defaulted
+    // before there was a window.
+    if !option_was_set(kOptScroll) {
+        set_option_default(kOptScroll, OptionSetFlags::LOCAL);
     }
+    unsafe { comp_col() };
     // Same for 'window', which is one screen's worth of lines.
     if !option_was_set(kOptWindow) {
         p_window.set((Rows.get() - 1) as OptInt);
@@ -585,38 +575,40 @@ pub(crate) fn set_init_3() {
 
     // SAFETY: 'shell' is a NUL-terminated option value, and `p` below is an
     // owned copy of its trailing component.
-    unsafe {
-        parse_shape_opt(SHAPE_CURSOR);
+    unsafe { parse_shape_opt(SHAPE_CURSOR) };
 
-        let do_srr = !option_was_set(kOptShellredir);
-        let do_sp = !option_was_set(kOptShellpipe);
+    let do_srr = !option_was_set(kOptShellredir);
+    let do_sp = !option_was_set(kOptShellpipe);
 
-        let mut len: size_t = 0;
-        let tail = invocation_path_tail(p_sh.get(), &raw mut len);
-        let shell = xmemdupz(tail.cast::<c_void>(), len).cast::<c_char>();
-        let named = |names: &[&CStr]| names.iter().any(|n| path_fnamecmp(shell, n.as_ptr()) == 0);
-        let is_csh = named(&CSH_LIKE);
+    let mut len: size_t = 0;
+    let tail = unsafe { invocation_path_tail(p_sh.get(), &raw mut len) };
+    let shell = unsafe { xmemdupz(tail.cast::<c_void>(), len) }.cast::<c_char>();
+    let named = |names: &[&CStr]| {
+        names
+            .iter()
+            .any(|n| unsafe { path_fnamecmp(shell, n.as_ptr()) } == 0)
+    };
+    let is_csh = named(&CSH_LIKE);
 
-        if is_csh || named(&POSIX_LIKE) {
-            if do_sp {
-                let sp = borrowed(if is_csh { c"|& tee" } else { c"2>&1| tee" });
-                set_option_direct(kOptShellpipe, sp, OptionSetFlags::NONE, SID_NONE);
-                change_option_default(kOptShellpipe, optval_copy(sp));
-            }
-            if do_srr {
-                let srr = borrowed(if is_csh { c">&" } else { c">%s 2>&1" });
-                set_option_direct(kOptShellredir, srr, OptionSetFlags::NONE, SID_NONE);
-                change_option_default(kOptShellredir, optval_copy(srr));
-            }
+    if is_csh || named(&POSIX_LIKE) {
+        if do_sp {
+            let sp = borrowed(if is_csh { c"|& tee" } else { c"2>&1| tee" });
+            set_option_direct(kOptShellpipe, sp, OptionSetFlags::NONE, SID_NONE);
+            change_option_default(kOptShellpipe, optval_copy(sp));
         }
-        xfree(shell.cast::<c_void>());
-
-        // An empty buffer has no line endings to have detected a format
-        // from, so it takes the first of 'fileformats' — but only if the
-        // user gave that option a value; otherwise its own default stands.
-        if buf_is_empty(curbuf.get()) && option_was_set(kOptFileformats) {
-            set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
+        if do_srr {
+            let srr = borrowed(if is_csh { c">&" } else { c">%s 2>&1" });
+            set_option_direct(kOptShellredir, srr, OptionSetFlags::NONE, SID_NONE);
+            change_option_default(kOptShellredir, optval_copy(srr));
         }
+    }
+    unsafe { xfree(shell.cast::<c_void>()) };
+
+    // An empty buffer has no line endings to have detected a format
+    // from, so it takes the first of 'fileformats' — but only if the
+    // user gave that option a value; otherwise its own default stands.
+    if unsafe { buf_is_empty(curbuf.get()) } && option_was_set(kOptFileformats) {
+        set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
     }
     set_title_defaults();
 }
@@ -631,29 +623,27 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
         return;
     }
     // SAFETY: the caller's `lang` is NUL-terminated.
-    unsafe {
-        let lang_len = strlen(lang);
-        // Two letters is what the option holds; anything shorter cannot be
-        // a language code.
-        if lang_len < 2 || option_was_set(kOptHelplang) {
-            return;
-        }
-        free_string_option(p_hlg.get());
-        p_hlg.set(xmemdupz(lang.cast::<c_void>(), lang_len).cast::<c_char>());
-
-        let hlg = p_hlg.get();
-        let lower = |c: c_char| (c as u8).to_ascii_lowercase() as c_char;
-        if strncasecmp(hlg, c"zh_".as_ptr(), 3) == 0 && lang_len >= 5 {
-            // zh_CN becomes "cn", zh_TW becomes "tw".
-            *hlg = lower(*hlg.add(3));
-            *hlg.add(1) = lower(*hlg.add(4));
-        } else if *hlg as c_int == 'C' as c_int {
-            // Any C-like setting, C.UTF-8 included, becomes "en".
-            *hlg = 'e' as c_char;
-            *hlg.add(1) = 'n' as c_char;
-        }
-        *hlg.add(2) = NUL as c_char;
+    let lang_len = unsafe { strlen(lang) };
+    // Two letters is what the option holds; anything shorter cannot be
+    // a language code.
+    if lang_len < 2 || option_was_set(kOptHelplang) {
+        return;
     }
+    unsafe { free_string_option(p_hlg.get()) };
+    p_hlg.set(unsafe { xmemdupz(lang.cast::<c_void>(), lang_len) }.cast::<c_char>());
+
+    let hlg = p_hlg.get();
+    let lower = |c: c_char| (c as u8).to_ascii_lowercase() as c_char;
+    if unsafe { strncasecmp(hlg, c"zh_".as_ptr(), 3) } == 0 && lang_len >= 5 {
+        // zh_CN becomes "cn", zh_TW becomes "tw".
+        unsafe { *hlg = lower(*hlg.add(3)) };
+        unsafe { *hlg.add(1) = lower(*hlg.add(4)) };
+    } else if unsafe { *hlg } as c_int == 'C' as c_int {
+        // Any C-like setting, C.UTF-8 included, becomes "en".
+        unsafe { *hlg = 'e' as c_char };
+        unsafe { *hlg.add(1) = 'n' as c_char };
+    }
+    unsafe { *hlg.add(2) = NUL as c_char };
 }
 
 /// 'title' and 'icon' default off unless the user asked for them, so that
@@ -665,4 +655,10 @@ pub(crate) fn set_title_defaults() {
             cell.set(0);
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

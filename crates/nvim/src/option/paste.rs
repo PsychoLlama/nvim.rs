@@ -23,7 +23,10 @@ use crate::options::{
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::types::{OptIndex, OptInt, OptionSetFlags, colnr_T, optset_T};
 
-use super::{buffers, didset_options_sctx};
+use crate::types::buf_T;
+use crate::winlayer::buffers;
+
+use super::{didset_options_sctx, field_ptr};
 
 /// What 'paste' overrode, so that switching it off again restores the
 /// values the user set. The per-buffer copies live in `buf_T`; these are
@@ -52,6 +55,9 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 
 /// 'paste': switch off everything that would reformat pasted text, and
 /// remember what to switch back on.
+/// Where a buffer keeps its parsed 'varsofttabstop' stops.
+const VSTS_ARRAY: usize = core::mem::offset_of!(buf_T, b_p_vsts_array);
+
 pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
     static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sm: GlobalCell<c_int> = GlobalCell::new(0);
@@ -62,99 +68,100 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
     // SAFETY: the buffer list is the editor's own, and every string handled
     // here is either the shared empty string or an allocation this option
     // owns.
-    unsafe {
-        if p_paste.get() != 0 {
-            if old_p_paste.get() == 0 {
-                for buf in buffers() {
-                    (*buf).b_p_tw_nopaste = (*buf).b_p_tw;
-                    (*buf).b_p_wm_nopaste = (*buf).b_p_wm;
-                    (*buf).b_p_sts_nopaste = (*buf).b_p_sts;
-                    (*buf).b_p_ai_nopaste = (*buf).b_p_ai;
-                    (*buf).b_p_et_nopaste = (*buf).b_p_et;
-                    if !(*buf).b_p_vsts_nopaste.is_null() {
-                        xfree((*buf).b_p_vsts_nopaste.cast::<c_void>());
-                    }
-                    (*buf).b_p_vsts_nopaste = saved_copy((*buf).b_p_vsts);
+    if p_paste.get() != 0 {
+        if old_p_paste.get() == 0 {
+            for mut buf in buffers() {
+                buf.b_p_tw_nopaste = buf.b_p_tw;
+                buf.b_p_wm_nopaste = buf.b_p_wm;
+                buf.b_p_sts_nopaste = buf.b_p_sts;
+                buf.b_p_ai_nopaste = buf.b_p_ai;
+                buf.b_p_et_nopaste = buf.b_p_et;
+                if !buf.b_p_vsts_nopaste.is_null() {
+                    unsafe { xfree(buf.b_p_vsts_nopaste.cast::<c_void>()) };
                 }
-                save_sm.set(p_sm.get());
-                save_sta.set(p_sta.get());
-                save_ru.set(p_ru.get());
-                save_ri.set(p_ri.get());
-                p_ai_nopaste.set(p_ai.get());
-                p_et_nopaste.set(p_et.get());
-                p_sts_nopaste.set(p_sts.get());
-                p_tw_nopaste.set(p_tw.get());
-                p_wm_nopaste.set(p_wm.get());
-                if !p_vsts_nopaste.get().is_null() {
-                    xfree(p_vsts_nopaste.get().cast::<c_void>());
-                }
-                p_vsts_nopaste.set(saved_copy(p_vsts.get()));
+                buf.b_p_vsts_nopaste = unsafe { saved_copy(buf.b_p_vsts) };
             }
-
-            for buf in buffers() {
-                (*buf).b_p_tw = 0;
-                (*buf).b_p_wm = 0;
-                (*buf).b_p_sts = 0;
-                (*buf).b_p_ai = 0;
-                (*buf).b_p_et = 0;
-                if !(*buf).b_p_vsts.is_null() {
-                    free_string_option((*buf).b_p_vsts);
-                }
-                (*buf).b_p_vsts = empty_option();
-                xfree((*buf).b_p_vsts_array.cast::<c_void>());
-                (*buf).b_p_vsts_array = ptr::null_mut();
+            save_sm.set(p_sm.get());
+            save_sta.set(p_sta.get());
+            save_ru.set(p_ru.get());
+            save_ri.set(p_ri.get());
+            p_ai_nopaste.set(p_ai.get());
+            p_et_nopaste.set(p_et.get());
+            p_sts_nopaste.set(p_sts.get());
+            p_tw_nopaste.set(p_tw.get());
+            p_wm_nopaste.set(p_wm.get());
+            if !p_vsts_nopaste.get().is_null() {
+                unsafe { xfree(p_vsts_nopaste.get().cast::<c_void>()) };
             }
-            p_sm.set(0);
-            p_sta.set(0);
-            if p_ru.get() != 0 {
-                status_redraw_all();
-            }
-            p_ru.set(0);
-            p_ri.set(0);
-            p_tw.set(0);
-            p_wm.set(0);
-            p_sts.set(0);
-            p_ai.set(0);
-            p_et.set(0);
-            if !p_vsts.get().is_null() {
-                free_string_option(p_vsts.get());
-            }
-            p_vsts.set(empty_option());
-        } else if old_p_paste.get() != 0 {
-            for buf in buffers() {
-                (*buf).b_p_tw = (*buf).b_p_tw_nopaste;
-                (*buf).b_p_wm = (*buf).b_p_wm_nopaste;
-                (*buf).b_p_sts = (*buf).b_p_sts_nopaste;
-                (*buf).b_p_ai = (*buf).b_p_ai_nopaste;
-                (*buf).b_p_et = (*buf).b_p_et_nopaste;
-                if !(*buf).b_p_vsts.is_null() {
-                    free_string_option((*buf).b_p_vsts);
-                }
-                (*buf).b_p_vsts = restored_copy((*buf).b_p_vsts_nopaste);
-                xfree((*buf).b_p_vsts_array.cast::<c_void>());
-                if !(*buf).b_p_vsts.is_null() && !is_empty_option((*buf).b_p_vsts) {
-                    tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array);
-                } else {
-                    (*buf).b_p_vsts_array = ptr::null_mut::<colnr_T>();
-                }
-            }
-            p_sm.set(save_sm.get());
-            p_sta.set(save_sta.get());
-            if p_ru.get() != save_ru.get() {
-                status_redraw_all();
-            }
-            p_ru.set(save_ru.get());
-            p_ri.set(save_ri.get());
-            p_ai.set(p_ai_nopaste.get());
-            p_et.set(p_et_nopaste.get());
-            p_sts.set(p_sts_nopaste.get());
-            p_tw.set(p_tw_nopaste.get());
-            p_wm.set(p_wm_nopaste.get());
-            if !p_vsts.get().is_null() {
-                free_string_option(p_vsts.get());
-            }
-            p_vsts.set(restored_copy(p_vsts_nopaste.get()));
+            p_vsts_nopaste.set(unsafe { saved_copy(p_vsts.get()) });
         }
+
+        for mut buf in buffers() {
+            buf.b_p_tw = 0;
+            buf.b_p_wm = 0;
+            buf.b_p_sts = 0;
+            buf.b_p_ai = 0;
+            buf.b_p_et = 0;
+            if !buf.b_p_vsts.is_null() {
+                unsafe { free_string_option(buf.b_p_vsts) };
+            }
+            buf.b_p_vsts = empty_option();
+            unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
+            buf.b_p_vsts_array = ptr::null_mut();
+        }
+        p_sm.set(0);
+        p_sta.set(0);
+        if p_ru.get() != 0 {
+            unsafe { status_redraw_all() };
+        }
+        p_ru.set(0);
+        p_ri.set(0);
+        p_tw.set(0);
+        p_wm.set(0);
+        p_sts.set(0);
+        p_ai.set(0);
+        p_et.set(0);
+        if !p_vsts.get().is_null() {
+            unsafe { free_string_option(p_vsts.get()) };
+        }
+        p_vsts.set(empty_option());
+    } else if old_p_paste.get() != 0 {
+        for mut buf in buffers() {
+            buf.b_p_tw = buf.b_p_tw_nopaste;
+            buf.b_p_wm = buf.b_p_wm_nopaste;
+            buf.b_p_sts = buf.b_p_sts_nopaste;
+            buf.b_p_ai = buf.b_p_ai_nopaste;
+            buf.b_p_et = buf.b_p_et_nopaste;
+            if !buf.b_p_vsts.is_null() {
+                unsafe { free_string_option(buf.b_p_vsts) };
+            }
+            buf.b_p_vsts = unsafe { restored_copy(buf.b_p_vsts_nopaste) };
+            unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
+            if !buf.b_p_vsts.is_null() && !is_empty_option(buf.b_p_vsts) {
+                // The array's address is the buffer's plus a constant, so
+                // naming it reads nothing.
+                let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &buf_T| &b.b_p_vsts_array);
+                unsafe { tabstop_set(buf.b_p_vsts, array) };
+            } else {
+                buf.b_p_vsts_array = ptr::null_mut::<colnr_T>();
+            }
+        }
+        p_sm.set(save_sm.get());
+        p_sta.set(save_sta.get());
+        if p_ru.get() != save_ru.get() {
+            unsafe { status_redraw_all() };
+        }
+        p_ru.set(save_ru.get());
+        p_ri.set(save_ri.get());
+        p_ai.set(p_ai_nopaste.get());
+        p_et.set(p_et_nopaste.get());
+        p_sts.set(p_sts_nopaste.get());
+        p_tw.set(p_tw_nopaste.get());
+        p_wm.set(p_wm_nopaste.get());
+        if !p_vsts.get().is_null() {
+            unsafe { free_string_option(p_vsts.get()) };
+        }
+        p_vsts.set(unsafe { restored_copy(p_vsts_nopaste.get()) });
     }
     old_p_paste.set(p_paste.get());
     didset_options_sctx(

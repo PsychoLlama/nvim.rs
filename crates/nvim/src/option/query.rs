@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
 
@@ -47,24 +48,20 @@ use crate::winlayer::Win;
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
-    unsafe {
-        if *(*curbuf.get()).b_p_ep == 0 {
-            p_ep.get()
-        } else {
-            (*curbuf.get()).b_p_ep
-        }
+    if unsafe { *cur_buf().b_p_ep } == 0 {
+        p_ep.get()
+    } else {
+        cur_buf().b_p_ep
     }
 }
 
 /// 'findfunc', local where set.
 pub(crate) fn get_findfunc() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
-    unsafe {
-        if *(*curbuf.get()).b_p_ffu == 0 {
-            p_ffu.get()
-        } else {
-            (*curbuf.get()).b_p_ffu
-        }
+    if unsafe { *cur_buf().b_p_ffu } == 0 {
+        p_ffu.get()
+    } else {
+        cur_buf().b_p_ffu
     }
 }
 
@@ -96,17 +93,15 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
         return;
     }
     // SAFETY: the caller's strings are NUL-terminated.
-    unsafe {
-        let existing = vim_getenv(envname);
-        if !existing.is_null() {
-            xfree(existing.cast::<c_void>());
-            return;
-        }
-        let full = full_name_save(fname, false);
-        if !full.is_null() {
-            os_setenv(envname, full, 1);
-            xfree(full.cast::<c_void>());
-        }
+    let existing = unsafe { vim_getenv(envname) };
+    if !existing.is_null() {
+        unsafe { xfree(existing.cast::<c_void>()) };
+        return;
+    }
+    let full = unsafe { full_name_save(fname, false) };
+    if !full.is_null() {
+        unsafe { os_setenv(envname, full, 1) };
+        unsafe { xfree(full.cast::<c_void>()) };
     }
 }
 
@@ -119,46 +114,44 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 /// `wp` must be live.
 pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
     // SAFETY: the caller's `wp` is live and `val` is NUL-terminated.
-    unsafe {
-        let mut p = match val {
-            Some(val) => val.as_ptr().cast_mut(),
-            None => (*wp).w_onebuf_opt.wo_culopt,
-        };
-        let mut flags: uint8_t = 0;
-        while *p != 0 {
-            for (word, bits) in [
-                (c"line".to_bytes(), kOptCuloptFlagLine),
-                (
-                    c"both".to_bytes(),
-                    kOptCuloptFlagLine | kOptCuloptFlagNumber,
-                ),
-                (c"number".to_bytes(), kOptCuloptFlagNumber),
-                (c"screenline".to_bytes(), kOptCuloptFlagScreenline),
-            ] {
-                if strncmp(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) == 0 {
-                    p = p.add(word.len());
-                    flags |= bits as uint8_t;
-                    break;
-                }
-            }
-            // Anything the words above did not consume is a syntax error.
-            if *p != b',' as c_char && *p != 0 {
-                return FAIL;
-            }
-            if *p == b',' as c_char {
-                p = p.add(1);
+    let mut p = match val {
+        Some(val) => val.as_ptr().cast_mut(),
+        None => unsafe { (*wp).w_onebuf_opt.wo_culopt },
+    };
+    let mut flags: uint8_t = 0;
+    while unsafe { *p } != 0 {
+        for (word, bits) in [
+            (c"line".to_bytes(), kOptCuloptFlagLine),
+            (
+                c"both".to_bytes(),
+                kOptCuloptFlagLine | kOptCuloptFlagNumber,
+            ),
+            (c"number".to_bytes(), kOptCuloptFlagNumber),
+            (c"screenline".to_bytes(), kOptCuloptFlagScreenline),
+        ] {
+            if unsafe { strncmp(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) } == 0 {
+                p = unsafe { p.add(word.len()) };
+                flags |= bits as uint8_t;
+                break;
             }
         }
-        // "line" and "screenline" are mutually exclusive; "both" implies
-        // "line", so it collides with "screenline" too.
-        if flags as c_int & kOptCuloptFlagLine as c_int != 0
-            && flags as c_int & kOptCuloptFlagScreenline as c_int != 0
-        {
+        // Anything the words above did not consume is a syntax error.
+        if unsafe { *p } != b',' as c_char && unsafe { *p } != 0 {
             return FAIL;
         }
-        (*wp).w_p_culopt_flags = flags;
-        OK
+        if unsafe { *p } == b',' as c_char {
+            p = unsafe { p.add(1) };
+        }
     }
+    // "line" and "screenline" are mutually exclusive; "both" implies
+    // "line", so it collides with "screenline" too.
+    if flags as c_int & kOptCuloptFlagLine as c_int != 0
+        && flags as c_int & kOptCuloptFlagScreenline as c_int != 0
+    {
+        return FAIL;
+    }
+    unsafe { (*wp).w_p_culopt_flags = flags };
+    OK
 }
 
 /// Whether patterns are magic right now — `\v`/`\V` in the pattern override
@@ -180,43 +173,41 @@ pub(crate) fn magic_isset() -> bool {
 /// live `Callback` this call may replace.
 pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
     // SAFETY: the caller's pointers are valid for the call.
-    unsafe {
-        if optval.is_null() || *optval == 0 {
-            callback_free(optcb);
-            return OK;
-        }
-        // A lambda, `function(...)` or `funcref(...)` is an expression; a
-        // bare name is the function's name.
-        let tv = if *optval == b'{' as c_char
-            || strncmp(optval, c"function(".as_ptr(), 9) == 0
-            || strncmp(optval, c"funcref(".as_ptr(), 8) == 0
-        {
-            let tv = eval_expr(optval, ptr::null_mut::<exarg_T>());
-            if tv.is_null() {
-                return FAIL;
-            }
-            tv
-        } else {
-            let tv = xcalloc(1, size_of::<typval_T>()).cast::<typval_T>();
-            (*tv).v_type = VAR_STRING;
-            (*tv).vval.v_string = xstrdup(optval);
-            tv
-        };
-        let mut cb = Callback {
-            data: Callback_data {
-                funcref: ptr::null_mut::<c_char>(),
-            },
-            type_0: kCallbackNone,
-        };
-        if !callback_from_typval(&raw mut cb, tv) || cb.type_0 == kCallbackNone {
-            tv_free(tv);
+    if optval.is_null() || unsafe { *optval } == 0 {
+        unsafe { callback_free(optcb) };
+        return OK;
+    }
+    // A lambda, `function(...)` or `funcref(...)` is an expression; a
+    // bare name is the function's name.
+    let tv = if unsafe { *optval } == b'{' as c_char
+        || unsafe { strncmp(optval, c"function(".as_ptr(), 9) } == 0
+        || unsafe { strncmp(optval, c"funcref(".as_ptr(), 8) } == 0
+    {
+        let tv = unsafe { eval_expr(optval, ptr::null_mut::<exarg_T>()) };
+        if tv.is_null() {
             return FAIL;
         }
-        callback_free(optcb);
-        *optcb = cb;
-        tv_free(tv);
-        OK
+        tv
+    } else {
+        let tv = unsafe { xcalloc(1, size_of::<typval_T>()) }.cast::<typval_T>();
+        unsafe { (*tv).v_type = VAR_STRING };
+        unsafe { (*tv).vval.v_string = xstrdup(optval) };
+        tv
+    };
+    let mut cb = Callback {
+        data: Callback_data {
+            funcref: ptr::null_mut::<c_char>(),
+        },
+        type_0: kCallbackNone,
+    };
+    if !unsafe { callback_from_typval(&raw mut cb, tv) } || cb.type_0 == kCallbackNone {
+        unsafe { tv_free(tv) };
+        return FAIL;
     }
+    unsafe { callback_free(optcb) };
+    unsafe { *optcb = cb };
+    unsafe { tv_free(tv) };
+    OK
 }
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
@@ -227,13 +218,11 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
     }
     // SAFETY: 'backspace' is a string option, so it is a live, NUL-terminated
     // string.
-    unsafe {
-        // The historic numeric spelling: 2 is everything but "nostop".
-        if *p_bs.get() == b'2' as c_char {
-            return what != BsFlag::NOSTOP;
-        }
-        what.is_in(CStr::from_ptr(p_bs.get()))
+    // The historic numeric spelling: 2 is everything but "nostop".
+    if unsafe { *p_bs.get() } == b'2' as c_char {
+        return what != BsFlag::NOSTOP;
     }
+    what.is_in(unsafe { CStr::from_ptr(p_bs.get()) })
 }
 
 /// 'backupcopy' as flags, local where set.
@@ -256,12 +245,10 @@ pub(crate) unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
 /// `buf` must be live.
 pub(crate) unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
     // SAFETY: the caller's buffer is live.
-    unsafe {
-        if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp == 0 {
-            p_flp.get()
-        } else {
-            (*buf).b_p_flp
-        }
+    if unsafe { (*buf).b_p_flp }.is_null() || unsafe { *(*buf).b_p_flp } == 0 {
+        p_flp.get()
+    } else {
+        unsafe { (*buf).b_p_flp }
     }
 }
 
@@ -285,16 +272,14 @@ pub(crate) fn get_ve_flags(wp: Win) -> c_uint {
 /// `win` must be live.
 pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
     // SAFETY: the caller's window is live.
-    unsafe {
-        let local = (*win).w_onebuf_opt.wo_sbr;
-        if local.is_null() || *local == 0 {
-            return p_sbr.get();
-        }
-        if strcmp(local, c"NONE".as_ptr()) == 0 {
-            return empty_option();
-        }
-        local
+    let local = unsafe { (*win).w_onebuf_opt.wo_sbr };
+    if local.is_null() || unsafe { *local } == 0 {
+        return p_sbr.get();
     }
+    if unsafe { strcmp(local, c"NONE".as_ptr()) } == 0 {
+        return empty_option();
+    }
+    local
 }
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
@@ -304,15 +289,13 @@ pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
 /// `buf` must be live.
 pub(crate) unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
     // SAFETY: the caller's buffer is live; 'fileformat' is never null.
-    unsafe {
-        let c = *(*buf).b_p_ff as c_uchar;
-        if (*buf).b_p_bin != 0 || c == b'u' {
-            EOL_UNIX
-        } else if c == b'm' {
-            EOL_MAC
-        } else {
-            EOL_DOS
-        }
+    let c = unsafe { *(*buf).b_p_ff } as c_uchar;
+    if unsafe { (*buf).b_p_bin } != 0 || c == b'u' {
+        EOL_UNIX
+    } else if c == b'm' {
+        EOL_MAC
+    } else {
+        EOL_DOS
     }
 }
 
@@ -364,22 +347,20 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
         _ => None,
     };
     // SAFETY: the names are static; `curbuf` is live.
-    unsafe {
-        if let Some(name) = name {
-            set_option_direct(
-                kOptFileformat,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string(name.as_ptr().cast_mut()),
-                    },
+    if let Some(name) = name {
+        set_option_direct(
+            kOptFileformat,
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: unsafe { cstr_as_string(name.as_ptr().cast_mut()) },
                 },
-                opt_flags,
-                0 as scid_T,
-            );
-        }
-        redraw_buf_status_later(curbuf.get());
+            },
+            opt_flags,
+            0 as scid_T,
+        );
     }
+    unsafe { redraw_buf_status_later(curbuf.get()) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }
@@ -392,13 +373,11 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
 /// `p` must be NUL-terminated.
 pub(crate) unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
     // SAFETY: the caller's string is NUL-terminated.
-    unsafe {
-        if *p == b',' as c_char {
-            p = p.add(1);
-        }
-        while *p == b' ' as c_char {
-            p = p.add(1);
-        }
+    if unsafe { *p } == b',' as c_char {
+        p = unsafe { p.add(1) };
+    }
+    while unsafe { *p } == b' ' as c_char {
+        p = unsafe { p.add(1) };
     }
     p.cast_mut()
 }
@@ -423,38 +402,36 @@ pub(crate) unsafe fn copy_option_part(
     sep_chars: *mut c_char,
 ) -> size_t {
     // SAFETY: the caller's pointers are valid for the lengths documented.
-    unsafe {
-        let mut len: size_t = 0;
-        let mut p = *option;
-        // A leading '.' is copied without being tested against the
-        // separators, so `.` can start a path entry.
-        if *p == b'.' as c_char {
-            *buf = *p;
-            p = p.add(1);
-            len = 1;
-        }
-        while *p != 0 && vim_strchr(sep_chars, *p as uint8_t as c_int).is_null() {
-            // A backslash escapes a separator, and is dropped.
-            if *p == b'\\' as c_char
-                && !vim_strchr(sep_chars, *p.add(1) as uint8_t as c_int).is_null()
-            {
-                p = p.add(1);
-            }
-            if len < maxlen.wrapping_sub(1) {
-                *buf.add(len) = *p;
-                len += 1;
-            }
-            p = p.add(1);
-        }
-        *buf.add(len) = NUL as c_char;
-        // Step over the separator we stopped on — unless it is a comma,
-        // which `skip_to_option_part` handles along with the padding.
-        if *p != 0 && *p != b',' as c_char {
-            p = p.add(1);
-        }
-        *option = skip_to_option_part(p);
-        len
+    let mut len: size_t = 0;
+    let mut p = unsafe { *option };
+    // A leading '.' is copied without being tested against the
+    // separators, so `.` can start a path entry.
+    if unsafe { *p } == b'.' as c_char {
+        unsafe { *buf = *p };
+        p = unsafe { p.add(1) };
+        len = 1;
     }
+    while unsafe { *p } != 0 && unsafe { vim_strchr(sep_chars, *p as uint8_t as c_int) }.is_null() {
+        // A backslash escapes a separator, and is dropped.
+        if unsafe { *p } == b'\\' as c_char
+            && !unsafe { vim_strchr(sep_chars, *p.add(1) as uint8_t as c_int) }.is_null()
+        {
+            p = unsafe { p.add(1) };
+        }
+        if len < maxlen.wrapping_sub(1) {
+            unsafe { *buf.add(len) = *p };
+            len += 1;
+        }
+        p = unsafe { p.add(1) };
+    }
+    unsafe { *buf.add(len) = NUL as c_char };
+    // Step over the separator we stopped on — unless it is a comma,
+    // which `skip_to_option_part` handles along with the padding.
+    if unsafe { *p } != 0 && unsafe { *p } != b',' as c_char {
+        p = unsafe { p.add(1) };
+    }
+    unsafe { *option = skip_to_option_part(p) };
+    len
 }
 
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
@@ -479,22 +456,20 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
     };
     // SAFETY: the option table is a plain array, and `get_varp` hands back
     // the variable for the current buffer and window.
-    unsafe {
-        let d = tv_dict_alloc();
-        for opt_idx in kOptAleph..kOptCount {
-            if !option_has_scope(opt_idx, scope) {
-                continue;
-            }
-            let varp = get_varp(opt_idx);
-            if varp.is_none() {
-                continue;
-            }
-            let mut tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
-            let name = get_option(opt_idx).fullname;
-            tv_dict_add_tv(d, name, strlen(name), &raw mut tv);
+    let d = unsafe { tv_dict_alloc() };
+    for opt_idx in kOptAleph..kOptCount {
+        if !option_has_scope(opt_idx, scope) {
+            continue;
         }
-        d
+        let varp = get_varp(opt_idx);
+        if varp.is_none() {
+            continue;
+        }
+        let mut tv = unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) };
+        let name = get_option(opt_idx).fullname;
+        unsafe { tv_dict_add_tv(d, name, strlen(name), &raw mut tv) };
     }
+    d
 }
 
 /// 'scrolloff' for a window, local where set. A terminal buffer never
@@ -505,14 +480,12 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
 /// `wp` must be live, with a live buffer.
 pub(crate) unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
     // SAFETY: the caller's window and its buffer are live.
-    unsafe {
-        if State.get() & MODE_TERMINAL != 0 && !(*(*wp).w_buffer).terminal.is_null() {
-            return 0;
-        }
-        match (*wp).w_onebuf_opt.wo_so {
-            local if local < 0 => p_so.get(),
-            local => local,
-        }
+    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*(*wp).w_buffer).terminal }.is_null() {
+        return 0;
+    }
+    match unsafe { (*wp).w_onebuf_opt.wo_so } {
+        local if local < 0 => p_so.get(),
+        local => local,
     }
 }
 
@@ -587,4 +560,10 @@ impl ScrollOff {
             Self::Global(ScrollMargin::Columns) => p_siso.set(value),
         }
     }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }
