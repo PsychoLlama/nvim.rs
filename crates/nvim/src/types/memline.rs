@@ -584,3 +584,259 @@ impl memline_T {
         self.ml_flags.clear(MlFlags::EMPTY);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `infoptr_T` is plain data; only the four numbers matter.
+    fn entry(bnum: blocknr_T, low: linenr_T, high: linenr_T) -> infoptr_T {
+        infoptr_T {
+            ip_bnum: bnum,
+            ip_low: low,
+            ip_high: high,
+            ip_index: -1,
+        }
+    }
+
+    fn with_stack(entries: &[infoptr_T]) -> memline_T {
+        let mut ml = memline_T::closed();
+        for &e in entries {
+            let at = ml.stack_push();
+            ml.stack_set(at, e);
+        }
+        ml
+    }
+
+    #[test]
+    fn stack_push_answers_the_new_top() {
+        let mut ml = memline_T::closed();
+        assert_eq!(ml.stack_len(), 0);
+        assert_eq!(ml.stack_push(), 0);
+        assert_eq!(ml.stack_push(), 1);
+        assert_eq!(ml.stack_len(), 2);
+    }
+
+    #[test]
+    fn stack_entries_survive_the_growth_a_push_causes() {
+        // The hazard the C carried a comment about: an entry read before a
+        // push must still be readable after it. Taking entries by value is
+        // what makes that true, and Miri is what proves the old pointer is
+        // not being kept.
+        let mut ml = memline_T::closed();
+        for i in 0..64i32 {
+            let at = ml.stack_push();
+            ml.stack_set(at, entry(blocknr_T::from(i), i, i + 1));
+        }
+        for i in 0..64i32 {
+            let seen = ml.stack_at(usize::try_from(i).unwrap());
+            assert_eq!(seen.ip_bnum, blocknr_T::from(i));
+            assert_eq!(seen.ip_high, i + 1);
+        }
+    }
+
+    #[test]
+    fn stack_truncate_keeps_the_entry_it_stops_at() {
+        // `ml_pointer_add_entry` and `ml_free_data_block` both cut the stack
+        // to `stack_idx + 1` and then correct entry `stack_idx` -- which is
+        // the entry upstream read from *above* `ml_stack_top`.
+        let mut ml = with_stack(&[entry(1, 1, 100), entry(2, 1, 50), entry(3, 1, 20)]);
+        ml.stack_truncate(2);
+        assert_eq!(ml.stack_len(), 2);
+        ml.stack_add_high(1, 5);
+        assert_eq!(ml.stack_at(1).ip_high, 55);
+        ml.stack_set_index(1, 7);
+        assert_eq!(ml.stack_at(1).ip_index, 7);
+    }
+
+    #[test]
+    fn stack_pop_answers_none_at_the_bottom() {
+        let mut ml = with_stack(&[entry(1, 1, 9)]);
+        assert_eq!(ml.stack_pop().map(|e| e.ip_bnum), Some(1));
+        assert!(ml.stack_pop().is_none());
+        ml.stack_clear();
+        ml.stack_free();
+        assert_eq!(ml.stack_len(), 0);
+    }
+
+    #[test]
+    fn locking_a_block_starts_it_clean() {
+        let mut ml = memline_T::closed();
+        assert!(!ml.is_locked());
+        assert!(ml.locked_hp().is_null());
+
+        let hp = core::ptr::dangling_mut::<bhdr_T>();
+        ml.lock(hp, 10, 20);
+        assert!(ml.is_locked());
+        assert_eq!(ml.locked_hp(), hp);
+        assert_eq!((ml.locked_low(), ml.locked_high()), (10, 20));
+
+        let locked = ml.unlock().expect("just locked");
+        assert!(!locked.dirty);
+        assert!(!locked.moved);
+        assert_eq!(locked.lineadd, 0);
+        assert!(!ml.is_locked());
+    }
+
+    #[test]
+    fn shifting_a_locked_block_moves_its_end_and_its_debt() {
+        let mut ml = memline_T::closed();
+        ml.lock(core::ptr::dangling_mut::<bhdr_T>(), 1, 5);
+        ml.shift_locked(1);
+        ml.shift_locked(1);
+        ml.shift_locked(-1);
+        assert_eq!(ml.locked_high(), 6);
+        assert_eq!(ml.take_locked_lineadd(), 1);
+        // Taken means paid: it must not be paid twice.
+        assert_eq!(ml.take_locked_lineadd(), 0);
+    }
+
+    #[test]
+    fn marking_a_block_with_nothing_locked_does_nothing() {
+        // `ml_get(will_change)` can reach this with the cached line dirty
+        // and no block held; upstream set bits that the next lock cleared.
+        let mut ml = memline_T::closed();
+        ml.locked_has_moved();
+        ml.locked_is_dirty();
+        ml.shift_locked(3);
+        assert!(ml.unlock().is_none());
+        assert_eq!(ml.forget_locked(), 0);
+    }
+
+    #[test]
+    fn forgetting_a_locked_block_still_answers_its_debt() {
+        let mut ml = memline_T::closed();
+        ml.lock(core::ptr::dangling_mut::<bhdr_T>(), 1, 5);
+        ml.shift_locked(-1);
+        ml.locked_has_moved();
+        assert_eq!(ml.forget_locked(), -1);
+        assert!(!ml.is_locked());
+    }
+
+    #[test]
+    fn a_fresh_chunk_index_is_unbuilt_and_on() {
+        let mut chunks = MlChunks::default();
+        assert!(!chunks.is_built());
+        assert!(!chunks.is_off());
+        chunks.build();
+        assert!(chunks.is_built());
+        assert_eq!(chunks.len(), 1);
+        assert_eq!((chunks.lines(0), chunks.size(0)), (1, 1));
+        chunks.switch_off();
+        assert!(chunks.is_off());
+        chunks.free();
+        assert!(!chunks.is_built());
+        assert!(!chunks.is_off());
+    }
+
+    #[test]
+    fn splitting_a_chunk_duplicates_it_for_the_caller_to_divide() {
+        let mut chunks = MlChunks::default();
+        chunks.build();
+        chunks.set(0, 800, 8000);
+        chunks.split_at(0);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!((chunks.lines(1), chunks.size(1)), (800, 8000));
+        chunks.add_lines(1, -400);
+        chunks.add_size(1, -4000);
+        chunks.set(0, 400, 4000);
+        assert_eq!((chunks.lines(0), chunks.size(0)), (400, 4000));
+        assert_eq!((chunks.lines(1), chunks.size(1)), (400, 4000));
+    }
+
+    #[test]
+    fn deleting_the_last_line_of_the_only_chunk_drops_it() {
+        let mut chunks = MlChunks::default();
+        chunks.build();
+        chunks.set(0, 1, 5);
+        chunks.delete_line(0, 400);
+        assert_eq!(chunks.len(), 0);
+        // Built, but with nothing in it -- the state a length alone cannot
+        // tell from "never built".
+        assert!(chunks.is_built());
+    }
+
+    #[test]
+    fn a_short_chunk_merges_into_the_one_after_it() {
+        let mut chunks = MlChunks::default();
+        chunks.build();
+        chunks.set(0, 100, 1000);
+        chunks.push_empty();
+        chunks.set(1, 100, 1000);
+        chunks.push_empty();
+        chunks.set(2, 700, 7000);
+        // 99 + 100 <= 400, so chunk 0 and chunk 1 become one. The byte
+        // count is the caller's business -- `ml_updatechunk` has already
+        // taken the deleted line's bytes off -- so the two just add up.
+        chunks.delete_line(0, 400);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!((chunks.lines(0), chunks.size(0)), (199, 2000));
+        assert_eq!((chunks.lines(1), chunks.size(1)), (700, 7000));
+    }
+
+    #[test]
+    fn a_long_chunk_keeps_to_itself() {
+        let mut chunks = MlChunks::default();
+        chunks.build();
+        chunks.set(0, 500, 5000);
+        chunks.push_empty();
+        chunks.set(1, 500, 5000);
+        chunks.delete_line(1, 400);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks.lines(1), 499);
+    }
+
+    #[test]
+    fn a_block_line_is_not_owned_and_a_replacement_is() {
+        let mut text = *b"hello\0";
+        let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
+        let mut ml = memline_T::closed();
+
+        ml.cache_block_line(ptr, 6, 3);
+        assert_eq!(ml.cached_lnum(), 3);
+        assert_eq!(ml.cached_text(), ptr);
+        assert_eq!(ml.cached_len(), 6);
+        assert!(!ml.line_is_owned());
+        assert!(ml.take_owned().is_none());
+
+        ml.cache_replacement(ptr, 6, 3);
+        assert!(ml.line_is_dirty());
+        assert!(ml.line_is_owned());
+        assert_eq!(ml.take_owned(), Some(ptr));
+        // Handed over once only.
+        assert!(ml.take_owned().is_none());
+    }
+
+    #[test]
+    fn swapping_the_text_answers_the_old_one_when_it_was_owned() {
+        let mut first = *b"one\0";
+        let mut second = *b"two\0";
+        let one = (&raw mut first[0]).cast::<::core::ffi::c_char>();
+        let two = (&raw mut second[0]).cast::<::core::ffi::c_char>();
+        let mut ml = memline_T::closed();
+
+        // A line read out of a block: swapping it frees nothing.
+        ml.cache_block_line(one, 4, 1);
+        assert!(ml.swap_cached_text(two, 4).is_none());
+        assert_eq!(ml.cached_text(), two);
+        assert_eq!(ml.cached_lnum(), 1);
+        assert!(ml.line_is_dirty());
+
+        // Now it is the memline's own, so the next swap hands it back.
+        assert_eq!(ml.swap_cached_text(one, 4), Some(two));
+    }
+
+    #[test]
+    fn clearing_the_cache_forgets_the_line_and_its_offset() {
+        let mut text = *b"x\0";
+        let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
+        let mut ml = memline_T::closed();
+        ml.cache_replacement(ptr, 2, 9);
+        ml.set_cached_offset(64);
+        assert_eq!(ml.cached_offset(), 64);
+        ml.clear_cache();
+        assert_eq!(ml.cached_lnum(), 0);
+        assert_eq!(ml.cached_offset(), 0);
+        assert!(!ml.line_is_owned());
+    }
+}
