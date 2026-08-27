@@ -7,9 +7,7 @@ use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
-use crate::eval::typval::{
-    NumBuf, tv_list_alloc_ret, tv_list_append_number, tv_list_find, tv_list_len,
-};
+use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_find, tv_list_len};
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
 use crate::main::e_invarg2;
@@ -234,16 +232,9 @@ fn init_srand() -> u32 {
     // SAFETY: a synchronous `uv_random` (null loop and request) fills
     // `bytes`, whose length it is told; the callback is null because the
     // call is synchronous.
-    let rc = unsafe {
-        uv_random(
-            ptr::null_mut(),
-            ptr::null_mut(),
-            bytes.as_mut_ptr().cast::<c_void>(),
-            bytes.len(),
-            0,
-            None,
-        )
-    };
+    let (out, len) = (bytes.as_mut_ptr().cast::<c_void>(), bytes.len());
+    let (loop_, req) = (ptr::null_mut(), ptr::null_mut());
+    let rc = unsafe { uv_random(loop_, req, out, len, 0, None) };
     if rc == 0 {
         return u32::from_ne_bytes(bytes);
     }
@@ -302,12 +293,8 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // format string can only carry UTF-8.
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
-            unsafe {
-                semsg_c!(
-                    gettext(e_invarg2.as_ptr()),
-                    arg_string(&mut numbuf, args.get(0)),
-                )
-            };
+            let what = arg_string(&mut numbuf, args.get(0));
+            semsg_c!(unsafe { gettext(e_invarg2.as_ptr()) }, what);
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;
@@ -421,12 +408,8 @@ pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     }
     // SAFETY: `rettv` is the dispatcher's cleared return value. The length
     // is upstream's estimate and only preallocates.
-    let list = unsafe {
-        tv_list_alloc_ret(
-            rettv,
-            (end as isize).wrapping_sub(start as isize) / stride as isize,
-        )
-    };
+    let hint = (end as isize).wrapping_sub(start as isize) / stride as isize;
+    let list = list_alloc_ret(rettv, hint);
     while if stride > 0 {
         start <= end
     } else {

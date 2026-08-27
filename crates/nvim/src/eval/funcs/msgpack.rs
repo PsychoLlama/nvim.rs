@@ -48,9 +48,11 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut tofree: *mut c_char = ptr::null_mut();
     let mut len: usize = 0;
     let s: *const c_char = if args.ty(0) == VAR_LIST {
-        if !unsafe {
-            encode_vim_list_to_buf(args.get(0).vval.v_list, &raw mut len, &raw mut tofree)
-        } {
+        // SAFETY: the tag says the union holds a List pointer; the two
+        // out-parameters are locals.
+        let l = unsafe { args.get(0).vval.v_list };
+        let (out_len, out) = (&raw mut len, &raw mut tofree);
+        if !unsafe { encode_vim_list_to_buf(l, out_len, out) } {
             semsg!("E474: Failed to convert list to string");
             return;
         }
@@ -117,14 +119,11 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         label.clear();
         let _ = write!(label, "msgpackdump() argument, index {idx}\0");
         idx += 1;
-        if unsafe {
-            encode_vim_to_msgpack(
-                &raw mut packer,
-                &raw mut (*li).li_tv,
-                label.as_ptr() as *const c_char,
-            )
-        } == 0
-        {
+        let item = unsafe { &raw mut (*li).li_tv };
+        let what = label.as_ptr() as *const c_char;
+        // SAFETY: `packer` is the local writer, `item` is the List item the
+        // walk is on, and `label` is NUL-terminated by the `write!` above.
+        if unsafe { encode_vim_to_msgpack(&raw mut packer, item, what) } == 0 {
             break;
         }
         li = unsafe { (*li).li_next };
@@ -182,14 +181,12 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
     let mut status = MPACK_OK as c_int;
     loop {
         let mut read_bytes: usize = 0;
-        let rlret = unsafe {
-            encode_read_from_list(
-                &raw mut lrstate,
-                buf.add(buf_size),
-                (ARENA_BLOCK_SIZE as usize) - buf_size,
-                &raw mut read_bytes,
-            )
-        };
+        let at = unsafe { buf.add(buf_size) };
+        let room = (ARENA_BLOCK_SIZE as usize) - buf_size;
+        let (state, got) = (&raw mut lrstate, &raw mut read_bytes);
+        // SAFETY: `buf` has `ARENA_BLOCK_SIZE` bytes and `buf_size` of them
+        // are used; the reader state and the count are locals.
+        let rlret = unsafe { encode_read_from_list(state, at, room, got) };
         if rlret == FAIL {
             semsg!("E475: Invalid argument: List item is not a string");
             break;

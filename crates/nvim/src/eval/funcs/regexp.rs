@@ -557,7 +557,7 @@ pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let mut li = unsafe { tv_list_first(l) };
     let mut idx: c_int = 0;
     while !li.is_null() {
-        let li_tv = &unsafe { (*li).li_tv };
+        let li_tv = unsafe { &(*li).li_tv };
         // A non-String item, and the null String, contribute nothing.
         if li_tv.v_type == VAR_STRING && !unsafe { li_tv.vval.v_string }.is_null() {
             let str = unsafe { li_tv.vval.v_string };

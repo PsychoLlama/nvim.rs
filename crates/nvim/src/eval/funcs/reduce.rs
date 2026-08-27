@@ -73,7 +73,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
     // container returns the 0 written above instead.
     let mut n: varnumber_T = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
     let better = |i: varnumber_T, n: varnumber_T| if domax { i > n } else { i < n };
-    let tv = &unsafe { *tv };
+    let tv = unsafe { &*tv };
     match tv.v_type {
         VAR_LIST => {
             if unsafe { tv_list_len(tv.vval.v_list) } == 0 {
@@ -277,15 +277,10 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
     }
     while unsafe { *p } as c_int != NUL {
         let len = unsafe { utfc_ptr2len(p) };
-        if !unsafe {
-            fold_step(
-                expr,
-                rettv,
-                owned_str(p, len),
-                STRING_CLEANUP,
-                called_emsg_start,
-            )
-        } {
+        let item = unsafe { owned_str(p, len) };
+        // SAFETY: `expr` is the caller's callback and `rettv` the running
+        // accumulator; `item` is the character just measured.
+        if !unsafe { fold_step(expr, rettv, item, STRING_CLEANUP, called_emsg_start) } {
             break;
         }
         p = unsafe { p.add(len as usize) };
@@ -318,15 +313,9 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
     };
     unsafe { tv_copy(&raw const initial, rettv) };
     while i < unsafe { tv_blob_len(b) } {
-        if !unsafe {
-            fold_step(
-                expr,
-                rettv,
-                number_tv(tv_blob_get(b, i) as varnumber_T),
-                BLOB_CLEANUP,
-                called_emsg_start,
-            )
-        } {
+        let item = number_tv(unsafe { tv_blob_get(b, i) } as varnumber_T);
+        // SAFETY: as the String walk above; `i` is inside the Blob.
+        if !unsafe { fold_step(expr, rettv, item, BLOB_CLEANUP, called_emsg_start) } {
             return;
         }
         i += 1;

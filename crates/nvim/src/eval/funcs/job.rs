@@ -208,7 +208,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             {
                 // Not a job: reported as -3 below.
                 unsafe { *jobs.add(i as usize) = ptr::null_mut() };
-            } else if proc_is_stopped(&unsafe { *channel_proc(chan) }) {
+            } else if proc_is_stopped(unsafe { &*channel_proc(chan) }) {
                 // Already gone; reap it and report -3 as well.
                 unsafe { proc_wait(channel_proc(chan), -1, ptr::null_mut()) };
                 unsafe { *jobs.add(i as usize) = ptr::null_mut() };

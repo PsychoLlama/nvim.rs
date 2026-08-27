@@ -94,34 +94,29 @@ pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let tw = unsafe { xmalloc(size_of::<TimeWatcher>()) } as *mut TimeWatcher;
     unsafe { time_watcher_init(main_loop.ptr(), tw, ptr::null_mut()) };
     unsafe { (*tw).events = ptr::null_mut::<MultiQueue>() };
-    unsafe {
-        time_watcher_start(
-            tw,
-            Some(dummy_timer_due_cb),
-            interval as u64,
-            interval as u64,
-        )
-    };
+    let every = interval as u64;
+    let due = dummy_timer_due_cb;
+    unsafe { time_watcher_start(tw, Some(due), every, every) };
 
     let mut argv = EMPTY_TV;
     let mut exprval = EMPTY_TV;
     let mut error = false;
     let called_emsg_before = called_emsg.get();
     unsafe { ui_flush() };
-    unsafe {
-        process_events_until(
-            main_loop.ptr(),
-            (*main_loop.ptr()).events,
-            timeout as i64,
-            || {
-                eval_expr_typval(&raw const expr, false, &raw mut argv, 0, &raw mut exprval) != 1
-                    || tv_get_number_chk(&raw mut exprval, &raw mut error) != 0
-                    || called_emsg.get() > called_emsg_before
-                    || error
-                    || got_int.get()
-            },
-        )
+    let loop_ = main_loop.ptr();
+    let events = unsafe { (*loop_).events };
+    // SAFETY: `expr`, `argv` and `exprval` are this frame's locals, which
+    // outlive the wait, and the main loop is running.
+    let done = || {
+        let out = &raw mut exprval;
+        let got = unsafe { eval_expr_typval(&raw const expr, false, &raw mut argv, 0, out) };
+        got != 1
+            || unsafe { tv_get_number_chk(out, &raw mut error) } != 0
+            || called_emsg.get() > called_emsg_before
+            || error
+            || got_int.get()
     };
+    unsafe { process_events_until(loop_, events, timeout as i64, done) };
     if called_emsg.get() > called_emsg_before || error {
         rettv.vval.v_number = -3;
     } else if got_int.get() {
@@ -168,7 +163,7 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> proftime_T {
 /// `arg` is a live typval from the call frame.
 unsafe fn list2proftime(arg: *const typval_T) -> Option<proftime_T> {
     // SAFETY: the caller's obligation; the list is only read.
-    let arg = &unsafe { *arg };
+    let arg = unsafe { &*arg };
     if arg.v_type != VAR_LIST || unsafe { tv_list_len(arg.vval.v_list) } != 2 {
         return None;
     }
@@ -278,14 +273,9 @@ pub unsafe fn f_timer_pause(argvars: *mut typval_T, _unused: *mut typval_T, _fpt
     if !unsafe { (*timer).paused } && paused {
         unsafe { time_watcher_stop(&raw mut (*timer).tw) };
     } else if unsafe { (*timer).paused } && !paused {
-        unsafe {
-            time_watcher_start(
-                &raw mut (*timer).tw,
-                Some(timer_due_cb),
-                (*timer).timeout as u64,
-                (*timer).timeout as u64,
-            )
-        };
+        let tw = unsafe { &raw mut (*timer).tw };
+        let every = unsafe { (*timer).timeout } as u64;
+        unsafe { time_watcher_start(tw, Some(timer_due_cb), every, every) };
     }
     unsafe { (*timer).paused = paused };
 }

@@ -64,14 +64,10 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
         semsg!("E475: Invalid argument: funcref");
         return;
     }
-    unsafe {
-        tv_dict_watcher_add(
-            args.get(0).vval.v_dict,
-            key_pattern,
-            key_pattern_len,
-            callback,
-        )
-    };
+    // SAFETY: the tag checked above says the union holds a Dict pointer;
+    // the watcher takes the callback over.
+    let d = unsafe { args.get(0).vval.v_dict };
+    unsafe { tv_dict_watcher_add(d, key_pattern, key_pattern_len, callback) };
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
@@ -99,14 +95,11 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
     if !unsafe { callback_from_typval(&raw mut callback, args.ptr(2)) } {
         return;
     }
-    if !unsafe {
-        tv_dict_watcher_remove(
-            args.get(0).vval.v_dict,
-            key_pattern,
-            strlen(key_pattern),
-            &callback,
-        )
-    } {
+    // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
+    // watcher here and is freed below.
+    let d = unsafe { args.get(0).vval.v_dict };
+    let len = unsafe { strlen(key_pattern) };
+    if !unsafe { tv_dict_watcher_remove(d, key_pattern, len, &callback) } {
         semsg!("Couldn't find a watcher matching key and callback");
     }
     unsafe { callback_free(&raw mut callback) };
@@ -121,17 +114,12 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
     // read below comes back from it; `clear_lval` runs on every path.
     let mut lv = unsafe { core::mem::zeroed() };
-    let end = unsafe {
-        get_lval(
-            arg_string(&mut numbuf, args.get(0)) as *mut c_char,
-            ptr::null_mut(),
-            &raw mut lv,
-            false,
-            false,
-            (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int,
-            FNE_CHECK_START,
-        )
-    };
+    let name = arg_string(&mut numbuf, args.get(0)) as *mut c_char;
+    let out = &raw mut lv;
+    let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int;
+    let nul = ptr::null_mut();
+    let start = FNE_CHECK_START;
+    let end = unsafe { get_lval(name, nul, out, false, false, flags, start) };
     if !end.is_null() && !lv.ll_name.is_null() {
         if unsafe { *end } as c_int != NUL {
             // Both texts interpolate the unconsumed remainder of the
@@ -172,24 +160,14 @@ pub unsafe fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
     // SAFETY: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.
     let base = args.ptr(0);
-    let len = unsafe {
-        vim_vsnprintf_typval(
-            ptr::null_mut(),
-            0,
-            c"%p".as_ptr(),
-            (*dummy_ap.ptr()).clone(),
-            base,
-        )
-    };
+    let fmt = c"%p".as_ptr();
+    let nul = ptr::null_mut();
+    let ap = unsafe { (*dummy_ap.ptr()).clone() };
+    let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = unsafe { xmalloc(len as usize + 1) } as *mut c_char;
-    unsafe {
-        vim_vsnprintf_typval(
-            rettv.vval.v_string,
-            len as usize + 1,
-            c"%p".as_ptr(),
-            (*dummy_ap.ptr()).clone(),
-            base,
-        )
-    };
+    let out = unsafe { rettv.vval.v_string };
+    let cap = len as usize + 1;
+    let ap = unsafe { (*dummy_ap.ptr()).clone() };
+    unsafe { vim_vsnprintf_typval(out, cap, fmt, ap, base) };
 }

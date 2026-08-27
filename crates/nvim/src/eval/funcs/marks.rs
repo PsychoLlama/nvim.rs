@@ -226,11 +226,7 @@ pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     } else {
         ptr::null()
     };
-    unsafe {
-        get_tags(
-            list_alloc_ret(rettv, kListLenUnknown as isize),
-            pattern as *mut c_char,
-            fname as *mut c_char,
-        )
-    };
+    let list = list_alloc_ret(rettv, kListLenUnknown as isize);
+    let (pat, file) = (pattern as *mut c_char, fname as *mut c_char);
+    unsafe { get_tags(list, pat, file) };
 }

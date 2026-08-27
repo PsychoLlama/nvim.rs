@@ -237,11 +237,8 @@ pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         unsafe { restore_typeahead(&raw mut saved) };
     } else if p_verbose.get() > 1 {
         // SAFETY: a static message, and the caller's return value.
-        unsafe {
-            verb_msg(gettext(
-                c"called inputrestore() more often than inputsave()".as_ptr(),
-            ))
-        };
+        let msg = c"called inputrestore() more often than inputsave()";
+        unsafe { verb_msg(gettext(msg.as_ptr())) };
         unsafe { (*rettv).vval.v_number = 1 };
     }
 }

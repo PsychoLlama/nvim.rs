@@ -75,16 +75,11 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut arena = ARENA_EMPTY;
     let ctx_dict = unsafe { ctx_to_dict(ctx, &raw mut arena) };
     let mut err = NO_ERROR;
-    unsafe {
-        object_to_vim(
-            object {
-                type_0: kObjectTypeDict,
-                data: object_data { dict: ctx_dict },
-            },
-            rettv,
-            &raw mut err,
-        )
+    let dict = object {
+        type_0: kObjectTypeDict,
+        data: object_data { dict: ctx_dict },
     };
+    unsafe { object_to_vim(dict, rettv, &raw mut err) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { api_clear_error(&raw mut err) };
 }
@@ -107,7 +102,7 @@ pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
             let mut types: c_int = 0;
             let mut li = unsafe { tv_list_first(args.get(0).vval.v_list) };
             while !li.is_null() {
-                let tv = &unsafe { (*li).li_tv };
+                let tv = unsafe { &(*li).li_tv };
                 // An unrecognised name is silently ignored, as is a
                 // non-String item.
                 // A null `v_string` is the empty string, which matches

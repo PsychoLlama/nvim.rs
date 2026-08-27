@@ -370,12 +370,8 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     }
 
     let list = list_alloc_ret(rettv, 3);
-    unsafe {
-        tv_list_append_number(
-            list,
-            (syntax_flags.has(SynFlags::CONCEAL)) as c_int as varnumber_T,
-        )
-    };
+    let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as varnumber_T;
+    unsafe { tv_list_append_number(list, concealed) };
     unsafe { tv_list_append_string(list, text.as_ptr(), -1) };
     unsafe { tv_list_append_number(list, matchid as varnumber_T) };
 }
