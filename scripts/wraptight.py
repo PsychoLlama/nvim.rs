@@ -144,10 +144,29 @@ def statement_end(raw: bytes, at: int) -> int | None:
     return None
 
 
+# A borrow operator that must end up INSIDE the region, never outside it.
+# `&raw mut unsafe { (*p).f }` is the address of a *temporary*: the block is a
+# value expression, so the deref makes a copy on the stack and the address
+# names that copy. It compiles and nothing warns. The `&`/`&&` case is left
+# alone -- those are also the binary operator, and telling them apart needs a
+# parser -- but `&mut` and `&raw` can only be a borrow.
+BORROW_BEFORE = (b"&raw mut ", b"&raw const ", b"&mut ")
+
+
+def borrow_start(raw: bytes, at: int) -> int:
+    """`at`, moved back over a `&mut`/`&raw mut`/`&raw const` that precedes it."""
+    head = raw[:at]
+    for op in BORROW_BEFORE:
+        stripped = head.rstrip()
+        if stripped.endswith(op.rstrip()):
+            return len(stripped) - len(op.rstrip())
+    return at
+
+
 def wrap(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     """E0133: `<span>` -> `unsafe { <span> }`."""
     done = 0
-    pairs = [(s["byte_start"], s["byte_end"]) for s in spans]
+    pairs = [(borrow_start(raw, s["byte_start"]), s["byte_end"]) for s in spans]
     for start, end in reversed(outermost(pairs)):
         body = raw[start:end]
         if body.startswith(b"unsafe"):
