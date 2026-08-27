@@ -18,16 +18,16 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
 use crate::main::{
-    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, first_tabpage, firstbuf, firstwin,
-    got_int, jop_flags, lastwin, p_ch, p_ea, p_tpm, swap_exists_action, swap_exists_did_quit,
+    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, first_tabpage, firstwin, got_int,
+    jop_flags, lastwin, p_ch, p_ea, p_tpm, swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{
-    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, buf_T, cleanup_T, exarg_T, except_T, linenr_T,
-    tabpage_T, win_T,
+    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, cleanup_T, exarg_T, except_T, linenr_T, tabpage_T,
+    win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -35,7 +35,7 @@ use crate::window::{
     tabline_height, tabpage_index, win_close, win_enter, win_locked, win_move_after, win_split,
     win_valid,
 };
-use crate::winlayer::{Buf, TabPage, Win};
+use crate::winlayer::{Buf, TabPage, Win, buffers, windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -224,15 +224,13 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     enter_win(last_nofloat());
     autocmd_no_leave.set(autocmd_no_leave.get() + 1);
 
-    let mut buf = buf_of(firstbuf.get());
-    while let Some(b) = buf {
+    for b in buffers() {
         if (open_wins as linenr_T) >= count {
             break;
         }
         if !open_window_for(b, all, had_tab, &mut split_ret, &mut open_wins) {
             break;
         }
-        buf = b.next();
     }
 
     autocmd_no_enter.set(autocmd_no_enter.get() - 1);
@@ -241,12 +239,6 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
     close_extra_windows(count, &mut open_wins);
-}
-
-fn buf_of(buf: *mut buf_T) -> Option<Buf> {
-    // SAFETY: `firstbuf`, and every `b_next` reached from it, is a live
-    // buffer or null -- and upstream's loop condition allows null here.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
 }
 
 /// The first stage: close the windows showing a buffer twice, and the ones
@@ -340,15 +332,7 @@ fn open_window_for(
         (buf.b_nwindows > 0).then(last_win)
     } else {
         // Check whether this buffer already has a window.
-        let mut wp = None;
-        let mut w = win_of(firstwin.get());
-        while let Some(win) = w {
-            if !win.w_floating && win.w_buffer == buf.raw() {
-                wp = Some(win);
-                break;
-            }
-            w = win_of(win.w_next);
-        }
+        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buf.raw());
         // If the buffer already has a window, move it.
         if let Some(win) = wp {
             move_win_after(win, current_win());
