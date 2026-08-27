@@ -436,14 +436,14 @@ fn new_buffer() -> Owned<buf_T> {
 /// the caller fills in afterwards may be read.
 pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     let mut storage = Box::<buf_T>::new_zeroed();
-    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(buf_T))`
-    // hands a fresh buffer, and the one field a zeroed `buf_T` is *not* a
-    // valid value for -- `b_ucmds`, whose empty `Vec` holds a non-null
-    // dangling pointer -- is written before anything can read or drop it.
-    unsafe {
-        (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
-        Owned::new(storage.assume_init())
-    }
+    // The one field a zeroed `buf_T` is *not* a valid value for: an empty
+    // `Vec` holds a non-null dangling pointer, not a zero one.
+    // SAFETY: the field is inside the block just allocated, and nothing has
+    // read or dropped it yet.
+    unsafe { (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new()) };
+    // SAFETY: all-zero bytes are otherwise what upstream's
+    // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
+    Owned::new(unsafe { storage.assume_init() })
 }
 
 /// Put a new buffer at the end of the buffer list, give it its number and

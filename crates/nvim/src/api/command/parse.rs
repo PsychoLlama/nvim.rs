@@ -241,16 +241,17 @@ pub unsafe fn nvim_parse_cmd(
         return Err(error);
     }
 
-    // SAFETY: `useridx` indexes the garray the matching `cmdidx` names, and
-    // `parse_args` reads the arguments `parse_cmdline` left in `ea`.
+    // The `useridx`th entry of one of the two user-command tables, by
+    // address: what the rest of this reads the command's own facts from.
+    let nth = |table: Table| {
+        // SAFETY: `useridx` indexes the table the matching `cmdidx` names.
+        unsafe { table.list() }
+            .get(ea.useridx as usize)
+            .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
+    };
+    // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `ea`.
     let (args, cmd) = unsafe {
         let args = parse_args(&ea, arena);
-        let nth = |table: Table| {
-            table
-                .list()
-                .get(ea.useridx as usize)
-                .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
-        };
         let cmd: *mut ucmd_T = match ea.cmdidx {
             CMD_USER => nth(Table::Global),
             CMD_USER_BUF => nth(Table::Buffer(curbuf.get())),

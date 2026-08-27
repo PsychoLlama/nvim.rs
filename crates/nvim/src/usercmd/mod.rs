@@ -111,12 +111,12 @@ impl Table {
     pub(crate) unsafe fn list<'a>(self) -> &'a [ucmd_T] {
         let (data, len) = match self {
             Table::Global => ucmds.with(|cmds| (cmds.as_ptr(), cmds.len())),
-            // SAFETY: caller contract. The field is reached by raw
-            // projection, so no reference to the whole buffer is formed.
-            Table::Buffer(buf) => unsafe {
-                let cmds = &(*buf).b_ucmds;
+            Table::Buffer(buf) => {
+                // SAFETY: caller contract. The field is reached by raw
+                // projection, so no reference to the whole buffer is formed.
+                let cmds = unsafe { &(*buf).b_ucmds };
                 (cmds.as_ptr(), cmds.len())
-            },
+            }
         };
         // SAFETY: `Vec::as_ptr` answers an aligned, non-null pointer to
         // `len` initialised entries even when the table is empty; the
@@ -439,21 +439,20 @@ pub(crate) unsafe fn uc_add_command(
         // Everything the old entry owned bar its name, taken out of the
         // table before it is released: freeing a Lua reference re-enters,
         // and no borrow of the table may be live when it does.
-        // SAFETY: module contract; the closure is a leaf.
-        let (rep, compl_arg, luarefs) = unsafe {
-            table.with_mut(|cmds| {
-                let cmd = &mut cmds[idx];
-                (
-                    mem::replace(&mut cmd.uc_rep, ptr::null_mut()),
-                    mem::replace(&mut cmd.uc_compl_arg, ptr::null_mut()),
-                    [
-                        mem::replace(&mut cmd.uc_luaref, LUA_NOREF),
-                        mem::replace(&mut cmd.uc_compl_luaref, LUA_NOREF),
-                        mem::replace(&mut cmd.uc_preview_luaref, LUA_NOREF),
-                    ],
-                )
-            })
+        let steal = |cmds: &mut Vec<ucmd_T>| {
+            let cmd = &mut cmds[idx];
+            (
+                mem::replace(&mut cmd.uc_rep, ptr::null_mut()),
+                mem::replace(&mut cmd.uc_compl_arg, ptr::null_mut()),
+                [
+                    mem::replace(&mut cmd.uc_luaref, LUA_NOREF),
+                    mem::replace(&mut cmd.uc_compl_luaref, LUA_NOREF),
+                    mem::replace(&mut cmd.uc_preview_luaref, LUA_NOREF),
+                ],
+            )
         };
+        // SAFETY: module contract; `steal` is a leaf.
+        let (rep, compl_arg, luarefs) = unsafe { table.with_mut(steal) };
         // SAFETY: the entry owned all five and no longer names any of them.
         unsafe {
             xfree(rep.cast());
@@ -473,32 +472,31 @@ pub(crate) unsafe fn uc_add_command(
     // SAFETY: caller contract; `name` has `name_len` readable bytes.
     let fresh_name = (!replacing).then(|| unsafe { xstrnsave(name, name_len) });
 
-    // SAFETY: module contract; the closure is a leaf.
-    unsafe {
-        table.with_mut(|cmds| {
-            let entry = |uc_name| ucmd_T {
-                uc_name,
-                uc_argt: argt,
-                uc_rep: rep_buf,
-                uc_def: def,
-                uc_compl: context,
-                uc_addr_type: addr_type,
-                uc_script_ctx: script_ctx,
-                uc_compl_arg: compl_arg,
-                uc_compl_luaref: compl_luaref,
-                uc_preview_luaref: preview_luaref,
-                uc_luaref: luaref,
-            };
-            match fresh_name {
-                // `idx` is where the walk stopped, which keeps it sorted.
-                Some(uc_name) => cmds.insert(idx, entry(uc_name)),
-                None => {
-                    let uc_name = cmds[idx].uc_name;
-                    cmds[idx] = entry(uc_name);
-                }
+    let store = |cmds: &mut Vec<ucmd_T>| {
+        let entry = |uc_name| ucmd_T {
+            uc_name,
+            uc_argt: argt,
+            uc_rep: rep_buf,
+            uc_def: def,
+            uc_compl: context,
+            uc_addr_type: addr_type,
+            uc_script_ctx: script_ctx,
+            uc_compl_arg: compl_arg,
+            uc_compl_luaref: compl_luaref,
+            uc_preview_luaref: preview_luaref,
+            uc_luaref: luaref,
+        };
+        match fresh_name {
+            // `idx` is where the walk stopped, which keeps it sorted.
+            Some(uc_name) => cmds.insert(idx, entry(uc_name)),
+            None => {
+                let uc_name = cmds[idx].uc_name;
+                cmds[idx] = entry(uc_name);
             }
-        });
-    }
+        }
+    };
+    // SAFETY: module contract; `store` is a leaf.
+    unsafe { table.with_mut(store) };
     OK
 }
 
