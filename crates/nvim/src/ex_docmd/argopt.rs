@@ -2,6 +2,9 @@
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::strings::vim_snprintf;
+use std::ffi::CString;
+
 use crate::semsg_c;
 use crate::winlayer::{Buf, Ea, Live, Win};
 
@@ -11,13 +14,12 @@ use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
-use crate::charset::{getdigits, skipwhite};
-use crate::cmdexpand::expand_generic;
+use crate::charset::getdigits;
+
 use crate::event::libuv::uv_strerror;
-use crate::ex_docmd::ex_msg;
+
 use crate::ex_docmd::lookup::checkforcmd;
-use crate::ex_docmd::scan::skip_cmd_arg;
-use crate::ex_docmd::source::ex_errmsg;
+
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
@@ -31,9 +33,10 @@ use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
-use crate::os::cshim::{gettext, ngettext, strncmp};
+use crate::os::cshim::ngettext;
+
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
-use crate::strings::vim_snprintf;
+
 use crate::types::regexp::regmatch_T;
 use crate::types::{
     CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, NUL, OK, exarg_T,
@@ -59,7 +62,7 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
         command = dollar_command.as_ptr().cast_mut();
     } else {
         command = arg;
-        arg = unsafe { skip_cmd_arg(command, true) };
+        arg = skip_cmd_arg(command, true);
         if unsafe { *arg } as c_int != NUL {
             unsafe { *arg = NUL as c_char };
             arg = unsafe { arg.add(1) };
@@ -109,9 +112,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
     let mut bad_char_idx: c_int = 0;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
-    if unsafe { strncmp(arg, c"bin".as_ptr(), 3) } == 0
-        || unsafe { strncmp(arg, c"nobin".as_ptr(), 5) } == 0
-    {
+    if strncmp(arg, c"bin".as_ptr(), 3) == 0 || strncmp(arg, c"nobin".as_ptr(), 5) == 0 {
         if unsafe { *arg } as c_int == 'n' as c_int {
             arg = unsafe { arg.add(2) };
             ea.force_bin = FORCE_NOBIN;
@@ -121,12 +122,12 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
         if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
             return FAIL;
         }
-        ea.arg = unsafe { skipwhite(arg) };
+        ea.arg = skipwhite(arg);
         return OK;
     }
 
     // `++edit`, and not `++editsomething`.
-    if unsafe { strncmp(arg, c"edit".as_ptr(), 4) } == 0
+    if strncmp(arg, c"edit".as_ptr(), 4) == 0
         && !(unsafe { *arg.add(4) } as u8).is_ascii_alphabetic()
     {
         ea.read_edit = 1;
@@ -143,13 +144,13 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
         return OK;
     }
 
-    let pp: *mut c_int = if unsafe { strncmp(arg, c"ff".as_ptr(), 2) } == 0 {
+    let pp: *mut c_int = if strncmp(arg, c"ff".as_ptr(), 2) == 0 {
         arg = unsafe { arg.add(2) };
         ea.force_ff_ptr()
-    } else if unsafe { strncmp(arg, c"fileformat".as_ptr(), 10) } == 0 {
+    } else if strncmp(arg, c"fileformat".as_ptr(), 10) == 0 {
         arg = unsafe { arg.add(10) };
         ea.force_ff_ptr()
-    } else if unsafe { strncmp(arg, c"enc".as_ptr(), 3) } == 0 {
+    } else if strncmp(arg, c"enc".as_ptr(), 3) == 0 {
         arg = unsafe {
             arg.add(if strncmp(arg, c"encoding".as_ptr(), 8) == 0 {
                 8
@@ -158,7 +159,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
             })
         };
         ea.force_enc_ptr()
-    } else if unsafe { strncmp(arg, c"bad".as_ptr(), 3) } == 0 {
+    } else if strncmp(arg, c"bad".as_ptr(), 3) == 0 {
         arg = unsafe { arg.add(3) };
         &raw mut bad_char_idx
     } else {
@@ -170,8 +171,8 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
     }
     arg = unsafe { arg.add(1) };
     unsafe { *pp = arg.offset_from(ea.cmd) as c_int };
-    arg = unsafe { skip_cmd_arg(arg, false) };
-    ea.arg = unsafe { skipwhite(arg) };
+    arg = skip_cmd_arg(arg, false);
+    ea.arg = skipwhite(arg);
     unsafe { *arg = NUL as c_char };
 
     if pp == ea.force_ff_ptr() {
@@ -245,29 +246,25 @@ pub unsafe fn expand_argopt(
         if cb.is_none() {
             return FAIL;
         }
-        unsafe { expand_generic(pat, xp, rmp, matches, num_matches, cb, false) };
+        expand_generic(pat, xp, rmp, matches, num_matches, cb, false);
         return OK;
     }
     // `++ff` is the only abbreviation worth finishing on its own.
-    if x.xp_pattern_len == 2
-        && unsafe { strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) } == 0
-    {
+    if x.xp_pattern_len == 2 && strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) == 0 {
         unsafe { *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char };
         unsafe { *num_matches = 1 };
         unsafe { **matches = xstrdup(c"fileformat=".as_ptr()) };
         return OK;
     }
-    unsafe {
-        expand_generic(
-            pat,
-            xp,
-            rmp,
-            matches,
-            num_matches,
-            Some(get_argopt_name),
-            false,
-        )
-    };
+    expand_generic(
+        pat,
+        xp,
+        rmp,
+        matches,
+        num_matches,
+        Some(get_argopt_name),
+        false,
+    );
     OK
 }
 
@@ -287,7 +284,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
     };
     let last_tab = || current_tab_nr(ptr::null_mut());
     let invarg2 = |mut ea: Ea| {
-        ea.errmsg = Some(unsafe { ex_errmsg(e_invarg2.as_ptr(), ea.arg) });
+        ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
     };
 
     'theend: {
@@ -314,7 +311,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     tab_number = last_tab();
                 } else if unsafe { strcmp(p, c"#".as_ptr()) } == 0 {
                     if !valid_tabpage(lastused_tabpage.get()) {
-                        ea.errmsg = Some(unsafe { ex_errmsg(e_invargval.as_ptr(), ea.arg) });
+                        ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
                         tab_number = 0;
                         break 'theend;
                     }
@@ -358,7 +355,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
             }
         } else if ea.addr_count > 0 {
             if unaccept_arg0 != 0 && ea.line2 == 0 {
-                ea.errmsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                 tab_number = 0;
             } else {
                 tab_number = ea.line2 as c_int;
@@ -379,7 +376,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     if unsafe { *cmdp } as c_int == '-' as c_int {
                         tab_number = tab_number.wrapping_sub(1);
                         if tab_number < unaccept_arg0 {
-                            ea.errmsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                            ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                         }
                     }
                 }
@@ -459,11 +456,9 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
-        semsg_c!(
-            unsafe { gettext(&raw const e_mkdir as *const c_char) },
-            name,
-            unsafe { uv_strerror(ret) },
-        );
+        semsg_c!(gettext(&raw const e_mkdir as *const c_char), name, unsafe {
+            uv_strerror(ret)
+        },);
         return FAIL;
     }
     OK
@@ -475,16 +470,13 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 /// command's `!`.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     if unsafe { os_isdir(fname) } {
-        semsg_c!(
-            unsafe { gettext(&raw const e_isadir2 as *const c_char) },
-            fname
-        );
+        semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname);
         return ptr::null_mut();
     }
     if forceit == 0 && unsafe { *mode } as c_int != 'a' as c_int && unsafe { os_path_exists(fname) }
     {
         semsg_c!(
-            unsafe { gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()) },
+            gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
             fname,
         );
         return ptr::null_mut();
@@ -492,7 +484,7 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
     let fd = unsafe { os_fopen(fname, mode) };
     if fd.is_null() {
         semsg_c!(
-            unsafe { gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()) },
+            gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
             fname,
         );
     }
@@ -502,7 +494,7 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
 /// Fill in a dialog message with the file name it is about, or `Untitled`.
 pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_char) {
     let fname = if fname.is_null() {
-        unsafe { gettext(c"Untitled".as_ptr()) }
+        gettext(c"Untitled".as_ptr())
     } else {
         fname
     };
@@ -519,4 +511,61 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `ex_errmsg()` as checked code.
+fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CString {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::source::ex_errmsg(msg_0, arg) }
+}
+
+/// `ex_msg()` as checked code.
+fn ex_msg(msg: *const c_char) -> CString {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::ex_msg(msg) }
+}
+
+/// `expand_generic()` as checked code.
+#[allow(clippy::too_many_arguments)]
+fn expand_generic(
+    pat: *const c_char,
+    xp: *mut expand_T,
+    regmatch: *mut regmatch_T,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+    func: CompleteListItemGetter,
+    escaped: bool,
+) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe {
+        crate::cmdexpand::expand_generic(pat, xp, regmatch, matches, numMatches, func, escaped)
+    }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `skip_cmd_arg()` as checked code.
+fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::scan::skip_cmd_arg(p, rembs) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `strncmp()` as checked code.
+fn strncmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    // SAFETY: two NUL-terminated strings, and a length within both.
+    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }

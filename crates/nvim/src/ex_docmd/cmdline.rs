@@ -18,26 +18,27 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, do_debug};
-use crate::eval::userfunc::{
-    func_breakpoint, func_dbg_tick, func_has_abort, func_has_ended, func_level, func_name,
-    get_func_line,
-};
+use crate::debugger::{dbg_breakpoint, do_debug};
+
+use crate::eval::userfunc::{func_breakpoint, func_dbg_tick, func_name, get_func_line};
+
 use crate::ex_docmd::onecmd::do_one_cmd;
 use crate::ex_docmd::source::{
-    do_cmdline_end, do_cmdline_start, get_loop_line, getline_cookie, getline_equal,
-    handle_did_throw, msg_verbose_cmd, restore_dbg_stuff, save_dbg_stuff, store_loop_line,
+    do_cmdline_end, do_cmdline_start, get_loop_line, getline_cookie, handle_did_throw,
+    msg_verbose_cmd, restore_dbg_stuff, save_dbg_stuff, store_loop_line,
 };
+
 use crate::ex_docmd::{
     CSF_ACTIVE, CSF_FINALLY, CSF_FOR, CSF_TRY, CSF_WHILE, CSL_HAD_CONT, CSL_HAD_ENDLOOP,
     CSL_HAD_FINA, CSL_HAD_LOOP, CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, dbg_stuff,
     loop_cookie, wcmd_T,
 };
 use crate::ex_eval::{
-    aborting, cleanup_conditionals, do_errthrow, do_intthrow, has_loop_cmd, report_make_pending,
-    rewind_conditionals,
+    aborting, cleanup_conditionals, do_intthrow, has_loop_cmd, report_make_pending,
 };
-use crate::ex_getln::{getexline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
+
+use crate::ex_getln::{getexline, ui_ext_cmdline_block_leave};
+
 use crate::garray::{ga_clear, ga_init};
 use crate::guard::{Bump, Suppress};
 use crate::main::{
@@ -47,15 +48,15 @@ use crate::main::{
     msg_didany, msg_didout, msg_list, msg_scroll, need_rethrow, need_wait_return, new_last_cmdline,
     p_verbose, repeat_cmdline, suppress_errthrow, trylevel,
 };
-use crate::memory::{xfree, xstrdup};
-use crate::message::{emsg, msg_start, wait_return};
-use crate::os::cshim::{gettext, memmove};
+
+use crate::message::{msg_start, wait_return};
+
+use crate::os::cshim::memmove;
+
 use crate::os::input::line_breakcheck;
 use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
-use crate::runtime::{
-    getsourceline, set_sourcing_lnum, source_breakpoint, source_dbg_tick, source_finished,
-    source_level,
-};
+use crate::runtime::{getsourceline, source_breakpoint, source_dbg_tick, source_level};
+
 use crate::types::ui::kUICmdline;
 use crate::types::{
     FAIL, LineGetter, OK, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T,
@@ -174,9 +175,9 @@ pub unsafe fn do_cmdline(
     msg_list.set(&raw mut private_msg_list);
 
     if do_cmdline_start() == FAIL {
-        unsafe { emsg(gettext(&raw const e_command_too_recursive as *const c_char)) };
+        emsg(gettext(&raw const e_command_too_recursive as *const c_char));
         // No command name: this is not an error of any one command.
-        unsafe { do_errthrow(ptr::null_mut(), ptr::null_mut()) };
+        do_errthrow(ptr::null_mut(), ptr::null_mut());
         msg_list.set(saved_msg_list);
         return FAIL;
     }
@@ -186,8 +187,8 @@ pub unsafe fn do_cmdline(
     let real_cookie = unsafe { getline_cookie(fgetline, cookie) };
 
     // Inside a function, use a higher nesting level.
-    let mut getline_is_func = unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) };
-    if getline_is_func && ex_nesting_level.get() == unsafe { func_level(real_cookie) } {
+    let mut getline_is_func = getline_equal(fgetline, cookie, Some(get_func_line));
+    if getline_is_func && ex_nesting_level.get() == func_level(real_cookie) {
         ex_nesting_level.set(ex_nesting_level.get() + 1);
     }
 
@@ -197,7 +198,7 @@ pub unsafe fn do_cmdline(
         fname = unsafe { func_name(real_cookie) };
         breakpoint = unsafe { func_breakpoint(real_cookie) };
         dbg_tick = unsafe { func_dbg_tick(real_cookie) };
-    } else if unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) } {
+    } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
         fname = sourcing_entry().es_name;
         breakpoint = unsafe { source_breakpoint(real_cookie) };
         dbg_tick = unsafe { source_dbg_tick(real_cookie) };
@@ -229,22 +230,20 @@ pub unsafe fn do_cmdline(
 
     // 'KeyTyped' is only set by `vgetc`; a sourced line never went
     // through it.
-    if !flags.has(DoCmdOpts::KEYTYPED)
-        && !unsafe { getline_equal(fgetline, cookie, Some(getexline)) }
-    {
+    if !flags.has(DoCmdOpts::KEYTYPED) && !getline_equal(fgetline, cookie, Some(getexline)) {
         KeyTyped.set(false);
     }
 
     next_cmdline = cmdline;
     loop {
-        getline_is_func = unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) };
+        getline_is_func = getline_equal(fgetline, cookie, Some(get_func_line));
 
         // Stop skipping commands after an error once every :endif,
         // :endwhile and :endfor has been passed.
         if next_cmdline.is_null()
             && !force_abort.get()
             && cstack.cs_idx < 0
-            && !(getline_is_func && unsafe { func_has_abort(real_cookie) } != 0)
+            && !(getline_is_func && func_has_abort(real_cookie) != 0)
         {
             did_emsg.set(0);
         }
@@ -253,7 +252,7 @@ pub unsafe fn do_cmdline(
         //    `|`-separated command was stored separately, so that an
         //    `:endwhile` can jump back to exactly one of them.
         if cstack.cs_looplevel > 0 && current_line < lines_ga.ga_len {
-            unsafe { xfree(cmdline_copy as *mut c_void) };
+            xfree(cmdline_copy as *mut c_void);
             cmdline_copy = ptr::null_mut();
 
             // Has the function returned, or (with no try conditional
@@ -262,18 +261,18 @@ pub unsafe fn do_cmdline(
                 if do_profiling.get() == PROF_YES {
                     unsafe { func_line_end(real_cookie) };
                 }
-                if unsafe { func_has_ended(real_cookie) } != 0 {
+                if func_has_ended(real_cookie) != 0 {
                     retval = FAIL;
                     break;
                 }
             } else if do_profiling.get() == PROF_YES
-                && unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) }
+                && getline_equal(fgetline, cookie, Some(getsourceline))
             {
                 unsafe { script_line_end() };
             }
 
             // Has the sourced file hit a `:finish`?
-            if unsafe { source_finished(fgetline, cookie) } {
+            if source_finished(fgetline, cookie) {
                 retval = FAIL;
                 break;
             }
@@ -315,7 +314,7 @@ pub unsafe fn do_cmdline(
             if do_profiling.get() == PROF_YES {
                 if getline_is_func {
                     unsafe { func_line_start(real_cookie) };
-                } else if unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) } {
+                } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
                     unsafe { script_line_start() };
                 }
             }
@@ -329,9 +328,9 @@ pub unsafe fn do_cmdline(
                 (cstack.cs_idx + 1) * 2
             };
 
-            if count == 1 && unsafe { getline_equal(fgetline, cookie, Some(getexline)) } {
+            if count == 1 && getline_equal(fgetline, cookie, Some(getexline)) {
                 if ui_has(kUICmdline) {
-                    unsafe { ui_ext_cmdline_block_append(0, last_cmdline.get()) };
+                    ui_ext_cmdline_block_append(0, last_cmdline.get());
                     did_block = true;
                 }
                 // The first line after an `:if` needs this, or the `:if`
@@ -358,19 +357,16 @@ pub unsafe fn do_cmdline(
             // Every cmdline_block event but the first goes out
             // immediately: holding them until the commands have run
             // would interleave them wrongly with a nested command line.
-            if ui_has(kUICmdline)
-                && count > 0
-                && unsafe { getline_equal(fgetline, cookie, Some(getexline)) }
-            {
-                unsafe { ui_ext_cmdline_block_append(indent as size_t, next_cmdline) };
+            if ui_has(kUICmdline) && count > 0 && getline_equal(fgetline, cookie, Some(getexline)) {
+                ui_ext_cmdline_block_append(indent as size_t, next_cmdline);
             }
 
             // Keep the first typed line for `.` to repeat; forget it as
             // soon as a second one is typed.
             if flags.has(DoCmdOpts::KEEPLINE) {
-                unsafe { xfree(repeat_cmdline.get() as *mut c_void) };
+                xfree(repeat_cmdline.get() as *mut c_void);
                 repeat_cmdline.set(if count == 0 {
-                    unsafe { xstrdup(next_cmdline) }
+                    xstrdup(next_cmdline)
                 } else {
                     ptr::null_mut()
                 });
@@ -378,7 +374,7 @@ pub unsafe fn do_cmdline(
         } else if cmdline_copy.is_null() {
             // 3. A line was given: copy it, because it is about to be
             //    modified in place.
-            next_cmdline = unsafe { xstrdup(next_cmdline) };
+            next_cmdline = xstrdup(next_cmdline);
         }
         cmdline_copy = next_cmdline;
 
@@ -451,15 +447,14 @@ pub unsafe fn do_cmdline(
         }
 
         if next_cmdline.is_null() {
-            unsafe { xfree(cmdline_copy as *mut c_void) };
+            xfree(cmdline_copy as *mut c_void);
             cmdline_copy = ptr::null_mut();
 
             // Remember a typed command for the `:` register — after
             // running it, so that `:@:` works.
-            if unsafe { getline_equal(fgetline, cookie, Some(getexline)) }
-                && !new_last_cmdline.get().is_null()
+            if getline_equal(fgetline, cookie, Some(getexline)) && !new_last_cmdline.get().is_null()
             {
-                unsafe { xfree(last_cmdline.get() as *mut c_void) };
+                xfree(last_cmdline.get() as *mut c_void);
                 last_cmdline.set(new_last_cmdline.get());
                 new_last_cmdline.set(ptr::null_mut());
             }
@@ -479,8 +474,8 @@ pub unsafe fn do_cmdline(
         // A function that an error did not abort keeps going.
         if did_emsg.get() != 0
             && !force_abort.get()
-            && unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) }
-            && unsafe { func_has_abort(real_cookie) } == 0
+            && getline_equal(fgetline, cookie, Some(get_func_line))
+            && func_has_abort(real_cookie) == 0
         {
             did_emsg.set(0);
         }
@@ -526,14 +521,12 @@ pub unsafe fn do_cmdline(
                     }
                 } else if idx >= 0 {
                     // Only reachable from `:endwhile` or `:endfor`.
-                    unsafe {
-                        rewind_conditionals(
-                            &raw mut cstack,
-                            idx - 1,
-                            CSF_WHILE as c_int | CSF_FOR as c_int,
-                            &raw mut cstack.cs_looplevel,
-                        )
-                    };
+                    rewind_conditionals(
+                        &raw mut cstack,
+                        idx - 1,
+                        CSF_WHILE as c_int | CSF_FOR as c_int,
+                        &raw mut cstack.cs_looplevel,
+                    );
                 }
             } else if cstack.cs_lflags & CSL_HAD_LOOP as c_int != 0 {
                 // A `:while` or `:for` remembers where its body starts.
@@ -604,7 +597,7 @@ pub unsafe fn do_cmdline(
         let typed_error = did_emsg.get() != 0
             && (cstack.cs_trylevel == 0 || did_emsg_syntax.get())
             && used_getline
-            && unsafe { getline_equal(fgetline, cookie, Some(getexline)) };
+            && getline_equal(fgetline, cookie, Some(getexline));
         let more_to_run =
             !next_cmdline.is_null() || cstack.cs_idx >= 0 || flags.has(DoCmdOpts::REPEAT);
         if aborting_now || typed_error || !more_to_run {
@@ -612,7 +605,7 @@ pub unsafe fn do_cmdline(
         }
     }
 
-    unsafe { xfree(cmdline_copy as *mut c_void) };
+    xfree(cmdline_copy as *mut c_void);
     did_emsg_syntax.set(false);
     unsafe { clear_loop_lines(&raw mut lines_ga) };
 
@@ -622,10 +615,10 @@ pub unsafe fn do_cmdline(
         if !got_int.get()
             && !did_throw.get()
             && !aborting()
-            && (unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) }
-                && !unsafe { source_finished(fgetline, cookie) }
-                || unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) }
-                    && unsafe { func_has_ended(real_cookie) } == 0)
+            && (getline_equal(fgetline, cookie, Some(getsourceline))
+                && !source_finished(fgetline, cookie)
+                || getline_equal(fgetline, cookie, Some(get_func_line))
+                    && func_has_ended(real_cookie) == 0)
         {
             let flags_here = cstack.cs_flags[cstack.cs_idx as usize];
             let missing = if flags_here & CSF_TRY as c_int != 0 {
@@ -637,7 +630,7 @@ pub unsafe fn do_cmdline(
             } else {
                 &raw const e_endif as *const c_char
             };
-            unsafe { emsg(gettext(missing)) };
+            emsg(gettext(missing));
         }
 
         // Put `trylevel` back after a `:finish`, a `:return` or a
@@ -650,14 +643,12 @@ pub unsafe fn do_cmdline(
                 // Drop a try block that is not in its finally clause.
                 idx -= 1;
             }
-            unsafe {
-                rewind_conditionals(
-                    &raw mut cstack,
-                    idx,
-                    CSF_WHILE as c_int | CSF_FOR as c_int,
-                    &raw mut cstack.cs_looplevel,
-                )
-            };
+            rewind_conditionals(
+                &raw mut cstack,
+                idx,
+                CSF_WHILE as c_int | CSF_FOR as c_int,
+                &raw mut cstack.cs_looplevel,
+            );
             if cstack.cs_idx < 0 {
                 break;
             }
@@ -667,16 +658,14 @@ pub unsafe fn do_cmdline(
 
     // A missing `:endtry`/`:endwhile`/`:endfor`/`:endif` reported above
     // becomes an exception now, after the stack has been rewound.
-    unsafe {
-        do_errthrow(
-            &raw mut cstack,
-            if getline_equal(fgetline, cookie, Some(get_func_line)) {
-                c"endfunction".as_ptr() as *mut c_char
-            } else {
-                ptr::null_mut()
-            },
-        )
-    };
+    do_errthrow(
+        &raw mut cstack,
+        if getline_equal(fgetline, cookie, Some(get_func_line)) {
+            c"endfunction".as_ptr() as *mut c_char
+        } else {
+            ptr::null_mut()
+        },
+    );
 
     if trylevel.get() == 0 {
         if did_throw.get() {
@@ -702,22 +691,22 @@ pub unsafe fn do_cmdline(
     if did_throw.get() {
         need_rethrow.set(true);
     }
-    if unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) }
+    if getline_equal(fgetline, cookie, Some(getsourceline))
         && ex_nesting_level.get() > unsafe { source_level(real_cookie) }
-        || unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) }
-            && ex_nesting_level.get() > unsafe { func_level(real_cookie) } + 1
+        || getline_equal(fgetline, cookie, Some(get_func_line))
+            && ex_nesting_level.get() > func_level(real_cookie) + 1
     {
         if !did_throw.get() {
             check_cstack.set(true);
         }
     } else {
-        if unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) } {
+        if getline_equal(fgetline, cookie, Some(get_func_line)) {
             ex_nesting_level.set(ex_nesting_level.get() - 1);
         }
         // Single-stepping out of a function drops back into the
         // debugger.
-        if (unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) }
-            || unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) })
+        if (getline_equal(fgetline, cookie, Some(getsourceline))
+            || getline_equal(fgetline, cookie, Some(get_func_line)))
             && ex_nesting_level.get() < debug_break_level.get()
         {
             unsafe {
@@ -742,7 +731,7 @@ pub unsafe fn do_cmdline(
     let mut elem: *mut eslist_T = cstack.cs_emsg_silent_list;
     while !elem.is_null() {
         let next = unsafe { (*elem).next };
-        unsafe { xfree(elem as *mut c_void) };
+        xfree(elem as *mut c_void);
         elem = next;
     }
 
@@ -773,4 +762,93 @@ pub unsafe fn do_cmdline(
 
     do_cmdline_end();
     retval
+}
+
+/// `dbg_find_breakpoint()` as checked code.
+fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: linenr_T) -> linenr_T {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::debugger::dbg_find_breakpoint(file, fname, after) }
+}
+
+/// `do_errthrow()` as checked code.
+fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_eval::do_errthrow(cstack, cmdname) }
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `func_has_abort()` as checked code.
+fn func_has_abort(cookie: *mut c_void) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::userfunc::func_has_abort(cookie) }
+}
+
+/// `func_has_ended()` as checked code.
+fn func_has_ended(cookie: *mut c_void) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::userfunc::func_has_ended(cookie) }
+}
+
+/// `func_level()` as checked code.
+fn func_level(cookie: *mut c_void) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::userfunc::func_level(cookie) }
+}
+
+/// `getline_equal()` as checked code.
+fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::source::getline_equal(fgetline, cookie, func) }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `rewind_conditionals()` as checked code.
+fn rewind_conditionals(
+    cstack: *mut cstack_T,
+    idx: c_int,
+    cond_type: c_int,
+    cond_level: *mut c_int,
+) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_eval::rewind_conditionals(cstack, idx, cond_type, cond_level) }
+}
+
+/// `set_sourcing_lnum()` as checked code.
+fn set_sourcing_lnum(lnum: linenr_T) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::runtime::set_sourcing_lnum(lnum)
+}
+
+/// `source_finished()` as checked code.
+fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::runtime::source_finished(fgetline, cookie) }
+}
+
+/// `ui_ext_cmdline_block_append()` as checked code.
+fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_getln::ui_ext_cmdline_block_append(indent, line) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
+}
+
+/// `xstrdup()` as checked code.
+fn xstrdup(str: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::memory::xstrdup(str) }
 }

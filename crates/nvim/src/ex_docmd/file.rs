@@ -9,12 +9,11 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::arglist::check_arg_idx;
-use crate::buffer::{
-    buf_hide, buf_is_prompt, current_buf, goto_buffer, maketitle, otherfile, setaltfname, setfname,
-};
+use crate::buffer::{buf_is_prompt, current_buf, maketitle, otherfile, setaltfname, setfname};
+
 use crate::change::deleted_lines_mark;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later};
-use crate::ex_cmds::{do_bang, do_ecmd};
+
 use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
@@ -26,8 +25,8 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
-use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
-use crate::fileio::readfile;
+use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
+
 use crate::getchar::stuff_readbuf;
 use crate::main::{
     curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active, global_busy,
@@ -35,13 +34,14 @@ use crate::main::{
     recoverymode,
 };
 use crate::mark::setpcmark;
-use crate::memfile::mf_fname;
+
 use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
-use crate::memory::xfree;
-use crate::message::{emsg, msg};
+
+use crate::message::emsg;
+
 use crate::normal::normal_enter;
 use crate::option::{cpo_has, get_findfunc};
-use crate::os::cshim::gettext;
+
 use crate::path::path_fnamecmp;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
@@ -50,12 +50,11 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
     CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CmdModFlags,
-    CpoFlag, FAIL, NUL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
+    CpoFlag, FAIL, NUL, OK, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
-use crate::undo::{
-    curbuf_is_changed, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo,
-};
+use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
+
 use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
 use crate::winfloat::win_float_remove;
 use crate::winlayer::{Buf, Ea, Win};
@@ -100,16 +99,14 @@ pub(crate) fn do_exbuffer(mut eap: Ea) {
         return;
     }
     if eap.addr_count == 0 {
-        unsafe { goto_buffer(eap.raw(), DOBUF_CURRENT as c_int, FORWARD as c_int, 0) };
+        goto_buffer(eap.raw(), DOBUF_CURRENT as c_int, FORWARD as c_int, 0);
     } else {
-        unsafe {
-            goto_buffer(
-                eap.raw(),
-                DOBUF_FIRST as c_int,
-                FORWARD as c_int,
-                eap.line2 as c_int,
-            )
-        };
+        goto_buffer(
+            eap.raw(),
+            DOBUF_FIRST as c_int,
+            FORWARD as c_int,
+            eap.line2 as c_int,
+        );
     }
     run_ecmd_cmd(eap);
 }
@@ -124,54 +121,48 @@ fn run_ecmd_cmd(eap: Ea) {
 /// `:bmodified`.
 pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    unsafe {
-        goto_buffer(
-            eap.raw(),
-            DOBUF_MOD as c_int,
-            FORWARD as c_int,
-            eap.line2 as c_int,
-        )
-    };
+    goto_buffer(
+        eap.raw(),
+        DOBUF_MOD as c_int,
+        FORWARD as c_int,
+        eap.line2 as c_int,
+    );
     run_ecmd_cmd(eap);
 }
 
 /// `:bnext`.
 pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    unsafe {
-        goto_buffer(
-            eap.raw(),
-            DOBUF_CURRENT as c_int,
-            FORWARD as c_int,
-            eap.line2 as c_int,
-        )
-    };
+    goto_buffer(
+        eap.raw(),
+        DOBUF_CURRENT as c_int,
+        FORWARD as c_int,
+        eap.line2 as c_int,
+    );
     run_ecmd_cmd(eap);
 }
 
 /// `:bprevious` and `:bNext`.
 pub(crate) unsafe fn ex_bprevious(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    unsafe {
-        goto_buffer(
-            eap.raw(),
-            DOBUF_CURRENT as c_int,
-            BACKWARD as c_int,
-            eap.line2 as c_int,
-        )
-    };
+    goto_buffer(
+        eap.raw(),
+        DOBUF_CURRENT as c_int,
+        BACKWARD as c_int,
+        eap.line2 as c_int,
+    );
     run_ecmd_cmd(eap);
 }
 
 /// `:brewind` and `:bfirst`.
 pub(crate) unsafe fn ex_brewind(eap: *mut exarg_T) {
-    unsafe { goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, 0) };
+    goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(eap) });
 }
 
 /// `:blast`.
 pub(crate) unsafe fn ex_blast(eap: *mut exarg_T) {
-    unsafe { goto_buffer(eap, DOBUF_LAST as c_int, BACKWARD as c_int, 0) };
+    goto_buffer(eap, DOBUF_LAST as c_int, BACKWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(eap) });
 }
 
@@ -232,7 +223,7 @@ pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
     }
     eap.arg = fname;
     unsafe { do_exedit(eap.raw(), ptr::null_mut()) };
-    unsafe { xfree(fname as *mut c_void) };
+    xfree(fname as *mut c_void);
 }
 
 /// The `count`'th match for `pat` on 'path'.
@@ -260,21 +251,19 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
             n -= 1;
             n > 0
         } {
-            unsafe { xfree(fname as *mut c_void) };
-            fname = unsafe {
-                find_file_in_path(
-                    ptr::null_mut(),
-                    0 as size_t,
-                    FileNameOpts::MESS,
-                    false,
-                    cur_buf().b_ffname,
-                    &raw mut file_to_find,
-                    &raw mut search_ctx,
-                )
-            };
+            xfree(fname as *mut c_void);
+            fname = find_file_in_path(
+                ptr::null_mut(),
+                0 as size_t,
+                FileNameOpts::MESS,
+                false,
+                cur_buf().b_ffname,
+                &raw mut file_to_find,
+                &raw mut search_ctx,
+            );
         }
     }
-    unsafe { xfree(file_to_find as *mut c_void) };
+    xfree(file_to_find as *mut c_void);
     unsafe { vim_findfile_cleanup(search_ctx as *mut c_void) };
     fname
 }
@@ -355,26 +344,24 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
     {
         // A new, empty buffer.
         setpcmark();
-        unsafe {
-            do_ecmd(
-                0,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                eap,
-                ECMD_ONE as linenr_T,
-                ECMD_HIDE as c_int
-                    + if ea.forceit != 0 {
-                        ECMD_FORCEIT as c_int
-                    } else {
-                        0
-                    },
-                if old_curwin.is_null() {
-                    curwin.get()
+        do_ecmd(
+            0,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            eap,
+            ECMD_ONE as linenr_T,
+            ECMD_HIDE as c_int
+                + if ea.forceit != 0 {
+                    ECMD_FORCEIT as c_int
                 } else {
-                    ptr::null_mut()
+                    0
                 },
-            )
-        };
+            if old_curwin.is_null() {
+                curwin.get()
+            } else {
+                ptr::null_mut()
+            },
+        );
     } else if idx != CMD_split as c_int && idx != CMD_vsplit as c_int
         || unsafe { *ea.arg } as c_int != NUL
     {
@@ -391,45 +378,43 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             setpcmark();
         }
 
-        let opened = unsafe {
-            do_ecmd(
-                0,
-                if idx == CMD_enew as c_int {
-                    ptr::null_mut()
-                } else {
-                    ea.arg
-                },
-                ptr::null_mut(),
-                eap,
-                ea.do_ecmd_lnum,
-                (if buf_hide(curbuf.get()) {
-                    ECMD_HIDE as c_int
-                } else {
-                    0
-                }) + (if ea.forceit != 0 {
-                    ECMD_FORCEIT as c_int
-                } else {
-                    0
-                }) + (if old_curwin.is_null() {
-                    0
-                } else {
-                    ECMD_OLDBUF as c_int
-                }) + (if idx == CMD_badd as c_int {
-                    ECMD_ADDBUF as c_int
-                } else {
-                    0
-                }) + (if idx == CMD_balt as c_int {
-                    ECMD_ALTBUF as c_int
-                } else {
-                    0
-                }),
-                if old_curwin.is_null() {
-                    curwin.get()
-                } else {
-                    ptr::null_mut()
-                },
-            )
-        };
+        let opened = do_ecmd(
+            0,
+            if idx == CMD_enew as c_int {
+                ptr::null_mut()
+            } else {
+                ea.arg
+            },
+            ptr::null_mut(),
+            eap,
+            ea.do_ecmd_lnum,
+            (if buf_hide(curbuf.get()) {
+                ECMD_HIDE as c_int
+            } else {
+                0
+            }) + (if ea.forceit != 0 {
+                ECMD_FORCEIT as c_int
+            } else {
+                0
+            }) + (if old_curwin.is_null() {
+                0
+            } else {
+                ECMD_OLDBUF as c_int
+            }) + (if idx == CMD_badd as c_int {
+                ECMD_ADDBUF as c_int
+            } else {
+                0
+            }) + (if idx == CMD_balt as c_int {
+                ECMD_ALTBUF as c_int
+            } else {
+                0
+            }),
+            if old_curwin.is_null() {
+                curwin.get()
+            } else {
+                ptr::null_mut()
+            },
+        );
 
         if opened == FAIL {
             // The split has already happened; close it again. The
@@ -437,7 +422,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             // being lost while the window is closed.
             if !old_curwin.is_null() {
                 let need_hide = curbuf_is_changed() && cur_buf().b_nwindows <= 1;
-                if !need_hide || unsafe { buf_hide(curbuf.get()) } {
+                if !need_hide || buf_hide(curbuf.get()) {
                     let mut cs: cleanup_T = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
                     unsafe {
@@ -475,10 +460,10 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
 /// `:swapname`.
 pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
     let mfp = cur_buf().b_ml.ml_mfp;
-    if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
-        unsafe { msg(gettext(c"No swap file".as_ptr()), 0) };
+    if mfp.is_null() || mf_fname(mfp).is_null() {
+        msg(gettext(c"No swap file".as_ptr()), 0);
     } else {
-        unsafe { msg(mf_fname(mfp), 0) };
+        msg(mf_fname(mfp), 0);
     }
 }
 
@@ -487,7 +472,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let was_empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
     if eap.usefilter != 0 {
-        unsafe { do_bang(1, eap.raw(), false, false, true) };
+        do_bang(1, eap.raw(), false, false, true);
         return;
     }
     if u_save(eap.line2, eap.line2 + 1) == FAIL {
@@ -498,43 +483,36 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         if unsafe { check_fname() } == FAIL {
             return;
         }
-        unsafe {
-            readfile(
-                cur_buf().b_ffname,
-                cur_buf().b_fname,
-                eap.line2,
-                0,
-                MAXLNUM as linenr_T,
-                eap.raw(),
-                0,
-                false,
-            )
-        }
+        readfile(
+            cur_buf().b_ffname,
+            cur_buf().b_fname,
+            eap.line2,
+            0,
+            MAXLNUM as linenr_T,
+            eap.raw(),
+            0,
+            false,
+        )
     } else {
         // 'cpoptions' `a` makes `:read file` set the alternate file.
         if cpo_has(CpoFlag::ALTREAD) {
             unsafe { setaltfname(eap.arg, eap.arg, 1) };
         }
-        unsafe {
-            readfile(
-                eap.arg,
-                ptr::null_mut(),
-                eap.line2,
-                0,
-                MAXLNUM as linenr_T,
-                eap.raw(),
-                0,
-                false,
-            )
-        }
+        readfile(
+            eap.arg,
+            ptr::null_mut(),
+            eap.line2,
+            0,
+            MAXLNUM as linenr_T,
+            eap.raw(),
+            0,
+            false,
+        )
     };
 
     if read != OK {
         if !aborting() {
-            semsg_c!(
-                unsafe { gettext(&raw const e_notopen as *const c_char) },
-                eap.arg
-            );
+            semsg_c!(gettext(&raw const e_notopen as *const c_char), eap.arg);
         }
         return;
     }
@@ -560,7 +538,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 /// `:!cmd`.
 pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    unsafe { do_bang(eap.addr_count, eap.raw(), eap.forceit != 0, true, true) };
+    do_bang(eap.addr_count, eap.raw(), eap.forceit != 0, true, true);
 }
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
@@ -645,4 +623,119 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `buf_hide()` as checked code.
+fn buf_hide(buf: *const buf_T) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::buffer::buf_hide(buf) }
+}
+
+/// `do_bang()` as checked code.
+fn do_bang(addr_count: c_int, eap: *mut exarg_T, forceit: bool, do_in: bool, do_out: bool) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_cmds::do_bang(addr_count, eap, forceit, do_in, do_out) }
+}
+
+/// `do_ecmd()` as checked code.
+#[allow(clippy::too_many_arguments)]
+fn do_ecmd(
+    fnum: c_int,
+    ffname: *mut c_char,
+    sfname: *mut c_char,
+    eap: *mut exarg_T,
+    newlnum: linenr_T,
+    flags: c_int,
+    oldwin: *mut win_T,
+) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, oldwin) }
+}
+
+/// `find_file_in_path()` as checked code.
+#[allow(clippy::too_many_arguments)]
+fn find_file_in_path(
+    ptr: *mut c_char,
+    len: size_t,
+    options: FileNameOpts,
+    first: bool,
+    rel_fname: *mut c_char,
+    file_to_find: *mut *mut c_char,
+    search_ctx: *mut *mut c_char,
+) -> *mut c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe {
+        crate::file_search::find_file_in_path(
+            ptr,
+            len,
+            options,
+            first,
+            rel_fname,
+            file_to_find,
+            search_ctx,
+        )
+    }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `goto_buffer()` as checked code.
+fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_int) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::buffer::goto_buffer(eap, start, dir, count) }
+}
+
+/// `mf_fname()` as checked code.
+fn mf_fname(mfp: *const memfile_T) -> *const c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::memfile::mf_fname(mfp) }
+}
+
+/// `msg()` as checked code.
+fn msg(s: *const c_char, hl_id: c_int) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::msg(s, hl_id) }
+}
+
+/// `readfile()` as checked code.
+#[allow(clippy::too_many_arguments)]
+fn readfile(
+    fname: *mut c_char,
+    sfname: *mut c_char,
+    from: linenr_T,
+    lines_to_skip: linenr_T,
+    lines_to_read: linenr_T,
+    eap: *mut exarg_T,
+    flags: c_int,
+    silent: bool,
+) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe {
+        crate::fileio::readfile(
+            fname,
+            sfname,
+            from,
+            lines_to_skip,
+            lines_to_read,
+            eap,
+            flags,
+            silent,
+        )
+    }
+}
+
+/// `u_compute_hash()` as checked code.
+fn u_compute_hash(buf: Buf, hash: *mut uint8_t) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::undo::u_compute_hash(buf, hash) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
 }

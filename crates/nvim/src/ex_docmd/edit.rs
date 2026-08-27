@@ -9,13 +9,13 @@ use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
-use crate::cursor::{check_cursor, check_cursor_col};
+use crate::cursor::check_cursor;
+
 use crate::drawscreen::{UPD_VALID, clearmode, redraw_later, setcursor_mayforce, showmode};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::event::r#loop::process_events_until;
-use crate::ex_cmds::{
-    do_move, ex_copy, ex_substitute, ex_substitute_preview, global_exe, print_line,
-};
+use crate::ex_cmds::{do_move, ex_copy, ex_substitute, ex_substitute_preview, global_exe};
+
 use crate::ex_docmd::address::get_address;
 use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::modifier::expr_map_locked;
@@ -27,8 +27,9 @@ use crate::ex_docmd::{
 use crate::ex_getln::getexline;
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
 use crate::getchar::{
-    beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc,
+    beep_flush, restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc,
 };
+
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
 use crate::main::{
@@ -39,10 +40,10 @@ use crate::main::{
     stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
-use crate::mbyte::utfc_ptr2len;
+
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
 use crate::memory::{xfree, xmalloc};
-use crate::message::emsg;
+
 use crate::mouse::setmouse;
 use crate::r#move::{
     check_cursor_moved, cursor_correct, cursor_valid, scrolldown, scrollup, update_curswant,
@@ -51,9 +52,10 @@ use crate::r#move::{
 use crate::normal::{
     end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line, visual_active,
 };
-use crate::ops::{clear_oparg, do_join, op_delete, op_shift};
+use crate::ops::{do_join, op_delete, op_shift};
+
 use crate::option::{cpo_has, get_scrolloff_value};
-use crate::os::cshim::gettext;
+
 use crate::os::input::os_breakcheck;
 use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
@@ -67,9 +69,11 @@ use crate::types::{
     exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t,
     ssize_t, uint8_t,
 };
-use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
+use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
+
 use crate::undo::store::header_chain;
-use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
+use crate::undo::{u_clearline, u_redo, u_undo};
+
 use crate::winlayer::{Buf, Ea, Win, windows};
 use ::libc::strlen;
 
@@ -77,7 +81,7 @@ use ::libc::strlen;
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        unsafe { emsg(gettext(&raw const e_empty_buffer as *const c_char)) };
+        emsg(gettext(&raw const e_empty_buffer as *const c_char));
     } else {
         let idx = eap.cmdidx as c_int;
         let numbered =
@@ -85,7 +89,7 @@ pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
         let listed = idx == CMD_list as c_int || eap.flags & EXFLAG_LIST != 0;
         let mut line = eap.line1;
         while line <= eap.line2 && !got_int.get() {
-            unsafe { print_line(line, numbered, listed, line == eap.line1) };
+            print_line(line, numbered, listed, line == eap.line1);
             line += 1;
             os_breakcheck();
         }
@@ -147,15 +151,13 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != cur_win().w_cursor.lnum {
             let ctrl_o: [c_char; 2] = [Ctrl_O as c_char, 0];
-            unsafe {
-                ins_typebuf(
-                    ctrl_o.as_ptr() as *mut c_char,
-                    REMAP_NONE as c_int,
-                    0,
-                    true,
-                    false,
-                )
-            };
+            ins_typebuf(
+                ctrl_o.as_ptr() as *mut c_char,
+                REMAP_NONE as c_int,
+                0,
+                true,
+                false,
+            );
         }
     }
 }
@@ -183,10 +185,7 @@ pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
-            semsg_c!(
-                unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-                eap.arg
-            );
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
             return;
         }
     }
@@ -219,7 +218,7 @@ pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
 pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let mut oa: oparg_T = unsafe { core::mem::zeroed() };
-    unsafe { clear_oparg(&raw mut oa) };
+    clear_oparg(&raw mut oa);
     oa.regname = eap.regname;
     oa.start.lnum = eap.line1;
     oa.end.lnum = eap.line2;
@@ -323,7 +322,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     };
     if eap.arg.is_null() {
         if let Some(msg) = &errormsg {
-            unsafe { emsg(msg.as_ptr()) };
+            emsg(msg.as_ptr());
         }
         eap.nextcmd = ptr::null_mut();
         return;
@@ -332,7 +331,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
     if n == MAXLNUM as linenr_T || n < 0 || n > cur_buf().b_ml.ml_line_count {
-        unsafe { emsg(gettext(&raw const e_invrange as *const c_char)) };
+        emsg(gettext(&raw const e_invrange as *const c_char));
         return;
     }
 
@@ -352,14 +351,12 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
 pub unsafe fn ex_may_print(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if eap.flags != 0 {
-        unsafe {
-            print_line(
-                cur_win().w_cursor.lnum,
-                eap.flags & EXFLAG_NR != 0,
-                eap.flags & EXFLAG_LIST != 0,
-                true,
-            )
-        };
+        print_line(
+            cur_win().w_cursor.lnum,
+            eap.flags & EXFLAG_NR != 0,
+            eap.flags & EXFLAG_LIST != 0,
+            true,
+        );
         ex_no_reprint.set(true);
     }
 }
@@ -469,7 +466,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if eap.addr_count != 1 {
         if eap.forceit != 0 {
-            unsafe { u_undo_and_forget(1, true) };
+            u_undo_and_forget(1, true);
         } else {
             unsafe { u_undo(1) };
         }
@@ -477,16 +474,14 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     }
     let step = eap.line2;
     if eap.forceit == 0 {
-        unsafe { undo_time(step as c_int, false, false, true) };
+        undo_time(step as c_int, false, false, true);
         return;
     }
 
     if step >= cur_buf().b_u_seq_cur as linenr_T {
-        unsafe {
-            emsg(gettext(
-                &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
-            ))
-        };
+        emsg(gettext(
+            &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
+        ));
         return;
     }
     // Count how many states back `step` is along this branch.
@@ -508,14 +503,12 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
     if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as linenr_T) < step) {
-        unsafe {
-            emsg(gettext(
-                &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
-            ))
-        };
+        emsg(gettext(
+            &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
+        ));
         return;
     }
-    unsafe { u_undo_and_forget(count, true) };
+    u_undo_and_forget(count, true);
 }
 
 /// `:redo`.
@@ -567,38 +560,30 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
         }
     }
     if unsafe { *p } as c_int != NUL {
-        semsg_c!(
-            unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-            eap.arg
-        );
+        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
         return;
     }
-    unsafe {
-        undo_time(
-            if eap.cmdidx as c_int == CMD_earlier as c_int {
-                count.wrapping_neg()
-            } else {
-                count
-            },
-            sec,
-            file,
-            false,
-        )
-    };
+    undo_time(
+        if eap.cmdidx as c_int == CMD_earlier as c_int {
+            count.wrapping_neg()
+        } else {
+            count
+        },
+        sec,
+        file,
+        false,
+    );
 }
 
 /// `:mark` and `:k`.
 pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if unsafe { *eap.arg } as c_int == NUL {
-        unsafe { emsg(gettext(&raw const e_argreq as *const c_char)) };
+        emsg(gettext(&raw const e_argreq as *const c_char));
         return;
     }
     if unsafe { *eap.arg.add(1) } as c_int != NUL {
-        semsg_c!(
-            unsafe { gettext(&raw const e_trailing_arg as *const c_char) },
-            eap.arg,
-        );
+        semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), eap.arg,);
         return;
     }
     // The mark is set at the first non-blank of the addressed line, so
@@ -607,11 +592,9 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     cur_win().w_cursor.lnum = eap.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     if unsafe { setmark(*eap.arg as c_int) } == FAIL {
-        unsafe {
-            emsg(gettext(
-                c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
+        ));
     }
     cur_win().w_cursor = pos;
 }
@@ -669,22 +652,22 @@ pub unsafe fn restore_current_state(sst: *mut save_state_T) {
     pending_end_reg_executing.set(s.save_pending_end_reg_executing);
     msg_didout.set(msg_didout.get() || s.save_msg_didout);
     State.set(s.save_State);
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 }
 
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if !cur_buf().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
-        unsafe { emsg(c"Can't re-enter normal mode from terminal mode".as_ptr()) };
+        emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
     }
     if expr_map_locked() {
-        unsafe { emsg(gettext(&raw const e_secure as *const c_char)) };
+        emsg(gettext(&raw const e_secure as *const c_char));
         return;
     }
     if ex_normal_busy.get() as crate::types::OptInt >= p_mmd.get() {
-        unsafe { emsg(gettext(c"E192: Recursive use of :normal too deep".as_ptr())) };
+        emsg(gettext(c"E192: Recursive use of :normal too deep".as_ptr()));
         return;
     }
 
@@ -721,7 +704,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     unsafe { restore_current_state(&raw mut save_state) };
     ex_normal_busy.set(ex_normal_busy.get() - 1);
     setmouse();
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
     unsafe { xfree(arg as *mut c_void) };
 }
 
@@ -735,7 +718,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
     let mut extra = 0;
     let mut p = src;
     while unsafe { *p } as c_int != NUL {
-        let mut l = unsafe { utfc_ptr2len(p) } - 1;
+        let mut l = utfc_ptr2len(p) - 1;
         while l > 0 {
             p = unsafe { p.add(1) };
             if unsafe { *p } as c_int == K_SPECIAL as c_char as c_int {
@@ -755,7 +738,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
     while unsafe { *p } as c_int != NUL {
         unsafe { *out.offset(len) = *p };
         len += 1;
-        let mut l = unsafe { utfc_ptr2len(p) } - 1;
+        let mut l = utfc_ptr2len(p) - 1;
         while l > 0 {
             p = unsafe { p.add(1) };
             unsafe { *out.offset(len) = *p };
@@ -818,14 +801,14 @@ pub(crate) unsafe fn ex_stopinsert(_eap: *mut exarg_T) {
 
 /// Put `cmd` into the typeahead and run it as normal-mode keys.
 pub unsafe fn exec_normal_cmd(cmd: *mut c_char, remap: c_int, silent: bool) {
-    unsafe { ins_typebuf(cmd, remap, 0, true, silent) };
+    ins_typebuf(cmd, remap, 0, true, silent);
     unsafe { exec_normal(false, false) };
 }
 
 /// Run normal-mode commands until the typeahead is spent.
 pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
     let mut oa: oparg_T = unsafe { core::mem::zeroed() };
-    unsafe { clear_oparg(&raw mut oa) };
+    clear_oparg(&raw mut oa);
     finish_op.set(false);
     let mut c: c_int;
     while (!stuff_empty()
@@ -909,4 +892,70 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `check_cursor_col()` as checked code.
+fn check_cursor_col(win: Win) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::cursor::check_cursor_col(win)
+}
+
+/// `clear_oparg()` as checked code.
+fn clear_oparg(oap: *mut oparg_T) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ops::clear_oparg(oap) }
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `ins_typebuf()` as checked code.
+fn ins_typebuf(
+    str: *mut c_char,
+    noremap: c_int,
+    offset: c_int,
+    nottyped: bool,
+    silent: bool,
+) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::getchar::ins_typebuf(str, noremap, offset, nottyped, silent) }
+}
+
+/// `print_line()` as checked code.
+fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bool) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::ex_cmds::print_line(lnum, use_number, list, first) }
+}
+
+/// `u_undo_and_forget()` as checked code.
+fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::undo::u_undo_and_forget(count, do_buf_event) }
+}
+
+/// `ui_cursor_shape()` as checked code.
+fn ui_cursor_shape() {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::ui::ui_cursor_shape() }
+}
+
+/// `undo_time()` as checked code.
+fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::undo::undo_time(step, sec, file, absolute) }
+}
+
+/// `utfc_ptr2len()` as checked code.
+fn utfc_ptr2len(p: *const c_char) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::mbyte::utfc_ptr2len(p) }
 }

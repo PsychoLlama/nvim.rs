@@ -1,7 +1,7 @@
 //! `:terminal` and `:lsp`, which both hand a buffer to a process.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::{api_clear_error, cstr_as_string};
@@ -10,11 +10,13 @@ use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_shellempty, p_sh};
-use crate::memory::{xfree, xstrlcat};
+use crate::memory::xstrlcat;
+
 use crate::message::{emsg, emsg_multiline};
 use crate::os::cshim::{gettext, snprintf};
+
 use crate::os::shell::{shell_build_argv, shell_free_argv};
-use crate::strings::vim_strsave_escaped;
+
 use crate::types::{
     Array, Error, NUL, Object, String_0, exarg_T, kErrorTypeNone, kObjectTypeString, size_t,
 };
@@ -70,7 +72,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
     debug_assert!(len < CMD_LEN);
 
     if unsafe { *eap.arg } as c_int != NUL {
-        let name = unsafe { vim_strsave_escaped(eap.arg, c"\"\\".as_ptr()) };
+        let name = vim_strsave_escaped(eap.arg, c"\"\\".as_ptr());
         unsafe {
             snprintf(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
@@ -79,7 +81,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
                 name,
             )
         };
-        unsafe { xfree(name as *mut core::ffi::c_void) };
+        xfree(name as *mut c_void);
     } else {
         if unsafe { *p_sh.get() } as c_int == NUL {
             unsafe { emsg(gettext(&raw const e_shellempty as *const c_char)) };
@@ -101,7 +103,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
                     escaped,
                 )
             };
-            unsafe { xfree(escaped as *mut core::ffi::c_void) };
+            xfree(escaped as *mut c_void);
             unsafe {
                 xstrlcat(
                     &raw mut shell_argv as *mut c_char,
@@ -162,4 +164,16 @@ pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
         unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
     }
     unsafe { api_clear_error(&raw mut err) };
+}
+
+/// `vim_strsave_escaped()` as checked code.
+fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
 }

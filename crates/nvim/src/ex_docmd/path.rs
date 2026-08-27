@@ -12,32 +12,35 @@ use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::eval::typval::{
-    callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_free, tv_list_len,
-};
+use crate::eval::typval::{callback_free, tv_clear, tv_list_copy, tv_list_find};
+
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
 use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
 use crate::ex_getln::allbuf_locked;
-use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
+use crate::file_search::vim_chdir;
+
 use crate::fileio::shorten_fnames;
 use crate::main::{
     KeyTyped, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path, e_failed,
     e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path, globaldir,
     last_chdir_reason, p_cdh, p_ffu, p_verbose,
 };
-use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::message::{emsg, msg};
-use crate::option::{cpo_has, option_last_set, option_set_callback_func};
+use crate::memory::xmalloc;
+
+use crate::message::msg;
+
+use crate::option::{cpo_has, option_last_set};
+
 use crate::options::kOptFindfunc;
 use crate::optionstr::free_string_option;
-use crate::os::cshim::gettext;
+
 use crate::os::env::expand_env;
-use crate::os::fs::os_dirname;
+
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, CpoFlag, FAIL,
-    MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdCause, CdScope, CpoFlag,
+    FAIL, MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
     VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
@@ -96,11 +99,9 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         if rettv.v_type as c_uint == VAR_LIST as c_uint {
             retlist = unsafe { tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copy_id()) };
         } else {
-            unsafe {
-                emsg(gettext(
-                    &raw const e_invalid_return_type_from_findfunc as *const c_char,
-                ))
-            };
+            emsg(gettext(
+                &raw const e_invalid_return_type_from_findfunc as *const c_char,
+            ));
         }
         unsafe { tv_clear(&raw mut rettv) };
     }
@@ -119,9 +120,9 @@ pub unsafe fn expand_findfunc(
     if l.is_null() {
         return FAIL;
     }
-    let len = unsafe { tv_list_len(l) };
+    let len = tv_list_len(l);
     if len == 0 {
-        unsafe { tv_list_free(l) };
+        tv_list_free(l);
         return FAIL;
     }
     // Sized by the list length, filled only with the entries that are
@@ -137,7 +138,7 @@ pub unsafe fn expand_findfunc(
         li = unsafe { (*li).li_next };
     }
     unsafe { *num_matches = idx };
-    unsafe { tv_list_free(l) };
+    tv_list_free(l);
     OK
 }
 
@@ -155,15 +156,15 @@ pub(crate) unsafe fn findfunc_find_file(
     unsafe { *findarg.add(findarg_len) = NUL as c_char };
 
     let fname_list = unsafe { call_findfunc(findarg, kBoolVarFalse) };
-    let fname_count = unsafe { tv_list_len(fname_list) };
+    let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
         semsg_c!(
-            unsafe { gettext(&raw const e_cant_find_file_str_in_path as *const c_char) },
+            gettext(&raw const e_cant_find_file_str_in_path as *const c_char),
             findarg,
         );
     } else if count > fname_count {
         semsg_c!(
-            unsafe { gettext(&raw const e_no_more_file_str_found_in_path as *const c_char) },
+            gettext(&raw const e_no_more_file_str_found_in_path as *const c_char),
             findarg,
         );
     } else {
@@ -173,7 +174,7 @@ pub(crate) unsafe fn findfunc_find_file(
         }
     }
     if !fname_list.is_null() {
-        unsafe { tv_list_free(fname_list) };
+        tv_list_free(fname_list);
     }
     unsafe { *findarg.add(findarg_len) = saved };
     ret_fname
@@ -188,7 +189,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
     let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb) }
     } else {
-        let r = unsafe { option_set_callback_func(p_ffu.get(), global_findfunc()) };
+        let r = option_set_callback_func(p_ffu.get(), global_findfunc());
         // Setting it globally without `:setglobal` clears the local one.
         if !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut (*buf).b_ffu_cb) };
@@ -230,7 +231,7 @@ pub(crate) unsafe fn get_prevdir(scope: CdScope) -> *mut c_char {
 /// remembers what the global directory was, so that leaving a local
 /// directory can go back to it.
 pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
-    unsafe { xfree(cur_win().w_localdir as *mut c_void) };
+    xfree(cur_win().w_localdir as *mut c_void);
     cur_win().w_localdir = ptr::null_mut();
     if scope as c_int >= kCdScopeTabpage as c_int {
         unsafe { xfree((*curtab.get()).tp_localdir as *mut c_void) };
@@ -239,26 +240,26 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
     if (scope as c_int) < kCdScopeGlobal as c_int {
         let pdir = unsafe { get_prevdir(scope) };
         if globaldir.get().is_null() && !pdir.is_null() {
-            globaldir.set(unsafe { xstrdup(pdir) });
+            globaldir.set(xstrdup(pdir));
         }
     }
 
     let mut cwd: [c_char; 4096] = [0; 4096];
-    if unsafe { os_dirname(&raw mut cwd as *mut c_char, MAXPATHL as size_t) } != OK {
+    if os_dirname(&raw mut cwd as *mut c_char, MAXPATHL as size_t) != OK {
         return;
     }
     match scope as c_int {
         s if s == kCdScopeGlobal as c_int => {
             // The global directory *is* the process's now, so there is
             // nothing left to remember.
-            unsafe { xfree(globaldir.get() as *mut c_void) };
+            xfree(globaldir.get() as *mut c_void);
             globaldir.set(ptr::null_mut());
         }
         s if s == kCdScopeTabpage as c_int => {
             unsafe { (*curtab.get()).tp_localdir = xstrdup(&raw mut cwd as *mut c_char) };
         }
         s if s == kCdScopeWindow as c_int => {
-            cur_win().w_localdir = unsafe { xstrdup(&raw mut cwd as *mut c_char) };
+            cur_win().w_localdir = xstrdup(&raw mut cwd as *mut c_char);
         }
         // `kCdScopeInvalid`. Upstream aborts here; so does this.
         _ => unreachable!("post_chdir with an invalid scope"),
@@ -266,7 +267,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
     last_chdir_reason.set(ptr::null_mut());
     unsafe { shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS) as c_int) };
     if trigger_dirchanged {
-        unsafe { do_autocmd_dirchanged(&raw mut cwd as *mut c_char, scope, kCdCauseManual, false) };
+        do_autocmd_dirchanged(&raw mut cwd as *mut c_char, scope, kCdCauseManual, false);
     }
 }
 
@@ -286,14 +287,14 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if unsafe { strcmp(new_dir, c"-".as_ptr()) } == 0 {
         let pdir = unsafe { get_prevdir(scope) };
         if pdir.is_null() {
-            unsafe { emsg(gettext(c"E186: No previous directory".as_ptr())) };
+            emsg(gettext(c"E186: No previous directory".as_ptr()));
             return false;
         }
         new_dir = pdir;
     }
 
-    let pdir = if unsafe { os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) } == OK {
-        unsafe { xstrdup(dir.as_mut_ptr()) }
+    let pdir = if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) == OK {
+        xstrdup(dir.as_mut_ptr())
     } else {
         ptr::null_mut()
     };
@@ -306,10 +307,10 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 
     let dir_differs = pdir.is_null() || unsafe { pathcmp(pdir, new_dir, -1) } != 0;
     if dir_differs {
-        unsafe { do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true) };
+        do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
         if unsafe { vim_chdir(new_dir) } != 0 {
-            unsafe { emsg(gettext(&raw const e_failed as *const c_char)) };
-            unsafe { xfree(pdir as *mut c_void) };
+            emsg(gettext(&raw const e_failed as *const c_char));
+            xfree(pdir as *mut c_void);
             return false;
         }
     }
@@ -361,8 +362,8 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
 pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
-    if unsafe { os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) } != OK {
-        unsafe { emsg(gettext(c"E187: Unknown".as_ptr())) };
+    if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) != OK {
+        emsg(gettext(c"E187: Unknown".as_ptr()));
         return;
     }
     if p_verbose.get() > 0 as OptInt {
@@ -391,4 +392,58 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `do_autocmd_dirchanged()` as checked code.
+fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: CdScope, cause: CdCause, pre: bool) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::file_search::do_autocmd_dirchanged(new_dir, scope, cause, pre) }
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `option_set_callback_func()` as checked code.
+fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::option::option_set_callback_func(optval, optcb) }
+}
+
+/// `os_dirname()` as checked code.
+fn os_dirname(buf: *mut c_char, len: size_t) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::os::fs::os_dirname(buf, len) }
+}
+
+/// `tv_list_free()` as checked code.
+fn tv_list_free(l: *mut list_T) {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::typval::tv_list_free(l) }
+}
+
+/// `tv_list_len()` as checked code.
+fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::typval::tv_list_len(l) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
+}
+
+/// `xstrdup()` as checked code.
+fn xstrdup(str: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::memory::xstrdup(str) }
 }

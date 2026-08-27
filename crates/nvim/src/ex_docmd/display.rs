@@ -8,12 +8,13 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::buffer::maketitle;
-use crate::charset::skipwhite;
+
 use crate::digraph::{listdigraphs, putdigraph};
 use crate::drawscreen::{
-    UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later, redraw_curbuf_later,
-    redraw_statuslines, status_redraw_all, status_redraw_curbuf, update_screen,
+    UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_statuslines,
+    status_redraw_all, status_redraw_curbuf,
 };
+
 use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
@@ -23,17 +24,19 @@ use crate::main::{
     State, cmdpreview, e_invarg2, msg_col, msg_didout, need_maketitle, need_wait_return,
     no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
 };
-use crate::memory::{xfree, xstrdup};
-use crate::message::{msg, msg_ext_set_kind};
+use crate::memory::xstrdup;
+
+use crate::message::msg_ext_set_kind;
+
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
-use crate::os::cshim::gettext;
+
 use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
 use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, uint8_t, varnumber_T};
-use crate::ui::ui_flush;
+
 use crate::winlayer::{Ea, Win};
 use ::libc::{fclose, strcasecmp};
 
@@ -43,7 +46,7 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     if unsafe { *eap.arg } as c_int != NUL {
         if unsafe { load_colors(eap.arg) } == FAIL {
             semsg_c!(
-                unsafe { gettext(c"E185: Cannot find color scheme '%s'".as_ptr()) },
+                gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
                 eap.arg,
             );
         }
@@ -55,14 +58,14 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let no_emsg = Suppress::emsg();
     let name = unsafe { eval_to_string(expr, false, false) };
     drop(no_emsg);
-    unsafe { xfree(expr as *mut c_void) };
+    xfree(expr as *mut c_void);
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     if name.is_null() {
-        unsafe { msg(c"default".as_ptr(), 0) };
+        msg(c"default".as_ptr(), 0);
     } else {
-        unsafe { msg(name, 0) };
-        unsafe { xfree(name as *mut c_void) };
+        msg(name, 0);
+        xfree(name as *mut c_void);
     }
 }
 
@@ -70,7 +73,7 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_highlight(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if unsafe { *eap.arg } as c_int == NUL && unsafe { *eap.cmd.add(2) } as c_int == '!' as c_int {
-        unsafe { msg(gettext(c"Greetings, Vim user!".as_ptr()), 0) };
+        msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
     unsafe { do_highlight(eap.arg, eap.forceit != 0, false) };
 }
@@ -94,14 +97,14 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         } else {
             c"w".as_ptr() as *mut c_char
         };
-        arg = unsafe { skipwhite(arg) };
+        arg = skipwhite(arg);
         unsafe { close_redir() };
         let fname = unsafe { expand_env_save(arg) };
         if fname.is_null() {
             return;
         }
         redir_fd.set(unsafe { open_exfile(fname, eap.forceit, mode) });
-        unsafe { xfree(fname as *mut c_void) };
+        xfree(fname as *mut c_void);
     } else if unsafe { *arg } as c_int == '@' as c_int {
         unsafe { close_redir() };
         arg = unsafe { arg.add(1) };
@@ -129,10 +132,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         }
         if unsafe { *arg } as c_int != NUL {
             redir_reg.set(0);
-            semsg_c!(
-                unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-                eap.arg
-            );
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
         }
     } else if unsafe { *arg } as c_int == '=' as c_int
         && unsafe { *arg.add(1) } as c_int == '>' as c_int
@@ -147,10 +147,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
             redir_vname.set(true);
         }
     } else {
-        semsg_c!(
-            unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-            eap.arg
-        );
+        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg);
     }
     // Whichever form succeeded, output is being captured again.
     if !redir_fd.get().is_null() || redir_reg.get() != 0 || redir_vname.get() {
@@ -169,12 +166,12 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
     validate_cursor(unsafe { Win::current() });
     update_topline(unsafe { Win::current() });
     if eap.forceit != 0 {
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
     } else if visual_active() {
         redraw_curbuf_later(UPD_INVERTED);
     }
-    unsafe { update_screen() };
+    update_screen();
     if need_maketitle.get() {
         unsafe { maketitle() };
     }
@@ -183,7 +180,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
     msg_didout.set(false);
     msg_col.set(0);
     need_wait_return.set(false);
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// `:redrawstatus` — the status lines only, unless a full redraw is
@@ -205,10 +202,10 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
         if visual_active() {
             redraw_curbuf_later(UPD_INVERTED);
         }
-        unsafe { update_screen() };
+        update_screen();
     }
     drop(lazyredraw_off);
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// `:redrawtabline`.
@@ -216,7 +213,7 @@ pub(crate) unsafe fn ex_redrawtabline(_eap: *mut exarg_T) {
     let lazyredraw_off = suspend_lazyredraw();
     unsafe { draw_tabline() };
     drop(lazyredraw_off);
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// The redraw suppression counter and 'lazyredraw' held out of the way,
@@ -279,7 +276,7 @@ pub unsafe fn set_no_hlsearch(flag: bool) {
 /// `:nohlsearch`.
 pub(crate) unsafe fn ex_nohlsearch(_eap: *mut exarg_T) {
     unsafe { set_no_hlsearch(true) };
-    unsafe { redraw_all_later(UPD_SOME_VALID) };
+    redraw_all_later(UPD_SOME_VALID);
 }
 
 /// Did the last Ex-mode line end with a bare Return?
@@ -290,4 +287,46 @@ pub fn get_pressedreturn() -> bool {
 /// Record whether it did.
 pub fn set_pressedreturn(val: bool) {
     ex_pressedreturn.set(val);
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `msg()` as checked code.
+fn msg(s: *const c_char, hl_id: c_int) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::msg(s, hl_id) }
+}
+
+/// `redraw_all_later()` as checked code.
+fn redraw_all_later(redr_type: c_int) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::drawscreen::redraw_all_later(redr_type) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `ui_flush()` as checked code.
+fn ui_flush() {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::ui::ui_flush() }
+}
+
+/// `update_screen()` as checked code.
+fn update_screen() -> c_int {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::drawscreen::update_screen() }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
 }

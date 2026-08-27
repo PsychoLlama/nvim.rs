@@ -12,14 +12,16 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
-use crate::charset::{getdigits_int32, skipdigits, skipwhite};
+use crate::ascii::{ascii_isspace, ascii_iswhite};
+
+use crate::charset::{getdigits_int32, skipdigits};
+
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
-use crate::mbyte::utfc_ptr2len;
+
 use crate::memory::xstrdup;
 use crate::option::cpo_has;
 use crate::os::cshim::memmove;
@@ -40,7 +42,7 @@ use ::libc::strlen;
 /// `::::print` both reach the command name.
 pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
     let mut p = if skipleadingwhite {
-        unsafe { skipwhite(p) }
+        skipwhite(p)
     } else {
         p as *mut c_char
     };
@@ -84,7 +86,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
         }
         ea.arg = unsafe { ea.arg.add(strlen(ea.arg)) };
     }
-    ea.arg = unsafe { skipwhite(ea.arg) };
+    ea.arg = skipwhite(ea.arg);
 }
 
 /// Turn a count into a range, which is what a count means for every command
@@ -136,7 +138,7 @@ pub(crate) unsafe fn parse_count(
     }
 
     let n: linenr_T = unsafe { getdigits_int32(ea.arg_ptr(), false, INT32_MAX) };
-    ea.arg = unsafe { skipwhite(ea.arg) };
+    ea.arg = skipwhite(ea.arg);
     if !ea.args.is_null() {
         // `nvim_cmd` supplies the arguments already split, so the count
         // that was just consumed has to come off the first of them.
@@ -331,7 +333,7 @@ pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
 
 /// The command after `p`, if `p` is at the separator that introduces one.
 pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
-    let s = unsafe { skipwhite(p) };
+    let s = skipwhite(p);
     if unsafe { *s } as c_int == '|' as c_int || unsafe { *s } as c_int == '\n' as c_int {
         return unsafe { s.add(1) };
     }
@@ -342,4 +344,22 @@ pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
 fn cur_buf() -> Buf {
     // SAFETY: `curbuf` is set from startup to exit.
     unsafe { Buf::current() }
+}
+
+/// `ascii_isdigit()` as checked code.
+fn ascii_isdigit(c: c_int) -> bool {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::ascii::ascii_isdigit(c)
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `utfc_ptr2len()` as checked code.
+fn utfc_ptr2len(p: *const c_char) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::mbyte::utfc_ptr2len(p) }
 }

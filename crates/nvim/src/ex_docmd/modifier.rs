@@ -14,14 +14,15 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
+
 use crate::buffer::BufFlags;
-use crate::charset::{skipdigits, skipwhite};
-use crate::ex_cmds::skip_vimgrep_pat;
+use crate::charset::skipdigits;
+
 use crate::ex_docmd::address::{get_address, skip_range};
-use crate::ex_docmd::lookup::checkforcmd;
+
 use crate::ex_docmd::onecmd::ex_func_is;
-use crate::ex_docmd::scan::ends_excmd;
+
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
@@ -32,12 +33,14 @@ use crate::main::{
     msg_silent, p_ei, p_verbose, sandbox,
 };
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
-use crate::memory::{xfree, xmemcpyz, xstrdup};
+use crate::memory::{xfree, xmemcpyz};
+
 use crate::message::redirecting;
 use crate::option::{kOptValTypeString, set_option_direct};
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
-use crate::os::cshim::{memmove, strncmp};
+use crate::os::cshim::strncmp;
+
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
@@ -180,36 +183,36 @@ pub(crate) unsafe fn parse_command_modifiers(
         let mut p = unsafe { skip_range(ea.cmd, ptr::null_mut()) };
         match unsafe { *p } as u8 {
             b'a' => {
-                if !unsafe { checkforcmd(ea.cmd_ptr(), c"aboveleft".as_ptr(), 3) } {
+                if !checkforcmd(ea.cmd_ptr(), c"aboveleft".as_ptr(), 3) {
                     break;
                 }
                 cm.cmod_split |= WSP_ABOVE as c_int;
             }
             b'b' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"belowright".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"belowright".as_ptr(), 3) {
                     cm.cmod_split |= WSP_BELOW as c_int;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"browse".as_ptr(), 3) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"browse".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::BROWSE;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"botright".as_ptr(), 2) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"botright".as_ptr(), 2) {
                     cm.cmod_split |= WSP_BOT as c_int;
                 } else {
                     break;
                 }
             }
             b'c' => {
-                if !unsafe { checkforcmd(ea.cmd_ptr(), c"confirm".as_ptr(), 4) } {
+                if !checkforcmd(ea.cmd_ptr(), c"confirm".as_ptr(), 4) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::CONFIRM;
             }
             b'k' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"keepmarks".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"keepmarks".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::KEEPMARKS;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"keepalt".as_ptr(), 5) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"keepalt".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPALT;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"keeppatterns".as_ptr(), 5) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"keeppatterns".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"keepjumps".as_ptr(), 5) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"keepjumps".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
                 } else {
                     break;
@@ -219,7 +222,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                 // `:filter` insists on a pattern *and* something after
                 // it: the whole point is the command it wraps.
                 let mut reg_pat: *mut c_char = ptr::null_mut();
-                if !unsafe { checkforcmd(&raw mut p, c"filter".as_ptr(), 4) }
+                if !checkforcmd(&raw mut p, c"filter".as_ptr(), 4)
                     || unsafe { *p } as c_int == NUL
                     || ends_excmd(unsafe { *p } as c_int) != 0
                 {
@@ -233,15 +236,15 @@ pub(crate) unsafe fn parse_command_modifiers(
                     }
                 }
                 p = if skip_only {
-                    unsafe { skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut()) }
+                    skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut())
                 } else {
-                    unsafe { skip_vimgrep_pat(p, &raw mut reg_pat, ptr::null_mut()) }
+                    skip_vimgrep_pat(p, &raw mut reg_pat, ptr::null_mut())
                 };
                 if p.is_null() || unsafe { *p } as c_int == NUL {
                     break;
                 }
                 if !skip_only {
-                    cm.cmod_filter_pat = unsafe { xstrdup(reg_pat) };
+                    cm.cmod_filter_pat = xstrdup(reg_pat);
                     cm.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(reg_pat, RE_MAGIC) };
                     if cm.cmod_filter_regmatch.regprog.is_null() {
                         break;
@@ -250,10 +253,10 @@ pub(crate) unsafe fn parse_command_modifiers(
                 ea.cmd = p;
             }
             b'h' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"horizontal".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"horizontal".as_ptr(), 3) {
                     cm.cmod_split |= WSP_HOR as c_int;
                 } else if p == ea.cmd
-                    && unsafe { checkforcmd(&raw mut p, c"hide".as_ptr(), 3) }
+                    && checkforcmd(&raw mut p, c"hide".as_ptr(), 3)
                     && unsafe { *p } as c_int != NUL
                     && ends_excmd(unsafe { *p } as c_int) == 0
                 {
@@ -267,33 +270,33 @@ pub(crate) unsafe fn parse_command_modifiers(
                 }
             }
             b'l' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"lockmarks".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"lockmarks".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::LOCKMARKS;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"leftabove".as_ptr(), 5) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"leftabove".as_ptr(), 5) {
                     cm.cmod_split |= WSP_ABOVE as c_int;
                 } else {
                     break;
                 }
             }
             b'n' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"noautocmd".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"noautocmd".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"noswapfile".as_ptr(), 3) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"noswapfile".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
                 } else {
                     break;
                 }
             }
             b'r' => {
-                if !unsafe { checkforcmd(ea.cmd_ptr(), c"rightbelow".as_ptr(), 6) } {
+                if !checkforcmd(ea.cmd_ptr(), c"rightbelow".as_ptr(), 6) {
                     break;
                 }
                 cm.cmod_split |= WSP_BELOW as c_int;
             }
             b's' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"sandbox".as_ptr(), 3) } {
+                if checkforcmd(ea.cmd_ptr(), c"sandbox".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::SANDBOX;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"silent".as_ptr(), 3) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"silent".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::SILENT;
                     // `:silent!` only means "and silence errors" when
                     // the `!` is stuck to the word: `:silent !cmd` runs
@@ -309,7 +312,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                 }
             }
             b't' => {
-                if unsafe { checkforcmd(&raw mut p, c"tab".as_ptr(), 3) } {
+                if checkforcmd(&raw mut p, c"tab".as_ptr(), 3) {
                     if !skip_only {
                         let tabnr = unsafe {
                             get_address(
@@ -337,22 +340,22 @@ pub(crate) unsafe fn parse_command_modifiers(
                         }
                     }
                     ea.cmd = p;
-                } else if unsafe { checkforcmd(ea.cmd_ptr(), c"topleft".as_ptr(), 2) } {
+                } else if checkforcmd(ea.cmd_ptr(), c"topleft".as_ptr(), 2) {
                     cm.cmod_split |= WSP_TOP as c_int;
                 } else {
                     break;
                 }
             }
             b'u' => {
-                if !unsafe { checkforcmd(ea.cmd_ptr(), c"unsilent".as_ptr(), 3) } {
+                if !checkforcmd(ea.cmd_ptr(), c"unsilent".as_ptr(), 3) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::UNSILENT;
             }
             b'v' => {
-                if unsafe { checkforcmd(ea.cmd_ptr(), c"vertical".as_ptr(), 4) } {
+                if checkforcmd(ea.cmd_ptr(), c"vertical".as_ptr(), 4) {
                     cm.cmod_split |= WSP_VERT as c_int;
-                } else if unsafe { checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) } {
+                } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
                     // The count is read from `eap->cmd`, which
                     // `checkforcmd` left *before* the word: `:5verbose`.
                     // Saturating: the count is whatever the user typed,
@@ -399,7 +402,7 @@ unsafe fn restore_visual_range(
     if ea.cmd > cmd_start {
         if use_plus_cmd {
             let len = unsafe { strlen(cmd_start) };
-            unsafe { memmove(orig_cmd as *mut c_void, cmd_start as *const c_void, len) };
+            memmove(orig_cmd as *mut c_void, cmd_start as *const c_void, len);
             unsafe { xmemcpyz(orig_cmd.add(len) as *mut c_void, c" *+".as_ptr().cast(), 3) };
         } else {
             unsafe {
@@ -562,7 +565,7 @@ unsafe fn apply_cmdmod() {
     }
     if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
         // SAFETY: `p_ei` is the live `'eventignore'` string.
-        let save_ei = unsafe { xstrdup(p_ei.get()) };
+        let save_ei = xstrdup(p_ei.get());
         cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
         set_option_direct(
             kOptEventignore,
@@ -793,4 +796,54 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `ascii_isdigit()` as checked code.
+fn ascii_isdigit(c: c_int) -> bool {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::ascii::ascii_isdigit(c)
+}
+
+/// `checkforcmd()` as checked code.
+fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::lookup::checkforcmd(pp, cmd, len) }
+}
+
+/// `ends_excmd()` as checked code.
+fn ends_excmd(c: c_int) -> c_int {
+    // SAFETY: a plain character comparison.
+    crate::ex_docmd::scan::ends_excmd(c)
+}
+
+/// `memmove()` as checked code.
+fn memmove(
+    __dest: *mut ::core::ffi::c_void,
+    __src: *const ::core::ffi::c_void,
+    __n: size_t,
+) -> *mut ::core::ffi::c_void {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::os::cshim::memmove(__dest, __src, __n) }
+}
+
+/// `skip_vimgrep_pat()` as checked code.
+fn skip_vimgrep_pat(
+    p: *mut ::core::ffi::c_char,
+    s: *mut *mut ::core::ffi::c_char,
+    flags: *mut ::core::ffi::c_int,
+) -> *mut ::core::ffi::c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_cmds::skip_vimgrep_pat(p, s, flags) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `xstrdup()` as checked code.
+fn xstrdup(str: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::memory::xstrdup(str) }
 }

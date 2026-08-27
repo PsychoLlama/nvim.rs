@@ -6,6 +6,7 @@
 //! `repl_cmdline` does and why it is the only place allowed to free the
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::os::cshim::snprintf;
 
 use crate::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -36,15 +37,18 @@ use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_usingsid,
     escape_chars, p_gp, p_mp, p_wic,
 };
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
+use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
+
 use crate::message::{emsg, msg_make};
 use crate::normal::find_ident_under_cursor;
-use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
+
 use crate::os::env::{expand_env_esc, expand_env_save};
-use crate::path::{full_name_save, path_has_wildcard, path_tail, path_try_shorten_fname};
+use crate::path::{full_name_save, path_tail, path_try_shorten_fname};
+
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
-use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
+use crate::strings::strrep;
+
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     ExArgt, ExpandContext, FAIL, MAXPATHL, NUL, OK, Vv, exarg_T, expand_T, linenr_T, size_t,
@@ -123,7 +127,7 @@ pub(crate) unsafe fn expand_filename(
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
     let mut p = skip_grep_pat(ea);
-    let mut has_wildcards = unsafe { path_has_wildcard(p) };
+    let mut has_wildcards = path_has_wildcard(p);
 
     while unsafe { *p } as c_int != NUL {
         if unsafe { *p } as c_int == '`' as c_int && unsafe { *p.add(1) } as c_int == '=' as c_int {
@@ -163,12 +167,10 @@ pub(crate) unsafe fn expand_filename(
             continue;
         }
 
-        if !unsafe { vim_strchr(repl, '$' as c_int) }.is_null()
-            || !unsafe { vim_strchr(repl, '~' as c_int) }.is_null()
-        {
+        if !vim_strchr(repl, '$' as c_int).is_null() || !vim_strchr(repl, '~' as c_int).is_null() {
             let old = repl;
             repl = unsafe { expand_env_save(repl) };
-            unsafe { xfree(old as *mut c_void) };
+            xfree(old as *mut c_void);
         }
 
         // A name that will be handed to a *file* argument gets the
@@ -191,8 +193,8 @@ pub(crate) unsafe fn expand_filename(
             let mut l = repl;
             while unsafe { *l } != 0 {
                 if !unsafe { vim_strchr(escape_chars.get(), *l as uint8_t as c_int) }.is_null() {
-                    let escaped_repl = unsafe { vim_strsave_escaped(repl, escape_chars.get()) };
-                    unsafe { xfree(repl as *mut c_void) };
+                    let escaped_repl = vim_strsave_escaped(repl, escape_chars.get());
+                    xfree(repl as *mut c_void);
                     repl = escaped_repl;
                     break;
                 }
@@ -204,13 +206,13 @@ pub(crate) unsafe fn expand_filename(
         if (ea.usefilter != 0 || idx == CMD_bang as c_int || idx == CMD_terminal as c_int)
             && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
         {
-            let escaped_repl = unsafe { vim_strsave_escaped(repl, c"!".as_ptr()) };
-            unsafe { xfree(repl as *mut c_void) };
+            let escaped_repl = vim_strsave_escaped(repl, c"!".as_ptr());
+            xfree(repl as *mut c_void);
             repl = escaped_repl;
         }
 
         p = unsafe { repl_cmdline(eap, p, srclen, repl, cmdlinep) };
-        unsafe { xfree(repl as *mut c_void) };
+        xfree(repl as *mut c_void);
     }
 
     // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
@@ -222,12 +224,12 @@ pub(crate) unsafe fn expand_filename(
     if has_wildcards {
         // Environment variables first: they may hold the wildcards, or
         // may be all that looked like one.
-        if !unsafe { vim_strchr(ea.arg, '$' as c_int) }.is_null()
-            || !unsafe { vim_strchr(ea.arg, '~' as c_int) }.is_null()
+        if !vim_strchr(ea.arg, '$' as c_int).is_null()
+            || !vim_strchr(ea.arg, '~' as c_int).is_null()
         {
             let out = expanded.as_mut_ptr();
             unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
-            has_wildcards = unsafe { path_has_wildcard(out) };
+            has_wildcards = path_has_wildcard(out);
             unsafe { repl_cmdline(eap, ea.arg, strlen(ea.arg), out, cmdlinep) };
         }
     }
@@ -256,7 +258,7 @@ pub(crate) unsafe fn expand_filename(
         return FAIL;
     }
     unsafe { repl_cmdline(eap, ea.arg, strlen(ea.arg), expanded, cmdlinep) };
-    unsafe { xfree(expanded as *mut c_void) };
+    xfree(expanded as *mut c_void);
     OK
 }
 
@@ -286,7 +288,7 @@ pub(crate) unsafe fn repl_cmdline(
     if !ea.nextcmd.is_null() {
         size += unsafe { strlen(ea.nextcmd) };
     }
-    let new_cmdline = unsafe { xmalloc(size) } as *mut c_char;
+    let new_cmdline = xmalloc(size) as *mut c_char;
 
     let offset = unsafe { src.offset_from(*cmdlinep) } as size_t;
     unsafe {
@@ -379,7 +381,7 @@ const SPEC_SID: ssize_t = 14;
 pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssize_t {
     for (i, spec) in SPECIALS.iter().enumerate() {
         let len = spec.to_bytes().len() as size_t;
-        if unsafe { strncmp(src, spec.as_ptr(), len) } == 0 {
+        if strncmp(src, spec.as_ptr(), len) == 0 {
             unsafe { *usedlen = len };
             return i as ssize_t;
         }
@@ -542,7 +544,7 @@ pub unsafe fn eval_vars(
                     autocmd_fname_full.set(true);
                     result = unsafe { full_name_save(autocmd_fname.get(), false) };
                     unsafe { xstrlcpy(autocmd_fname.get(), result, MAXPATHL as size_t) };
-                    unsafe { xfree(result as *mut c_void) };
+                    xfree(result as *mut c_void);
                 }
                 result = autocmd_fname.get();
                 if result.is_null() {
@@ -700,7 +702,7 @@ pub unsafe fn eval_vars(
     } else {
         result = unsafe { xmemdupz(result as *const c_void, resultlen) } as *mut c_char;
     }
-    unsafe { xfree(resultbuf as *mut c_void) };
+    xfree(resultbuf as *mut c_void);
     result
 }
 
@@ -711,7 +713,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
     let mut result = unsafe { xstrdup(arg) };
     let mut p = result;
     while unsafe { *p } != 0 {
-        if unsafe { strncmp(p, c"<sfile>".as_ptr(), 7) } != 0 {
+        if strncmp(p, c"<sfile>".as_ptr(), 7) != 0 {
             p = unsafe { p.add(1) };
             continue;
         }
@@ -732,7 +734,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             if unsafe { *errormsg } != 0 {
                 unsafe { emsg(errormsg) };
             }
-            unsafe { xfree(result as *mut c_void) };
+            xfree(result as *mut c_void);
             return ptr::null_mut();
         }
         if repl.is_null() {
@@ -740,7 +742,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             continue;
         }
         let size = unsafe { strlen(result) } - srclen + unsafe { strlen(repl) } + 1;
-        let newres = unsafe { xmalloc(size) } as *mut c_char;
+        let newres = xmalloc(size) as *mut c_char;
         unsafe {
             memmove(
                 newres as *mut c_void,
@@ -751,8 +753,8 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
         unsafe { strcpy(newres.offset(p.offset_from(result)), repl) };
         let used = unsafe { strlen(newres) };
         unsafe { strcat(newres, p.add(srclen as usize)) };
-        unsafe { xfree(repl as *mut c_void) };
-        unsafe { xfree(result as *mut c_void) };
+        xfree(repl as *mut c_void);
+        xfree(result as *mut c_void);
         result = newres;
         p = unsafe { newres.add(used as usize) };
     }
@@ -763,4 +765,60 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
 fn cur_buf() -> Buf {
     // SAFETY: `curbuf` is set from startup to exit.
     unsafe { Buf::current() }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `memmove()` as checked code.
+fn memmove(
+    __dest: *mut ::core::ffi::c_void,
+    __src: *const ::core::ffi::c_void,
+    __n: size_t,
+) -> *mut ::core::ffi::c_void {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::os::cshim::memmove(__dest, __src, __n) }
+}
+
+/// `path_has_wildcard()` as checked code.
+fn path_has_wildcard(p: *const c_char) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::path::path_has_wildcard(p) }
+}
+
+/// `strncmp()` as checked code.
+fn strncmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    // SAFETY: two NUL-terminated strings, and a length within both.
+    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
+}
+
+/// `vim_strchr()` as checked code.
+fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::strings::vim_strchr(string, c) }
+}
+
+/// `vim_strsave_escaped()` as checked code.
+fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
+}
+
+/// `xmalloc()` as checked code.
+fn xmalloc(size: usize) -> *mut c_void {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::memory::xmalloc(size) }
 }

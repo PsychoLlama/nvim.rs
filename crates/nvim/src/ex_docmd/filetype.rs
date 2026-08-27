@@ -6,10 +6,12 @@ use crate::{semsg_c, semsg_multiline_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use crate::api::private::helpers::{api_clear_error, cstr_as_string};
-use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd, do_doautocmd};
+use crate::api::private::helpers::api_clear_error;
+
+use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd};
+
 use crate::buffer::do_modelines;
-use crate::charset::skipwhite;
+
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
     cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent, filetype_plugin,
@@ -17,12 +19,14 @@ use crate::ex_docmd::{
 };
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_curdir, e_invarg2, p_rtp, secure};
-use crate::message::emsg;
+
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::strstr;
+
 use crate::os::env::{env_buf, os_getenv_into};
-use crate::runtime::{RuntimeOpts, source_runtime};
+use crate::runtime::RuntimeOpts;
+
 use crate::types::{
     Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
     kErrorTypeNone, kObjectTypeString, size_t,
@@ -55,7 +59,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
     let mut arg = eap.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
-    unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+    do_doautocmd(arg, false, &raw mut did_aucmd);
     if call_do_modelines && did_aucmd {
         do_modelines(OptionSetFlags::NONE);
     }
@@ -73,10 +77,10 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
     let mut plugin = false;
     let mut indent = false;
     loop {
-        if unsafe { strncmp(arg, c"plugin".as_ptr(), 6) } == 0 {
+        if strncmp(arg, c"plugin".as_ptr(), 6) == 0 {
             plugin = true;
             arg = unsafe { skipwhite(arg.add(6)) };
-        } else if unsafe { strncmp(arg, c"indent".as_ptr(), 6) } == 0 {
+        } else if strncmp(arg, c"indent".as_ptr(), 6) == 0 {
             indent = true;
             arg = unsafe { skipwhite(arg.add(6)) };
         } else {
@@ -90,49 +94,44 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
         if unsafe { *arg } as c_int == 'o' as c_int || filetype_detect.get() != Some(true) {
-            unsafe { source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+            source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
             filetype_detect.set(Some(true));
             if plugin {
-                unsafe { source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(true));
             }
             if indent {
-                unsafe { source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_indent.set(Some(true));
             }
         }
         if unsafe { *arg } as c_int == 'd' as c_int {
             // `detect` also applies the result to the buffers already
             // open.
-            unsafe {
-                do_doautocmd(
-                    c"filetypedetect BufRead".as_ptr() as *mut c_char,
-                    true,
-                    ptr::null_mut(),
-                )
-            };
+            do_doautocmd(
+                c"filetypedetect BufRead".as_ptr() as *mut c_char,
+                true,
+                ptr::null_mut(),
+            );
             do_modelines(OptionSetFlags::NONE);
         }
     } else if unsafe { strcmp(arg, c"off".as_ptr()) } == 0 {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
-                unsafe { source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(false));
             }
             if indent {
-                unsafe { source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+                source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_indent.set(Some(false));
             }
         } else {
-            unsafe { source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+            source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
             filetype_detect.set(Some(false));
         }
     } else {
-        semsg_c!(
-            unsafe { gettext(&raw const e_invarg2 as *const c_char) },
-            arg
-        );
+        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
     }
 }
 
@@ -168,11 +167,11 @@ unsafe fn report_filetype_state() {
 /// explicitly turned off.
 pub unsafe fn filetype_plugin_enable() {
     if filetype_plugin.get().is_none() {
-        unsafe { source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_plugin.set(Some(true));
     }
     if filetype_indent.get().is_none() {
-        unsafe { source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_indent.set(Some(true));
     }
 }
@@ -180,7 +179,7 @@ pub unsafe fn filetype_plugin_enable() {
 /// The same for detection.
 pub unsafe fn filetype_maybe_enable() {
     if filetype_detect.get().is_none() {
-        unsafe { source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL) };
+        source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_detect.set(Some(true));
     }
 }
@@ -196,7 +195,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
         return;
     }
     let mut arg = eap.arg;
-    if unsafe { strncmp(arg, c"FALLBACK ".as_ptr(), 9) } == 0 {
+    if strncmp(arg, c"FALLBACK ".as_ptr(), 9) == 0 {
         arg = unsafe { arg.add(9) };
     }
     set_option_value_give_err(
@@ -204,7 +203,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
         OptVal {
             type_0: kOptValTypeString,
             data: OptValData {
-                string: unsafe { cstr_as_string(arg) },
+                string: cstr_as_string(arg),
             },
         },
         OptionSetFlags::LOCAL,
@@ -252,7 +251,7 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
     items[1] = Object {
         type_0: kObjectTypeString,
         data: crate::types::object_data {
-            string: unsafe { cstr_as_string(eap.arg) },
+            string: cstr_as_string(eap.arg),
         },
     };
     args.size = 2;
@@ -275,17 +274,17 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
     // runtime files are not where the editor thinks.
     let vimruntime = unsafe { os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env) };
     if vimruntime.is_null() {
-        unsafe { emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr())) };
+        emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
     } else if !unsafe { strstr(p_rtp.get(), vimruntime) }.is_null() {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.
         semsg_c!(
-            unsafe { gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()) },
+            gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
             vimruntime,
         );
     } else {
-        unsafe { emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr())) };
+        emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }
     semsg_multiline_c!(c"emsg".as_ptr(), err.msg);
     unsafe { api_clear_error(&raw mut err) };
@@ -300,4 +299,54 @@ fn lua_chunk(src: &'static CStr) -> String_0 {
 fn cur_buf() -> Buf {
     // SAFETY: `curbuf` is set from startup to exit.
     unsafe { Buf::current() }
+}
+
+/// `cstr_as_string()` as checked code.
+fn cstr_as_string(str: *const c_char) -> String_0 {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::api::private::helpers::cstr_as_string(str) }
+}
+
+/// `do_doautocmd()` as checked code.
+fn do_doautocmd(
+    arg_start: *mut ::core::ffi::c_char,
+    do_msg: bool,
+    did_something: *mut bool,
+) -> ::core::ffi::c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::autocmd::do_doautocmd(arg_start, do_msg, did_something) }
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `source_runtime()` as checked code.
+fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::runtime::source_runtime(name, flags) }
+}
+
+/// `strncmp()` as checked code.
+fn strncmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    // SAFETY: two NUL-terminated strings, and a length within both.
+    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }

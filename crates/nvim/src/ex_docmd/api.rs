@@ -14,14 +14,15 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::ascii::ascii_iswhite;
-use crate::buffer::buflist_findpat;
-use crate::charset::{skiptowhite_esc, skipwhite};
+
+use crate::charset::skiptowhite_esc;
+
 use crate::eval::skip_expr;
 use crate::ex_docmd::address::{
     correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
     set_cmd_dflall_range,
 };
-use crate::ex_docmd::ex_msg;
+
 use crate::ex_docmd::filename::expand_filename;
 use crate::ex_docmd::lookup::is_user_cmd;
 use crate::ex_docmd::modifier::{
@@ -31,8 +32,9 @@ use crate::ex_docmd::onecmd::{
     append_command, ex_range_without_command, fresh_exarg, shift_cmd_args,
 };
 use crate::ex_docmd::scan::{
-    check_nextcmd, parse_bang, parse_count, parse_register, separate_nextcmd, skip_colon_white,
+    check_nextcmd, parse_bang, parse_count, parse_register, separate_nextcmd,
 };
+
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::{
     cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
@@ -46,7 +48,7 @@ use crate::main::{
     cmdmod, cmdwin_type, e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange,
     emsg_silent, global_busy,
 };
-use crate::message::emsg;
+
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
@@ -100,7 +102,7 @@ pub unsafe fn parse_cmdline(
         // The command name says what kind of address the range counts in.
         let mut p = find_excmd_after_range(ea);
         if p.is_null() {
-            *errormsg = Some(unsafe { ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()) });
+            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
             break 'end;
         }
 
@@ -109,7 +111,7 @@ pub unsafe fn parse_cmdline(
             break 'end;
         }
 
-        ea.cmd = unsafe { skip_colon_white(ea.cmd, true) };
+        ea.cmd = skip_colon_white(ea.cmd, true);
         if unsafe { *ea.cmd } as c_int == '"' as c_int {
             break 'end;
         }
@@ -142,7 +144,7 @@ pub unsafe fn parse_cmdline(
             } else {
                 after_modifier
             };
-            let msg = unsafe { ex_msg(e_not_an_editor_command.as_ptr()) };
+            let msg = ex_msg(e_not_an_editor_command.as_ptr());
             *errormsg = Some(unsafe { append_command(&msg, cmdname) });
             break 'end;
         }
@@ -155,7 +157,7 @@ pub unsafe fn parse_cmdline(
         ea.arg = if ea.cmdidx as c_int == CMD_bang as c_int {
             p
         } else {
-            unsafe { skipwhite(p) }
+            skipwhite(p)
         };
         // `:r!` is a filter, not a bang.
         if ea.cmdidx as c_int == CMD_read as c_int && ea.forceit != 0 {
@@ -192,11 +194,11 @@ pub unsafe fn parse_cmdline(
         }
 
         if !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
-            *errormsg = Some(unsafe { ex_msg(e_nobang.as_ptr()) });
+            *errormsg = Some(ex_msg(e_nobang.as_ptr()));
             break 'end;
         }
         if !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-            *errormsg = Some(unsafe { ex_msg(e_norange.as_ptr()) });
+            *errormsg = Some(ex_msg(e_norange.as_ptr()));
             break 'end;
         }
         if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
@@ -209,7 +211,7 @@ pub unsafe fn parse_cmdline(
         }
 
         if !ea.nextcmd.is_null() {
-            ea.nextcmd = unsafe { skip_colon_white(ea.nextcmd, true) };
+            ea.nextcmd = skip_colon_white(ea.nextcmd, true);
         }
 
         // Which characters the caller must escape to have them taken
@@ -273,10 +275,9 @@ pub(crate) unsafe fn execute_cmd0(
                 p
             };
             ea.line2 =
-                unsafe { buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false) }
-                    as linenr_T;
+                buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false) as linenr_T;
             ea.addr_count = 1;
-            ea.arg = unsafe { skipwhite(p) };
+            ea.arg = skipwhite(p);
         } else {
             // The API gave the argument positions, so the first argument
             // is the name with no scanning at all.
@@ -364,16 +365,16 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 && (ea.cmdidx as c_int == CMD_put as c_int
                     || ea.cmdidx as c_int == CMD_iput as c_int))
         {
-            errormsg = Some(unsafe { ex_msg(e_modifiable.as_ptr()) });
+            errormsg = Some(ex_msg(e_modifiable.as_ptr()));
             break 'end;
         }
         if !is_user_cmd(ea.cmdidx) {
             if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
-                errormsg = Some(unsafe { ex_msg(e_cmdwin.as_ptr()) });
+                errormsg = Some(ex_msg(e_cmdwin.as_ptr()));
                 break 'end;
             }
             if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
-                errormsg = Some(unsafe { ex_msg(get_text_locked_msg()) });
+                errormsg = Some(ex_msg(get_text_locked_msg()));
                 break 'end;
             }
         }
@@ -432,7 +433,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
     if let Some(msg) = &errormsg
         && !msg.is_empty()
     {
-        unsafe { emsg(msg.as_ptr()) };
+        emsg(msg.as_ptr());
     }
     drop(mods);
     do_cmdline_end();
@@ -449,4 +450,40 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `buflist_findpat()` as checked code.
+fn buflist_findpat(
+    pattern: *const c_char,
+    pattern_end: *const c_char,
+    unlisted: bool,
+    diffmode: bool,
+    curtab_only: bool,
+) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::buffer::buflist_findpat(pattern, pattern_end, unlisted, diffmode, curtab_only) }
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `ex_msg()` as checked code.
+fn ex_msg(msg: *const c_char) -> CString {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::ex_msg(msg) }
+}
+
+/// `skip_colon_white()` as checked code.
+fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::scan::skip_colon_white(p, skipleadingwhite) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
 }

@@ -2,6 +2,7 @@
 //! restores for the debugger, the line getter it reads through, the loop
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::strings::vim_snprintf;
 
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
@@ -11,13 +12,14 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::buffer::buf_get_changedtick;
 use crate::clipboard::{end_batch_changes, start_batch_changes};
 use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
-use crate::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
+use crate::eval::vars::set_vim_var_string;
+
 use crate::ex_cmds::print_line_no_prefix;
-use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
+use crate::ex_docmd::cmdline::do_cmdline;
+
 use crate::ex_docmd::{
     DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_pressedreturn,
     loop_cookie, wcmd_T,
@@ -32,18 +34,18 @@ use crate::main::{
     exmode_active, force_abort, global_busy, got_int, lines_left, msg_col, msg_row, msg_scroll,
     msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow, trylevel,
 };
-use crate::memory::{xfree, xstrdup};
+
 use crate::message::{
-    emsg, emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, verbose_enter_scroll,
+    emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, verbose_enter_scroll,
     verbose_leave_scroll,
 };
-use crate::os::cshim::gettext;
+
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
-use crate::strings::vim_snprintf;
+
 use crate::types::{
-    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
-    size_t,
+    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, estack_T, except_T, garray_T, linenr_T, msglist_T,
+    ptrdiff_t, size_t, varnumber_T,
 };
 
 use crate::winlayer::{Buf, Live, Win};
@@ -74,8 +76,8 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut dbg_stuff) {
     d.caught_stack = caught_stack.get();
     caught_stack.set(ptr::null_mut());
     // Both of these answer the old value and clear it.
-    d.vv_exception = unsafe { v_exception(ptr::null_mut()) };
-    d.vv_throwpoint = unsafe { v_throwpoint(ptr::null_mut()) };
+    d.vv_exception = v_exception(ptr::null_mut());
+    d.vv_throwpoint = v_throwpoint(ptr::null_mut());
     d.did_emsg = did_emsg.get();
     did_emsg.set(0);
     d.got_int = got_int.get() as c_int;
@@ -98,8 +100,8 @@ pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut dbg_stuff) {
     trylevel.set(d.trylevel);
     force_abort.set(d.force_abort != 0);
     caught_stack.set(d.caught_stack);
-    unsafe { v_exception(d.vv_exception) };
-    unsafe { v_throwpoint(d.vv_throwpoint) };
+    v_exception(d.vv_exception);
+    v_throwpoint(d.vv_throwpoint);
     did_emsg.set(d.did_emsg);
     got_int.set(d.got_int != 0);
     did_throw.set(d.did_throw);
@@ -156,7 +158,7 @@ pub unsafe fn do_exmode() {
             || changedtick != buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
         if moved && !ex_no_reprint.get() {
             if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                unsafe { emsg(gettext(&raw const e_empty_buffer as *const c_char)) };
+                emsg(gettext(&raw const e_empty_buffer as *const c_char));
             } else {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
@@ -174,9 +176,9 @@ pub unsafe fn do_exmode() {
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
             if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                unsafe { emsg(gettext(&raw const e_empty_buffer as *const c_char)) };
+                emsg(gettext(&raw const e_empty_buffer as *const c_char));
             } else {
-                unsafe { emsg(gettext(c"E501: At end-of-file".as_ptr())) };
+                emsg(gettext(c"E501: At end-of-file".as_ptr()));
             }
         }
     }
@@ -195,9 +197,9 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
     unsafe { verbose_enter_scroll() };
     if lnum == 0 {
-        smsg_c!(0, unsafe { gettext(c"Executing: %s".as_ptr()) }, cmd);
+        smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd);
     } else {
-        smsg_c!(0, unsafe { gettext(c"line %d: %s".as_ptr()) }, lnum, cmd);
+        smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd);
     }
     if msg_silent.get() == 0 {
         unsafe { msg_puts(c"\n".as_ptr()) };
@@ -254,7 +256,7 @@ pub unsafe fn handle_did_throw() {
                     exception.value,
                 )
             };
-            reported = unsafe { xstrdup(buf.as_ptr()) };
+            reported = xstrdup(buf.as_ptr());
         }
         1 => {
             // ET_ERROR: take the messages, so that discarding the
@@ -285,15 +287,15 @@ pub unsafe fn handle_did_throw() {
             unsafe { emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E, (*m).multiline) };
             unsafe { xfree((*m).msg as *mut c_void) };
             unsafe { xfree((*m).sfile as *mut c_void) };
-            unsafe { xfree(m as *mut c_void) };
+            xfree(m as *mut c_void);
             m = next;
         }
     } else if !reported.is_null() {
-        unsafe { emsg(reported) };
-        unsafe { xfree(reported as *mut c_void) };
+        emsg(reported);
+        xfree(reported as *mut c_void);
     }
 
-    unsafe { xfree(sourcing_entry().es_name as *mut c_void) };
+    xfree(sourcing_entry().es_name as *mut c_void);
     estack_pop();
 }
 
@@ -433,4 +435,52 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `buf_get_changedtick()` as checked code.
+fn buf_get_changedtick(buf: Buf) -> varnumber_T {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::buffer::buf_get_changedtick(buf)
+}
+
+/// `emsg()` as checked code.
+fn emsg(s: *const c_char) -> bool {
+    // SAFETY: a NUL-terminated message.
+    unsafe { crate::message::emsg(s) }
+}
+
+/// `gettext()` as checked code.
+fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    // SAFETY: a NUL-terminated message; `gettext` answers one too.
+    unsafe { crate::os::cshim::gettext(__msgid) }
+}
+
+/// `sourcing_entry()` as checked code.
+fn sourcing_entry() -> estack_T {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::ex_docmd::cmdline::sourcing_entry()
+}
+
+/// `v_exception()` as checked code.
+fn v_exception(oldval: *mut c_char) -> *mut c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::vars::v_exception(oldval) }
+}
+
+/// `v_throwpoint()` as checked code.
+fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::eval::vars::v_throwpoint(oldval) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
+}
+
+/// `xstrdup()` as checked code.
+fn xstrdup(str: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::memory::xstrdup(str) }
 }

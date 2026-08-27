@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
-use crate::charset::skipwhite;
+
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
@@ -19,7 +19,8 @@ use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, c
 use crate::main::getout;
 use crate::memory::xstrdup;
 use crate::message::iemsg;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
+
 use crate::types::{
     CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, CmdAddr,
     EvalFuncData, ExArgt, NUL, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T,
@@ -157,13 +158,13 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
     debug_assert!(ea.cmdidx as c_int >= 0);
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if len == 3 && unsafe { strncmp(c"def".as_ptr(), ea.cmd, 3) } == 0 {
+    if len == 3 && strncmp(c"def".as_ptr(), ea.cmd, 3) == 0 {
         ea.cmdidx = CMD_SIZE;
     }
 
     while (ea.cmdidx as c_int) < CMD_SIZE as c_int {
         let name = cmdnames[ea.cmdidx as usize].cmd_name;
-        if unsafe { strncmp(name, ea.cmd, len as size_t) } == 0 {
+        if strncmp(name, ea.cmd, len as size_t) == 0 {
             if !full.is_null() && unsafe { *name.offset(len as isize) } as c_int == NUL {
                 unsafe { *full = 1 };
             }
@@ -310,7 +311,7 @@ fn blank_exarg() -> exarg_T {
 /// The command index for a name of a known length, without the rest of
 /// `find_ex_command`'s bookkeeping. Used by the API's command parser.
 pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
-    if len == 3 && unsafe { strncmp(c"def".as_ptr(), cmd, 3) } == 0 {
+    if len == 3 && strncmp(c"def".as_ptr(), cmd, 3) == 0 {
         return CMD_SIZE;
     }
     let mut idx: cmdidx_T = CMD_append;
@@ -321,7 +322,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
     // shortcut: this entry point is not on the hot path.
     let mut idx = CMD_append;
     while (idx as c_int) < CMD_SIZE as c_int {
-        if unsafe { strncmp(cmdnames[idx as usize].cmd_name, cmd, len) } == 0 {
+        if strncmp(cmdnames[idx as usize].cmd_name, cmd, len) == 0 {
             break;
         }
         idx = (idx as c_int + 1) as cmdidx_T;
@@ -344,4 +345,20 @@ pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
         return unsafe { expand_user_command_name(idx) };
     }
     cmdnames[idx as usize].cmd_name
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `strncmp()` as checked code.
+fn strncmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    // SAFETY: two NUL-terminated strings, and a length within both.
+    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }

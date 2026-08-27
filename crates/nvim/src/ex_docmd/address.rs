@@ -17,32 +17,36 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_is_quickfix, current_buf, get_highest_fnum};
-use crate::charset::{getdigits, getdigits_int32, skipwhite};
-use crate::cursor::{check_cursor, check_cursor_col};
+use crate::charset::{getdigits, getdigits_int32};
+
+use crate::cursor::check_cursor_col;
+
 use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::scan::skip_colon_white;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors,
-    e_norange, ex_msg, kMarkAll, kMarkBufLocal, searchcmdlen,
+    e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
+
 use crate::fold::has_folding;
 use crate::main::{curbuf, curtab, curwin};
-use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
+use crate::mark::{mark_check, mark_get, mark_move_to};
+
 use crate::message::iemsg;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::pos::{MAXCOL, MAXLNUM};
-use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
+use crate::quickfix::qf_get_size;
+
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, CmdAddr, Direction, ExArgt,
-    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, colnr_T, exarg_T, fmark_T, linenr_T, pos_T,
-    size_t,
+    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, fmark_T, linenr_T,
+    pos_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 use ::libc::strlen;
@@ -175,8 +179,8 @@ pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as linenr_T,
         CmdAddr::Tabs => current_tab_nr(curtab.get()) as linenr_T,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => unsafe { qf_get_cur_idx(eap.raw()) as linenr_T },
-        CmdAddr::QuickfixValid => unsafe { qf_get_cur_valid_idx(eap.raw()) as linenr_T },
+        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as linenr_T,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as linenr_T,
         _ => 0,
     }
 }
@@ -215,7 +219,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
             }
         }
         CmdAddr::QuickfixValid => {
-            ea.line2 = unsafe { qf_get_valid_size(eap) } as linenr_T;
+            ea.line2 = qf_get_valid_size(eap) as linenr_T;
             if ea.line2 == 0 {
                 ea.line2 = 1;
             }
@@ -287,7 +291,7 @@ pub unsafe fn parse_cmd_address(
         loop {
             ea.line1 = ea.line2;
             ea.line2 = unsafe { get_cmd_default_range(eap) };
-            ea.cmd = unsafe { skipwhite(ea.cmd) };
+            ea.cmd = skipwhite(ea.cmd);
             lnum = unsafe {
                 get_address(
                     eap,
@@ -317,18 +321,18 @@ pub unsafe fn parse_cmd_address(
                 ea.addr_count += 1;
             } else if unsafe { *ea.cmd } as c_int == '*' as c_int {
                 if ea.addr_type != CmdAddr::Lines {
-                    *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                    *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     break 'theend;
                 }
                 ea.cmd = unsafe { ea.cmd.add(1) };
                 if ea.skip == 0 {
-                    let fm = unsafe { mark_get_visual(curbuf.get(), &raw mut first, '<' as c_int) };
+                    let fm = mark_get_visual(curbuf.get(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
                     debug_assert!(!fm.is_null());
                     ea.line1 = unsafe { (*fm).mark.lnum };
-                    let fm = unsafe { mark_get_visual(curbuf.get(), &raw mut last, '>' as c_int) };
+                    let fm = mark_get_visual(curbuf.get(), &raw mut last, '>' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
@@ -394,7 +398,7 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
             if (eap.cmdidx as c_int) >= 0 {
-                *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 return false;
             }
             eap.line1 = 1;
@@ -405,7 +409,7 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-            *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+            *errormsg = Some(ex_msg(e_invrange.as_ptr()));
             return false;
         }
         CmdAddr::Arguments => {
@@ -420,7 +424,7 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
         }
         CmdAddr::QuickfixValid => {
             // SAFETY: the caller's promise -- a live command.
-            let valid = unsafe { qf_get_valid_size(eap.raw()) } as linenr_T;
+            let valid = qf_get_valid_size(eap.raw()) as linenr_T;
             eap.line1 = 1;
             eap.line2 = valid;
             if eap.line2 == 0 {
@@ -486,9 +490,9 @@ pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_
 /// E493 or E481, depending on whether the command takes a range at all.
 pub(crate) unsafe fn addr_error(addr_type: CmdAddr) -> CString {
     if addr_type == CmdAddr::NoRange {
-        unsafe { ex_msg(e_norange.as_ptr()) }
+        ex_msg(e_norange.as_ptr())
     } else {
-        unsafe { ex_msg(e_invrange.as_ptr()) }
+        ex_msg(e_invrange.as_ptr())
     }
 }
 
@@ -651,7 +655,7 @@ pub unsafe fn get_address(
                 {
                     RE_SEARCH as c_int
                 } else {
-                    *errormsg = Some(unsafe { ex_msg(e_backslash.as_ptr()) });
+                    *errormsg = Some(ex_msg(e_backslash.as_ptr()));
                     cmd = ptr::null_mut();
                     break;
                 };
@@ -705,7 +709,7 @@ pub unsafe fn get_address(
         // Offsets. A `+`/`-` with no address before it counts from the
         // address kind's "here".
         loop {
-            cmd = unsafe { skipwhite(cmd) };
+            cmd = skipwhite(cmd);
             if unsafe { *cmd } as c_int != '-' as c_int
                 && unsafe { *cmd } as c_int != '+' as c_int
                 && !ascii_isdigit(unsafe { *cmd } as c_int)
@@ -729,14 +733,14 @@ pub unsafe fn get_address(
             } else {
                 let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) } as linenr_T;
                 if n == MAXLNUM as linenr_T {
-                    *errormsg = Some(unsafe { ex_msg(e_line_number_out_of_range.as_ptr()) });
+                    *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
-                *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 cmd = ptr::null_mut();
                 break 'error;
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
@@ -755,7 +759,7 @@ pub unsafe fn get_address(
                 if i == '-' as c_int {
                     lnum -= n;
                 } else if lnum >= 0 && n >= INT32_MAX as linenr_T - lnum {
-                    *errormsg = Some(unsafe { ex_msg(e_line_number_out_of_range.as_ptr()) });
+                    *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;
                 } else {
@@ -800,8 +804,8 @@ fn dot_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
         CmdAddr::Arguments => (cur_win().w_arg_idx + 1) as linenr_T,
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as linenr_T,
         CmdAddr::Tabs => current_tab_nr(curtab.get()) as linenr_T,
-        CmdAddr::Quickfix => unsafe { qf_get_cur_idx(eap.raw()) as linenr_T },
-        CmdAddr::QuickfixValid => unsafe { qf_get_cur_valid_idx(eap.raw()) as linenr_T },
+        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as linenr_T,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as linenr_T,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -820,7 +824,7 @@ fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
         CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as linenr_T,
         // An empty quickfix list still has a last entry, numbered 1.
         CmdAddr::Quickfix => (unsafe { qf_get_size(eap.raw()) } as linenr_T).max(1),
-        CmdAddr::QuickfixValid => (unsafe { qf_get_valid_size(eap.raw()) } as linenr_T).max(1),
+        CmdAddr::QuickfixValid => (qf_get_valid_size(eap.raw()) as linenr_T).max(1),
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -842,7 +846,7 @@ fn offset_base(eap: Ea, addr_type: CmdAddr) -> Addr {
 /// to report, or null.
 pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
     let ea = unsafe { Ea::new(eap) };
-    let invrange = || Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+    let invrange = || Some(ex_msg(e_invrange.as_ptr()));
     if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
         return invrange();
     }
@@ -910,14 +914,13 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
                 if ea.addr_count == 0 {
-                    return Some(unsafe { ex_msg(e_no_errors.as_ptr()) });
+                    return Some(ex_msg(e_no_errors.as_ptr()));
                 }
                 return invrange();
             }
         }
         CmdAddr::QuickfixValid
-            if ((ea.line2 != 1 && ea.line2 as size_t > unsafe { qf_get_valid_size(eap) })
-                || ea.line2 < 0) =>
+            if ((ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(eap)) || ea.line2 < 0) =>
         {
             return invrange();
         }
@@ -950,4 +953,52 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `ascii_isdigit()` as checked code.
+fn ascii_isdigit(c: c_int) -> bool {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::ascii::ascii_isdigit(c)
+}
+
+/// `check_cursor()` as checked code.
+fn check_cursor(wp: Win) {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    crate::cursor::check_cursor(wp)
+}
+
+/// `ex_msg()` as checked code.
+fn ex_msg(msg: *const c_char) -> CString {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::ex_msg(msg) }
+}
+
+/// `mark_get_visual()` as checked code.
+fn mark_get_visual(buf: *mut buf_T, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::mark::mark_get_visual(buf, fmp, name) }
+}
+
+/// `qf_get_cur_idx()` as checked code.
+fn qf_get_cur_idx(eap: *mut exarg_T) -> size_t {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::quickfix::qf_get_cur_idx(eap) }
+}
+
+/// `qf_get_cur_valid_idx()` as checked code.
+fn qf_get_cur_valid_idx(eap: *mut exarg_T) -> c_int {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::quickfix::qf_get_cur_valid_idx(eap) }
+}
+
+/// `qf_get_valid_size()` as checked code.
+fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::quickfix::qf_get_valid_size(eap) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
 }

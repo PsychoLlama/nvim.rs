@@ -10,7 +10,8 @@
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
-use crate::charset::{getdigits_int, skipwhite};
+use crate::charset::getdigits_int;
+
 use crate::ex_docmd::scan::{check_nextcmd, ends_excmd};
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
@@ -57,7 +58,7 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
     let mut n = 1;
     if ascii_isdigit(unsafe { *ea.arg } as c_int) {
         n = unsafe { getdigits_int(ea.arg_ptr(), false, 0) };
-        ea.arg = unsafe { skipwhite(ea.arg) };
+        ea.arg = skipwhite(ea.arg);
     }
 
     // `/pat/` searches for a pattern rather than for a whole word, and
@@ -160,4 +161,10 @@ unsafe fn ex_tag_cmd(eap: Ea, name: *const c_char) {
             true,
         )
     };
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
 }

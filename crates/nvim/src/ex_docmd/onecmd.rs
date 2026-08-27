@@ -17,15 +17,16 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
-use crate::charset::skipwhite;
+
 use crate::cstr;
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
 use crate::ex_docmd::address::{
-    correct_range, find_excmd_after_range, invalid_range, parse_cmd_address, set_cmd_addr_type,
+    correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
     set_cmd_dflall_range,
 };
+
 use crate::ex_docmd::api::execute_cmd0;
 use crate::ex_docmd::argopt::{getargcmd, getargopt};
 use crate::ex_docmd::edit::ex_print;
@@ -36,15 +37,18 @@ use crate::ex_docmd::scan::{
     check_nextcmd, get_flags, parse_bang, parse_count, parse_register, separate_nextcmd,
     skip_colon_white,
 };
-use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
+use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
+
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
     CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES, cmdnames,
-    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, ex_msg,
-    exmode_plus, quitmore,
+    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
+    quitmore,
 };
+
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
-use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
+use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
+
 use crate::fold::has_folding;
 use crate::input::ask_yesno;
 use crate::main::{
@@ -54,7 +58,8 @@ use crate::main::{
     pending_end_reg_executing, reg_executing, sandbox,
 };
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
-use crate::memory::{xcalloc, xfree, xmemdupz, xstrlcat, xstrlcpy};
+use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+
 use crate::message::emsg;
 use crate::os::cshim::{gettext, memmove};
 use crate::profile::{func_line_exec, script_line_exec};
@@ -125,12 +130,12 @@ pub(crate) fn shift_cmd_args(mut ea: Ea) {
 
     ea.argc -= 1;
     ea.args = if ea.argc > 0 {
-        unsafe { xcalloc(ea.argc, size_of::<*mut c_char>()) as *mut *mut c_char }
+        xcalloc(ea.argc, size_of::<*mut c_char>()) as *mut *mut c_char
     } else {
         ptr::null_mut()
     };
     ea.arglens = if ea.argc > 0 {
-        unsafe { xcalloc(ea.argc, size_of::<size_t>()) as *mut size_t }
+        xcalloc(ea.argc, size_of::<size_t>()) as *mut size_t
     } else {
         ptr::null_mut()
     };
@@ -144,8 +149,8 @@ pub(crate) fn shift_cmd_args(mut ea: Ea) {
         unsafe { (*oldargs).add(*oldarglens) }
     };
 
-    unsafe { xfree(oldargs as *mut c_void) };
-    unsafe { xfree(oldarglens as *mut c_void) };
+    xfree(oldargs as *mut c_void);
+    xfree(oldarglens as *mut c_void);
 }
 
 /// The commands that still run when `do_one_cmd` is skipping — inside an
@@ -297,7 +302,7 @@ pub(crate) unsafe fn do_one_cmd(
             let ret = unsafe {
                 apply_autocmds(EVENT_CMDUNDEFINED, cmdname, cmdname, true, ptr::null_mut())
             };
-            unsafe { xfree(cmdname as *mut c_void) };
+            xfree(cmdname as *mut c_void);
             // Look again only if the autocommands did something and did
             // not fail.
             p = if ret && !aborting() {
@@ -309,8 +314,7 @@ pub(crate) unsafe fn do_one_cmd(
 
         if p.is_null() {
             if ea.skip == 0 {
-                errormsg =
-                    Some(unsafe { ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()) });
+                errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
             }
             break 'doend;
         }
@@ -324,7 +328,7 @@ pub(crate) unsafe fn do_one_cmd(
                 } else {
                     after_modifier
                 };
-                let msg = unsafe { ex_msg(e_not_an_editor_command.as_ptr()) };
+                let msg = ex_msg(e_not_an_editor_command.as_ptr());
                 errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
                     // The whole line is appended below instead.
                     msg
@@ -360,18 +364,18 @@ pub(crate) unsafe fn do_one_cmd(
                 && ea.cmdidx as c_int != CMD_edit as c_int
                 && ea.cmdidx as c_int != CMD_file as c_int
                 && !is_user_cmd(ea.cmdidx)
-                && unsafe { curbuf_locked() }
+                && curbuf_locked()
             {
                 break 'doend;
             }
             if !ni && !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-                errormsg = Some(unsafe { ex_msg(e_norange.as_ptr()) });
+                errormsg = Some(ex_msg(e_norange.as_ptr()));
                 break 'doend;
             }
         }
 
         if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
-            errormsg = Some(unsafe { ex_msg(e_nobang.as_ptr()) });
+            errormsg = Some(ex_msg(e_nobang.as_ptr()));
             break 'doend;
         }
 
@@ -384,7 +388,7 @@ pub(crate) unsafe fn do_one_cmd(
             if global_busy.get() == 0 && ea.line1 > ea.line2 {
                 if msg_silent.get() == 0 {
                     if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
-                        errormsg = Some(unsafe { ex_msg(c"E493: Backwards range given".as_ptr()) });
+                        errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
                         break 'doend;
                     }
                     if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap".as_ptr())) }
@@ -395,7 +399,7 @@ pub(crate) unsafe fn do_one_cmd(
                 }
                 core::mem::swap(&mut ea.line1, &mut ea.line2);
             }
-            errormsg = unsafe { invalid_range(&raw mut ea) };
+            errormsg = invalid_range(&raw mut ea);
             if errormsg.is_some() {
                 break 'doend;
             }
@@ -439,12 +443,12 @@ pub(crate) unsafe fn do_one_cmd(
         ea.arg = if ea.cmdidx as c_int == CMD_bang as c_int {
             p
         } else {
-            unsafe { skipwhite(p) }
+            skipwhite(p)
         };
 
         if ea.cmdidx as c_int == CMD_file as c_int
             && unsafe { *ea.arg } as c_int != NUL
-            && unsafe { curbuf_locked() }
+            && curbuf_locked()
         {
             break 'doend;
         }
@@ -455,7 +459,7 @@ pub(crate) unsafe fn do_one_cmd(
                 && unsafe { *ea.arg.add(1) } as c_int == '+' as c_int
             {
                 if unsafe { getargopt(&raw mut ea) } == FAIL && !ni {
-                    errormsg = Some(unsafe { ex_msg(e_invarg.as_ptr()) });
+                    errormsg = Some(ex_msg(e_invarg.as_ptr()));
                     break 'doend;
                 }
             }
@@ -465,7 +469,7 @@ pub(crate) unsafe fn do_one_cmd(
             if unsafe { *ea.arg } as c_int == '>' as c_int {
                 ea.arg = unsafe { ea.arg.add(1) };
                 if unsafe { *ea.arg } as c_int != '>' as c_int {
-                    errormsg = Some(unsafe { ex_msg(c"E494: Use w or w>>".as_ptr()) });
+                    errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
                     break 'doend;
                 }
                 ea.arg = unsafe { skipwhite(ea.arg.add(1)) };
@@ -496,7 +500,7 @@ pub(crate) unsafe fn do_one_cmd(
                 ea.arg = unsafe { ea.arg.add(1) };
                 ea.amount += 1;
             }
-            ea.arg = unsafe { skipwhite(ea.arg) };
+            ea.arg = skipwhite(ea.arg);
         }
 
         // `+command`, before the next command is looked for. Not for
@@ -558,7 +562,7 @@ pub(crate) unsafe fn do_one_cmd(
             break 'doend;
         }
         if !ni && ea.argt.has(ExArgt::NEEDARG) && unsafe { *ea.arg } as c_int == NUL {
-            errormsg = Some(unsafe { ex_msg(e_argreq.as_ptr()) });
+            errormsg = Some(ex_msg(e_argreq.as_ptr()));
             break 'doend;
         }
 
@@ -579,7 +583,7 @@ pub(crate) unsafe fn do_one_cmd(
         } else if check_cstack.get() {
             if unsafe { source_finished(fgetline, cookie) } {
                 unsafe { do_finish(&raw mut ea, true) };
-            } else if unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) }
+            } else if getline_equal(fgetline, cookie, Some(get_func_line))
                 && unsafe { current_func_returned() } != 0
             {
                 unsafe { do_return(&raw mut ea, true, false, ptr::null_mut()) };
@@ -627,7 +631,7 @@ pub(crate) unsafe fn do_one_cmd(
     }
 
     ex_nesting_level.set(ex_nesting_level.get() - 1);
-    unsafe { xfree(ea.cmdline_tofree as *mut c_void) };
+    xfree(ea.cmdline_tofree as *mut c_void);
 
     ea.nextcmd
 }
@@ -637,8 +641,8 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: `getline_equal` only compares `fgetline` against a known line
     // getter, walking `cookie` as a `loop_cookie` chain the caller owns.
     quitmore.get() != 0
-        && !unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) }
-        && !unsafe { getline_equal(fgetline, cookie, Some(getnextac)) }
+        && !getline_equal(fgetline, cookie, Some(get_func_line))
+        && !getline_equal(fgetline, cookie, Some(getnextac))
 }
 
 /// Count this line for `:profile`, if profiling is on and the line is one
@@ -690,9 +694,9 @@ pub(crate) unsafe fn profile_cmd(
     if skip {
         return;
     }
-    if unsafe { getline_equal(fgetline, cookie, Some(get_func_line)) } {
+    if getline_equal(fgetline, cookie, Some(get_func_line)) {
         unsafe { func_line_exec(getline_cookie(fgetline, cookie)) };
-    } else if unsafe { getline_equal(fgetline, cookie, Some(getsourceline)) } {
+    } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
         unsafe { script_line_exec() };
     }
 }
@@ -702,7 +706,7 @@ pub(crate) unsafe fn profile_cmd(
 /// Answers the message to report, or `None` when the command may run.
 unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
     if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
-        return Some(unsafe { ex_msg(e_sandbox.as_ptr()) });
+        return Some(ex_msg(e_sandbox.as_ptr()));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
     if cur_buf().b_p_ma == 0
@@ -710,14 +714,14 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
         && !(!cur_buf().terminal.is_null()
             && (ea.cmdidx as c_int == CMD_put as c_int || ea.cmdidx as c_int == CMD_iput as c_int))
     {
-        return Some(unsafe { ex_msg(e_modifiable.as_ptr()) });
+        return Some(ex_msg(e_modifiable.as_ptr()));
     }
     if !is_user_cmd(ea.cmdidx) {
         if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
-            return Some(unsafe { ex_msg(e_cmdwin.as_ptr()) });
+            return Some(ex_msg(e_cmdwin.as_ptr()));
         }
         if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
-            return Some(unsafe { ex_msg(get_text_locked_msg()) });
+            return Some(ex_msg(get_text_locked_msg()));
         }
     }
     None
@@ -738,7 +742,7 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> Option<CStri
     {
         ea.cmdidx = CMD_print;
         ea.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
-        errormsg = unsafe { invalid_range(ea.raw()) };
+        errormsg = invalid_range(ea.raw());
         if errormsg.is_none() {
             correct_range(ea);
             unsafe { ex_print(ea.raw()) };
@@ -746,7 +750,7 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> Option<CStri
     } else if ea.addr_count != 0 {
         ea.line2 = ea.line2.min(cur_buf().b_ml.ml_line_count);
         if ea.line2 < 0 {
-            errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+            errormsg = Some(ex_msg(e_invrange.as_ptr()));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
             cur_win().w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
@@ -807,7 +811,7 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 pub unsafe fn ex_ni(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if eap.skip == 0 {
-        eap.errmsg = Some(unsafe { ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()) });
+        eap.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
     }
 }
 
@@ -834,4 +838,46 @@ fn cur_buf() -> Buf {
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// `curbuf_locked()` as checked code.
+fn curbuf_locked() -> bool {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::ex_getln::curbuf_locked() }
+}
+
+/// `ex_msg()` as checked code.
+fn ex_msg(msg: *const c_char) -> CString {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::ex_msg(msg) }
+}
+
+/// `getline_equal()` as checked code.
+fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::source::getline_equal(fgetline, cookie, func) }
+}
+
+/// `invalid_range()` as checked code.
+fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
+    // SAFETY: the pointers are the command line's own, and live for the call.
+    unsafe { crate::ex_docmd::address::invalid_range(eap) }
+}
+
+/// `skipwhite()` as checked code.
+fn skipwhite(p: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated string.
+    unsafe { crate::charset::skipwhite(p) }
+}
+
+/// `xcalloc()` as checked code.
+fn xcalloc(count: usize, size: usize) -> *mut c_void {
+    // SAFETY: reads the editor's own state, which exists from startup to exit.
+    unsafe { crate::memory::xcalloc(count, size) }
+}
+
+/// `xfree()` as checked code.
+fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
 }
