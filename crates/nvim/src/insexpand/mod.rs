@@ -112,7 +112,7 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, Callback_data, Direction, EvalFuncData,
-    ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED, Vv, buf_T,
+    ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T,
     colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T,
     list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t,
     typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
@@ -216,10 +216,10 @@ pub(crate) const CPT_SOURCE_INIT: cpt_source_T = cpt_source_T {
     cs_flag: 0,
 };
 pub const CP_EQUAL: ::core::ffi::c_int = 8;
-#[derive(Copy, Clone)]
 pub struct ins_compl_next_state_T {
-    pub e_cpt_copy: *mut ::core::ffi::c_char,
-    pub e_cpt: *mut ::core::ffi::c_char,
+    /// The copy of `'complete'` being walked, and where the walk is up to.
+    /// Owning, which is why this struct is no longer `Copy`.
+    pub(crate) cpt: CptScan,
     /// The buffer being scanned. Deliberately raw: it outlives the user
     /// functions and Lua a completion runs, which is exactly the liveness a
     /// [`crate::winlayer::Buf`] would be promising. Each use builds one where
@@ -261,8 +261,7 @@ pub(crate) const GARRAY_T_INIT: garray_T = garray_T {
 };
 /// A zeroed `ins_compl_next_state_T`: C's `CLEAR_FIELD(st)`.
 pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_next_state_T {
-    e_cpt_copy: ptr::null_mut(),
-    e_cpt: ptr::null_mut(),
+    cpt: CptScan::EMPTY,
     ins_buf: ptr::null_mut(),
     cur_match_pos: ptr::null_mut(),
     prev_match_pos: POS_T_INIT,
@@ -278,7 +277,7 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_n
 /// (C leaves these uninitialised and has the callee fill them in).
 pub(crate) const TYPVAL_T_INIT: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
-    v_lock: VAR_UNLOCKED,
+    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 

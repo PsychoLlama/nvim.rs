@@ -539,7 +539,7 @@ pub(crate) unsafe fn get_next_default_completion(
         let save_p_ws = p_ws.get();
         if !in_curbuf {
             p_ws.set(0);
-        } else if *(*st).e_cpt as c_int == '.' as c_int {
+        } else if (*st).cpt.at() as c_int == '.' as c_int {
             p_ws.set(1);
         }
 

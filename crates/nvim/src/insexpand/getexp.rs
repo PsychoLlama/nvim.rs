@@ -17,6 +17,112 @@ use crate::winlayer::{Buf, buffers};
 /// this many lines above the cursor.
 const LOOKBACK_LINE_COUNT: linenr_T = 1000;
 
+/// The running completion's own copy of `'complete'`, and how far the scan
+/// through it has got.
+///
+/// Upstream keeps two fields for this: `st.e_cpt_copy`, the `xstrdup`ed
+/// copy, and `st.e_cpt`, a bare `char *` walking it. The copy is freed at
+/// the *start* of the next completion, which leaves it the one allocation
+/// in this family with no owner, and leaves the cursor free to outlive the
+/// bytes it points into.
+///
+/// Here the buffer is owned and the cursor is a byte offset into it, so a
+/// fresh copy frees the old one in the same step -- at exactly the point
+/// upstream's `xfree` ran -- and no cursor survives the buffer.
+///
+/// The copy is taken at all because `'complete'` belongs to a buffer, and a
+/// completion runs user code that can wipe that buffer out.
+pub(crate) struct CptScan {
+    /// The copy, or null before the first completion. Never reallocated:
+    /// `st.dict` borrows these bytes for a `k`/`s` entry's dictionary name,
+    /// and reads them after the cursor has moved on.
+    option: *mut c_char,
+    /// Where the entry being scanned starts, as a byte offset into
+    /// `option`.
+    cursor: usize,
+}
+
+impl Drop for CptScan {
+    fn drop(&mut self) {
+        // SAFETY: this value's own `xstrdup`, or null, which `xfree` takes.
+        unsafe { xfree(self.option.cast::<c_void>()) };
+    }
+}
+
+impl CptScan {
+    /// No copy taken yet: what C's zeroed `static` starts out as.
+    pub(crate) const EMPTY: CptScan = CptScan {
+        option: ptr::null_mut(),
+        cursor: 0,
+    };
+
+    /// Drop the copy in hand and take a fresh one of `option`, positioned on
+    /// its first entry. This is upstream's `xfree`/`xstrdup` pair at the
+    /// start of a completion.
+    ///
+    /// # Safety
+    /// `option` is a NUL-terminated string.
+    pub(crate) unsafe fn restart(&mut self, option: *const c_char) {
+        // The old copy goes first, where upstream's `xfree` was, rather than
+        // after the new one has been allocated.
+        *self = Self::EMPTY;
+        // SAFETY: the caller's contract.
+        let copy = unsafe { xstrdup(option) };
+        // SAFETY: `copy` is this value's own NUL-terminated string, and
+        // `strip_caret_numbers_in_place` only ever shortens it in place.
+        unsafe { strip_caret_numbers_in_place(copy) };
+        *self = CptScan {
+            option: copy,
+            cursor: 0,
+        };
+    }
+
+    /// What is left of `'complete'`: the `char *` the readers, and the
+    /// dictionary name `st.dict` keeps, want.
+    pub(crate) fn rest(&self) -> *mut c_char {
+        // Address arithmetic only -- nothing is read until `at`, and the
+        // empty scan is a null pointer with a zero cursor.
+        self.option.wrapping_add(self.cursor)
+    }
+
+    /// The byte the scan is on, `NUL` once `'complete'` is used up.
+    pub(crate) fn at(&self) -> c_char {
+        // SAFETY: the cursor never passes the copy's terminator, and a scan
+        // is only read once `restart` has given it a buffer -- as upstream
+        // reads `*st->e_cpt` without a null check.
+        unsafe { *self.rest() }
+    }
+
+    /// Step over one byte: C's `*++st->e_cpt` reaching the name after a
+    /// `k`/`s` flag.
+    pub(crate) fn bump(&mut self) {
+        self.cursor += 1;
+    }
+
+    /// Step over what separates two entries -- `'complete'` allows spaces
+    /// after its commas.
+    pub(crate) fn skip_separators(&mut self) {
+        while self.at() as c_int == ',' as c_int || self.at() as c_int == ' ' as c_int {
+            self.bump();
+        }
+    }
+
+    /// Step to the entry after this one, copying the one just left into
+    /// `buf` -- C's `copy_option_part(&st->e_cpt, ...)`.
+    ///
+    /// # Safety
+    /// `buf` has `len` writable bytes.
+    pub(crate) unsafe fn next_entry(&mut self, buf: *mut c_char, len: size_t) {
+        let mut p = self.rest();
+        // SAFETY: the caller's contract for `buf`; `p` walks this scan's own
+        // copy, which `copy_option_part` only reads.
+        unsafe { copy_option_part(&raw mut p, buf, len, c",".as_ptr().cast_mut()) };
+        // `copy_option_part` only moves the pointer forward, and stops at the
+        // terminator, so this stays within the copy.
+        self.cursor = p.addr() - self.option.addr();
+    }
+}
+
 /// Thesaurus completion goes through a function rather than a word list:
 /// `'thesaurusfunc'` is set.
 pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
@@ -66,12 +172,10 @@ pub(crate) unsafe fn process_next_cpt_value(
         (*st).found_all = false;
         *advance_cpt_idx = false;
 
-        while *(*st).e_cpt as c_int == ',' as c_int || *(*st).e_cpt as c_int == ' ' as c_int {
-            (*st).e_cpt = (*st).e_cpt.offset(1);
-        }
+        (*st).cpt.skip_separators();
 
         'done: {
-            if *(*st).e_cpt as c_int == '.' as c_int
+            if (*st).cpt.at() as c_int == '.' as c_int
                 && !(*curbuf.get()).b_scanned
                 && !skip_source
                 && !compl_time_slice_expired.get()
@@ -93,10 +197,10 @@ pub(crate) unsafe fn process_next_cpt_value(
                 (*st).set_match_pos = true;
             } else if !skip_source
                 && !compl_time_slice_expired.get()
-                && !vim_strchr(c"buwU".as_ptr(), *(*st).e_cpt as uint8_t as c_int).is_null()
+                && !vim_strchr(c"buwU".as_ptr(), (*st).cpt.at() as uint8_t as c_int).is_null()
                 && {
                     (*st).ins_buf =
-                        ins_compl_next_buf(Buf::new((*st).ins_buf), *(*st).e_cpt as c_int).raw();
+                        ins_compl_next_buf(Buf::new((*st).ins_buf), (*st).cpt.at() as c_int).raw();
                     (*st).ins_buf != curbuf.get()
                 }
             {
@@ -143,21 +247,22 @@ pub(crate) unsafe fn process_next_cpt_value(
                         true,
                     );
                 }
-            } else if *(*st).e_cpt as c_int == NUL {
+            } else if (*st).cpt.at() as c_int == NUL {
                 status = INS_COMPL_CPT_END;
             } else {
                 if ctrl_x_mode_line_or_eval() {
                     // compl_type stays -1.
-                } else if *(*st).e_cpt as c_int == 'F' as c_int
-                    || *(*st).e_cpt as c_int == 'o' as c_int
+                } else if (*st).cpt.at() as c_int == 'F' as c_int
+                    || (*st).cpt.at() as c_int == 'o' as c_int
                 {
                     compl_type = CTRL_X_FUNCTION;
-                    (*st).func_cb = get_callback_if_cpt_func((*st).e_cpt, cpt_sources().index());
+                    (*st).func_cb =
+                        get_callback_if_cpt_func((*st).cpt.rest(), cpt_sources().index());
                     if (*st).func_cb.is_null() {
                         compl_type = -1;
                     }
                 } else if !skip_source {
-                    let flag = *(*st).e_cpt as c_int;
+                    let flag = (*st).cpt.at() as c_int;
                     if flag == 'k' as c_int || flag == 's' as c_int {
                         compl_type = if flag == 'k' as c_int {
                             CTRL_X_DICTIONARY
@@ -165,9 +270,10 @@ pub(crate) unsafe fn process_next_cpt_value(
                             CTRL_X_THESAURUS
                         };
                         // C's `*++st->e_cpt`: a name may follow the flag.
-                        (*st).e_cpt = (*st).e_cpt.offset(1);
-                        if *(*st).e_cpt as c_int != ',' as c_int && *(*st).e_cpt as c_int != NUL {
-                            (*st).dict = (*st).e_cpt;
+                        (*st).cpt.bump();
+                        if (*st).cpt.at() as c_int != ',' as c_int && (*st).cpt.at() as c_int != NUL
+                        {
+                            (*st).dict = (*st).cpt.rest();
                             (*st).dict_f = DICT_FIRST;
                         }
                     } else if flag == 'i' as c_int {
@@ -197,14 +303,9 @@ pub(crate) unsafe fn process_next_cpt_value(
                     }
                 }
 
-                // In any case `e_cpt` advances to the next entry.
-                copy_option_part(
-                    &raw mut (*st).e_cpt,
-                    scratch.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    c",".as_ptr().cast_mut(),
-                );
-                *advance_cpt_idx = may_advance_cpt_index((*st).e_cpt);
+                // In any case the scan advances to the next entry.
+                (*st).cpt.next_entry(scratch.as_mut_ptr(), IOSIZE as size_t);
+                *advance_cpt_idx = may_advance_cpt_index((*st).cpt.rest());
 
                 (*st).found_all = true;
                 if compl_type == -1 {
@@ -581,15 +682,14 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
             }
             (*st).found_all = false;
             (*st).ins_buf = curbuf.get();
-            xfree((*st).e_cpt_copy.cast::<c_void>());
             // Copy 'complete', in case the buffer is wiped out.
-            (*st).e_cpt_copy = xstrdup(if compl_cont_status.get() & CONT_LOCAL != 0 {
-                c".".as_ptr()
-            } else {
-                (*curbuf.get()).b_p_cpt
-            });
-            strip_caret_numbers_in_place((*st).e_cpt_copy);
-            (*st).e_cpt = (*st).e_cpt_copy;
+            (*st)
+                .cpt
+                .restart(if compl_cont_status.get() & CONT_LOCAL != 0 {
+                    c".".as_ptr()
+                } else {
+                    (*curbuf.get()).b_p_cpt
+                });
 
             if compl_autocomplete.get() && is_nearest_active() {
                 start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(1);
@@ -746,7 +846,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
         cpt_sources().set_index(-1);
         compl_started.set(true);
 
-        if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && *(*st).e_cpt as c_int == NUL {
+        if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && (*st).cpt.at() as c_int == NUL {
             // Got to the end of 'complete'.
             found_new_match = FAIL;
         }
