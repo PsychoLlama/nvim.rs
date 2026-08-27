@@ -22,8 +22,8 @@ use crate::ex_getln::check_opt_wim;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
 use crate::main::{
-    breakat_flags, cmdpreview, curwin, e_unsupportedoption, firstbuf, km_startsel, km_stopsel,
-    p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pumborder, p_ve,
+    breakat_flags, cmdpreview, curwin, e_unsupportedoption, km_startsel, km_stopsel, p_bg,
+    p_breakat, p_km, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pumborder, p_ve,
     p_winborder, ve_flags,
 };
 use crate::mbyte::utfc_ptr2len;
@@ -34,7 +34,7 @@ use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BreakAt, Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig, buf_T,
+    BreakAt, Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig,
     colnr_T, kErrorTypeNone, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
@@ -52,7 +52,7 @@ use super::{
 use crate::decoration::SCL_NUM;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
-use crate::winlayer::Win;
+use crate::winlayer::{Win, buffers};
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.
@@ -131,14 +131,10 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
     }
 
     // Terminal buffers pick their palette from the background.
-    // SAFETY: the editor's own buffer list.
-    unsafe {
-        let mut buf: *mut buf_T = firstbuf.get();
-        while !buf.is_null() {
-            if !(*buf).terminal.is_null() {
-                terminal_notify_theme((*buf).terminal, dark);
-            }
-            buf = (*buf).b_next;
+    for buf in buffers() {
+        if !buf.terminal.is_null() {
+            // SAFETY: a live buffer's own terminal.
+            unsafe { terminal_notify_theme(buf.terminal, dark) };
         }
     }
     ptr::null()

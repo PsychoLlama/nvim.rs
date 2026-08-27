@@ -19,6 +19,7 @@ use crate::path::tail_index;
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::types::{FAIL, MAXPATHL, OK};
+use crate::winlayer::buffers;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;
@@ -55,20 +56,21 @@ pub unsafe fn shorten_buf_fname(mut buf: Buf, dirname: *mut c_char, force: c_int
 
 /// Shorten file names for all buffers.
 pub unsafe fn shorten_fnames(force: c_int) {
-    unsafe {
-        let mut dirname = [0 as c_char; MAXPATHL as usize];
-        os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t);
-        let mut buf = firstbuf.get();
-        while !buf.is_null() {
-            shorten_buf_fname(Buf::new(buf), dirname.as_mut_ptr(), force);
-            // Always make the swap file name a full path; a "nofile" buffer
-            // may also have a swap file.
-            mf_fullname((*buf).b_ml.ml_mfp);
-            buf = (*buf).b_next;
-        }
-        status_redraw_all();
-        redraw_tabline.set(true);
+    let mut dirname = [0 as c_char; MAXPATHL as usize];
+    // SAFETY: a buffer the caller's stack owns, of the length passed with it.
+    unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) };
+    for buf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, and the directory
+        // name just filled in.
+        unsafe { shorten_buf_fname(buf, dirname.as_mut_ptr(), force) };
+        // Always make the swap file name a full path; a "nofile" buffer
+        // may also have a swap file.
+        // SAFETY: the buffer's own memfile, or null.
+        unsafe { mf_fullname(buf.b_ml.ml_mfp) };
     }
+    // SAFETY: on the main thread, as every caller of this is.
+    unsafe { status_redraw_all() };
+    redraw_tabline.set(true);
 }
 
 /// Get a new file name ended by the given extension.

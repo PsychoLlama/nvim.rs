@@ -322,20 +322,20 @@ unsafe fn sign_get_placed(
     group: *const ::core::ffi::c_char,
     retlist: *mut list_T,
 ) {
-    // SAFETY: the caller's buffer and list.
-    unsafe {
-        if !buf.is_null() {
-            sign_get_placed_in_buf(buf, lnum, id, group, retlist);
-            return;
-        }
-        let mut cbuf = firstbuf.get();
-        while !cbuf.is_null() {
-            if buf_has_signs(cbuf) {
+    if !buf.is_null() {
+        // SAFETY: the caller's buffer and list.
+        unsafe { sign_get_placed_in_buf(buf, lnum, id, group, retlist) };
+        return;
+    }
+    for cbuf in buffers() {
+        // SAFETY: a live buffer from the editor's own list, and the caller's
+        // list.
+        unsafe {
+            if buf_has_signs(cbuf.raw()) {
                 // `lnum` is deliberately dropped: an all-buffers query
                 // reports every line whatever line was asked for.
-                sign_get_placed_in_buf(cbuf, 0, id, group, retlist);
+                sign_get_placed_in_buf(cbuf.raw(), 0, id, group, retlist);
             }
-            cbuf = (*cbuf).b_next;
         }
     }
 }
