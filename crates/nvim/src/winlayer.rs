@@ -149,7 +149,8 @@
 //! are the C's `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`,
 //! `FOR_ALL_BUFFERS` and `FOR_ALL_FRAMES`. The lists they walk are the
 //! editor's own and live from startup to exit, so the walks are safe
-//! functions; each is lazy, as the macro it replaces is.
+//! functions. **They are not the plain macro's timing**: see "when the link is
+//! read" below.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -866,16 +867,31 @@ impl Line {
 // invalidate is a different matter and stays the caller's problem: none of
 // these re-reads the head, exactly as the macros do not.
 //
+// # When the link is read
+//
+// **Every walk here reads the next link *before* the body runs, not after.**
+// `iter::successors` calls its closure at yield time — `let item =
+// self.next.take()?; self.next = (self.succ)(&item); Some(item)` — so these
+// are the C's `FOR_ALL_*_SAFE` shape, not `FOR_ALL_*`'s. The macro's
+// `buf = buf->b_next` increment runs *after* its body.
+//
+// The difference is only visible to a body that touches the element it is
+// standing on, and it cuts one way each: freeing that element is safe here
+// and a use-after-free in the macro, while *relinking* it is followed by the
+// macro and ignored here, because the neighbour was read already. Neither
+// showed in the suites, but a caller that relinks under itself must not use
+// these — `buffer::info`'s `:ls` walk is the one in the tree that needs the
+// macro's timing and spells its own `step` out to get it.
+//
 // # The links are handles
 //
 // `b_next`/`b_prev` are `Option<BufId>`, and `firstbuf`/`lastbuf` with them:
 // a step is a registry lookup, not a load. That is what makes the object
 // graph index-shaped rather than pointer-shaped — a buffer can move, and a
-// link can never name one that has been freed, because `free_buffer` takes
-// the handle out of the registry before anything else. The cost is one
-// `SlotTable` probe per step, which is a hash of an integer and one `Vec`
-// index; the walks are over a handful of entries and none of them is in the
-// draw path's inner loop.
+// link can never name one that has been freed, because the free path takes
+// the handle out of the registry (after the unlink — see `registry`). The
+// cost is one `HandleMap` probe per step, a subtract and a load, which is
+// why that type exists at all.
 
 /// `first` and every window after it in its tab page's list.
 pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {

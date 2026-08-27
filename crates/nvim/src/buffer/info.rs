@@ -193,9 +193,11 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// Not `Iterator::next`: the walk reads `b_next` only after its caller
-    /// has printed the line, which is where upstream's `for` increment
-    /// reads it.
+    /// Not `Iterator::next`, and not `winlayer::buffers()`: this walk reads
+    /// `b_next` only after its caller has printed the line, which is where
+    /// upstream's `for` increment reads it. Every walk in `winlayer` reads
+    /// the link at yield time instead (`iter::successors`), which is the
+    /// `FOR_ALL_*_SAFE` shape — see that module's "when the link is read".
     fn step(&mut self) -> Option<Buf> {
         let buf = self.next?;
         self.next = match self.sorted {
