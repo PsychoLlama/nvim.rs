@@ -20,13 +20,14 @@ use crate::eval::typval::{
     NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_len,
     tv_list_ref,
 };
+use crate::eval::vars::emsg_static;
 use crate::eval::vars::set_vim_var_nr;
 use crate::eval::{NL, PROF_YES, Tv};
 use crate::ex_cmds::check_secure;
 use crate::main::{do_profiling, e_invarg, e_invarg2, e_invargNval, e_nobufnr, p_verbose};
 use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
-use crate::message::{emsg, msg_puts, verbose_enter_scroll, verbose_leave_scroll};
+use crate::message::{msg_puts, verbose_enter_scroll, verbose_leave_scroll};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
@@ -78,7 +79,7 @@ pub unsafe fn tv_to_argv(
     let argc = unsafe { tv_list_len(argl) };
     if argc == 0 {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg_static(&e_invarg);
         return null_mut();
     }
 

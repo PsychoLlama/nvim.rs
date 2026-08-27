@@ -11,8 +11,9 @@ use core::ptr::null_mut;
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::skipwhite;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::eval::typval::{NumBuf, tv_clear};
+use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::{restore_funccal, save_funccal};
+use crate::eval::vars::clear_local;
 use crate::eval::vars::set_var;
 use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
 use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
@@ -140,7 +141,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
             unsafe { xfree(tofree as *mut c_void) };
         }
         // SAFETY: `rettv` is this frame's.
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
         // SAFETY: `arg` walks a NUL-terminated command line.
         arg = unsafe { skipwhite(arg) };
     }
@@ -241,7 +242,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             ga.ga_len += len as c_int;
         }
         // SAFETY: `rettv` is this frame's.
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
         // SAFETY: `arg` walks a NUL-terminated command line.
         arg = unsafe { skipwhite(arg) };
     }

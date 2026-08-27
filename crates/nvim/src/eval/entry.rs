@@ -14,7 +14,7 @@ use crate::guard::{Lock, Suppress};
 use crate::semsg_c;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::size_of;
 use core::ptr::null_mut;
 
 use crate::api::private::converter::vim_to_object;
@@ -29,7 +29,9 @@ use crate::eval::typval::{
     tv_list_set_lock,
 };
 use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
+use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
+use crate::eval::window::cur_win;
 use crate::eval::{
     EVAL_EVALUATE, FUNCEXE_INIT, NL, NOTDONE, Tv, check_luafunc_name, clear_evalarg, eval0,
     eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
@@ -71,10 +73,6 @@ const UNSET_EVALARG: evalarg_T = evalarg_T {
 /// The scratch a Number or a Float is rendered into. `NUMBUFLEN` in the C.
 const NUMBUFLEN: usize = 65;
 
-/// The `v:event` save slot, whose caller has promised it outlives the
-/// value: the `get_v_event`/`restore_v_event` pair's own frame.
-type Sve = Live<save_v_event_T>;
-
 /// One expression's evaluation state, owned by the frame that declared it.
 type Ev = Live<evalarg_T>;
 
@@ -95,18 +93,25 @@ const UNSET_GA: garray_T = garray_T {
 pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
     // SAFETY: `v:event` is a live dictionary from startup to exit.
     let v_event = unsafe { get_vim_var_dict(Vv::Event) };
+    // Neither pointee may be reached through a `Live`: both hold a
+    // `hashtab_T`, which points at its own inline array, and `DerefMut`
+    // borrows the whole struct — see `winlayer::live`'s note. Their fields
+    // are named by address instead.
     // SAFETY: the caller's promise about `sve`, and `v_event` as above.
-    let (mut sve, ev) = unsafe { (Sve::new(sve), Live::<dict_T>::new(v_event)) };
-    sve.sve_did_save = ev.dv_hashtab.ht_used > 0 as size_t;
-    if sve.sve_did_save {
+    let saved: *mut hashtab_T = unsafe { &raw mut (*sve).sve_hashtab };
+    // SAFETY: as above.
+    let live: *mut hashtab_T = unsafe { &raw mut (*v_event).dv_hashtab };
+    // SAFETY: as above.
+    let did_save = unsafe { (*live).ht_used } > 0 as size_t;
+    // SAFETY: as above.
+    unsafe { (*sve).sve_did_save = did_save };
+    if did_save {
         // A hashtab that has not outgrown its inline array holds
         // `ht_array` pointing *into itself*, so this is a move and not
         // a copy: the bytes go to `sve` and `hash_init` immediately
         // makes the source a fresh empty table. `restore_v_event` puts
         // them back at the address they came from, which is what makes
         // the self-reference valid again.
-        let saved: *mut hashtab_T = sve.field_ptr(offset_of!(save_v_event_T, sve_hashtab));
-        let live: *mut hashtab_T = ev.field_ptr(offset_of!(dict_T, dv_hashtab));
         // SAFETY: both name a whole `hashtab_T`, and the move is the one
         // the comment above describes.
         unsafe { saved.write(live.read()) };
@@ -122,12 +127,14 @@ pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
 /// `v_event` and `sve` must be a pair `get_v_event` produced.
 pub unsafe fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T) {
     // SAFETY: the caller's promise -- the pair `get_v_event` produced.
-    let (sve, ev) = unsafe { (Sve::new(sve), Live::<dict_T>::new(v_event)) };
-    // SAFETY: as above.
     unsafe { tv_dict_free_contents(v_event) };
-    let saved: *mut hashtab_T = sve.field_ptr(offset_of!(save_v_event_T, sve_hashtab));
-    let live: *mut hashtab_T = ev.field_ptr(offset_of!(dict_T, dv_hashtab));
-    if sve.sve_did_save {
+    // Named by address, not through a `Live`: as [`get_v_event`].
+    // SAFETY: as above.
+    let saved: *mut hashtab_T = unsafe { &raw mut (*sve).sve_hashtab };
+    // SAFETY: as above.
+    let live: *mut hashtab_T = unsafe { &raw mut (*v_event).dv_hashtab };
+    // SAFETY: as above.
+    if unsafe { (*sve).sve_did_save } {
         // The move back, to the address [`get_v_event`] took it from.
         // SAFETY: both name a whole `hashtab_T`.
         unsafe { live.write(saved.read()) };
@@ -199,7 +206,7 @@ pub unsafe fn eval_to_bool(
         unsafe { *error = false };
         if !skip {
             retval = unsafe { tv_get_number_chk(&raw mut tv, error) } != 0;
-            unsafe { tv_clear(&raw mut tv) };
+            clear_local(&mut tv);
         }
     }
     drop(skipping);
@@ -375,7 +382,7 @@ pub unsafe fn eval_expr_to_bool(expr: *const typval_T, error: *mut bool) -> bool
         return false;
     }
     let res = unsafe { tv_get_number_chk(&raw mut rettv, error) } != 0;
-    unsafe { tv_clear(&raw mut rettv) };
+    clear_local(&mut rettv);
     res
 }
 
@@ -393,7 +400,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
         null_mut()
     } else {
         let s = unsafe { xstrdup(numbuf.string(&raw mut tv)) };
-        unsafe { tv_clear(&raw mut tv) };
+        clear_local(&mut tv);
         s
     };
     drop(skipping);
@@ -491,7 +498,7 @@ pub unsafe fn eval_to_string_eap(
         null_mut()
     } else {
         let s = unsafe { typval2string(&raw mut tv, join_list) };
-        unsafe { tv_clear(&raw mut tv) };
+        clear_local(&mut tv);
         s
     };
     unsafe { clear_evalarg(&raw mut evalarg, null_mut()) };
@@ -555,7 +562,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
         -1
     } else {
         let n = unsafe { tv_get_number_chk(&raw mut rettv, null_mut()) };
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
         n
     }
 }
@@ -658,7 +665,7 @@ pub unsafe fn call_func_retstr(
         return null_mut();
     }
     let retval = unsafe { xstrdup(numbuf.string(&raw mut rettv)) };
-    unsafe { tv_clear(&raw mut rettv) };
+    clear_local(&mut rettv);
     retval as *mut c_void
 }
 
@@ -677,7 +684,7 @@ pub unsafe fn call_func_retlist(
         return null_mut();
     }
     if rettv.v_type != VAR_LIST {
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
         return null_mut();
     }
     unsafe { rettv.vval.v_list as *mut c_void }
@@ -732,7 +739,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
                 // SAFETY: `s` is inside the NUL-terminated string.
                 retval = unsafe { atol(s) } as varnumber_T;
             }
-            unsafe { tv_clear(&raw mut tv) };
+            clear_local(&mut tv);
         }
         retval
     };
@@ -788,7 +795,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
                 },
             }
         };
-        unsafe { tv_clear(&raw mut tv) };
+        clear_local(&mut tv);
         obj
     };
 
@@ -856,10 +863,4 @@ pub(crate) unsafe fn tv_init(tv: *mut typval_T) {
     if !tv.is_null() {
         unsafe { memset(tv as *mut c_void, 0, size_of::<typval_T>()) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

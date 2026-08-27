@@ -4,7 +4,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -20,6 +19,8 @@ use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
 };
 use crate::eval::vars::eval_variable;
+use crate::eval::vars::{clear_local, emsg_static};
+use crate::eval::window::{cur_buf, cur_win};
 use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
 use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
@@ -31,8 +32,7 @@ use crate::main::{
 };
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
-use crate::message::emsg;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
@@ -144,10 +144,10 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
         let wrong_kind = !data.is_null() && unsafe { (*data).streamtype } != kChannelStreamProc;
         if wrong_kind {
             // SAFETY: a shared NUL-terminated message.
-            unsafe { emsg(gettext(e_invchanjob.as_ptr())) };
+            emsg_static(&e_invchanjob);
         } else {
             // SAFETY: as above.
-            unsafe { emsg(gettext(e_invchan.as_ptr())) };
+            emsg_static(&e_invchan);
         }
     }
     null_mut()
@@ -165,7 +165,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
     let (arg, mut ret) = unsafe { (Tv::new(argvars), Tv::new(rettv)) };
     if arg.v_type != VAR_STRING {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg_static(&e_invarg);
         return;
     }
     // SAFETY: the List is fresh and this frame's.
@@ -270,7 +270,7 @@ pub unsafe fn eval_call_provider(
 
     if discard {
         // SAFETY: `rettv` is this frame's.
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
     }
     rettv
 }
@@ -474,7 +474,7 @@ pub unsafe fn prompt_invoke_callback() {
         // SAFETY: the argument array and the result are this frame's.
         unsafe { tv_clear(argv.as_mut_ptr()) };
         // SAFETY: as above.
-        unsafe { tv_clear(&raw mut rettv) };
+        clear_local(&mut rettv);
     }
 
     // SAFETY: the current buffer is live.
@@ -504,18 +504,6 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
     // SAFETY: as above.
     let ret = unsafe { callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv) };
     // SAFETY: `rettv` is this frame's.
-    unsafe { tv_clear(&raw mut rettv) };
+    clear_local(&mut rettv);
     ret as c_int != FAIL
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

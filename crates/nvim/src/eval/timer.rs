@@ -16,9 +16,10 @@ use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::eval::typval::{
-    callback_free, callback_put, tv_clear, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
-    tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
+    callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_item_alloc,
+    tv_list_alloc_ret, tv_list_append_dict,
 };
+use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new_child};
 use crate::event::time::{
@@ -170,7 +171,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
         unsafe { timer_stop(timer.raw()) };
     }
     // SAFETY: `rettv` is this frame's, filled in by the callback.
-    unsafe { tv_clear(&raw mut rettv) };
+    clear_local(&mut rettv);
 
     // A zero timeout does not repeat by itself; it is re-armed here so
     // that it yields to the event loop between runs.
@@ -210,9 +211,13 @@ pub unsafe fn timer_start(
     // SAFETY: the loop lives from startup to exit, `tw` is the timer's own
     // watcher, and the timer is the data it is armed with.
     unsafe { time_watcher_init(main_loop.ptr(), tw, timer.raw() as *mut c_void) };
-    // SAFETY: as above -- the loop's queue is live.
-    timer.tw.events = unsafe { multiqueue_new_child((*main_loop.ptr()).events) };
-    timer.tw.blockable = true;
+    // The loop now holds `tw`, so the two writes below go through it rather
+    // than through `DerefMut`, which would borrow the whole `timer_T` and
+    // pop the address the loop is holding — `winlayer::live`'s note.
+    // SAFETY: as above -- the loop's queue is live and `tw` is the timer's.
+    unsafe { (*tw).events = multiqueue_new_child((*main_loop.ptr()).events) };
+    // SAFETY: as above.
+    unsafe { (*tw).blockable = true };
     let repeat = timeout as uint64_t;
     // SAFETY: `tw` is the timer's own watcher, initialised above.
     unsafe { time_watcher_start(tw, Some(timer_due_cb), repeat, repeat) };

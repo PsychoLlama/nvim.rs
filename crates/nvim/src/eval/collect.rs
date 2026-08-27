@@ -42,6 +42,7 @@ use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
     set_ref_in_functions, set_ref_in_previous_funccal,
 };
+use crate::eval::vars::emsg_lit;
 use crate::eval::vars::{
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
@@ -59,7 +60,7 @@ use crate::main::{
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::message::{emsg, internal_error, verb_msg};
+use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
@@ -667,9 +668,7 @@ pub unsafe fn var_item_copy(
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
 
     if RECURSE.get() >= DICT_MAXNEST {
-        let msg = e_variable_nested_too_deep_for_making_copy;
-        // SAFETY: a shared NUL-terminated message.
-        unsafe { emsg(gettext(msg.as_ptr())) };
+        emsg_lit(e_variable_nested_too_deep_for_making_copy);
         return FAIL;
     }
     RECURSE.set(RECURSE.get() + 1);

@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::eval::Tv;
+use crate::eval::window::{cur_buf, cur_win};
 use crate::winlayer::{Buf, Live};
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
@@ -361,16 +362,4 @@ pub unsafe fn list2fpos(
         unsafe { *curswantp = tv_list_find_nr(l, i + 1, null_mut()) as colnr_T };
     }
     OK
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

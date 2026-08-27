@@ -19,16 +19,15 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_clear, tv_list_first, tv_list_unref,
+    tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_list_first, tv_list_unref,
     tv_list_watch_add, tv_list_watch_remove,
 };
+use crate::eval::vars::{clear_local, emsg_lit};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
 use crate::eval::{EVAL_EVALUATE, Fi, e_string_list_or_blob_required, eval0, forinfo_T};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
-use crate::message::emsg;
-use crate::os::cshim::gettext;
 use crate::types::{
     NUL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
     listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
@@ -80,7 +79,7 @@ pub unsafe fn eval_for_line(
             || ascii_iswhite(unsafe { *expr.add(2) } as c_int))
     {
         // SAFETY: the message is a NUL-terminated literal.
-        unsafe { emsg(gettext(c"E690: Missing \"in\" after :for".as_ptr())) };
+        emsg_lit(c"E690: Missing \"in\" after :for");
         return fi.raw() as *mut c_void;
     }
 
@@ -100,7 +99,7 @@ pub unsafe fn eval_for_line(
                     let l = unsafe { tv.vval.v_list };
                     if l.is_null() {
                         // SAFETY: `tv` is this frame's.
-                        unsafe { tv_clear(&raw mut tv) };
+                        clear_local(&mut tv);
                     } else {
                         // The reference moves into `fi`, and the watcher
                         // is what keeps the cursor valid across changes
@@ -110,8 +109,11 @@ pub unsafe fn eval_for_line(
                         // SAFETY: `l` is the live List the typval held, and
                         // `lw` is the `forinfo_T`'s own watcher.
                         unsafe { tv_list_watch_add(l, lw) };
+                        // The List holds `lw` from here on, so this write
+                        // goes through the pointer rather than borrowing
+                        // the whole record — `winlayer::live`'s note.
                         // SAFETY: as above.
-                        fi.fi_lw.lw_item = unsafe { tv_list_first(l) };
+                        unsafe { (*lw).lw_item = tv_list_first(l) };
                     }
                 }
                 VAR_BLOB => {
@@ -127,7 +129,7 @@ pub unsafe fn eval_for_line(
                         fi.fi_blob = unsafe { btv.vval.v_blob };
                     }
                     // SAFETY: `tv` is this frame's.
-                    unsafe { tv_clear(&raw mut tv) };
+                    clear_local(&mut tv);
                 }
                 VAR_STRING => {
                     fi.fi_byte_idx = 0;
@@ -146,9 +148,9 @@ pub unsafe fn eval_for_line(
                 _ => {
                     // SAFETY: the message is a NUL-terminated literal, and
                     // `tv` is this frame's.
-                    unsafe { emsg(gettext(e_string_list_or_blob_required.as_ptr())) };
+                    emsg_lit(e_string_list_or_blob_required);
                     // SAFETY: `tv` is this frame's.
-                    unsafe { tv_clear(&raw mut tv) };
+                    clear_local(&mut tv);
                 }
             }
         }
@@ -163,9 +165,15 @@ pub unsafe fn eval_for_line(
 /// `fi_void` must be a `forinfo_T` from `eval_for_line`; `arg` the loop's
 /// variable list.
 pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
+    // `eval_for_line` handed the List the address of `fi_lw`, so the List
+    // is holding a pointer into this record for as long as the loop runs.
+    // Every write below therefore goes through `rec` rather than through
+    // `DerefMut`, which would borrow the whole `forinfo_T` and pop it —
+    // see `winlayer::live`'s note.
     // SAFETY: the caller's promise -- the loop's own `forinfo_T`, which
     // `:endfor` keeps alive for as long as the loop runs.
-    let mut fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
+    let fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
+    let rec = fi.raw();
 
     if !fi.fi_blob.is_null() {
         // SAFETY: `fi_blob` is the copy `eval_for_line` took.
@@ -177,7 +185,8 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         tv.v_lock = VarLock::Fixed;
         // SAFETY: as above; `fi_bi` is inside the Blob.
         tv.vval.v_number = unsafe { tv_blob_get(fi.fi_blob, fi.fi_bi) } as varnumber_T;
-        fi.fi_bi += 1;
+        // SAFETY: `rec` is the caller's record.
+        unsafe { (*rec).fi_bi += 1 };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
         return unsafe { assign(fi, arg, &raw mut tv) };
     }
@@ -196,7 +205,8 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         tv.v_lock = VarLock::Fixed;
         // SAFETY: `len` bytes from `at` are the character just measured.
         tv.vval.v_string = unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char };
-        fi.fi_byte_idx += len;
+        // SAFETY: `rec` is the caller's record.
+        unsafe { (*rec).fi_byte_idx += len };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
         let ok = unsafe { assign(fi, arg, &raw mut tv) };
         // The typval was never handed over, so its String is ours.
@@ -209,8 +219,9 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     if item.is_null() {
         return false;
     }
-    // SAFETY: the watcher keeps `lw_item` pointing at a live item.
-    fi.fi_lw.lw_item = unsafe { (*item).li_next };
+    // SAFETY: the watcher keeps `lw_item` pointing at a live item, and
+    // `rec` is the caller's record.
+    unsafe { (*rec).fi_lw.lw_item = (*item).li_next };
     // SAFETY: as above -- the item's typval is the List's own.
     unsafe { assign(fi, arg, &raw mut (*item).li_tv) }
 }
@@ -238,11 +249,15 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
     let fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
     if !fi.fi_list.is_null() {
         let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
+        // Read out first: `tv_list_watch_remove` writes through `lw`, which
+        // points into this record, so no borrow of the record may still be
+        // alive while it runs.
+        let list = fi.fi_list;
         // SAFETY: the watcher was added to this List by `eval_for_line`,
         // and the reference it took is released here.
-        unsafe { tv_list_watch_remove(fi.fi_list, lw) };
+        unsafe { tv_list_watch_remove(list, lw) };
         // SAFETY: as above -- this releases the reference `fi` held.
-        unsafe { tv_list_unref(fi.fi_list) };
+        unsafe { tv_list_unref(list) };
     } else if !fi.fi_blob.is_null() {
         // SAFETY: the Blob is the copy `eval_for_line` took.
         unsafe { tv_blob_unref(fi.fi_blob) };

@@ -27,6 +27,7 @@ use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
     NumBuf, kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
 };
+use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2};
 use crate::memory::{xmalloc, xstrdup};
@@ -103,15 +104,6 @@ unsafe fn items(list: *const list_T) -> impl Iterator<Item = *const listitem_T> 
     })
 }
 
-/// Raise `msg`, which is one of the shared error texts.
-///
-/// # Safety
-/// `msg` must be one of `main.rs`'s NUL-terminated `e_*` messages.
-#[inline(always)]
-unsafe fn err(msg: &[c_char]) {
-    unsafe { emsg(gettext(msg.as_ptr())) };
-}
-
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
 ///
 /// Deprecated in favour of `jobstart(..., {'rpc': v:true})`.
@@ -135,8 +127,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     if argv[0].v_type != VAR_STRING || (argv[1].v_type != VAR_LIST && argv[1].v_type != VAR_UNKNOWN)
     {
         // Wrong argument types.
-        // SAFETY: `e_invarg` is a shared message.
-        unsafe { err(&e_invarg) };
+        emsg_static(&e_invarg);
         return;
     }
 
@@ -162,8 +153,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: a `VAR_STRING` holds a NUL-terminated string or NULL.
     let prog = unsafe { argv[0].vval.v_string };
     if prog.is_null() || unsafe { *prog } == 0 {
-        // SAFETY: `e_api_spawn_failed` is a shared message.
-        unsafe { err(&e_api_spawn_failed) };
+        emsg_static(&e_api_spawn_failed);
         return;
     }
 
@@ -230,8 +220,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
     let argv = unsafe { args(argvars) };
     if argv[0].v_type != VAR_NUMBER {
         // Wrong argument types.
-        // SAFETY: `e_invarg` is a shared message.
-        unsafe { err(&e_invarg) };
+        emsg_static(&e_invarg);
         return;
     }
 
