@@ -29,9 +29,7 @@ use crate::autocmd::{
 };
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::main::{
-    curbuf, curwin, first_tabpage, firstwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin,
-};
+use crate::main::{curbuf, curwin, firstwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin};
 use crate::mark::setpcmark;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
@@ -43,8 +41,8 @@ use crate::types::{
     CMD_argdo, CMD_bufdo, CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo, CMD_tabdo, CMD_windo, aco_save_T,
     cmdidx_T, exarg_T, linenr_T, size_t,
 };
-use crate::window::{goto_tabpage_tp, valid_tabpage, win_goto, win_split, win_valid};
-use crate::winlayer::{Buf, Win, first_buffer};
+use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
+use crate::winlayer::{Buf, Win, first_buffer, first_tab};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -186,7 +184,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
         let mut i: c_int = 0;
         // Start at the eap->line1'th argument/window/tab page.
         let mut wp = firstwin.get();
-        let mut tp = first_tabpage.get();
+        let mut tp = first_tab();
         match list {
             ListDo::Windows => {
                 while !wp.is_null() && (i as linenr_T + 1) < (*eap).line1 {
@@ -195,9 +193,9 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                 }
             }
             ListDo::Tabs => {
-                while !tp.is_null() && (i as linenr_T + 1) < (*eap).line1 {
+                while let Some(cur) = tp.filter(|_| (i as linenr_T + 1) < (*eap).line1) {
                     i += 1;
-                    tp = (*tp).tp_next;
+                    tp = cur.next();
                 }
             }
             ListDo::Args => i = (*eap).line1 as c_int - 1,
@@ -289,11 +287,11 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                 }
                 ListDo::Tabs => {
                     // Go to tab page "tp".
-                    if !valid_tabpage(tp) {
+                    let Some(cur) = tp.filter(|tp| valid_tabpage(tp.raw())) else {
                         break;
-                    }
-                    goto_tabpage_tp(tp, true, true);
-                    tp = (*tp).tp_next;
+                    };
+                    goto_tab(cur, true, true);
+                    tp = cur.next();
                 }
                 ListDo::Buffers => {
                     // Remember the number of the next listed buffer, in case

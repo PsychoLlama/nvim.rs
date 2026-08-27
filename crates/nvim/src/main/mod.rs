@@ -26,7 +26,7 @@ use crate::types::{
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
     xfmark_T,
 };
-use crate::winlayer::BufId;
+use crate::winlayer::{BufId, TabId};
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
 mod entry;
@@ -703,8 +703,9 @@ pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_m
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
-pub static first_tabpage: GlobalCell<*mut tabpage_T> =
-    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
+/// The tab page list's head, a handle as the `tp_next` links it anchors
+/// are. `winlayer::first_tab` resolves it and `winlayer::tabs` walks it.
+pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 pub static curtab: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =

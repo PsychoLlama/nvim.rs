@@ -86,10 +86,11 @@ pub unsafe fn win_alloc_first() {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
     }
-    first_tabpage.set(alloc_tabpage().raw());
-    curtab.set(first_tabpage.get());
+    let first = alloc_tabpage();
+    first_tabpage.set(Some(first.id()));
+    curtab.set(first.raw());
     // SAFETY: the tab page just allocated.
-    unsafe { unuse_tabpage(first_tabpage.get()) };
+    unsafe { unuse_tabpage(first.raw()) };
 }
 
 pub unsafe fn win_alloc_aucmd_win(idx: c_int) {

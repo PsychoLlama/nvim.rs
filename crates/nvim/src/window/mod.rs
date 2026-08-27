@@ -496,9 +496,11 @@ fn last_win() -> Win {
 }
 
 /// The first tab page, which is the only one when it has no `tp_next`.
+///
+/// The fallible form is `winlayer::first_tab`; the editor has a tab page
+/// from startup to exit, which is the promise this one takes.
 fn first_tab() -> TabPage {
-    // SAFETY: `first_tabpage` is set from startup to exit.
-    unsafe { TabPage::new(first_tabpage.get()) }
+    crate::winlayer::first_tab().expect("the editor always has a tab page")
 }
 
 /// `api_set_error(err, kErrorTypeException, "%s", msg)`.

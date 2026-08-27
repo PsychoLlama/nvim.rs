@@ -145,9 +145,9 @@ mod live;
 pub(crate) use live::{Cc, Ea, Live};
 
 pub(crate) use handles::{
-    BufId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer, forget_tabpage,
-    forget_window, free_deferred, register_buffer, register_tabpage, register_window, tabpage,
-    window,
+    BufId, TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer,
+    forget_tabpage, forget_window, free_deferred, register_buffer, register_tabpage,
+    register_window, tabpage, window,
 };
 
 use core::ffi::c_char;
@@ -731,6 +731,15 @@ impl TabPage {
         self.handle
     }
 
+    /// This tab page's identity, for the list links and for holding across
+    /// re-entry. [`Win::id`].
+    #[inline(always)]
+    pub(crate) fn id(self) -> TabId {
+        // A live tab page's handle is `LAST_TP_HANDLE`, which is incremented
+        // before it is read, so it is never zero.
+        TabId(NonZero::new(self.handle).expect("a live tab page has a handle"))
+    }
+
     /// Whether this is the tab page the editor is working in.
     ///
     /// Safe where [`TabPage::current`] is not: comparing the two pointers
@@ -751,9 +760,7 @@ impl TabPage {
     /// The next tab page in the editor's list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        // A live tab page's `tp_next` is a live tab page or null.
-        let next = self.tp_next;
-        (!next.is_null()).then_some(Self(next))
+        self.tp_next.and_then(TabId::get)
     }
 
     /// The root of this tab page's layout tree, `tp_topframe` verbatim.
@@ -888,9 +895,13 @@ pub fn windows_in_tab(tp: TabPage) -> impl Iterator<Item = Win> {
 
 /// Every tab page, in list order: the C's `FOR_ALL_TABS`.
 pub fn tabs() -> impl Iterator<Item = TabPage> {
-    // The chain is the editor's tab page list, ending at a null `tp_next`.
-    let first = first_tabpage.get();
-    iter::successors((!first.is_null()).then_some(TabPage(first)), |tp| tp.next())
+    iter::successors(first_tab(), |tp| tp.next())
+}
+
+/// The head of the editor's tab page list, `None` only before the first one
+/// is made. [`first_buffer`].
+pub(crate) fn first_tab() -> Option<TabPage> {
+    first_tabpage.get().and_then(TabId::get)
 }
 
 /// Every window of every tab page: `FOR_ALL_TAB_WINDOWS`, which is exactly

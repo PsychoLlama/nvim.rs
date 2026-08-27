@@ -33,9 +33,7 @@ use crate::eval::typval::{tv_dict_add_nr, tv_dict_alloc_ret};
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
-use crate::main::{
-    curbuf, curtab, curwin, first_tabpage, mouse_col, mouse_row, tab_page_click_defs,
-};
+use crate::main::{curbuf, curtab, curwin, mouse_col, mouse_row, tab_page_click_defs};
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
 use crate::normal::sel_exclusive;
 use crate::plines::{getvcols, win_chartabsize};
@@ -52,7 +50,7 @@ use crate::window::{
     self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
     win_enter, win_valid,
 };
-use crate::winlayer::{Buf, Pos, Win};
+use crate::winlayer::{Buf, Pos, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod click;
@@ -439,8 +437,7 @@ fn mouse_tab_close(c1: c_int) {
         find_tabpage(c1)
     };
     if tp == curtab.get() {
-        // SAFETY: the tab page globals and list are live from startup to exit.
-        if unsafe { !(*first_tabpage.get()).tp_next.is_null() } {
+        if first_tab().is_some_and(|tp| tp.next().is_some()) {
             // SAFETY: as above.
             unsafe { tabpage_close(false as c_int) };
         }

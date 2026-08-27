@@ -30,8 +30,8 @@ use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::getchar::beep_flush;
 use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
 use crate::main::{
-    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, first_tabpage,
-    firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
+    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, firstwin, getout,
+    lastwin, p_awa, p_confirm, p_write, topframe,
 };
 use crate::message::{emsg, msg};
 use crate::os::cshim::{gettext, snprintf};
@@ -46,7 +46,7 @@ use crate::window::{
     close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
     valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
 };
-use crate::winlayer::{Buf, windows};
+use crate::winlayer::{Buf, first_tab, tabs, windows};
 
 /// The key a command-line window sends back to close itself, with the
 /// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
@@ -375,7 +375,7 @@ pub(crate) unsafe fn ex_tabclose(eap: *mut exarg_T) {
             cmdwin_result.set(special_key(KE_IGNORE as c_int));
             return;
         }
-        if (*first_tabpage.get()).tp_next.is_null() {
+        if only_tab() {
             emsg(gettext(c"E784: Cannot close last tab page".as_ptr()));
             return;
         }
@@ -406,7 +406,7 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
             cmdwin_result.set(special_key(KE_IGNORE as c_int));
             return;
         }
-        if (*first_tabpage.get()).tp_next.is_null() {
+        if only_tab() {
             msg(gettext(c"Already only one tab page".as_ptr()), 0);
             return;
         }
@@ -425,19 +425,17 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
         // against a tab page that refuses to close.
         let mut done = 0;
         while done < 1000 {
-            let mut tp = first_tabpage.get();
-            while !tp.is_null() {
-                if (*tp).tp_topframe != topframe.get() {
-                    tabpage_close_other(tp, (*eap).forceit);
-                    if valid_tabpage(tp) {
+            for tp in tabs() {
+                if tp.tp_topframe != topframe.get() {
+                    tabpage_close_other(tp.raw(), (*eap).forceit);
+                    if valid_tabpage(tp.raw()) {
                         done = 1000;
                     }
                     break;
                 }
-                tp = (*tp).tp_next;
             }
-            debug_assert!(!first_tabpage.get().is_null());
-            if (*first_tabpage.get()).tp_next.is_null() {
+            debug_assert!(first_tab().is_some());
+            if only_tab() {
                 break;
             }
             done += 1;
@@ -617,4 +615,10 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
             (*eap).forceit != 0,
         );
     }
+}
+
+/// Whether the editor has exactly one tab page. Upstream's
+/// `first_tabpage->tp_next == NULL`, which it writes out four times here.
+fn only_tab() -> bool {
+    first_tab().is_none_or(|tp| tp.next().is_none())
 }

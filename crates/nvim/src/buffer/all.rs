@@ -18,24 +18,23 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
 use crate::main::{
-    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, first_tabpage, firstwin, got_int,
-    jop_flags, lastwin, p_ch, p_ea, p_tpm, swap_exists_action, swap_exists_did_quit,
+    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, firstwin, got_int, jop_flags,
+    lastwin, p_ch, p_ea, p_tpm, swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{
-    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, cleanup_T, exarg_T, except_T, linenr_T, tabpage_T,
-    win_T,
+    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
-    WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tabpage_tp, lastwin_nofloating,
-    tabline_height, tabpage_index, win_close, win_enter, win_locked, win_move_after, win_split,
-    win_valid,
+    WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
+    lastwin_nofloating, tabline_height, tabpage_index, win_close, win_enter, win_locked,
+    win_move_after, win_split, win_valid,
 };
-use crate::winlayer::{Buf, TabPage, Win, buffers, windows};
+use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -77,9 +76,8 @@ fn set_pcmark() {
 }
 
 /// Make `tp` the current tab page, with autocommands.
-fn goto_tab(tp: *mut tabpage_T) {
-    // SAFETY: a live tab page.
-    unsafe { goto_tabpage_tp(tp, true, true) };
+fn goto_tab(tp: TabPage) {
+    goto_tab_page(tp, true, true);
 }
 
 /// The last non-floating window of the current tab page.
@@ -245,10 +243,10 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
 /// that are not full width.
 fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
     if had_tab > 0 {
-        goto_tab(first_tabpage.get());
+        goto_tab(first_tab().expect("there is always a first tab page"));
     }
     loop {
-        let mut tpnext = current_tab().tp_next;
+        let mut tpnext = current_tab().next();
         // Try to close floating windows first.
         let mut wp = if last_win().w_floating {
             lastwin.get()
@@ -280,7 +278,7 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
                 } else {
                     firstwin.get()
                 };
-                tpnext = first_tabpage.get();
+                tpnext = first_tab();
                 *open_wins = 0;
             } else {
                 *open_wins += 1;
@@ -289,10 +287,10 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
         }
 
         // Without the ":tab" modifier only do the current tab page.
-        if had_tab == 0 || tpnext.is_null() {
+        let (false, Some(tp)) = (had_tab == 0, tpnext) else {
             break;
-        }
-        goto_tab(tpnext);
+        };
+        goto_tab(tp);
     }
 }
 

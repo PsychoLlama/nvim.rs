@@ -214,6 +214,10 @@ pub(crate) struct WinId(pub(super) NonZero<handle_T>);
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BufId(pub(super) NonZero<handle_T>);
 
+/// A tab page's identity, taken from a live tab page. [`WinId`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct TabId(pub(super) NonZero<handle_T>);
+
 impl WinId {
     /// The window again, `None` once it has been freed.
     ///
@@ -267,6 +271,14 @@ impl BufId {
     }
 }
 
+impl TabId {
+    /// The tab page again, `None` once it has been closed. [`WinId::get`].
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<TabPage> {
+        tabpage(self.0.get())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,5 +295,6 @@ mod tests {
     fn an_absent_id_is_the_zero_word() {
         assert_eq!(size_of::<Option<WinId>>(), size_of::<handle_T>());
         assert_eq!(size_of::<Option<BufId>>(), size_of::<handle_T>());
+        assert_eq!(size_of::<Option<TabId>>(), size_of::<handle_T>());
     }
 }

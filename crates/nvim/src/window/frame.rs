@@ -383,11 +383,11 @@ pub(crate) fn alt_tab_page() -> TabPage {
     }
     let cur = cur_tab();
     let forward = cur.next().is_some()
-        && (tcl_flags.get() & kOptTclFlagLeft == 0 || cur.raw() == first_tabpage.get());
+        && (tcl_flags.get() & kOptTclFlagLeft == 0 || first_tabpage.get() == Some(cur.id()));
     match cur.next() {
         Some(next) if forward => next,
         _ => tabs()
-            .find(|tp| tp.tp_next == cur.raw())
+            .find(|tp| tp.tp_next == Some(cur.id()))
             .expect("a tab page before the current one"),
     }
 }

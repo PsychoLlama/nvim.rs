@@ -13,8 +13,8 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
-use crate::window::{WSP_BELOW, WSP_ROOM};
-use crate::winlayer::windows;
+use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
+use crate::winlayer::{TabPage, first_tab, windows};
 
 /// What the two passes of `:all` share. A stack local of [`do_arg_all`],
 /// never handed to C, so the passes take it by reference and its fields
@@ -209,8 +209,7 @@ unsafe fn close_unused_window(
     }
     // Don't close the last window.
     if firstwin.get() == lastwin.get() {
-        // SAFETY: there is always a first tab page.
-        let only_tab = unsafe { (*first_tabpage.get()).tp_next.is_null() };
+        let only_tab = first_tab().is_none_or(|tp| tp.next().is_none());
         if only_tab || aall.had_tab == 0 {
             aall.use_firstwin = true;
             return wpnext;
@@ -272,8 +271,11 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
     let old_curwin = curwin.get();
     let old_curtab = curtab.get();
     if aall.had_tab > 0 {
-        // SAFETY: there is always a first tab page.
-        unsafe { goto_tabpage_tp(first_tabpage.get(), true, true) };
+        goto_tab(
+            first_tab().expect("there is always a first tab page"),
+            true,
+            true,
+        );
     }
     // Moving tab pages around in an autocommand may cause an endless loop.
     tabpage_move_disallowed.set(tabpage_move_disallowed.get() + 1);
@@ -282,20 +284,19 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
         // re-validated below because closing windows runs autocommands.
         // SAFETY: `curtab` is live; the next page is read *before* the
         // close, which may leave the current one.
-        let tpnext = unsafe { (*curtab.get()).tp_next };
+        let tpnext = unsafe { TabPage::current() }.next();
         // SAFETY: as above.
         unsafe { close_unused_windows_in_tab(aall, old_curwin, old_curtab) };
         // Without the ":tab" modifier only do the current tab page.
-        if aall.had_tab == 0 || tpnext.is_null() {
+        let (false, Some(tpnext)) = (aall.had_tab == 0, tpnext) else {
             break;
-        }
-        // SAFETY: a tab page that is gone falls back to the first one.
-        let tpnext = if valid_tabpage(tpnext) {
-            tpnext
-        } else {
-            first_tabpage.get()
         };
-        unsafe { goto_tabpage_tp(tpnext, true, true) };
+        // A tab page that is gone falls back to the first one.
+        let tpnext = match valid_tabpage(tpnext.raw()) {
+            true => tpnext,
+            false => first_tab().expect("there is always a first tab page"),
+        };
+        goto_tab(tpnext, true, true);
     }
     tabpage_move_disallowed.set(tabpage_move_disallowed.get() - 1);
 }

@@ -25,9 +25,9 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::entry::event_teardown;
 use crate::main::{
-    curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstwin,
-    garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
-    stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
+    curbuf, did_emsg, ex_exitval, exiting, exmode_active, firstwin, garbage_collect_at_exit,
+    no_wait_return, p_shada, p_title, p_titleold, stderr_isatty, stdout_isatty,
+    ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
@@ -37,12 +37,12 @@ use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{NUL, VAR_NUMBER, Vv, tabpage_T, varnumber_T};
+use crate::types::{NUL, VAR_NUMBER, Vv, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
 
-use crate::winlayer::{Buf, buffers, first_buffer};
+use crate::winlayer::{Buf, buffers, first_buffer, first_tab};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -142,13 +142,13 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
         if v_dying.get() <= 1 {
             // `BufWinLeave` for every window, but only once per buffer: the
             // changedtick is set to -1 to mark a buffer as already done.
-            let mut tp: *const tabpage_T = first_tabpage.get();
-            while !tp.is_null() {
-                let mut next_tp = (*tp).tp_next;
-                let mut wp = if ptr::eq(tp, curtab.get()) {
+            let mut tab = first_tab();
+            while let Some(tp) = tab {
+                let mut next_tp = tp.next();
+                let mut wp = if tp.is_current() {
                     firstwin.get()
                 } else {
-                    (*tp).tp_firstwin
+                    tp.tp_firstwin
                 };
                 while !wp.is_null() {
                     // An autocommand may already have closed the buffer.
@@ -168,12 +168,12 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                         }
                         // The autocommands may have rearranged both lists;
                         // start the whole walk again.
-                        next_tp = first_tabpage.get();
+                        next_tp = first_tab();
                         break;
                     }
                     wp = (*wp).w_next;
                 }
-                tp = next_tp;
+                tab = next_tp;
             }
 
             // `BufUnload` for every loaded buffer.

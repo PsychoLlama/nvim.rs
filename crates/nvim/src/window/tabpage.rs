@@ -205,7 +205,7 @@ pub(crate) fn new_tabpage(
     if after == 1 {
         // New tab page becomes the first one.
         newtp.tp_next = first_tabpage.get();
-        first_tabpage.set(newtp.raw());
+        first_tabpage.set(Some(newtp.id()));
     } else {
         let mut tp = old_curtab;
         if after > 0 {
@@ -218,7 +218,7 @@ pub(crate) fn new_tabpage(
             }
         }
         newtp.tp_next = tp.tp_next;
-        tp.tp_next = newtp.raw();
+        tp.tp_next = Some(newtp.id());
     }
     newtp.tp_curwin = opened.raw();
     newtp.tp_lastwin = newtp.tp_curwin;
@@ -364,11 +364,12 @@ pub unsafe fn close_tabpage(tab: *mut tabpage_T) {
 /// Close tab page `tab`, which must have no windows left in it. There must be
 /// another tab page or this will crash.
 fn close_tab(tab: TabPage) {
-    let ptp = if tab.raw() == first_tabpage.get() {
+    let id = tab.id();
+    let ptp = if first_tabpage.get() == Some(id) {
         first_tabpage.set(tab.tp_next);
         first_tab()
     } else {
-        let found = tabs().find(|ptp| ptp.tp_next == tab.raw());
+        let found = tabs().find(|ptp| ptp.tp_next == Some(id));
         debug_assert!(found.is_some(), "ptp != NULL");
         let mut prev = found.expect("another tab page precedes this one");
         prev.tp_next = tab.tp_next;
@@ -612,8 +613,9 @@ pub(crate) fn goto_tab_number(n: c_int) {
         let mut ttp = cur_tab();
         let mut tp = ttp;
         for _ in n..0 {
+            let target = Some(ttp.id());
             tp = first_tab();
-            while let Some(next) = tp.next().filter(|_| tp.tp_next != ttp.raw()) {
+            while let Some(next) = tp.next().filter(|_| tp.tp_next != target) {
                 tp = next;
             }
             ttp = tp;
@@ -709,17 +711,18 @@ pub fn tabpage_move(nr: c_int) {
         n += 1;
         tp = next;
     }
-    if tp.is_current() || (nr > 0 && tp.next().is_some() && tp.tp_next == curtab.get()) {
+    let mut cur = cur_tab();
+    let id = cur.id();
+    if tp.is_current() || (nr > 0 && tp.next().is_some() && tp.tp_next == Some(id)) {
         return;
     }
     let mut tp_dst = tp;
 
     // Remove the current tab page from the list of tab pages.
-    let mut cur = cur_tab();
-    if cur.raw() == first_tabpage.get() {
+    if first_tabpage.get() == Some(id) {
         first_tabpage.set(cur.tp_next);
     } else {
-        let Some(mut prev) = tabs().find(|tp2| tp2.tp_next == cur.raw()) else {
+        let Some(mut prev) = tabs().find(|tp2| tp2.tp_next == Some(id)) else {
             return; // "cannot happen"
         };
         prev.tp_next = cur.tp_next;
@@ -728,10 +731,10 @@ pub fn tabpage_move(nr: c_int) {
     // Re-insert it at the position asked for.
     if nr <= 0 {
         cur.tp_next = first_tabpage.get();
-        first_tabpage.set(cur.raw());
+        first_tabpage.set(Some(id));
     } else {
         cur.tp_next = tp_dst.tp_next;
-        tp_dst.tp_next = cur.raw();
+        tp_dst.tp_next = Some(id);
     }
     // The tabline needs redrawing; the tab page contents do not change.
     redraw_tabline.set(true);

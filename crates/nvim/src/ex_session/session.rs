@@ -37,8 +37,7 @@ use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::hashtab::hash_removed;
 use crate::main::{
-    Columns, Rows, curtab, curwin, first_tabpage, firstwin, globaldir, p_shm, p_stal, p_wh, p_wiw,
-    topframe,
+    Columns, Rows, curtab, curwin, firstwin, globaldir, p_shm, p_stal, p_wh, p_wiw, topframe,
 };
 use crate::memory::xfree;
 use crate::options::{
@@ -53,7 +52,7 @@ use crate::types::{
     frame_T, hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
-use crate::winlayer::{Buf, TabPage, Win, buffers, tabs, windows_in_tab};
+use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, tabs, windows_in_tab};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -141,8 +140,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
 
     // With two or more tab pages and 'showtabline' at 1, the tabline appears
     // when the next tab is created, which resizes the first tab's windows.
-    // SAFETY: the tab page list is live.
-    let restore_stal = unsafe { p_stal.get() == 1 && !(*first_tabpage.get()).tp_next.is_null() };
+    let restore_stal = p_stal.get() == 1 && first_tab().is_some_and(|tp| tp.next().is_some());
     if restore_stal && !out.line(c"set stal=2") {
         return false;
     }
@@ -277,17 +275,14 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     // below, so that local options set later are not copied into new tabs.
     // `bufhidden=wipe` drops the placeholder buffers once they are unneeded
     // (Vim patch 8.1.0829).
-    // SAFETY: caller contract.
-    unsafe {
-        if with_tabs {
-            for tp in tabs() {
-                if tp.next().is_some() && !out.line(c"tabnew +setlocal\\ bufhidden=wipe") {
-                    return false;
-                }
-            }
-            if !(*first_tabpage.get()).tp_next.is_null() && !out.line(c"tabrewind") {
+    if with_tabs {
+        for tp in tabs() {
+            if tp.next().is_some() && !out.line(c"tabnew +setlocal\\ bufhidden=wipe") {
                 return false;
             }
+        }
+        if first_tab().is_some_and(|tp| tp.next().is_some()) && !out.line(c"tabrewind") {
+            return false;
         }
     }
 
@@ -301,22 +296,20 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     // SAFETY: caller contract; nothing here runs Vimscript, so the lists
     // cannot change under the walk.
     unsafe {
-        let mut tp = first_tabpage.get();
-        while !tp.is_null() {
+        let mut next = first_tab();
+        while let Some(mut tab) = next {
             let mut need_tabnext = false;
             let (tab_firstwin, tab_topframe) = if with_tabs {
-                need_tabnext = tp != first_tabpage.get();
-                if tp == curtab.get() {
+                need_tabnext = Some(tab) != first_tab();
+                if tab.is_current() {
                     (firstwin.get(), topframe.get())
                 } else {
-                    ((*tp).tp_firstwin, (*tp).tp_topframe)
+                    (tab.tp_firstwin, tab.tp_topframe)
                 }
             } else {
-                tp = curtab.get();
+                tab = TabPage::current();
                 (firstwin.get(), topframe.get())
             };
-            // The same head `tab_firstwin` was just taken, said as a walk.
-            let tab = TabPage::new(tp);
 
             // Before creating the layout, try loading one file: if that is
             // aborted we do not end up with a pile of useless windows. This
@@ -400,8 +393,8 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 
             // The tab-local working directory goes before the windows, so a
             // window-local one can override it.
-            if opts.has(kOptSsopFlagCurdir) && !(*tp).tp_localdir.is_null() {
-                if !out.puts(c"tcd ") || !ses_put_fname(out, (*tp).tp_localdir) || !out.eol() {
+            if opts.has(kOptSsopFlagCurdir) && !tab.tp_localdir.is_null() {
+                if !out.puts(c"tcd ") || !ses_put_fname(out, tab.tp_localdir) || !out.eol() {
                     return false;
                 }
                 did_lcd.set(true);
@@ -410,7 +403,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             // Each window's view.
             for wp in windows_in_tab(tab).map(Win::raw) {
                 if ses_do_win(wp) {
-                    if !put_view(out, wp, tp, wp != edited_win, opts, cur_arg_idx) {
+                    if !put_view(out, wp, tab.raw(), wp != edited_win, opts, cur_arg_idx) {
                         return false;
                     }
                     if nr > 1 && !out.line(c"wincmd w") {
@@ -438,7 +431,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             if !with_tabs {
                 break;
             }
-            tp = (*tp).tp_next;
+            next = tab.next();
         }
     }
     true

@@ -13,7 +13,7 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::r#move::WinValid;
 use crate::undo::store::UndoStore;
-use crate::winlayer::BufId;
+use crate::winlayer::{BufId, TabId};
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -590,7 +590,10 @@ pub struct synblock_T {
 /// handle naming this one.
 pub struct tabpage_S {
     pub handle: handle_T,
-    pub tp_next: *mut tabpage_T,
+    /// The tab page list off `first_tabpage`. A handle, as the buffer
+    /// list's links are — `winlayer::TabPage::next` and `winlayer::tabs`
+    /// are how it is walked.
+    pub(crate) tp_next: Option<TabId>,
     pub tp_topframe: *mut frame_T,
     pub tp_curwin: *mut win_T,
     pub tp_prevwin: *mut win_T,

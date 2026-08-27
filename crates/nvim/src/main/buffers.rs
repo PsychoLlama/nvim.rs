@@ -31,9 +31,9 @@ use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
     SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
-    autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, got_int, kOptErrorfile,
-    kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm,
-    p_fdls, p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    autocmd_no_leave, curbuf, curwin, did_emsg, firstwin, got_int, kOptErrorfile, kOptShortmess,
+    kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls,
+    p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -57,7 +57,7 @@ use crate::window::{
 use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, TabPage};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
@@ -312,7 +312,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                     curwin.set(firstwin.get());
                 }
             } else if (*parmp).window_layout == WIN_TABS as c_int {
-                if (*curtab.get()).tp_next.is_null() {
+                if TabPage::current().next().is_none() {
                     break;
                 }
                 goto_tabpage(0);
@@ -401,7 +401,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
 
             if advance {
                 if (*parmp).window_layout == WIN_TABS as c_int {
-                    if (*curtab.get()).tp_next.is_null() {
+                    if TabPage::current().next().is_none() {
                         break;
                     }
                     goto_tabpage(0);

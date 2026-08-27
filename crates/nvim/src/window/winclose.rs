@@ -438,8 +438,7 @@ fn tabclosedpre(tp: *mut tabpage_T) {
     RECURSIVE.set(false);
     // The tab page may have been modified or deleted by the autocommands: try
     // to recover it, and fall back to the first tab page.
-    // SAFETY: `first_tabpage` is set from startup to exit.
-    let back = valid_tab(ptp).unwrap_or_else(|| unsafe { TabPage::new(first_tabpage.get()) });
+    let back = valid_tab(ptp).unwrap_or_else(first_tab);
     goto_tab(back, false, false);
 }
 
@@ -552,10 +551,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
         if tp.tp_firstwin == tp.tp_lastwin {
             free_tp_idx = tab_index(tp);
             let h = tabline_rows();
-            if tp.raw() == first_tabpage.get() {
+            let id = tp.id();
+            if first_tabpage.get() == Some(id) {
                 first_tabpage.set(tp.tp_next);
             } else {
-                let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == tp.raw()) else {
+                let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(id)) else {
                     // SAFETY: a static message naming the caller.
                     unsafe { internal_error(c"win_close_othertab()".as_ptr()) };
                     return false;

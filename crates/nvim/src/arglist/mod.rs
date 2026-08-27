@@ -39,8 +39,8 @@ use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
     Columns, arg_had_last, autocmd_no_enter, autocmd_no_leave, cmdmod, cmdwin_type, curbuf, curtab,
-    curwin, first_tabpage, firstwin, global_alist, got_int, lastused_tabpage, lastwin,
-    max_alist_id, p_ea, p_fic, p_tpm, tabpage_move_disallowed,
+    curwin, firstwin, global_alist, got_int, lastused_tabpage, lastwin, max_alist_id, p_ea, p_fic,
+    p_tpm, tabpage_move_disallowed,
 };
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
