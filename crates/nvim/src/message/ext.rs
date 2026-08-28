@@ -127,15 +127,11 @@ pub unsafe fn msg_ext_ui_flush() {
         let mut msg = EMPTY_HL_MESSAGE;
         for i in 0..unsafe { (*tofree).size } {
             let chunk = unsafe { (*(*tofree).items.add(i)).data.array.items };
-            unsafe {
-                hl_msg_push(
-                    &mut msg,
-                    HlMessageChunk {
-                        text: (*chunk.add(1)).data.string,
-                        hl_id: (*chunk.add(2)).data.integer as c_int,
-                    },
-                )
+            let moved = HlMessageChunk {
+                text: unsafe { (*chunk.add(1)).data.string },
+                hl_id: unsafe { (*chunk.add(2)).data.integer } as c_int,
             };
+            unsafe { hl_msg_push(&mut msg, moved) };
             unsafe { xfree(chunk.cast()) };
         }
         unsafe { xfree((*tofree).items.cast()) };

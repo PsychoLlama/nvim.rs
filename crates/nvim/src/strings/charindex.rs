@@ -311,10 +311,9 @@ pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     }
 
     unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe {
-        (*rettv).vval.v_string =
-            xmemdupz(p.offset(nbyte as isize) as *const c_void, len as size_t) as *mut c_char
-    };
+    let from = unsafe { p.offset(nbyte as isize) } as *const c_void;
+    let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
+    unsafe { (*rettv).vval.v_string = part };
 }
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
@@ -358,10 +357,9 @@ pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     }
 
     unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe {
-        (*rettv).vval.v_string =
-            xmemdupz(p.offset(n as isize) as *const c_void, len as size_t) as *mut c_char
-    };
+    let from = unsafe { p.offset(n as isize) } as *const c_void;
+    let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
+    unsafe { (*rettv).vval.v_string = part };
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.

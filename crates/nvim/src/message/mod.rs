@@ -272,13 +272,8 @@ unsafe fn array_push(array: &mut Array, value: Object) {
         } else {
             8
         };
-        array.items = unsafe {
-            xrealloc(
-                array.items.cast(),
-                ::core::mem::size_of::<Object>() * array.capacity,
-            )
-        }
-        .cast();
+        let bytes = ::core::mem::size_of::<Object>() * array.capacity;
+        array.items = unsafe { xrealloc(array.items.cast(), bytes) }.cast();
     }
     unsafe { array.items.add(array.size).write(value) };
     array.size += 1;
@@ -296,13 +291,8 @@ unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
         } else {
             8
         };
-        msg.items = unsafe {
-            xrealloc(
-                msg.items.cast(),
-                ::core::mem::size_of::<HlMessageChunk>() * msg.capacity,
-            )
-        }
-        .cast();
+        let bytes = ::core::mem::size_of::<HlMessageChunk>() * msg.capacity;
+        msg.items = unsafe { xrealloc(msg.items.cast(), bytes) }.cast();
     }
     unsafe { msg.items.add(msg.size).write(chunk) };
     msg.size += 1;
@@ -358,14 +348,9 @@ pub unsafe fn msg_multiline(
     // The tail, and the whole of an empty message: an empty `str` still
     // has to reach `msg_outtrans_len`, which is what clears the line.
     if unsafe { *chunk } != 0 || chunk == str.data().cast_const() {
-        unsafe {
-            msg_outtrans_len(
-                chunk,
-                (str.len() - chunk.offset_from(str.data()) as size_t) as c_int,
-                hl_id,
-                hist,
-            )
-        };
+        let done = unsafe { chunk.offset_from(str.data()) } as size_t;
+        let rest = (str.len() - done) as c_int;
+        unsafe { msg_outtrans_len(chunk, rest, hl_id, hist) };
     }
 }
 
@@ -681,13 +666,9 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
         if len >= buflen - e - 3 {
             len = buflen - e - 3 - 1;
         }
-        unsafe {
-            ptr::copy(
-                s.offset(i as isize),
-                buf.offset(e as isize).offset(3),
-                len as usize,
-            )
-        };
+        let tail = unsafe { s.offset(i as isize) };
+        let after = unsafe { buf.offset(e as isize).offset(3) };
+        unsafe { ptr::copy(tail, after, len as usize) };
         unsafe { *buf.offset((e + 3 + len - 1) as isize) = 0 };
     } else {
         // Can't fit the "...", so just truncate.
@@ -842,22 +823,13 @@ pub unsafe fn msgmore(n: c_int) {
     } else {
         (c"%d line less", c"%d fewer lines")
     };
-    unsafe {
-        vim_snprintf(
-            text,
-            MSG_BUF_LEN as size_t,
-            ngettext(one.as_ptr(), many.as_ptr(), pn as ::core::ffi::c_ulong),
-            pn,
-        )
-    };
+    let plural = pn as ::core::ffi::c_ulong;
+    let fmt = unsafe { ngettext(one.as_ptr(), many.as_ptr(), plural) };
+    let cap = MSG_BUF_LEN as size_t;
+    unsafe { vim_snprintf(text, cap, fmt, pn) };
     if got_int.get() {
-        unsafe {
-            xstrlcat(
-                text,
-                gettext(c" (Interrupted)".as_ptr()),
-                MSG_BUF_LEN as size_t,
-            )
-        };
+        let note = unsafe { gettext(c" (Interrupted)".as_ptr()) };
+        unsafe { xstrlcat(text, note, MSG_BUF_LEN as size_t) };
     }
     if unsafe { msg(text, 0) } {
         unsafe { set_keep_msg(text, 0) };

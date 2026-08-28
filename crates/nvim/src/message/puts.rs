@@ -344,14 +344,8 @@ pub(crate) unsafe fn msg_puts_display(
             if cw > 1 && msg_col.get() == Columns.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
-                unsafe {
-                    grid_line_puts(
-                        msg_col.get(),
-                        c">".as_ptr(),
-                        1,
-                        *hl_attr_active.get().offset(HLF_AT as isize),
-                    )
-                };
+                let at = unsafe { *hl_attr_active.get().offset(HLF_AT as isize) };
+                unsafe { grid_line_puts(msg_col.get(), c">".as_ptr(), 1, at) };
                 cw = 1;
             } else {
                 unsafe { grid_line_puts(msg_col.get(), s, l, print_attr) };

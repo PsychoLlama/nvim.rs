@@ -246,12 +246,8 @@ pub unsafe fn verbose_open() -> c_int {
         verbose_did_open.set(true);
         verbose_fd.set(unsafe { os_fopen(p_vfile.get(), c"a".as_ptr()) });
         if verbose_fd.get().is_null() {
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_notopen as *const c_char),
-                    p_vfile.get(),
-                )
-            };
+            let msg = unsafe { gettext(&raw const e_notopen as *const c_char) };
+            unsafe { semsg_c!(msg, p_vfile.get()) };
             return FAIL;
         }
     }

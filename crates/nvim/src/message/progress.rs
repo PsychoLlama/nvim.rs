@@ -190,16 +190,17 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
         c"".as_ptr().cast_mut()
     };
     let mut event_data = data.object();
+    // No file name, no buffer and no `:autocmd` argument block: the pattern
+    // and the data are the whole of what this event carries.
+    let payload = &raw mut event_data;
+    let group = AUGROUP_ALL as c_int;
+    let no_fname = ptr::null_mut();
+    let no_buf = ptr::null_mut();
+    let no_eap = ptr::null_mut();
+    let fired = EVENT_PROGRESS;
     unsafe {
         apply_autocmds_group(
-            EVENT_PROGRESS,
-            pattern,
-            ptr::null_mut(),
-            true,
-            AUGROUP_ALL as c_int,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &raw mut event_data,
+            fired, pattern, no_fname, true, group, no_buf, no_eap, payload,
         )
     };
 

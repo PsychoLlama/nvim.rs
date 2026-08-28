@@ -92,23 +92,11 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     // the prefix length, the digit count, the unsigned value and the
     // overflow flag -- is one `vim_str2nr` may skip.
     let out = &raw mut n;
-    let no_prefix = ptr::null_mut();
-    let no_len = ptr::null_mut();
-    let no_unsigned = ptr::null_mut();
-    let no_overflow = ptr::null_mut();
-    unsafe {
-        vim_str2nr(
-            p,
-            no_prefix,
-            no_len,
-            what,
-            out,
-            no_unsigned,
-            0,
-            false,
-            no_overflow,
-        )
-    };
+    let pre = ptr::null_mut();
+    let len = ptr::null_mut();
+    let uns = ptr::null_mut();
+    let ovf = ptr::null_mut();
+    unsafe { vim_str2nr(p, pre, len, what, out, uns, 0, false, ovf) };
     unsafe { (*rettv).vval.v_number = if isneg { -n } else { n } };
 }
 
@@ -373,13 +361,8 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
             };
 
             unsafe { ga_grow(&raw mut ga, cplen) };
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    cpstr,
-                    (ga.ga_data as *mut c_char).offset(ga.ga_len as isize),
-                    cplen as usize,
-                )
-            };
+            let end = unsafe { (ga.ga_data as *mut c_char).offset(ga.ga_len as isize) };
+            unsafe { ptr::copy_nonoverlapping(cpstr, end, cplen as usize) };
             ga.ga_len += cplen;
             in_str = unsafe { in_str.offset(inlen as isize) };
         }

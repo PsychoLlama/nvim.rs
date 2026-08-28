@@ -443,11 +443,9 @@ unsafe fn render_string(
             } else {
                 // Never look past the precision. (The 2^31 clamp is
                 // upstream's, for a `memchr` that disliked more.)
-                unsafe {
-                    xmemscan(str_arg.cast(), 0, c.precision.min(0x7fffffff))
-                        .cast::<c_char>()
-                        .offset_from(str_arg) as size_t
-                }
+                let cap = c.precision.min(0x7fffffff);
+                let end = unsafe { xmemscan(str_arg.cast(), 0, cap) }.cast::<c_char>();
+                unsafe { end.offset_from(str_arg) as size_t }
             };
 
             if c.fmt_spec == b'S' {
@@ -745,12 +743,8 @@ unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -
         // `as_mut_ptr`, not `as_ptr`: `delete_byte` writes through what
         // this hands back, and a pointer derived from a *shared* borrow
         // of `tmp` only grants read permission (Stacked Borrows).
-        tp = unsafe {
-            vim_strchr(
-                tmp.as_mut_ptr().cast_const(),
-                if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int,
-            )
-        };
+        let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
+        tp = unsafe { vim_strchr(tmp.as_mut_ptr().cast_const(), e) };
         if tp.is_null() {
             return len;
         }
@@ -788,12 +782,8 @@ unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -
 unsafe fn trim_exponent_width(c: &Conversion, tmp: &mut [c_char; TMP], len: size_t) -> size_t {
     // Only the conversion's own case is looked for, so `%f` -- which
     // has no exponent -- never matches.
-    let tp = unsafe {
-        vim_strchr(
-            tmp.as_ptr(),
-            if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int,
-        )
-    };
+    let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
+    let tp = unsafe { vim_strchr(tmp.as_ptr(), e) };
     if !tp.is_null()
         && matches!(unsafe { *tp.add(1) as u8 }, b'+' | b'-')
         && unsafe { *tp.add(2) as u8 } == b'0'

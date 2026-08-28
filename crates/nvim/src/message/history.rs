@@ -113,13 +113,12 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
         unsafe { xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) }.cast();
     unsafe { (*entry).msg = msg };
     unsafe { (*entry).temp = temp };
-    unsafe {
-        (*entry).kind = if msg_ext_kind.get().is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup(msg_ext_kind.get())
-        }
+    let kind = if msg_ext_kind.get().is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { xstrdup(msg_ext_kind.get()) }
     };
+    unsafe { (*entry).kind = kind };
     unsafe { (*entry).prev = msg_hist_last.get() };
     unsafe { (*entry).next = ptr::null_mut() };
     // NOTE: this does not encode whether the message was actually appended
@@ -305,12 +304,8 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
         };
         let mut content_entry = EMPTY_ARRAY;
         unsafe { array_push(&mut content_entry, Object::integer(attr.into())) };
-        unsafe {
-            array_push(
-                &mut content_entry,
-                Object::string(copy_string(chunk.text, ptr::null_mut())),
-            )
-        };
+        let text = unsafe { copy_string(chunk.text, ptr::null_mut()) };
+        unsafe { array_push(&mut content_entry, Object::string(text)) };
         unsafe { array_push(&mut content_entry, Object::integer(chunk.hl_id.into())) };
         unsafe { array_push(&mut content, Object::array(content_entry)) };
     }
@@ -327,13 +322,12 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
 /// `eap` must point at a valid command argument block.
 pub unsafe fn ex_messages(eap: *mut exarg_T) {
     if unsafe { strcmp((*eap).arg, c"clear".as_ptr()) } == 0 {
-        unsafe {
-            msg_hist_clear(if (*eap).addr_count != 0 {
-                (*eap).line2 as c_int
-            } else {
-                0
-            })
+        let keep = if unsafe { (*eap).addr_count } != 0 {
+            unsafe { (*eap).line2 as c_int }
+        } else {
+            0
         };
+        unsafe { msg_hist_clear(keep) };
         return;
     }
     if unsafe { *(*eap).arg } != 0 {
@@ -376,17 +370,12 @@ pub unsafe fn ex_messages(eap: *mut exarg_T) {
                 // the event loop, which can service a UI attach or detach.
                 msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
                 let mut needs_clear = false;
-                unsafe {
-                    msg_multihl(
-                        Object::NIL,
-                        (*p).msg.clone(),
-                        (*p).kind,
-                        false,
-                        false,
-                        ptr::null_mut(),
-                        &raw mut needs_clear,
-                    )
-                };
+                let text = unsafe { (*p).msg.clone() };
+                let kind = unsafe { (*p).kind };
+                let no_id = ptr::null_mut();
+                let clear = &raw mut needs_clear;
+                let nil = Object::NIL;
+                unsafe { msg_multihl(nil, text, kind, false, false, no_id, clear) };
                 msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
             }
         }

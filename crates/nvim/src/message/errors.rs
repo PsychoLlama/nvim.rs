@@ -192,13 +192,12 @@ pub unsafe fn emsg_multiline(
             emsg_assert_fails_msg.set(unsafe { xstrdup(s) });
             emsg_assert_fails_lnum.set(sourcing_top().es_lnum as c_long);
             unsafe { xfree(emsg_assert_fails_context.get().cast()) };
-            emsg_assert_fails_context.set(unsafe {
-                xstrdup(if sourcing_top().es_name.is_null() {
-                    c"".as_ptr()
-                } else {
-                    sourcing_top().es_name
-                })
-            });
+            let context = if sourcing_top().es_name.is_null() {
+                c"".as_ptr()
+            } else {
+                sourcing_top().es_name
+            };
+            emsg_assert_fails_context.set(unsafe { xstrdup(context) });
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
@@ -398,12 +397,8 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
 #[doc(hidden)]
 pub unsafe fn msg_schedule_semsg_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
     let s = unsafe { xstrdup(buf.as_ptr()) };
-    unsafe {
-        loop_schedule_deferred(
-            main_loop.ptr(),
-            Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]),
-        )
-    };
+    let event = Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]);
+    unsafe { loop_schedule_deferred(main_loop.ptr(), event) };
 }
 
 /// Deferred-event handler for [`msg_schedule_semsg_multiline`].
@@ -425,12 +420,8 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
 #[doc(hidden)]
 pub unsafe fn msg_schedule_semsg_multiline_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
     let s = unsafe { xstrdup(buf.as_ptr()) };
-    unsafe {
-        loop_schedule_deferred(
-            main_loop.ptr(),
-            Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]),
-        )
-    };
+    let event = Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]);
+    unsafe { loop_schedule_deferred(main_loop.ptr(), event) };
 }
 
 /// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick

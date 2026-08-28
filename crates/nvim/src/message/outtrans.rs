@@ -276,12 +276,8 @@ pub unsafe fn str2special_save(
     unsafe { ga_init(&raw mut ga, 1, 40) };
     let mut p = str;
     while unsafe { *p } != 0 {
-        unsafe {
-            ga_concat(
-                &raw mut ga,
-                str2special(&raw mut p, replace_spaces, replace_lt, &mut piece),
-            )
-        };
+        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
+        unsafe { ga_concat(&raw mut ga, text) };
     }
     unsafe { ga_append(&raw mut ga, 0) };
     ga.ga_data.cast()

@@ -354,15 +354,11 @@ pub(crate) unsafe fn inc_msg_scrolled() {
         } else {
             let tofreesize = unsafe { strlen(p.data()) } + 40;
             tofree = unsafe { xmalloc(tofreesize) }.cast();
-            p.set_len(unsafe {
-                vim_snprintf_safelen(
-                    tofree,
-                    tofreesize,
-                    gettext(c"%s line %ld".as_ptr()),
-                    p.data(),
-                    sourcing_top().es_lnum as int64_t,
-                )
-            });
+            let fmt = unsafe { gettext(c"%s line %ld".as_ptr()) };
+            let name = p.data();
+            let lnum = sourcing_top().es_lnum as int64_t;
+            let len = unsafe { vim_snprintf_safelen(tofree, tofreesize, fmt, name, lnum) };
+            p.set_len(len);
             p.set_data(tofree);
         }
         unsafe { set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t) };

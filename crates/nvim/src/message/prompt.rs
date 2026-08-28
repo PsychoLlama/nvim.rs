@@ -67,14 +67,9 @@ pub unsafe fn wait_return(redraw: c_int) {
     }
 
     if ui_has(kUIMessages) {
-        unsafe {
-            prompt_for_input(
-                c"Press any key to continue".as_ptr().cast_mut(),
-                HLF_M,
-                true,
-                ptr::null_mut(),
-            )
-        };
+        let text = c"Press any key to continue".as_ptr().cast_mut();
+        let no_cb = ptr::null_mut();
+        unsafe { prompt_for_input(text, HLF_M, true, no_cb) };
         return;
     }
 
@@ -291,13 +286,8 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     if got_int.get() {
         unsafe { msg_puts(gettext(c"Interrupt: ".as_ptr())) };
     }
-    unsafe {
-        msg_puts_hl(
-            gettext(c"Press ENTER or type command to continue".as_ptr()),
-            HLF_R,
-            false,
-        )
-    };
+    let prompt = unsafe { gettext(c"Press ENTER or type command to continue".as_ptr()) };
+    unsafe { msg_puts_hl(prompt, HLF_R, false) };
     if unsafe { msg_use_printf() } == 0 {
         unsafe { msg_clr_eos() };
     }
@@ -536,14 +526,9 @@ pub(crate) unsafe fn msg_moremsg(full: bool) {
     unsafe { grid_line_start(msg_grid_view(), Rows.get() - 1) };
     let mut len = unsafe { grid_line_puts(0, gettext(c"-- More --".as_ptr()), -1, attr) };
     if full {
-        len += unsafe {
-            grid_line_puts(
-                len,
-                gettext(c" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit ".as_ptr()),
-                -1,
-                attr,
-            )
-        };
+        let keys = c" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit ";
+        let help = unsafe { gettext(keys.as_ptr()) };
+        len += unsafe { grid_line_puts(len, help, -1, attr) };
     }
     unsafe { grid_line_cursor_goto(len) };
     unsafe { grid_line_flush() };
