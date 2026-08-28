@@ -22,11 +22,11 @@ use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
-    Object, ObjectType, String_0, consumed_blk, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, key_value_pair, object, object_data, size_t,
+    Arena, ArenaMem, Array, ArrayBuilder, Boolean, Dict, Error, Float, HlMessage, HlMessageChunk,
+    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
+    kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
 use ::libc::{abort, memcpy};
 use core::ffi::{CStr, c_char, c_int};
@@ -342,6 +342,64 @@ pub(crate) fn api_metadata_raw() -> String_0 {
         PACKED_API_METADATA.as_ptr() as *mut c_char,
         PACKED_API_METADATA.len(),
     )
+}
+
+// -- Reading an object -----------------------------------------------------
+//
+// The tag decides which arm of the union carries the value, so a reader that
+// asks the tag first is safe by construction. Every `if o.type_0 ==
+// kObjectTypeX { o.data.x }` in the api/ family was an `unsafe` region
+// spelling out this one line, and the transpile has hundreds of them.
+
+impl Object {
+    /// The boolean payload, when the tag says there is one. A `Boolean`
+    /// object only -- an integer that happens to be 0 or 1 is not one, which
+    /// is the distinction every `nvim_*` option check makes.
+    pub(crate) fn as_boolean(self) -> Option<Boolean> {
+        // SAFETY: the tag says the payload is the boolean.
+        (self.type_0 == kObjectTypeBoolean).then(|| unsafe { self.data.boolean })
+    }
+
+    /// The integer payload, when the tag says there is one. Handles carry
+    /// their id in the same arm but under their own tags, so
+    /// [`as_handle`](Self::as_handle) is the reader for those.
+    pub(crate) fn as_integer(self) -> Option<Integer> {
+        // SAFETY: the tag says the payload is the integer.
+        (self.type_0 == kObjectTypeInteger).then(|| unsafe { self.data.integer })
+    }
+
+    /// The float payload, when the tag says there is one.
+    pub(crate) fn as_float(self) -> Option<Float> {
+        // SAFETY: the tag says the payload is the float.
+        (self.type_0 == kObjectTypeFloat).then(|| unsafe { self.data.floating })
+    }
+
+    /// The string payload, when the tag says there is one. Borrowed from
+    /// whoever owns the object; this reads the pair, not the bytes.
+    pub(crate) fn as_string(self) -> Option<String_0> {
+        // SAFETY: the tag says the payload is the string.
+        (self.type_0 == kObjectTypeString).then(|| unsafe { self.data.string })
+    }
+
+    /// The array payload, when the tag says there is one.
+    pub(crate) fn as_array(self) -> Option<Array> {
+        // SAFETY: the tag says the payload is the array.
+        (self.type_0 == kObjectTypeArray).then(|| unsafe { self.data.array })
+    }
+
+    /// The dictionary payload, when the tag says there is one.
+    pub(crate) fn as_dict(self) -> Option<Dict> {
+        // SAFETY: the tag says the payload is the dictionary.
+        (self.type_0 == kObjectTypeDict).then(|| unsafe { self.data.dict })
+    }
+
+    /// The Lua registry reference, when the tag says there is one. Still
+    /// owned by the object -- taking it over means clearing the object's
+    /// copy, as the keyset readers do.
+    pub(crate) fn as_luaref(self) -> Option<LuaRef> {
+        // SAFETY: the tag says the payload is the reference.
+        (self.type_0 == kObjectTypeLuaRef).then(|| unsafe { self.data.luaref })
+    }
 }
 
 // -- Object conversion -----------------------------------------------------

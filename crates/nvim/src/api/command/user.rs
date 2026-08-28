@@ -12,6 +12,14 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::types::{ExArgt, ExpandContext};
+use crate::winlayer::Live;
+
+/// The options keyset this family decodes, with checked field access.
+///
+/// Construction is the one unsafe step: the caller's `*mut
+/// KeyDict_user_command` outlives the call that was handed it, and every
+/// `opts.field` after the wrap is ordinary code.
+type UserCmdOpts = Live<KeyDict_user_command>;
 
 pub unsafe fn nvim_create_user_command(
     channel_id: uint64_t,
@@ -21,14 +29,14 @@ pub unsafe fn nvim_create_user_command(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        create_user_command(channel_id, name, cmd, opts, 0 as ::core::ffi::c_int, err);
-    }
+    // SAFETY: `opts` is the caller's keydict and `err` this frame's slot.
+    unsafe { create_user_command(channel_id, name, cmd, opts, 0, err) };
     ().reported(error)
 }
 
 pub unsafe fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
-    unsafe { nvim_buf_del_user_command(-1 as Buffer, name) }
+    // SAFETY: `name` is the caller's command name.
+    unsafe { nvim_buf_del_user_command(-1, name) }
 }
 
 pub unsafe fn nvim_buf_create_user_command(
@@ -40,447 +48,355 @@ pub unsafe fn nvim_buf_create_user_command(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut target_buf: *mut buf_T = find_buffer_by_handle(buf, err);
-        if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return ().reported(error);
-        }
-        let mut save_curbuf: *mut buf_T = curbuf.get();
-        curbuf.set(target_buf);
-        create_user_command(
-            channel_id,
-            name,
-            cmd,
-            opts,
-            UC_BUFFER as ::core::ffi::c_int,
-            err,
-        );
-        curbuf.set(save_curbuf);
+    // SAFETY: `err` is this frame's slot.
+    let target_buf = unsafe { find_buffer_by_handle(buf, err) };
+    if error.type_0 != kErrorTypeNone {
+        return ().reported(error);
     }
+    // The command is added to whichever buffer is current, so the lookup's
+    // answer stands in for the caller's for the length of the call.
+    let save_curbuf = curbuf.get();
+    curbuf.set(target_buf);
+    let flags = UC_BUFFER as ::core::ffi::c_int;
+    // SAFETY: `opts` is the caller's keydict and `err` this frame's slot.
+    unsafe { create_user_command(channel_id, name, cmd, opts, flags, err) };
+    curbuf.set(save_curbuf);
     ().reported(error)
 }
 
 pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let table = if buf == -1 as ::core::ffi::c_int {
-            Table::Global
-        } else {
-            let b: *mut buf_T = find_buffer_by_handle(buf, err);
-            if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return ().reported(error);
-            }
-            Table::Buffer(b)
-        };
-        let found = table
-            .list()
-            .iter()
-            .position(|cmd| strcmp(name.data(), cmd.uc_name) == 0);
-        if let Some(idx) = found {
-            uc_del_command(table, idx);
+    let table = if buf == -1 {
+        Table::Global
+    } else {
+        // SAFETY: `err` is this frame's slot.
+        let b = unsafe { find_buffer_by_handle(buf, err) };
+        if error.type_0 != kErrorTypeNone {
             return ().reported(error);
         }
-        api_set_error(
-            err,
-            kErrorTypeException,
-            c"Invalid command (not found): %s".as_ptr(),
-            name.data(),
-        );
+        Table::Buffer(b)
+    };
+    // SAFETY: `table` names the global table or a live buffer's, the borrow
+    // does not outlive the search, and `name` is the caller's C string.
+    let found = unsafe {
+        table
+            .list()
+            .iter()
+            .position(|cmd| strcmp(name.data(), cmd.uc_name) == 0)
+    };
+    if let Some(idx) = found {
+        // SAFETY: `idx` indexes the table the search just walked.
+        unsafe { uc_del_command(table, idx) };
+        return ().reported(error);
     }
+    let fmt = c"Invalid command (not found): %s".as_ptr();
+    let data = name.data();
+    // SAFETY: `err` is this frame's slot; the format takes the one C string.
+    unsafe { api_set_error(err, kErrorTypeException, fmt, data) };
     ().reported(error)
 }
 
 pub unsafe fn create_user_command(
-    mut channel_id: uint64_t,
-    mut name: String_0,
-    mut cmd: Object,
-    mut opts: *mut KeyDict_user_command,
-    mut flags: ::core::ffi::c_int,
-    mut err: *mut Error,
+    channel_id: uint64_t,
+    name: String_0,
+    cmd: Object,
+    opts: *mut KeyDict_user_command,
+    flags: ::core::ffi::c_int,
+    err: *mut Error,
 ) {
-    unsafe {
-        let mut force: bool = false;
-        let mut argt = ExArgt::NONE;
-        let mut def: int64_t = -1 as int64_t;
-        let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
-        let mut context = ExpandContext::Nothing;
-        let mut compl_arg: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut rep: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut luaref: LuaRef = LUA_NOREF;
-        let mut compl_luaref: LuaRef = LUA_NOREF;
-        let mut preview_luaref: LuaRef = LUA_NOREF;
-        let cmd_name = name.data();
-        '_err: {
-            if uc_validate_name(cmd_name).is_null() {
-                api_err_invalid(err, c"command name".as_ptr(), cmd_name, 0 as int64_t, true);
-            } else if mb_islower(
-                *cmd_name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            ) {
-                api_err_invalid(
-                    err,
-                    c"command name (must start with uppercase)".as_ptr(),
-                    cmd_name,
-                    0 as int64_t,
-                    true,
-                );
-            } else if !(!(has_key((*opts).is_set__user_command_, 8 as ::core::ffi::c_int))
-                || !(has_key((*opts).is_set__user_command_, 5 as ::core::ffi::c_int)))
-            {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"%s".as_ptr(),
-                    c"Cannot use both 'range' and 'count'".as_ptr(),
-                );
-            } else {
-                if (*opts).nargs.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    match (*opts).nargs.data.integer {
-                        0 => {}
-                        1 => {
-                            argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
-                        }
-                        _ => {
-                            if true {
-                                api_err_invalid(
-                                    err,
-                                    c"nargs".as_ptr(),
-                                    ::core::ptr::null::<::core::ffi::c_char>(),
-                                    (*opts).nargs.data.integer,
-                                    false,
-                                );
-                                break '_err;
-                            }
-                        }
-                    }
-                } else if (*opts).nargs.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    if !((*opts).nargs.data.string.len() <= 1 as size_t) {
-                        api_err_invalid(
-                            err,
-                            c"nargs".as_ptr(),
-                            (*opts).nargs.data.string.data(),
-                            0 as int64_t,
-                            true,
-                        );
-                        break '_err;
-                    } else {
-                        match *(*opts)
-                            .nargs
-                            .data
-                            .string
-                            .data()
-                            .offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                        {
-                            42 => {
-                                argt |= ExArgt::EXTRA;
-                            }
-                            63 => {
-                                argt |= ExArgt::EXTRA | ExArgt::NOSPC;
-                            }
-                            43 => {
-                                argt |= ExArgt::EXTRA | ExArgt::NEEDARG;
-                            }
-                            _ => {
-                                if true {
-                                    api_err_invalid(
-                                        err,
-                                        c"nargs".as_ptr(),
-                                        (*opts).nargs.data.string.data(),
-                                        0 as int64_t,
-                                        true,
-                                    );
-                                    break '_err;
-                                }
-                            }
-                        }
-                    }
-                } else if has_key(
-                    (*opts).is_set__user_command_,
-                    KEYSET_OPTIDX_user_command__nargs,
-                ) && true
-                {
-                    api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
+    // SAFETY: `opts` is the caller's keydict, live for the call.
+    let mut opts = unsafe { UserCmdOpts::new(opts) };
+    let mut force: bool = false;
+    let mut argt = ExArgt::NONE;
+    let mut def: int64_t = -1;
+    let mut addr_type_arg = CmdAddr::NoRange;
+    let mut context = ExpandContext::Nothing;
+    let mut compl_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
+    let mut rep: *const ::core::ffi::c_char = ::core::ptr::null();
+    let mut luaref: LuaRef = LUA_NOREF;
+    let mut compl_luaref: LuaRef = LUA_NOREF;
+    let mut preview_luaref: LuaRef = LUA_NOREF;
+    let cmd_name = name.data();
+    '_err: {
+        // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
+        let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
+        if !named {
+            // SAFETY: `err` is the caller's slot and both strings are C
+            // strings.
+            unsafe { api_err_invalid(err, c"command name".as_ptr(), cmd_name, 0, true) };
+            break '_err;
+        }
+        // SAFETY: the name validated, so it has at least one byte.
+        if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
+            let what = c"command name (must start with uppercase)".as_ptr();
+            // SAFETY: as above.
+            unsafe { api_err_invalid(err, what, cmd_name, 0, true) };
+            break '_err;
+        }
+        let is_set = opts.is_set__user_command_;
+        if has_key(is_set, KEYSET_OPTIDX_user_command__range)
+            && has_key(is_set, KEYSET_OPTIDX_user_command__count)
+        {
+            let msg = c"Cannot use both 'range' and 'count'".as_ptr();
+            // SAFETY: `err` is the caller's slot; the format takes one C
+            // string.
+            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            break '_err;
+        }
+
+        if let Some(nargs) = opts.nargs.as_integer() {
+            match nargs {
+                0 => {}
+                1 => argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG,
+                _ => {
+                    let null = ::core::ptr::null();
+                    // SAFETY: `err` is the caller's slot; a null value string
+                    // asks for the numeric spelling.
+                    unsafe { api_err_invalid(err, c"nargs".as_ptr(), null, nargs, false) };
                     break '_err;
                 }
-                if !(!(has_key((*opts).is_set__user_command_, 10 as ::core::ffi::c_int))
-                    || argt != ExArgt::NONE)
-                {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        c"%s".as_ptr(),
-                        c"'complete' used without 'nargs'".as_ptr(),
-                    );
-                } else {
-                    if (*opts).range.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        if (*opts).range.data.boolean {
-                            argt |= ExArgt::RANGE;
-                            addr_type_arg = CmdAddr::Lines;
-                        }
-                    } else if (*opts).range.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        if !(*(*opts)
-                            .range
-                            .data
-                            .string
-                            .data()
-                            .offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                            == '%' as ::core::ffi::c_int
-                            && (*opts).range.data.string.len() == 1 as size_t)
-                        {
-                            api_err_invalid(
-                                err,
-                                c"range".as_ptr(),
-                                c"".as_ptr(),
-                                0 as int64_t,
-                                true,
-                            );
-                            break '_err;
-                        } else {
-                            argt |= ExArgt::RANGE | ExArgt::DFLALL;
-                            addr_type_arg = CmdAddr::Lines;
-                        }
-                    } else if (*opts).range.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        argt |= ExArgt::RANGE | ExArgt::ZEROR;
-                        def = (*opts).range.data.integer as int64_t;
-                        addr_type_arg = CmdAddr::Lines;
-                    } else if has_key(
-                        (*opts).is_set__user_command_,
-                        KEYSET_OPTIDX_user_command__range,
-                    ) && true
-                    {
-                        api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
-                        break '_err;
-                    }
-                    if (*opts).count.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        if (*opts).count.data.boolean {
-                            argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-                            addr_type_arg = CmdAddr::Other;
-                            def = 0 as int64_t;
-                        }
-                    } else if (*opts).count.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-                        addr_type_arg = CmdAddr::Other;
-                        def = (*opts).count.data.integer as int64_t;
-                    } else if has_key(
-                        (*opts).is_set__user_command_,
-                        KEYSET_OPTIDX_user_command__count,
-                    ) && true
-                    {
-                        api_err_invalid(err, c"count".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
-                        break '_err;
-                    }
-                    if has_key(
-                        (*opts).is_set__user_command_,
-                        KEYSET_OPTIDX_user_command__addr,
-                    ) {
-                        if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != (*opts).addr.type_0 as ::core::ffi::c_uint
-                        {
-                            api_err_exp(
-                                err,
-                                c"addr".as_ptr(),
-                                api_typename(kObjectTypeString),
-                                api_typename((*opts).addr.type_0),
-                            );
-                            break '_err;
-                        } else if !(1 as ::core::ffi::c_int
-                            == parse_addr_type_arg(
-                                (*opts).addr.data.string.data(),
-                                (*opts).addr.data.string.len() as ::core::ffi::c_int,
-                                &raw mut addr_type_arg,
-                            ))
-                        {
-                            api_err_invalid(
-                                err,
-                                c"addr".as_ptr(),
-                                (*opts).addr.data.string.data(),
-                                0 as int64_t,
-                                true,
-                            );
-                            break '_err;
-                        } else {
-                            argt |= ExArgt::RANGE;
-                            if addr_type_arg as ::core::ffi::c_uint
-                                != CmdAddr::Lines as ::core::ffi::c_uint
-                            {
-                                argt |= ExArgt::ZEROR;
-                            }
-                        }
-                    }
-                    if (*opts).bang {
-                        argt |= ExArgt::BANG;
-                    }
-                    if (*opts).bar {
-                        argt |= ExArgt::TRLBAR;
-                    }
-                    if (*opts).register_ {
-                        argt |= ExArgt::REGSTR;
-                    }
-                    if (*opts).keepscript {
-                        argt |= ExArgt::KEEPSCRIPT;
-                    }
-                    force = if has_key(
-                        (*opts).is_set__user_command_,
-                        KEYSET_OPTIDX_user_command__force,
-                    ) {
-                        (*opts).force as ::core::ffi::c_int
-                    } else {
-                        1
-                    } != 0;
-                    if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                        if (*opts).complete.type_0 as ::core::ffi::c_uint
-                            == kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            context = ExpandContext::UserLua;
-                            compl_luaref = (*opts).complete.data.luaref;
-                            (*opts).complete.data.luaref = LUA_NOREF as LuaRef;
-                        } else if (*opts).complete.type_0 as ::core::ffi::c_uint
-                            == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            if !(1 as ::core::ffi::c_int
-                                == parse_compl_arg(
-                                    (*opts).complete.data.string.data(),
-                                    (*opts).complete.data.string.len() as ::core::ffi::c_int,
-                                    &mut context,
-                                    &mut argt,
-                                    &mut compl_arg,
-                                ))
-                            {
-                                api_err_invalid(
-                                    err,
-                                    c"complete".as_ptr(),
-                                    (*opts).complete.data.string.data(),
-                                    0 as int64_t,
-                                    true,
-                                );
-                                break '_err;
-                            }
-                        } else if has_key(
-                            (*opts).is_set__user_command_,
-                            KEYSET_OPTIDX_user_command__complete,
-                        ) && true
-                        {
-                            api_err_exp(
-                                err,
-                                c"complete".as_ptr(),
-                                c"Function or String".as_ptr(),
-                                ::core::ptr::null::<::core::ffi::c_char>(),
-                            );
-                            break '_err;
-                        }
-                        if has_key(
-                            (*opts).is_set__user_command_,
-                            KEYSET_OPTIDX_user_command__preview,
-                        ) {
-                            if kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
-                                != (*opts).preview.type_0 as ::core::ffi::c_uint
-                            {
-                                api_err_exp(
-                                    err,
-                                    c"preview".as_ptr(),
-                                    api_typename(kObjectTypeLuaRef),
-                                    api_typename((*opts).preview.type_0),
-                                );
-                                break '_err;
-                            } else {
-                                argt |= ExArgt::PREVIEW;
-                                preview_luaref = (*opts).preview.data.luaref;
-                                (*opts).preview.data.luaref = LUA_NOREF as LuaRef;
-                            }
-                        }
-                        match cmd.type_0 as ::core::ffi::c_uint {
-                            kObjectTypeLuaRef => {
-                                luaref = api_new_luaref(cmd.data.luaref);
-                                if (*opts).desc.type_0 as ::core::ffi::c_uint
-                                    == kObjectTypeString as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
-                                {
-                                    rep = (*opts).desc.data.string.data();
-                                } else {
-                                    rep = c"".as_ptr();
-                                }
-                            }
-                            kObjectTypeString => {
-                                rep = cmd.data.string.data();
-                            }
-                            _ => {
-                                if true {
-                                    api_err_exp(
-                                        err,
-                                        c"command".as_ptr(),
-                                        c"Function or String".as_ptr(),
-                                        ::core::ptr::null::<::core::ffi::c_char>(),
-                                    );
-                                    break '_err;
-                                }
-                            }
-                        }
-                        let _sctx = api_set_sctx(channel_id);
-                        if uc_add_command(
-                            name.data(),
-                            name.len(),
-                            rep,
-                            argt,
-                            def,
-                            flags,
-                            context,
-                            compl_arg,
-                            compl_luaref,
-                            preview_luaref,
-                            addr_type_arg,
-                            luaref,
-                            force,
-                        ) != 1 as ::core::ffi::c_int
-                        {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                c"Failed to create user command".as_ptr(),
-                            );
-                        }
-                        return;
-                    }
+            }
+        } else if let Some(nargs) = opts.nargs.as_string() {
+            let value = nargs.data();
+            if nargs.len() > 1 {
+                // SAFETY: `err` is the caller's slot and `value` a C string.
+                unsafe { api_err_invalid(err, c"nargs".as_ptr(), value, 0, true) };
+                break '_err;
+            }
+            // SAFETY: an API string is NUL-terminated, so byte 0 is readable
+            // even for the empty string -- where it is the terminator, and
+            // falls to the arm that rejects it.
+            match unsafe { *value } as u8 {
+                b'*' => argt |= ExArgt::EXTRA,
+                b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
+                b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
+                _ => {
+                    // SAFETY: as above.
+                    unsafe { api_err_invalid(err, c"nargs".as_ptr(), value, 0, true) };
+                    break '_err;
                 }
             }
+        } else if has_key(is_set, KEYSET_OPTIDX_user_command__nargs) {
+            // SAFETY: `err` is the caller's slot; the empty value string asks
+            // for the spelling that names no value at all.
+            unsafe { api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0, true) };
+            break '_err;
         }
-        if luaref != LUA_NOREF {
-            api_free_luaref(luaref);
-            luaref = LUA_NOREF as LuaRef;
+
+        if has_key(is_set, KEYSET_OPTIDX_user_command__complete) && argt == ExArgt::NONE {
+            let msg = c"'complete' used without 'nargs'".as_ptr();
+            // SAFETY: `err` is the caller's slot; the format takes one C
+            // string.
+            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            break '_err;
         }
-        if compl_luaref != LUA_NOREF {
-            api_free_luaref(compl_luaref);
-            compl_luaref = LUA_NOREF as LuaRef;
+
+        if let Some(range) = opts.range.as_boolean() {
+            if range {
+                argt |= ExArgt::RANGE;
+                addr_type_arg = CmdAddr::Lines;
+            }
+        } else if let Some(range) = opts.range.as_string() {
+            // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
+            let percent = unsafe { *range.data() } as u8 == b'%';
+            if !(percent && range.len() == 1) {
+                // SAFETY: `err` is the caller's slot; the empty value string
+                // asks for the spelling that names no value.
+                unsafe { api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0, true) };
+                break '_err;
+            }
+            argt |= ExArgt::RANGE | ExArgt::DFLALL;
+            addr_type_arg = CmdAddr::Lines;
+        } else if let Some(range) = opts.range.as_integer() {
+            argt |= ExArgt::RANGE | ExArgt::ZEROR;
+            def = range;
+            addr_type_arg = CmdAddr::Lines;
+        } else if has_key(is_set, KEYSET_OPTIDX_user_command__range) {
+            // SAFETY: as the `nargs` spelling above.
+            unsafe { api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0, true) };
+            break '_err;
         }
-        if preview_luaref != LUA_NOREF {
-            api_free_luaref(preview_luaref);
-            preview_luaref = LUA_NOREF as LuaRef;
+
+        if let Some(count) = opts.count.as_boolean() {
+            if count {
+                argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
+                addr_type_arg = CmdAddr::Other;
+                def = 0;
+            }
+        } else if let Some(count) = opts.count.as_integer() {
+            argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
+            addr_type_arg = CmdAddr::Other;
+            def = count;
+        } else if has_key(is_set, KEYSET_OPTIDX_user_command__count) {
+            // SAFETY: as the `nargs` spelling above.
+            unsafe { api_err_invalid(err, c"count".as_ptr(), c"".as_ptr(), 0, true) };
+            break '_err;
         }
-        xfree(compl_arg as *mut ::core::ffi::c_void);
+
+        if has_key(is_set, KEYSET_OPTIDX_user_command__addr) {
+            let Some(addr) = opts.addr.as_string() else {
+                let expected = api_typename(kObjectTypeString);
+                let actual = api_typename(opts.addr.type_0);
+                // SAFETY: `err` is the caller's slot and the type names are
+                // static C strings.
+                unsafe { api_err_exp(err, c"addr".as_ptr(), expected, actual) };
+                break '_err;
+            };
+            let value = addr.data();
+            let vallen = addr.len() as ::core::ffi::c_int;
+            let slot = &raw mut addr_type_arg;
+            // SAFETY: `addr` is the caller's string, NUL-terminated with
+            // `vallen` readable bytes, and `slot` is this frame's.
+            let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
+            if parsed != 1 {
+                // SAFETY: `err` is the caller's slot and `value` a C string.
+                unsafe { api_err_invalid(err, c"addr".as_ptr(), value, 0, true) };
+                break '_err;
+            }
+            argt |= ExArgt::RANGE;
+            if addr_type_arg != CmdAddr::Lines {
+                argt |= ExArgt::ZEROR;
+            }
+        }
+
+        if opts.bang {
+            argt |= ExArgt::BANG;
+        }
+        if opts.bar {
+            argt |= ExArgt::TRLBAR;
+        }
+        if opts.register_ {
+            argt |= ExArgt::REGSTR;
+        }
+        if opts.keepscript {
+            argt |= ExArgt::KEEPSCRIPT;
+        }
+        // An unsupplied `force` defaults to true: `nvim_create_user_command`
+        // replaces an existing command unless told otherwise.
+        force = !has_key(is_set, KEYSET_OPTIDX_user_command__force) || opts.force;
+
+        // Everything above reports through `err` without stopping, so a
+        // failure that fell through to here still has to skip the rest.
+        // SAFETY: `err` is the caller's slot.
+        if unsafe { (*err).type_0 } != kErrorTypeNone {
+            break '_err;
+        }
+
+        if let Some(complete) = opts.complete.as_luaref() {
+            context = ExpandContext::UserLua;
+            compl_luaref = complete;
+            // The reference is this call's now, so the keyset must not free
+            // it a second time.
+            opts.complete.data.luaref = LUA_NOREF;
+        } else if let Some(complete) = opts.complete.as_string() {
+            let value = complete.data();
+            let vallen = complete.len() as ::core::ffi::c_int;
+            // SAFETY: `complete` is the caller's string, NUL-terminated with
+            // `vallen` readable bytes; the three out-parameters are this
+            // frame's.
+            let parsed =
+                unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
+            if parsed != 1 {
+                // SAFETY: `err` is the caller's slot and `value` a C string.
+                unsafe { api_err_invalid(err, c"complete".as_ptr(), value, 0, true) };
+                break '_err;
+            }
+        } else if has_key(is_set, KEYSET_OPTIDX_user_command__complete) {
+            let expected = c"Function or String".as_ptr();
+            let null = ::core::ptr::null();
+            // SAFETY: `err` is the caller's slot and both strings are static.
+            unsafe { api_err_exp(err, c"complete".as_ptr(), expected, null) };
+            break '_err;
+        }
+
+        if has_key(is_set, KEYSET_OPTIDX_user_command__preview) {
+            let Some(preview) = opts.preview.as_luaref() else {
+                let expected = api_typename(kObjectTypeLuaRef);
+                let actual = api_typename(opts.preview.type_0);
+                // SAFETY: `err` is the caller's slot and the type names are
+                // static C strings.
+                unsafe { api_err_exp(err, c"preview".as_ptr(), expected, actual) };
+                break '_err;
+            };
+            argt |= ExArgt::PREVIEW;
+            preview_luaref = preview;
+            // As `complete`: the reference is this call's now.
+            opts.preview.data.luaref = LUA_NOREF;
+        }
+
+        if let Some(body) = cmd.as_luaref() {
+            // SAFETY: `body` is a registry index rather than a pointer, and
+            // the object still holds the caller's own reference to it.
+            luaref = unsafe { api_new_luaref(body) };
+            rep = match opts.desc.as_string() {
+                Some(desc) => desc.data().cast_const(),
+                None => c"".as_ptr(),
+            };
+        } else if let Some(body) = cmd.as_string() {
+            rep = body.data().cast_const();
+        } else {
+            let expected = c"Function or String".as_ptr();
+            let null = ::core::ptr::null();
+            // SAFETY: `err` is the caller's slot and both strings are static.
+            unsafe { api_err_exp(err, c"command".as_ptr(), expected, null) };
+            break '_err;
+        }
+
+        let _sctx = api_set_sctx(channel_id);
+        // SAFETY: `name` and `rep` are the caller's NUL-terminated strings,
+        // `compl_arg` is this frame's allocation, and the three Lua
+        // references are owned by this call -- `uc_add_command` takes all
+        // four over whether it succeeds or fails.
+        let added = unsafe {
+            uc_add_command(
+                name.data(),
+                name.len(),
+                rep,
+                argt,
+                def,
+                flags,
+                context,
+                compl_arg,
+                compl_luaref,
+                preview_luaref,
+                addr_type_arg,
+                luaref,
+                force,
+            )
+        };
+        if added != 1 {
+            let msg = c"Failed to create user command".as_ptr();
+            // SAFETY: `err` is the caller's slot.
+            unsafe { api_set_error(err, kErrorTypeException, msg) };
+        }
+        // `uc_add_command` owns what it was handed, so nothing below runs.
+        return;
     }
+    // Only reached when the command was never added, so this call still owns
+    // the references it took and the argument it parsed.
+    if luaref != LUA_NOREF {
+        // SAFETY: the reference is this call's, taken above.
+        unsafe { api_free_luaref(luaref) };
+    }
+    if compl_luaref != LUA_NOREF {
+        // SAFETY: as above.
+        unsafe { api_free_luaref(compl_luaref) };
+    }
+    if preview_luaref != LUA_NOREF {
+        // SAFETY: as above.
+        unsafe { api_free_luaref(preview_luaref) };
+    }
+    // SAFETY: `compl_arg` is null or `parse_compl_arg`'s own allocation.
+    unsafe { xfree(compl_arg.cast()) };
 }
 
 pub unsafe fn nvim_get_commands(
     opts: *mut KeyDict_get_commands,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    unsafe { nvim_buf_get_commands(-1 as Buffer, opts, arena) }
+    // SAFETY: `opts` and `arena` are the caller's.
+    unsafe { nvim_buf_get_commands(-1, opts, arena) }
 }
 
 pub unsafe fn nvim_buf_get_commands(
@@ -490,41 +406,25 @@ pub unsafe fn nvim_buf_get_commands(
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut global: bool = buf == -1 as ::core::ffi::c_int;
-        if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return Dict {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
-            }
-            .reported(error);
+    // SAFETY: `opts` is the caller's keydict, live for the call.
+    let builtin = unsafe { (*opts).builtin };
+    if buf == -1 {
+        if builtin {
+            let msg = c"builtin=true not implemented".as_ptr();
+            // SAFETY: `err` is this frame's slot.
+            unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+            return Dict::EMPTY.reported(error);
         }
-        if global {
-            if (*opts).builtin {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"builtin=true not implemented".as_ptr(),
-                );
-                return Dict {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<KeyValuePair>(),
-                }
-                .reported(error);
-            }
-            return commands_array(::core::ptr::null_mut::<buf_T>(), arena).reported(error);
-        }
-        let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
-        if (*opts).builtin as ::core::ffi::c_int != 0 || b.is_null() {
-            return Dict {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
-            }
-            .reported(error);
-        }
-        commands_array(b, arena).reported(error)
+        // SAFETY: a null buffer names the global table, and `arena` is the
+        // caller's.
+        let global = ::core::ptr::null_mut::<buf_T>();
+        return unsafe { commands_array(global, arena) }.reported(error);
     }
+    // SAFETY: `err` is this frame's slot.
+    let b = unsafe { find_buffer_by_handle(buf, err) };
+    if builtin || b.is_null() {
+        return Dict::EMPTY.reported(error);
+    }
+    // SAFETY: `b` is a live buffer and `arena` is the caller's.
+    unsafe { commands_array(b, arena) }.reported(error)
 }

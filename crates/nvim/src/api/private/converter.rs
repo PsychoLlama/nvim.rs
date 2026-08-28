@@ -39,8 +39,9 @@ use crate::types::{
     kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
     kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t,
-    size_t, typval_T, typval_vval_union, uint32_t,
+    size_t, typval_T, typval_vval_union,
 };
+use crate::winlayer::Live;
 
 /// `FC_LUAREF`: the `ufunc_T` flag that marks a funcref which is really a Lua
 /// function, and so can go back to the API as a `LuaRef`.
@@ -421,88 +422,106 @@ pub unsafe fn object_to_vim_take_luaref(
     take_luaref: bool,
     err: *mut Error,
 ) {
-    unsafe {
-        (*tv).v_type = VAR_UNKNOWN;
-        (*tv).v_lock = VarLock::Unlocked;
-        match (*obj).type_0 as ::core::ffi::c_uint {
-            kObjectTypeNil => {
-                (*tv).v_type = VAR_SPECIAL;
-                (*tv).vval.v_special = kSpecialVarNull;
-            }
-            kObjectTypeBoolean => {
-                (*tv).v_type = VAR_BOOL;
-                (*tv).vval.v_bool = (if (*obj).data.boolean as ::core::ffi::c_int != 0 {
-                    kBoolVarTrue as ::core::ffi::c_int
-                } else {
-                    kBoolVarFalse as ::core::ffi::c_int
-                }) as BoolVarValue;
-            }
-            kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => {
-                (*tv).v_type = VAR_NUMBER;
-                (*tv).vval.v_number = (*obj).data.integer;
-            }
-            kObjectTypeFloat => {
-                (*tv).v_type = VAR_FLOAT;
-                (*tv).vval.v_float = (*obj).data.floating as float_T;
-            }
-            kObjectTypeString => {
-                let mut s: String_0 = (*obj).data.string;
-                *tv = decode_string(s.data(), s.len(), false, false);
-            }
-            kObjectTypeArray => {
-                let list: *mut list_T = tv_list_alloc((*obj).data.array.size as ptrdiff_t);
-                let mut i: uint32_t = 0 as uint32_t;
-                while (i as size_t) < (*obj).data.array.size {
-                    let mut li_tv: typval_T = typval_T {
-                        v_type: VAR_UNKNOWN,
-                        v_lock: VarLock::Unlocked,
-                        vval: typval_vval_union { v_number: 0 },
-                    };
-                    object_to_vim_take_luaref(
-                        (*obj).data.array.items.offset(i as isize),
-                        &raw mut li_tv,
-                        take_luaref,
-                        err,
-                    );
+    // SAFETY: the caller's promise -- `tv` is writable typval storage and
+    // `obj` a live object, both for the length of the call.
+    let mut tv = unsafe { Live::<typval_T>::new(tv) };
+    // SAFETY: as above.
+    let mut obj = unsafe { Live::<Object>::new(obj) };
+    tv.v_type = VAR_UNKNOWN;
+    tv.v_lock = VarLock::Unlocked;
+    let value = *obj;
+    match value.type_0 {
+        kObjectTypeNil => {
+            tv.v_type = VAR_SPECIAL;
+            tv.vval.v_special = kSpecialVarNull;
+        }
+        kObjectTypeBoolean => {
+            // SAFETY: the tag says the payload is the boolean.
+            let on = unsafe { value.data.boolean };
+            tv.v_type = VAR_BOOL;
+            tv.vval.v_bool = if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
+        }
+        kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => {
+            // SAFETY: every one of these tags says the payload is the
+            // integer -- a handle is an integer with its own wire type.
+            let number = unsafe { value.data.integer };
+            tv.v_type = VAR_NUMBER;
+            tv.vval.v_number = number;
+        }
+        kObjectTypeFloat => {
+            // SAFETY: the tag says the payload is the float.
+            let float = unsafe { value.data.floating };
+            tv.v_type = VAR_FLOAT;
+            tv.vval.v_float = float as float_T;
+        }
+        kObjectTypeString => {
+            // SAFETY: the tag says the payload is the string.
+            let str: String_0 = unsafe { value.data.string };
+            // SAFETY: the string names `len` readable bytes.
+            *tv = unsafe { decode_string(str.data(), str.len(), false, false) };
+        }
+        kObjectTypeArray => {
+            // SAFETY: the tag says the payload is the array.
+            let array = unsafe { value.data.array };
+            // SAFETY: the list is this call's until it is handed to `tv`.
+            let list: *mut list_T = unsafe { tv_list_alloc(array.size as ptrdiff_t) };
+            for i in 0..array.size {
+                let mut li_tv: typval_T = typval_T {
+                    v_type: VAR_UNKNOWN,
+                    v_lock: VarLock::Unlocked,
+                    vval: typval_vval_union { v_number: 0 },
+                };
+                // SAFETY: `i` is below `size`, so the slot is inside
+                // `items`, and `li_tv` is this frame's.
+                unsafe {
+                    object_to_vim_take_luaref(array.items.add(i), &raw mut li_tv, take_luaref, err);
                     tv_list_append_owned_tv(list, li_tv);
-                    i = i.wrapping_add(1);
                 }
-                tv_list_ref(list);
-                (*tv).v_type = VAR_LIST;
-                (*tv).vval.v_list = list;
             }
-            kObjectTypeDict => {
-                let dict: *mut dict_T = tv_dict_alloc();
-                let mut i_0: uint32_t = 0 as uint32_t;
-                while (i_0 as size_t) < (*obj).data.dict.size {
-                    let mut item: *mut KeyValuePair = (*obj).data.dict.items.offset(i_0 as isize);
-                    let mut key: String_0 = (*item).key;
-                    let di: *mut dictitem_T = tv_dict_item_alloc(key.data());
-                    object_to_vim_take_luaref(
-                        &raw mut (*item).value,
-                        &raw mut (*di).di_tv,
-                        take_luaref,
-                        err,
-                    );
+            // SAFETY: `list` is the list just built.
+            unsafe { tv_list_ref(list) };
+            tv.v_type = VAR_LIST;
+            tv.vval.v_list = list;
+        }
+        kObjectTypeDict => {
+            // SAFETY: the tag says the payload is the dictionary.
+            let pairs = unsafe { value.data.dict };
+            // SAFETY: the dictionary is this call's until it is handed over.
+            let dict: *mut dict_T = unsafe { tv_dict_alloc() };
+            for i in 0..pairs.size {
+                // SAFETY: `i` is below `size`, so the pair is inside `items`,
+                // and its key is a NUL-terminated name.
+                unsafe {
+                    let item: *mut KeyValuePair = pairs.items.add(i);
+                    let di: *mut dictitem_T = tv_dict_item_alloc((*item).key.data());
+                    let value = &raw mut (*item).value;
+                    object_to_vim_take_luaref(value, &raw mut (*di).di_tv, take_luaref, err);
                     tv_dict_add(dict, di);
-                    i_0 = i_0.wrapping_add(1);
                 }
-                (*dict).dv_refcount.retain();
-                (*tv).v_type = VAR_DICT;
-                (*tv).vval.v_dict = dict;
             }
-            kObjectTypeLuaRef => {
-                let mut ref_0: LuaRef = (*obj).data.luaref;
-                if take_luaref {
-                    (*obj).data.luaref = LUA_NOREF;
-                } else {
-                    ref_0 = api_new_luaref(ref_0);
-                }
-                let mut name: *mut ::core::ffi::c_char = register_luafunc(ref_0);
-                (*tv).v_type = VAR_FUNC;
-                (*tv).vval.v_string = xstrdup(name);
+            // SAFETY: `dict` is the dictionary just built; the reference the
+            // typval is about to hold is what this counts.
+            unsafe { (*dict).dv_refcount.retain() };
+            tv.v_type = VAR_DICT;
+            tv.vval.v_dict = dict;
+        }
+        kObjectTypeLuaRef => {
+            // SAFETY: the tag says the payload is the reference.
+            let mut ref_0: LuaRef = unsafe { value.data.luaref };
+            if take_luaref {
+                // The object gives its reference up rather than lending it.
+                obj.data.luaref = LUA_NOREF;
+            } else {
+                // SAFETY: a registry index, not a pointer.
+                ref_0 = unsafe { api_new_luaref(ref_0) };
             }
-            _ => {}
-        };
+            // SAFETY: as above; `register_luafunc` answers a NUL-terminated
+            // name owned by the registry.
+            let name = unsafe { register_luafunc(ref_0) };
+            tv.v_type = VAR_FUNC;
+            // SAFETY: `name` is that name.
+            tv.vval.v_string = unsafe { xstrdup(name) };
+        }
+        _ => {}
     }
 }

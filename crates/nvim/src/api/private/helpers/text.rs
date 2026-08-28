@@ -14,8 +14,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, NUL, String_0, buf_T, int64_t, kErrorTypeValidation,
-    kObjectTypeString, linenr_T, object, object_data, size_t,
+    Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, kErrorTypeValidation,
+    linenr_T, size_t,
 };
 use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
@@ -93,53 +93,60 @@ pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> Strin
 /// passed as a C string, and is turned back into one. Text that ends *with*
 /// a break gets a trailing empty item, so that the array round-trips.
 pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array {
-    // SAFETY: `input` has `size` readable bytes.
-    unsafe {
-        let mut ret: ArrayBuilder = mem::zeroed();
-        let mut items = InitVec::new(
-            &mut ret.size,
-            &mut ret.capacity,
-            &mut ret.items,
-            &mut ret.init_array,
-        );
-        items.init();
+    // SAFETY: an `ArrayBuilder` is a size, a capacity, two pointers and an
+    // inline array of plain-data objects, so all-zero is a valid value.
+    let mut ret: ArrayBuilder = unsafe { mem::zeroed() };
+    let mut items = InitVec::new(
+        &mut ret.size,
+        &mut ret.capacity,
+        &mut ret.items,
+        &mut ret.init_array,
+    );
+    items.init();
 
-        let mut i: size_t = 0;
-        while i < input.len() {
-            let start = input.data().add(i);
-            let mut end = start;
-            let mut line_len: size_t = 0;
-            while line_len < input.len() - i {
-                end = start.add(line_len);
-                if *end == NL || (crlf && *end == CAR) {
-                    break;
-                }
-                line_len += 1;
+    let mut i: size_t = 0;
+    while i < input.len() {
+        let start = input.data().wrapping_add(i);
+        let mut end = start;
+        let mut line_len: size_t = 0;
+        while line_len < input.len() - i {
+            end = start.wrapping_add(line_len);
+            // SAFETY: the caller's promise -- `end` is inside the input.
+            let byte = unsafe { *end };
+            if byte == NL || (crlf && byte == CAR) {
+                break;
             }
-            i += line_len;
-            let ends_line = *end == NL || (crlf && *end == CAR);
-            if crlf && *end == CAR && i + 1 < input.len() && *end.add(1) == NL {
+            line_len += 1;
+        }
+        i += line_len;
+        // SAFETY: as above -- `end` is the break the walk stopped at, or the
+        // last byte it looked at.
+        let at_break = unsafe { *end };
+        let ends_line = at_break == NL || (crlf && at_break == CAR);
+        // A CRLF counts as one break, so the LF is stepped over as well.
+        if crlf && at_break == CAR && i + 1 < input.len() {
+            // SAFETY: the byte after the CR is still inside the input.
+            if unsafe { *end.add(1) } == NL {
                 i += 1;
             }
-
-            let s = arena_string(arena, String_0::from_raw_parts(start, line_len));
-            memchrsub(s.data().cast(), NUL as c_char, NL, line_len);
-            items.push(object {
-                type_0: kObjectTypeString,
-                data: object_data { string: s },
-            });
-            if i + 1 == input.len() && ends_line {
-                items.push(object {
-                    type_0: kObjectTypeString,
-                    data: object_data {
-                        string: String_0::NULL,
-                    },
-                });
-            }
-            i += 1;
         }
-        arena_take_arraybuilder(arena, &raw mut ret)
+
+        let borrowed = String_0::from_raw_parts(start, line_len);
+        // SAFETY: the line has `line_len` readable bytes at `start`.
+        let s = unsafe { arena_string(arena, borrowed) };
+        // SAFETY: `s` is that many bytes of the arena, this call's own.
+        unsafe { memchrsub(s.data().cast(), NUL as c_char, NL, line_len) };
+        items.push(Object::string(s));
+        if i + 1 == input.len() && ends_line {
+            // Text that ends with a break round-trips through a trailing
+            // empty item.
+            items.push(Object::string(String_0::NULL));
+        }
+        i += 1;
     }
+    drop(items);
+    // SAFETY: `ret` is this frame's builder, filled in above.
+    unsafe { arena_take_arraybuilder(arena, &raw mut ret) }
 }
 
 // -- Buffer text -----------------------------------------------------------
@@ -155,24 +162,25 @@ pub(crate) unsafe fn normalize_index(
     end_exclusive: bool,
     oob: *mut bool,
 ) -> int64_t {
-    // SAFETY: `buf` is a loaded buffer and `oob` the caller's flag.
-    unsafe {
-        debug_assert!((*buf).b_ml.ml_line_count > 0);
-        let max_index = ((*buf).b_ml.ml_line_count + end_exclusive as linenr_T - 1) as int64_t;
-        let mut index = if index < 0 {
-            max_index + index + 1
-        } else {
-            index
-        };
-        if index > max_index {
-            *oob = true;
-            index = max_index;
-        } else if index < 0 {
-            *oob = true;
-            index = 0;
-        }
-        index + 1
+    // SAFETY: the caller's promise -- `buf` is a loaded buffer.
+    let line_count = unsafe { (*buf).b_ml.ml_line_count };
+    debug_assert!(line_count > 0);
+    let max_index = (line_count + end_exclusive as linenr_T - 1) as int64_t;
+    let mut index = if index < 0 {
+        max_index + index + 1
+    } else {
+        index
+    };
+    if index > max_index {
+        // SAFETY: the caller's promise -- `oob` is their flag.
+        unsafe { *oob = true };
+        index = max_index;
+    } else if index < 0 {
+        // SAFETY: as above.
+        unsafe { *oob = true };
+        index = 0;
     }
+    index + 1
 }
 
 /// The text of line `lnum` between the two columns, as a *borrowed* string
@@ -184,32 +192,28 @@ pub(crate) unsafe fn buf_get_text(
     end_col: int64_t,
     err: *mut Error,
 ) -> String_0 {
-    // SAFETY: `buf` is a loaded buffer and `err` the caller's error slot.
-    unsafe {
-        if lnum >= i64::from(MAXLNUM) {
-            api_err_invalid(
-                err,
-                c"line index".as_ptr(),
-                c"out of range".as_ptr(),
-                0,
-                false,
-            );
-            return String_0::NULL;
-        }
-        let bufstr = ml_get_buf(buf, lnum as linenr_T);
-        let line_length = ml_get_buf_len(buf, lnum as linenr_T) as int64_t;
-
-        let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
-        let start_col = relative(start_col).clamp(0, line_length);
-        let end_col = relative(end_col).clamp(0, line_length);
-        if start_col > end_col {
-            let msg = c"start_col must be less than or equal to end_col".as_ptr();
-            api_set_error(err, kErrorTypeValidation, msg);
-            return String_0::NULL;
-        }
-        String_0::from_raw_parts(
-            bufstr.offset(start_col as isize),
-            (end_col - start_col) as size_t,
-        )
+    if lnum >= i64::from(MAXLNUM) {
+        let out_of_range = c"out of range".as_ptr();
+        // SAFETY: the caller's promise about `err`; both strings are static.
+        unsafe { api_err_invalid(err, c"line index".as_ptr(), out_of_range, 0, false) };
+        return String_0::NULL;
     }
+    // SAFETY: the caller's promise -- `buf` is a loaded buffer, and `lnum`
+    // is below `MAXLNUM`.
+    let bufstr = unsafe { ml_get_buf(buf, lnum as linenr_T) };
+    // SAFETY: as above.
+    let line_length = unsafe { ml_get_buf_len(buf, lnum as linenr_T) } as int64_t;
+
+    let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
+    let start_col = relative(start_col).clamp(0, line_length);
+    let end_col = relative(end_col).clamp(0, line_length);
+    if start_col > end_col {
+        let msg = c"start_col must be less than or equal to end_col".as_ptr();
+        // SAFETY: the caller's promise about `err`.
+        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        return String_0::NULL;
+    }
+    // SAFETY: `start_col` was clamped into the line.
+    let text = unsafe { bufstr.offset(start_col as isize) };
+    String_0::from_raw_parts(text, (end_col - start_col) as size_t)
 }

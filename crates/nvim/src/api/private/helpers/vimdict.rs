@@ -32,19 +32,16 @@ pub(crate) unsafe fn dict_get_value(
 ) -> Object {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
-    unsafe {
-        let di = tv_dict_find(dict, key.data(), key.len() as ptrdiff_t);
-        if di.is_null() {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Key not found: %s".as_ptr(),
-                key.data(),
-            );
-            return NIL;
-        }
-        vim_to_object(&raw mut (*di).di_tv, arena, true)
+    let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
+    if di.is_null() {
+        let fmt = c"Key not found: %s".as_ptr();
+        // SAFETY: `err` is the caller's slot; the format takes the one C
+        // string it is given.
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+        return NIL;
     }
+    // SAFETY: the lookup answered a live item of `dict`.
+    unsafe { vim_to_object(&raw mut (*di).di_tv, arena, true) }
 }
 
 /// The item `key` names, having first reported through `err` any reason it
@@ -59,41 +56,41 @@ pub(crate) unsafe fn dict_check_writable(
     err: *mut Error,
 ) -> *mut dictitem_T {
     // SAFETY: as `dict_get_value`.
-    unsafe {
-        let di = tv_dict_find(dict, key.data(), key.len() as ptrdiff_t);
-        if !di.is_null() {
-            let flags = (*di).di_flags as c_int;
-            if flags & DI_FLAGS_RO != 0 {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Key is read-only: %s".as_ptr(),
-                    key.data(),
-                );
-            } else if flags & DI_FLAGS_LOCK != 0 {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Key is locked: %s".as_ptr(),
-                    key.data(),
-                );
-            } else if del && flags & DI_FLAGS_FIX != 0 {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Key is fixed: %s".as_ptr(),
-                    key.data(),
-                );
-            }
-        } else if (*dict).dv_lock.is_locked() {
-            api_set_error(err, kErrorTypeException, c"Dict is locked".as_ptr());
-        } else if key.is_empty() {
-            api_set_error(err, kErrorTypeValidation, c"Key name is empty".as_ptr());
-        } else if key.len() > c_int::MAX as size_t {
-            api_set_error(err, kErrorTypeValidation, c"Key name is too long".as_ptr());
+    let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
+    if !di.is_null() {
+        // SAFETY: the lookup answered a live item.
+        let flags = unsafe { (*di).di_flags } as c_int;
+        let refused = if flags & DI_FLAGS_RO != 0 {
+            Some(c"Key is read-only: %s")
+        } else if flags & DI_FLAGS_LOCK != 0 {
+            Some(c"Key is locked: %s")
+        } else if del && flags & DI_FLAGS_FIX != 0 {
+            Some(c"Key is fixed: %s")
+        } else {
+            None
+        };
+        if let Some(fmt) = refused {
+            // SAFETY: `err` is the caller's slot; the format takes the one C
+            // string it is given.
+            unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), key.data()) };
         }
-        di
+        return di;
     }
+    // SAFETY: `dict` is a live Vimscript dictionary.
+    let refused = if unsafe { (*dict).dv_lock.is_locked() } {
+        Some((kErrorTypeException, c"Dict is locked"))
+    } else if key.is_empty() {
+        Some((kErrorTypeValidation, c"Key name is empty"))
+    } else if key.len() > c_int::MAX as size_t {
+        Some((kErrorTypeValidation, c"Key name is too long"))
+    } else {
+        None
+    };
+    if let Some((kind, msg)) = refused {
+        // SAFETY: `err` is the caller's slot; the message takes no argument.
+        unsafe { api_set_error(err, kind, msg.as_ptr()) };
+    }
+    di
 }
 
 /// Set or remove `key` in `dict`. With `retval` the previous value comes
@@ -107,87 +104,101 @@ pub(crate) unsafe fn dict_set_var(
     arena: *mut Arena,
     err: *mut Error,
 ) -> Object {
+    let mut rv = NIL;
     // SAFETY: as `dict_get_value`.
-    unsafe {
-        let mut rv = NIL;
-        let mut di = dict_check_writable(dict, key, del, err);
-        if (*err).type_0 != kErrorTypeNone {
-            return rv;
-        }
-        let watched = tv_dict_is_watched(dict);
+    let mut di = unsafe { dict_check_writable(dict, key, del, err) };
+    // SAFETY: `err` is the caller's slot.
+    if unsafe { (*err).type_0 } != kErrorTypeNone {
+        return rv;
+    }
+    // SAFETY: `dict` is live.
+    let watched = unsafe { tv_dict_is_watched(dict) };
 
-        if del {
-            if di.is_null() {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"Key not found: %s".as_ptr(),
-                    key.data(),
-                );
-                return rv;
-            }
-            if watched {
-                tv_dict_watcher_notify(dict, key.data(), ptr::null_mut(), &raw mut (*di).di_tv);
-            }
-            if retval {
-                rv = vim_to_object(&raw mut (*di).di_tv, arena, false);
-            }
-            tv_dict_item_remove(dict, di);
-            return rv;
-        }
-
-        let mut tv = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        object_to_vim(value, &raw mut tv, err);
-        // Only filled in for a key that already existed; the watchers see an
-        // unset value for a key that did not.
-        let mut oldtv = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: 0 },
-        };
-
+    if del {
         if di.is_null() {
+            let fmt = c"Key not found: %s".as_ptr();
+            // SAFETY: `err` is the caller's slot; the format takes the one C
+            // string it is given.
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+            return rv;
+        }
+        // SAFETY: `di` is the live item the lookup found. A raw pointer
+        // rather than a borrow, because a watcher runs Lua.
+        let old = unsafe { &raw mut (*di).di_tv };
+        if watched {
+            // SAFETY: as above; a removal has no new value to show.
+            unsafe { tv_dict_watcher_notify(dict, key.data(), ptr::null_mut(), old) };
+        }
+        if retval {
+            // SAFETY: as above.
+            rv = unsafe { vim_to_object(old, arena, false) };
+        }
+        // SAFETY: `di` is an item of `dict`.
+        unsafe { tv_dict_item_remove(dict, di) };
+        return rv;
+    }
+
+    let mut tv = typval_T {
+        v_type: VAR_UNKNOWN,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union { v_number: 0 },
+    };
+    // SAFETY: `tv` is this frame's and `err` the caller's slot.
+    unsafe { object_to_vim(value, &raw mut tv, err) };
+    // Only filled in for a key that already existed; the watchers see an
+    // unset value for a key that did not.
+    let mut oldtv = typval_T {
+        v_type: VAR_UNKNOWN,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union { v_number: 0 },
+    };
+
+    if di.is_null() {
+        // SAFETY: `key` names its own bytes and `dict` is live.
+        unsafe {
             di = tv_dict_item_alloc_len(key.data(), key.len());
             tv_dict_add(dict, di);
-        } else {
-            if retval {
-                rv = vim_to_object(&raw mut (*di).di_tv, arena, false);
-            }
-            // `v:` keys are typed, and some of them run a hook on assignment.
-            let mut type_error = false;
-            if dict == get_vimvar_dict()
-                && !before_set_vvar(
-                    key.data(),
-                    di,
-                    &raw mut tv,
-                    true,
-                    watched,
-                    &raw mut type_error,
-                )
-            {
-                tv_clear(&raw mut tv);
-                if type_error {
-                    let fmt = c"Setting v:%s to value with wrong type".as_ptr();
-                    api_set_error(err, kErrorTypeValidation, fmt, key.data());
-                }
-                return rv;
-            }
-            if watched {
-                tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
-            }
-            tv_clear(&raw mut (*di).di_tv);
         }
-
-        tv_copy(&raw mut tv, &raw mut (*di).di_tv);
+    } else {
+        if retval {
+            // SAFETY: `di` is the live item the lookup found.
+            rv = unsafe { vim_to_object(&raw mut (*di).di_tv, arena, false) };
+        }
+        // `v:` keys are typed, and some of them run a hook on assignment.
+        let mut type_error = false;
+        let accepted = dict != get_vimvar_dict() || {
+            let (new, bad) = (&raw mut tv, &raw mut type_error);
+            // SAFETY: `di` is live, and `tv`/`type_error` are this frame's.
+            unsafe { before_set_vvar(key.data(), di, new, true, watched, bad) }
+        };
+        if !accepted {
+            // SAFETY: `tv` is this frame's.
+            unsafe { tv_clear(&raw mut tv) };
+            if type_error {
+                let fmt = c"Setting v:%s to value with wrong type".as_ptr();
+                // SAFETY: `err` is the caller's slot.
+                unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+            }
+            return rv;
+        }
         if watched {
+            // SAFETY: `di` is live and `oldtv` this frame's.
+            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut oldtv) };
+        }
+        // SAFETY: `di` is live.
+        unsafe { tv_clear(&raw mut (*di).di_tv) };
+    }
+
+    // SAFETY: `di` is live and `tv` this frame's.
+    unsafe { tv_copy(&raw mut tv, &raw mut (*di).di_tv) };
+    if watched {
+        // SAFETY: as above, and `oldtv` is this frame's.
+        unsafe {
             tv_dict_watcher_notify(dict, key.data(), &raw mut tv, &raw mut oldtv);
             tv_clear(&raw mut oldtv);
         }
-        tv_clear(&raw mut tv);
-        rv
     }
+    // SAFETY: `tv` is this frame's.
+    unsafe { tv_clear(&raw mut tv) };
+    rv
 }
