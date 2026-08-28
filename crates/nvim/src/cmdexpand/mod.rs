@@ -114,7 +114,7 @@ use crate::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::window::{global_stl_height, last_status};
-use crate::winlayer::Cc;
+use crate::winlayer::{Cc, Live};
 use ::libc::{qsort, strcmp, strcpy, strlen, strncpy};
 use core::ffi::CStr;
 
@@ -143,6 +143,20 @@ mod eval;
 pub use self::eval::*;
 mod bufpat;
 pub(crate) use self::bufpat::*;
+/// The completion context an expansion is running in, whose caller has
+/// promised it outlives the value.
+///
+/// The promise is discharged by the frame that owns the `expand_T`: the
+/// command line's own `xpc`, or a caller's local. Wrapping is the unsafe
+/// step, once per entry point, and every `(*xp).field` after it is ordinary
+/// checked code -- which also stops the 1 KiB struct being *copied* every
+/// time a field is read, as `unsafe { (*xp).xp_context }` does.
+///
+/// Two addresses may not be taken off one [`Deref`](core::ops::Deref) -- the
+/// second borrow pops the first -- so a caller wanting `&raw mut` on a field
+/// takes it off [`Live::field_ptr`] instead.
+pub(crate) type Xp = Live<expand_T>;
+
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;

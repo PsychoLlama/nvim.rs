@@ -31,130 +31,140 @@ const NO_ORIG: *mut c_char = ptr::null_mut();
 pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    unsafe {
-        let mut xpc: expand_T = core::mem::zeroed();
-        let mut filtered = false;
-        let mut options = GETCOMPLETION;
+    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut filtered = false;
+    let mut options = GETCOMPLETION;
 
-        if tv_check_for_string_arg(argvars, 1) == FAIL {
-            return;
-        }
-        let type_0 = numbuf.string(argvars.add(1));
+    if unsafe { tv_check_for_string_arg(argvars, 1) } == FAIL {
+        return;
+    }
+    let type_0 = unsafe { numbuf.string(argvars.add(1)) };
 
-        if (*argvars.add(2)).v_type != VAR_UNKNOWN {
-            filtered = tv_get_number_chk(argvars.add(2), ptr::null_mut()) != 0;
-        }
+    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
+        filtered = unsafe { tv_get_number_chk(argvars.add(2), ptr::null_mut()) } != 0;
+    }
 
-        if p_wic.get() != 0 {
-            options |= WildOpts::ICASE;
-        }
+    if p_wic.get() != 0 {
+        options |= WildOpts::ICASE;
+    }
 
-        // For filtered results, 'wildignore' is used.
-        if !filtered {
-            options |= WildOpts::KEEP_ALL;
-        }
+    // For filtered results, 'wildignore' is used.
+    if !filtered {
+        options |= WildOpts::KEEP_ALL;
+    }
 
-        if (*argvars).v_type != VAR_STRING {
-            emsg(gettext(&raw const e_invarg as *const c_char));
-            return;
-        }
-        let pattern = numbuf2.string(argvars);
-        let mut pattern_start = pattern;
+    if unsafe { (*argvars).v_type } != VAR_STRING {
+        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        return;
+    }
+    let pattern = unsafe { numbuf2.string(argvars) };
+    let mut pattern_start = pattern;
 
-        // C's `goto theend`: the "cmdline" type takes the whole classifier and
-        // skips the per-type switch entirely.
-        if strcmp(type_0, c"cmdline".as_ptr()) == 0 {
-            let cmdline_len = strlen(pattern) as c_int;
+    // C's `goto theend`: the "cmdline" type takes the whole classifier and
+    // skips the per-type switch entirely.
+    if unsafe { strcmp(type_0, c"cmdline".as_ptr()) } == 0 {
+        let cmdline_len = unsafe { strlen(pattern) } as c_int;
+        unsafe {
             set_cmd_context(
                 &raw mut xpc,
                 pattern as *mut c_char,
                 cmdline_len,
                 cmdline_len,
                 false,
-            );
-            pattern_start = xpc.xp_pattern;
-            xpc.xp_pattern_len = strlen(xpc.xp_pattern);
-            xpc.xp_col = cmdline_len;
-        } else {
-            expand_init(&raw mut xpc);
-            xpc.xp_pattern = pattern as *mut c_char;
-            xpc.xp_pattern_len = strlen(xpc.xp_pattern);
-            xpc.xp_line = pattern as *mut c_char;
+            )
+        };
+        pattern_start = xpc.xp_pattern;
+        xpc.xp_pattern_len = unsafe { strlen(xpc.xp_pattern) };
+        xpc.xp_col = cmdline_len;
+    } else {
+        unsafe { expand_init(&raw mut xpc) };
+        xpc.xp_pattern = pattern as *mut c_char;
+        xpc.xp_pattern_len = unsafe { strlen(xpc.xp_pattern) };
+        xpc.xp_line = pattern as *mut c_char;
 
-            xpc.xp_context = cmdcomplete_str_to_type(type_0);
-            match xpc.xp_context {
-                ExpandContext::Nothing => {
-                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
+        xpc.xp_context = unsafe { cmdcomplete_str_to_type(type_0) };
+        match xpc.xp_context {
+            ExpandContext::Nothing => {
+                unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0) };
+                return;
+            }
+            ExpandContext::UserDefined => {
+                // Must be "custom,funcname" pattern.
+                if unsafe { strncmp(type_0, c"custom,".as_ptr(), 7) } != 0 {
+                    unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0) };
                     return;
                 }
-                ExpandContext::UserDefined => {
-                    // Must be "custom,funcname" pattern.
-                    if strncmp(type_0, c"custom,".as_ptr(), 7) != 0 {
-                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
-                        return;
-                    }
-                    xpc.xp_arg = type_0.add(7) as *mut c_char;
+                xpc.xp_arg = unsafe { type_0.add(7) } as *mut c_char;
+            }
+            ExpandContext::UserList => {
+                // Must be "customlist,funcname" pattern.
+                if unsafe { strncmp(type_0, c"customlist,".as_ptr(), 11) } != 0 {
+                    unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0) };
+                    return;
                 }
-                ExpandContext::UserList => {
-                    // Must be "customlist,funcname" pattern.
-                    if strncmp(type_0, c"customlist,".as_ptr(), 11) != 0 {
-                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
-                        return;
-                    }
-                    xpc.xp_arg = type_0.add(11) as *mut c_char;
-                }
-                // The four generators below move `xp_pattern` forward inside
-                // the string, so the length has to follow it.
-                ExpandContext::Menus => {
-                    set_context_in_menu_cmd(&raw mut xpc, c"menu".as_ptr(), xpc.xp_pattern, false);
-                    xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
-                }
-                ExpandContext::Sign => {
-                    set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern);
-                    xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
-                }
-                ExpandContext::Runtime => {
-                    set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern);
-                    xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
-                }
-                ExpandContext::ShellCmdLine => {
-                    let mut context = ExpandContext::ShellCmdLine;
+                xpc.xp_arg = unsafe { type_0.add(11) } as *mut c_char;
+            }
+            // The four generators below move `xp_pattern` forward inside
+            // the string, so the length has to follow it.
+            ExpandContext::Menus => {
+                unsafe {
+                    set_context_in_menu_cmd(&raw mut xpc, c"menu".as_ptr(), xpc.xp_pattern, false)
+                };
+                xpc.xp_pattern_len -=
+                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+            }
+            ExpandContext::Sign => {
+                unsafe { set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern) };
+                xpc.xp_pattern_len -=
+                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+            }
+            ExpandContext::Runtime => {
+                unsafe { set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern) };
+                xpc.xp_pattern_len -=
+                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+            }
+            ExpandContext::ShellCmdLine => {
+                let mut context = ExpandContext::ShellCmdLine;
+                unsafe {
                     set_context_for_wildcard_arg(
                         ptr::null_mut(),
                         xpc.xp_pattern,
                         false,
                         &raw mut xpc,
                         &raw mut context,
-                    );
-                    xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
-                }
-                ExpandContext::FiletypeCmd => filetype_expand_what.set(FiletypeWhat::All),
-                _ => {}
+                    )
+                };
+                xpc.xp_pattern_len -=
+                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
             }
+            ExpandContext::FiletypeCmd => filetype_expand_what.set(FiletypeWhat::All),
+            _ => {}
         }
-
-        if xpc.xp_context == ExpandContext::Lua {
-            xpc.xp_col = strlen(xpc.xp_line) as c_int;
-            nlua_expand_pat(&raw mut xpc);
-            xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
-        }
-
-        let pat = if cmdline_fuzzy_completion_supported(&raw mut xpc) {
-            // When fuzzy matching, don't modify the search string.
-            xmemdupz(xpc.xp_pattern as *const c_void, xpc.xp_pattern_len) as *mut c_char
-        } else {
-            addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context)
-        };
-
-        expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep);
-        tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t);
-
-        for i in 0..xpc.xp_numfiles {
-            tv_list_append_string((*rettv).vval.v_list, *xpc.xp_files.offset(i as isize), -1);
-        }
-        xfree(pat as *mut c_void);
-        expand_cleanup(&raw mut xpc);
     }
+
+    if xpc.xp_context == ExpandContext::Lua {
+        xpc.xp_col = unsafe { strlen(xpc.xp_line) } as c_int;
+        unsafe { nlua_expand_pat(&raw mut xpc) };
+        xpc.xp_pattern_len -= unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+    }
+
+    let pat = if unsafe { cmdline_fuzzy_completion_supported(&raw mut xpc) } {
+        // When fuzzy matching, don't modify the search string.
+        unsafe { xmemdupz(xpc.xp_pattern as *const c_void, xpc.xp_pattern_len) as *mut c_char }
+    } else {
+        unsafe { addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context) }
+    };
+
+    unsafe { expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep) };
+    unsafe { tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t) };
+
+    for i in 0..xpc.xp_numfiles {
+        unsafe {
+            tv_list_append_string((*rettv).vval.v_list, *xpc.xp_files.offset(i as isize), -1)
+        };
+    }
+    unsafe { xfree(pat as *mut c_void) };
+    unsafe { expand_cleanup(&raw mut xpc) };
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
@@ -164,30 +174,30 @@ pub unsafe fn f_getcompletiontype(
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+
+    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL {
+        return;
+    }
+
+    let pat = unsafe { numbuf.string(argvars) };
+    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    unsafe { expand_init(&raw mut xpc) };
+
+    let cmdline_len = unsafe { strlen(pat) } as c_int;
     unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ptr::null_mut();
-
-        if tv_check_for_string_arg(argvars, 0) == FAIL {
-            return;
-        }
-
-        let pat = numbuf.string(argvars);
-        let mut xpc: expand_T = core::mem::zeroed();
-        expand_init(&raw mut xpc);
-
-        let cmdline_len = strlen(pat) as c_int;
         set_cmd_context(
             &raw mut xpc,
             pat as *mut c_char,
             cmdline_len,
             cmdline_len,
             false,
-        );
-        (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg);
+        )
+    };
+    unsafe { (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg) };
 
-        expand_cleanup(&raw mut xpc);
-    }
+    unsafe { expand_cleanup(&raw mut xpc) };
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
@@ -196,36 +206,34 @@ pub unsafe fn f_cmdcomplete_info(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let xpc = Cc::current().xpc();
+    let xpc = Cc::current().xpc();
 
-        tv_dict_alloc_ret(rettv);
-        if xpc.is_null() || (*xpc).xp_files.is_null() {
-            return;
-        }
-        let retdict: *mut dict_T = (*rettv).vval.v_dict;
+    unsafe { tv_dict_alloc_ret(rettv) };
+    if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
+        return;
+    }
+    let retdict: *mut dict_T = unsafe { (*rettv).vval.v_dict };
 
-        // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
-        // key type is a plain `&str`.
-        let add_str = |k: &str, v| tv_dict_add_str(retdict, k.as_ptr().cast(), k.len(), v);
-        let add_nr = |k: &str, v| tv_dict_add_nr(retdict, k.as_ptr().cast(), k.len(), v);
-        let add_list = |k: &str, v| tv_dict_add_list(retdict, k.as_ptr().cast(), k.len(), v);
+    // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
+    // key type is a plain `&str`.
+    let add_str = |k: &str, v| unsafe { tv_dict_add_str(retdict, k.as_ptr().cast(), k.len(), v) };
+    let add_nr = |k: &str, v| unsafe { tv_dict_add_nr(retdict, k.as_ptr().cast(), k.len(), v) };
+    let add_list = |k: &str, v| unsafe { tv_dict_add_list(retdict, k.as_ptr().cast(), k.len(), v) };
 
-        let mut ret = add_str("cmdline_orig", cmdline_orig.get());
-        if ret == OK {
-            ret = add_nr("pum_visible", pum_visible() as varnumber_T);
-        }
-        if ret == OK {
-            ret = add_nr("selected", (*xpc).xp_selected as varnumber_T);
-        }
-        if ret == OK {
-            let li = tv_list_alloc((*xpc).xp_numfiles as ptrdiff_t);
-            ret = add_list("matches", li);
-            let mut idx = 0;
-            while ret == OK && idx < (*xpc).xp_numfiles {
-                tv_list_append_string(li, *(*xpc).xp_files.offset(idx as isize), -1);
-                idx += 1;
-            }
+    let mut ret = add_str("cmdline_orig", cmdline_orig.get());
+    if ret == OK {
+        ret = add_nr("pum_visible", pum_visible() as varnumber_T);
+    }
+    if ret == OK {
+        ret = add_nr("selected", unsafe { (*xpc).xp_selected } as varnumber_T);
+    }
+    if ret == OK {
+        let li = unsafe { tv_list_alloc((*xpc).xp_numfiles as ptrdiff_t) };
+        ret = add_list("matches", li);
+        let mut idx = 0;
+        while ret == OK && idx < unsafe { (*xpc).xp_numfiles } {
+            unsafe { tv_list_append_string(li, *(*xpc).xp_files.offset(idx as isize), -1) };
+            idx += 1;
         }
     }
 }

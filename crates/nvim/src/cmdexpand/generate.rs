@@ -37,72 +37,73 @@ pub(crate) unsafe fn expand_files_and_dirs(
     flags: ExpandFlags,
     options: WildOpts,
 ) -> c_int {
-    unsafe {
-        let mut pat = pat;
-        let mut flags = flags;
-        let free_pat = (*xp).xp_backslash != BackslashEscape::NONE;
-        if free_pat {
-            // Halve the backslashes of an escaped space (or comma).
-            let pat_len = strlen(pat);
-            pat = xstrnsave(pat, pat_len);
-            let mut pat_end = pat.add(pat_len);
-            let mut p = pat;
-            while *p != 0 {
-                if *p == b'\\' as c_char {
-                    // How many bytes of escaping to drop, if any.  Each arm
-                    // is a distinct `xp_backslash` mode; upstream's
-                    // BACKSLASH_IN_FILENAME arm of the comma case is not
-                    // compiled on any platform this port builds for.
-                    let drop = if (*xp).xp_backslash.has(BackslashEscape::THREE)
-                        && *p.add(1) == b'\\' as c_char
-                        && *p.add(2) == b'\\' as c_char
-                        && *p.add(3) == b' ' as c_char
-                    {
-                        3
-                    } else if (*xp).xp_backslash.has(BackslashEscape::ONE)
-                        && *p.add(1) == b' ' as c_char
-                    {
-                        1
-                    } else if (*xp).xp_backslash.has(BackslashEscape::COMMA)
-                        && *p.add(1) == b'\\' as c_char
-                        && *p.add(2) == b',' as c_char
-                    {
-                        2
-                    } else {
-                        0
-                    };
-                    if drop > 0 {
-                        let from = p.add(drop);
-                        // +1 for the NUL.
-                        ptr::copy(from, p, pat_end.offset_from(from) as usize + 1);
-                        pat_end = pat_end.sub(drop);
-                    }
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    let mut pat = pat;
+    let mut flags = flags;
+    let free_pat = xp.xp_backslash != BackslashEscape::NONE;
+    if free_pat {
+        // Halve the backslashes of an escaped space (or comma).
+        let pat_len = unsafe { strlen(pat) };
+        pat = unsafe { xstrnsave(pat, pat_len) };
+        let mut pat_end = unsafe { pat.add(pat_len) };
+        let mut p = pat;
+        while unsafe { *p } != 0 {
+            if unsafe { *p } == b'\\' as c_char {
+                // How many bytes of escaping to drop, if any.  Each arm
+                // is a distinct `xp_backslash` mode; upstream's
+                // BACKSLASH_IN_FILENAME arm of the comma case is not
+                // compiled on any platform this port builds for.
+                let drop = if xp.xp_backslash.has(BackslashEscape::THREE)
+                    && unsafe { *p.add(1) } == b'\\' as c_char
+                    && unsafe { *p.add(2) } == b'\\' as c_char
+                    && unsafe { *p.add(3) } == b' ' as c_char
+                {
+                    3
+                } else if xp.xp_backslash.has(BackslashEscape::ONE)
+                    && unsafe { *p.add(1) } == b' ' as c_char
+                {
+                    1
+                } else if xp.xp_backslash.has(BackslashEscape::COMMA)
+                    && unsafe { *p.add(1) } == b'\\' as c_char
+                    && unsafe { *p.add(2) } == b',' as c_char
+                {
+                    2
+                } else {
+                    0
+                };
+                if drop > 0 {
+                    let from = unsafe { p.add(drop) };
+                    // +1 for the NUL.
+                    unsafe { ptr::copy(from, p, pat_end.offset_from(from) as usize + 1) };
+                    pat_end = unsafe { pat_end.sub(drop) };
                 }
-                p = p.add(1);
             }
+            p = unsafe { p.add(1) };
         }
-
-        let ret = if (*xp).xp_context == ExpandContext::Findfunc {
-            expand_findfunc(pat, matches, numMatches)
-        } else {
-            flags = match (*xp).xp_context {
-                ExpandContext::Files => flags | ExpandFlags::FILE,
-                ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
-                ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
-                _ => dirs_only(flags),
-            };
-            if options.has(WildOpts::ICASE) {
-                flags |= ExpandFlags::ICASE;
-            }
-            // Expand wildcards, supporting %:h and the like.
-            expand_wildcards_eval(&raw mut pat, numMatches, matches, flags)
-        };
-
-        if free_pat {
-            xfree(pat as *mut c_void);
-        }
-        ret
     }
+
+    let ret = if xp.xp_context == ExpandContext::Findfunc {
+        unsafe { expand_findfunc(pat, matches, numMatches) }
+    } else {
+        flags = match xp.xp_context {
+            ExpandContext::Files => flags | ExpandFlags::FILE,
+            ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
+            ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
+            _ => dirs_only(flags),
+        };
+        if options.has(WildOpts::ICASE) {
+            flags |= ExpandFlags::ICASE;
+        }
+        // Expand wildcards, supporting %:h and the like.
+        unsafe { expand_wildcards_eval(&raw mut pat, numMatches, matches, flags) }
+    };
+
+    if free_pat {
+        unsafe { xfree(pat as *mut c_void) };
+    }
+    ret
 }
 
 /// Answer `list[idx]` as a C string, or NULL when `idx` is out of range.
@@ -155,16 +156,20 @@ pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// caller must copy it before asking for the next one — which
 /// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
 pub(crate) unsafe fn get_scriptnames_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    unsafe {
-        let sid = idx + 1;
-        if !script_id_valid(sid) {
-            return ptr::null_mut();
-        }
-        let si = script_item(sid);
-        let (out, room) = ((*xp).xp_buf.as_mut_ptr(), EXPAND_BUF_LEN as size_t);
-        home_replace(ptr::null::<buf_T>(), (*si).sn_name, out, room, true);
-        out
+    let sid = idx + 1;
+    if !script_id_valid(sid) {
+        return ptr::null_mut();
     }
+    let si = script_item(sid);
+    // SAFETY: the caller's contract -- `xp` is the live expansion context,
+    // whose `xp_buf` is `EXPAND_BUF_LEN` bytes of scratch. `&raw mut` takes
+    // the field's address without reading the context, so the pointer is
+    // into the context itself and not into a copy of it.
+    let out = unsafe { &raw mut (*xp).xp_buf }.cast::<c_char>();
+    let room = EXPAND_BUF_LEN as size_t;
+    // SAFETY: `si` is a live script item and `out` has `room` bytes.
+    unsafe { home_replace(ptr::null::<buf_T>(), (*si).sn_name, out, room, true) };
+    out
 }
 
 /// The possible arguments of the `":retab {-indentonly}"` option.
@@ -201,24 +206,24 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
 
 /// Replace the cached answer with a fresh one, dropping the old.
 unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
-    unsafe {
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
-        let res = nlua_exec(
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ptr::null_mut(),
+    };
+    let res = unsafe {
+        nlua_exec(
             static_cstring(script),
             ptr::null(),
             args,
             kRetObject,
             ptr::null_mut::<Arena>(),
             &raw mut err,
-        );
-        api_clear_error(&raw mut err);
-        // `replace` rather than a `get`/`set` pair: the old answer must not
-        // be reachable through the cell while it is being freed.
-        api_free_object(names.replace(res));
-    }
+        )
+    };
+    unsafe { api_clear_error(&raw mut err) };
+    // `replace` rather than a `get`/`set` pair: the old answer must not
+    // be reachable through the cell while it is being freed.
+    unsafe { api_free_object(names.replace(res)) };
 }
 
 /// Completion for `:checkhealth`: the available healthcheck names.
@@ -226,15 +231,13 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
 pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    unsafe {
-        static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
-        static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
-        if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
-            cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT);
-            last_gen.set(get_cmdline_last_prompt_id());
-        }
-        nth_lua_string(&names, idx)
+    static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
+    static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
+    if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
+        unsafe { cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT) };
+        last_gen.set(get_cmdline_last_prompt_id());
     }
+    unsafe { nth_lua_string(&names, idx) }
 }
 
 /// Completion for `:lsp`.
@@ -242,28 +245,31 @@ pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *m
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
 pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    unsafe {
-        static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
-        static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-        static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
-        if last_xp_line.get().is_null()
-            || strcmp(last_xp_line.get(), (*xp).xp_line) != 0
-            || last_gen.get() != get_cmdline_last_prompt_id()
-        {
-            xfree(last_xp_line.get() as *mut c_void);
-            last_xp_line.set(xstrdup((*xp).xp_line));
-            // The current command line, as the Lua function's one argument.
-            let mut args = ArrayBuf::<1>::new();
-            args.push(Object::string(cstr_as_string((*xp).xp_line)));
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
+    static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+    static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
+    if last_xp_line.get().is_null()
+        || unsafe { strcmp(last_xp_line.get(), xp.xp_line) } != 0
+        || last_gen.get() != get_cmdline_last_prompt_id()
+    {
+        unsafe { xfree(last_xp_line.get() as *mut c_void) };
+        last_xp_line.set(unsafe { xstrdup(xp.xp_line) });
+        // The current command line, as the Lua function's one argument.
+        let mut args = ArrayBuf::<1>::new();
+        args.push(Object::string(unsafe { cstr_as_string(xp.xp_line) }));
+        unsafe {
             cache_lua_answer(
                 &names,
                 c"return require'vim._core.ex_cmd'.lsp_complete(...)",
                 args.array(),
-            );
-            last_gen.set(get_cmdline_last_prompt_id());
-        }
-        nth_lua_string(&names, idx)
+            )
+        };
+        last_gen.set(get_cmdline_last_prompt_id());
     }
+    unsafe { nth_lua_string(&names, idx) }
 }
 
 /// `(context, generator, match case-insensitively, escape the matches)`.
@@ -333,19 +339,20 @@ pub(crate) unsafe fn expand_other(
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> c_int {
-    unsafe {
-        // Find the context in the table and call expand_generic() with the
-        // right function to do the expansion.
-        let Some(&(_, func, ic, escaped)) = GENERATORS
-            .iter()
-            .find(|&&(context, ..)| context == (*xp).xp_context)
-        else {
-            return FAIL;
-        };
-        if ic {
-            (*rmp).rm_ic = true;
-        }
-        expand_generic(pat, xp, rmp, matches, numMatches, Some(func), escaped);
-        OK
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // Find the context in the table and call expand_generic() with the
+    // right function to do the expansion.
+    let Some(&(_, func, ic, escaped)) = GENERATORS
+        .iter()
+        .find(|&&(context, ..)| context == xp.xp_context)
+    else {
+        return FAIL;
+    };
+    if ic {
+        unsafe { (*rmp).rm_ic = true };
     }
+    unsafe { expand_generic(pat, xp.raw(), rmp, matches, numMatches, Some(func), escaped) };
+    OK
 }

@@ -24,8 +24,11 @@ const NO_PATTERN: *mut c_char = ptr::null_mut();
 /// # Safety
 /// `xp` must point at a live `expand_T`.
 unsafe fn orig_or_empty(xp: *const expand_T) -> *const c_char {
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
     // SAFETY: the caller's promise.
-    let orig = unsafe { (*xp).xp_orig };
+    let orig = xp.xp_orig;
     if orig.is_null() {
         c"".as_ptr()
     } else {
@@ -46,13 +49,14 @@ const fn first_selected(options: WildOpts) -> c_int {
 /// The expanded matches, as a slice.  Only call this where `xp_numfiles` is
 /// known positive: it is -1 before anything has been expanded.
 unsafe fn matches_of(xp: *const expand_T) -> &'static [*mut c_char] {
-    unsafe {
-        debug_assert!((*xp).xp_numfiles > 0);
-        // `.max(0)`: -1 means "nothing expanded", and building a slice of
-        // `usize::MAX` entries out of that would be instant UB where the C
-        // merely read past the end.
-        core::slice::from_raw_parts((*xp).xp_files, (*xp).xp_numfiles.max(0) as usize)
-    }
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
+    debug_assert!(xp.xp_numfiles > 0);
+    // `.max(0)`: -1 means "nothing expanded", and building a slice of
+    // `usize::MAX` entries out of that would be instant UB where the C
+    // merely read past the end.
+    unsafe { core::slice::from_raw_parts(xp.xp_files, xp.xp_numfiles.max(0) as usize) }
 }
 
 /// Expand the word before the cursor on the command line.
@@ -70,248 +74,273 @@ pub(crate) unsafe fn nextwild(
     options: WildOpts,
     escape: bool,
 ) -> c_int {
-    unsafe {
-        let mut ccline = Cc::current();
-        let from_wildtrigger_func = options.has(WildOpts::FUNC_TRIGGER);
-        let wild_navigate = mode.navigates();
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    let mut ccline = Cc::current();
+    let from_wildtrigger_func = options.has(WildOpts::FUNC_TRIGGER);
+    let wild_navigate = mode.navigates();
 
-        if (*xp).xp_numfiles == -1 {
-            pre_incsearch_pos.set((*xp).xp_pre_incsearch_pos);
-            if ccline.input_fn != 0 && ccline.xp_context == ExpandContext::Commands {
-                // Expand commands typed in the input() function.
-                set_cmd_context(xp, ccline.text(), ccline.len(), ccline.cmdpos, false);
-            } else {
-                may_expand_pattern.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
-                set_expand_context(xp);
-                may_expand_pattern.set(false);
-            }
-            if (*xp).xp_context == ExpandContext::Lua {
-                nlua_expand_pat(xp);
-            }
-            cmd_showtail.set(expand_showtail(xp));
-        }
-
-        match (*xp).xp_context {
-            // Something illegal on the command line.
-            ExpandContext::Unsuccessful => {
-                beep_flush();
-                return OK;
-            }
-            // The caller can use the character as a normal char instead.
-            ExpandContext::Nothing => return FAIL,
-            _ => {}
-        }
-
-        // Where the pattern starts within the command line.  Held as an index
-        // rather than a pointer because `realloc_cmdbuff` below can move the
-        // buffer out from under `xp_pattern`.
-        let at = (*xp).xp_pattern.offset_from(ccline.text()) as c_int;
-        debug_assert!(ccline.cmdpos >= at);
-        (*xp).xp_pattern_len = (ccline.cmdpos - at) as size_t;
-
-        // Skip showing matches if the prefix is invalid during wildtrigger().
-        let context = (*xp).xp_context;
-        if from_wildtrigger_func && context == ExpandContext::Commands && (*xp).xp_pattern_len == 0
-        {
-            return FAIL;
-        }
-
-        // If 'cmd_silent' is set don't show the dots, because the redrawcmd()
-        // below won't remove them.
-        if !cmd_silent.get()
-            && !from_wildtrigger_func
-            && !wild_navigate
-            && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
-        {
-            msg_puts(c"...".as_ptr()); // show that we are busy
-            ui_flush();
-        }
-
-        let mut p;
-        if wild_navigate {
-            // Get the next/previous match of an already expanded pattern.
-            p = expand_one(xp, ptr::null_mut(), ptr::null_mut(), WildOpts::NONE, mode);
+    if xp.xp_numfiles == -1 {
+        pre_incsearch_pos.set(xp.xp_pre_incsearch_pos);
+        if ccline.input_fn != 0 && ccline.xp_context == ExpandContext::Commands {
+            // Expand commands typed in the input() function.
+            unsafe { set_cmd_context(xp.raw(), ccline.text(), ccline.len(), ccline.cmdpos, false) };
         } else {
-            let tmp = if cmdline_fuzzy_completion_supported(xp)
-                || (*xp).xp_context == ExpandContext::PatternInBuf
-            {
-                // Don't modify the search string.
-                xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len)
-            } else {
-                addstar((*xp).xp_pattern, (*xp).xp_pattern_len, (*xp).xp_context)
-            };
-            // Translate the string into a pattern and expand it.
-            let use_options = options
-                | WildOpts::HOME_REPLACE
-                | WildOpts::ADD_SLASH
-                | WildOpts::SILENT
-                | WildOpts::ESCAPE.when(escape)
-                | WildOpts::ICASE.when(p_wic.get() != 0);
-            p = expand_one(
-                xp,
+            may_expand_pattern.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
+            unsafe { set_expand_context(xp.raw()) };
+            may_expand_pattern.set(false);
+        }
+        if xp.xp_context == ExpandContext::Lua {
+            unsafe { nlua_expand_pat(xp.raw()) };
+        }
+        cmd_showtail.set(unsafe { expand_showtail(xp.raw()) });
+    }
+
+    match xp.xp_context {
+        // Something illegal on the command line.
+        ExpandContext::Unsuccessful => {
+            beep_flush();
+            return OK;
+        }
+        // The caller can use the character as a normal char instead.
+        ExpandContext::Nothing => return FAIL,
+        _ => {}
+    }
+
+    // Where the pattern starts within the command line.  Held as an index
+    // rather than a pointer because `realloc_cmdbuff` below can move the
+    // buffer out from under `xp_pattern`.
+    let at = unsafe { xp.xp_pattern.offset_from(ccline.text()) } as c_int;
+    debug_assert!(ccline.cmdpos >= at);
+    xp.xp_pattern_len = (ccline.cmdpos - at) as size_t;
+
+    // Skip showing matches if the prefix is invalid during wildtrigger().
+    let context = xp.xp_context;
+    if from_wildtrigger_func && context == ExpandContext::Commands && xp.xp_pattern_len == 0 {
+        return FAIL;
+    }
+
+    // If 'cmd_silent' is set don't show the dots, because the redrawcmd()
+    // below won't remove them.
+    if !cmd_silent.get()
+        && !from_wildtrigger_func
+        && !wild_navigate
+        && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
+    {
+        unsafe { msg_puts(c"...".as_ptr()) }; // show that we are busy
+        unsafe { ui_flush() };
+    }
+
+    let mut p;
+    if wild_navigate {
+        // Get the next/previous match of an already expanded pattern.
+        p = unsafe {
+            expand_one(
+                xp.raw(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                WildOpts::NONE,
+                mode,
+            )
+        };
+    } else {
+        let tmp = if unsafe { cmdline_fuzzy_completion_supported(xp.raw()) }
+            || xp.xp_context == ExpandContext::PatternInBuf
+        {
+            // Don't modify the search string.
+            unsafe { xstrnsave(xp.xp_pattern, xp.xp_pattern_len) }
+        } else {
+            unsafe { addstar(xp.xp_pattern, xp.xp_pattern_len, xp.xp_context) }
+        };
+        // Translate the string into a pattern and expand it.
+        let use_options = options
+            | WildOpts::HOME_REPLACE
+            | WildOpts::ADD_SLASH
+            | WildOpts::SILENT
+            | WildOpts::ESCAPE.when(escape)
+            | WildOpts::ICASE.when(p_wic.get() != 0);
+        p = unsafe {
+            expand_one(
+                xp.raw(),
                 tmp,
-                xstrnsave(ccline.at(at), (*xp).xp_pattern_len),
+                xstrnsave(ccline.at(at), xp.xp_pattern_len),
                 use_options,
                 mode,
-            );
-            xfree(tmp as *mut c_void);
+            )
+        };
+        unsafe { xfree(tmp as *mut c_void) };
 
-            // Longest match: make sure it is not shorter than the literal
-            // part of what was typed, which happens with :help.
-            if !p.is_null() && mode == WildMode::Longest {
-                let mut literal = 0;
-                while (literal as size_t) < (*xp).xp_pattern_len {
-                    let c = *ccline.at(at + literal);
-                    if c == b'*' as c_char || c == b'?' as c_char {
-                        break;
-                    }
-                    literal += 1;
+        // Longest match: make sure it is not shorter than the literal
+        // part of what was typed, which happens with :help.
+        if !p.is_null() && mode == WildMode::Longest {
+            let mut literal = 0;
+            while (literal as size_t) < xp.xp_pattern_len {
+                let c = unsafe { *ccline.at(at + literal) };
+                if c == b'*' as c_char || c == b'?' as c_char {
+                    break;
                 }
-                if (strlen(p) as c_int) < literal {
-                    xfree(p as *mut c_void);
-                    p = ptr::null_mut();
-                }
+                literal += 1;
+            }
+            if (unsafe { strlen(p) } as c_int) < literal {
+                unsafe { xfree(p as *mut c_void) };
+                p = ptr::null_mut();
             }
         }
+    }
 
-        // Save the command line before inserting the selected item.
-        if !wild_navigate && ccline.in_use() {
-            xfree(cmdline_orig.get() as *mut c_void);
-            cmdline_orig.set(xstrnsave(ccline.text(), ccline.len() as size_t));
-        }
+    // Save the command line before inserting the selected item.
+    if !wild_navigate && ccline.in_use() {
+        unsafe { xfree(cmdline_orig.get() as *mut c_void) };
+        cmdline_orig.set(unsafe { xstrnsave(ccline.text(), ccline.len() as size_t) });
+    }
 
-        if !p.is_null() && !got_int.get() && !options.has(WildOpts::NOSELECT) {
-            let plen = strlen(p);
-            let difflen = plen as c_int - (*xp).xp_pattern_len as c_int;
-            // The buffer may move; re-derive the pattern pointer from `at`.
-            realloc_cmdbuff(ccline, ccline.len() + difflen + 4);
-            (*xp).xp_pattern = ccline.at(at);
+    if !p.is_null() && !got_int.get() && !options.has(WildOpts::NOSELECT) {
+        let plen = unsafe { strlen(p) };
+        let difflen = plen as c_int - xp.xp_pattern_len as c_int;
+        // The buffer may move; re-derive the pattern pointer from `at`.
+        realloc_cmdbuff(ccline, ccline.len() + difflen + 4);
+        xp.xp_pattern = ccline.at(at);
 
-            debug_assert!(ccline.cmdpos <= ccline.len());
-            // Open (or close) a gap of `difflen` bytes at the cursor, taking
-            // the NUL along, then drop the match in at the pattern's start.
-            // Both copies overlap the destination, hence `copy`.
+        debug_assert!(ccline.cmdpos <= ccline.len());
+        // Open (or close) a gap of `difflen` bytes at the cursor, taking
+        // the NUL along, then drop the match in at the pattern's start.
+        // Both copies overlap the destination, hence `copy`.
+        unsafe {
             ptr::copy(
                 ccline.at(ccline.cmdpos),
                 ccline.at(ccline.cmdpos + difflen),
                 (ccline.len() - ccline.cmdpos + 1) as size_t,
-            );
-            ptr::copy(p, ccline.at(at), plen);
-            ccline.set_len(ccline.len() + difflen);
-            ccline.cmdpos += difflen;
-        }
-
-        redrawcmd();
-        cursorcmd();
-
-        // When expanding a ":map" command and no matches are found, assume
-        // the key is supposed to be inserted literally.
-        if (*xp).xp_context == ExpandContext::Mappings && p.is_null() {
-            return FAIL;
-        }
-
-        if (*xp).xp_numfiles <= 0 && p.is_null() {
-            beep_flush();
-        } else if (*xp).xp_numfiles == 1 && !options.has(WildOpts::NOSELECT) && !wild_navigate {
-            // Only one match: free the expanded pattern again.
-            expand_one(xp, NO_PATTERN, NO_PATTERN, WildOpts::NONE, WildMode::Free);
-        }
-
-        xfree(p as *mut c_void);
-        OK
+            )
+        };
+        unsafe { ptr::copy(p, ccline.at(at), plen) };
+        ccline.set_len(ccline.len() + difflen);
+        ccline.cmdpos += difflen;
     }
+
+    unsafe { redrawcmd() };
+    unsafe { cursorcmd() };
+
+    // When expanding a ":map" command and no matches are found, assume
+    // the key is supposed to be inserted literally.
+    if xp.xp_context == ExpandContext::Mappings && p.is_null() {
+        return FAIL;
+    }
+
+    if xp.xp_numfiles <= 0 && p.is_null() {
+        beep_flush();
+    } else if xp.xp_numfiles == 1 && !options.has(WildOpts::NOSELECT) && !wild_navigate {
+        // Only one match: free the expanded pattern again.
+        unsafe {
+            expand_one(
+                xp.raw(),
+                NO_PATTERN,
+                NO_PATTERN,
+                WildOpts::NONE,
+                WildMode::Free,
+            )
+        };
+    }
+
+    unsafe { xfree(p as *mut c_void) };
+    OK
 }
 
 /// Move the selection within an already expanded match list, and answer a
 /// fresh copy of what is now selected (or of the original text, at index -1).
 unsafe fn next_match(mode: WildMode, xp: *mut expand_T) -> *mut c_char {
-    unsafe {
-        // When no matches were found there is nothing to move within.
-        if (*xp).xp_numfiles <= 0 {
-            return ptr::null_mut();
-        }
-        let count = (*xp).xp_numfiles;
-        let mut findex = (*xp).xp_selected;
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // When no matches were found there is nothing to move within.
+    if xp.xp_numfiles <= 0 {
+        return ptr::null_mut();
+    }
+    let count = xp.xp_numfiles;
+    let mut findex = xp.xp_selected;
 
-        match mode {
-            WildMode::Prev => {
-                // Select the last entry when at the original text, otherwise
-                // the previous one.
-                if findex == -1 {
-                    findex = count;
-                }
-                findex -= 1;
+    match mode {
+        WildMode::Prev => {
+            // Select the last entry when at the original text, otherwise
+            // the previous one.
+            if findex == -1 {
+                findex = count;
             }
-            WildMode::Next => findex += 1,
-            WildMode::PageUp | WildMode::PageDown => {
-                // The height of the popup menu, less its border rows.
-                let mut ht = pum_get_height();
-                if ht > 3 {
-                    ht -= 2;
-                }
-                findex = if mode == WildMode::PageUp {
-                    match findex {
-                        0 => -1,                 // at the first entry: select none
-                        f if f < 0 => count - 1, // none selected: select the last
-                        f => (f - ht).max(0),
-                    }
-                } else {
-                    match findex {
-                        f if f == count - 1 => -1, // at the last entry: select none
-                        f if f < 0 => 0,           // none selected: select the first
-                        f => (f + ht).min(count - 1),
-                    }
-                };
-            }
-            WildMode::PumWant => {
-                // The UI named the item it wants.
-                debug_assert!(pum_want.get().active);
-                findex = pum_want.get().item;
-            }
-            // `WildMode::navigates` is the caller's guard, and it names
-            // exactly the five arms above; anything else is a mis-dispatch,
-            // which as a bare `_` used to be answered as `PumWant`.
-            mode => unreachable!("{mode:?} does not move within a match list"),
+            findex -= 1;
         }
-
-        // Handle wrapping around.
-        if findex < 0 || findex >= count {
-            findex = if !(*xp).xp_orig.is_null() {
-                -1 // return to the original text
-            } else if findex < 0 {
-                count - 1 // wrap around to the opposite end
+        WildMode::Next => findex += 1,
+        WildMode::PageUp | WildMode::PageDown => {
+            // The height of the popup menu, less its border rows.
+            let mut ht = pum_get_height();
+            if ht > 3 {
+                ht -= 2;
+            }
+            findex = if mode == WildMode::PageUp {
+                match findex {
+                    0 => -1,                 // at the first entry: select none
+                    f if f < 0 => count - 1, // none selected: select the last
+                    f => (f - ht).max(0),
+                }
             } else {
-                0
+                match findex {
+                    f if f == count - 1 => -1, // at the last entry: select none
+                    f if f < 0 => 0,           // none selected: select the first
+                    f => (f + ht).min(count - 1),
+                }
             };
         }
+        WildMode::PumWant => {
+            // The UI named the item it wants.
+            debug_assert!(pum_want.get().active);
+            findex = pum_want.get().item;
+        }
+        // `WildMode::navigates` is the caller's guard, and it names
+        // exactly the five arms above; anything else is a mis-dispatch,
+        // which as a bare `_` used to be answered as `PumWant`.
+        mode => unreachable!("{mode:?} does not move within a match list"),
+    }
 
-        // Display the matches on screen.
-        if p_wmnu.get() != 0 {
-            if !compl_match_array.get().is_null() {
-                compl_selected.set(findex);
-                cmdline_pum_display(false);
-            } else if cmdline_compl_use_pum(true) {
+    // Handle wrapping around.
+    if findex < 0 || findex >= count {
+        findex = if !xp.xp_orig.is_null() {
+            -1 // return to the original text
+        } else if findex < 0 {
+            count - 1 // wrap around to the opposite end
+        } else {
+            0
+        };
+    }
+
+    // Display the matches on screen.
+    if p_wmnu.get() != 0 {
+        if !compl_match_array.get().is_null() {
+            compl_selected.set(findex);
+            unsafe { cmdline_pum_display(false) };
+        } else if cmdline_compl_use_pum(true) {
+            unsafe {
                 cmdline_pum_create(
                     Cc::current(),
-                    xp,
-                    (*xp).xp_files,
+                    xp.raw(),
+                    xp.xp_files,
                     count,
                     cmd_showtail.get(),
                     false,
-                );
-                compl_selected.set(findex);
-                pum_clear();
-                cmdline_pum_display(true);
-            } else {
-                redraw_wildmenu(xp, count, (*xp).xp_files, findex, cmd_showtail.get());
-            }
-        }
-
-        (*xp).xp_selected = findex;
-        xstrdup(if findex == -1 {
-            (*xp).xp_orig as *const c_char
+                )
+            };
+            compl_selected.set(findex);
+            pum_clear();
+            unsafe { cmdline_pum_display(true) };
         } else {
-            matches_of(xp)[findex as usize] as *const c_char
+            unsafe { redraw_wildmenu(xp.raw(), count, xp.xp_files, findex, cmd_showtail.get()) };
+        }
+    }
+
+    xp.xp_selected = findex;
+    unsafe {
+        xstrdup(if findex == -1 {
+            xp.xp_orig as *const c_char
+        } else {
+            matches_of(xp.raw())[findex as usize] as *const c_char
         })
     }
 }
@@ -327,69 +356,71 @@ unsafe fn expand_one_start(
     str: *mut c_char,
     options: WildOpts,
 ) -> *mut c_char {
-    unsafe {
-        if expand_from_context(
-            xp,
-            str,
-            &raw mut (*xp).xp_files,
-            &raw mut (*xp).xp_numfiles,
-            options,
-        ) == FAIL
-        {
-            // Upstream reports "No match" here under FNAME_ILLEGAL, which is
-            // not defined on any platform this port builds for.
-            return ptr::null_mut();
-        }
-        if (*xp).xp_numfiles == 0 {
-            if !options.has(WildOpts::SILENT) {
-                semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), str);
-            }
-            return ptr::null_mut();
-        }
-
-        // Escape the matches for use on the command line.
-        escape_matches(
-            xp,
-            str,
-            core::slice::from_raw_parts_mut((*xp).xp_files, (*xp).xp_numfiles as usize),
-            options,
-        );
-
-        if mode == WildMode::All || mode == WildMode::AllKeep || mode == WildMode::Longest {
-            return ptr::null_mut();
-        }
-
-        // Check for matching suffixes in file names.  (Upstream's
-        // `xp_numfiles ? xp_numfiles : 1` can only take the first arm here:
-        // the zero case returned above.)
-        let mut non_suf_match = (*xp).xp_numfiles;
-        let ctx = (*xp).xp_context;
-        let names = matches!(ctx, ExpandContext::Files | ExpandContext::Directories);
-        if names && (*xp).xp_numfiles > 1 {
-            // More than one match; check the suffix.  expand_wildcards has
-            // sorted the ones with a matching suffix to the front, so only
-            // the first two need looking at.
-            non_suf_match = matches_of(xp)[..2]
-                .iter()
-                .filter(|&&name| match_suffix(name))
-                .count() as c_int;
-        }
-        if non_suf_match != 1 {
-            // Can we ever get here unless it's while expanding
-            // interactively?  If not, we can get rid of this all together.
-            // Don't really want to wait for this message (and possibly have
-            // to hit return to continue!).
-            if !options.has(WildOpts::SILENT) {
-                emsg(gettext(&raw const e_toomany as *const c_char));
-            } else if !options.has(WildOpts::NO_BEEP) {
-                beep_flush();
-            }
-        }
-        if non_suf_match != 1 && mode == WildMode::ExpandFree {
-            return ptr::null_mut();
-        }
-        xstrdup(matches_of(xp)[0] as *const c_char)
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // `field_ptr`, not `&raw mut xp.xp_files`: two addresses off one
+    // `Deref` would pop each other, and `expand_from_context` writes both.
+    let files = xp.field_ptr(core::mem::offset_of!(expand_T, xp_files));
+    let numfiles = xp.field_ptr(core::mem::offset_of!(expand_T, xp_numfiles));
+    // SAFETY: `xp` is live and both out-parameters are its own fields.
+    let expanded = unsafe { expand_from_context(xp.raw(), str, files, numfiles, options) };
+    if expanded == FAIL {
+        // Upstream reports "No match" here under FNAME_ILLEGAL, which is
+        // not defined on any platform this port builds for.
+        return ptr::null_mut();
     }
+    if xp.xp_numfiles == 0 {
+        if !options.has(WildOpts::SILENT) {
+            unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), str) };
+        }
+        return ptr::null_mut();
+    }
+
+    // Escape the matches for use on the command line.
+    unsafe {
+        escape_matches(
+            xp.raw(),
+            str,
+            core::slice::from_raw_parts_mut(xp.xp_files, xp.xp_numfiles as usize),
+            options,
+        )
+    };
+
+    if mode == WildMode::All || mode == WildMode::AllKeep || mode == WildMode::Longest {
+        return ptr::null_mut();
+    }
+
+    // Check for matching suffixes in file names.  (Upstream's
+    // `xp_numfiles ? xp_numfiles : 1` can only take the first arm here:
+    // the zero case returned above.)
+    let mut non_suf_match = xp.xp_numfiles;
+    let ctx = xp.xp_context;
+    let names = matches!(ctx, ExpandContext::Files | ExpandContext::Directories);
+    if names && xp.xp_numfiles > 1 {
+        // More than one match; check the suffix.  expand_wildcards has
+        // sorted the ones with a matching suffix to the front, so only
+        // the first two need looking at.
+        non_suf_match = unsafe { matches_of(xp.raw()) }[..2]
+            .iter()
+            .filter(|&&name| unsafe { match_suffix(name) })
+            .count() as c_int;
+    }
+    if non_suf_match != 1 {
+        // Can we ever get here unless it's while expanding
+        // interactively?  If not, we can get rid of this all together.
+        // Don't really want to wait for this message (and possibly have
+        // to hit return to continue!).
+        if !options.has(WildOpts::SILENT) {
+            unsafe { emsg(gettext(&raw const e_toomany as *const c_char)) };
+        } else if !options.has(WildOpts::NO_BEEP) {
+            beep_flush();
+        }
+    }
+    if non_suf_match != 1 && mode == WildMode::ExpandFree {
+        return ptr::null_mut();
+    }
+    unsafe { xstrdup(matches_of(xp.raw())[0] as *const c_char) }
 }
 
 /// The longest common prefix of the matches — the `'wildmode'`=longest answer.
@@ -397,44 +428,45 @@ unsafe fn expand_one_start(
 /// Beeps (unless `WildOpts::NO_BEEP`) at the byte where they first diverge, which
 /// is how the user learns the expansion stopped short of a whole name.
 unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_char {
-    unsafe {
-        let files = matches_of(xp);
-        let first = files[0];
-        // 'fileignorecase' folds case, but only where the matches are names
-        // that came from the filesystem or the buffer list.  Neither operand
-        // can change inside the loop.
-        let fold = p_fic.get() != 0
-            && matches!(
-                (*xp).xp_context,
-                ExpandContext::Directories
-                    | ExpandContext::Files
-                    | ExpandContext::ShellCmd
-                    | ExpandContext::Buffers
-            );
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    let files = unsafe { matches_of(xp.raw()) };
+    let first = files[0];
+    // 'fileignorecase' folds case, but only where the matches are names
+    // that came from the filesystem or the buffer list.  Neither operand
+    // can change inside the loop.
+    let fold = p_fic.get() != 0
+        && matches!(
+            xp.xp_context,
+            ExpandContext::Directories
+                | ExpandContext::Files
+                | ExpandContext::ShellCmd
+                | ExpandContext::Buffers
+        );
 
-        let mut len: size_t = 0;
-        while *first.add(len as usize) != 0 {
-            let mb_len = utfc_ptr2len(first.add(len as usize)) as size_t;
-            let c0 = utf_ptr2char(first.add(len as usize));
-            let diverged = files[1..].iter().any(|&name| {
-                let ci = utf_ptr2char(name.add(len as usize));
-                if fold {
-                    mb_tolower(c0) != mb_tolower(ci)
-                } else {
-                    c0 != ci
-                }
-            });
-            if diverged {
-                if !options.has(WildOpts::NO_BEEP) {
-                    vim_beep(kOptBoFlagWildmode as ::core::ffi::c_uint);
-                }
-                break;
+    let mut len: size_t = 0;
+    while unsafe { *first.add(len as usize) } != 0 {
+        let mb_len = unsafe { utfc_ptr2len(first.add(len as usize)) } as size_t;
+        let c0 = unsafe { utf_ptr2char(first.add(len as usize)) };
+        let diverged = files[1..].iter().any(|&name| {
+            let ci = unsafe { utf_ptr2char(name.add(len as usize)) };
+            if fold {
+                mb_tolower(c0) != mb_tolower(ci)
+            } else {
+                c0 != ci
             }
-            len += mb_len;
+        });
+        if diverged {
+            if !options.has(WildOpts::NO_BEEP) {
+                unsafe { vim_beep(kOptBoFlagWildmode as ::core::ffi::c_uint) };
+            }
+            break;
         }
-
-        xmemdupz(first as *const c_void, len) as *mut c_char
+        len += mb_len;
     }
+
+    unsafe { xmemdupz(first as *const c_void, len) as *mut c_char }
 }
 
 /// Do wildcard expansion on the string `str`.
@@ -474,133 +506,136 @@ pub unsafe fn expand_one(
     options: WildOpts,
     mode: WildMode,
 ) -> *mut c_char {
-    unsafe {
-        // First handle the case of using an old match.
-        if mode.navigates() {
-            return next_match(mode, xp);
-        }
-
-        // The original text, for the two modes that answer with it.
-        let mut ss = match mode {
-            WildMode::Cancel => xstrdup(orig_or_empty(xp)),
-            WildMode::Apply if (*xp).xp_selected == -1 => xstrdup(orig_or_empty(xp)),
-            WildMode::Apply => xstrdup(matches_of(xp)[(*xp).xp_selected as usize] as *const c_char),
-            _ => ptr::null_mut(),
-        };
-
-        // Free the old names.
-        if (*xp).xp_numfiles != -1 && mode != WildMode::All && mode != WildMode::Longest {
-            free_wild((*xp).xp_numfiles, (*xp).xp_files);
-            (*xp).xp_numfiles = -1;
-            xfree((*xp).xp_orig as *mut c_void);
-            (*xp).xp_orig = ptr::null_mut();
-
-            // The entries from xp_files may be in the popup menu; remove it.
-            if !compl_match_array.get().is_null() {
-                cmdline_pum_remove(false);
-            }
-        }
-        (*xp).xp_selected = first_selected(options);
-
-        if mode == WildMode::Free {
-            // Only release the file names.
-            return ptr::null_mut();
-        }
-
-        // Whether `orig` was stored in `xp_orig` rather than being ours to free.
-        let mut orig_saved = false;
-        if (*xp).xp_numfiles == -1 && mode != WildMode::Apply && mode != WildMode::Cancel {
-            xfree((*xp).xp_orig as *mut c_void);
-            (*xp).xp_orig = orig;
-            orig_saved = true;
-            ss = expand_one_start(mode, xp, str, options);
-        }
-
-        // Find the longest common part.
-        if mode == WildMode::Longest && (*xp).xp_numfiles > 0 {
-            ss = longest_common_match(xp, options);
-            (*xp).xp_selected = -1; // next 'wildchar' gets the first one
-        }
-
-        // Concatenate all matching names.  Unless interrupted this can be
-        // slow, and the result probably won't be used.
-        if mode == WildMode::All && (*xp).xp_numfiles > 0 && !got_int.get() {
-            let files = matches_of(xp);
-            let suffix = if options.has(WildOpts::USE_NL) {
-                c"\n"
-            } else {
-                c" "
-            };
-            // A boolean option's matches are listed as "novimfile" /
-            // "invvimfile"; the prefix goes *between* the entries, so there
-            // is one fewer of it than there are matches.
-            let prefix = match (*xp).xp_prefix {
-                XP_PREFIX_NO => c"no",
-                XP_PREFIX_INV => c"inv",
-                _ => c"",
-            };
-            let last = files.len() - 1;
-            let mut ss_size = prefix.count_bytes() * last;
-            for &name in files {
-                ss_size += strlen(name) + 1; // +1 for the suffix
-            }
-            ss_size += 1; // +1 for the NUL
-
-            let buf = xmalloc(ss_size) as *mut c_char;
-            *buf = 0;
-            let mut ssp = buf;
-            for (i, &name) in files.iter().enumerate() {
-                if i > 0 {
-                    ssp = xstpcpy(ssp, prefix.as_ptr());
-                }
-                ssp = xstpcpy(ssp, name);
-                if i < last {
-                    ssp = xstpcpy(ssp, suffix.as_ptr());
-                }
-                debug_assert!(ssp < buf.add(ss_size));
-            }
-            ss = buf;
-        }
-
-        if mode == WildMode::ExpandFree || mode == WildMode::All {
-            expand_cleanup(xp);
-        }
-
-        // Free "orig" if it wasn't stored in "xp->xp_orig".
-        if !orig_saved {
-            xfree(orig as *mut c_void);
-        }
-
-        ss
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // First handle the case of using an old match.
+    if mode.navigates() {
+        return unsafe { next_match(mode, xp.raw()) };
     }
+
+    // The original text, for the two modes that answer with it.
+    let mut ss = match mode {
+        WildMode::Cancel => unsafe { xstrdup(orig_or_empty(xp.raw())) },
+        WildMode::Apply if xp.xp_selected == -1 => unsafe { xstrdup(orig_or_empty(xp.raw())) },
+        WildMode::Apply => unsafe {
+            xstrdup(matches_of(xp.raw())[xp.xp_selected as usize] as *const c_char)
+        },
+        _ => ptr::null_mut(),
+    };
+
+    // Free the old names.
+    if xp.xp_numfiles != -1 && mode != WildMode::All && mode != WildMode::Longest {
+        unsafe { free_wild(xp.xp_numfiles, xp.xp_files) };
+        xp.xp_numfiles = -1;
+        unsafe { xfree(xp.xp_orig as *mut c_void) };
+        xp.xp_orig = ptr::null_mut();
+
+        // The entries from xp_files may be in the popup menu; remove it.
+        if !compl_match_array.get().is_null() {
+            unsafe { cmdline_pum_remove(false) };
+        }
+    }
+    xp.xp_selected = first_selected(options);
+
+    if mode == WildMode::Free {
+        // Only release the file names.
+        return ptr::null_mut();
+    }
+
+    // Whether `orig` was stored in `xp_orig` rather than being ours to free.
+    let mut orig_saved = false;
+    if xp.xp_numfiles == -1 && mode != WildMode::Apply && mode != WildMode::Cancel {
+        unsafe { xfree(xp.xp_orig as *mut c_void) };
+        xp.xp_orig = orig;
+        orig_saved = true;
+        ss = unsafe { expand_one_start(mode, xp.raw(), str, options) };
+    }
+
+    // Find the longest common part.
+    if mode == WildMode::Longest && xp.xp_numfiles > 0 {
+        ss = unsafe { longest_common_match(xp.raw(), options) };
+        xp.xp_selected = -1; // next 'wildchar' gets the first one
+    }
+
+    // Concatenate all matching names.  Unless interrupted this can be
+    // slow, and the result probably won't be used.
+    if mode == WildMode::All && xp.xp_numfiles > 0 && !got_int.get() {
+        let files = unsafe { matches_of(xp.raw()) };
+        let suffix = if options.has(WildOpts::USE_NL) {
+            c"\n"
+        } else {
+            c" "
+        };
+        // A boolean option's matches are listed as "novimfile" /
+        // "invvimfile"; the prefix goes *between* the entries, so there
+        // is one fewer of it than there are matches.
+        let prefix = match xp.xp_prefix {
+            XP_PREFIX_NO => c"no",
+            XP_PREFIX_INV => c"inv",
+            _ => c"",
+        };
+        let last = files.len() - 1;
+        let mut ss_size = prefix.count_bytes() * last;
+        for &name in files {
+            ss_size += unsafe { strlen(name) } + 1; // +1 for the suffix
+        }
+        ss_size += 1; // +1 for the NUL
+
+        let buf = unsafe { xmalloc(ss_size) } as *mut c_char;
+        unsafe { *buf = 0 };
+        let mut ssp = buf;
+        for (i, &name) in files.iter().enumerate() {
+            if i > 0 {
+                ssp = unsafe { xstpcpy(ssp, prefix.as_ptr()) };
+            }
+            ssp = unsafe { xstpcpy(ssp, name) };
+            if i < last {
+                ssp = unsafe { xstpcpy(ssp, suffix.as_ptr()) };
+            }
+            debug_assert!(ssp < unsafe { buf.add(ss_size) });
+        }
+        ss = buf;
+    }
+
+    if mode == WildMode::ExpandFree || mode == WildMode::All {
+        unsafe { expand_cleanup(xp.raw()) };
+    }
+
+    // Free "orig" if it wasn't stored in "xp->xp_orig".
+    if !orig_saved {
+        unsafe { xfree(orig as *mut c_void) };
+    }
+
+    ss
 }
 
 /// Prepare an expand structure for use.
 pub unsafe fn expand_init(xp: *mut expand_T) {
-    unsafe {
-        xp.write_bytes(0, 1);
-        (*xp).xp_backslash = BackslashEscape::NONE;
-        (*xp).xp_prefix = XP_PREFIX_NONE;
-        (*xp).xp_numfiles = -1;
-    }
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    unsafe { xp.raw().write_bytes(0, 1) };
+    xp.xp_backslash = BackslashEscape::NONE;
+    xp.xp_prefix = XP_PREFIX_NONE;
+    xp.xp_numfiles = -1;
 }
 
 /// Clean up an expand structure after use.
 pub unsafe fn expand_cleanup(xp: *mut expand_T) {
-    unsafe {
-        if (*xp).xp_numfiles >= 0 {
-            free_wild((*xp).xp_numfiles, (*xp).xp_files);
-            (*xp).xp_numfiles = -1;
-        }
-        xfree((*xp).xp_orig as *mut c_void);
-        (*xp).xp_orig = ptr::null_mut();
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    if xp.xp_numfiles >= 0 {
+        unsafe { free_wild(xp.xp_numfiles, xp.xp_files) };
+        xp.xp_numfiles = -1;
     }
+    unsafe { xfree(xp.xp_orig as *mut c_void) };
+    xp.xp_orig = ptr::null_mut();
 }
 
 /// Drop the saved copy of the command line taken before the last expansion.
 pub unsafe fn clear_cmdline_orig() {
-    unsafe {
-        xfree(cmdline_orig.get() as *mut c_void);
-        cmdline_orig.set(ptr::null_mut());
-    }
+    unsafe { xfree(cmdline_orig.get() as *mut c_void) };
+    cmdline_orig.set(ptr::null_mut());
 }

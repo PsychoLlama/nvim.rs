@@ -19,7 +19,10 @@ use core::ffi::{c_char, c_int, c_void};
 /// expands a path, an option value or a tag, where a fuzzy match would offer
 /// something the command being completed cannot use.
 pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
-    let context = unsafe { (*xp).xp_context };
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
+    let context = xp.xp_context;
     match context {
         ExpandContext::BoolSettings
         | ExpandContext::Colors
@@ -63,14 +66,15 @@ pub unsafe fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool {
 ///
 /// Stays `extern "C"`: it is handed to `qsort`.
 pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    unsafe {
-        let p1 = *s1.cast::<*mut c_char>();
-        let p2 = *s2.cast::<*mut c_char>();
-        match (*p1 == b'<' as c_char, *p2 == b'<' as c_char) {
-            (false, true) => -1,
-            (true, false) => 1,
-            _ => strcmp(p1, p2),
-        }
+    let p1 = unsafe { *s1.cast::<*mut c_char>() };
+    let p2 = unsafe { *s2.cast::<*mut c_char>() };
+    match (
+        unsafe { *p1 } == b'<' as c_char,
+        unsafe { *p2 } == b'<' as c_char,
+    ) {
+        (false, true) => -1,
+        (true, false) => 1,
+        _ => unsafe { strcmp(p1, p2) },
     }
 }
 
@@ -84,77 +88,77 @@ pub(crate) unsafe fn wildescape(
     str: *const c_char,
     matches: &mut [*mut c_char],
 ) {
-    unsafe {
-        // Free the string in `slot` and put `escaped` in its place.  Every
-        // escaping step builds the new string out of the old one, so the
-        // replacement is always computed before the call.  A closure rather
-        // than a free function: it inherits this block, where a free
-        // function would have to state one of its own.
-        let put = |slot: &mut *mut c_char, escaped: *mut c_char| {
-            xfree(core::mem::replace(slot, escaped) as *mut c_void)
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // Free the string in `slot` and put `escaped` in its place.  Every
+    // escaping step builds the new string out of the old one, so the
+    // replacement is always computed before the call.  A closure rather
+    // than a free function: it inherits this block, where a free
+    // function would have to state one of its own.
+    let put = |slot: &mut *mut c_char, escaped: *mut c_char| unsafe {
+        xfree(core::mem::replace(slot, escaped) as *mut c_void)
+    };
+    let context = xp.xp_context;
+    if matches!(
+        context,
+        ExpandContext::Files
+            | ExpandContext::FilesInPath
+            | ExpandContext::ShellCmd
+            | ExpandContext::Buffers
+            | ExpandContext::Directories
+            | ExpandContext::DirsInCdpath
+    ) {
+        let vse_what = if context == ExpandContext::Buffers {
+            VSE_BUFFER
+        } else {
+            VSE_NONE
         };
-        let context = (*xp).xp_context;
-        if matches!(
-            context,
-            ExpandContext::Files
-                | ExpandContext::FilesInPath
-                | ExpandContext::ShellCmd
-                | ExpandContext::Buffers
-                | ExpandContext::Directories
-                | ExpandContext::DirsInCdpath
-        ) {
-            let vse_what = if context == ExpandContext::Buffers {
-                VSE_BUFFER
-            } else {
-                VSE_NONE
+        // Insert a backslash into a file name before a space, \, %, #
+        // and wildmatch characters, except '~'.
+        for slot in matches.iter_mut() {
+            // For ":set path=" we need to escape spaces twice.
+            if xp.xp_backslash.has(BackslashEscape::THREE) {
+                let pat = if xp.xp_backslash.has(BackslashEscape::COMMA) {
+                    c" ,"
+                } else {
+                    c" "
+                };
+                let escaped = unsafe { vim_strsave_escaped(*slot, pat.as_ptr()) };
+                put(slot, escaped);
+            } else if xp.xp_backslash.has(BackslashEscape::COMMA)
+                && !unsafe { vim_strchr(*slot, ',' as c_int) }.is_null()
+            {
+                let escaped = unsafe { vim_strsave_escaped(*slot, c",".as_ptr()) };
+                put(slot, escaped);
+            }
+            let escaped = unsafe {
+                vim_strsave_fnameescape(*slot, if xp.xp_shell { VSE_SHELL } else { vse_what })
             };
-            // Insert a backslash into a file name before a space, \, %, #
-            // and wildmatch characters, except '~'.
-            for slot in matches.iter_mut() {
-                // For ":set path=" we need to escape spaces twice.
-                if (*xp).xp_backslash.has(BackslashEscape::THREE) {
-                    let pat = if (*xp).xp_backslash.has(BackslashEscape::COMMA) {
-                        c" ,"
-                    } else {
-                        c" "
-                    };
-                    let escaped = vim_strsave_escaped(*slot, pat.as_ptr());
-                    put(slot, escaped);
-                } else if (*xp).xp_backslash.has(BackslashEscape::COMMA)
-                    && !vim_strchr(*slot, ',' as c_int).is_null()
-                {
-                    let escaped = vim_strsave_escaped(*slot, c",".as_ptr());
-                    put(slot, escaped);
-                }
-                let escaped = vim_strsave_fnameescape(
-                    *slot,
-                    if (*xp).xp_shell { VSE_SHELL } else { vse_what },
-                );
-                put(slot, escaped);
+            put(slot, escaped);
 
-                // If "str" starts with "\~", replace a leading "~" of the
-                // match with "\~" as well.
-                if *str == b'\\' as c_char
-                    && *str.add(1) == b'~' as c_char
-                    && **slot == b'~' as c_char
-                {
-                    escape_fname(slot);
-                }
+            // If "str" starts with "\~", replace a leading "~" of the
+            // match with "\~" as well.
+            if unsafe { *str } == b'\\' as c_char
+                && unsafe { *str.add(1) } == b'~' as c_char
+                && unsafe { **slot } == b'~' as c_char
+            {
+                unsafe { escape_fname(slot) };
             }
-            (*xp).xp_backslash = BackslashEscape::NONE;
+        }
+        xp.xp_backslash = BackslashEscape::NONE;
 
-            // If the first match starts with a '+' escape it.  Otherwise it
-            // could be read as "+cmd".
-            if *matches[0] == b'+' as c_char {
-                escape_fname(&mut matches[0]);
-            }
-        } else if context == ExpandContext::Tags {
-            // Insert a backslash before characters in a tag name that would
-            // terminate the ":tag" command.
-            for slot in matches.iter_mut() {
-                let escaped = vim_strsave_escaped(*slot, c"\\|\"".as_ptr());
-                put(slot, escaped);
-            }
+        // If the first match starts with a '+' escape it.  Otherwise it
+        // could be read as "+cmd".
+        if unsafe { *matches[0] } == b'+' as c_char {
+            unsafe { escape_fname(&mut matches[0]) };
+        }
+    } else if context == ExpandContext::Tags {
+        // Insert a backslash before characters in a tag name that would
+        // terminate the ":tag" command.
+        for slot in matches.iter_mut() {
+            let escaped = unsafe { vim_strsave_escaped(*slot, c"\\|\"".as_ptr()) };
+            put(slot, escaped);
         }
     }
 }
@@ -166,13 +170,14 @@ pub(crate) unsafe fn escape_matches(
     matches: &mut [*mut c_char],
     options: WildOpts,
 ) {
-    unsafe {
-        // May change home directory back to "~".
-        if options.has(WildOpts::HOME_REPLACE) {
-            tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr());
-        }
-        if options.has(WildOpts::ESCAPE) {
-            wildescape(xp, str, matches);
-        }
+    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // context, which outlives this call.
+    let mut xp = unsafe { Xp::new(xp) };
+    // May change home directory back to "~".
+    if options.has(WildOpts::HOME_REPLACE) {
+        unsafe { tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr()) };
+    }
+    if options.has(WildOpts::ESCAPE) {
+        unsafe { wildescape(xp.raw(), str, matches) };
     }
 }
