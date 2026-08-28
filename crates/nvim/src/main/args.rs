@@ -678,7 +678,7 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
         unsafe { xfree(swcmd as *mut c_void) };
     }
 
-    unsafe { time_msg_at(c"parsing arguments") };
+    time_msg_at(c"parsing arguments");
 }
 
 /// Zero the parameter block, and set the fields whose "not given" value is
@@ -731,7 +731,7 @@ pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut mparm_T) {
     stdin_isatty.set(os_isatty(STDIN_FILENO));
     stdout_isatty.set(os_isatty(STDOUT_FILENO));
     stderr_isatty.set(os_isatty(STDERR_FILENO));
-    unsafe { time_msg_at(c"window checked") };
+    time_msg_at(c"window checked");
 }
 
 /// Set `v:progpath` and `v:progname`.

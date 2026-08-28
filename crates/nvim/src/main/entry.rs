@@ -108,7 +108,7 @@ pub unsafe extern "C" fn event_init() {
     unsafe { channel_init() };
     unsafe { terminal_init() };
     unsafe { ui_init() };
-    unsafe { time_msg_at(c"event init") };
+    time_msg_at(c"event init");
 }
 
 /// Take the event loop back down, in the reverse order.
@@ -157,19 +157,19 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
     unsafe { init_path(exename) };
     unsafe { runtime_init() };
     highlight_init();
-    unsafe { time_msg_at(c"early init") };
+    time_msg_at(c"early init");
 
     init_locale();
     set_init_tablocal();
     unsafe { win_alloc_first() };
-    unsafe { time_msg_at(c"init first window") };
+    time_msg_at(c"init first window");
 
     unsafe { alist_init(global_arglist()) };
     unsafe { (*global_arglist()).id = 0 };
     init_homedir();
     set_init_1(!paramp.is_null() && unsafe { (*paramp).clean });
     log_init();
-    unsafe { time_msg_at(c"inits 1") };
+    time_msg_at(c"inits 1");
 
     set_lang_var();
     qf_init_stack();
@@ -225,7 +225,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_argf_var() };
 
     unsafe { nlua_init(argv, argc, params.lua_arg0) };
-    unsafe { time_msg_at(c"init lua interpreter") };
+    time_msg_at(c"init lua interpreter");
 
     if embedded_mode.get() {
         // stdin/stdout become the RPC channel.
@@ -293,7 +293,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if !unsafe { server_init(params.listen_addr, &mut reason) } {
         unsafe { mainerr(reason.as_mut_ptr(), ptr::null(), ptr::null()) };
     }
-    unsafe { time_msg_at(c"expanding arguments") };
+    time_msg_at(c"expanding arguments");
 
     if params.diff_mode != 0 && params.window_count == -1 {
         // Diff mode wants one window per file.
@@ -320,13 +320,13 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { default_grid_alloc() };
 
     set_init_2(headless_mode.get());
-    unsafe { time_msg_at(c"inits 2") };
+    time_msg_at(c"inits 2");
 
     msg_scroll.set(1);
     no_wait_return.set(1);
     unsafe { init_highlight(true, false) };
     unsafe { ui_comp_syn_init() };
-    unsafe { time_msg_at(c"init highlight") };
+    time_msg_at(c"init highlight");
 
     debug_break_level.set(params.use_debug_break_level);
 
@@ -340,16 +340,16 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // startup waits for it so the first redraw has somewhere to go.
     let use_remote_ui = embedded_mode.get() && !headless_mode.get();
     if use_remote_ui {
-        unsafe { time_msg_at(c"waiting for UI") };
+        time_msg_at(c"waiting for UI");
         unsafe { remote_ui_wait_for_attach() };
-        unsafe { time_msg_at(c"done waiting for UI") };
+        time_msg_at(c"done waiting for UI");
         first_win().w_prev_height = first_win().w_height;
     }
 
     starting.set(NO_BUFFERS);
     unsafe { screenclear() };
     win_new_screensize();
-    unsafe { time_msg_at(c"clear screen") };
+    time_msg_at(c"clear screen");
 
     if unsafe { edit_stdin(&raw mut params) } {
         params.edit_type = EDIT_STDIN as c_int;
@@ -373,7 +373,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     unsafe { nlua_init_defaults() };
-    unsafe { time_msg_at(c"init default mappings & autocommands") };
+    time_msg_at(c"init default mappings & autocommands");
 
     // `-u NONE` also turns the plugins off, unless `--clean` asked for
     // the defaults.
@@ -404,7 +404,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     set_init_3();
-    unsafe { time_msg_at(c"inits 3") };
+    time_msg_at(c"inits 3");
 
     if params.no_swap_file != 0 {
         p_uc.set(0 as OptInt);
@@ -415,7 +415,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if unsafe { *p_shada.get() } as c_int != NUL {
         unsafe { shada_read_everything(ptr::null(), false, true) };
-        unsafe { time_msg_at(c"reading ShaDa") };
+        time_msg_at(c"reading ShaDa");
     }
     if unsafe { get_vim_var_list(Vv::Oldfiles) }.is_null() {
         unsafe { set_vim_var_list(Vv::Oldfiles, tv_list_alloc(0)) };
@@ -438,7 +438,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     no_wait_return.set(1);
 
     unsafe { create_windows(&raw mut params) };
-    unsafe { time_msg_at(c"opening buffers") };
+    time_msg_at(c"opening buffers");
 
     // The swap command has served its purpose; the ATTENTION prompts
     // from here on are the user's own doing.
@@ -449,12 +449,12 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     unsafe { apply_autocmds(EVENT_BUFENTER, no_fname, no_fname_io, false, curbuf.get()) };
-    unsafe { time_msg_at(c"BufEnter autocommands") };
+    time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
     if params.edit_type == EDIT_QF as c_int {
         unsafe { qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0) };
-        unsafe { time_msg_at(c"jump to first error") };
+        time_msg_at(c"jump to first error");
     }
 
     unsafe { edit_buffers(&raw mut params) };
@@ -482,10 +482,10 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as varnumber_T) };
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     unsafe { apply_autocmds(EVENT_VIMENTER, no_fname, no_fname_io, false, curbuf.get()) };
-    unsafe { time_msg_at(c"VimEnter autocommands") };
+    time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
         unsafe { do_autocmd_uienter_all() };
-        unsafe { time_msg_at(c"UIEnter autocommands") };
+        time_msg_at(c"UIEnter autocommands");
     }
 
     unsafe { set_reg_var(get_default_register_name()) };
@@ -493,7 +493,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if cur_win().w_onebuf_opt.wo_diff != 0 && cur_win().w_onebuf_opt.wo_scb != 0 {
         update_topline(unsafe { Win::current() });
         unsafe { check_scrollbind(0 as linenr_T, 0) };
-        unsafe { time_msg_at(c"diff scrollbinding") };
+        time_msg_at(c"diff scrollbinding");
     }
 
     if restart_edit.get() != 0 {
@@ -513,7 +513,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let (site, what) = (c"main".as_ptr(), c"executing Lua -l script".as_ptr());
         unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), site, 678, true, what) };
         let lua_ok = unsafe { nlua_exec_file(params.luaf) };
-        unsafe { time_msg_at(c"executing Lua -l script") };
+        time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
             unsafe { msg_putchar('\n' as c_int) };
             msg_didout.set(false);
@@ -521,7 +521,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         unsafe { getout(if lua_ok { 0 } else { 1 }) };
     }
 
-    unsafe { time_msg_at(c"before starting main loop") };
+    time_msg_at(c"before starting main loop");
     let (site, what) = (c"main".as_ptr(), c"starting main loop".as_ptr());
     unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), site, 689, true, what) };
 

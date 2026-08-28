@@ -133,7 +133,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
         unsafe { msg_putchar('\n' as c_int) };
         unsafe { os_exit(3) };
     }
-    unsafe { time_msg_at(c"reading errorfile") };
+    time_msg_at(c"reading errorfile");
 }
 
 /// `-t`: jump to a tag instead of opening a file.
@@ -147,7 +147,7 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     let into = cmd.as_mut_ptr();
     unsafe { vim_snprintf(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
     unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
-    unsafe { time_msg_at(c"jumping to tag") };
+    time_msg_at(c"jumping to tag");
     if swap_exists_did_quit.get() {
         quit_on_swap_exists(false);
     }
@@ -207,7 +207,7 @@ pub(crate) unsafe fn read_stdin() {
 
     no_wait_return.set(0);
     msg_didany.set(save_msg_didany);
-    unsafe { time_msg_at(c"reading stdin") };
+    time_msg_at(c"reading stdin");
     unsafe { check_swap_exists_action() };
 }
 
@@ -241,11 +241,11 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
         }
         if parm.window_layout == WIN_TABS as c_int {
             unsafe { parm.window_count = make_tabpages(parm.window_count) };
-            unsafe { time_msg_at(c"making tab pages") };
+            time_msg_at(c"making tab pages");
         } else if first_win().next().is_none_or(|next| next.w_floating) {
             let (count, vertical) = (parm.window_count, parm.window_layout == WIN_VER as c_int);
             parm.window_count = unsafe { make_windows(count, vertical) };
-            unsafe { time_msg_at(c"making windows") };
+            time_msg_at(c"making windows");
         } else {
             parm.window_count = win_count();
         }
@@ -446,7 +446,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     unsafe { win_enter(win.raw(), false) };
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
-    unsafe { time_msg_at(c"editing files in windows") };
+    time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
         unsafe { win_equal(curwin.get(), false, 'b' as c_int) };
     }

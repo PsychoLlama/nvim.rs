@@ -71,16 +71,8 @@ pub(crate) unsafe fn server_connect(
 
     let is_tcp = socket_address_is_tcp(unsafe { CStr::from_ptr(server_addr) });
     let mut error: *const c_char = ptr::null();
-    let chan = unsafe {
-        channel_connect(
-            is_tcp,
-            server_addr,
-            true,
-            on_data,
-            CONNECT_TIMEOUT_MS,
-            &raw mut error,
-        )
-    };
+    let (timeout, at_error) = (CONNECT_TIMEOUT_MS, &raw mut error);
+    let chan = unsafe { channel_connect(is_tcp, server_addr, true, on_data, timeout, at_error) };
     if !error.is_null() {
         unsafe { *errmsg = error };
         return 0;
@@ -91,13 +83,8 @@ pub(crate) unsafe fn server_connect(
 /// Complain that `vim._cs_remote` answered with the wrong shape, and exit 2.
 unsafe fn bad_reply_type(key: &CStr) -> ! {
     // SAFETY: writes one message to stderr and does not return.
-    unsafe {
-        fprintf(
-            stderr,
-            c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr(),
-            key.as_ptr(),
-        )
-    };
+    let fmt = c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr();
+    unsafe { fprintf(stderr, fmt, key.as_ptr()) };
     unsafe { os_exit(2) }
 }
 
@@ -141,31 +128,16 @@ pub(crate) unsafe fn remote_request(
 
     if is_ui {
         if chan == 0 {
-            unsafe {
-                fprintf(
-                    stderr,
-                    c"Remote ui failed to start: %s\n".as_ptr(),
-                    connect_error,
-                )
-            };
+            let fmt = c"Remote ui failed to start: %s\n".as_ptr();
+            unsafe { fprintf(stderr, fmt, connect_error) };
             unsafe { os_exit(1) };
         } else if unsafe { strequal(server_addr, os_getenv_into(c"NVIM".as_ptr(), &mut env)) } {
             // $NVIM in a `:terminal` child names its own parent, and a UI
             // attached to that is a loop.
-            unsafe {
-                fprintf(
-                    stderr,
-                    c"%s".as_ptr(),
-                    c"Cannot attach UI of :terminal child to its parent. ".as_ptr(),
-                )
-            };
-            unsafe {
-                fprintf(
-                    stderr,
-                    c"%s\n".as_ptr(),
-                    c"(Unset $NVIM to skip this check)".as_ptr(),
-                )
-            };
+            let why = c"Cannot attach UI of :terminal child to its parent. ".as_ptr();
+            unsafe { fprintf(stderr, c"%s".as_ptr(), why) };
+            let hint = c"(Unset $NVIM to skip this check)".as_ptr();
+            unsafe { fprintf(stderr, c"%s\n".as_ptr(), hint) };
             unsafe { os_exit(1) };
         }
         ui_client_channel_id.set(chan);
@@ -175,21 +147,15 @@ pub(crate) unsafe fn remote_request(
     // The forwarded arguments, as an API Array of strings.
     let mut args: Array = ARRAY_DICT_INIT;
     args.capacity = (argc - remote_args) as size_t;
-    args.items = unsafe {
-        xrealloc(
-            args.items as *mut c_void,
-            size_of::<Object>().wrapping_mul(args.capacity),
-        )
-    } as *mut Object;
+    let want = size_of::<Object>().wrapping_mul(args.capacity);
+    args.items = unsafe { xrealloc(args.items as *mut c_void, want) } as *mut Object;
     for i in remote_args..argc {
-        unsafe {
-            *args.items.add(args.size) = Object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: cstr_as_string(*argv.offset(i as isize)),
-                },
-            }
+        let word = unsafe { cstr_as_string(*argv.offset(i as isize)) };
+        let arg = Object {
+            type_0: kObjectTypeString,
+            data: object_data { string: word },
         };
+        unsafe { *args.items.add(args.size) = arg };
         args.size += 1;
     }
 
@@ -230,16 +196,8 @@ pub(crate) unsafe fn remote_request(
     };
     let script =
         String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
-    let reply = unsafe {
-        nlua_exec(
-            script,
-            ptr::null(),
-            a,
-            kRetObject,
-            ptr::null_mut::<Arena>(),
-            &raw mut err,
-        )
-    };
+    let (no_arena, at_err) = (ptr::null_mut::<Arena>(), &raw mut err);
+    let reply = unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena, at_err) };
 
     unsafe { xfree(args.items as *mut c_void) };
     args.size = 0;
@@ -251,12 +209,8 @@ pub(crate) unsafe fn remote_request(
         unsafe { os_exit(2) };
     }
     if reply.type_0 != kObjectTypeDict {
-        unsafe {
-            fprintf(
-                stderr,
-                c"vim._cs_remote returned unexpected value\n".as_ptr(),
-            )
-        };
+        let msg = c"vim._cs_remote returned unexpected value\n".as_ptr();
+        unsafe { fprintf(stderr, msg) };
         unsafe { os_exit(2) };
     }
     let dict = unsafe { reply.data.dict };
@@ -298,13 +252,9 @@ pub(crate) unsafe fn remote_request(
     }
 
     if should_exit.is_none() || tabbed.is_none() {
-        unsafe {
-            fprintf(
-                stderr,
-                c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n"
-                    .as_ptr(),
-            )
-        };
+        let msg =
+            c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n".as_ptr();
+        unsafe { fprintf(stderr, msg) };
         unsafe { os_exit(2) };
     }
 

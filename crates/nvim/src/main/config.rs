@@ -62,7 +62,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
 
-    unsafe { time_msg_at(c"--cmd commands") };
+    time_msg_at(c"--cmd commands");
 }
 
 /// Run the `-c` and `+cmd` commands, which come after the config and the
@@ -100,7 +100,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
         unsafe { qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0) };
     }
 
-    unsafe { time_msg_at(c"executing command arguments") };
+    time_msg_at(c"executing command arguments");
 }
 
 /// `<dir>/<appname><suffix>`, freshly allocated.
@@ -317,7 +317,7 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
         }
     }
 
-    unsafe { time_msg_at(c"sourcing vimrc file(s)") };
+    time_msg_at(c"sourcing vimrc file(s)");
 }
 
 /// The window the editor is working in.

@@ -146,15 +146,9 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                 if unsafe { buf_valid(buf) } && buf_get_changedtick(unsafe { Buf::new(buf) }) != -1
                 {
                     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-                    unsafe {
-                        apply_autocmds(
-                            EVENT_BUFWINLEAVE,
-                            (*buf).b_fname,
-                            (*buf).b_fname,
-                            false,
-                            buf,
-                        )
-                    };
+                    let fname = unsafe { (*buf).b_fname };
+                    let event = EVENT_BUFWINLEAVE;
+                    unsafe { apply_autocmds(event, fname, fname, false, buf) };
                     if bufref.valid() {
                         unsafe { buf_set_changedtick(buf, -1) };
                     }
@@ -267,17 +261,12 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
     if !errmsg.is_null() && unsafe { *errmsg } as c_int != NUL {
         let has_eol = unsafe { *errmsg.add(strlen(errmsg) - 1) } as u8 == b'\n';
-        unsafe {
-            fprintf(
-                stderr,
-                if has_eol {
-                    c"%s".as_ptr()
-                } else {
-                    c"%s\n".as_ptr()
-                },
-                errmsg,
-            )
+        let fmt = if has_eol {
+            c"%s".as_ptr()
+        } else {
+            c"%s\n".as_ptr()
         };
+        unsafe { fprintf(stderr, fmt, errmsg) };
     }
 
     if ui_client_channel_id.get() != 0 {
