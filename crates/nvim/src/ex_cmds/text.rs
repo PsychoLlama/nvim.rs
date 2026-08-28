@@ -73,8 +73,7 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
             c = NUL;
         }
         // NL is stored as CR.
-        // SAFETY: `curbuf` is the live current buffer.
-        let mac = c == CAR && unsafe { get_fileformat(curbuf.get()) } == EOL_MAC;
+        let mac = c == CAR && get_fileformat(cur_buf()) == EOL_MAC;
         // SAFETY: `c` came out of the buffer.
         unsafe { describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line) };
         // needed for overlong ascii?

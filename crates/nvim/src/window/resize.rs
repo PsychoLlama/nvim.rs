@@ -109,7 +109,7 @@ fn cursor_up(wp: Win, n: linenr_T) {
 /// The effective `'scrolloff'` for `wp`.
 fn scrolloff(wp: Win) -> ::core::ffi::c_long {
     // SAFETY: a live window.
-    unsafe { get_scrolloff_value(wp.raw()) as ::core::ffi::c_long }
+    get_scrolloff_value(wp) as ::core::ffi::c_long
 }
 
 /// Free a window's status line or window bar click definitions.

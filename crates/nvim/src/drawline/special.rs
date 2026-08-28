@@ -285,7 +285,7 @@ impl Cells {
 
         // The Tab's width depends on the column, with `'showbreak'`
         // removed: it is not part of the buffer line.
-        let sbr = unsafe { get_showbreak_value(wp.raw()) };
+        let sbr = get_showbreak_value(wp);
         let vcol_adjusted = if unsafe { *sbr } != NUL as ::core::ffi::c_char
             && wlv.vcol == wlv.showbreak_vcol
             && wp.w_onebuf_opt.wo_wrap != 0

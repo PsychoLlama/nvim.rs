@@ -227,9 +227,9 @@ fn measure_selection(sel: VisualSelection) -> Selection {
 /// `selection`, when given, must describe the current window's Visual
 /// selection.
 fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -> bool {
-    // SAFETY: a live buffer, and `lnum` walks its own line count, so every
-    // line the walk asks for is one of it.
-    let eol_size = if unsafe { get_fileformat(curbuf.get()) } == EOL_DOS {
+    // `lnum` walks the buffer's own line count, so every line the walk asks
+    // for is one of it.
+    let eol_size = if get_fileformat(cur_buf()) == EOL_DOS {
         2
     } else {
         1

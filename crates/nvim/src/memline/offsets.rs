@@ -241,7 +241,7 @@ pub unsafe fn ml_find_line_or_offset(
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
-    let ffdos = (!no_ff && unsafe { get_fileformat(buf) } == EOL_DOS) as c_int;
+    let ffdos = (!no_ff && get_fileformat(b) == EOL_DOS) as c_int;
     let mut extra = 0;
 
     // Take care of the cached line first, and only if it is before the

@@ -166,8 +166,8 @@ impl Win {
 
     /// Whether 'showbreak' is unset for this window.
     pub(super) fn showbreak_empty(self) -> bool {
-        // SAFETY: a live window; the answer is a NUL-terminated string.
-        unsafe { *get_showbreak_value(self.raw()) == NUL as c_char }
+        // SAFETY: 'showbreak' answers a NUL-terminated string.
+        unsafe { *get_showbreak_value(self) == NUL as c_char }
     }
 
     /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
@@ -266,14 +266,12 @@ impl Win {
 
     /// 'scrolloff' for this window, its window-local value preferred.
     pub(super) fn scrolloff(self) -> int64_t {
-        // SAFETY: a live window.
-        unsafe { get_scrolloff_value(self.raw()) }
+        get_scrolloff_value(self)
     }
 
     /// 'sidescrolloff' for this window, its window-local value preferred.
     pub(super) fn sidescrolloff(self) -> int64_t {
-        // SAFETY: a live window.
-        unsafe { get_sidescrolloff_value(self.raw()) }
+        get_sidescrolloff_value(self)
     }
 
     /// Redraw just the cursor's line.

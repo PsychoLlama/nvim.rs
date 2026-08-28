@@ -66,8 +66,7 @@ impl Win {
     /// The 'showbreak' in effect here — window-local or global — and whether
     /// it is non-empty, which is the only thing most callers ask.
     fn showbreak(self) -> (*mut c_char, bool) {
-        // SAFETY: a live window.
-        let sbr = unsafe { get_showbreak_value(self.raw()) };
+        let sbr = get_showbreak_value(self);
         // SAFETY: 'showbreak' is a NUL-terminated option string.
         (sbr, unsafe { byte_at(sbr) } != NUL as c_int)
     }

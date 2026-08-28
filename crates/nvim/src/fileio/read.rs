@@ -255,14 +255,14 @@ pub(crate) unsafe fn readfile(
                 keep_fileformat = false;
             } else {
                 if !eap.is_null() && unsafe { (*eap).force_ff } != 0 {
-                    fileformat = unsafe { get_fileformat_force(curbuf.get(), eap) };
+                    fileformat = unsafe { get_fileformat_force(cur_buf(), eap) };
                     guess.try_unix = 0;
                     guess.try_dos = false;
                     guess.try_mac = 0;
                 } else if cur_buf().b_p_bin != 0 {
                     fileformat = EOL_UNIX; // binary: use Unix format
                 } else if unsafe { *p_ffs.get() } == 0 {
-                    fileformat = unsafe { get_fileformat(curbuf.get()) }; // from the buffer
+                    fileformat = get_fileformat(cur_buf()); // from the buffer
                 } else {
                     fileformat = EOL_UNKNOWN; // detect from the file
                 }

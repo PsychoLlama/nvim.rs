@@ -200,7 +200,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
     }
-    let siso = unsafe { get_sidescrolloff_value(win.raw()) };
+    let siso = get_sidescrolloff_value(win);
     let mut col: colnr_T = 0;
     // A closed fold shows one line of its own, which starts at column 0.
     if !folded(win.w_cursor.lnum) {

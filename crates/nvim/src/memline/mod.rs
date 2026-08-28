@@ -370,7 +370,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
     if !b.b_spell {
         let changed = b.b_changed != 0;
         unsafe { (*b0p).set_dirty(changed) };
-        let fileformat = unsafe { get_fileformat(buf) } + 1;
+        let fileformat = get_fileformat(b) + 1;
         unsafe { (*b0p).set_flags(fileformat) };
         unsafe { set_b0_fname(b0p, buf) };
         unsafe {

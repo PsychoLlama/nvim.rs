@@ -314,8 +314,7 @@ impl Env {
 
     /// The buffer's `'fileformat'`, resolved.
     fn fileformat(&self) -> c_int {
-        // SAFETY: a live buffer.
-        unsafe { get_fileformat(self.buf.raw()) }
+        get_fileformat(self.buf)
     }
 
     /// `%S`: `'showcmd'`'s pending keys, but only in the option

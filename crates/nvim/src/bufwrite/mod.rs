@@ -286,7 +286,7 @@ pub unsafe fn buf_write(
     let whole = start == 1 && end == b.b_ml.ml_line_count;
     let mut write_undo_file = false;
     let mut sha_ctx = Sha256::new();
-    let bkc = unsafe { get_bkc_flags(buf) };
+    let bkc = get_bkc_flags(b);
 
     if fname.is_null() || unsafe { *fname } == 0 {
         return FAIL; // safety check
@@ -645,7 +645,7 @@ pub unsafe fn buf_write(
 
                     writer.clear();
                     writer.flags = wb_flags;
-                    fileformat = unsafe { get_fileformat_force(buf, eap) };
+                    fileformat = unsafe { get_fileformat_force(b, eap) };
                     let hash = write_undo_file.then_some(&mut sha_ctx);
                     let lines = (start, end);
                     written = unsafe {

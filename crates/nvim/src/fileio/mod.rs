@@ -576,7 +576,7 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
     if set_options {
         if !eap.is_null() && unsafe { (*eap).force_ff } != 0 {
             set_fileformat(
-                unsafe { get_fileformat_force(curbuf.get(), eap) },
+                unsafe { get_fileformat_force(cur_buf(), eap) },
                 OptionSetFlags::LOCAL,
             );
         } else if unsafe { *p_ffs.get() } != 0 {

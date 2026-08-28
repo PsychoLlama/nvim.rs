@@ -378,6 +378,8 @@ pub unsafe fn did_set_eventignore(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
+    // SAFETY: `optset_T` names a live buffer for exactly this call.
+    let b = unsafe { Buf::new(buf) };
     // Changing a buffer's line endings changes its text.
     if unsafe { (*buf).b_p_ma } == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
         return e_modifiable.as_ptr();
@@ -391,7 +393,7 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
     unsafe { ml_setflags(buf) };
     // Only "mac" is drawn differently, so a redraw is needed when
     // entering or leaving it.
-    if unsafe { get_fileformat(buf) } == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {
+    if get_fileformat(b) == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {
         unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
     }
     ptr::null()

@@ -33,8 +33,8 @@ use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
     BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptInt, OptVal, OptValData,
-    OptionSetFlags, ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
-    uint8_t, win_T,
+    OptionSetFlags, ShmFlag, VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
+    uint8_t,
 };
 use ::libc::{strcmp, strlen};
 
@@ -111,12 +111,11 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 ///
 /// # Safety
 ///
-/// `wp` must be live.
-pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
-    // SAFETY: the caller's `wp` is live and `val` is NUL-terminated.
+/// `val`, where given, must outlive the call.
+pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> c_int {
     let mut p = match val {
         Some(val) => val.as_ptr().cast_mut(),
-        None => unsafe { (*wp).w_onebuf_opt.wo_culopt },
+        None => wp.w_onebuf_opt.wo_culopt,
     };
     let mut flags: uint8_t = 0;
     while unsafe { *p } != 0 {
@@ -150,7 +149,7 @@ pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_
     {
         return FAIL;
     }
-    unsafe { (*wp).w_p_culopt_flags = flags };
+    wp.w_p_culopt_flags = flags;
     OK
 }
 
@@ -226,13 +225,8 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
 }
 
 /// 'backupcopy' as flags, local where set.
-///
-/// # Safety
-///
-/// `buf` must be live.
-pub(crate) unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
-    // SAFETY: the caller's buffer is live.
-    match unsafe { (*buf).b_bkc_flags } {
+pub(crate) fn get_bkc_flags(buf: Buf) -> c_uint {
+    match buf.b_bkc_flags {
         0 => bkc_flags.get(),
         local => local,
     }
@@ -240,15 +234,12 @@ pub(crate) unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
 
 /// 'formatlistpat', local where set.
 ///
-/// # Safety
-///
-/// `buf` must be live.
-pub(crate) unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
-    // SAFETY: the caller's buffer is live.
-    if unsafe { (*buf).b_p_flp }.is_null() || unsafe { *(*buf).b_p_flp } == 0 {
+pub(crate) fn get_flp_value(buf: Buf) -> *mut c_char {
+    // SAFETY: a string option is either null or NUL-terminated.
+    if buf.b_p_flp.is_null() || unsafe { *buf.b_p_flp } == 0 {
         p_flp.get()
     } else {
-        unsafe { (*buf).b_p_flp }
+        buf.b_p_flp
     }
 }
 
@@ -267,12 +258,9 @@ pub(crate) fn get_ve_flags(wp: Win) -> c_uint {
 /// 'showbreak', local where set. `"NONE"` is how a window says "no leader"
 /// against a global value that has one.
 ///
-/// # Safety
-///
-/// `win` must be live.
-pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
-    // SAFETY: the caller's window is live.
-    let local = unsafe { (*win).w_onebuf_opt.wo_sbr };
+pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
+    let local = win.w_onebuf_opt.wo_sbr;
+    // SAFETY: a string option is either null or NUL-terminated.
     if local.is_null() || unsafe { *local } == 0 {
         return p_sbr.get();
     }
@@ -284,13 +272,10 @@ pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
 ///
-/// # Safety
-///
-/// `buf` must be live.
-pub(crate) unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
-    // SAFETY: the caller's buffer is live; 'fileformat' is never null.
-    let c = unsafe { *(*buf).b_p_ff } as c_uchar;
-    if unsafe { (*buf).b_p_bin } != 0 || c == b'u' {
+pub(crate) fn get_fileformat(buf: Buf) -> c_int {
+    // SAFETY: 'fileformat' is a string option, so it is never null.
+    let c = unsafe { *buf.b_p_ff } as c_uchar;
+    if buf.b_p_bin != 0 || c == b'u' {
         EOL_UNIX
     } else if c == b'm' {
         EOL_MAC
@@ -303,9 +288,8 @@ pub(crate) unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
 ///
 /// # Safety
 ///
-/// `buf` must be live; `eap`, when non-null, must be a live command.
-pub(crate) unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_int {
-    // SAFETY: the caller's pointers are live.
+/// `eap`, when non-null, must be a live command.
+pub(crate) unsafe fn get_fileformat_force(buf: Buf, eap: *const exarg_T) -> c_int {
     // SAFETY: the caller's command, where they gave one. Reading both
     // fields together is the same answer: they are plain fields of a live
     // `exarg_T`, and only their values decide anything below.
@@ -320,14 +304,13 @@ pub(crate) unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T
         let binary = if force_bin != 0 {
             (force_bin == FORCE_BIN) as c_int
         } else {
-            // SAFETY: the caller's buffer is live.
-            unsafe { (*buf).b_p_bin }
+            buf.b_p_bin
         };
         if binary != 0 {
             return EOL_UNIX;
         }
         // SAFETY: 'fileformat' is a string option, so it is never null.
-        (unsafe { *(*buf).b_p_ff }) as c_uchar as c_int
+        (unsafe { *buf.b_p_ff }) as c_uchar as c_int
     };
     match c as u8 {
         b'u' => EOL_UNIX,
@@ -483,15 +466,12 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
 /// 'scrolloff' for a window, local where set. A terminal buffer never
 /// scrolls off, whatever the option says.
 ///
-/// # Safety
-///
-/// `wp` must be live, with a live buffer.
-pub(crate) unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
-    // SAFETY: the caller's window and its buffer are live.
-    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*(*wp).w_buffer).terminal }.is_null() {
+pub(crate) fn get_scrolloff_value(wp: Win) -> int64_t {
+    // SAFETY: a window that is being scrolled has a buffer.
+    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*wp.w_buffer).terminal }.is_null() {
         return 0;
     }
-    match unsafe { (*wp).w_onebuf_opt.wo_so } {
+    match wp.w_onebuf_opt.wo_so {
         local if local < 0 => p_so.get(),
         local => local,
     }
@@ -499,12 +479,8 @@ pub(crate) unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
 
 /// 'sidescrolloff' for a window, local where set.
 ///
-/// # Safety
-///
-/// `wp` must be live.
-pub(crate) unsafe fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t {
-    // SAFETY: the caller's window is live.
-    match unsafe { (*wp).w_onebuf_opt.wo_siso } {
+pub(crate) fn get_sidescrolloff_value(wp: Win) -> int64_t {
+    match wp.w_onebuf_opt.wo_siso {
         local if local < 0 => p_siso.get(),
         local => local,
     }

@@ -123,7 +123,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
                 let limit = unsafe { plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count) }
                     as linenr_T
-                    - unsafe { get_scrolloff_value(curwin.get()) } as linenr_T;
+                    - get_scrolloff_value(cur_win()) as linenr_T;
                 vtopline = vtopline.min(limit);
             }
         }

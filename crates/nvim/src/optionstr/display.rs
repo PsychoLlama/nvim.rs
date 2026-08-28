@@ -201,9 +201,11 @@ pub unsafe fn did_set_cursorlineopt(args: *mut optset_T) -> *const c_char {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     // An empty 'cursorlineopt' is not "no highlighting", it is no answer at
     // all.
-    // SAFETY: the option's C string value and the frame's window.
+    // SAFETY: the option's C string value, and the frame's window, which
+    // `optset_T` names for exactly this call.
+    let win = unsafe { Win::new(wp) };
     if unsafe { c_int::from(**varp) } == NUL
-        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), wp) } != OK
+        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), win) } != OK
     {
         return invalid();
     }

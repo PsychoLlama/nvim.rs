@@ -420,8 +420,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     let tabstop = unsafe { tabstop_at(vcol, cur_buf().b_p_ts, cur_buf().b_p_vts_array, false) };
     if cur_win().w_wcol < s.mincol - tabstop
         && cur_win().w_wrow as int64_t
-            == (cur_win().w_view_height - 1) as int64_t
-                - unsafe { get_scrolloff_value(curwin.get()) }
+            == (cur_win().w_view_height - 1) as int64_t - get_scrolloff_value(cur_win())
         && (cur_win().w_cursor.lnum != cur_win().w_topline || cur_win().w_topfill > 0)
     {
         if cur_win().w_topfill > 0 {

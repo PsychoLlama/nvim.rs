@@ -168,8 +168,8 @@ pub(crate) unsafe fn nv_screengo(
         let mut virtcol = win.w_virtcol;
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
-        if virtcol > width1 && unsafe { *get_showbreak_value(wp.raw()) } as c_int != NUL {
-            virtcol -= unsafe { vim_strsize(get_showbreak_value(wp.raw())) };
+        if virtcol > width1 && unsafe { *get_showbreak_value(wp) } as c_int != NUL {
+            virtcol -= unsafe { vim_strsize(get_showbreak_value(wp)) };
         }
         let c = unsafe { utf_ptr2char(get_cursor_pos_ptr()) };
         // A wide unprintable character is drawn as `<xxxx>`, which is

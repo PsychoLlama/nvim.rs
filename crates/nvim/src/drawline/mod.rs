@@ -290,7 +290,7 @@ unsafe fn wlv_put_linebuf(
     if wlv.row == 0
         && wp.w_skipcol > 0
         // Do not overwrite the 'showbreak' text with "<<<" ...
-        && unsafe { *get_showbreak_value(wp.raw()) } as ::core::ffi::c_int == NUL
+        && unsafe { *get_showbreak_value(wp) } as ::core::ffi::c_int == NUL
         // ... nor the 'listchars' "precedes" text.
         && !(wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.prec != 0)
     {

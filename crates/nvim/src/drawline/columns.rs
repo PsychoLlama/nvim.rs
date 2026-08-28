@@ -795,7 +795,7 @@ impl WinLineVars {
             };
         }
 
-        let sbr = unsafe { get_showbreak_value(wp.raw()) };
+        let sbr = get_showbreak_value(wp);
         if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
             // 'showbreak' combined with 'cursorline', 'showbreak' winning.
             let attr =

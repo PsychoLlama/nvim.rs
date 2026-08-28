@@ -315,8 +315,8 @@ pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
         list: win.w_briopt_list,
         vcol: win.w_briopt_vcol,
     };
-    // SAFETY: a live window, and its buffer's 'formatlistpat'.
-    let (col_off2, flp) = unsafe { (win_col_off2(win), get_flp_value(buf.raw())) };
+    // SAFETY: a live window.
+    let (col_off2, flp) = (win_col_off2(win), get_flp_value(buf));
     // The window width minus its margins: what is left for text.
     let eff_wwidth = win.w_view_width - unsafe { win_col_off(wp) } + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
@@ -343,8 +343,8 @@ pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
         bri
     });
     if opt.sbr {
-        // SAFETY: the caller's window.
-        bri -= unsafe { vim_strsize(get_showbreak_value(wp)) };
+        // SAFETY: 'showbreak' is a NUL-terminated option value.
+        bri -= unsafe { vim_strsize(get_showbreak_value(win)) };
     }
     // Never indent past the left window margin, and always leave `min`
     // columns for the text when the window is wide enough for them.

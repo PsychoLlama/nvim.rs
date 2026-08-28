@@ -579,7 +579,7 @@ pub unsafe fn ml_setflags(buf: *mut buf_T) {
     let b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
     let changed = b.b_changed != 0;
     unsafe { (*b0p).set_dirty(changed) };
-    let fileformat = (unsafe { get_fileformat(buf) } + 1) as uint8_t as c_int;
+    let fileformat = (get_fileformat(b) + 1) as uint8_t as c_int;
     let flags = unsafe { (*b0p).flags() } & !B0_FF_MASK | fileformat;
     unsafe { (*b0p).set_flags(flags) };
     unsafe { add_b0_fenc(b0p, buf) };

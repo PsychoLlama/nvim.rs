@@ -22,6 +22,7 @@ use crate::mbyte::{
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
 use crate::types::{NUL, StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
+use crate::winlayer::Buf;
 use ::libc::strlen;
 
 use super::{
@@ -459,8 +460,10 @@ unsafe fn render_nonprint(buf: *const buf_T, c: c_int) -> render::Rendered {
     let c = if c == NL {
         // A NUL is stored as a newline internally.
         NUL
-    // SAFETY: `buf` is a valid buffer when it is not null.
-    } else if !buf.is_null() && c == CAR && unsafe { get_fileformat(buf) } == EOL_MAC {
+    // SAFETY: the caller's promise -- null, or a valid buffer.
+    } else if c == CAR
+        && unsafe { Buf::from_raw(buf.cast_mut()) }.is_some_and(|b| get_fileformat(b) == EOL_MAC)
+    {
         NL
     } else {
         c
