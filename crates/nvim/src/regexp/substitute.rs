@@ -199,13 +199,9 @@ impl Out {
         if self.copy {
             // SAFETY: `room` cleared `tail` bytes at `at + 1`, and `first`
             // has `totlen` valid bytes because `utfc_ptr2len` said so.
-            unsafe {
-                memmove(
-                    self.at.offset(1).cast(),
-                    first.offset(clen as isize).cast(),
-                    tail as usize,
-                )
-            };
+            let dest = unsafe { self.at.offset(1) }.cast();
+            let src = unsafe { first.offset(clen as isize) }.cast();
+            unsafe { memmove(dest, src, tail as usize) };
         }
         self.skip(tail);
         true
@@ -288,13 +284,8 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 
         let tmpsub: *mut c_char = unsafe { xmalloc(tmpsublen + 1) }.cast();
         unsafe { memmove(tmpsub.cast(), newsub.cast(), prefixlen) };
-        unsafe {
-            memmove(
-                tmpsub.add(prefixlen).cast(),
-                reg_prev_sub.get().cast(),
-                reg_prev_sublen.get(),
-            )
-        };
+        let dest = unsafe { tmpsub.add(prefixlen) }.cast();
+        unsafe { memmove(dest, reg_prev_sub.get().cast(), reg_prev_sublen.get()) };
         let expanded = prefixlen + reg_prev_sublen.get();
         unsafe { strcpy(tmpsub.add(expanded), postfix) };
 
@@ -531,32 +522,20 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);
     funcexe.fe_evaluate = true;
-    if unsafe { (*expr).v_type } == VAR_FUNC {
-        let name = unsafe { (*expr).vval.v_string };
-        unsafe {
-            call_func(
-                name,
-                -1,
-                &raw mut rettv,
-                1,
-                argv.as_mut_ptr(),
-                &raw mut funcexe,
-            )
-        };
+    let name = if unsafe { (*expr).v_type } == VAR_FUNC {
+        Some(unsafe { (*expr).vval.v_string })
     } else if unsafe { (*expr).v_type } == VAR_PARTIAL {
         let partial: *mut partial_T = unsafe { (*expr).vval.v_partial };
         funcexe.fe_partial = partial;
-        let name = unsafe { partial_name(partial) };
-        unsafe {
-            call_func(
-                name,
-                -1,
-                &raw mut rettv,
-                1,
-                argv.as_mut_ptr(),
-                &raw mut funcexe,
-            )
-        };
+        Some(unsafe { partial_name(partial) })
+    } else {
+        None
+    };
+    if let Some(name) = name {
+        let rettv = &raw mut rettv;
+        let argv = argv.as_mut_ptr();
+        let funcexe = &raw mut funcexe;
+        unsafe { call_func(name, -1, rettv, 1, argv, funcexe) };
     }
     if unsafe { tv_list_len(&raw mut match_list.sl_list) } > 0 {
         // A non-empty list means `fill_submatch_list` ran and allocated.

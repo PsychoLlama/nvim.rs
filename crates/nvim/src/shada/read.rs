@@ -254,20 +254,15 @@ impl Reading {
                 return;
             }
         }
-        let stored = unsafe {
-            op_reg_set(
-                reg.name,
-                yankreg_T {
-                    y_array: reg.contents,
-                    y_size: reg.contents_size,
-                    y_type: reg.type_0,
-                    y_width: reg.width as colnr_T,
-                    timestamp: entry.timestamp,
-                    additional_data: entry.additional_data,
-                },
-                reg.is_unnamed,
-            )
+        let yank = yankreg_T {
+            y_array: reg.contents,
+            y_size: reg.contents_size,
+            y_type: reg.type_0,
+            y_width: reg.width as colnr_T,
+            timestamp: entry.timestamp,
+            additional_data: entry.additional_data,
         };
+        let stored = unsafe { op_reg_set(reg.name, yank, reg.is_unnamed) };
         if !stored {
             unsafe { shada_free_shada_entry(&raw mut entry) };
         }
@@ -411,15 +406,14 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
             continue;
         }
         unsafe { free_fmark((*buf).b_last_cursor.clone()) };
-        unsafe {
-            (*buf).b_last_cursor = fmark_T {
-                mark: (*item).pos,
-                fnum: 0,
-                timestamp: os_time(),
-                view: INIT_FMARKV,
-                additional_data: core::ptr::null_mut(),
-            }
+        let cursor = fmark_T {
+            mark: unsafe { (*item).pos },
+            fnum: 0,
+            timestamp: os_time(),
+            view: INIT_FMARKV,
+            additional_data: core::ptr::null_mut(),
         };
+        unsafe { (*buf).b_last_cursor = cursor };
         let (lnum, col) = (unsafe { (*buf).b_last_cursor.mark.lnum }, unsafe {
             (*buf).b_last_cursor.mark.col
         });

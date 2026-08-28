@@ -65,12 +65,10 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
             regexp_engine.set(chosen);
             expr = unsafe { expr.offset(5) };
         } else {
-            unsafe {
-                emsg(gettext(
-                c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "
-                    .as_ptr(),
-            ))
-            };
+            let fmt = c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "
+                .as_ptr();
+            // SAFETY: a static, NUL-terminated message.
+            unsafe { emsg(gettext(fmt)) };
             regexp_engine.set(AUTOMATIC_ENGINE as c_int);
         }
     }
@@ -87,16 +85,11 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
         } else {
             0
         };
-        unsafe {
-            nfa_regengine.regcomp.expect("non-null function pointer")(
-                expr as *mut uint8_t,
-                re_flags + auto,
-            )
-        }
+        let regcomp = nfa_regengine.regcomp.expect("non-null function pointer");
+        unsafe { regcomp(expr as *mut uint8_t, re_flags + auto) }
     } else {
-        unsafe {
-            bt_regengine.regcomp.expect("non-null function pointer")(expr as *mut uint8_t, re_flags)
-        }
+        let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
+        unsafe { regcomp(expr as *mut uint8_t, re_flags) }
     };
     // Only retry when the NFA engine declined quietly: an error means the
     // pattern is bad, not merely too much for that engine.
@@ -107,17 +100,13 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
         regexp_engine.set(BACKTRACKING_ENGINE as c_int);
         if p_verbose.get() > 0 as OptInt {
             unsafe { verbose_enter() };
-            unsafe {
-                msg_puts(gettext(
-                    c"Switching to backtracking RE engine for pattern: ".as_ptr(),
-                ))
-            };
+            let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
+            unsafe { msg_puts(gettext(note)) };
             unsafe { msg_puts(expr) };
             unsafe { verbose_leave() };
         }
-        prog = unsafe {
-            bt_regengine.regcomp.expect("non-null function pointer")(expr as *mut uint8_t, re_flags)
-        };
+        let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
+        prog = unsafe { regcomp(expr as *mut uint8_t, re_flags) };
     }
     if !prog.is_null() {
         unsafe { (*prog).re_engine = regexp_engine.get() as u32 };

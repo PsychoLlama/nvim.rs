@@ -33,18 +33,17 @@ use crate::mark::global_mark_timestamp;
 /// [`WriteMergerState`] that is allocated zeroed.
 pub(crate) unsafe fn hmll_init(hmll: *mut HMLList, size: size_t) {
     let entries = unsafe { xcalloc(size, size_of::<HMLListEntry>()) }.cast::<HMLListEntry>();
-    unsafe {
-        hmll.write(HMLList {
-            entries,
-            first: core::ptr::null_mut(),
-            last: core::ptr::null_mut(),
-            free_entry: core::ptr::null_mut(),
-            last_free_entry: entries,
-            size,
-            num_entries: 0,
-            contained_entries: MAP_INIT,
-        })
+    let empty = HMLList {
+        entries,
+        first: core::ptr::null_mut(),
+        last: core::ptr::null_mut(),
+        free_entry: core::ptr::null_mut(),
+        last_free_entry: entries,
+        size,
+        num_entries: 0,
+        contained_entries: MAP_INIT,
     };
+    unsafe { hmll.write(empty) };
 }
 
 /// Take one entry out of the ring, freeing what it holds.
@@ -523,16 +522,13 @@ pub(crate) unsafe fn shada_read_when_writing(
                     unsafe { entry.data.filemark }.mark,
                     unsafe { entry.data.filemark }.fname,
                 );
+                let jumps = unsafe { &mut (*wms).jumps };
+                let jumps_size = unsafe { &mut (*wms).jumps_size };
                 unsafe {
-                    insert_mark_list(
-                        &mut (*wms).jumps,
-                        &mut (*wms).jumps_size,
-                        entry,
-                        |existing| {
-                            marks_equal(existing.data.filemark.mark, mark)
-                                && strcmp(existing.data.filemark.fname, fname) == 0
-                        },
-                    )
+                    insert_mark_list(jumps, jumps_size, entry, |existing| {
+                        marks_equal(existing.data.filemark.mark, mark)
+                            && strcmp(existing.data.filemark.fname, fname) == 0
+                    })
                 };
             }
             _ => {}
@@ -647,14 +643,9 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
 
     let mut key: *mut cstr_t = core::ptr::null_mut();
     let mut new_item = false;
-    let val = unsafe {
-        map_put_ref_cstr_t_ptr_t(
-            &raw mut (*wms).file_marks,
-            fname,
-            &raw mut key,
-            &raw mut new_item,
-        )
-    };
+    let file_marks = unsafe { &raw mut (*wms).file_marks };
+    let val =
+        unsafe { map_put_ref_cstr_t_ptr_t(file_marks, fname, &raw mut key, &raw mut new_item) };
     if new_item {
         unsafe { *key = xstrdup(fname) };
     }
@@ -667,14 +658,13 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
     }
 
     if entry.type_0 == kSDItemChange {
-        let mark = unsafe { entry.data.filemark }.mark;
+        let mark = unsafe { entry.data.filemark.mark };
+        let changes = unsafe { &mut (*filemarks).changes };
+        let changes_size = unsafe { &mut (*filemarks).changes_size };
         unsafe {
-            insert_mark_list(
-                &mut (*filemarks).changes,
-                &mut (*filemarks).changes_size,
-                entry,
-                |existing| marks_equal(existing.data.filemark.mark, mark),
-            )
+            insert_mark_list(changes, changes_size, entry, |existing| {
+                marks_equal(existing.data.filemark.mark, mark)
+            })
         };
         return;
     }
@@ -729,15 +719,9 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
             && unsafe { path_fnamecmp(entry.data.filemark.fname, buf.b_ffname) } == 0
         {
             let mut fm: fmark_T = fmark_T::UNSET;
-            unsafe {
-                mark_get(
-                    buf.raw(),
-                    curwin.get(),
-                    &raw mut fm,
-                    kMarkBufLocal,
-                    entry.data.filemark.name as c_int,
-                )
-            };
+            let name = unsafe { entry.data.filemark.name } as c_int;
+            let win = curwin.get();
+            unsafe { mark_get(buf.raw(), win, &raw mut fm, kMarkBufLocal, name) };
             if fm.timestamp >= entry.timestamp {
                 return true;
             }

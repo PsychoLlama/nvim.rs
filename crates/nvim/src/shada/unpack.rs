@@ -13,12 +13,30 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::msgpack_rpc::unpacker::{MPACK_EOF, MPACK_OK};
 use crate::types::FieldHashfn;
 
 use super::*;
+
+/// Report `E576`/`E886` about the file, naming a byte offset or a length.
+///
+/// Every message here ends in one variadic call; writing it once keeps the
+/// unchecked part of reporting to these two functions.
+fn shada_read_error(fmt: &CStr, at: uint64_t) {
+    // SAFETY: `fmt` is a static format string whose one conversion is the
+    // `%lu` that `at` is passed for.
+    unsafe { semsg_c!(gettext(fmt.as_ptr()), at) };
+}
+
+/// As [`shada_read_error`], for the messages whose `%s` is a libuv error or
+/// a fixed reason.
+fn shada_read_error_why(fmt: &CStr, why: *const c_char) {
+    // SAFETY: as `shada_read_error`; `why` is a NUL-terminated message that
+    // outlives the call.
+    unsafe { semsg_c!(gettext(fmt.as_ptr()), why) };
+}
 
 /// The largest entry type this Nvim knows. Anything above it is an unknown
 /// entry, kept only to be written back out.
@@ -161,24 +179,13 @@ pub(crate) unsafe fn fread_len(
 ) -> ShaDaReadResult {
     let read_bytes = unsafe { file_read(sd_reader, buffer, length) };
     if read_bytes < 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E886: System error while reading ShaDa file: %s".as_ptr()),
-                uv_strerror(read_bytes as c_int),
-            )
-        };
+        shada_read_error_why(c"E886: System error while reading ShaDa file: %s", unsafe {
+            uv_strerror(read_bytes as c_int)
+        });
         return kSDReadStatusReadError;
     }
     if read_bytes != length as ptrdiff_t {
-        unsafe {
-            semsg_c!(
-            gettext(
-                c"E576: Error while reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
-                    .as_ptr(),
-            ),
-            length as uint64_t,
-        )
-        };
+        shada_read_error(c"E576: Error while reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier", length as uint64_t);
         return kSDReadStatusNotShaDa;
     }
     kSDReadStatusSuccess
@@ -191,33 +198,21 @@ pub(crate) unsafe fn sd_reader_skip(
 ) -> ShaDaReadResult {
     let skip_bytes = unsafe { file_skip(sd_reader, offset) };
     if skip_bytes < 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E886: System error while skipping in ShaDa file: %s".as_ptr()),
-                uv_strerror(skip_bytes as c_int),
-            )
-        };
+        shada_read_error_why(
+            c"E886: System error while skipping in ShaDa file: %s",
+            unsafe { uv_strerror(skip_bytes as c_int) },
+        );
         return kSDReadStatusReadError;
     }
     if skip_bytes != offset as ptrdiff_t {
         assert!(skip_bytes < offset as ptrdiff_t, "skipped past end of file");
         if unsafe { file_eof(sd_reader) } {
-            unsafe {
-                semsg_c!(
-                gettext(
-                    c"E576: Reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
-                        .as_ptr(),
-                ),
-                offset as uint64_t,
-            )
-            };
+            shada_read_error(c"E576: Reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier", offset as uint64_t);
         } else {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E886: System error while skipping in ShaDa file: %s".as_ptr()),
-                    gettext(c"too few bytes read".as_ptr()),
-                )
-            };
+            shada_read_error_why(
+                c"E886: System error while skipping in ShaDa file: %s",
+                unsafe { gettext(c"too few bytes read".as_ptr()) },
+            );
         }
         return kSDReadStatusNotShaDa;
     }
@@ -240,27 +235,17 @@ unsafe fn read_uint64(
     let mut first: uint8_t = 0;
     let read_bytes = unsafe { file_read(sd_reader, (&raw mut first).cast::<c_char>(), 1) };
     if read_bytes < 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E886: System error while reading integer from ShaDa file: %s".as_ptr()),
-                uv_strerror(read_bytes as c_int),
-            )
-        };
+        shada_read_error_why(
+            c"E886: System error while reading integer from ShaDa file: %s",
+            unsafe { uv_strerror(read_bytes as c_int) },
+        );
         return Err(kSDReadStatusReadError);
     }
     if read_bytes == 0 {
         if allow_eof && unsafe { file_eof(sd_reader) } {
             return Err(kSDReadStatusFinished);
         }
-        unsafe {
-            semsg_c!(
-            gettext(
-                c"E576: Error while reading ShaDa file: expected positive integer at position %lu, but got nothing"
-                    .as_ptr(),
-            ),
-            fpos,
-        )
-        };
+        shada_read_error(c"E576: Error while reading ShaDa file: expected positive integer at position %lu, but got nothing", fpos);
         return Err(kSDReadStatusNotShaDa);
     }
 
@@ -275,15 +260,10 @@ unsafe fn read_uint64(
         0xce => 4,
         0xcf => 8,
         _ => {
-            unsafe {
-                semsg_c!(
-                gettext(
-                    c"E576: Error while reading ShaDa file: expected positive integer at position %lu"
-                        .as_ptr(),
-                ),
+            shada_read_error(
+                c"E576: Error while reading ShaDa file: expected positive integer at position %lu",
                 fpos,
-            )
-            };
+            );
             return Err(kSDReadStatusNotShaDa);
         }
     };
@@ -308,15 +288,10 @@ pub(crate) unsafe fn shada_check_status(
 ) -> ShaDaReadResult {
     if status == MPACK_OK {
         if remaining != 0 {
-            unsafe {
-                semsg_c!(
-                gettext(
-                    c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu"
-                        .as_ptr(),
-                ),
+            shada_read_error(
+                c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu",
                 initial_fpos as uint64_t,
-            )
-            };
+            );
             return kSDReadStatusNotShaDa;
         }
         return kSDReadStatusSuccess;
@@ -353,15 +328,7 @@ unsafe fn read_header(sd_reader: *mut FileDescriptor) -> Result<Header, ShaDaRea
     let length_u64 = unsafe { read_uint64(sd_reader, false) }?;
 
     if length_u64 > PTRDIFF_MAX as uint64_t {
-        unsafe {
-            semsg_c!(
-            gettext(
-                c"E576: Error while reading ShaDa file: there is an item at position %lu that is stated to be too long"
-                    .as_ptr(),
-            ),
-            fpos,
-        )
-        };
+        shada_read_error(c"E576: Error while reading ShaDa file: there is an item at position %lu that is stated to be too long", fpos);
         return Err(kSDReadStatusNotShaDa);
     }
     if type_u64 == 0 {
@@ -369,15 +336,7 @@ unsafe fn read_header(sd_reader: *mut FileDescriptor) -> Result<Header, ShaDaRea
         // `read_uint64` rejects — but `kSDItemMissing` can, and it would
         // otherwise be skipped silently because `1 << 0` is never in the
         // flags.
-        unsafe {
-            semsg_c!(
-            gettext(
-                c"E576: Error while reading ShaDa file: there is an item at position %lu that must not be there: Missing items are for internal uses only"
-                    .as_ptr(),
-            ),
-            fpos,
-        )
-        };
+        shada_read_error(c"E576: Error while reading ShaDa file: there is an item at position %lu that must not be there: Missing items are for internal uses only", fpos);
         return Err(kSDReadStatusNotShaDa);
     }
     Ok(Header {

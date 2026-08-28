@@ -44,41 +44,38 @@ use ::libc::strlen;
 /// multibyte predicate.
 pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
     // SAFETY: the ctype table is indexed only inside the guards below.
-    let member = unsafe {
-        let ctype = |mask: c_int| {
-            *(*__ctype_b_loc()).offset(c as isize) as c_int & mask as c_ushort as c_int != 0
-        };
-        match cls {
-            NFA_CLASS_ALNUM => (1..128).contains(&c) && ctype(_ISalnum as c_int),
-            NFA_CLASS_ALPHA => (1..128).contains(&c) && ctype(_ISalpha as c_int),
-            NFA_CLASS_BLANK => c == b' ' as c_int || c == b'\t' as c_int,
-            NFA_CLASS_CNTRL => (1..=127).contains(&c) && ctype(_IScntrl as c_int),
-            NFA_CLASS_DIGIT => ascii_isdigit(c),
-            NFA_CLASS_GRAPH => (1..=127).contains(&c) && ctype(_ISgraph as c_int),
-            // U+00AA and U+00BA are the ordinal indicators: lowercase
-            // letters, but not the lower half of a case pair.
-            NFA_CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
-            NFA_CLASS_PRINT => vim_isprintc(c),
-            NFA_CLASS_PUNCT => (1..128).contains(&c) && ctype(_ISpunct as c_int),
-            NFA_CLASS_SPACE => (9..=13).contains(&c) || c == b' ' as c_int,
-            NFA_CLASS_UPPER => mb_isupper(c),
-            NFA_CLASS_XDIGIT => ascii_isxdigit(c),
-            NFA_CLASS_TAB => c == b'\t' as c_int,
-            NFA_CLASS_RETURN => c == b'\r' as c_int,
-            NFA_CLASS_BACKSPACE => c == 0x08,
-            NFA_CLASS_ESCAPE => c == ESC,
-            NFA_CLASS_IDENT => vim_is_ident_char(c),
-            NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
-            NFA_CLASS_FNAME => vim_isfilec(c),
-            _ => {
-                // `siemsg`, not `semsg`: an internal-error report, dropped
-                // while messages are held back.
-                siemsg_c!(
-                    c"E877: (NFA regexp) Invalid character class: %ld".as_ptr(),
-                    cls as i64,
-                );
-                return FAIL;
-            }
+    let ctype = |mask: c_int| unsafe {
+        *(*__ctype_b_loc()).offset(c as isize) as c_int & mask as c_ushort as c_int != 0
+    };
+    let member = match cls {
+        NFA_CLASS_ALNUM => (1..128).contains(&c) && ctype(_ISalnum as c_int),
+        NFA_CLASS_ALPHA => (1..128).contains(&c) && ctype(_ISalpha as c_int),
+        NFA_CLASS_BLANK => c == b' ' as c_int || c == b'\t' as c_int,
+        NFA_CLASS_CNTRL => (1..=127).contains(&c) && ctype(_IScntrl as c_int),
+        NFA_CLASS_DIGIT => ascii_isdigit(c),
+        NFA_CLASS_GRAPH => (1..=127).contains(&c) && ctype(_ISgraph as c_int),
+        // U+00AA and U+00BA are the ordinal indicators: lowercase
+        // letters, but not the lower half of a case pair.
+        NFA_CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
+        NFA_CLASS_PRINT => unsafe { vim_isprintc(c) },
+        NFA_CLASS_PUNCT => (1..128).contains(&c) && ctype(_ISpunct as c_int),
+        NFA_CLASS_SPACE => (9..=13).contains(&c) || c == b' ' as c_int,
+        NFA_CLASS_UPPER => mb_isupper(c),
+        NFA_CLASS_XDIGIT => ascii_isxdigit(c),
+        NFA_CLASS_TAB => c == b'\t' as c_int,
+        NFA_CLASS_RETURN => c == b'\r' as c_int,
+        NFA_CLASS_BACKSPACE => c == 0x08,
+        NFA_CLASS_ESCAPE => c == ESC,
+        NFA_CLASS_IDENT => unsafe { vim_is_ident_char(c) },
+        NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
+        NFA_CLASS_FNAME => unsafe { vim_isfilec(c) },
+        _ => {
+            // `siemsg`, not `semsg`: an internal-error report, dropped
+            // while messages are held back.
+            let fmt = c"E877: (NFA regexp) Invalid character class: %ld".as_ptr();
+            // SAFETY: a static format string with the one `%ld` below.
+            unsafe { siemsg_c!(fmt, cls as i64) };
+            return FAIL;
         }
     };
     if member { OK } else { FAIL }

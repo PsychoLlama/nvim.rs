@@ -235,15 +235,9 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     let mut slot = fmark_T::UNSET;
     // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
     // window; `slot` is this frame's and outlives every use of `fm`.
-    let fm = unsafe {
-        mark_get(
-            rex.reg_buf(),
-            curwin.get(),
-            &raw mut slot,
-            kMarkBufLocal,
-            mark,
-        )
-    };
+    let buf = rex.reg_buf();
+    let win = curwin.get();
+    let fm = unsafe { mark_get(buf, win, &raw mut slot, kMarkBufLocal, mark) };
     // `mark_get` can move the buffer's line pointers, so re-anchor.
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).cast(), col);
@@ -424,17 +418,12 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
             // Never captured: an empty match.
         } else if start.lnum == rex.lnum() && end.lnum == rex.lnum() {
             len = end.col - start.col;
-            if unsafe {
-                cstrncmp(
-                    rex,
-                    rex.line()
-                        .cast::<core::ffi::c_char>()
-                        .add(start.col as usize),
-                    rex.input().cast(),
-                    &mut len,
-                )
-            } != 0
-            {
+            let at = unsafe {
+                rex.line()
+                    .cast::<core::ffi::c_char>()
+                    .add(start.col as usize)
+            };
+            if unsafe { cstrncmp(rex, at, rex.input().cast(), &mut len) } != 0 {
                 status = RA_NOMATCH;
             }
         } else {

@@ -120,33 +120,32 @@ pub(crate) unsafe fn add_search_pattern(
         return;
     }
     let last_used = is_substitute_pattern != search_last_used;
-    unsafe {
-        *ret_pse = ShadaEntry {
-            type_0: kSDItemSearchPattern,
-            can_free_entry: false,
-            timestamp: pat.timestamp,
-            data: ShadaEntryData {
-                search_pattern: KeyDict__shada_search_pat {
-                    is_set___shada_search_pat_: 0,
-                    magic: pat.magic,
-                    smartcase: !pat.no_scs,
-                    has_line_offset: !is_substitute_pattern && pat.off.line,
-                    place_cursor_at_end: !is_substitute_pattern && pat.off.end,
-                    is_last_used: last_used,
-                    is_substitute_pattern,
-                    highlighted: last_used && search_highlighted,
-                    search_backward: !is_substitute_pattern && pat.off.dir as c_int == '?' as c_int,
-                    offset: if is_substitute_pattern {
-                        defaults.offset
-                    } else {
-                        pat.off.off as Integer
-                    },
-                    pat: cstr_as_string(pat.pat),
+    let entry = ShadaEntry {
+        type_0: kSDItemSearchPattern,
+        can_free_entry: false,
+        timestamp: pat.timestamp,
+        data: ShadaEntryData {
+            search_pattern: KeyDict__shada_search_pat {
+                is_set___shada_search_pat_: 0,
+                magic: pat.magic,
+                smartcase: !pat.no_scs,
+                has_line_offset: !is_substitute_pattern && pat.off.line,
+                place_cursor_at_end: !is_substitute_pattern && pat.off.end,
+                is_last_used: last_used,
+                is_substitute_pattern,
+                highlighted: last_used && search_highlighted,
+                search_backward: !is_substitute_pattern && pat.off.dir as c_int == '?' as c_int,
+                offset: if is_substitute_pattern {
+                    defaults.offset
+                } else {
+                    pat.off.off as Integer
                 },
+                pat: unsafe { cstr_as_string(pat.pat) },
             },
-            additional_data: pat.additional_data,
-        }
+        },
+        additional_data: pat.additional_data,
     };
+    unsafe { *ret_pse = entry };
     // The two substitute-pattern defaults are `false`, which is what the
     // `!is_substitute_pattern &&` above produces; assert it rather than
     // spelling the branch out twice.
@@ -175,29 +174,28 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
         }
         let too_long = max_reg_lines >= 0 && reg.y_size > max_reg_lines as size_t;
         if !too_long {
-            unsafe {
-                (*wms).registers[op_reg_index(name as c_int) as usize] = ShadaEntry {
-                    type_0: kSDItemRegister,
-                    can_free_entry: false,
-                    timestamp: reg.timestamp,
-                    data: ShadaEntryData {
-                        reg: reg {
-                            name,
-                            type_0: reg.y_type,
-                            contents: reg.y_array,
-                            is_unnamed,
-                            contents_size: reg.y_size,
-                            // Only a blockwise register has a width.
-                            width: if reg.y_type == kMTBlockWise {
-                                reg.y_width as size_t
-                            } else {
-                                0
-                            },
+            let entry = ShadaEntry {
+                type_0: kSDItemRegister,
+                can_free_entry: false,
+                timestamp: reg.timestamp,
+                data: ShadaEntryData {
+                    reg: reg {
+                        name,
+                        type_0: reg.y_type,
+                        contents: reg.y_array,
+                        is_unnamed,
+                        contents_size: reg.y_size,
+                        // Only a blockwise register has a width.
+                        width: if reg.y_type == kMTBlockWise {
+                            reg.y_width as size_t
+                        } else {
+                            0
                         },
                     },
-                    additional_data: reg.additional_data,
-                }
+                },
+                additional_data: reg.additional_data,
             };
+            unsafe { (*wms).registers[op_reg_index(name as c_int) as usize] = entry };
         }
         if reg_iter.is_null() {
             return;
@@ -310,21 +308,20 @@ pub(crate) unsafe fn shada_init_jumps(
         jump_iter = unsafe { mark_jumplist_iter(jump_iter, curwin.get(), &raw mut fm) };
 
         if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
-            unsafe {
-                *jumps.add(jumps_size) = ShadaEntry {
-                    type_0: kSDItemJump,
-                    can_free_entry: false,
-                    timestamp: fm.fmark.timestamp,
-                    data: ShadaEntryData {
-                        filemark: shada_filemark {
-                            name: NUL as c_char,
-                            mark: fm.fmark.mark,
-                            fname: fname.cast_mut(),
-                        },
+            let entry = ShadaEntry {
+                type_0: kSDItemJump,
+                can_free_entry: false,
+                timestamp: fm.fmark.timestamp,
+                data: ShadaEntryData {
+                    filemark: shada_filemark {
+                        name: NUL as c_char,
+                        mark: fm.fmark.mark,
+                        fname: fname.cast_mut(),
                     },
-                    additional_data: fm.fmark.additional_data,
-                }
+                },
+                additional_data: fm.fmark.additional_data,
             };
+            unsafe { *jumps.add(jumps_size) = entry };
             jumps_size += 1;
         }
         if jump_iter.is_null() {
@@ -434,24 +431,19 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
         if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
             let mut tgttv: typval_T = unsafe { core::mem::zeroed() };
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
-            let written = unsafe {
-                shada_pack_entry(
-                    &raw mut packer,
-                    ShadaEntry {
-                        type_0: kSDItemVariable,
-                        can_free_entry: false,
-                        timestamp: cur_timestamp,
-                        data: ShadaEntryData {
-                            global_var: global_var {
-                                name: name.cast_mut(),
-                                value: tgttv,
-                            },
-                        },
-                        additional_data: core::ptr::null_mut(),
+            let entry = ShadaEntry {
+                type_0: kSDItemVariable,
+                can_free_entry: false,
+                timestamp: cur_timestamp,
+                data: ShadaEntryData {
+                    global_var: global_var {
+                        name: name.cast_mut(),
+                        value: tgttv,
                     },
-                    0,
-                )
+                },
+                additional_data: core::ptr::null_mut(),
             };
+            let written = unsafe { shada_pack_entry(&raw mut packer, entry, 0) };
             assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
             unsafe { tv_clear(&raw mut tgttv) };
         }
