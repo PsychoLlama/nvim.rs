@@ -169,7 +169,7 @@ unsafe fn log(format: *const core::ffi::c_char, name: *const core::ffi::c_char, 
     let tag = c"UI: ".as_ptr();
     let no_func = core::ptr::null();
     // The caller's promise: `format` spends `name` and `count`.
-    logmsg_c!(lvl, tag, no_func, -1, true, format, name, count);
+    unsafe { logmsg_c!(lvl, tag, no_func, -1, true, format, name, count) };
 }
 
 /// Hands every UI that `reach` selects to `send`, and logs `name` if there

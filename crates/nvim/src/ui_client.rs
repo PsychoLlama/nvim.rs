@@ -337,7 +337,7 @@ pub(crate) unsafe fn ui_client_run() -> ! {
         let (who, fmt, line) = (c"ui_client_run", c"test log message", line!() as c_int);
         // SAFETY: both names are static C strings and the format spends no
         // argument.
-        logmsg!(LOGLVL_ERR, who, line, fmt);
+        unsafe { logmsg!(LOGLVL_ERR, who, line, fmt) };
     }
     time_finish();
 
@@ -514,7 +514,7 @@ fn bad_event(event: &'static CStr, wrapper: &'static CStr) {
     let fmt = c"Error handling ui event '%s'";
     let (line, name) = (line!() as c_int, event.as_ptr());
     // SAFETY: both names are static C strings and the format takes one.
-    logmsg!(LOGLVL_ERR, wrapper, line, fmt, name);
+    unsafe { logmsg!(LOGLVL_ERR, wrapper, line, fmt, name) };
 }
 
 /// A `&'static CStr` from a name the macros have as a `&str`.
@@ -838,7 +838,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         let fmt = c"Cannot connect to server %s: %s";
         let line = line!() as c_int;
         // SAFETY: the two `%s` spend the two C strings that follow them.
-        logmsg!(LOGLVL_ERR, who, line, fmt, server_addr, err);
+        unsafe { logmsg!(LOGLVL_ERR, who, line, fmt, server_addr, err) };
         unsafe { xfree(server_addr.cast()) };
         ui_client_exit_status.set(1);
         unsafe { os_exit(1) };
@@ -856,7 +856,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
     let fmt = c"Connected to server %s on channel %ld";
     let line = line!() as c_int;
     // SAFETY: `%s` spends the address string and `%ld` the channel id.
-    logmsg!(LOGLVL_INF, who, line, fmt, server_addr, chan);
+    unsafe { logmsg!(LOGLVL_INF, who, line, fmt, server_addr, chan) };
     unsafe { xfree(server_addr.cast()) };
 }
 
@@ -947,7 +947,7 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                 let fmt = c"cannot connect to server %s: %s";
                 let line = line!() as c_int;
                 // SAFETY: the two `%s` spend the two C strings after them.
-                logmsg!(LOGLVL_ERR, who, line, fmt, listen_addr, err);
+                unsafe { logmsg!(LOGLVL_ERR, who, line, fmt, listen_addr, err) };
             } else {
                 ui_client_channel_id.set(chan_id);
                 let (w, h, term, rgb) = (
@@ -962,7 +962,7 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                 let fmt = c"restarted server address=%s id=%ld";
                 let line = line!() as c_int;
                 // SAFETY: `%s` spends the address and `%ld` the channel id.
-                logmsg!(LOGLVL_INF, who, line, fmt, listen_addr, chan_id);
+                unsafe { logmsg!(LOGLVL_INF, who, line, fmt, listen_addr, chan_id) };
             }
         }
     }

@@ -262,17 +262,8 @@ unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
     let who = c"report_error";
     let (level, line) = (LOGLVL_ERR, line!() as i32);
     let no_context = core::ptr::null();
-    // The format spends exactly the three C strings that follow it.
-    logmsg_c!(
-        level,
-        no_context,
-        who.as_ptr(),
-        line,
-        true,
-        format,
-        name,
-        ns,
-        msg
-    );
+    let here = who.as_ptr();
+    // SAFETY: the format spends exactly the three C strings that follow it.
+    unsafe { logmsg_c!(level, no_context, here, line, true, format, name, ns, msg) };
     unsafe { msg_schedule_semsg_multiline_c!(format, name, ns, msg) };
 }
