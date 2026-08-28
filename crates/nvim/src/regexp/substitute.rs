@@ -46,6 +46,7 @@ use crate::types::{
     NUL, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, funcexe_T, linenr_T,
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
+use crate::winlayer::Live;
 use ::libc::{strcpy, strlen};
 
 /// How deep a `\=` expression may nest substitutions before it is more
@@ -728,25 +729,28 @@ unsafe fn copy_capture(
     let mut clnum: linenr_T = 0;
     let mut len: c_int = 0;
     let mut s = if multi {
-        let mmatch = rex.reg_mmatch();
-        clnum = unsafe { (*mmatch).startpos[no].lnum };
-        if clnum < 0 || unsafe { (*mmatch).endpos[no].lnum } < 0 {
+        // SAFETY: a buffer match's `reg_mmatch` is the caller's live structure.
+        let mmatch = unsafe { Live::new(rex.reg_mmatch()) };
+        clnum = mmatch.startpos[no].lnum;
+        if clnum < 0 || mmatch.endpos[no].lnum < 0 {
             core::ptr::null_mut()
         } else {
-            len = if unsafe { (*mmatch).endpos[no].lnum } == clnum {
-                unsafe { (*mmatch).endpos[no].col - (*mmatch).startpos[no].col }
+            len = if mmatch.endpos[no].lnum == clnum {
+                mmatch.endpos[no].col - mmatch.startpos[no].col
             } else {
-                reg_getline_len(rex, clnum) - unsafe { (*mmatch).startpos[no].col }
+                reg_getline_len(rex, clnum) - mmatch.startpos[no].col
             };
-            unsafe { reg_getline(rex, clnum).offset((*mmatch).startpos[no].col as isize) }
+            unsafe { reg_getline(rex, clnum).offset(mmatch.startpos[no].col as isize) }
         }
     } else {
-        let match_ = rex.reg_match();
-        let start = unsafe { (*match_).startp[no] };
-        if unsafe { (*match_).endp[no].is_null() } {
+        // SAFETY: a string match's `reg_match` is the caller's live structure.
+        let match_ = unsafe { Live::new(rex.reg_match()) };
+        let start = match_.startp[no];
+        if match_.endp[no].is_null() {
             core::ptr::null_mut()
         } else {
-            len = unsafe { (*match_).endp[no].offset_from(start) } as c_int;
+            // SAFETY: both slots point into the same matched string.
+            len = unsafe { match_.endp[no].offset_from(start) } as c_int;
             start
         }
     };
@@ -757,8 +761,9 @@ unsafe fn copy_capture(
 
     loop {
         if len == 0 {
-            let mmatch = rex.reg_mmatch();
-            if !multi || unsafe { (*mmatch).endpos[no].lnum } == clnum {
+            // SAFETY: as above.
+            let mmatch = unsafe { Live::new(rex.reg_mmatch()) };
+            if !multi || mmatch.endpos[no].lnum == clnum {
                 return Outcome::Done;
             }
             // The capture continues on the next line.
@@ -768,8 +773,8 @@ unsafe fn copy_capture(
             out.push(CAR as c_char);
             clnum += 1;
             s = reg_getline(rex, clnum);
-            len = if unsafe { (*mmatch).endpos[no].lnum } == clnum {
-                unsafe { (*mmatch).endpos[no].col }
+            len = if mmatch.endpos[no].lnum == clnum {
+                mmatch.endpos[no].col
             } else {
                 reg_getline_len(rex, clnum)
             };

@@ -457,12 +457,16 @@ unsafe fn buffer_for_fname(fname_bufs: *mut Map_cstr_t_ptr_t, fname: *const c_ch
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
 unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
-    let win = curwin.get();
-    let mut i = unsafe { (*win).w_jumplistlen };
+    // SAFETY: `curwin` is set from startup to exit, and nothing below can
+    // change which window that is.
+    let mut win = unsafe { Win::current() };
+    let mut i = win.w_jumplistlen;
     while i > 0 {
-        let existing = unsafe { &(*win).w_jumplist[i as usize - 1] };
+        let existing = &win.w_jumplist[i as usize - 1];
         if existing.fmark.timestamp <= fm.fmark.timestamp {
             let same_file = if buf.is_null() {
+                // SAFETY: both names are NUL-terminated: the list's own, and
+                // the caller's, which it promised.
                 !existing.fname.is_null() && unsafe { strcmp(fm.fname, existing.fname) } == 0
             } else {
                 fm.fmark.fnum == existing.fmark.fnum
@@ -474,33 +478,36 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
         }
         i -= 1;
     }
-    if i > 0 && unsafe { (*win).w_jumplistlen } == JUMPLISTSIZE {
-        unsafe { free_xfmark((*win).w_jumplist[0].clone()) };
+    if i > 0 && win.w_jumplistlen == JUMPLISTSIZE {
+        // SAFETY: the oldest jump is about to be overwritten, so what it
+        // holds is this call's to release.
+        unsafe { free_xfmark(win.w_jumplist[0].clone()) };
     }
-    let len = unsafe { (*win).w_jumplistlen };
-    let i = marklist_insert(unsafe { &mut (*win).w_jumplist }, len, i);
+    let len = win.w_jumplistlen;
+    let i = marklist_insert(&mut win.w_jumplist, len, i);
     if i == -1 {
+        // SAFETY: the entry was read from the file, so it owns its strings.
         unsafe { shada_free_shada_entry(&raw mut entry) };
         return;
     }
-    unsafe { (*win).w_jumplist[i as usize] = fm };
-    if unsafe { (*win).w_jumplistlen } < JUMPLISTSIZE {
-        unsafe { (*win).w_jumplistlen += 1 };
+    win.w_jumplist[i as usize] = fm;
+    if win.w_jumplistlen < JUMPLISTSIZE {
+        win.w_jumplistlen += 1;
     }
     // Keep the cursor into the list pointing at the same jump.
-    if unsafe { (*win).w_jumplistidx } >= i
-        && unsafe { (*win).w_jumplistidx } < unsafe { (*win).w_jumplistlen }
-    {
-        unsafe { (*win).w_jumplistidx += 1 };
+    if win.w_jumplistidx >= i && win.w_jumplistidx < win.w_jumplistlen {
+        win.w_jumplistidx += 1;
     }
 }
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
 unsafe fn insert_change(buf: *mut buf_T, fm: fmark_T) {
-    let mut i = unsafe { (*buf).b_changelistlen };
+    // SAFETY: the caller's promise — `buf` is a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mut i = buf.b_changelistlen;
     while i > 0 {
-        let existing = unsafe { &(*buf).b_changelist[i as usize - 1] };
+        let existing = &buf.b_changelist[i as usize - 1];
         if existing.timestamp <= fm.timestamp {
             if marks_equal(existing.mark, fm.mark) {
                 i = -1;
@@ -509,18 +516,21 @@ unsafe fn insert_change(buf: *mut buf_T, fm: fmark_T) {
         }
         i -= 1;
     }
-    if i > 0 && unsafe { (*buf).b_changelistlen } == JUMPLISTSIZE {
-        unsafe { free_fmark((*buf).b_changelist[0].clone()) };
+    if i > 0 && buf.b_changelistlen == JUMPLISTSIZE {
+        // SAFETY: the oldest change is about to be overwritten, so what it
+        // holds is this call's to release.
+        unsafe { free_fmark(buf.b_changelist[0].clone()) };
     }
-    let len = unsafe { (*buf).b_changelistlen };
-    let i = marklist_insert(unsafe { &mut (*buf).b_changelist }, len, i);
+    let len = buf.b_changelistlen;
+    let i = marklist_insert(&mut buf.b_changelist, len, i);
     if i == -1 {
+        // SAFETY: the mark was read from the file, so it owns its extras.
         unsafe { xfree(fm.additional_data.cast()) };
         return;
     }
-    unsafe { (*buf).b_changelist[i as usize] = fm };
-    if unsafe { (*buf).b_changelistlen } < JUMPLISTSIZE {
-        unsafe { (*buf).b_changelistlen += 1 };
+    buf.b_changelist[i as usize] = fm;
+    if buf.b_changelistlen < JUMPLISTSIZE {
+        buf.b_changelistlen += 1;
     }
 }
 
