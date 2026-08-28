@@ -128,18 +128,13 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
         return;
     }
 
-    unsafe {
-        spell_dump_compl(
-            core::ptr::null_mut(),
-            0,
-            core::ptr::null_mut(),
-            if (*eap).forceit != 0 {
-                DUMPFLAG_COUNT
-            } else {
-                0
-            },
-        )
+    let dumpflags = if unsafe { (*eap).forceit } != 0 {
+        DUMPFLAG_COUNT
+    } else {
+        0
     };
+    let (pat, dir) = (core::ptr::null_mut(), core::ptr::null_mut());
+    unsafe { spell_dump_compl(pat, 0, dir, dumpflags) };
 
     // Drop the empty line the new buffer started with.
     if unsafe { (*curbuf.get()).b_ml.ml_line_count } > 1 {
@@ -203,14 +198,9 @@ pub unsafe fn spell_dump_compl(
     }
 
     if do_region && !region_names.is_null() && pat.is_null() {
-        unsafe {
-            vim_snprintf(
-                header.as_mut_ptr(),
-                IOSIZE as size_t,
-                c"/regions=%s".as_ptr(),
-                region_names,
-            )
-        };
+        let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
+        let fmt = c"/regions=%s".as_ptr();
+        unsafe { vim_snprintf(buf, size, fmt, region_names) };
         unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
         lnum += 1;
     } else {
@@ -225,14 +215,10 @@ pub unsafe fn spell_dump_compl(
         }
 
         if pat.is_null() {
-            unsafe {
-                vim_snprintf(
-                    header.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    c"# file: %s".as_ptr(),
-                    (*slang).sl_fname,
-                )
-            };
+            let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
+            let fmt = c"# file: %s".as_ptr();
+            let fname = unsafe { (*slang).sl_fname };
+            unsafe { vim_snprintf(buf, size, fmt, fname) };
             unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
             lnum += 1;
         }
@@ -295,33 +281,17 @@ pub unsafe fn spell_dump_compl(
                         // when this is the first of its prefixes.
                         c = (flags as c_uint >> 24) as c_int;
                         if c == 0 || curi[d] == 2 {
-                            unsafe {
-                                dump_word(
-                                    slang,
-                                    word.as_mut_ptr(),
-                                    pat,
-                                    dir,
-                                    dumpflags,
-                                    flags,
-                                    lnum,
-                                )
-                            };
+                            let w = word.as_mut_ptr();
+                            unsafe { dump_word(slang, w, pat, dir, dumpflags, flags, lnum) };
                             if pat.is_null() {
                                 lnum += 1;
                             }
                         }
 
                         if c != 0 {
+                            let w = word.as_mut_ptr();
                             lnum = unsafe {
-                                dump_prefixes(
-                                    slang,
-                                    word.as_mut_ptr(),
-                                    pat,
-                                    dir,
-                                    dumpflags,
-                                    flags,
-                                    lnum,
-                                )
+                                dump_prefixes(slang, w, pat, dir, dumpflags, flags, lnum)
                             };
                         }
                     }
@@ -406,14 +376,9 @@ unsafe fn dump_word(
                 for i in 0..7 {
                     if flags & (0x10000 << i) != 0 {
                         let badword_len = unsafe { strlen(badword.as_ptr()) };
-                        unsafe {
-                            snprintf(
-                                badword.as_mut_ptr().add(badword_len),
-                                badword.len() - badword_len,
-                                c"%d".as_ptr(),
-                                i + 1,
-                            )
-                        };
+                        let room = badword.len() - badword_len;
+                        let at = unsafe { badword.as_mut_ptr().add(badword_len) };
+                        unsafe { snprintf(at, room, c"%d".as_ptr(), i + 1) };
                     }
                 }
             }
@@ -427,15 +392,10 @@ unsafe fn dump_word(
                 || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed))
             {
                 let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
-                unsafe {
-                    vim_snprintf(
-                        counted.as_mut_ptr(),
-                        IOSIZE as size_t,
-                        c"%s\t%d".as_ptr(),
-                        tw,
-                        (*wc).wc_count as c_int,
-                    )
-                };
+                let (buf, size) = (counted.as_mut_ptr(), IOSIZE as size_t);
+                let fmt = c"%s\t%d".as_ptr();
+                let count = unsafe { (*wc).wc_count } as c_int;
+                unsafe { vim_snprintf(buf, size, fmt, tw, count) };
                 p = counted.as_mut_ptr();
             }
         }
@@ -447,19 +407,11 @@ unsafe fn dump_word(
         } else {
             unsafe { strncmp(p, pat, strlen(pat)) == 0 }
         };
-        if matches
-            && unsafe {
-                ins_compl_add_infercase(
-                    p,
-                    strlen(p) as c_int,
-                    p_ic.get() != 0,
-                    core::ptr::null_mut(),
-                    *dir,
-                    false,
-                    0,
-                )
-            } == OK
-        {
+        let len = unsafe { strlen(p) } as c_int;
+        let ic = p_ic.get() != 0;
+        let want = unsafe { *dir };
+        let none = core::ptr::null_mut();
+        if matches && unsafe { ins_compl_add_infercase(p, len, ic, none, want, false, 0) } == OK {
             // A BACKWARD request is honoured only for the first match.
             unsafe { *dir = FORWARD };
         }
@@ -532,22 +484,15 @@ unsafe fn dump_prefixes(
 
             let c = unsafe { valid_word_prefix(i, n, flags, word, slang, false) };
             if c != 0 {
-                unsafe { xstrlcpy(prefix.as_mut_ptr().add(d), word, MAXWLEN - d) };
-                unsafe {
-                    dump_word(
-                        slang,
-                        prefix.as_mut_ptr(),
-                        pat,
-                        dir,
-                        dumpflags,
-                        if c & WF_RAREPFX as c_int != 0 {
-                            flags | WF_RARE as c_int
-                        } else {
-                            flags
-                        },
-                        lnum,
-                    )
+                let at = unsafe { prefix.as_mut_ptr().add(d) };
+                unsafe { xstrlcpy(at, word, MAXWLEN - d) };
+                let pfx_flags = if c & WF_RAREPFX as c_int != 0 {
+                    flags | WF_RARE as c_int
+                } else {
+                    flags
                 };
+                let w = prefix.as_mut_ptr();
+                unsafe { dump_word(slang, w, pat, dir, dumpflags, pfx_flags, lnum) };
                 if lnum != 0 {
                     lnum += 1;
                 }
@@ -559,28 +504,16 @@ unsafe fn dump_prefixes(
                 let c =
                     unsafe { valid_word_prefix(i, n, flags, word_up.as_mut_ptr(), slang, true) };
                 if c != 0 {
-                    unsafe {
-                        xstrlcpy(
-                            prefix.as_mut_ptr().add(d),
-                            word_up.as_mut_ptr(),
-                            MAXWLEN - d,
-                        )
+                    let at = unsafe { prefix.as_mut_ptr().add(d) };
+                    let up = word_up.as_mut_ptr();
+                    unsafe { xstrlcpy(at, up, MAXWLEN - d) };
+                    let pfx_flags = if c & WF_RAREPFX as c_int != 0 {
+                        flags | WF_RARE as c_int
+                    } else {
+                        flags
                     };
-                    unsafe {
-                        dump_word(
-                            slang,
-                            prefix.as_mut_ptr(),
-                            pat,
-                            dir,
-                            dumpflags,
-                            if c & WF_RAREPFX as c_int != 0 {
-                                flags | WF_RARE as c_int
-                            } else {
-                                flags
-                            },
-                            lnum,
-                        )
-                    };
+                    let w = prefix.as_mut_ptr();
+                    unsafe { dump_word(slang, w, pat, dir, dumpflags, pfx_flags, lnum) };
                     if lnum != 0 {
                         lnum += 1;
                     }

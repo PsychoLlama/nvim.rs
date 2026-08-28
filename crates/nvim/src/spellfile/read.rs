@@ -116,14 +116,8 @@ unsafe fn spell_check_magic_string(fd: *mut FILE) -> c_int {
     if let Err(e) = unsafe { read_bytes(fd, buf.as_mut_ptr(), VIMSPELLMAGICL) } {
         return e;
     }
-    if unsafe {
-        memcmp(
-            buf.as_ptr().cast(),
-            VIMSPELLMAGIC.as_ptr().cast(),
-            VIMSPELLMAGICL,
-        )
-    } != 0
-    {
+    let (got, want) = (buf.as_ptr().cast(), VIMSPELLMAGIC.as_ptr().cast());
+    if unsafe { memcmp(got, want, VIMSPELLMAGICL) } != 0 {
         return SP_FORMERROR;
     }
     0
@@ -161,17 +155,8 @@ pub unsafe fn spell_load_file(
     let mut lp: *mut slang_T = core::ptr::null_mut();
     let mut did_estack_push = false;
 
-    let ok = unsafe {
-        load_spl(
-            fd,
-            fname,
-            lang,
-            old_lp,
-            silent,
-            &mut lp,
-            &mut did_estack_push,
-        )
-    };
+    let (out, pushed) = (&mut lp, &mut did_estack_push);
+    let ok = unsafe { load_spl(fd, fname, lang, old_lp, silent, out, pushed) };
     if !ok {
         // The language name is cleared even when the file could not be
         // opened, so the caller stops trying this name.
@@ -255,19 +240,13 @@ unsafe fn load_spl(
 
     let version = unsafe { getc(fd) };
     if version < VIMSPELLVERSION {
-        unsafe {
-            emsg(gettext(
-                c"E771: Old spell file, needs to be updated".as_ptr(),
-            ))
-        };
+        let text = c"E771: Old spell file, needs to be updated";
+        unsafe { emsg(gettext(text.as_ptr())) };
         return false;
     }
     if version > VIMSPELLVERSION {
-        unsafe {
-            emsg(gettext(
-                c"E772: Spell file is for newer version of Vim".as_ptr(),
-            ))
-        };
+        let text = c"E772: Spell file is for newer version of Vim";
+        unsafe { emsg(gettext(text.as_ptr())) };
         return false;
     }
 
@@ -345,20 +324,16 @@ unsafe fn read_section(
             0
         }
         SN_PREFCOND => unsafe { read_prefcond_section(fd, lp) },
-        SN_REP => unsafe {
-            read_rep_section(
-                fd,
-                &raw mut (*lp).sl_rep,
-                (&raw mut (*lp).sl_rep_first).cast::<int16_t>(),
-            )
-        },
-        SN_REPSAL => unsafe {
-            read_rep_section(
-                fd,
-                &raw mut (*lp).sl_repsal,
-                (&raw mut (*lp).sl_repsal_first).cast::<int16_t>(),
-            )
-        },
+        SN_REP => {
+            let gap = unsafe { &raw mut (*lp).sl_rep };
+            let first = unsafe { &raw mut (*lp).sl_rep_first }.cast::<int16_t>();
+            unsafe { read_rep_section(fd, gap, first) }
+        }
+        SN_REPSAL => {
+            let gap = unsafe { &raw mut (*lp).sl_repsal };
+            let first = unsafe { &raw mut (*lp).sl_repsal_first }.cast::<int16_t>();
+            unsafe { read_rep_section(fd, gap, first) }
+        }
         SN_SAL => unsafe { read_sal_section(fd, lp) },
         SN_SOFO => unsafe { read_sofo_section(fd, lp) },
         SN_MAP => {
@@ -425,44 +400,27 @@ unsafe fn read_section(
 /// `fd` must be positioned at the first tree and `lp` be live.
 unsafe fn read_trees(fd: *mut FILE, lp: *mut slang_T) -> c_int {
     // SAFETY: the caller promises the position and the language.
-    let res = unsafe {
-        spell_read_tree(
-            fd,
-            &raw mut (*lp).sl_fbyts,
-            &raw mut (*lp).sl_fbyts_len,
-            &raw mut (*lp).sl_fidxs,
-            false,
-            0,
-        )
-    };
+    let byts = unsafe { &raw mut (*lp).sl_fbyts };
+    let byts_len = unsafe { &raw mut (*lp).sl_fbyts_len };
+    let idxs = unsafe { &raw mut (*lp).sl_fidxs };
+    let res = unsafe { spell_read_tree(fd, byts, byts_len, idxs, false, 0) };
     if res != 0 {
         return res;
     }
-    let res = unsafe {
-        spell_read_tree(
-            fd,
-            &raw mut (*lp).sl_kbyts,
-            core::ptr::null_mut(),
-            &raw mut (*lp).sl_kidxs,
-            false,
-            0,
-        )
-    };
+    let byts = unsafe { &raw mut (*lp).sl_kbyts };
+    let idxs = unsafe { &raw mut (*lp).sl_kidxs };
+    let none = core::ptr::null_mut();
+    let res = unsafe { spell_read_tree(fd, byts, none, idxs, false, 0) };
     if res != 0 {
         return res;
     }
     // The prefix tree's entries name a prefix condition by number, so
     // it can only be read once SN_PREFCOND has said how many there are.
-    unsafe {
-        spell_read_tree(
-            fd,
-            &raw mut (*lp).sl_pbyts,
-            core::ptr::null_mut(),
-            &raw mut (*lp).sl_pidxs,
-            true,
-            (*lp).sl_prefixcnt,
-        )
-    }
+    let byts = unsafe { &raw mut (*lp).sl_pbyts };
+    let idxs = unsafe { &raw mut (*lp).sl_pidxs };
+    let none = core::ptr::null_mut();
+    let conds = unsafe { (*lp).sl_prefixcnt };
+    unsafe { spell_read_tree(fd, byts, none, idxs, true, conds) }
 }
 
 /// Load the `.sug` file for every language of the current window that has
@@ -537,14 +495,12 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
     if unsafe { read_sug_body(fd, slang) } {
         return;
     }
-    let fmt = unsafe {
-        gettext(
-            super::e_error_while_reading_sug_file_str
-                .as_ptr()
-                .cast::<c_char>(),
-        )
-    };
-    unsafe { semsg_c!(fmt, (*slang).sl_fname) };
+    let text = super::e_error_while_reading_sug_file_str
+        .as_ptr()
+        .cast::<c_char>();
+    let fmt = unsafe { gettext(text) };
+    let fname = unsafe { (*slang).sl_fname };
+    unsafe { semsg_c!(fmt, fname) };
     unsafe { slang_clear_sug(slang) };
 }
 
@@ -555,17 +511,10 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
 /// `fd` must be positioned just past the `.sug` header.
 unsafe fn read_sug_body(fd: *mut FILE, slang: *mut slang_T) -> bool {
     // SAFETY: the caller promises the position and the language.
-    if unsafe {
-        spell_read_tree(
-            fd,
-            &raw mut (*slang).sl_sbyts,
-            &raw mut (*slang).sl_sbyts_len,
-            &raw mut (*slang).sl_sidxs,
-            false,
-            0,
-        )
-    } != 0
-    {
+    let byts = unsafe { &raw mut (*slang).sl_sbyts };
+    let byts_len = unsafe { &raw mut (*slang).sl_sbyts_len };
+    let idxs = unsafe { &raw mut (*slang).sl_sidxs };
+    if unsafe { spell_read_tree(fd, byts, byts_len, idxs, false, 0) } != 0 {
         return false;
     }
 
@@ -596,17 +545,10 @@ unsafe fn read_sug_body(fd: *mut FILE, slang: *mut slang_T) -> bool {
                 break;
             }
         }
-        if !ok
-            || unsafe {
-                ml_append_buf(
-                    (*slang).sl_sugbuf,
-                    wordnr as linenr_T,
-                    ga.ga_data.cast::<c_char>(),
-                    ga.ga_len as colnr_T,
-                    true,
-                )
-            } == FAIL
-        {
+        let sugbuf = unsafe { (*slang).sl_sugbuf };
+        let (line, len) = (ga.ga_data.cast::<c_char>(), ga.ga_len as colnr_T);
+        let at = wordnr as linenr_T;
+        if !ok || unsafe { ml_append_buf(sugbuf, at, line, len, true) } == FAIL {
             ok = false;
             break;
         }
@@ -729,7 +671,13 @@ unsafe fn spell_read_tree(
     let ip = unsafe { xcalloc(len as size_t, size_of::<idx_T>()) }.cast::<idx_T>();
     unsafe { *idxsp = ip };
 
-    let idx = unsafe { read_tree_node(fd, bp, ip, len, 0, prefixtree, prefixcnt, 0) };
+    // Both allocations are `len` entries and nothing else reaches them
+    // until the tree is read, so the reader can hold them as slices and
+    // let Rust check every index a corrupt file names.
+    // SAFETY: `xcalloc` just returned these, sized as asked.
+    let byts = unsafe { core::slice::from_raw_parts_mut(bp, len as usize) };
+    let idxs = unsafe { core::slice::from_raw_parts_mut(ip, len as usize) };
+    let idx = unsafe { read_tree_node(fd, byts, idxs, 0, prefixtree, prefixcnt, 0) };
     if idx < 0 {
         return idx;
     }
@@ -744,26 +692,26 @@ unsafe fn spell_read_tree(
 /// Read one node — a length byte and that many entries — and recurse into
 /// the children. Returns the next free index, or a negative `SP_*`.
 ///
-/// Every index that goes into `idxs` is checked against `maxidx` first, and
-/// nesting is capped at [`MAXWLEN`], so the tree cannot be made to point
-/// outside itself or to nest without end.
+/// The two arrays arrive as slices, so every index a corrupt file could
+/// name is bounds-checked by Rust rather than by review; the explicit
+/// `startidx + len >= byts.len()` test below is kept because it must answer
+/// `SP_FORMERROR` rather than panic. Nesting is capped at [`MAXWLEN`], so
+/// the tree cannot be made to nest without end either.
 ///
 /// # Safety
 ///
-/// `byts` and `idxs` must each hold `maxidx` entries.
-#[allow(clippy::too_many_arguments)]
+/// `fd` must be open and positioned at a node.
 unsafe fn read_tree_node(
     fd: *mut FILE,
-    byts: *mut uint8_t,
-    idxs: *mut idx_T,
-    maxidx: c_int,
+    byts: &mut [uint8_t],
+    idxs: &mut [idx_T],
     startidx: idx_T,
     prefixtree: bool,
     maxprefcondnr: c_int,
     depth: c_int,
 ) -> idx_T {
-    // SAFETY: the caller promises the arrays; every write below is at an
-    // index the checks in this function have bounded by `maxidx`.
+    // SAFETY: the caller promises the stream; the arrays are checked.
+    let maxidx = byts.len() as c_int;
     let mut idx = startidx;
     if depth > MAXWLEN as c_int {
         return SP_FORMERROR;
@@ -776,7 +724,7 @@ unsafe fn read_tree_node(
         return SP_FORMERROR;
     }
 
-    unsafe { *byts.offset(idx as isize) = len as uint8_t };
+    byts[idx as usize] = len as uint8_t;
     idx += 1;
 
     for _ in 1..=len {
@@ -787,7 +735,7 @@ unsafe fn read_tree_node(
         if c <= BY_SPECIAL as c_int {
             if c == BY_NOFLAGS as c_int && !prefixtree {
                 // A word end with nothing to say about it.
-                unsafe { *idxs.offset(idx as isize) = 0 };
+                idxs[idx as usize] = 0;
             } else if c != BY_INDEX as c_int {
                 // A word end carrying flags; how many bytes follow
                 // depends on which flags are set.
@@ -816,7 +764,7 @@ unsafe fn read_tree_node(
                         c += unsafe { getc(fd) } << 24;
                     }
                 }
-                unsafe { *idxs.offset(idx as isize) = c as idx_T };
+                idxs[idx as usize] = c as idx_T;
                 c = 0;
             } else {
                 // A reference to a sub-tree written earlier.
@@ -824,38 +772,28 @@ unsafe fn read_tree_node(
                 if n < 0 || n >= maxidx {
                     return SP_FORMERROR;
                 }
-                unsafe { *idxs.offset(idx as isize) = n.wrapping_add(SHARED_MASK) as idx_T };
+                idxs[idx as usize] = n.wrapping_add(SHARED_MASK) as idx_T;
                 c = unsafe { getc(fd) };
             }
         }
-        unsafe { *byts.offset(idx as isize) = c as uint8_t };
+        byts[idx as usize] = c as uint8_t;
         idx += 1;
     }
 
     // Second pass: children follow the whole node, so their indices
     // are only known now.
     for i in 1..=len {
-        let at = (startidx + i) as isize;
-        if unsafe { *byts.offset(at) } == 0 {
+        let at = (startidx + i) as usize;
+        if byts[at] == 0 {
             continue;
         }
-        if unsafe { *idxs.offset(at) } & SHARED_MASK != 0 {
-            unsafe { *idxs.offset(at) &= !SHARED_MASK };
+        if idxs[at] & SHARED_MASK != 0 {
+            idxs[at] &= !SHARED_MASK;
             continue;
         }
-        unsafe { *idxs.offset(at) = idx };
-        idx = unsafe {
-            read_tree_node(
-                fd,
-                byts,
-                idxs,
-                maxidx,
-                idx,
-                prefixtree,
-                maxprefcondnr,
-                depth + 1,
-            )
-        };
+        idxs[at] = idx;
+        let deeper = depth + 1;
+        idx = unsafe { read_tree_node(fd, byts, idxs, idx, prefixtree, maxprefcondnr, deeper) };
         if idx < 0 {
             break;
         }

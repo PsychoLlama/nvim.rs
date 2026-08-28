@@ -85,15 +85,9 @@ pub unsafe fn spell_enc() -> *mut c_char {
 
 /// The `.spl` file name for the internal word list, into `fname[MAXPATHL]`.
 unsafe fn int_wordlist_spl(fname: *mut c_char) {
-    unsafe {
-        vim_snprintf(
-            fname,
-            MAXPATHL as size_t,
-            SPL_FNAME_TMPL.as_ptr(),
-            int_wordlist.get(),
-            spell_enc(),
-        )
-    };
+    let fmt = SPL_FNAME_TMPL.as_ptr();
+    let (list, enc) = (int_wordlist.get(), unsafe { spell_enc() });
+    unsafe { vim_snprintf(fname, MAXPATHL as size_t, fmt, list, enc) };
 }
 
 /// Load every spell file for language `lang` (a name without a region)
@@ -118,44 +112,27 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
 
     let mut r = 0;
     for round in 1..=2 {
-        unsafe {
-            vim_snprintf(
-                fname_enc.as_mut_ptr(),
-                fname_enc.len() as size_t - 5,
-                c"spell/%s.%s.spl".as_ptr(),
-                lang,
-                spell_enc(),
-            )
-        };
+        let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
+        let fmt = c"spell/%s.%s.spl".as_ptr();
+        let enc = unsafe { spell_enc() };
+        unsafe { vim_snprintf(buf, room, fmt, lang, enc) };
         r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
 
         if r == FAIL_I && sl.sl_lang[0] != 0 {
             // Fall back on the ASCII version.
-            unsafe {
-                vim_snprintf(
-                    fname_enc.as_mut_ptr(),
-                    fname_enc.len() as size_t - 5,
-                    c"spell/%s.ascii.spl".as_ptr(),
-                    lang,
-                )
-            };
+            let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
+            let fmt = c"spell/%s.ascii.spl".as_ptr();
+            unsafe { vim_snprintf(buf, room, fmt, lang) };
             r = unsafe {
                 do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl)
             };
 
-            if r == FAIL_I
-                && sl.sl_lang[0] != 0
-                && round == 1
-                && unsafe {
-                    apply_autocmds(
-                        EVENT_SPELLFILEMISSING,
-                        lang,
-                        (*curbuf.get()).b_fname,
-                        false,
-                        curbuf.get(),
-                    )
-                }
-            {
+            if r == FAIL_I && sl.sl_lang[0] != 0 && round == 1 && {
+                let buf = curbuf.get();
+                let fname = unsafe { (*buf).b_fname };
+                let event = EVENT_SPELLFILEMISSING;
+                unsafe { apply_autocmds(event, lang, fname, false, buf) }
+            } {
                 continue;
             }
         }
@@ -167,32 +144,21 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             // Plugins are not loaded yet, so nvim/spellfile.lua cannot
             // offer the download itself. #3027
             let mut autocmd_buf = [0 as c_char; 512];
-            unsafe {
-                snprintf(
-                    autocmd_buf.as_mut_ptr(),
-                    autocmd_buf.len(),
-                    c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
-                        .as_ptr(),
-                    lang,
-                )
-            };
+            let (buf, room) = (autocmd_buf.as_mut_ptr(), autocmd_buf.len());
+            let fmt = c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
+                .as_ptr();
+            unsafe { snprintf(buf, room, fmt, lang) };
             unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
         } else {
-            let fmt = unsafe {
-                gettext(
-                    c"Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\"".as_ptr(),
-                )
-            };
-            unsafe { smsg_c!(0, fmt, lang, spell_enc(), lang) };
+            let text = c"Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\"";
+            let fmt = unsafe { gettext(text.as_ptr()) };
+            let enc = unsafe { spell_enc() };
+            unsafe { smsg_c!(0, fmt, lang, enc, lang) };
         }
     } else if !sl.sl_slang.is_null() {
         // At least one file loaded; now take all the additions.
-        unsafe {
-            strcpy(
-                fname_enc.as_mut_ptr().add(strlen(fname_enc.as_ptr()) - 3),
-                c"add.spl".as_ptr(),
-            )
-        };
+        let at = unsafe { fname_enc.as_mut_ptr().add(strlen(fname_enc.as_ptr()) - 3) };
+        unsafe { strcpy(at, c"add.spl".as_ptr()) };
         unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
     }
 
@@ -225,14 +191,10 @@ unsafe fn spell_load_cb(
 ) -> bool {
     let slp = cookie as *mut spelload_T;
     for i in 0..num_fnames {
-        let slang = unsafe {
-            spell_load_file(
-                *fnames.offset(i as isize),
-                (*slp).sl_lang.as_mut_ptr(),
-                core::ptr::null_mut(),
-                false,
-            )
-        };
+        let fname = unsafe { *fnames.offset(i as isize) };
+        let lang = unsafe { (*slp).sl_lang.as_mut_ptr() };
+        let none = core::ptr::null_mut();
+        let slang = unsafe { spell_load_file(fname, lang, none, false) };
         if slang.is_null() {
             continue;
         }
@@ -287,14 +249,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
 
     let mut splp = spl_copy;
     'names: while unsafe { *splp } != 0 {
-        let len = unsafe {
-            copy_option_part(
-                &raw mut splp,
-                lang.as_mut_ptr(),
-                MAXWLEN as size_t,
-                c",".as_ptr() as *mut c_char,
-            )
-        } as c_int;
+        let (buf, room) = (lang.as_mut_ptr(), MAXWLEN as size_t);
+        let sep = c",".as_ptr() as *mut c_char;
+        let len = unsafe { copy_option_part(&raw mut splp, buf, room, sep) } as c_int;
         let mut region: *mut c_char = core::ptr::null_mut();
 
         if !valid_spelllang(cstr::in_chars(&lang)) {
@@ -322,13 +279,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 && !ascii_isalpha(unsafe { *p.offset(3) } as c_int)
             {
                 unsafe { xstrlcpy(region_cp.as_mut_ptr(), p.offset(1), 3) };
-                unsafe {
-                    memmove(
-                        p as *mut c_void,
-                        p.offset(3) as *const c_void,
-                        (len as isize - p.offset_from(lang.as_ptr()) - 2) as size_t,
-                    )
-                };
+                let after = unsafe { p.offset(3) } as *const c_void;
+                let rest = unsafe { len as isize - p.offset_from(lang.as_ptr()) - 2 };
+                unsafe { memmove(p as *mut c_void, after, rest as size_t) };
                 region = region_cp.as_mut_ptr();
             } else {
                 dont_use_region = true;
@@ -373,14 +326,8 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         // Not loaded yet: load it now.
         if slang.is_null() {
             if filename {
-                unsafe {
-                    spell_load_file(
-                        lang.as_mut_ptr(),
-                        lang.as_mut_ptr(),
-                        core::ptr::null_mut(),
-                        false,
-                    )
-                };
+                let name = lang.as_mut_ptr();
+                unsafe { spell_load_file(name, name, core::ptr::null_mut(), false) };
             } else {
                 unsafe { spell_load_lang(lang.as_mut_ptr()) };
                 // The autocommands may have destroyed the buffer being
@@ -397,10 +344,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         slang = first_lang.get();
         while !slang.is_null() {
             let matches = if filename {
-                unsafe {
-                    path_full_compare(lang.as_mut_ptr(), (*slang).sl_fname, false, true)
-                        == kEqualFiles
-                }
+                let fname = unsafe { (*slang).sl_fname };
+                let cmp = unsafe { path_full_compare(lang.as_mut_ptr(), fname, false, true) };
+                cmp == kEqualFiles
             } else {
                 unsafe { strcasecmp(lang.as_ptr(), (*slang).sl_name) == 0 }
             };
@@ -455,22 +401,17 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 }
                 unsafe { int_wordlist_spl(spf_name.as_mut_ptr()) };
             } else {
-                let len = unsafe {
-                    copy_option_part(
-                        &raw mut spf,
-                        spf_name.as_mut_ptr(),
-                        MAXPATHL as size_t - 4,
-                        c",".as_ptr() as *mut c_char,
-                    )
-                } as c_int;
-                unsafe { strcpy(spf_name.as_mut_ptr().offset(len as isize), c".spl".as_ptr()) };
+                let (buf, room) = (spf_name.as_mut_ptr(), MAXPATHL as size_t - 4);
+                let sep = c",".as_ptr() as *mut c_char;
+                let len = unsafe { copy_option_part(&raw mut spf, buf, room, sep) } as c_int;
+                let tail = unsafe { buf.offset(len as isize) };
+                unsafe { strcpy(tail, c".spl".as_ptr()) };
 
                 // Skip it if the loop above already took it.
                 let mut c = 0;
                 while c < ga.ga_len {
-                    let p = unsafe {
-                        (*(*(ga.ga_data as *mut langp_T).offset(c as isize)).lp_slang).sl_fname
-                    };
+                    let entry = ga.ga_data as *mut langp_T;
+                    let p = unsafe { (*(*entry.offset(c as isize)).lp_slang).sl_fname };
                     if !p.is_null()
                         && unsafe { path_full_compare(spf_name.as_mut_ptr(), p, false, true) }
                             == kEqualFiles
@@ -487,10 +428,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
 
             let mut slang = first_lang.get();
             while !slang.is_null() {
-                if unsafe {
-                    path_full_compare(spf_name.as_mut_ptr(), (*slang).sl_fname, false, true)
-                } == kEqualFiles
-                {
+                let fname = unsafe { (*slang).sl_fname };
+                let name = spf_name.as_mut_ptr();
+                if unsafe { path_full_compare(name, fname, false, true) } == kEqualFiles {
                     break;
                 }
                 slang = unsafe { (*slang).sl_next };
@@ -503,26 +443,15 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 if round == 0 {
                     unsafe { strcpy(lang.as_mut_ptr(), c"internal wordlist".as_ptr()) };
                 } else {
-                    unsafe {
-                        xstrlcpy(
-                            lang.as_mut_ptr(),
-                            path_tail(spf_name.as_mut_ptr()),
-                            MAXWLEN + 1,
-                        )
-                    };
+                    let tail = unsafe { path_tail(spf_name.as_mut_ptr()) };
+                    unsafe { xstrlcpy(lang.as_mut_ptr(), tail, MAXWLEN + 1) };
                     let p = unsafe { vim_strchr(lang.as_mut_ptr(), '.' as c_int) };
                     if !p.is_null() {
                         unsafe { *p = NUL as c_char }; // truncate at ".encoding.add"
                     }
                 }
-                slang = unsafe {
-                    spell_load_file(
-                        spf_name.as_mut_ptr(),
-                        lang.as_mut_ptr(),
-                        core::ptr::null_mut(),
-                        true,
-                    )
-                };
+                let (file, name) = (spf_name.as_mut_ptr(), lang.as_mut_ptr());
+                slang = unsafe { spell_load_file(file, name, core::ptr::null_mut(), true) };
 
                 // If any language has NOBREAK assume the additions do too.
                 if !slang.is_null() && nobreak {
@@ -699,14 +628,9 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
     let mut spf_name = [0 as c_char; MAXPATHL as usize];
     let mut spf = val as *mut c_char;
     while unsafe { *spf } != 0 {
-        let l = unsafe {
-            copy_option_part(
-                &raw mut spf,
-                spf_name.as_mut_ptr(),
-                MAXPATHL as size_t,
-                c",".as_ptr() as *mut c_char,
-            )
-        };
+        let (buf, room) = (spf_name.as_mut_ptr(), MAXPATHL as size_t);
+        let sep = c",".as_ptr() as *mut c_char;
+        let l = unsafe { copy_option_part(&raw mut spf, buf, room, sep) };
         if l >= MAXPATHL as size_t - 4
             || l < 4
             || unsafe { strcmp(spf_name.as_ptr().add(l - 4), c".add".as_ptr()) } != 0
@@ -782,22 +706,15 @@ unsafe fn use_midword(lp: *mut slang_T, wp: *mut win_T) {
         if c < 256 && l <= 2 {
             unsafe { (*(*wp).w_s).b_spell_ismw[c as usize] = true };
         } else if unsafe { (*(*wp).w_s).b_spell_ismw_mb }.is_null() {
-            unsafe {
-                (*(*wp).w_s).b_spell_ismw_mb =
-                    xmemdupz(p as *const c_void, l as size_t) as *mut c_char
-            };
+            let copy = unsafe { xmemdupz(p as *const c_void, l as size_t) };
+            unsafe { (*(*wp).w_s).b_spell_ismw_mb = copy as *mut c_char };
         } else {
             let n = unsafe { strlen((*(*wp).w_s).b_spell_ismw_mb) } as c_int;
             let bp = unsafe { xstrnsave((*(*wp).w_s).b_spell_ismw_mb, (n + l) as size_t) };
             unsafe { xfree((*(*wp).w_s).b_spell_ismw_mb as *mut c_void) };
             unsafe { (*(*wp).w_s).b_spell_ismw_mb = bp };
-            unsafe {
-                xmemcpyz(
-                    bp.offset(n as isize) as *mut c_void,
-                    p as *const c_void,
-                    l as size_t,
-                )
-            };
+            let at = unsafe { bp.offset(n as isize) } as *mut c_void;
+            unsafe { xmemcpyz(at, p as *const c_void, l as size_t) };
         }
         p = unsafe { p.offset(l as isize) };
     }
