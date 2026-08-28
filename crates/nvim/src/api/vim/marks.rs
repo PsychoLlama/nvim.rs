@@ -8,50 +8,66 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
+/// The one character `name` spells, when it names a global mark: an
+/// uppercase letter, or a digit for one of the numbered file marks.
+///
+/// `None` -- with `err` set -- when it is neither, or is not one character.
+///
+/// # Safety
+/// `name` must name its own bytes and `err` must be the caller's error slot.
+unsafe fn global_mark_name(name: String_0, err: *mut Error) -> Option<c_char> {
+    if name.len() != 1 {
+        // SAFETY: the caller's promise about `name` and `err`.
+        unsafe { reject(err, c"mark name (must be a single char)", name) };
+        return None;
+    }
+    // SAFETY: the caller's promise -- `name` has the one byte read here.
+    let mark = unsafe { *name.data() };
+    if !((mark as u8).is_ascii_uppercase() || ascii_isdigit(mark as c_int)) {
+        // SAFETY: as above.
+        unsafe { reject(err, c"mark name (must be file/uppercase)", name) };
+        return None;
+    }
+    Some(mark)
+}
+
+/// "Invalid `what`: '`name`'".
+///
+/// # Safety
+/// `name` must be NUL-terminated and `err` must be the caller's error slot.
+unsafe fn reject(err: *mut Error, what: &CStr, name: String_0) {
+    let (what, got) = (what.as_ptr(), name.data());
+    // SAFETY: the caller's promise.
+    unsafe { api_err_invalid(err, what, got, 0, true) };
+}
+
+/// Remove the global mark `name`.
+///
+/// # Safety
+/// `name` must name its own bytes.
 pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    let mut res: bool = false;
-    if !(name.len() == 1 as size_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"mark name (must be a single char)".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
-        return (res as Boolean).reported(error);
+    // SAFETY: `name` is the caller's and `err` this frame's own slot.
+    if unsafe { global_mark_name(name, err) }.is_none() {
+        return false.reported(error);
     }
-    if !(unsafe { *name.data() } as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && unsafe { *name.data() } as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || ascii_isdigit(unsafe { *name.data() } as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
-    {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"mark name (must be file/uppercase)".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
-        return (res as Boolean).reported(error);
-    }
-    res = unsafe {
-        set_mark(
-            ::core::ptr::null_mut::<buf_T>(),
-            name,
-            0 as Integer,
-            0 as Integer,
-            err,
-        )
-    };
-    (res as Boolean).reported(error)
+    let no_buf = ptr::null_mut::<buf_T>();
+    // SAFETY: a global mark takes no buffer, and `err` is this frame's own.
+    let res = unsafe { set_mark(no_buf, name, 0, 0, err) };
+    res.reported(error)
 }
 
+/// The global mark `name`, as `[row, col, buffer, filename]`.
+///
+/// A mark that names nothing, or names a line that is gone, answers
+/// `[0, 0, 0, ""]` rather than an error.
+///
+/// # Safety
+/// `name` must name its own bytes and `arena` must be the caller's.
 pub unsafe fn nvim_get_mark(
     name: String_0,
     _opts: *mut KeyDict_empty,
@@ -59,80 +75,53 @@ pub unsafe fn nvim_get_mark(
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    let mut rv: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
+    // SAFETY: `name` is the caller's and `err` this frame's own slot.
+    let Some(mark) = (unsafe { global_mark_name(name, err) }) else {
+        return Array::EMPTY.reported(error);
     };
-    if !(name.len() == 1 as size_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"mark name (must be a single char)".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
-        return rv.reported(error);
-    }
-    if !(unsafe { *name.data() } as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && unsafe { *name.data() } as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || ascii_isdigit(unsafe { *name.data() } as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
-    {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"mark name (must be file/uppercase)".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
-        return rv.reported(error);
-    }
-    let mut mark: *mut xfmark_T =
-        unsafe { mark_get_global(false, *name.data() as ::core::ffi::c_int) };
-    let mut pos: pos_T = unsafe { (*mark).fmark.mark };
-    let mut allocated: bool = false;
-    let mut bufnr: ::core::ffi::c_int = 0;
-    let mut filename: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if unsafe { (*mark).fmark.fnum } != 0 as ::core::ffi::c_int {
-        bufnr = unsafe { (*mark).fmark.fnum };
-        filename = buflist_nr2name(bufnr, 1, 1);
-        allocated = true;
+    // SAFETY: `mark_get_global` answers a live global mark for every name
+    // this one accepts -- the slot exists whether or not it is set.
+    let (pos, fnum, fname) = unsafe {
+        let mark = mark_get_global(false, mark as c_int);
+        ((*mark).fmark.mark, (*mark).fmark.fnum, (*mark).fname)
+    };
+    // A mark in a buffer names the buffer; one restored from ShaDa names
+    // only the file it was in, and `fname` is the mark's own storage.
+    let mut allocated = fnum != 0;
+    let mut bufnr = fnum;
+    let mut filename = if allocated {
+        buflist_nr2name(bufnr, 1, 1)
     } else {
-        filename = unsafe { (*mark).fname };
-        bufnr = 0 as ::core::ffi::c_int;
-    }
-    let mut exists: bool = !filename.is_null();
+        fname
+    };
     let mut row: Integer = 0;
     let mut col: Integer = 0;
-    if !exists || pos.lnum <= 0 as linenr_T {
+    if filename.is_null() || pos.lnum <= 0 as linenr_T {
         if allocated {
-            unsafe { xfree(filename as *mut ::core::ffi::c_void) };
+            // SAFETY: `buflist_nr2name` handed back an allocation.
+            unsafe { xfree(filename.cast()) };
             allocated = false;
         }
-        filename = c"".as_ptr() as *mut ::core::ffi::c_char;
-        bufnr = 0 as ::core::ffi::c_int;
-        row = 0 as Integer;
-        col = 0 as Integer;
+        filename = c"".as_ptr().cast_mut();
+        bufnr = 0;
     } else {
-        row = pos.lnum as Integer;
-        col = pos.col as Integer;
+        row = Integer::from(pos.lnum);
+        col = Integer::from(pos.col);
     }
-    rv = arena_array(arena, 4 as size_t);
-    unsafe { array_add(&mut rv, Object::integer(row)) };
-    unsafe { array_add(&mut rv, Object::integer(col)) };
-    unsafe { array_add(&mut rv, Object::integer(bufnr as Integer)) };
+    let mut rv = arena_array(arena, 4 as size_t);
+    // SAFETY: `filename` is NUL-terminated and `arena` is the caller's, so
+    // the copy outlives the answer.
+    let path = unsafe { Object::string(arena_string(arena, cstr_as_string(filename))) };
+    // SAFETY: `rv` is the four-slot block the arena just handed back.
     unsafe {
-        array_add(
-            &mut rv,
-            Object::string(arena_string(arena, cstr_as_string(filename))),
-        )
-    };
+        array_add(&mut rv, Object::integer(row));
+        array_add(&mut rv, Object::integer(col));
+        array_add(&mut rv, Object::integer(Integer::from(bufnr)));
+        array_add(&mut rv, path);
+    }
     if allocated {
-        unsafe { xfree(filename as *mut ::core::ffi::c_void) };
+        // SAFETY: as above -- the arena has its own copy now.
+        unsafe { xfree(filename.cast()) };
     }
     rv.reported(error)
 }

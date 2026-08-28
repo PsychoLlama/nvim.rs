@@ -21,27 +21,19 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
         return (0 as Integer).reported(slot);
     }
     if b == cmdwin_buf.get() {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                &raw const e_cmdwin as *const ::core::ffi::c_char,
-            )
-        };
+        let msg = (&raw const e_cmdwin).cast::<::core::ffi::c_char>();
+        // SAFETY: `err` is this frame's slot and `e_cmdwin` a static message.
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
         return (0 as Integer).reported(slot);
     }
     let mut may_read_buffer: bool = true;
     if !unsafe { (*b).terminal }.is_null() {
         if unsafe { terminal_running((*b).terminal) } {
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Terminal already connected to buffer %d".as_ptr(),
-                    (*b).handle,
-                )
-            };
+            let fmt = c"Terminal already connected to buffer %d".as_ptr();
+            // SAFETY: `b` is the live buffer, and `err` is this frame's slot.
+            let handle = unsafe { (*b).handle };
+            // SAFETY: as above; the format takes the one `int` given.
+            unsafe { api_set_error(err, kErrorTypeException, fmt, handle) };
             return (0 as Integer).reported(slot);
         }
         buf_close_terminal(unsafe { Buf::new(b) });
@@ -106,15 +98,10 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
     unsafe { channel_decref(chan) };
     if contents.size > 0 as size_t {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        unsafe {
-            channel_send(
-                (*chan).id,
-                contents.items,
-                contents.size,
-                true,
-                &raw mut error,
-            )
-        };
+        let (text, len, slot) = (contents.items, contents.size, &raw mut error);
+        // SAFETY: `chan` is the channel just made, `contents` this frame's
+        // own lines, and `error` its own out-parameter.
+        unsafe { channel_send((*chan).id, text, len, true, slot) };
         if !error.is_null() {
             unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error) };
         }
@@ -142,28 +129,20 @@ unsafe fn term_write(
     let mut args__items: [Object; 3] = [NIL; 3];
     args.capacity = 3 as size_t;
     args.items = &raw mut args__items as *mut Object;
-    unsafe { array_add(&mut args, Object::integer((*chan).id as Integer)) };
-    unsafe { array_add(&mut args, Object::buffer(terminal_buf((*chan).term))) };
+    let text = Object::string(String_0::from_raw_parts(buf.cast_mut(), size));
+    // SAFETY: `chan` is the terminal's channel and `args` the three-slot
+    // block just declared above it.
     unsafe {
-        array_add(
-            &mut args,
-            Object::string(String_0::from_raw_parts(
-                buf as *mut ::core::ffi::c_char,
-                size,
-            )),
-        )
-    };
+        array_add(&mut args, Object::integer((*chan).id as Integer));
+        array_add(&mut args, Object::buffer(terminal_buf((*chan).term)));
+        array_add(&mut args, text);
+    }
     let _locked = Lock::text();
-    unsafe {
-        nlua_call_ref(
-            cb,
-            c"input".as_ptr(),
-            args,
-            kRetNilBool,
-            ::core::ptr::null_mut::<Arena>(),
-            ::core::ptr::null_mut::<Error>(),
-        )
-    };
+    let (name, no_arena) = (c"input".as_ptr(), ::core::ptr::null_mut::<Arena>());
+    let no_err = ::core::ptr::null_mut::<Error>();
+    // SAFETY: `cb` is a live Lua reference and `args` this frame's own; the
+    // handler reports nothing, so it is given no error slot.
+    unsafe { nlua_call_ref(cb, name, args, kRetNilBool, no_arena, no_err) };
 }
 
 fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}
@@ -185,15 +164,10 @@ pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error>
     if data.is_empty() {
         return ().reported(slot);
     }
-    unsafe {
-        channel_send(
-            chan as uint64_t,
-            data.data(),
-            data.len(),
-            false,
-            &raw mut error,
-        )
-    };
+    let (id, text, len) = (chan as uint64_t, data.data(), data.len());
+    // SAFETY: `data` is the caller's, and `error` this frame's own
+    // out-parameter.
+    unsafe { channel_send(id, text, len, false, &raw mut error) };
     if !error.is_null() {
         unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error) };
     }

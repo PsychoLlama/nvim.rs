@@ -56,15 +56,14 @@ pub unsafe fn nvim_set_client_info(
     if !has_major {
         let mut v: Dict = arena_dict(arena, version.size.wrapping_add(1 as size_t));
         if version.size != 0 {
-            unsafe {
-                memcpy(
-                    v.items as *mut ::core::ffi::c_void,
-                    version.items as *const ::core::ffi::c_void,
-                    version
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<KeyValuePair>()),
-                )
-            };
+            let dst = v.items.cast::<::core::ffi::c_void>();
+            let src = version.items.cast::<::core::ffi::c_void>();
+            let bytes = version
+                .size
+                .wrapping_mul(::core::mem::size_of::<KeyValuePair>());
+            // SAFETY: `v` is the arena block just sized for one more pair
+            // than `version` holds, and `version` is the caller's.
+            unsafe { memcpy(dst, src, bytes) };
             v.size = version.size;
         }
         unsafe { dict_put(&mut v, c"major", Object::integer(0 as Integer)) };
@@ -74,12 +73,10 @@ pub unsafe fn nvim_set_client_info(
     unsafe { dict_put(&mut info, c"type", Object::string(type_0)) };
     unsafe { dict_put(&mut info, c"methods", Object::dict(methods)) };
     unsafe { dict_put(&mut info, c"attributes", Object::dict(attributes)) };
-    unsafe {
-        rpc_set_client_info(
-            channel_id,
-            copy_dict(info, ::core::ptr::null_mut::<Arena>()),
-        )
-    };
+    let no_arena = ::core::ptr::null_mut::<Arena>();
+    // SAFETY: `info` is this frame's own, and the copy the channel keeps is
+    // owned rather than borrowed from the arena.
+    unsafe { rpc_set_client_info(channel_id, copy_dict(info, no_arena)) };
 }
 
 pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
@@ -87,14 +84,9 @@ pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Re
     let err = &raw mut error;
     let mut chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                &raw const e_invchan as *const ::core::ffi::c_char,
-            )
-        };
+        let msg = (&raw const e_invchan).cast::<::core::ffi::c_char>();
+        // SAFETY: `err` is this frame's own slot and `e_invchan` is static.
+        unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
         return ().reported(error);
     }
     unsafe { (*chan).detach = detach };

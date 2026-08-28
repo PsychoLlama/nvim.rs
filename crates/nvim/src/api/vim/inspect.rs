@@ -85,14 +85,18 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             None => rv = 2 as ::core::ffi::c_int,
         }
         if rv == 2 as ::core::ffi::c_int {
-            logmsg_c!(
-                LOGLVL_DBG,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                c"nvim_get_proc_children".as_ptr(),
-                1924 as ::core::ffi::c_int,
-                true,
-                c"fallback to vim._os_proc_children()".as_ptr(),
-            );
+            // SAFETY: the log macro's own operations; every argument is a
+            // literal that outlives the call.
+            unsafe {
+                logmsg_c!(
+                    LOGLVL_DBG,
+                    ::core::ptr::null::<::core::ffi::c_char>(),
+                    c"nvim_get_proc_children".as_ptr(),
+                    1924 as ::core::ffi::c_int,
+                    true,
+                    c"fallback to vim._os_proc_children()".as_ptr(),
+                )
+            };
             let mut a: Array = Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -102,20 +106,11 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             a.capacity = 1 as size_t;
             a.items = &raw mut a__items as *mut Object;
             unsafe { array_add(&mut a, Object::integer(pid)) };
-            let mut o: Object = unsafe {
-                nlua_exec(
-                    String_0::from_raw_parts(
-                        c"return vim._os_proc_children(...)".as_ptr() as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 34]>()
-                            .wrapping_sub(1 as size_t),
-                    ),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    a,
-                    kRetObject,
-                    arena,
-                    err,
-                )
-            };
+            let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
+            let name = ::core::ptr::null::<::core::ffi::c_char>();
+            // SAFETY: `a` is the one-slot block above, `arena` is the
+            // caller's and `err` this frame's own slot.
+            let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, err) };
             if o.type_0 as ::core::ffi::c_uint
                 == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
             {
@@ -162,27 +157,20 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         } else {
             8 as size_t
         };
-        a.items = unsafe {
-            xrealloc(
-                a.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul(a.capacity),
-            )
-        } as *mut Object;
+        let (items, bytes) = (
+            a.items.cast::<::core::ffi::c_void>(),
+            ::core::mem::size_of::<Object>().wrapping_mul(a.capacity),
+        );
+        // SAFETY: `a.items` is this frame's own one-slot array, which
+        // `xrealloc` copies out of and does not free.
+        a.items = unsafe { xrealloc(items, bytes) }.cast::<Object>();
     };
     unsafe { array_add(&mut a, Object::integer(pid)) };
-    let mut o: Object = unsafe {
-        nlua_exec(
-            String_0::from_raw_parts(
-                c"return vim._os_proc_info(...)".as_ptr() as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 30]>().wrapping_sub(1 as size_t),
-            ),
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            a,
-            kRetObject,
-            arena,
-            err,
-        )
-    };
+    let code = String_0::from_cstr(c"return vim._os_proc_info(...)");
+    let name = ::core::ptr::null::<::core::ffi::c_char>();
+    // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
+    // `err` this frame's own slot.
+    let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, err) };
     if o.type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
         && unsafe { o.data.array }.size == 0 as size_t

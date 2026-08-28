@@ -164,15 +164,9 @@ impl Context {
                     && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
             };
             if !single {
+                let (key, want) = (c"fillchar".as_ptr(), c"single character".as_ptr());
                 // SAFETY: the caller's error slot.
-                unsafe {
-                    api_err_exp(
-                        err,
-                        c"fillchar".as_ptr(),
-                        c"single character".as_ptr(),
-                        ptr::null(),
-                    )
-                };
+                unsafe { api_err_exp(err, key, want, ptr::null()) };
                 return None;
             }
             let mut c = 0;
@@ -191,19 +185,14 @@ impl Context {
             }
         };
         // SAFETY: null or a live window.
-        let win = unsafe { win_opt(wp) }.or_else(|| {
+        let win = unsafe { win_opt(wp) };
+        let Some(win) = win else {
+            let (fmt, winid) = (c"unknown winid %d".as_ptr(), opts.winid);
             // SAFETY: the caller's error slot; the lookup may already have
             // set one, which upstream overwrites with this.
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"unknown winid %d".as_ptr(),
-                    opts.winid,
-                )
-            };
-            None
-        })?;
+            unsafe { api_set_error(err, kErrorTypeException, fmt, winid) };
+            return None;
+        };
 
         let mut statuscol_lnum = 0;
         if has_key(
@@ -212,16 +201,10 @@ impl Context {
         ) {
             statuscol_lnum = opts.use_statuscol_lnum as c_int;
             if !(statuscol_lnum > 0 && statuscol_lnum as linenr_T <= win.buffer().line_count()) {
+                let key = c"use_statuscol_lnum".as_ptr();
+                let why = c"out of range".as_ptr();
                 // SAFETY: the caller's error slot.
-                unsafe {
-                    api_err_invalid(
-                        err,
-                        c"use_statuscol_lnum".as_ptr(),
-                        c"out of range".as_ptr(),
-                        0,
-                        false,
-                    )
-                };
+                unsafe { api_err_invalid(err, key, why, 0, false) };
                 return None;
             }
             use_bools += 1;
@@ -291,19 +274,11 @@ unsafe fn statuscol_state(
     let lnum = lnum as linenr_T;
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
     let mut cursorline_fi = foldinfo_T::default();
-    // SAFETY: the caller's promise; the three ids and the sign array are
-    // out-parameters of this frame.
-    unsafe {
-        decor_redraw_signs(
-            win.raw(),
-            win.buffer().raw(),
-            lnum - 1,
-            sattrs.as_mut_ptr(),
-            &raw mut line_id,
-            &raw mut cul_id,
-            &raw mut num_id,
-        )
-    };
+    let (wp, buf, signs) = (win.raw(), win.buffer().raw(), sattrs.as_mut_ptr());
+    let ids = (&raw mut line_id, &raw mut cul_id, &raw mut num_id);
+    // SAFETY: the caller's promise; the three ids `ids` names and the sign
+    // array are out-parameters of this frame.
+    unsafe { decor_redraw_signs(wp, buf, lnum - 1, signs, ids.0, ids.1, ids.2) };
     statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {
@@ -435,14 +410,9 @@ pub unsafe fn nvim__complete_set(
     let opts = unsafe { &*opts };
     // SAFETY: reads the 'completeopt' flags.
     if unsafe { get_cot_flags() } & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
+        let msg = c"completeopt option does not include popup".as_ptr();
         // SAFETY: the caller's error slot and a static message.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"completeopt option does not include popup".as_ptr(),
-            )
-        };
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
         return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {

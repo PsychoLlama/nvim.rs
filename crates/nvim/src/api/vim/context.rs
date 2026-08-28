@@ -11,6 +11,19 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
 
+/// The `types` key's spellings, and the `kCtx*` bit each one names.
+const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"sfuncs", c"funcs"];
+
+/// [`NAMES`]' bits, in the same order.
+const FLAGS: [::core::ffi::c_int; 6] = [
+    kCtxRegs as ::core::ffi::c_int,
+    kCtxJumps as ::core::ffi::c_int,
+    kCtxBufs as ::core::ffi::c_int,
+    kCtxGVars as ::core::ffi::c_int,
+    kCtxSFuncs as ::core::ffi::c_int,
+    kCtxFuncs as ::core::ffi::c_int,
+];
+
 pub unsafe fn nvim_get_context(
     opts: *mut KeyDict_context,
     arena: *mut Arena,
@@ -36,25 +49,20 @@ pub unsafe fn nvim_get_context(
     if types.size > 0 as size_t {
         let mut i: size_t = 0 as size_t;
         while i < types.size {
-            if unsafe { (*types.items.add(i)).type_0 } as ::core::ffi::c_uint
-                == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let s: *const ::core::ffi::c_char =
-                    unsafe { (*types.items.add(i)).data.string }.data();
-                if unsafe { strequal(s, c"regs".as_ptr()) } {
-                    int_types |= kCtxRegs as ::core::ffi::c_int;
-                } else if unsafe { strequal(s, c"jumps".as_ptr()) } {
-                    int_types |= kCtxJumps as ::core::ffi::c_int;
-                } else if unsafe { strequal(s, c"bufs".as_ptr()) } {
-                    int_types |= kCtxBufs as ::core::ffi::c_int;
-                } else if unsafe { strequal(s, c"gvars".as_ptr()) } {
-                    int_types |= kCtxGVars as ::core::ffi::c_int;
-                } else if unsafe { strequal(s, c"sfuncs".as_ptr()) } {
-                    int_types |= kCtxSFuncs as ::core::ffi::c_int;
-                } else if unsafe { strequal(s, c"funcs".as_ptr()) } {
-                    int_types |= kCtxFuncs as ::core::ffi::c_int;
-                } else if true {
-                    unsafe { api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true) };
+            // SAFETY: `types` names its own `size` items, and the tag says
+            // whether the string arm is the live one.
+            let named = unsafe {
+                let item = *types.items.add(i);
+                (item.type_0 == kObjectTypeString).then(|| item.data.string.data())
+            };
+            if let Some(s) = named {
+                // SAFETY: the keyset's strings are NUL-terminated.
+                let which = unsafe { NAMES.iter().position(|n| strequal(s, n.as_ptr())) };
+                if let Some(which) = which {
+                    int_types |= FLAGS[which];
+                } else {
+                    // SAFETY: `err` is this frame's own slot.
+                    unsafe { api_err_invalid(err, c"type".as_ptr(), s, 0, true) };
                     return Dict {
                         size: 0 as size_t,
                         capacity: 0 as size_t,
@@ -80,7 +88,8 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
     unsafe { ctx_from_dict(dict, &raw mut ctx, err) };
-    if !(unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+    if error.type_0 == kErrorTypeNone {
+        // SAFETY: `ctx` is this frame's own, filled in above.
         unsafe { ctx_restore(&raw mut ctx, kCtxAll.get()) };
     }
     unsafe { ctx_free(&raw mut ctx) };

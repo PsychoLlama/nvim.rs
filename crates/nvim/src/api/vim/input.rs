@@ -64,23 +64,16 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
     if lowlevel {
         unsafe { input_enqueue_raw(keys_esc, strlen(keys_esc)) };
     } else {
-        unsafe {
-            ins_typebuf(
-                keys_esc,
-                if remap as ::core::ffi::c_int != 0 {
-                    REMAP_YES as ::core::ffi::c_int
-                } else {
-                    REMAP_NONE as ::core::ffi::c_int
-                },
-                if insert as ::core::ffi::c_int != 0 {
-                    0 as ::core::ffi::c_int
-                } else {
-                    typeahead().len()
-                },
-                !typed,
-                false,
-            )
+        let remap_flag = if remap {
+            REMAP_YES as ::core::ffi::c_int
+        } else {
+            REMAP_NONE as ::core::ffi::c_int
         };
+        // `insert` puts the keys at the front of the typeahead; without it
+        // they go after whatever is already queued.
+        let offset = if insert { 0 } else { typeahead().len() };
+        // SAFETY: `keys_esc` is the escaped copy, or the caller's own string.
+        unsafe { ins_typebuf(keys_esc, remap_flag, offset, !typed, false) };
         if vgetc_busy.get() != 0 {
             typebuf_was_filled.set(true);
         }
@@ -172,14 +165,11 @@ pub unsafe fn nvim_input_mouse(
                     let mut mod_0: ::core::ffi::c_int =
                         name_to_mod_mask(byte as ::core::ffi::c_int);
                     if !(mod_0 != 0 as ::core::ffi::c_int) {
-                        unsafe {
-                            api_set_error(
-                                err,
-                                kErrorTypeValidation,
-                                c"Invalid modifier: %c".as_ptr(),
-                                byte as ::core::ffi::c_int,
-                            )
-                        };
+                        let fmt = c"Invalid modifier: %c".as_ptr();
+                        let byte = byte as ::core::ffi::c_int;
+                        // SAFETY: `err` is this frame's own slot, and the
+                        // format takes the one `int` given.
+                        unsafe { api_set_error(err, kErrorTypeValidation, fmt, byte) };
                         return ().reported(error);
                     }
                     modmask |= mod_0;
@@ -196,13 +186,10 @@ pub unsafe fn nvim_input_mouse(
             return ().reported(error);
         }
     }
-    unsafe {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            c"invalid button or action".as_ptr(),
-        )
-    };
+    let msg = c"invalid button or action".as_ptr();
+    // SAFETY: `err` is this frame's own slot, and the format takes the one C
+    // string given.
+    unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
     ().reported(error)
 }
 
@@ -229,17 +216,12 @@ pub unsafe fn nvim_replace_termcodes(
         flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
     }
     let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    unsafe {
-        replace_termcodes(
-            str.data(),
-            str.len(),
-            &raw mut ptr,
-            0 as scid_T,
-            flags,
-            ::core::ptr::null_mut::<bool>(),
-            p_cpo.get(),
-        )
-    };
+    let (text, len, out) = (str.data(), str.len(), &raw mut ptr);
+    let (no_flag, cpo) = (::core::ptr::null_mut::<bool>(), p_cpo.get());
+    // SAFETY: `str` is the caller's, `ptr` this frame's own out-parameter,
+    // and `'cpoptions'` a live NUL-terminated string.
+    unsafe { replace_termcodes(text, len, out, 0 as scid_T, flags, no_flag, cpo) };
+    // SAFETY: `replace_termcodes` left an owned C string in `ptr`.
     unsafe { cstr_as_string(ptr) }
 }
 

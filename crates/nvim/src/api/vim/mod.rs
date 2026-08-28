@@ -102,8 +102,8 @@ use crate::types::{
     dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T,
-    mpack_token_type_t, pos_T, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
-    uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    mpack_token_type_t, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
+    uint64_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

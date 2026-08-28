@@ -36,15 +36,9 @@ pub unsafe fn nvim_set_hl(
     let err = &raw mut error;
     let mut hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"highlight name".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
+        let (what, got) = (c"highlight name".as_ptr(), name.data());
+        // SAFETY: `err` is this frame's own slot and `name` is the caller's.
+        unsafe { api_err_invalid(err, what, got, 0, true) };
         return ().reported(error);
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -106,15 +100,10 @@ pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     if !(ns_id >= 0 as Integer) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"namespace".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        let what = c"namespace".as_ptr();
+        let none = ::core::ptr::null::<::core::ffi::c_char>();
+        // SAFETY: `err` is this frame's own slot and `what` is a literal.
+        unsafe { api_err_invalid(err, what, none, ns_id, false) };
         return ().reported(error);
     }
     ns_hl_global.set(ns_id as NS);
@@ -136,13 +125,10 @@ pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
 pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> Dict {
     let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
-        unsafe {
-            dict_put_str(
-                &mut colors,
-                cstr_as_string(entry.name.as_ptr()),
-                Object::integer(entry.color as Integer),
-            )
-        };
+        let name = String_0::from_cstr(entry.name);
+        let color = Object::integer(entry.color as Integer);
+        // SAFETY: `colors` is the arena block sized for every colour name.
+        unsafe { dict_put_str(&mut colors, name, color) };
     }
     colors
 }

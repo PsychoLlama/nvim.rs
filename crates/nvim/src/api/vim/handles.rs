@@ -142,16 +142,10 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
     let mut err = ERROR_INIT;
     let ret = api_try(&mut err, |_| create_buf(listed, scratch));
     if ret == 0 && err.type_0 == kErrorTypeNone {
-        // SAFETY: `err` is this frame's own slot, and the message is a
-        // literal that takes no arguments.
-        unsafe {
-            api_set_error(
-                &raw mut err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                c"Failed to create buffer".as_ptr(),
-            )
-        };
+        let (fmt, msg) = (c"%s".as_ptr(), c"Failed to create buffer".as_ptr());
+        // SAFETY: `err` is this frame's own slot, and the format takes the
+        // one C string given.
+        unsafe { api_set_error(&raw mut err, kErrorTypeException, fmt, msg) };
     }
     ret.reported(err)
 }
@@ -167,15 +161,9 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
         } else {
             0
         };
+    let no_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
     // SAFETY: a new buffer with neither a file name nor a short name.
-    let buf = unsafe {
-        buflist_new(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            0 as linenr_T,
-            flags,
-        )
-    };
+    let buf = unsafe { buflist_new(no_name, no_name, 0 as linenr_T, flags) };
     // SAFETY: `buf` is the buffer just made, or null.
     let opened = !buf.is_null() && unsafe { ml_open(buf) } != 0 as ::core::ffi::c_int;
     if !opened {
@@ -197,24 +185,14 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
         );
     }
     if scratch {
+        let target = buf.cast::<::core::ffi::c_void>();
+        let local = OptionSetFlags::LOCAL;
         // SAFETY: as above; the two values borrow static literals.
         unsafe {
-            set_option_direct_for(
-                kOptBufhidden,
-                string_optval(c"hide"),
-                OptionSetFlags::LOCAL,
-                0 as scid_T,
-                kOptScopeBuf,
-                buf.cast::<::core::ffi::c_void>(),
-            );
-            set_option_direct_for(
-                kOptBuftype,
-                string_optval(c"nofile"),
-                OptionSetFlags::LOCAL,
-                0 as scid_T,
-                kOptScopeBuf,
-                buf.cast::<::core::ffi::c_void>(),
-            );
+            let hide = string_optval(c"hide");
+            set_option_direct_for(kOptBufhidden, hide, local, 0, kOptScopeBuf, target);
+            let nofile = string_optval(c"nofile");
+            set_option_direct_for(kOptBuftype, nofile, local, 0, kOptScopeBuf, target);
         }
         debug_assert!(
             // SAFETY: a buffer `ml_open` answered for has a memfile.
