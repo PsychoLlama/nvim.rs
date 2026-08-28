@@ -246,10 +246,8 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
         do_profiling.set(PROF_NONE);
         // SAFETY: a v: variable set to a number, then the profiling tables,
         // which are live for as long as the editor is.
-        unsafe {
-            set_vim_var_nr(Vv::Profiling, 0 as varnumber_T);
-            profile_reset();
-        }
+        unsafe { set_vim_var_nr(Vv::Profiling, 0 as varnumber_T) };
+        unsafe { profile_reset() };
     } else if full == b"pause" {
         if do_profiling.get() == PROF_YES {
             PAUSE_TIME.set(profile_start());
@@ -309,11 +307,9 @@ unsafe fn profile_reset() {
         for i in 0..uf.uf_lines.ga_len as isize {
             // SAFETY: `func_do_profile` sized all three per-line arrays to
             // `uf_lines`, which is what this walks.
-            unsafe {
-                *uf.uf_tml_count.offset(i) = 0;
-                *uf.uf_tml_total.offset(i) = 0;
-                *uf.uf_tml_self.offset(i) = 0;
-            }
+            unsafe { *uf.uf_tml_count.offset(i) = 0 };
+            unsafe { *uf.uf_tml_total.offset(i) = 0 };
+            unsafe { *uf.uf_tml_self.offset(i) = 0 };
         }
         uf.uf_tml_start = profile_zero();
         uf.uf_tml_children = profile_zero();
@@ -426,16 +422,14 @@ pub unsafe fn func_do_profile(fp: *mut ufunc_T) {
         fp.uf_tm_total = profile_zero();
         // SAFETY: `xcalloc` returns an owned zeroed array of `len` elements,
         // which is what the three per-line counters are read as everywhere.
-        unsafe {
-            if fp.uf_tml_count.is_null() {
-                fp.uf_tml_count = xcalloc(len, size_of::<c_int>()) as *mut c_int;
-            }
-            if fp.uf_tml_total.is_null() {
-                fp.uf_tml_total = xcalloc(len, size_of::<proftime_T>()) as *mut proftime_T;
-            }
-            if fp.uf_tml_self.is_null() {
-                fp.uf_tml_self = xcalloc(len, size_of::<proftime_T>()) as *mut proftime_T;
-            }
+        if fp.uf_tml_count.is_null() {
+            fp.uf_tml_count = unsafe { xcalloc(len, size_of::<c_int>()) } as *mut c_int;
+        }
+        if fp.uf_tml_total.is_null() {
+            fp.uf_tml_total = unsafe { xcalloc(len, size_of::<proftime_T>()) } as *mut proftime_T;
+        }
+        if fp.uf_tml_self.is_null() {
+            fp.uf_tml_self = unsafe { xcalloc(len, size_of::<proftime_T>()) } as *mut proftime_T;
         }
         fp.uf_tml_idx = -1;
         fp.uf_prof_initialized = 1;
@@ -452,12 +446,10 @@ pub unsafe fn func_do_profile(fp: *mut ufunc_T) {
 pub unsafe fn prof_child_enter() -> proftime_T {
     // SAFETY: `get_current_funccal` answers with the live call frame or null,
     // and a frame's `fc_func` is the function being executed.
-    unsafe {
-        if let Some(fc) = profiled_funccal() {
-            (*fc).fc_prof_child = profile_start();
-        }
-        script_prof_save()
+    if let Some(fc) = unsafe { profiled_funccal() } {
+        unsafe { (*fc).fc_prof_child = profile_start() };
     }
+    unsafe { script_prof_save() }
 }
 
 /// Account the time spent in a child; pairs with [`prof_child_enter`],
@@ -467,18 +459,16 @@ pub unsafe fn prof_child_enter() -> proftime_T {
 /// Main-thread editor call; the call stack and script table are live.
 pub unsafe fn prof_child_exit(wait: proftime_T) {
     // SAFETY: as [`prof_child_enter`].
-    unsafe {
-        if let Some(fc) = profiled_funccal() {
-            let fc = &mut *fc;
-            // Don't count waiting time.
-            let child = profile_sub_wait(wait, profile_end(fc.fc_prof_child));
-            fc.fc_prof_child = child;
-            let func = &mut *fc.fc_func;
-            func.uf_tm_children = profile_add(func.uf_tm_children, child);
-            func.uf_tml_children = profile_add(func.uf_tml_children, child);
-        }
-        script_prof_restore(wait);
+    if let Some(fc) = unsafe { profiled_funccal() } {
+        let fc = unsafe { &mut *fc };
+        // Don't count waiting time.
+        let child = profile_sub_wait(wait, profile_end(fc.fc_prof_child));
+        fc.fc_prof_child = child;
+        let func = unsafe { &mut *fc.fc_func };
+        func.uf_tm_children = profile_add(func.uf_tm_children, child);
+        func.uf_tml_children = profile_add(func.uf_tml_children, child);
     }
+    unsafe { script_prof_restore(wait) };
 }
 
 /// The current call frame, when its function is being profiled.
@@ -487,10 +477,8 @@ pub unsafe fn prof_child_exit(wait: proftime_T) {
 /// Main-thread editor call; the call stack is live.
 unsafe fn profiled_funccal() -> Option<*mut funccall_T> {
     // SAFETY: the caller's contract.
-    unsafe {
-        let fc = get_current_funccal();
-        (!fc.is_null() && (*(*fc).fc_func).uf_profiling != 0).then_some(fc)
-    }
+    let fc = unsafe { get_current_funccal() };
+    (!fc.is_null() && unsafe { (*(*fc).fc_func).uf_profiling } != 0).then_some(fc)
 }
 
 /// Called when starting to read a function line; the exestack lnum must be
@@ -554,11 +542,10 @@ pub unsafe fn func_line_end(cookie: *mut c_void) {
             fp.uf_tml_start = spent;
             let children = fp.uf_tml_children;
             // SAFETY: as above.
+            unsafe { *fp.uf_tml_total.offset(i) = profile_add(*fp.uf_tml_total.offset(i), spent) };
             unsafe {
-                *fp.uf_tml_total.offset(i) = profile_add(*fp.uf_tml_total.offset(i), spent);
-                *fp.uf_tml_self.offset(i) =
-                    profile_self(*fp.uf_tml_self.offset(i), spent, children);
-            }
+                *fp.uf_tml_self.offset(i) = profile_self(*fp.uf_tml_self.offset(i), spent, children)
+            };
         }
         fp.uf_tml_idx = -1;
     }
@@ -651,12 +638,10 @@ pub unsafe fn script_line_start() {
             // Zero counters for a line that was not used before.
             // SAFETY: `ga_len` is below `ga_maxlen`, which is what the array
             // holds room for.
-            unsafe {
-                let pp = &mut *prl_item(si, si.sn_prl_ga.ga_len as isize);
-                pp.snp_count = 0;
-                pp.sn_prl_total = profile_zero();
-                pp.sn_prl_self = profile_zero();
-            }
+            let pp = unsafe { &mut *prl_item(si, si.sn_prl_ga.ga_len as isize) };
+            pp.snp_count = 0;
+            pp.sn_prl_total = profile_zero();
+            pp.sn_prl_self = profile_zero();
             si.sn_prl_ga.ga_len += 1;
         }
         si.sn_prl_execed = 0;
@@ -737,20 +722,20 @@ unsafe fn profiled_functions() -> Vec<*mut ufunc_T> {
     // `uf_name` field of its `ufunc_T`, which is what the offset undoes;
     // `ht_used` bounds how many occupied slots the walk will find, and the
     // array is NUL/removed-padded up to that many.
-    unsafe {
-        let functbl = func_tbl_get();
-        let mut todo = (*functbl).ht_used;
-        let mut hi = (*functbl).ht_array;
-        while todo > 0 {
-            if !(*hi).hi_key.is_null() && !core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
-                todo -= 1;
-                let fp = (*hi).hi_key.offset(-UF_NAME_OFFSET) as *mut ufunc_T;
-                if (*fp).uf_prof_initialized != 0 {
-                    found.push(fp);
-                }
+    let functbl = func_tbl_get();
+    let mut todo = unsafe { (*functbl).ht_used };
+    let mut hi = unsafe { (*functbl).ht_array };
+    while todo > 0 {
+        if !unsafe { (*hi).hi_key }.is_null()
+            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
+        {
+            todo -= 1;
+            let fp = unsafe { (*hi).hi_key.offset(-UF_NAME_OFFSET) } as *mut ufunc_T;
+            if unsafe { (*fp).uf_prof_initialized } != 0 {
+                found.push(fp);
             }
-            hi = hi.offset(1);
         }
+        hi = unsafe { hi.offset(1) };
     }
     found
 }

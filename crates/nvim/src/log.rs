@@ -94,13 +94,11 @@ fn log_try_create(fname: &[u8]) -> bool {
     }
     // SAFETY: a NUL-terminated name, and the handle is closed here or never
     // escapes.
-    unsafe {
-        let log_file = fopen(fname.as_ptr(), c"a".as_ptr());
-        if log_file.is_null() {
-            return false;
-        }
-        fclose(log_file);
+    let log_file = unsafe { fopen(fname.as_ptr(), c"a".as_ptr()) };
+    if log_file.is_null() {
+        return false;
     }
+    unsafe { fclose(log_file) };
     true
 }
 
@@ -158,33 +156,31 @@ fn ensure_state_home() -> (c_int, Option<CString>) {
     // SAFETY: `get_xdg_home` hands back an owned NUL-terminated path, freed
     // here; `os_mkdir_recurse` writes at most one owned string to
     // `failed_dir`, which is read back and freed by the caller.
-    unsafe {
-        let loghome = get_xdg_home(kXDGStateHome);
-        if !os_isdir(loghome) {
-            log_dir_failure = os_mkdir_recurse(
+    let loghome = get_xdg_home(kXDGStateHome);
+    if !unsafe { os_isdir(loghome) } {
+        log_dir_failure = unsafe {
+            os_mkdir_recurse(
                 loghome,
                 0o700 as int32_t,
                 &raw mut failed_dir,
                 core::ptr::null_mut(),
-            );
-        }
-        xfree(loghome as *mut c_void);
-        let owned = (!failed_dir.is_null()).then(|| CStr::from_ptr(failed_dir).to_owned());
-        xfree(failed_dir as *mut c_void);
-        (log_dir_failure, owned)
+            )
+        };
     }
+    unsafe { xfree(loghome as *mut c_void) };
+    let owned = (!failed_dir.is_null()).then(|| unsafe { CStr::from_ptr(failed_dir) }.to_owned());
+    unsafe { xfree(failed_dir as *mut c_void) };
+    (log_dir_failure, owned)
 }
 
 /// The default log path, `$XDG_STATE_HOME/nvim/nvim.log`.
 fn default_log_path() -> Vec<u8> {
     // SAFETY: a NUL-terminated literal in, an owned NUL-terminated path out,
     // freed here.
-    unsafe {
-        let p = stdpaths_user_state_subpath(c"nvim.log".as_ptr(), 0, true);
-        let owned = CStr::from_ptr(p).to_bytes().to_vec();
-        xfree(p as *mut c_void);
-        owned
-    }
+    let p = unsafe { stdpaths_user_state_subpath(c"nvim.log".as_ptr(), 0, true) };
+    let owned = unsafe { CStr::from_ptr(p) }.to_bytes().to_vec();
+    unsafe { xfree(p as *mut c_void) };
+    owned
 }
 
 /// Decide the log file path and publish it as `$NVIM_LOG_FILE`.
@@ -339,18 +335,16 @@ pub(crate) unsafe fn logmsg_finish(log_file: *mut FILE, eol: bool, payload_ok: b
     let mut ret = payload_ok;
     // SAFETY: the caller's open handle; `stderr`/`stdout` are the two the
     // module borrows rather than owns.
-    unsafe {
-        if ret {
-            if eol {
-                fputc(b'\n' as c_int, log_file);
-            }
-            if fflush(log_file) == EOF {
-                ret = false;
-            }
+    if ret {
+        if eol {
+            unsafe { fputc(b'\n' as c_int, log_file) };
         }
-        if log_file != stderr && log_file != stdout {
-            fclose(log_file);
+        if unsafe { fflush(log_file) } == EOF {
+            ret = false;
         }
+    }
+    if log_file != unsafe { stderr } && log_file != unsafe { stdout } {
+        unsafe { fclose(log_file) };
     }
     LOGGING.set(false);
     log_unlock();
@@ -430,11 +424,9 @@ pub(crate) unsafe fn log_uv_handles(loop_0: *mut c_void) {
     let log_file = open_log_file();
     // SAFETY: the caller's loop, and a handle this call owns except for the
     // two standard streams.
-    unsafe {
-        uv_print_all_handles(loop_0 as *mut uv_loop_t, log_file);
-        if log_file != stderr && log_file != stdout {
-            fclose(log_file);
-        }
+    unsafe { uv_print_all_handles(loop_0 as *mut uv_loop_t, log_file) };
+    if log_file != unsafe { stderr } && log_file != unsafe { stdout } {
+        unsafe { fclose(log_file) };
     }
     log_unlock();
 }
@@ -468,19 +460,19 @@ fn open_log_file() -> *mut FILE {
     let msg = format!("failed to open $NVIM_LOG_FILE ({reason}): {path}\n\0");
     // SAFETY: `stderr` is open; `msg` is NUL-terminated and outlives the
     // call; the literals are NUL-terminated.
-    unsafe {
-        if log_write_prefix(
+    if unsafe {
+        log_write_prefix(
             stderr,
             LOGLVL_ERR,
             core::ptr::null::<c_char>(),
             c"open_log_file".as_ptr(),
             234 as c_int,
-        ) {
-            fputs(msg.as_ptr() as *const c_char, stderr);
-            fflush(stderr);
-        }
-        stderr
+        )
+    } {
+        unsafe { fputs(msg.as_ptr() as *const c_char, stderr) };
+        unsafe { fflush(stderr) };
     }
+    unsafe { stderr }
 }
 
 // ---------------------------------------------------------------------------
@@ -519,28 +511,28 @@ fn regen_name(ui: bool) {
     // `get_vim_var_str` both answer with NUL-terminated strings that outlive
     // the `snprintf` below (`parent` points into `parent_buf`, `serv` into
     // the vim variable).
-    unsafe {
-        let parent = path_tail(os_getenv_buf(
+    let parent = unsafe {
+        path_tail(os_getenv_buf(
             ENV_NVIM.as_ptr(),
             parent_buf.as_mut_ptr(),
             parent_buf.len(),
-        ));
-        let serv = path_tail(get_vim_var_str(Vv::Servername));
-        NAME.with_mut(|name| {
-            let (n, len) = (name.as_mut_ptr(), name.len());
-            if *parent != 0 {
-                // "c/" = child of $NVIM.
-                let fmt = if ui { c"ui/c/%s" } else { c"c/%s" };
-                snprintf(n, len, fmt.as_ptr(), parent);
-            } else if *serv != 0 {
-                let fmt = if ui { c"ui/%s" } else { c"%s" };
-                snprintf(n, len, fmt.as_ptr(), serv);
-            } else {
-                let who = if ui { c"ui" } else { c"?" };
-                snprintf(n, len, c"%s.%-5ld".as_ptr(), who.as_ptr(), os_get_pid());
-            }
-        });
-    }
+        ))
+    };
+    let serv = unsafe { path_tail(get_vim_var_str(Vv::Servername)) };
+    NAME.with_mut(|name| {
+        let (n, len) = (name.as_mut_ptr(), name.len());
+        if unsafe { *parent } != 0 {
+            // "c/" = child of $NVIM.
+            let fmt = if ui { c"ui/c/%s" } else { c"c/%s" };
+            unsafe { snprintf(n, len, fmt.as_ptr(), parent) };
+        } else if unsafe { *serv } != 0 {
+            let fmt = if ui { c"ui/%s" } else { c"%s" };
+            unsafe { snprintf(n, len, fmt.as_ptr(), serv) };
+        } else {
+            let who = if ui { c"ui" } else { c"?" };
+            unsafe { snprintf(n, len, c"%s.%-5ld".as_ptr(), who.as_ptr(), os_get_pid()) };
+        }
+    });
 }
 
 /// `%Y-%m-%dT%H:%M:%S` of the current local time, plus the millisecond
@@ -623,8 +615,8 @@ unsafe fn log_write_prefix(
         let name = name.as_ptr();
         // SAFETY: every argument outlives the call and matches its verb;
         // `name` is borrowed only for the duration of the write.
-        unsafe {
-            if located {
+        if located {
+            unsafe {
                 fprintf(
                     log_file,
                     c"%s %s.%03d %-10s %s%s:%d: ".as_ptr(),
@@ -636,7 +628,9 @@ unsafe fn log_write_prefix(
                     func_name,
                     line_num,
                 )
-            } else {
+            }
+        } else {
+            unsafe {
                 fprintf(
                     log_file,
                     c"%s %s.%03d %-10s %s".as_ptr(),

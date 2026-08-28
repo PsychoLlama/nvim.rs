@@ -120,14 +120,12 @@ pub unsafe fn ctx_get(index: size_t) -> *mut Context {
 /// `ctx` is a live context whose blobs are owned.
 pub unsafe fn ctx_free(ctx: *mut Context) {
     // SAFETY: the caller's context.
-    unsafe {
-        let ctx = &mut *ctx;
-        api_free_string(ctx.regs);
-        api_free_string(ctx.jumps);
-        api_free_string(ctx.bufs);
-        api_free_string(ctx.gvars);
-        api_free_array(ctx.funcs);
-    }
+    let ctx = unsafe { &mut *ctx };
+    unsafe { api_free_string(ctx.regs) };
+    unsafe { api_free_string(ctx.jumps) };
+    unsafe { api_free_string(ctx.bufs) };
+    unsafe { api_free_string(ctx.gvars) };
+    unsafe { api_free_array(ctx.funcs) };
 }
 
 /// Save the editor state selected by `flags` into `ctx`, or push a new
@@ -147,25 +145,23 @@ pub unsafe fn ctx_save(ctx: *mut Context, flags: c_int) {
     };
     // SAFETY: either the caller's context or the one just pushed. Each
     // encoder runs editor code, so the stack is not borrowed across them.
-    unsafe {
-        let ctx = &mut *ctx;
-        if flags & kCtxRegs as c_int != 0 {
-            ctx.regs = shada_encode_regs();
-        }
-        if flags & kCtxJumps as c_int != 0 {
-            ctx.jumps = shada_encode_jumps();
-        }
-        if flags & kCtxBufs as c_int != 0 {
-            ctx.bufs = shada_encode_buflist();
-        }
-        if flags & kCtxGVars as c_int != 0 {
-            ctx.gvars = shada_encode_gvars();
-        }
-        if flags & kCtxFuncs as c_int != 0 {
-            ctx_save_funcs(ctx, false);
-        } else if flags & kCtxSFuncs as c_int != 0 {
-            ctx_save_funcs(ctx, true);
-        }
+    let ctx = unsafe { &mut *ctx };
+    if flags & kCtxRegs as c_int != 0 {
+        ctx.regs = unsafe { shada_encode_regs() };
+    }
+    if flags & kCtxJumps as c_int != 0 {
+        ctx.jumps = unsafe { shada_encode_jumps() };
+    }
+    if flags & kCtxBufs as c_int != 0 {
+        ctx.bufs = unsafe { shada_encode_buflist() };
+    }
+    if flags & kCtxGVars as c_int != 0 {
+        ctx.gvars = unsafe { shada_encode_gvars() };
+    }
+    if flags & kCtxFuncs as c_int != 0 {
+        unsafe { ctx_save_funcs(ctx, false) };
+    } else if flags & kCtxSFuncs as c_int != 0 {
+        unsafe { ctx_save_funcs(ctx, true) };
     }
 }
 
@@ -190,32 +186,30 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     // Reading a context's ShaDa blobs must not be filtered by whatever the
     // user's 'shada' says.
     // SAFETY: main-thread editor call; the option value is owned here.
-    unsafe {
-        let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
-        set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
+    let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
+    set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
-        if flags & kCtxRegs as c_int != 0 {
-            shada_read_string((*ctx).regs, SHADA_RESTORE);
-        }
-        if flags & kCtxJumps as c_int != 0 {
-            shada_read_string((*ctx).jumps, SHADA_RESTORE);
-        }
-        if flags & kCtxBufs as c_int != 0 {
-            shada_read_string((*ctx).bufs, SHADA_RESTORE);
-        }
-        if flags & kCtxGVars as c_int != 0 {
-            shada_read_string((*ctx).gvars, SHADA_RESTORE);
-        }
-        if flags & kCtxFuncs as c_int != 0 {
-            ctx_restore_funcs(&*ctx);
-        }
-        if popped.is_some() {
-            ctx_free(ctx);
-        }
-
-        set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
-        optval_free(op_shada);
+    if flags & kCtxRegs as c_int != 0 {
+        unsafe { shada_read_string((*ctx).regs, SHADA_RESTORE) };
     }
+    if flags & kCtxJumps as c_int != 0 {
+        unsafe { shada_read_string((*ctx).jumps, SHADA_RESTORE) };
+    }
+    if flags & kCtxBufs as c_int != 0 {
+        unsafe { shada_read_string((*ctx).bufs, SHADA_RESTORE) };
+    }
+    if flags & kCtxGVars as c_int != 0 {
+        unsafe { shada_read_string((*ctx).gvars, SHADA_RESTORE) };
+    }
+    if flags & kCtxFuncs as c_int != 0 {
+        unsafe { ctx_restore_funcs(&*ctx) };
+    }
+    if popped.is_some() {
+        unsafe { ctx_free(ctx) };
+    }
+
+    set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
+    optval_free(op_shada);
     true
 }
 
@@ -244,17 +238,17 @@ unsafe fn func_names() -> Vec<*const c_char> {
     let mut names = Vec::new();
     // SAFETY: `ht_used` bounds how many occupied slots the walk will find,
     // and the array holds at least that many past the ones it skips.
-    unsafe {
-        let functbl = func_tbl_get();
-        let mut todo = (*functbl).ht_used;
-        let mut hi: *mut hashitem_T = (*functbl).ht_array;
-        while todo != 0 {
-            if !(*hi).hi_key.is_null() && !core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
-                todo -= 1;
-                names.push((*hi).hi_key as *const c_char);
-            }
-            hi = hi.offset(1);
+    let functbl = func_tbl_get();
+    let mut todo = unsafe { (*functbl).ht_used };
+    let mut hi: *mut hashitem_T = unsafe { (*functbl).ht_array };
+    while todo != 0 {
+        if !unsafe { (*hi).hi_key }.is_null()
+            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
+        {
+            todo -= 1;
+            names.push(unsafe { (*hi).hi_key } as *const c_char);
         }
+        hi = unsafe { hi.offset(1) };
     }
     names
 }
@@ -266,19 +260,18 @@ unsafe fn func_names() -> Vec<*const c_char> {
 /// `arr.items` is null or an `xmalloc`'d array of `arr.capacity` objects.
 unsafe fn array_push(arr: &mut Array, value: Object) {
     // SAFETY: the caller's array.
-    unsafe {
-        if arr.size == arr.capacity {
-            arr.capacity = if arr.capacity != 0 {
-                arr.capacity << 1
-            } else {
-                8
-            };
-            arr.items = xrealloc(arr.items as *mut c_void, size_of::<Object>() * arr.capacity)
+    if arr.size == arr.capacity {
+        arr.capacity = if arr.capacity != 0 {
+            arr.capacity << 1
+        } else {
+            8
+        };
+        arr.items =
+            unsafe { xrealloc(arr.items as *mut c_void, size_of::<Object>() * arr.capacity) }
                 as *mut Object;
-        }
-        *arr.items.add(arr.size) = value;
-        arr.size += 1;
     }
+    unsafe { *arr.items.add(arr.size) = value };
+    arr.size += 1;
 }
 
 /// Capture every function's `:function` listing into `ctx.funcs`.
@@ -297,36 +290,38 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
     };
     // SAFETY: the caller's contract; every name is NUL-terminated and alive
     // for the walk, and `cmd` is owned until `exec_impl` has copied it.
-    unsafe {
-        for name in func_names() {
-            let bytes = CStr::from_ptr(name).to_bytes();
-            let islambda = bytes.starts_with(b"<lambda>");
-            let isscript = bytes.first() == Some(&(K_SPECIAL as uint8_t));
-            if islambda || (scriptonly && !isscript) {
-                continue;
-            }
-            let mut cmd = Vec::with_capacity(b"func! ".len() + bytes.len() + 1);
-            cmd.extend_from_slice(b"func! ");
-            cmd.extend_from_slice(bytes);
-            cmd.push(0);
-            let mut opts = KeyDict_exec_opts { output: true };
-            let func_body = exec_impl(
+    for name in unsafe { func_names() } {
+        let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
+        let islambda = bytes.starts_with(b"<lambda>");
+        let isscript = bytes.first() == Some(&(K_SPECIAL as uint8_t));
+        if islambda || (scriptonly && !isscript) {
+            continue;
+        }
+        let mut cmd = Vec::with_capacity(b"func! ".len() + bytes.len() + 1);
+        cmd.extend_from_slice(b"func! ");
+        cmd.extend_from_slice(bytes);
+        cmd.push(0);
+        let mut opts = KeyDict_exec_opts { output: true };
+        let func_body = unsafe {
+            exec_impl(
                 VIML_INTERNAL_CALL,
                 cstr_as_string(cmd.as_ptr() as *const c_char),
                 &raw mut opts,
                 &raw mut err,
-            );
-            if err.type_0 as c_int == kErrorTypeNone as c_int {
+            )
+        };
+        if err.type_0 as c_int == kErrorTypeNone as c_int {
+            unsafe {
                 array_push(
                     &mut ctx.funcs,
                     object {
                         type_0: kObjectTypeString,
                         data: object_data { string: func_body },
                     },
-                );
-            }
-            api_clear_error(&raw mut err);
+                )
+            };
         }
+        unsafe { api_clear_error(&raw mut err) };
     }
 }
 
@@ -336,10 +331,8 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
 /// Main-thread editor call; `ctx.funcs` holds NUL-terminated strings.
 unsafe fn ctx_restore_funcs(ctx: &Context) {
     // SAFETY: the caller's contract.
-    unsafe {
-        for i in 0..ctx.funcs.size {
-            do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data());
-        }
+    for i in 0..ctx.funcs.size {
+        unsafe { do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data()) };
     }
 }
 
@@ -364,22 +357,24 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
             },
             &raw mut list_tv,
             err,
-        );
-        debug_assert!(
-            list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
-            "list_tv.v_type == VAR_LIST"
-        );
-        let (data, size) = sbuf.parts_mut();
-        if !encode_vim_list_to_buf(list_tv.vval.v_list, size, data) {
+        )
+    };
+    debug_assert!(
+        list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
+        "list_tv.v_type == VAR_LIST"
+    );
+    let (data, size) = sbuf.parts_mut();
+    if !unsafe { encode_vim_list_to_buf(list_tv.vval.v_list, size, data) } {
+        unsafe {
             api_set_error(
                 err,
                 kErrorTypeException,
                 c"%s".as_ptr(),
                 c"E474: Failed to convert list to msgpack string buffer".as_ptr(),
-            );
-        }
-        tv_clear(&raw mut list_tv);
+            )
+        };
     }
+    unsafe { tv_clear(&raw mut list_tv) };
     sbuf
 }
 
@@ -396,9 +391,9 @@ unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
                 type_0: kObjectTypeArray,
                 data: object_data { array },
             },
-        };
-        rv.size += 1;
-    }
+        }
+    };
+    rv.size += 1;
 }
 
 /// The dict form of a context: each blob as an array of byte-strings, plus
@@ -411,16 +406,14 @@ pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     // SAFETY: the caller's context and arena; the dict is sized for the five
     // entries put into it.
-    unsafe {
-        let ctx = &*ctx;
-        let mut rv = arena_dict(arena, 5);
-        put_array(&mut rv, c"regs", string_to_array(ctx.regs, false, arena));
-        put_array(&mut rv, c"jumps", string_to_array(ctx.jumps, false, arena));
-        put_array(&mut rv, c"bufs", string_to_array(ctx.bufs, false, arena));
-        put_array(&mut rv, c"gvars", string_to_array(ctx.gvars, false, arena));
-        put_array(&mut rv, c"funcs", copy_array(ctx.funcs, arena));
-        rv
-    }
+    let ctx = unsafe { &*ctx };
+    let mut rv = arena_dict(arena, 5);
+    unsafe { put_array(&mut rv, c"regs", string_to_array(ctx.regs, false, arena)) };
+    unsafe { put_array(&mut rv, c"jumps", string_to_array(ctx.jumps, false, arena)) };
+    unsafe { put_array(&mut rv, c"bufs", string_to_array(ctx.bufs, false, arena)) };
+    unsafe { put_array(&mut rv, c"gvars", string_to_array(ctx.gvars, false, arena)) };
+    unsafe { put_array(&mut rv, c"funcs", copy_array(ctx.funcs, arena)) };
+    rv
 }
 
 /// Read a context back out of its dict form, into `ctx`. Returns the
@@ -433,35 +426,35 @@ pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: *mut Error) -> c
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut types = 0;
     // SAFETY: the caller's dict, context and error.
-    unsafe {
-        let ctx = &mut *ctx;
-        for i in 0..dict.size {
-            if (*err).type_0 as c_int != kErrorTypeNone as c_int {
-                break;
-            }
-            let item: KeyValuePair = *dict.items.add(i);
-            if item.value.type_0 as ::core::ffi::c_uint != kObjectTypeArray as ::core::ffi::c_uint {
-                continue;
-            }
-            let array = item.value.data.array;
-            if strequal(item.key.data(), c"regs".as_ptr()) {
-                types |= kCtxRegs as c_int;
-                ctx.regs = array_to_string(array, err);
-            } else if strequal(item.key.data(), c"jumps".as_ptr()) {
-                types |= kCtxJumps as c_int;
-                ctx.jumps = array_to_string(array, err);
-            } else if strequal(item.key.data(), c"bufs".as_ptr()) {
-                types |= kCtxBufs as c_int;
-                ctx.bufs = array_to_string(array, err);
-            } else if strequal(item.key.data(), c"gvars".as_ptr()) {
-                types |= kCtxGVars as c_int;
-                ctx.gvars = array_to_string(array, err);
-            } else if strequal(item.key.data(), c"funcs".as_ptr()) {
-                types |= kCtxFuncs as c_int;
-                ctx.funcs = copy_object(item.value, core::ptr::null_mut::<Arena>())
+    let ctx = unsafe { &mut *ctx };
+    for i in 0..dict.size {
+        if unsafe { (*err).type_0 } as c_int != kErrorTypeNone as c_int {
+            break;
+        }
+        let item: KeyValuePair = unsafe { *dict.items.add(i) };
+        if item.value.type_0 as ::core::ffi::c_uint != kObjectTypeArray as ::core::ffi::c_uint {
+            continue;
+        }
+        let array = unsafe { item.value.data.array };
+        if unsafe { strequal(item.key.data(), c"regs".as_ptr()) } {
+            types |= kCtxRegs as c_int;
+            ctx.regs = unsafe { array_to_string(array, err) };
+        } else if unsafe { strequal(item.key.data(), c"jumps".as_ptr()) } {
+            types |= kCtxJumps as c_int;
+            ctx.jumps = unsafe { array_to_string(array, err) };
+        } else if unsafe { strequal(item.key.data(), c"bufs".as_ptr()) } {
+            types |= kCtxBufs as c_int;
+            ctx.bufs = unsafe { array_to_string(array, err) };
+        } else if unsafe { strequal(item.key.data(), c"gvars".as_ptr()) } {
+            types |= kCtxGVars as c_int;
+            ctx.gvars = unsafe { array_to_string(array, err) };
+        } else if unsafe { strequal(item.key.data(), c"funcs".as_ptr()) } {
+            types |= kCtxFuncs as c_int;
+            ctx.funcs = unsafe {
+                copy_object(item.value, core::ptr::null_mut::<Arena>())
                     .data
-                    .array;
-            }
+                    .array
+            };
         }
     }
     types

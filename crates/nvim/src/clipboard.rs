@@ -186,93 +186,99 @@ pub(crate) unsafe fn get_clipboard(
     let mut errmsg = true;
     // SAFETY: `result` is the provider's typval, whose list (if any) is
     // alive for this block, and `reg` is the live register being filled.
-    unsafe {
-        'err: {
-            if result.v_type != VAR_LIST {
-                if result.v_type == VAR_NUMBER && result.vval.v_number == 0 {
-                    errmsg = false;
-                }
+    'err: {
+        if result.v_type != VAR_LIST {
+            if result.v_type == VAR_NUMBER && unsafe { result.vval.v_number } == 0 {
+                errmsg = false;
+            }
+            break 'err;
+        }
+        let res = unsafe { result.vval.v_list };
+        let lines;
+        if unsafe { tv_list_len(res) } == 2
+            && unsafe { (*tv_list_first(res)).li_tv.v_type } == VAR_LIST
+        {
+            lines = unsafe { (*tv_list_first(res)).li_tv.vval.v_list };
+            if unsafe { (*tv_list_last(res)).li_tv.v_type } != VAR_STRING {
                 break 'err;
             }
-            let res = result.vval.v_list;
-            let lines;
-            if tv_list_len(res) == 2 && (*tv_list_first(res)).li_tv.v_type == VAR_LIST {
-                lines = (*tv_list_first(res)).li_tv.vval.v_list;
-                if (*tv_list_last(res)).li_tv.v_type != VAR_STRING {
-                    break 'err;
-                }
-                let regtype = (*tv_list_last(res)).li_tv.vval.v_string;
-                if regtype.is_null() || strlen(regtype) > 1 {
-                    break 'err;
-                }
-                match regtype_of(*regtype as u8) {
-                    Some(ty) => (*reg).y_type = ty,
-                    None => break 'err,
-                }
-            } else {
-                lines = res;
-                // The provider did not specify a regtype; inferred below.
-                (*reg).y_type = kMTUnknown;
+            let regtype = unsafe { (*tv_list_last(res)).li_tv.vval.v_string };
+            if regtype.is_null() || unsafe { strlen(regtype) } > 1 {
+                break 'err;
             }
+            match regtype_of(unsafe { *regtype } as u8) {
+                Some(ty) => unsafe { (*reg).y_type = ty },
+                None => break 'err,
+            }
+        } else {
+            lines = res;
+            // The provider did not specify a regtype; inferred below.
+            unsafe { (*reg).y_type = kMTUnknown };
+        }
 
+        unsafe {
             (*reg).y_array =
-                xcalloc(tv_list_len(lines) as size_t, size_of::<String_0>()) as *mut String_0;
-            (*reg).y_size = tv_list_len(lines) as size_t;
-            (*reg).y_width = 0;
-            (*reg).additional_data = core::ptr::null_mut::<AdditionalData>();
-            // No timestamp: clipboard registers are not saved in the ShaDa file.
-            (*reg).timestamp = 0;
+                xcalloc(tv_list_len(lines) as size_t, size_of::<String_0>()) as *mut String_0
+        };
+        unsafe { (*reg).y_size = tv_list_len(lines) as size_t };
+        unsafe { (*reg).y_width = 0 };
+        unsafe { (*reg).additional_data = core::ptr::null_mut::<AdditionalData>() };
+        // No timestamp: clipboard registers are not saved in the ShaDa file.
+        unsafe { (*reg).timestamp = 0 };
 
-            let mut tv_idx: size_t = 0;
-            if !lines.is_null() {
-                let mut li = (*lines).lv_first;
-                while !li.is_null() {
-                    if (*li).li_tv.v_type != VAR_STRING {
-                        break 'err;
-                    }
-                    let s = (*li).li_tv.vval.v_string;
+        let mut tv_idx: size_t = 0;
+        if !lines.is_null() {
+            let mut li = unsafe { (*lines).lv_first };
+            while !li.is_null() {
+                if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+                    break 'err;
+                }
+                let s = unsafe { (*li).li_tv.vval.v_string };
+                unsafe {
                     *(*reg).y_array.add(tv_idx) =
-                        cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() });
-                    tv_idx += 1;
-                    li = (*li).li_next;
+                        cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() })
+                };
+                tv_idx += 1;
+                li = unsafe { (*li).li_next };
+            }
+        }
+
+        if unsafe { (*reg).y_size } > 0
+            && unsafe { (*(*reg).y_array.add((*reg).y_size - 1)).is_empty() }
+        {
+            // A known-to-be charwise yank might have a final linebreak, but
+            // otherwise there is no line after the final newline.
+            if unsafe { (*reg).y_type } != kMTCharWise {
+                unsafe { xfree((*(*reg).y_array.add((*reg).y_size - 1)).data() as *mut c_void) };
+                unsafe { (*reg).y_size -= 1 };
+                if unsafe { (*reg).y_type } == kMTUnknown {
+                    unsafe { (*reg).y_type = kMTLineWise };
                 }
             }
-
-            if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).is_empty() {
-                // A known-to-be charwise yank might have a final linebreak, but
-                // otherwise there is no line after the final newline.
-                if (*reg).y_type != kMTCharWise {
-                    xfree((*(*reg).y_array.add((*reg).y_size - 1)).data() as *mut c_void);
-                    (*reg).y_size -= 1;
-                    if (*reg).y_type == kMTUnknown {
-                        (*reg).y_type = kMTLineWise;
-                    }
-                }
-            } else if (*reg).y_type == kMTUnknown {
-                (*reg).y_type = kMTCharWise;
-            }
-
-            update_yankreg_width(reg);
-            *target = reg;
-            return true;
+        } else if unsafe { (*reg).y_type } == kMTUnknown {
+            unsafe { (*reg).y_type = kMTCharWise };
         }
 
-        // Error path: leave the register empty.
-        if !(*reg).y_array.is_null() {
-            for i in 0..(*reg).y_size {
-                xfree((*(*reg).y_array.add(i)).data() as *mut c_void);
-            }
-            xfree((*reg).y_array as *mut c_void);
-        }
-        (*reg).y_array = core::ptr::null_mut();
-        (*reg).y_size = 0;
-        (*reg).additional_data = core::ptr::null_mut();
-        (*reg).timestamp = 0;
-        if errmsg {
-            emsg(c"clipboard: provider returned invalid data".as_ptr());
-        }
+        unsafe { update_yankreg_width(reg) };
         *target = reg;
+        return true;
     }
+
+    // Error path: leave the register empty.
+    if !unsafe { (*reg).y_array }.is_null() {
+        for i in 0..unsafe { (*reg).y_size } {
+            unsafe { xfree((*(*reg).y_array.add(i)).data() as *mut c_void) };
+        }
+        unsafe { xfree((*reg).y_array as *mut c_void) };
+    }
+    unsafe { (*reg).y_array = core::ptr::null_mut() };
+    unsafe { (*reg).y_size = 0 };
+    unsafe { (*reg).additional_data = core::ptr::null_mut() };
+    unsafe { (*reg).timestamp = 0 };
+    if errmsg {
+        unsafe { emsg(c"clipboard: provider returned invalid data".as_ptr()) };
+    }
+    *target = reg;
     false
 }
 
@@ -305,28 +311,28 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
 
     // SAFETY: main-thread editor call; `regtype`/`regname` outlive their
     // appends, and the provider call owns `args` from here on.
-    unsafe {
-        let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
-        for i in 0..reg.y_size {
-            let line = *reg.y_array.add(i);
-            tv_list_append_string(lines, line.data(), line.len() as ssize_t);
-        }
-        if trailing {
-            tv_list_append_string(lines, core::ptr::null(), 0);
-        }
+    let lines = unsafe { tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t) };
+    for i in 0..reg.y_size {
+        let line = unsafe { *reg.y_array.add(i) };
+        unsafe { tv_list_append_string(lines, line.data(), line.len() as ssize_t) };
+    }
+    if trailing {
+        unsafe { tv_list_append_string(lines, core::ptr::null(), 0) };
+    }
 
-        let args = tv_list_alloc(3);
-        tv_list_append_list(args, lines);
-        tv_list_append_string(args, &raw const regtype, 1);
-        let regname = [name as c_char];
-        tv_list_append_string(args, regname.as_ptr(), 1);
+    let args = unsafe { tv_list_alloc(3) };
+    unsafe { tv_list_append_list(args, lines) };
+    unsafe { tv_list_append_string(args, &raw const regtype, 1) };
+    let regname = [name as c_char];
+    unsafe { tv_list_append_string(args, regname.as_ptr(), 1) };
+    unsafe {
         eval_call_provider(
             c"clipboard".as_ptr().cast_mut(),
             c"set".as_ptr().cast_mut(),
             args,
             true,
-        );
-    }
+        )
+    };
 }
 
 /// Start a batch: defer provider updates until the matching

@@ -121,12 +121,10 @@ unsafe fn prof_sort_list(
 /// `fp` is a live function-table entry with a non-zero `uf_script_ctx`.
 unsafe fn write_func_origin(fd: &mut dyn Write, fp: &ufunc_T) -> io::Result<()> {
     // SAFETY: `get_scriptname` answers an owned, NUL-terminated name.
-    unsafe {
-        let p = get_scriptname(fp.uf_script_ctx, true);
-        write!(fd, "    Defined: ")?;
-        fd.write_all(p.to_bytes())?;
-        writeln!(fd, ":{}", fp.uf_script_ctx.sc_lnum)?;
-    }
+    let p = unsafe { get_scriptname(fp.uf_script_ctx, true) };
+    write!(fd, "    Defined: ")?;
+    fd.write_all(p.to_bytes())?;
+    writeln!(fd, ":{}", fp.uf_script_ctx.sc_lnum)?;
     Ok(())
 }
 
@@ -178,12 +176,14 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
     }
     if !sorttab.is_empty() {
         // SAFETY: the entries this walk collected.
-        unsafe {
-            sorttab.sort_by(|&a, &b| profile_cmp((*a).uf_tm_total, (*b).uf_tm_total).cmp(&0));
-            prof_sort_list(fd, &sorttab, "TOTAL", false)?;
-            sorttab.sort_by(|&a, &b| profile_cmp((*a).uf_tm_self, (*b).uf_tm_self).cmp(&0));
-            prof_sort_list(fd, &sorttab, "SELF", true)?;
-        }
+        sorttab.sort_by(|&a, &b| {
+            profile_cmp(unsafe { (*a).uf_tm_total }, unsafe { (*b).uf_tm_total }).cmp(&0)
+        });
+        unsafe { prof_sort_list(fd, &sorttab, "TOTAL", false) }?;
+        sorttab.sort_by(|&a, &b| {
+            profile_cmp(unsafe { (*a).uf_tm_self }, unsafe { (*b).uf_tm_self }).cmp(&0)
+        });
+        unsafe { prof_sort_list(fd, &sorttab, "SELF", true) }?;
     }
     Ok(())
 }

@@ -130,34 +130,33 @@ unsafe fn next_key() -> c_int {
     loop {
         // SAFETY: the editor is initialized, so the typeahead buffer and the
         // main loop's queue are live.
+        if vpeekc() != NUL || !typeahead().is_empty() {
+            return safe_vgetc();
+        }
+        if !unsafe { multiqueue_empty(main_loop_events()) } {
+            unsafe { ui_flush() };
+            return K_EVENT;
+        }
+        // Nothing to do but wait, so show what has been decided first.
+        if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
+            unsafe { update_screen() };
+            unsafe { setcursor() };
+        }
+        unsafe { ui_flush() };
         unsafe {
-            if vpeekc() != NUL || !typeahead().is_empty() {
-                return safe_vgetc();
-            }
-            if !multiqueue_empty(main_loop_events()) {
-                ui_flush();
-                return K_EVENT;
-            }
-            // Nothing to do but wait, so show what has been decided first.
-            if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0
-            {
-                update_screen();
-                setcursor();
-            }
-            ui_flush();
             input_get(
                 ptr::null_mut::<uint8_t>(),
                 0,
                 -1,
                 typeahead().change_cnt(),
                 main_loop_events(),
-            );
-            // A wakeup with neither input nor queued work is spurious.
-            if input_available() != 0 || multiqueue_empty(main_loop_events()) {
-                continue;
-            }
-            return K_EVENT;
+            )
+        };
+        // A wakeup with neither input nor queued work is spurious.
+        if input_available() != 0 || unsafe { multiqueue_empty(main_loop_events()) } {
+            continue;
         }
+        return K_EVENT;
     }
 }
 
@@ -170,16 +169,14 @@ pub unsafe fn state_handle_k_event() {
     loop {
         // SAFETY: the main loop's queue is live, and an `Event` it answers
         // owns its own `argv`.
-        unsafe {
-            let mut event = multiqueue_get(main_loop_events());
-            if let Some(handler) = event.handler {
-                handler(&raw mut event.argv as *mut *mut core::ffi::c_void);
-            }
-            if multiqueue_empty(main_loop_events()) {
-                return;
-            }
-            os_breakcheck();
+        let mut event = unsafe { multiqueue_get(main_loop_events()) };
+        if let Some(handler) = event.handler {
+            unsafe { handler(&raw mut event.argv as *mut *mut core::ffi::c_void) };
         }
+        if unsafe { multiqueue_empty(main_loop_events()) } {
+            return;
+        }
+        os_breakcheck();
         if input_available() != 0 || got_int.get() {
             return;
         }
@@ -472,31 +469,35 @@ pub unsafe fn may_trigger_modechanged() {
     // SAFETY: the editor is initialized; `v_event` is borrowed from
     // `save_v_event`, which outlives the `restore_v_event` that ends it, and
     // both mode names outlive the autocommand that reads them.
+    let v_event = unsafe { get_v_event(&raw mut save_v_event) };
     unsafe {
-        let v_event = get_v_event(&raw mut save_v_event);
         tv_dict_add_str(
             v_event,
             c"new_mode".as_ptr(),
             c"new_mode".count_bytes(),
             curr_mode.as_mut_ptr(),
-        );
+        )
+    };
+    unsafe {
         tv_dict_add_str(
             v_event,
             c"old_mode".as_ptr(),
             c"old_mode".count_bytes(),
             old_mode.as_mut_ptr(),
-        );
-        tv_dict_set_keys_readonly(v_event);
+        )
+    };
+    unsafe { tv_dict_set_keys_readonly(v_event) };
+    unsafe {
         apply_autocmds(
             EVENT_MODECHANGED,
             pattern.as_mut_ptr(),
             ptr::null_mut::<c_char>(),
             false,
             curbuf.get(),
-        );
-        last_mode.set(curr_mode);
-        restore_v_event(v_event, &raw mut save_v_event);
-    }
+        )
+    };
+    last_mode.set(curr_mode);
+    unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
 
 /// Whether `SafeState` has been announced and not yet withdrawn.
@@ -540,8 +541,8 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
                 ptr::null_mut::<c_char>(),
                 false,
                 curbuf.get(),
-            );
-        }
+            )
+        };
     }
     was_safe.set(is_safe);
 }
@@ -560,8 +561,8 @@ pub unsafe fn state_no_longer_safe(reason: *const c_char) {
                 319,
                 c"SafeState reset: %s",
                 reason
-            );
-        }
+            )
+        };
     }
     was_safe.set(false);
 }

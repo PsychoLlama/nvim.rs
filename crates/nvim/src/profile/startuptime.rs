@@ -140,17 +140,17 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     if r != 0 {
         // SAFETY: the buffer and stream just set up, released here and
         // cleared so nothing reaches them again.
+        unsafe { xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void) };
+        unsafe { fclose(time_fd.get()) };
+        time_fd.set(core::ptr::null_mut());
         unsafe {
-            xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void);
-            fclose(time_fd.get());
-            time_fd.set(core::ptr::null_mut());
             fprintf(
                 stderr,
                 c"time_init: setvbuf failed: %d %s".as_ptr(),
                 r,
                 uv_err_name(r),
-            );
-        }
+            )
+        };
         return;
     }
     let mut header = b"--- Startup times for process: ".to_vec();
@@ -168,10 +168,8 @@ pub fn time_finish() {
     debug_assert!(!STARTUPTIME_BUF.get().is_null());
     // SAFETY: the stream and its buffer were set up by time_init; nothing
     // touches them after the fd is cleared.
-    unsafe {
-        time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null());
-        fclose(time_fd.get());
-        time_fd.set(core::ptr::null_mut());
-        xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void);
-    }
+    unsafe { time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null()) };
+    unsafe { fclose(time_fd.get()) };
+    time_fd.set(core::ptr::null_mut());
+    unsafe { xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void) };
 }
