@@ -199,14 +199,9 @@ pub(crate) unsafe fn report_written(
     if notes.conv_error {
         note(c" CONVERSION ERROR");
         if notes.conv_error_lnum != 0 {
-            unsafe {
-                vim_snprintf_add(
-                    iobuff,
-                    IOSIZE as size_t,
-                    translate(c" in line %ld;").as_ptr(),
-                    notes.conv_error_lnum as int64_t,
-                )
-            };
+            let fmt = translate(c" in line %ld;").as_ptr();
+            let lnum = notes.conv_error_lnum as int64_t;
+            unsafe { vim_snprintf_add(iobuff, IOSIZE as size_t, fmt, lnum) };
         }
     } else if notes.notconverted {
         note(c"[NOT converted]");
@@ -240,17 +235,10 @@ pub(crate) unsafe fn report_written(
             (false, false) => c" written",
         });
     }
-    unsafe {
-        set_keep_msg(
-            msg_progress(
-                iobuff,
-                c"bufwrite".as_ptr().cast_mut(),
-                c"success".as_ptr().cast_mut(),
-                0,
-                true,
-                true,
-            ),
-            0,
-        )
-    };
+    let (tag, state) = (
+        c"bufwrite".as_ptr().cast_mut(),
+        c"success".as_ptr().cast_mut(),
+    );
+    let shown = unsafe { msg_progress(iobuff, tag, state, 0, true, true) };
+    unsafe { set_keep_msg(shown, 0) };
 }

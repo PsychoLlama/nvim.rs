@@ -241,13 +241,8 @@ impl<'a> ByteWriter<'a> {
             return false;
         }
         if remaining > 0 {
-            unsafe {
-                core::ptr::copy(
-                    self.buf.as_ptr().add(consumed),
-                    self.buf.as_mut_ptr(),
-                    remaining,
-                )
-            };
+            let from = unsafe { self.buf.as_ptr().add(consumed) };
+            unsafe { core::ptr::copy(from, self.buf.as_mut_ptr(), remaining) };
         }
         true
     }
@@ -276,9 +271,8 @@ impl<'a> ByteWriter<'a> {
             let mut at = 0;
             let mut wlen = 0;
             while wlen < staged {
-                let n = unsafe {
-                    utf_ptr2len_len(self.buf.as_ptr().add(wlen), (staged - wlen) as c_int)
-                } as usize;
+                let head = unsafe { self.buf.as_ptr().add(wlen) };
+                let n = unsafe { utf_ptr2len_len(head, (staged - wlen) as c_int) } as usize;
                 if n > staged - wlen {
                     // An incomplete byte sequence at the end. It cannot
                     // be converted without the rest of it, so keep the
@@ -333,15 +327,9 @@ impl<'a> ByteWriter<'a> {
         if self.first {
             let save_len = tolen;
             // Output the initial shift state sequence.
-            unsafe {
-                iconv(
-                    self.iconv,
-                    core::ptr::null_mut(),
-                    core::ptr::null_mut(),
-                    &raw mut to,
-                    &raw mut tolen,
-                )
-            };
+            let (dst, dstlen) = (&raw mut to, &raw mut tolen);
+            let (no_src, no_srclen) = (core::ptr::null_mut(), core::ptr::null_mut());
+            unsafe { iconv(self.iconv, no_src, no_srclen, dst, dstlen) };
             // There is a bug in iconv() on Linux (which appears to be
             // wide-spread) which sets "to" to NULL and messes up "tolen".
             if to.is_null() {
@@ -351,15 +339,9 @@ impl<'a> ByteWriter<'a> {
             self.first = false;
         }
 
-        if unsafe {
-            iconv(
-                self.iconv,
-                (&raw mut from).cast::<*mut c_char>(),
-                &raw mut fromlen,
-                &raw mut to,
-                &raw mut tolen,
-            )
-        } == -1i32 as size_t
+        let src = (&raw mut from).cast::<*mut c_char>();
+        let (srclen, dst, dstlen) = (&raw mut fromlen, &raw mut to, &raw mut tolen);
+        if unsafe { iconv(self.iconv, src, srclen, dst, dstlen) } == -1i32 as size_t
             && unsafe { *__errno_location() } != ICONV_EINVAL
         {
             self.conv_error = true;

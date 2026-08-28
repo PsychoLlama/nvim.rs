@@ -153,15 +153,8 @@ impl WriteError {
                 unsafe { semsg_c!(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg) };
             }
             (Some(num), arg) => {
-                unsafe {
-                    semsg_c!(
-                        c"%s: %s%s: %s".as_ptr(),
-                        num.as_ptr(),
-                        iobuff,
-                        msg,
-                        uv_strerror(arg),
-                    )
-                };
+                let why = unsafe { uv_strerror(arg) };
+                unsafe { semsg_c!(c"%s: %s%s: %s".as_ptr(), num.as_ptr(), iobuff, msg, why) };
             }
             // The message is deliberately its own format string here.
             (None, arg) if arg != 0 => {
@@ -185,17 +178,12 @@ pub(crate) unsafe fn conversion_failed(lnum: linenr_T) -> WriteError {
         );
     }
     let mut msg = [0 as ::core::ffi::c_char; 300];
-    unsafe {
-        vim_snprintf(
-            msg.as_mut_ptr(),
-            msg.len() as size_t,
-            translate(
-                c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
-            )
-            .as_ptr(),
-            lnum,
-        )
-    };
+    let (into, size) = (msg.as_mut_ptr(), msg.len() as size_t);
+    let fmt = translate(
+        c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
+    )
+    .as_ptr();
+    unsafe { vim_snprintf(into, size, fmt, lnum) };
     WriteError::formatted(unsafe { CStr::from_ptr(msg.as_ptr()) }.to_owned())
 }
 
@@ -288,14 +276,14 @@ pub unsafe fn buf_write(
     req: WriteRequest,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buf) };
     // The quoted file name the failure path reports against.
     let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     let (mut buf, mut start, mut end) = (buf, start, end);
     let mut retval = OK;
     let msg_save = msg_scroll.get();
     let mut prev_got_int = got_int.get();
-    let whole = start == 1 && end == unsafe { (*buf).b_ml.ml_line_count };
+    let whole = start == 1 && end == b.b_ml.ml_line_count;
     let mut write_undo_file = false;
     let mut sha_ctx = Sha256::new();
     let bkc = unsafe { get_bkc_flags(buf) };
@@ -303,7 +291,7 @@ pub unsafe fn buf_write(
     if fname.is_null() || unsafe { *fname } == 0 {
         return FAIL; // safety check
     }
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null() {
+    if b.b_ml.ml_mfp.is_null() {
         // Can happen during startup, from a stray "w" in the vimrc.
         unsafe { emsg(gettext(e_empty_buffer.as_ptr())) };
         return FAIL;
@@ -323,7 +311,7 @@ pub unsafe fn buf_write(
     // With no file name yet, take the one being written to. BufFlags::NOTEDITED
     // records that, in case the write fails. Not for a filter command,
     // not when appending, and only when 'cpoptions' contains "F".
-    if unsafe { (*buf).b_ffname }.is_null()
+    if b.b_ffname.is_null()
         && req.reset_changed
         && whole
         && buf == curbuf.get()
@@ -336,6 +324,8 @@ pub unsafe fn buf_write(
             return FAIL;
         }
         buf = curbuf.get(); // just in case autocmds made "buf" invalid
+        // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
+        b = unsafe { Buf::new(buf) };
     }
     if sfname.is_null() {
         sfname = fname;
@@ -346,19 +336,18 @@ pub unsafe fn buf_write(
     fname = sfname;
 
     // Writing over the file the buffer came from?
-    let overwriting = !unsafe { (*buf).b_ffname }.is_null()
-        && unsafe { path_fnamecmp(ffname, (*buf).b_ffname) } == 0;
+    let overwriting = !b.b_ffname.is_null() && unsafe { path_fnamecmp(ffname, b.b_ffname) } == 0;
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
     let orig = OpMarks {
-        start: unsafe { (*buf).b_op_start },
-        end: unsafe { (*buf).b_op_end },
+        start: b.b_op_start,
+        end: b.b_op_end,
     };
     // Set '[ and '] to the lines to be written.
-    unsafe { (*buf).b_op_start.lnum = start };
-    unsafe { (*buf).b_op_start.col = 0 };
-    unsafe { (*buf).b_op_end.lnum = end };
-    unsafe { (*buf).b_op_end.col = 0 };
+    b.b_op_start.lnum = start;
+    b.b_op_start.col = 0;
+    b.b_op_end.lnum = end;
+    b.b_op_end.col = 0;
 
     let mode = WriteMode {
         req,
@@ -383,8 +372,8 @@ pub unsafe fn buf_write(
 
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Restore the original '[ and '] positions.
-        unsafe { (*buf).b_op_start = orig.start };
-        unsafe { (*buf).b_op_end = orig.end };
+        b.b_op_start = orig.start;
+        b.b_op_end = orig.end;
     }
     // Overwrite the previous file message, or don't.
     msg_scroll.set(if shortmess(ShmFlag::OVER) && !exiting.get() {
@@ -459,7 +448,7 @@ pub unsafe fn buf_write(
             got_int.set(false);
             // Mark the buffer as being saved, to suppress changed-buffer
             // warnings.
-            unsafe { (*buf).b_saving = true };
+            b.b_saving = true;
 
             // Back up when the file exists and 'writebackup', 'backup' or
             // 'patchmode' asks for it; appending only backs up for
@@ -470,17 +459,12 @@ pub unsafe fn buf_write(
                 && target.perm >= 0
                 && dobackup
             {
-                match unsafe {
-                    buf_write_make_backup(
-                        fname,
-                        &raw mut file_info_old,
-                        &target,
-                        acl,
-                        bkc,
-                        req.append,
-                        req.forceit,
-                    )
-                } {
+                let old = &raw mut file_info_old;
+                let (append, forceit) = (req.append, req.forceit);
+                let made = unsafe {
+                    buf_write_make_backup(fname, old, &target, acl, bkc, append, forceit)
+                };
+                match made {
                     Ok(made) => backup = made,
                     Err(e) => {
                         err = Some(e);
@@ -504,13 +488,13 @@ pub unsafe fn buf_write(
             // With ":w!" over the current file, 'readonly' makes no
             // sense; reset it unless 'cpoptions' contains "Z".
             if req.forceit && overwriting && !cpo_has(CpoFlag::KEEPRO) {
-                unsafe { (*buf).b_p_ro = 0 };
+                b.b_p_ro = 0;
                 need_maketitle.set(true); // set the window title later
                 unsafe { status_redraw_all() }; // redraw status lines later
             }
 
-            end = end.min(unsafe { (*buf).b_ml.ml_line_count });
-            if unsafe { (*buf).b_ml.ml_flags }.has(MlFlags::EMPTY) {
+            end = end.min(b.b_ml.ml_line_count);
+            if b.b_ml.ml_flags.has(MlFlags::EMPTY) {
                 start = end + 1;
             }
 
@@ -525,11 +509,7 @@ pub unsafe fn buf_write(
                     && overwriting
                     && !(exiting.get() && !backup.path.is_null())
                 {
-                    let fsync = if unsafe { (*buf).b_p_fs } >= 0 {
-                        unsafe { (*buf).b_p_fs }
-                    } else {
-                        p_fs.get()
-                    };
+                    let fsync = if b.b_p_fs >= 0 { b.b_p_fs } else { p_fs.get() };
                     unsafe { ml_preserve(buf, false, fsync != 0) };
                     if got_int.get() {
                         err = Some(unsafe { WriteError::shared(e_interr.as_ptr(), 0) });
@@ -547,7 +527,7 @@ pub unsafe fn buf_write(
                         unsafe { enc_canonize((*eap).cmd.offset((*eap).force_enc as isize)) };
                     fenc_tofree
                 } else {
-                    unsafe { (*buf).b_p_fenc }
+                    b.b_p_fenc
                 };
                 let converted = unsafe { need_conversion(fenc) };
 
@@ -614,16 +594,11 @@ pub unsafe fn buf_write(
                     if checking_conversion {
                         fd = -1; // make sure nothing is written
                     } else {
-                        match unsafe {
-                            open_write_file(
-                                wfname,
-                                fname,
-                                &mut target,
-                                &raw mut file_info_old,
-                                req,
-                                &mut err,
-                            )
-                        } {
+                        let old = &raw mut file_info_old;
+                        let opened = unsafe {
+                            open_write_file(wfname, fname, &mut target, old, req, &mut err)
+                        };
+                        match opened {
                             Some(opened) => fd = opened,
                             None => break 'restore_backup,
                         }
@@ -635,13 +610,13 @@ pub unsafe fn buf_write(
                     let write_bin = if !eap.is_null() && unsafe { (*eap).force_bin } != 0 {
                         unsafe { (*eap).force_bin == FORCE_BIN }
                     } else {
-                        unsafe { (*buf).b_p_bin != 0 }
+                        b.b_p_bin != 0
                     };
 
                     let mut bom_chars = 0;
                     // Skip the BOM when appending to a file that already
                     // existed: it only means anything at the start.
-                    if unsafe { (*buf).b_p_bomb } != 0
+                    if b.b_p_bomb != 0
                         && !write_bin
                         && (!req.append || target.perm < 0)
                         && unsafe { writer.stage_bom(fenc) } > 0
@@ -658,7 +633,7 @@ pub unsafe fn buf_write(
                         }
                     }
 
-                    write_undo_file = unsafe { (*buf).b_p_udf } != 0
+                    write_undo_file = b.b_p_udf != 0
                         && overwriting
                         && !req.append
                         && !req.filtering
@@ -671,15 +646,10 @@ pub unsafe fn buf_write(
                     writer.clear();
                     writer.flags = wb_flags;
                     fileformat = unsafe { get_fileformat_force(buf, eap) };
+                    let hash = write_undo_file.then_some(&mut sha_ctx);
+                    let lines = (start, end);
                     written = unsafe {
-                        write_lines(
-                            buf,
-                            (start, end),
-                            &mut writer,
-                            fileformat,
-                            write_bin,
-                            write_undo_file.then_some(&mut sha_ctx),
-                        )
+                        write_lines(buf, lines, &mut writer, fileformat, write_bin, hash)
                     };
                     written.nchars += bom_chars;
                     if written.failed {
@@ -698,17 +668,9 @@ pub unsafe fn buf_write(
                 // If we started writing, finish writing — also when an
                 // error was encountered.
                 if !checking_conversion {
-                    if let Some(e) = unsafe {
-                        finish_write(
-                            buf,
-                            fd,
-                            wfname,
-                            &target,
-                            &backup,
-                            acl,
-                            &raw mut file_info_old,
-                        )
-                    } {
+                    let old = &raw mut file_info_old;
+                    let done = unsafe { finish_write(buf, fd, wfname, &target, &backup, acl, old) };
+                    if let Some(e) = done {
                         err = Some(e);
                         end = 0;
                     }
@@ -747,23 +709,16 @@ pub unsafe fn buf_write(
                 no_wait_return.set(no_wait_return.get() - 1); // may wait now
 
                 if !req.filtering {
-                    unsafe {
-                        report_written(
-                            buf,
-                            fname,
-                            &written,
-                            &WriteNotes {
-                                conv_error: writer.conv_error,
-                                conv_error_lnum: writer.conv_error_lnum,
-                                notconverted,
-                                converted,
-                                device: target.device,
-                                newfile: target.newfile,
-                                fileformat,
-                            },
-                            req.append,
-                        )
+                    let notes = WriteNotes {
+                        conv_error: writer.conv_error,
+                        conv_error_lnum: writer.conv_error_lnum,
+                        notconverted,
+                        converted,
+                        device: target.device,
+                        newfile: target.newfile,
+                        fileformat,
                     };
+                    unsafe { report_written(buf, fname, &written, &notes, req.append) };
                 }
 
                 // Everything went out correctly: reset 'modified'. Unless
@@ -777,10 +732,10 @@ pub unsafe fn buf_write(
                 {
                     unchanged(b, true, false);
                     let changedtick = buf_get_changedtick(b);
-                    if unsafe { (*buf).b_last_changedtick } + 1 == changedtick {
+                    if b.b_last_changedtick + 1 == changedtick {
                         // b:changedtick may have been incremented in
                         // unchanged(), but that must not fire TextChanged.
-                        unsafe { (*buf).b_last_changedtick = changedtick };
+                        b.b_last_changedtick = changedtick;
                     }
                     u_unchanged(b);
                     u_update_save_nr(b);
@@ -792,9 +747,9 @@ pub unsafe fn buf_write(
                 if overwriting {
                     unsafe { ml_timestamp(buf) };
                     if req.append {
-                        unsafe { (*buf).b_flags.clear(BufFlags::NEW) };
+                        b.b_flags.clear(BufFlags::NEW);
                     } else {
-                        unsafe { (*buf).b_flags.clear(BufFlags::WRITE_MASK) };
+                        b.b_flags.clear(BufFlags::WRITE_MASK);
                     }
                 }
 
@@ -826,7 +781,7 @@ pub unsafe fn buf_write(
     }
 
     // Done saving; accept changed-buffer warnings again.
-    unsafe { (*buf).b_saving = false };
+    b.b_saving = false;
 
     unsafe { xfree(backup.path.cast()) };
     unsafe { xfree(fenc_tofree.cast()) };
@@ -843,27 +798,18 @@ pub unsafe fn buf_write(
         retval = FAIL;
         if end == 0 {
             let hl_id = HLF_E;
-            unsafe {
-                msg_puts_hl(
-                    translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr(),
-                    hl_id,
-                    true,
-                )
-            };
-            unsafe {
-                msg_puts_hl(
-                    translate(c"don't quit the editor until the file is successfully written!")
-                        .as_ptr(),
-                    hl_id,
-                    true,
-                )
-            };
+            let warning = translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr();
+            unsafe { msg_puts_hl(warning, hl_id, true) };
+            let advice =
+                translate(c"don't quit the editor until the file is successfully written!")
+                    .as_ptr();
+            unsafe { msg_puts_hl(advice, hl_id, true) };
             // Update the timestamp to avoid an "overwrite changed file"
             // prompt when writing again.
             if unsafe { os_fileinfo(fname, &raw mut file_info_old) } {
                 unsafe { buf_store_file_info(b, &raw mut file_info_old) };
-                unsafe { (*buf).b_mtime_read = (*buf).b_mtime };
-                unsafe { (*buf).b_mtime_read_ns = (*buf).b_mtime_ns };
+                b.b_mtime_read = b.b_mtime;
+                b.b_mtime_read_ns = b.b_mtime_ns;
             }
         }
     }

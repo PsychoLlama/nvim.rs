@@ -73,12 +73,8 @@ unsafe fn check_mtime(buf: *mut buf_T, file_info: *mut FileInfo) -> bool {
     msg_scroll.set(1); // don't overwrite messages here
     msg_silent.set(0); // must give this prompt
     // Not emsg(): that would flush the buffers.
-    unsafe {
-        msg(
-            translate(c"WARNING: The file has been changed since reading it!!!").as_ptr(),
-            HLF_E,
-        )
-    };
+    let warning = translate(c"WARNING: The file has been changed since reading it!!!").as_ptr();
+    unsafe { msg(warning, HLF_E) };
     if unsafe { ask_yesno(translate(c"Do you really want to write to it").as_ptr()) }
         == 'n' as c_int
     {
@@ -178,14 +174,10 @@ pub(crate) unsafe fn buf_get_backup_name(
         let ret =
             unsafe { os_mkdir_recurse(iobuff, 0o755, &raw mut failed_dir, core::ptr::null_mut()) };
         if ret != 0 {
-            unsafe {
-                semsg_c!(
-                    translate(c"E303: Unable to create directory \"%s\" for backup file: %s")
-                        .as_ptr(),
-                    failed_dir,
-                    uv_strerror(ret),
-                )
-            };
+            let fmt =
+                translate(c"E303: Unable to create directory \"%s\" for backup file: %s").as_ptr();
+            let why = unsafe { uv_strerror(ret) };
+            unsafe { semsg_c!(fmt, failed_dir, why) };
             unsafe { xfree(failed_dir.cast()) };
         }
     }
@@ -247,46 +239,27 @@ unsafe fn want_backup_copy(
     let dirlen = unsafe { path_tail(fname).offset_from(fname) } as usize;
     debug_assert!(dirlen < MAXPATHL as usize);
     let mut tmp_fname = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        xmemcpyz(
-            tmp_fname.as_mut_ptr().cast(),
-            fname.cast(),
-            dirlen as size_t,
-        )
-    };
+    let into = tmp_fname.as_mut_ptr().cast();
+    unsafe { xmemcpyz(into, fname.cast(), dirlen as size_t) };
     let mut i: c_int = 4913;
     loop {
-        unsafe {
-            snprintf(
-                tmp_fname.as_mut_ptr().add(dirlen),
-                tmp_fname.len() - dirlen,
-                c"%d".as_ptr(),
-                i,
-            )
-        };
+        let at = unsafe { tmp_fname.as_mut_ptr().add(dirlen) };
+        let room = tmp_fname.len() - dirlen;
+        unsafe { snprintf(at, room, c"%d".as_ptr(), i) };
         if !unsafe { os_fileinfo_link(tmp_fname.as_mut_ptr(), &raw mut file_info) } {
             break;
         }
         i += 123;
     }
 
-    let fd = unsafe {
-        os_open(
-            tmp_fname.as_mut_ptr(),
-            O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW,
-            perm,
-        )
-    };
+    let path = tmp_fname.as_mut_ptr();
+    let fd = unsafe { os_open(path, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm) };
     if fd < 0 {
         return true; // can't write in this directory
     }
-    unsafe {
-        os_fchown(
-            fd,
-            (*file_info_old).stat.st_uid as uv_uid_t,
-            (*file_info_old).stat.st_gid as uv_gid_t,
-        )
-    };
+    let uid = unsafe { (*file_info_old).stat.st_uid } as uv_uid_t;
+    let gid = unsafe { (*file_info_old).stat.st_gid } as uv_gid_t;
+    unsafe { os_fchown(fd, uid, gid) };
     let copy = !unsafe { os_fileinfo(tmp_fname.as_mut_ptr(), &raw mut file_info) }
         || file_info.stat.st_uid != unsafe { (*file_info_old).stat.st_uid }
         || file_info.stat.st_gid != unsafe { (*file_info_old).stat.st_gid }
@@ -443,24 +416,15 @@ unsafe fn backup_by_copy(
         unsafe { os_setperm(backup, perm & 0o777) };
         // Try to give the backup the original's group. Failing that, give
         // the group the same bits as others.
-        if file_info_new.stat.st_gid != unsafe { (*file_info_old).stat.st_gid }
-            && unsafe {
-                os_chown(
-                    backup,
-                    -1i32 as uv_uid_t,
-                    (*file_info_old).stat.st_gid as uv_gid_t,
-                )
-            } != 0
+        let gid = unsafe { (*file_info_old).stat.st_gid };
+        if file_info_new.stat.st_gid != gid
+            && unsafe { os_chown(backup, -1i32 as uv_uid_t, gid as uv_gid_t) } != 0
         {
             unsafe { os_setperm(backup, (perm & 0o707) | ((perm & 0o7) << 3)) };
         }
-        unsafe {
-            os_file_settime(
-                backup,
-                (*file_info_old).stat.st_atim.tv_sec as f64,
-                (*file_info_old).stat.st_mtim.tv_sec as f64,
-            )
-        };
+        let atime = unsafe { (*file_info_old).stat.st_atim.tv_sec } as f64;
+        let mtime = unsafe { (*file_info_old).stat.st_mtim.tv_sec } as f64;
+        unsafe { os_file_settime(backup, atime, mtime) };
         os_set_acl(backup, acl);
         unsafe { os_copy_xattr(fname, backup) };
         err = None;
@@ -594,31 +558,23 @@ pub(crate) unsafe fn apply_patchmode(
             unsafe { vim_rename(backup.path, org) };
             unsafe { xfree(backup.path.cast()) }; // don't delete the file
             backup.path = core::ptr::null_mut();
-            unsafe {
-                os_file_settime(
-                    org,
-                    file_info_old.stat.st_atim.tv_sec as f64,
-                    file_info_old.stat.st_mtim.tv_sec as f64,
-                )
-            };
+            let atime = file_info_old.stat.st_atim.tv_sec as f64;
+            let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
+            unsafe { os_file_settime(org, atime, mtime) };
         }
     } else {
         // No backup, so remember that a (new) file was created.
         let empty_fd = if org.is_null() {
             -1
         } else {
-            unsafe {
-                os_open(
-                    org,
-                    O_CREAT | O_EXCL | O_NOFOLLOW,
-                    if perm < 0 { 0o666 } else { perm & 0o777 },
-                )
+            {
+                let mode = if perm < 0 { 0o666 } else { perm & 0o777 };
+                unsafe { os_open(org, O_CREAT | O_EXCL | O_NOFOLLOW, mode) }
             }
         };
         if empty_fd < 0 {
-            unsafe {
-                emsg(translate(c"E206: Patchmode: can't touch empty original file").as_ptr())
-            };
+            let why = translate(c"E206: Patchmode: can't touch empty original file").as_ptr();
+            unsafe { emsg(why) };
         } else {
             unsafe { close(empty_fd) };
         }
@@ -751,13 +707,9 @@ pub(crate) unsafe fn finish_write(
             || file_info.stat.st_uid != unsafe { (*file_info_old).stat.st_uid }
             || file_info.stat.st_gid != unsafe { (*file_info_old).stat.st_gid }
         {
-            unsafe {
-                os_fchown(
-                    fd,
-                    (*file_info_old).stat.st_uid as uv_uid_t,
-                    (*file_info_old).stat.st_gid as uv_gid_t,
-                )
-            };
+            let uid = unsafe { (*file_info_old).stat.st_uid } as uv_uid_t;
+            let gid = unsafe { (*file_info_old).stat.st_gid } as uv_gid_t;
+            unsafe { os_fchown(fd, uid, gid) };
             if target.perm >= 0 {
                 unsafe { os_setperm(wfname, target.perm) }; // may have changed
             }

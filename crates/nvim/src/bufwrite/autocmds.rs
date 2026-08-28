@@ -120,37 +120,21 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     let mut did_cmd = false;
     let mut nofile_err = false;
     if mode.req.append {
-        did_cmd = unsafe {
-            apply_autocmds_exarg(
-                EVENT_FILEAPPENDCMD,
-                sfname,
-                sfname,
-                false,
-                curbuf.get(),
-                eap,
-            )
-        };
+        let event = EVENT_FILEAPPENDCMD;
+        did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if !did_cmd {
             nofile_err = unsafe { apply_pre(EVENT_FILEAPPENDPRE, sfname, eap, mode.overwriting) };
         }
     } else if mode.req.filtering {
         // No <afile>: the filter's output file is not what the event is
         // about.
-        unsafe {
-            apply_autocmds_exarg(
-                EVENT_FILTERWRITEPRE,
-                core::ptr::null_mut(),
-                sfname,
-                false,
-                curbuf.get(),
-                eap,
-            )
-        };
+        let event = EVENT_FILTERWRITEPRE;
+        let no_fname = core::ptr::null_mut();
+        unsafe { apply_autocmds_exarg(event, no_fname, sfname, false, curbuf.get(), eap) };
     } else if mode.req.reset_changed && mode.whole {
         let was_changed = curbuf_is_changed();
-        did_cmd = unsafe {
-            apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf.get(), eap)
-        };
+        let event = EVENT_BUFWRITECMD;
+        did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if did_cmd {
             if was_changed && !curbuf_is_changed() {
                 // BufWriteCmd wrote everything correctly and reset
@@ -163,9 +147,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             nofile_err = unsafe { apply_pre(EVENT_BUFWRITEPRE, sfname, eap, mode.overwriting) };
         }
     } else {
-        did_cmd = unsafe {
-            apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, false, curbuf.get(), eap)
-        };
+        let event = EVENT_FILEWRITECMD;
+        did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if !did_cmd {
             nofile_err = unsafe { apply_pre(EVENT_FILEWRITEPRE, sfname, eap, mode.overwriting) };
         }
@@ -197,12 +180,11 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
         if nofile_err {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E676: No matching autocommands for buftype=%s buffer".as_ptr()),
-                    cur_buf().b_p_bt,
-                )
+            let fmt = unsafe {
+                gettext(c"E676: No matching autocommands for buftype=%s buffer".as_ptr())
             };
+            let buftype = cur_buf().b_p_bt;
+            unsafe { semsg_c!(fmt, buftype) };
         }
         if nofile_err || aborting() {
             // An aborting error, interrupt or exception in the
@@ -236,11 +218,10 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             return PreWrite::Finished(OK);
         }
         if !aborting() {
-            unsafe {
-                emsg(gettext(
-                    c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr(),
-                ))
+            let why = unsafe {
+                gettext(c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr())
             };
+            unsafe { emsg(why) };
         }
         return PreWrite::Finished(FAIL);
     }
@@ -259,11 +240,10 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             if *end < start {
                 no_wait_return.set(no_wait_return.get() - 1);
                 msg_scroll.set(msg_save);
-                unsafe {
-                    emsg(gettext(
-                        c"E204: Autocommand changed number of lines in unexpected way".as_ptr(),
-                    ))
+                let why = unsafe {
+                    gettext(c"E204: Autocommand changed number of lines in unexpected way".as_ptr())
                 };
+                unsafe { emsg(why) };
                 return PreWrite::Finished(FAIL);
             }
         }
