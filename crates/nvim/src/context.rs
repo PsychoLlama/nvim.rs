@@ -302,24 +302,15 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.extend_from_slice(bytes);
         cmd.push(0);
         let mut opts = KeyDict_exec_opts { output: true };
-        let func_body = unsafe {
-            exec_impl(
-                VIML_INTERNAL_CALL,
-                cstr_as_string(cmd.as_ptr() as *const c_char),
-                &raw mut opts,
-                &raw mut err,
-            )
-        };
+        let src = unsafe { cstr_as_string(cmd.as_ptr() as *const c_char) };
+        let (o, e) = (&raw mut opts, &raw mut err);
+        let func_body = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o, e) };
         if err.type_0 as c_int == kErrorTypeNone as c_int {
-            unsafe {
-                array_push(
-                    &mut ctx.funcs,
-                    object {
-                        type_0: kObjectTypeString,
-                        data: object_data { string: func_body },
-                    },
-                )
+            let body = object {
+                type_0: kObjectTypeString,
+                data: object_data { string: func_body },
             };
+            unsafe { array_push(&mut ctx.funcs, body) };
         }
         unsafe { api_clear_error(&raw mut err) };
     }
@@ -349,30 +340,19 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
     };
     // SAFETY: the caller's array and error; `list_tv` owns the conversion
     // result until `tv_clear`.
-    unsafe {
-        object_to_vim(
-            object {
-                type_0: kObjectTypeArray,
-                data: object_data { array },
-            },
-            &raw mut list_tv,
-            err,
-        )
+    let wrapped = object {
+        type_0: kObjectTypeArray,
+        data: object_data { array },
     };
+    unsafe { object_to_vim(wrapped, &raw mut list_tv, err) };
     debug_assert!(
         list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type == VAR_LIST"
     );
     let (data, size) = sbuf.parts_mut();
     if !unsafe { encode_vim_list_to_buf(list_tv.vval.v_list, size, data) } {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                c"E474: Failed to convert list to msgpack string buffer".as_ptr(),
-            )
-        };
+        let why = c"E474: Failed to convert list to msgpack string buffer".as_ptr();
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), why) };
     }
     unsafe { tv_clear(&raw mut list_tv) };
     sbuf
@@ -384,15 +364,14 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
 /// `rv` has room for another entry, and `key` is a NUL-terminated literal.
 unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
     // SAFETY: the caller's contract.
-    unsafe {
-        *rv.items.add(rv.size) = key_value_pair {
-            key: cstr_as_string(key.as_ptr()),
-            value: object {
-                type_0: kObjectTypeArray,
-                data: object_data { array },
-            },
-        }
+    let entry = key_value_pair {
+        key: unsafe { cstr_as_string(key.as_ptr()) },
+        value: object {
+            type_0: kObjectTypeArray,
+            data: object_data { array },
+        },
     };
+    unsafe { *rv.items.add(rv.size) = entry };
     rv.size += 1;
 }
 

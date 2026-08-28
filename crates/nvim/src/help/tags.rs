@@ -68,31 +68,23 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
     }
 
     if unsafe { strcmp((*eap).arg, c"ALL".as_ptr()) } == 0 {
-        unsafe {
-            do_in_path(
-                p_rtp.get(),
-                c"".as_ptr(),
-                c"doc".as_ptr().cast_mut(),
-                RuntimeOpts::ALL | RuntimeOpts::DIR,
-                Some(helptags_cb),
-                (&raw mut add_help_tags).cast::<c_void>(),
-            )
-        };
+        let (rtp, none, doc) = (p_rtp.get(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
+        let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
+        let flag = (&raw mut add_help_tags).cast::<c_void>();
+        // SAFETY: `flag` outlives the walk, which is the callback's only
+        // argument; the rest are static strings and the runtimepath.
+        unsafe { do_in_path(rtp, none, doc, opts, Some(helptags_cb), flag) };
         return;
     }
 
     let mut xpc: expand_T = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Directories;
-    let dirname = unsafe {
-        expand_one(
-            &raw mut xpc,
-            (*eap).arg,
-            ptr::null_mut(),
-            WildOpts::LIST_NOTFOUND | WildOpts::SILENT,
-            WildMode::ExpandFree,
-        )
-    };
+    let arg = unsafe { (*eap).arg };
+    let opts = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
+    let (orig, mode) = (ptr::null_mut(), WildMode::ExpandFree);
+    // SAFETY: `xpc` was just initialised and `arg` is the command's own.
+    let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
     if dirname.is_null() || !unsafe { os_isdir(dirname) } {
         unsafe { semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg) };
     } else {
@@ -132,22 +124,18 @@ unsafe fn helptags_cb(
 unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr: bool) {
     let mut glob = [0 as c_char; MAXPATHL as usize];
     let namebuff = glob.as_mut_ptr();
-    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below.
-    let files = unsafe {
-        xstrlcpy(namebuff, dirname, MAXPATHL as usize);
-        if !add_pathsep(namebuff)
-            || xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
-        {
-            emsg(gettext(e_fnametoolong.as_ptr()));
-            return;
-        }
-        match expand_help_files(namebuff) {
-            Some(files) => files,
-            None => {
-                semsg_c!(translated(c"E151: No match: %s"), namebuff);
-                return;
-            }
-        }
+    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below,
+    // and `dirname` is the caller's NUL-terminated string.
+    unsafe { xstrlcpy(namebuff, dirname, MAXPATHL as usize) };
+    let too_long = !unsafe { add_pathsep(namebuff) }
+        || unsafe { xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize;
+    if too_long {
+        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        return;
+    }
+    let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
+        unsafe { semsg_c!(translated(c"E151: No match: %s"), namebuff) };
+        return;
     };
 
     // Which languages does the directory hold?
@@ -176,15 +164,9 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
         }
         // SAFETY: both buffers are NUL-terminated by construction, and
         // `dirname` by the caller.
-        unsafe {
-            helptags_one(
-                dirname,
-                ext.as_ptr().cast::<c_char>(),
-                fname.as_ptr().cast::<c_char>(),
-                add_help_tags,
-                ignore_writeerr,
-            )
-        };
+        let ext = ext.as_ptr().cast::<c_char>();
+        let fname = fname.as_ptr().cast::<c_char>();
+        unsafe { helptags_one(dirname, ext, fname, add_help_tags, ignore_writeerr) };
     }
     drop(files);
 }
@@ -253,16 +235,10 @@ unsafe fn expand_help_files(pattern: *mut c_char) -> Option<Wildcards> {
     // Note: the pattern is passed as a one-element array, not as `&pattern`,
     // because in C `NameBuff` and `&NameBuff` are the same address.
     let mut list = [pattern];
+    let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
+    let (out_count, out_names) = (&raw mut count, &raw mut names);
     // SAFETY: caller contract; the out-parameters are ours.
-    let res = unsafe {
-        gen_expand_wildcards(
-            1,
-            list.as_mut_ptr(),
-            &raw mut count,
-            &raw mut names,
-            ExpandFlags::FILE | ExpandFlags::SILENT,
-        )
-    };
+    let res = unsafe { gen_expand_wildcards(1, list.as_mut_ptr(), out_count, out_names, flags) };
     if res == FAIL {
         return None;
     }
@@ -290,49 +266,43 @@ unsafe fn helptags_one(
     let mut glob = [0 as c_char; MAXPATHL as usize];
     let namebuff = glob.as_mut_ptr();
     // Find all the help files: "<dir>/**/*<ext>".
-    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below.
-    let (dirlen, files) = unsafe {
-        let dirlen = xstrlcpy(namebuff, dir, MAXPATHL as usize);
-        if dirlen >= MAXPATHL as usize
-            || xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
-            || xstrlcat(namebuff, ext, MAXPATHL as usize) >= MAXPATHL as usize
-        {
-            emsg(gettext(e_fnametoolong.as_ptr()));
-            return;
+    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below,
+    // and `dir`/`ext` are the caller's NUL-terminated strings.
+    let dirlen = unsafe { xstrlcpy(namebuff, dir, MAXPATHL as usize) };
+    let too_long = dirlen >= MAXPATHL as usize
+        || unsafe { xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize
+        || unsafe { xstrlcat(namebuff, ext, MAXPATHL as usize) } >= MAXPATHL as usize;
+    if too_long {
+        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        return;
+    }
+    let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
+        if !got_int.get() {
+            unsafe { semsg_c!(translated(c"E151: No match: %s"), namebuff) };
         }
-        match expand_help_files(namebuff) {
-            Some(files) => (dirlen, files),
-            None => {
-                if !got_int.get() {
-                    semsg_c!(translated(c"E151: No match: %s"), namebuff);
-                }
-                return;
-            }
-        }
+        return;
     };
 
     // Open the tags file for writing before scanning, so that a directory
     // we cannot write to costs nothing.
     let (into, from, n) = (namebuff.cast::<c_void>(), dir.cast(), dirlen as size_t + 1);
-    // SAFETY: `dir` is `dirlen` bytes plus its NUL, so the copy fits.
-    let fd_tags = unsafe {
-        memcpy(into, from, n);
-        if !add_pathsep(namebuff)
-            || xstrlcat(namebuff, tagfname, MAXPATHL as usize) >= MAXPATHL as usize
-        {
-            emsg(gettext(e_fnametoolong.as_ptr()));
-            // Upstream leaks `files` here; the `Wildcards` drop frees it.
-            return;
+    // SAFETY: `dir` is `dirlen` bytes plus its NUL, so the copy fits;
+    // `namebuff` stays NUL-terminated for the two appends after it.
+    unsafe { memcpy(into, from, n) };
+    let too_long = !unsafe { add_pathsep(namebuff) }
+        || unsafe { xstrlcat(namebuff, tagfname, MAXPATHL as usize) } >= MAXPATHL as usize;
+    if too_long {
+        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        // Upstream leaks `files` here; the `Wildcards` drop frees it.
+        return;
+    }
+    let fd_tags = unsafe { os_fopen(namebuff, c"w".as_ptr()) };
+    if fd_tags.is_null() {
+        if !ignore_writeerr {
+            unsafe { semsg_c!(translated(c"E152: Cannot open %s for writing"), namebuff) };
         }
-        let fd_tags = os_fopen(namebuff, c"w".as_ptr());
-        if fd_tags.is_null() {
-            if !ignore_writeerr {
-                semsg_c!(translated(c"E152: Cannot open %s for writing"), namebuff);
-            }
-            return;
-        }
-        fd_tags
-    };
+        return;
+    }
 
     // Every tag, as an owned "<tag>\t<file>" line.
     let mut tags: Vec<*mut c_char> = Vec::new();
@@ -493,16 +463,10 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
                 continue;
             }
             unsafe { *p2 = NUL as c_char };
-            unsafe {
-                vim_snprintf(
-                    namebuff,
-                    MAXPATHL as size_t,
-                    c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr(),
-                    pair[1],
-                    dir,
-                    p2.offset(1),
-                )
-            };
+            let fmt = c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr();
+            let (tag, rest) = (pair[1], unsafe { p2.offset(1) });
+            let cap = MAXPATHL as size_t;
+            unsafe { vim_snprintf(namebuff, cap, fmt, tag, dir, rest) };
             unsafe { emsg(namebuff) };
             unsafe { *p2 = b'\t' as c_char };
             break;

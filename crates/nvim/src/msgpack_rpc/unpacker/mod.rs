@@ -36,7 +36,7 @@ use crate::types::{
     Unpacker, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, mpack_node_t, mpack_parser_t,
-    mpack_token_t, mpack_uint32_t, object_data, size_t,
+    mpack_token_t, mpack_uint32_t, mpack_walk_cb, object_data, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -310,12 +310,11 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             unsafe { *mem.add(len) = 0 };
             let str = String_0::from_raw_parts(mem, len);
             if key_location.is_null() {
-                unsafe {
-                    *result = Object {
-                        type_0: kObjectTypeString,
-                        data: object_data { string: str },
-                    }
+                let obj = Object {
+                    type_0: kObjectTypeString,
+                    data: object_data { string: str },
                 };
+                unsafe { *result = obj };
             } else {
                 unsafe { *key_location = str };
             }
@@ -346,14 +345,9 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
         TOKEN_MAP => {
             let capacity = tok.length as size_t;
             // SAFETY: the arena hands back `capacity` zeroed entries.
-            let items = unsafe {
-                arena_alloc(
-                    &raw mut (*p).arena,
-                    size_of::<KeyValuePair>() * capacity,
-                    true,
-                )
-            }
-            .cast::<KeyValuePair>();
+            let bytes = size_of::<KeyValuePair>() * capacity;
+            let items =
+                unsafe { arena_alloc(&raw mut (*p).arena, bytes, true) }.cast::<KeyValuePair>();
             unsafe { *result = dict_object(items, capacity) };
             unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
@@ -450,12 +444,11 @@ pub unsafe fn unpacker_init(p: *mut Unpacker) {
     unsafe { mpack_parser_init(&raw mut (*p).parser, 0) };
     unsafe { (*p).parser.data.p = p.cast::<c_void>() };
     unsafe { mpack_tokbuf_init(&raw mut (*p).reader) };
-    unsafe {
-        (*p).unpack_error = Error {
-            type_0: kErrorTypeNone,
-            msg: core::ptr::null_mut(),
-        }
+    let no_error = Error {
+        type_0: kErrorTypeNone,
+        msg: core::ptr::null_mut(),
     };
+    unsafe { (*p).unpack_error = no_error };
     unsafe { (*p).arena = ARENA_EMPTY };
     unsafe { (*p).has_grid_line_event = false };
 }
@@ -556,14 +549,13 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
             // layer reports once the arguments have been read.
             // SAFETY: the chunk is `tok.length` readable bytes of the input
             // buffer, and the error slot is the unpacker's own.
-            u.handler = unsafe {
-                let name = if tok.length != 0 {
-                    tok.data.chunk_ptr
-                } else {
-                    c"".as_ptr()
-                };
-                msgpack_rpc_get_handler_for(name, tok.length as size_t, &raw mut u.unpack_error)
+            let name = if tok.length != 0 {
+                unsafe { tok.data.chunk_ptr }
+            } else {
+                c"".as_ptr()
             };
+            let (len, slot) = (tok.length as size_t, &raw mut u.unpack_error);
+            u.handler = unsafe { msgpack_rpc_get_handler_for(name, len, slot) };
         }
 
         u.read_ptr = data;
@@ -578,13 +570,9 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
     } else {
         // SAFETY: the error slot is the unpacker's own, and the message is a
         // static string.
-        unsafe {
-            api_set_error(
-                &raw mut u.unpack_error,
-                kErrorTypeValidation,
-                c"failed to decode msgpack".as_ptr(),
-            )
-        };
+        let slot = &raw mut u.unpack_error;
+        let why = c"failed to decode msgpack".as_ptr();
+        unsafe { api_set_error(slot, kErrorTypeValidation, why) };
         u.state = protocol::INVALID;
     }
     false
@@ -624,13 +612,12 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
             unsafe { (*p).type_0 = kMessageTypeRedrawEvent };
             unsafe { (*p).state = protocol::REDRAW_EVENTS };
         } else {
-            unsafe {
-                (*p).state = if (*p).type_0 == kMessageTypeResponse {
-                    protocol::RESPONSE_ERROR
-                } else {
-                    protocol::BODY
-                }
+            let state = if unsafe { (*p).type_0 } == kMessageTypeResponse {
+                protocol::RESPONSE_ERROR
+            } else {
+                protocol::BODY
             };
+            unsafe { (*p).state = state };
             unsafe { (*p).arena = ARENA_EMPTY };
         }
     }
@@ -662,28 +649,21 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
         if !body_is_unpacked {
             // SAFETY: the caller's unpacker and the bytes it points at; the
             // callback navigates back to it through `parser.data`.
-            let result = unsafe {
-                mpack_parse(
-                    &raw mut (*p).parser,
-                    &raw mut (*p).read_ptr,
-                    &raw mut (*p).read_size,
-                    Some(api_parse_enter),
-                    Some(parse_nop),
-                )
-            };
+            let parser = unsafe { &raw mut (*p).parser };
+            let at = unsafe { &raw mut (*p).read_ptr };
+            let left = unsafe { &raw mut (*p).read_size };
+            let enter: mpack_walk_cb = Some(api_parse_enter);
+            let exit: mpack_walk_cb = Some(parse_nop);
+            let result = unsafe { mpack_parse(parser, at, left, enter, exit) };
             if result == MPACK_EOF {
                 return false;
             }
             if result != MPACK_OK {
                 // SAFETY: the error slot is the unpacker's own, and the
                 // message is a static string.
-                unsafe {
-                    api_set_error(
-                        &raw mut (*p).unpack_error,
-                        kErrorTypeValidation,
-                        c"failed to parse msgpack".as_ptr(),
-                    )
-                };
+                let slot = unsafe { &raw mut (*p).unpack_error };
+                let why = c"failed to parse msgpack".as_ptr();
+                unsafe { api_set_error(slot, kErrorTypeValidation, why) };
                 unsafe { (*p).state = protocol::INVALID };
                 return false;
             }

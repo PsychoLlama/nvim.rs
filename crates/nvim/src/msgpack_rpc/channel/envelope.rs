@@ -96,12 +96,8 @@ pub unsafe fn serialize_response(
     // packer writes into a block it owns.
     let mut packer = unsafe { packer_buffer_init(slice::from_mut(&mut chan)) };
     mpack_array(&mut packer.ptr, 4);
-    unsafe {
-        put_byte(
-            &mut packer,
-            kMessageTypeResponse.to_le_bytes()[0].cast_signed(),
-        )
-    };
+    let kind = kMessageTypeResponse.to_le_bytes()[0].cast_signed();
+    unsafe { put_byte(&mut packer, kind) };
     mpack_uint(&mut packer.ptr, response_id);
     if errored {
         mpack_array(&mut packer.ptr, 2);
@@ -162,14 +158,8 @@ unsafe fn report_failed_notification(
         items: items.as_mut_ptr(),
     };
     let mut chan = channel;
-    unsafe {
-        serialize_request(
-            slice::from_mut(&mut chan),
-            0,
-            c"nvim_error_event".as_ptr(),
-            args,
-        )
-    };
+    let to = slice::from_mut(&mut chan);
+    unsafe { serialize_request(to, 0, c"nvim_error_event".as_ptr(), args) };
 }
 
 /// The msgpack encoding of nil, which is what the unused half of the
@@ -234,12 +224,9 @@ unsafe fn packer_buffer_init(chans: &mut [*mut Channel]) -> PackerBuffer {
 /// still alive.
 unsafe fn packer_channels<'a>(packer: &PackerBuffer) -> &'a mut [*mut Channel] {
     // SAFETY: the caller's guarantee that the slice outlives the packer.
-    unsafe {
-        slice::from_raw_parts_mut(
-            packer.anydata.cast::<*mut Channel>(),
-            usize::try_from(packer.anyint).expect("`packer_buffer_init` stored a count here"),
-        )
-    }
+    let base = packer.anydata.cast::<*mut Channel>();
+    let n = usize::try_from(packer.anyint).expect("`packer_buffer_init` stored a count here");
+    unsafe { slice::from_raw_parts_mut(base, n) }
 }
 
 /// Sends whatever the packer has accumulated, once per channel.

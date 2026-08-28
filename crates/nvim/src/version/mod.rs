@@ -309,20 +309,14 @@ pub(crate) unsafe fn list_lua_version() {
         type_0: kErrorTypeNone,
         msg: ptr::null_mut(),
     };
-    let ret = unsafe {
-        nlua_exec(
-            static_cstring(CODE),
-            ptr::null(),
-            Array {
-                size: 0,
-                capacity: 0,
-                items: ptr::null_mut(),
-            },
-            kRetObject,
-            ptr::null_mut::<Arena>(),
-            &raw mut err,
-        )
+    let no_args = Array {
+        size: 0,
+        capacity: 0,
+        items: ptr::null_mut(),
     };
+    let (chunk, name) = (static_cstring(CODE), ptr::null());
+    let (arena, slot) = (ptr::null_mut::<Arena>(), &raw mut err);
+    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, slot) };
     debug_assert!(err.type_0 == kErrorTypeNone, "a literal chunk cannot fail");
     // Not a debug assertion: the union field read below depends on it.
     assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
@@ -379,15 +373,14 @@ pub(crate) unsafe fn list_version() {
         }
     }
 
-    unsafe {
-        version_msg(if p_verbose.get() > 0 as OptInt {
-            c"\nRun :checkhealth for more info"
-        } else if starting.get() != 0 {
-            c"\nRun \"nvim -V1 -v\" for more info"
-        } else {
-            c"\nRun \":verbose version\" for more info"
-        })
+    let more = if p_verbose.get() > 0 as OptInt {
+        c"\nRun :checkhealth for more info"
+    } else if starting.get() != 0 {
+        c"\nRun \"nvim -V1 -v\" for more info"
+    } else {
+        c"\nRun \":verbose version\" for more info"
     };
+    unsafe { version_msg(more) };
 }
 
 /// Whether the intro screen is still what the window shows: an untouched
@@ -513,16 +506,12 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     // SAFETY: `mesg` is NUL-terminated and `text.len()` bytes long, so every
     // pointer below stays within it.
     let mut col = ((Columns.get() - unsafe { vim_strsize(mesg.as_ptr()) }) / 2).max(0);
-    unsafe {
-        grid_line_start(
-            if !colon && ui_has(kUIMultigrid) {
-                first_window().map_or_else(default_gridview, |wp| wp.w_grid)
-            } else {
-                default_gridview()
-            },
-            row,
-        )
+    let grid = if !colon && ui_has(kUIMultigrid) {
+        first_window().map_or_else(default_gridview, |wp| wp.w_grid)
+    } else {
+        default_gridview()
     };
+    unsafe { grid_line_start(grid, row) };
     let byte_at = |at: usize| unsafe { mesg.as_ptr().add(at) };
 
     let attr_of = |group: &CStr| unsafe { syn_id2attr(syn_name2id(group.as_ptr())) };
@@ -591,14 +580,9 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
             Some(colon_at) if text.get(at + len) == Some(&b'<') => {
                 col += unsafe { grid_line_puts(col, byte_at(at), colon_at as c_int, 0) };
                 col += unsafe { grid_line_puts(col, byte_at(at + colon_at), 1, special_attr) };
-                col += unsafe {
-                    grid_line_puts(
-                        col,
-                        byte_at(at + colon_at + 1),
-                        (len - colon_at - 1) as c_int,
-                        attr_of(c"Identifier"),
-                    )
-                };
+                let rest = byte_at(at + colon_at + 1);
+                let (n, attr) = ((len - colon_at - 1) as c_int, attr_of(c"Identifier"));
+                col += unsafe { grid_line_puts(col, rest, n, attr) };
             }
             _ => col += unsafe { grid_line_puts(col, byte_at(at), len as c_int, 0) },
         }

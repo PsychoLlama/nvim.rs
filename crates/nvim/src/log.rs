@@ -135,13 +135,9 @@ fn expand_log_file_var() -> (Vec<u8>, bool) {
     // SAFETY: `buf` holds `LOG_PATH_SIZE` chars and the bound passed is one
     // less, as upstream's is; the source is a NUL-terminated literal that
     // `expand_env` only reads.
-    unsafe {
-        expand_env(
-            ENV_LOGFILE_REF.as_ptr().cast_mut(),
-            buf.as_mut_ptr(),
-            LOG_PATH_SIZE as c_int - 1,
-        )
-    };
+    let src = ENV_LOGFILE_REF.as_ptr().cast_mut();
+    let (into, cap) = (buf.as_mut_ptr(), LOG_PATH_SIZE as c_int - 1);
+    unsafe { expand_env(src, into, cap) };
     let expanded = cstr::in_chars(&buf).to_bytes().to_vec();
     let user_set = expanded != ENV_LOGFILE_REF.to_bytes();
     (expanded, user_set)
@@ -224,16 +220,13 @@ fn log_path_init() {
         let failed_dir = failed_dir.map_or(core::ptr::null(), |d| d.as_ptr());
         // SAFETY: `failed_dir` outlives the call; `uv_strerror` returns a
         // static string.
+        let no_context = core::ptr::null::<c_char>();
+        let here = c"log_path_init".as_ptr();
+        let fmt = c"Failed to create directory %s for writing logs: %s".as_ptr();
+        let why = unsafe { uv_strerror(log_dir_failure) };
         unsafe {
             logmsg_c!(
-                LOGLVL_WRN,
-                core::ptr::null::<c_char>(),
-                c"log_path_init".as_ptr(),
-                106 as c_int,
-                true,
-                c"Failed to create directory %s for writing logs: %s".as_ptr(),
-                failed_dir,
-                uv_strerror(log_dir_failure),
+                LOGLVL_WRN, no_context, here, 106, true, fmt, failed_dir, why
             )
         };
     }
@@ -460,15 +453,10 @@ fn open_log_file() -> *mut FILE {
     let msg = format!("failed to open $NVIM_LOG_FILE ({reason}): {path}\n\0");
     // SAFETY: `stderr` is open; `msg` is NUL-terminated and outlives the
     // call; the literals are NUL-terminated.
-    if unsafe {
-        log_write_prefix(
-            stderr,
-            LOGLVL_ERR,
-            core::ptr::null::<c_char>(),
-            c"open_log_file".as_ptr(),
-            234 as c_int,
-        )
-    } {
+    let no_context = core::ptr::null::<c_char>();
+    let here = c"open_log_file".as_ptr();
+    let err = unsafe { stderr };
+    if unsafe { log_write_prefix(err, LOGLVL_ERR, no_context, here, 234) } {
         unsafe { fputs(msg.as_ptr() as *const c_char, stderr) };
         unsafe { fflush(stderr) };
     }
@@ -545,14 +533,9 @@ fn log_timestamp() -> Option<([c_char; 20], c_int)> {
     let mut date_time = [0 as c_char; 20];
     // SAFETY: `date_time` is what its length says and `local_time` is
     // initialised.
-    let written = unsafe {
-        strftime(
-            date_time.as_mut_ptr(),
-            date_time.len(),
-            c"%Y-%m-%dT%H:%M:%S".as_ptr(),
-            &raw mut local_time,
-        )
-    };
+    let (into, cap) = (date_time.as_mut_ptr(), date_time.len());
+    let (fmt, when) = (c"%Y-%m-%dT%H:%M:%S".as_ptr(), &raw mut local_time);
+    let written = unsafe { strftime(into, cap, fmt, when) };
     if written == 0 {
         return None;
     }
@@ -616,31 +599,12 @@ unsafe fn log_write_prefix(
         // SAFETY: every argument outlives the call and matches its verb;
         // `name` is borrowed only for the duration of the write.
         if located {
-            unsafe {
-                fprintf(
-                    log_file,
-                    c"%s %s.%03d %-10s %s%s:%d: ".as_ptr(),
-                    tag,
-                    date,
-                    millis,
-                    name,
-                    ctx,
-                    func_name,
-                    line_num,
-                )
-            }
+            let fmt = c"%s %s.%03d %-10s %s%s:%d: ".as_ptr();
+            let (at, line) = (func_name, line_num);
+            unsafe { fprintf(log_file, fmt, tag, date, millis, name, ctx, at, line) }
         } else {
-            unsafe {
-                fprintf(
-                    log_file,
-                    c"%s %s.%03d %-10s %s".as_ptr(),
-                    tag,
-                    date,
-                    millis,
-                    name,
-                    ctx,
-                )
-            }
+            let fmt = c"%s %s.%03d %-10s %s".as_ptr();
+            unsafe { fprintf(log_file, fmt, tag, date, millis, name, ctx) }
         }
     });
     rv >= 0

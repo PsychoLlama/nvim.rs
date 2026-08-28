@@ -263,15 +263,14 @@ pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
     // struct un-copyable without reading uninitialised bytes — which
     // `mpack_parser_copy` and `mpack_rpc_session_copy` both do — so it is
     // written out here instead. Twenty-five bytes, once per session.
-    unsafe {
-        tokbuf.write(mpack_tokbuf_t {
-            pending: [0; MAX_TOKEN_LEN],
-            pending_tok: empty_token(),
-            ppos: 0,
-            plen: 0,
-            passthrough: 0,
-        })
+    let empty = mpack_tokbuf_t {
+        pending: [0; MAX_TOKEN_LEN],
+        pending_tok: empty_token(),
+        ppos: 0,
+        plen: 0,
+        passthrough: 0,
     };
+    unsafe { tokbuf.write(empty) };
 }
 
 /// Read one token out of `*buf`, advancing it past what was consumed.
@@ -303,13 +302,12 @@ pub unsafe fn mpack_read(
             MPACK_OK as c_int
         }
         Step::Chunk(len) => {
-            unsafe {
-                *tok = mpack_token_t {
-                    type_0: MPACK_TOKEN_CHUNK,
-                    length: len,
-                    data: mpack_token_s_data { chunk_ptr: start },
-                }
+            let chunk = mpack_token_t {
+                type_0: MPACK_TOKEN_CHUNK,
+                length: len,
+                data: mpack_token_s_data { chunk_ptr: start },
             };
+            unsafe { *tok = chunk };
             MPACK_OK as c_int
         }
         Step::Eof => MPACK_EOF as c_int,

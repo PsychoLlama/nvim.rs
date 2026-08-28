@@ -24,7 +24,7 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::strings::arena_printf;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, OptKeySet,
-    String_0, StringArray, mpack_parser_t, mpack_token_t, size_t, ssize_t, uint32_t,
+    String_0, StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
 };
 use ::libc::abort;
 
@@ -114,15 +114,9 @@ pub unsafe fn unpack_skip(data: *mut *const c_char, size: *mut size_t) -> c_int 
     // SAFETY: the caller's cursor, and a parser that builds nothing.
     let mut parser: mpack_parser_t = unsafe { core::mem::zeroed() };
     unsafe { mpack_parser_init(&raw mut parser, 0) };
-    unsafe {
-        mpack_parse(
-            &raw mut parser,
-            data,
-            size,
-            Some(parse_nop),
-            Some(parse_nop),
-        )
-    }
+    let enter: mpack_walk_cb = Some(parse_nop);
+    let exit: mpack_walk_cb = Some(parse_nop);
+    unsafe { mpack_parse(&raw mut parser, data, size, enter, exit) }
 }
 
 /// Appends one unrecognised key's raw msgpack to a keyset's spillover.
@@ -147,11 +141,13 @@ pub unsafe fn push_additional_data(
             data: [],
         };
         unsafe { reserve(ad, size_of::<AdditionalData>()) };
+        let from = (&raw const header).cast::<c_char>();
+        let n = size_of::<AdditionalData>();
         unsafe {
-            (*ad).items.add((*ad).size).copy_from_nonoverlapping(
-                (&raw const header).cast::<c_char>(),
-                size_of::<AdditionalData>(),
-            )
+            (*ad)
+                .items
+                .add((*ad).size)
+                .copy_from_nonoverlapping(from, n)
         };
         unsafe { (*ad).size += size_of::<AdditionalData>() };
     }
@@ -330,13 +326,9 @@ unsafe fn unpack_string_array(
     // capacity it then writes within.
     if unsafe { (*a).capacity } < unsafe { (*a).size } + len {
         unsafe { (*a).capacity = protocol::capacity_for((*a).size + len) };
-        unsafe {
-            (*a).items = xrealloc(
-                (*a).items.cast::<c_void>(),
-                size_of::<String_0>() * (*a).capacity,
-            )
-            .cast::<String_0>()
-        };
+        let bytes = size_of::<String_0>() * unsafe { (*a).capacity };
+        let grown = unsafe { xrealloc((*a).items.cast::<c_void>(), bytes) };
+        unsafe { (*a).items = grown.cast::<String_0>() };
     }
     for _ in 0..len {
         let item = unsafe { unpack_string(data, size) };
@@ -345,13 +337,9 @@ unsafe fn unpack_string_array(
         }
         if unsafe { (*a).size } == unsafe { (*a).capacity } {
             unsafe { (*a).capacity = protocol::grown_capacity((*a).capacity) };
-            unsafe {
-                (*a).items = xrealloc(
-                    (*a).items.cast::<c_void>(),
-                    size_of::<String_0>() * (*a).capacity,
-                )
-                .cast::<String_0>()
-            };
+            let bytes = size_of::<String_0>() * unsafe { (*a).capacity };
+            let grown = unsafe { xrealloc((*a).items.cast::<c_void>(), bytes) };
+            unsafe { (*a).items = grown.cast::<String_0>() };
         }
         unsafe { *(*a).items.add((*a).size) = item };
         unsafe { (*a).size += 1 };
@@ -367,18 +355,11 @@ unsafe fn unpack_string_array(
 /// `key` describes `key.size` readable bytes.
 unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
     // SAFETY: the caller's key, and verbs that match it.
-    unsafe {
-        arena_printf(
-            core::ptr::null_mut(),
-            message.as_ptr(),
-            // `%.*s`'s precision, which upstream writes as `(int)key.size`.
-            // A 2 GiB keydict key cannot reach here — it would have to be a
-            // ShaDa entry that big — and if one did, saturating to
-            // `c_int::MAX` would print two gigabytes of it into an error
-            // message. `len_as_int` says so instead.
-            crate::narrow::len_as_int(key.len()),
-            key.data(),
-        )
-    }
-    .data()
+    // `%.*s`'s precision, which upstream writes as `(int)key.size`. A 2 GiB
+    // keydict key cannot reach here — it would have to be a ShaDa entry that
+    // big — and if one did, saturating to `c_int::MAX` would print two
+    // gigabytes of it into an error message. `len_as_int` says so instead.
+    let (fmt, arena) = (message.as_ptr(), core::ptr::null_mut());
+    let (precision, bytes) = (crate::narrow::len_as_int(key.len()), key.data());
+    unsafe { arena_printf(arena, fmt, precision, bytes) }.data()
 }

@@ -466,13 +466,8 @@ pub(crate) unsafe fn fuzzy_match_str_with_pos(
     let positions: *mut garray_T = unsafe { xmalloc(size_of::<garray_T>()) }.cast();
     unsafe { ga_init(positions, size_of::<u32>() as c_int, 10) };
     unsafe { ga_grow(positions, placed.len() as c_int) };
-    unsafe {
-        core::ptr::copy_nonoverlapping(
-            placed.as_ptr(),
-            (*positions).ga_data.cast::<u32>(),
-            placed.len(),
-        )
-    };
+    let into = unsafe { (*positions).ga_data }.cast::<u32>();
+    unsafe { core::ptr::copy_nonoverlapping(placed.as_ptr(), into, placed.len()) };
     unsafe { (*positions).ga_len = placed.len() as c_int };
     positions
 }
@@ -597,15 +592,9 @@ pub(crate) unsafe fn search_for_fuzzy_match(
                     }
                 } else {
                     let (mut len, mut score) = (0, 0);
-                    if unsafe {
-                        fuzzy_match_str_in_line(
-                            &raw mut ptr,
-                            pattern,
-                            &raw mut len,
-                            &raw mut current_pos,
-                            &raw mut score,
-                        )
-                    } {
+                    let (at, n) = (&raw mut ptr, &raw mut len);
+                    let (here, out) = (&raw mut current_pos, &raw mut score);
+                    if unsafe { fuzzy_match_str_in_line(at, pattern, n, here, out) } {
                         unsafe { *pos = current_pos };
                         let score = Some(score);
                         return Some(LineMatch { ptr, len, score });
@@ -859,16 +848,12 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
     let mut numbuf4 = NumBuf::new();
     let list = unsafe { &*argvars };
     if list.v_type != VAR_LIST || unsafe { list.vval.v_list }.is_null() {
-        unsafe {
-            semsg_c!(
-                message(&e_listarg),
-                if retmatchpos {
-                    c"matchfuzzypos()".as_ptr()
-                } else {
-                    c"matchfuzzy()".as_ptr()
-                },
-            )
+        let who = if retmatchpos {
+            c"matchfuzzypos()".as_ptr()
+        } else {
+            c"matchfuzzy()".as_ptr()
         };
+        unsafe { semsg_c!(message(&e_listarg), who) };
         return;
     }
     let pat = unsafe { &*argvars.add(1) };
@@ -899,13 +884,8 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                 || unsafe { (*di).di_tv.vval.v_string }.is_null()
                 || unsafe { *(*di).di_tv.vval.v_string } == 0
             {
-                unsafe {
-                    semsg_c!(
-                        message(&e_invargNval),
-                        c"key".as_ptr(),
-                        numbuf2.string(&raw const (*di).di_tv),
-                    )
-                };
+                let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
+                unsafe { semsg_c!(message(&e_invargNval), c"key".as_ptr(), got) };
                 return;
             }
             key = unsafe { numbuf3.string(&raw const (*di).di_tv) };

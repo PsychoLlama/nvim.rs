@@ -61,17 +61,9 @@ pub(super) unsafe fn receive_msgpack(
     unsafe { channel_incref(chan.as_ptr()) };
     let id = chan.id;
     // SAFETY: the verbs match the arguments.
-    unsafe {
-        logmsg!(
-            LOGLVL_DBG,
-            c"receive_msgpack",
-            211,
-            c"ch %lu: parsing %zu bytes from msgpack Stream: %p",
-            id,
-            c,
-            stream.cast::<c_void>(),
-        )
-    };
+    let fmt = c"ch %lu: parsing %zu bytes from msgpack Stream: %p";
+    let from = stream.cast::<c_void>();
+    unsafe { logmsg!(LOGLVL_DBG, c"receive_msgpack", 211, fmt, id, c, from) };
 
     let mut consumed = 0;
     if c > 0 {
@@ -90,14 +82,9 @@ pub(super) unsafe fn receive_msgpack(
         let mut buf = [0 as c_char; CLOSE_MSG_MAX];
         // SAFETY: the buffer is `CLOSE_MSG_MAX` writable bytes, the verbs
         // match, and the result is NUL-terminated.
-        unsafe {
-            crate::os::cshim::snprintf(
-                buf.as_mut_ptr(),
-                buf.len(),
-                c"ch %lu was closed by the peer".as_ptr(),
-                id,
-            )
-        };
+        let (into, cap) = (buf.as_mut_ptr(), buf.len());
+        let fmt = c"ch %lu was closed by the peer".as_ptr();
+        unsafe { crate::os::cshim::snprintf(into, cap, fmt, id) };
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_INF) };
     }
     // SAFETY: the reference taken above.
@@ -179,17 +166,12 @@ unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
         let mut buf = [0 as c_char; CLOSE_MSG_MAX];
         // SAFETY: the buffer is `CLOSE_MSG_MAX` writable bytes and the verbs
         // match the arguments.
-        unsafe {
-            crate::os::cshim::snprintf(
-            buf.as_mut_ptr(),
-            buf.len(),
-            c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"
-                .as_ptr(),
-            chan.id,
-            chan.rpc.client_type.cast_unsigned(),
-            p.request_id,
-        )
-        };
+        let (into, cap) = (buf.as_mut_ptr(), buf.len());
+        let fmt = c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"
+            .as_ptr();
+        let kind = chan.rpc.client_type.cast_unsigned();
+        let want = p.request_id;
+        unsafe { crate::os::cshim::snprintf(into, cap, fmt, chan.id, kind, want) };
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_ERR) };
         return false;
     };
@@ -222,15 +204,10 @@ unsafe fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
 
     if p.result.type_0 != kObjectTypeArray {
         // SAFETY: a static string, and the channel is live.
-        unsafe {
-            chan_close_on_err(
-                chan,
-                c"msgpack-rpc request args must be an array"
-                    .as_ptr()
-                    .cast_mut(),
-                LOGLVL_ERR,
-            )
-        };
+        let why = c"msgpack-rpc request args must be an array"
+            .as_ptr()
+            .cast_mut();
+        unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
         return false;
     }
     // SAFETY: `result` is an array, so the union read matches.
@@ -318,16 +295,8 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     // SAFETY: the channel's queue is live, and the handler name is a static
     // string the verbs match.
     unsafe { multiqueue_put_event(chan.events, event) };
-    unsafe {
-        logmsg!(
-            LOGLVL_DBG,
-            c"handle_request",
-            347,
-            c"RPC: scheduled %.*s",
-            name_len,
-            name
-        )
-    };
+    let fmt = c"RPC: scheduled %.*s";
+    unsafe { logmsg!(LOGLVL_DBG, c"handle_request", 347, fmt, name_len, name) };
 }
 
 /// Runs one dispatched request and answers it.
@@ -355,29 +324,17 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     if !chan.rpc.closed {
         // SAFETY: the handler was resolved from the method name, and the
         // arena and error slot are this call's own.
+        let mem = unsafe { &raw mut (*e).used_mem };
         let result = unsafe {
-            handler.fn_0.expect("dispatched with a handler")(
-                chan.id,
-                args,
-                &raw mut (*e).used_mem,
-                &raw mut error,
-            )
+            handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem, &raw mut error)
         };
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
         if type_0 == kMessageTypeRequest || error.type_0 != kErrorTypeNone {
             let mut answer = result;
             // SAFETY: the channel is live and both slots are stack locals.
-            unsafe {
-                serialize_response(
-                    chan.as_ptr(),
-                    handler,
-                    type_0,
-                    request_id,
-                    &raw mut error,
-                    &raw mut answer,
-                )
-            };
+            let (to, err, out) = (chan.as_ptr(), &raw mut error, &raw mut answer);
+            unsafe { serialize_response(to, handler, type_0, request_id, err, out) };
         }
         if handler.ret_alloc {
             // SAFETY: the handler said it allocated the result.
@@ -409,15 +366,7 @@ unsafe fn send_error(
     let mut answer = NIL;
     // SAFETY: the caller's message, and two stack locals.
     unsafe { api_set_error(&raw mut e, kErrorTypeException, c"%s".as_ptr(), err) };
-    unsafe {
-        serialize_response(
-            chan.as_ptr(),
-            handler,
-            type_0,
-            id,
-            &raw mut e,
-            &raw mut answer,
-        )
-    };
+    let (to, err, out) = (chan.as_ptr(), &raw mut e, &raw mut answer);
+    unsafe { serialize_response(to, handler, type_0, id, err, out) };
     unsafe { api_clear_error(&raw mut e) };
 }

@@ -254,12 +254,9 @@ pub unsafe fn rpc_close(channel: *mut Channel) {
     chan.rpc.closed = true;
     // SAFETY: the loop exists whenever a channel does, and the event carries
     // the channel to `rpc_close_event`, which is what keeps it alive.
-    unsafe {
-        multiqueue_put_event(
-            (*main_loop.ptr()).fast_events,
-            one_arg_event(Some(rpc_close_event), channel.cast::<c_void>()),
-        )
-    };
+    let queue = unsafe { (*main_loop.ptr()).fast_events };
+    let event = one_arg_event(Some(rpc_close_event), channel.cast::<c_void>());
+    unsafe { multiqueue_put_event(queue, event) };
 }
 
 /// Drops the channel's own reference, then decides whether the editor should
@@ -405,14 +402,8 @@ pub unsafe fn rpc_send_call(
     // SAFETY: the channel table is live whenever the editor is.
     let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
         // SAFETY: the caller's error slot.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"Invalid channel: %lu".as_ptr(),
-                id,
-            )
-        };
+        let fmt = c"Invalid channel: %lu".as_ptr();
+        unsafe { api_set_error(err, kErrorTypeException, fmt, id) };
         return NIL;
     };
     // SAFETY: the channel is live; this reference is dropped below.
@@ -421,14 +412,9 @@ pub unsafe fn rpc_send_call(
     let request_id = chan.rpc.next_request_id;
     chan.rpc.next_request_id = request_id.wrapping_add(1);
     // SAFETY: the caller's method name and arguments.
-    unsafe {
-        serialize_request(
-            slice::from_mut(&mut chan.as_ptr()),
-            request_id,
-            method_name,
-            args,
-        )
-    };
+    let mut only = chan.as_ptr();
+    let to = slice::from_mut(&mut only);
+    unsafe { serialize_request(to, request_id, method_name, args) };
     unsafe { trace::log_call(trace::SEND, chan.id, Some(request_id), method_name) };
 
     let mut frame = ChannelCallFrame {
@@ -450,14 +436,8 @@ pub unsafe fn rpc_send_call(
 
     if !frame.returned {
         // SAFETY: the caller's error slot, and the reference taken above.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"Invalid channel: %lu".as_ptr(),
-                id,
-            )
-        };
+        let fmt = c"Invalid channel: %lu".as_ptr();
+        unsafe { api_set_error(err, kErrorTypeException, fmt, id) };
         unsafe { channel_decref(chan.as_ptr()) };
         return NIL;
     }
@@ -485,14 +465,8 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
     // SAFETY: the caller's error slot and decoded result. Every union read
     // below is guarded by the `type_0` it belongs to.
     if result.type_0 == kObjectTypeString {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                result.data.string.data(),
-            )
-        };
+        let text = unsafe { result.data.string }.data();
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), text) };
         return;
     }
     if result.type_0 == kObjectTypeArray {
@@ -511,14 +485,8 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
             }
         }
     }
-    unsafe {
-        api_set_error(
-            err,
-            kErrorTypeException,
-            c"%s".as_ptr(),
-            c"unknown error".as_ptr(),
-        )
-    };
+    let unknown = c"unknown error".as_ptr();
+    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), unknown) };
 }
 
 /// Hands an already-encoded message to a channel. Takes ownership of `buffer`.
@@ -599,15 +567,10 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
         let mut buf = [0 as c_char; CLOSE_MSG_MAX];
         // SAFETY: the buffer is `CLOSE_MSG_MAX` writable bytes and the verbs
         // match the arguments; `uv_strerror` answers a static string.
-        unsafe {
-            crate::os::cshim::snprintf(
-                buf.as_mut_ptr(),
-                buf.len(),
-                c"ch %lu: stream write failed: %s. RPC canceled; closing channel".as_ptr(),
-                chan.id,
-                uv_strerror(err),
-            )
-        };
+        let (into, cap) = (buf.as_mut_ptr(), buf.len());
+        let fmt = c"ch %lu: stream write failed: %s. RPC canceled; closing channel".as_ptr();
+        let why = unsafe { uv_strerror(err) };
+        unsafe { crate::os::cshim::snprintf(into, cap, fmt, chan.id, why) };
         let level = if err == UV_EPIPE {
             LOGLVL_INF
         } else {
@@ -646,13 +609,8 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
     // a bug here rather than a protocol violation.
     if read_size != 0 && !chan.rpc.closed {
         // SAFETY: a static string, and the channel is still live.
-        unsafe {
-            chan_close_on_err(
-                chan,
-                c"internal channel: internal error".as_ptr().cast_mut(),
-                LOGLVL_ERR,
-            )
-        };
+        let why = c"internal channel: internal error".as_ptr().cast_mut();
+        unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
     }
     // SAFETY: the reference and the buffer `channel_write` handed over.
     unsafe { channel_decref(chan.as_ptr()) };

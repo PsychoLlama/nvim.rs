@@ -306,12 +306,10 @@ pub unsafe fn mpack_object_inner(
                 kObjectTypeArray | kObjectTypeDict => {
                     let is_array = type_0 == kObjectTypeArray;
                     // SAFETY: as above.
-                    let size = unsafe {
-                        if is_array {
-                            (*current).data.array.size
-                        } else {
-                            (*current).data.dict.size
-                        }
+                    let size = if is_array {
+                        unsafe { (*current).data.array.size }
+                    } else {
+                        unsafe { (*current).data.dict.size }
                     };
                     if is_array {
                         mpack_array(&mut packer.ptr, container_len(size));

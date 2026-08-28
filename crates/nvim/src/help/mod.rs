@@ -173,14 +173,9 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
     let mut num_matches: c_int = 0;
     let mut matches: *mut *mut c_char = ptr::null_mut();
     // SAFETY: `arg` is NUL-terminated; the two out-parameters are ours.
-    let n = unsafe {
-        find_help_tags(
-            arg,
-            &raw mut num_matches,
-            &raw mut matches,
-            !eap.is_null() && (*eap).forceit != 0,
-        )
-    };
+    let forceit = !eap.is_null() && unsafe { (*eap).forceit } != 0;
+    let (out_n, out_m) = (&raw mut num_matches, &raw mut matches);
+    let n = unsafe { find_help_tags(arg, out_n, out_m, forceit) };
 
     // The first match in the requested language is the best match.
     let mut i: c_int = 0;
@@ -299,16 +294,9 @@ unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
 unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, an empty argument array, and our error slot.
-    let res = unsafe {
-        nlua_exec(
-            static_cstring(c"return require'vim._core.help'.resolve_tag()"),
-            ptr::null(),
-            Array::EMPTY,
-            kRetObject,
-            ptr::null_mut(),
-            &raw mut err,
-        )
-    };
+    let chunk = static_cstring(c"return require'vim._core.help'.resolve_tag()");
+    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
+    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetObject, arena, slot) };
     // SAFETY: `res` is the chunk's answer and `err` our slot; both are
     // consumed here.
     let tag = if err.type_0 == kErrorTypeNone
@@ -396,17 +384,11 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
     opened.alt_fnum = unsafe { (*curbuf.get()).handle };
-    unsafe {
-        do_ecmd(
-            0,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ECMD_LASTL as linenr_T,
-            (ECMD_HIDE + ECMD_SET_HELP) as c_int,
-            ptr::null_mut(),
-        )
-    };
+    let (fnum, fname, sfname) = (0, ptr::null_mut(), ptr::null_mut());
+    let (eap_0, win) = (ptr::null_mut(), ptr::null_mut());
+    let (lnum, flags) = (ECMD_LASTL as linenr_T, (ECMD_HIDE + ECMD_SET_HELP) as c_int);
+    // SAFETY: the editor's own current window and buffer.
+    unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
     if keepalt_is_off() {
         unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
     }
@@ -547,16 +529,9 @@ pub(crate) unsafe fn find_help_tags(
     args.push(Object::string(unsafe { cstr_as_string(arg) }));
     // SAFETY: a static chunk, an argument array borrowing `args`, and our
     // own error slot.
-    let res = unsafe {
-        nlua_exec(
-            static_cstring(c"return require'vim._core.help'.escape_subject(...)"),
-            ptr::null(),
-            args.array(),
-            kRetObject,
-            ptr::null_mut(),
-            &raw mut err,
-        )
-    };
+    let chunk = static_cstring(c"return require'vim._core.help'.escape_subject(...)");
+    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
+    let res = unsafe { nlua_exec(chunk, name, args.array(), kRetObject, arena, slot) };
 
     // SAFETY: `err` is our slot and `res` the chunk's answer.
     if err.type_0 != kErrorTypeNone {
@@ -580,27 +555,13 @@ pub(crate) unsafe fn find_help_tags(
     // NUL-terminated text written just above.
     unsafe { *matches = ptr::null_mut() };
     unsafe { *num_matches = 0 };
-    if unsafe {
-        find_tags(
-            iobuff,
-            num_matches,
-            matches,
-            flags,
-            MAXCOL as c_int,
-            ptr::null_mut(),
-        )
-    } == OK
-        && unsafe { *num_matches } > 0
-    {
+    let (mincount, buf) = (MAXCOL as c_int, ptr::null_mut());
+    let found = unsafe { find_tags(iobuff, num_matches, matches, flags, mincount, buf) };
+    if found == OK && unsafe { *num_matches } > 0 {
         // Sort on the heuristic number `find_tags` put after the tag.
-        unsafe {
-            qsort(
-                (*matches).cast::<c_void>(),
-                *num_matches as size_t,
-                size_of::<*mut c_char>(),
-                Some(help_compare),
-            )
-        };
+        let base = unsafe { (*matches).cast::<c_void>() };
+        let (count, width) = (unsafe { *num_matches } as size_t, size_of::<*mut c_char>());
+        unsafe { qsort(base, count, width, Some(help_compare)) };
         // Drop everything past TAG_MANY to keep the listing short.
         while unsafe { *num_matches } > TAG_MANY as c_int {
             unsafe { *num_matches -= 1 };
@@ -724,16 +685,9 @@ pub(crate) unsafe fn prepare_help_buffer() {
 pub(crate) unsafe fn get_local_additions() {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, no arguments, and our own error slot.
-    let res = unsafe {
-        nlua_exec(
-            static_cstring(c"return require'vim._core.help'.local_additions()"),
-            ptr::null(),
-            Array::EMPTY,
-            kRetNilBool,
-            ptr::null_mut(),
-            &raw mut err,
-        )
-    };
+    let chunk = static_cstring(c"return require'vim._core.help'.local_additions()");
+    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
+    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetNilBool, arena, slot) };
     if err.type_0 != kErrorTypeNone {
         unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
     }

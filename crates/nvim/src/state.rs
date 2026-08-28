@@ -143,15 +143,9 @@ unsafe fn next_key() -> c_int {
             unsafe { setcursor() };
         }
         unsafe { ui_flush() };
-        unsafe {
-            input_get(
-                ptr::null_mut::<uint8_t>(),
-                0,
-                -1,
-                typeahead().change_cnt(),
-                main_loop_events(),
-            )
-        };
+        let (buf, maxlen, ms) = (ptr::null_mut::<uint8_t>(), 0, -1);
+        let (tb_change_cnt, events) = (typeahead().change_cnt(), main_loop_events());
+        unsafe { input_get(buf, maxlen, ms, tb_change_cnt, events) };
         // A wakeup with neither input nor queued work is spurious.
         if input_available() != 0 || unsafe { multiqueue_empty(main_loop_events()) } {
             continue;
@@ -470,32 +464,14 @@ pub unsafe fn may_trigger_modechanged() {
     // `save_v_event`, which outlives the `restore_v_event` that ends it, and
     // both mode names outlive the autocommand that reads them.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-    unsafe {
-        tv_dict_add_str(
-            v_event,
-            c"new_mode".as_ptr(),
-            c"new_mode".count_bytes(),
-            curr_mode.as_mut_ptr(),
-        )
-    };
-    unsafe {
-        tv_dict_add_str(
-            v_event,
-            c"old_mode".as_ptr(),
-            c"old_mode".count_bytes(),
-            old_mode.as_mut_ptr(),
-        )
-    };
+    let (key, len) = (c"new_mode".as_ptr(), c"new_mode".count_bytes());
+    unsafe { tv_dict_add_str(v_event, key, len, curr_mode.as_mut_ptr()) };
+    let (key, len) = (c"old_mode".as_ptr(), c"old_mode".count_bytes());
+    unsafe { tv_dict_add_str(v_event, key, len, old_mode.as_mut_ptr()) };
     unsafe { tv_dict_set_keys_readonly(v_event) };
-    unsafe {
-        apply_autocmds(
-            EVENT_MODECHANGED,
-            pattern.as_mut_ptr(),
-            ptr::null_mut::<c_char>(),
-            false,
-            curbuf.get(),
-        )
-    };
+    let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
+    let buf = curbuf.get();
+    unsafe { apply_autocmds(EVENT_MODECHANGED, fname, fname_io, false, buf) };
     last_mode.set(curr_mode);
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
@@ -534,15 +510,9 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
     }
     if is_safe {
         // SAFETY: the editor is initialized, so `curbuf` is live.
-        unsafe {
-            apply_autocmds(
-                EVENT_SAFESTATE,
-                ptr::null_mut::<c_char>(),
-                ptr::null_mut::<c_char>(),
-                false,
-                curbuf.get(),
-            )
-        };
+        let (fname, fname_io) = (ptr::null_mut::<c_char>(), ptr::null_mut::<c_char>());
+        let buf = curbuf.get();
+        unsafe { apply_autocmds(EVENT_SAFESTATE, fname, fname_io, false, buf) };
     }
     was_safe.set(is_safe);
 }
@@ -554,15 +524,8 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
 pub unsafe fn state_no_longer_safe(reason: *const c_char) {
     if was_safe.get() && !reason.is_null() {
         // SAFETY: the caller's NUL-terminated string.
-        unsafe {
-            logmsg!(
-                LOGLVL_DBG,
-                c"state_no_longer_safe",
-                319,
-                c"SafeState reset: %s",
-                reason
-            )
-        };
+        let fmt = c"SafeState reset: %s";
+        unsafe { logmsg!(LOGLVL_DBG, c"state_no_longer_safe", 319, fmt, reason) };
     }
     was_safe.set(false);
 }

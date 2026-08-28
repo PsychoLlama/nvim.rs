@@ -143,14 +143,9 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
         unsafe { xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void) };
         unsafe { fclose(time_fd.get()) };
         time_fd.set(core::ptr::null_mut());
-        unsafe {
-            fprintf(
-                stderr,
-                c"time_init: setvbuf failed: %d %s".as_ptr(),
-                r,
-                uv_err_name(r),
-            )
-        };
+        let fmt = c"time_init: setvbuf failed: %d %s".as_ptr();
+        let why = unsafe { uv_err_name(r) };
+        unsafe { fprintf(stderr, fmt, r, why) };
         return;
     }
     let mut header = b"--- Startup times for process: ".to_vec();

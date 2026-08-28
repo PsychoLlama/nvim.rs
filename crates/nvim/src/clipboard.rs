@@ -170,17 +170,11 @@ pub(crate) unsafe fn get_clipboard(
 
     // SAFETY: main-thread editor call; `regname` outlives the append, and
     // the provider call owns `args` from here on.
-    let result = unsafe {
-        let args = tv_list_alloc(1);
-        let regname = name as c_char;
-        tv_list_append_string(args, &raw const regname, 1);
-        eval_call_provider(
-            c"clipboard".as_ptr().cast_mut(),
-            c"get".as_ptr().cast_mut(),
-            args,
-            false,
-        )
-    };
+    let args = unsafe { tv_list_alloc(1) };
+    let regname = name as c_char;
+    unsafe { tv_list_append_string(args, &raw const regname, 1) };
+    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
+    let result = unsafe { eval_call_provider(provider, method, args, false) };
 
     // Show a message on error unless the provider already indicated failure.
     let mut errmsg = true;
@@ -325,14 +319,8 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
     unsafe { tv_list_append_string(args, &raw const regtype, 1) };
     let regname = [name as c_char];
     unsafe { tv_list_append_string(args, regname.as_ptr(), 1) };
-    unsafe {
-        eval_call_provider(
-            c"clipboard".as_ptr().cast_mut(),
-            c"set".as_ptr().cast_mut(),
-            args,
-            true,
-        )
-    };
+    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
+    unsafe { eval_call_provider(provider, method, args, true) };
 }
 
 /// Start a batch: defer provider updates until the matching
