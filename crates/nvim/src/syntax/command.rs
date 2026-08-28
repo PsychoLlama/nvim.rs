@@ -44,14 +44,14 @@ pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
     let arg = unsafe { (*eap).arg };
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
-        let state = if unsafe { (*cur_syn_block()).b_syn_conceal } != 0 {
+        let state = if cur_syn_block().b_syn_conceal != 0 {
             c"syntax conceal on"
         } else {
             c"syntax conceal off"
         };
         unsafe { msg(state.as_ptr(), 0) };
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"on", c"off"]) } {
-        unsafe { (*cur_syn_block()).b_syn_conceal = if i == 0 { 1 } else { 0 } };
+        cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
         unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
     }
@@ -65,14 +65,14 @@ pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
     let arg = unsafe { (*eap).arg };
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
-        let state = if unsafe { (*cur_syn_block()).b_syn_ic } != 0 {
+        let state = if cur_syn_block().b_syn_ic != 0 {
             c"syntax case ignore"
         } else {
             c"syntax case match"
         };
         unsafe { msg(state.as_ptr(), 0) };
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"match", c"ignore"]) } {
-        unsafe { (*cur_syn_block()).b_syn_ic = if i == 0 { 0 } else { 1 } };
+        cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
         unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
     }
@@ -86,9 +86,9 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
     let arg = unsafe { (*eap).arg };
     if unsafe { *arg } as c_int == NUL {
         // A block whose foldlevel is neither of the two reports nothing.
-        if unsafe { (*cur_syn_block()).b_syn_foldlevel } == SYNFLD_START {
+        if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
             unsafe { msg(c"syntax foldlevel start".as_ptr(), 0) };
-        } else if unsafe { (*cur_syn_block()).b_syn_foldlevel } == SYNFLD_MINIMUM {
+        } else if cur_syn_block().b_syn_foldlevel == SYNFLD_MINIMUM {
             unsafe { msg(c"syntax foldlevel minimum".as_ptr(), 0) };
         }
         return;
@@ -96,8 +96,8 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
 
     let arg_end = unsafe { skiptowhite(arg) };
     match unsafe { word_index(arg, arg_end, &[c"start", c"minimum"]) } {
-        Some(0) => unsafe { (*cur_syn_block()).b_syn_foldlevel = SYNFLD_START },
-        Some(_) => unsafe { (*cur_syn_block()).b_syn_foldlevel = SYNFLD_MINIMUM },
+        Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
+        Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
             unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
             return;
@@ -119,7 +119,7 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
     let arg = unsafe { (*eap).arg };
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
-        let state = match unsafe { (*cur_syn_block()).b_syn_spell } {
+        let state = match cur_syn_block().b_syn_spell {
             SYNSPL_TOP => c"syntax spell toplevel",
             SYNSPL_NOTOP => c"syntax spell notoplevel",
             _ => c"syntax spell default",
@@ -128,12 +128,10 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
     } else if let Some(i) =
         unsafe { word_index(arg, next, &[c"toplevel", c"notoplevel", c"default"]) }
     {
-        unsafe {
-            (*cur_syn_block()).b_syn_spell = match i {
-                0 => SYNSPL_TOP,
-                1 => SYNSPL_NOTOP,
-                _ => SYNSPL_DEFAULT,
-            }
+        cur_syn_block().b_syn_spell = match i {
+            0 => SYNSPL_TOP,
+            1 => SYNSPL_NOTOP,
+            _ => SYNSPL_DEFAULT,
         };
     } else {
         unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
@@ -156,14 +154,14 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
     let arg = unsafe { skipwhite((*eap).arg) };
     if unsafe { *arg } as c_int == NUL {
         unsafe { msg_puts(c"\n".as_ptr()) };
-        if !is_empty_option(unsafe { (*cur_syn_block()).b_syn_isk }) {
+        if !is_empty_option(cur_syn_block().b_syn_isk) {
             unsafe { msg_puts(c"syntax iskeyword ".as_ptr()) };
-            unsafe { msg_outtrans((*cur_syn_block()).b_syn_isk, 0, false) };
+            unsafe { msg_outtrans(cur_syn_block().b_syn_isk, 0, false) };
         } else {
             unsafe { msg_outtrans(gettext(c"syntax iskeyword not set".as_ptr()), 0, false) };
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
-        let chartab = unsafe { &raw mut (*cur_syn_block()).b_syn_chartab };
+        let chartab = syn_field!(cur_syn_block(), b_syn_chartab);
         unsafe {
             memmove(
                 chartab as *mut c_void,
@@ -171,7 +169,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
                 32,
             )
         };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_syn_isk) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     } else {
         let mut save_chartab: [c_char; 32] = [0; 32];
         unsafe {
@@ -187,7 +185,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { buf_init_chartab(curbuf.get(), false) };
         unsafe {
             memmove(
-                &raw mut (*cur_syn_block()).b_syn_chartab as *mut c_void,
+                syn_field!(cur_syn_block(), b_syn_chartab) as *mut c_void,
                 &raw const (*curbuf.get()).b_chartab as *const c_void,
                 32,
             )
@@ -199,8 +197,8 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
                 32,
             )
         };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_syn_isk) };
-        unsafe { (*cur_syn_block()).b_syn_isk = (*curbuf.get()).b_p_isk };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
+        unsafe { cur_syn_block().b_syn_isk = (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = save_isk };
     }
     unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
@@ -344,16 +342,16 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
             (*curwin.get()).w_s =
                 xcalloc(1, ::core::mem::size_of::<synblock_T>()) as *mut synblock_T
         };
-        unsafe { hash_init(&raw mut (*cur_syn_block()).b_keywtab) };
-        unsafe { hash_init(&raw mut (*cur_syn_block()).b_keywtab_ic) };
+        unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab)) };
+        unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.
         unsafe { (*curwin.get()).w_onebuf_opt.wo_spell = 0 }; // No spell checking
         // Make sure option values are "empty_string_option" instead of NULL.
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_p_spc) };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_p_spf) };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_p_spl) };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_p_spo) };
-        unsafe { clear_string_option(&raw mut (*cur_syn_block()).b_syn_isk) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spc)) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spf)) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spl)) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spo)) };
+        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     }
 
     // Save the value of b:current_syntax.

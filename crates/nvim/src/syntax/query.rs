@@ -138,7 +138,7 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
         ExpandWhat::Spell => nth(&SPELL_ARGS),
         ExpandWhat::Sync => nth(&SYNC_ARGS),
         ExpandWhat::Cluster => {
-            if idx >= unsafe { cur_cluster_count() } {
+            if idx >= cur_cluster_count() {
                 return ::core::ptr::null_mut();
             }
             unsafe {
@@ -146,7 +146,7 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
                     &raw mut (*xp).xp_buf as *mut c_char,
                     EXPAND_BUF_LEN as size_t,
                     c"@%s".as_ptr(),
-                    (*cur_cluster(idx)).scl_name,
+                    cur_cluster(idx).scl_name,
                 )
             };
             unsafe { &raw mut (*xp).xp_buf as *mut c_char }

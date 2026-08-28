@@ -73,7 +73,7 @@ use crate::types::{
     lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
     synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
-use crate::winlayer::Live;
+use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen, strpbrk};
 
 mod flags;
@@ -277,41 +277,94 @@ static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1);
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
 
+/// The window the editor is working in.
+#[inline]
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`
 /// command is not necessarily [`syn_block`], the one being *parsed*.
 #[inline]
-pub(crate) unsafe fn cur_syn_block() -> *mut synblock_T {
-    unsafe { (*curwin.get()).w_s }
+pub(crate) fn cur_syn_block() -> SynBlock {
+    // SAFETY: `w_s` names either the window's own block or its buffer's, and
+    // both outlive the window that points at them.
+    unsafe { SynBlock::new(cur_win().w_s) }
 }
 
 /// The `synpat_T` at `idx` in [`cur_syn_block`]'s pattern array.
 ///
 /// An accessor and not a borrow because every `:syntax` command that adds a
 /// pattern can `ga_grow` the array out from under one.
+///
+/// # Safety
+/// `idx` must be below [`cur_pattern_count`], and the handle is invalidated by
+/// anything that grows or frees the array.
 #[inline]
-pub(crate) unsafe fn cur_pattern(idx: ::core::ffi::c_int) -> *mut synpat_T {
-    unsafe { ((*cur_syn_block()).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize) }
+pub(crate) unsafe fn cur_pattern(idx: ::core::ffi::c_int) -> Pat {
+    let base = cur_syn_block().b_syn_patterns.ga_data as *mut synpat_T;
+    // SAFETY: the caller's promise -- a live index into that array.
+    unsafe { Pat::new(base.offset(idx as isize)) }
 }
 
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
-pub(crate) unsafe fn cur_pattern_count() -> ::core::ffi::c_int {
-    unsafe { (*cur_syn_block()).b_syn_patterns.ga_len }
+pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
+    cur_syn_block().b_syn_patterns.ga_len
 }
 
 /// The `syn_cluster_T` at `idx` in [`cur_syn_block`]'s cluster array.
+///
+/// # Safety
+/// [`cur_pattern`]'s, for the cluster array.
 #[inline]
-pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> *mut syn_cluster_T {
-    unsafe {
-        ((*cur_syn_block()).b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize)
-    }
+pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> Cluster {
+    let base = cur_syn_block().b_syn_clusters.ga_data as *mut syn_cluster_T;
+    // SAFETY: the caller's promise -- a live index into that array.
+    unsafe { Cluster::new(base.offset(idx as isize)) }
 }
 
 /// Number of clusters in [`cur_syn_block`].
 #[inline]
-pub(crate) unsafe fn cur_cluster_count() -> ::core::ffi::c_int {
-    unsafe { (*cur_syn_block()).b_syn_clusters.ga_len }
+pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
+    cur_syn_block().b_syn_clusters.ga_len
 }
+/// A syntax block — a window's or a buffer's `synblock_T`, whose holder has
+/// promised it outlives the value.
+///
+/// The promise is discharged by the window or buffer that owns the block: a
+/// `w_s` is either the buffer's `b_s` or an `:ownsyntax` block the window
+/// frees with itself.
+pub(crate) type SynBlock = Live<synblock_T>;
+
+/// The address of one field of a syntax block, **without borrowing the
+/// block**.
+///
+/// `&raw mut cur_syn_block().b_keywtab` would take its provenance from the
+/// transient `&mut synblock_T` that [`Live`]'s `DerefMut` hands out, and the
+/// block's next field access invalidates that borrow — so an address kept
+/// past the statement it was taken in is already dangling under Stacked and
+/// Tree Borrows. [`Live::field_ptr`] computes the same address from the
+/// pointer, which is why it exists.
+macro_rules! syn_field {
+    ($block:expr, $field:ident) => {
+        $block.field_ptr(::core::mem::offset_of!(crate::types::synblock_T, $field))
+    };
+}
+pub(crate) use syn_field;
+
+/// A `:syntax` pattern, whose holder has promised the block's pattern array
+/// has not been grown or freed since it was taken.
+///
+/// Every `:syntax match`/`region`/`keyword` that adds one can `ga_grow` the
+/// array out from under a handle, so take one per use rather than holding it
+/// across a command.
+pub(crate) type Pat = Live<synpat_T>;
+
+/// A `:syntax cluster`, on the same terms as [`Pat`].
+pub(crate) type Cluster = Live<syn_cluster_T>;
+
 /// One item on the syntax state stack, whose holder has promised the stack
 /// has not been pushed to, popped from or cleared since it was taken.
 ///
@@ -352,8 +405,20 @@ static syn_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut()
 /// The buffer being parsed.
 static syn_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut());
 /// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not
-/// the buffer's.
-static syn_block: GlobalCell<*mut synblock_T> = GlobalCell::new(::core::ptr::null_mut());
+/// the buffer's. Reach it through [`syn_block`].
+static parsed_block: GlobalCell<*mut synblock_T> = GlobalCell::new(::core::ptr::null_mut());
+
+/// The syntax block being *parsed*, which during a `:syntax` command is not
+/// necessarily [`cur_syn_block`], the one being *configured*.
+///
+/// Null until [`syntax_start`] has run, which every caller of this checks for
+/// through `b_sst_array` the way upstream does.
+#[inline]
+pub(crate) fn syn_block() -> SynBlock {
+    // SAFETY: set from `syntax_start` to the window or buffer that owns it,
+    // and cleared when that owner goes away.
+    unsafe { SynBlock::new(parsed_block.get()) }
+}
 /// When parsing must give up, or NULL for no limit.
 static syn_tm: GlobalCell<*mut proftime_T> = GlobalCell::new(::core::ptr::null_mut());
 /// The line being parsed.

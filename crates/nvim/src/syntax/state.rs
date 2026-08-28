@@ -28,22 +28,22 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
     static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
 
     current_sub_char.set(NUL);
-    if syn_block.get() != unsafe { (*wp).w_s }
+    if syn_block().raw() != unsafe { (*wp).w_s }
         || syn_buf.get() != unsafe { (*wp).w_buffer }
         || changedtick.get() != buf_get_changedtick(unsafe { Buf::new(syn_buf.get()) })
     {
         invalidate_current_state();
         syn_buf.set(unsafe { (*wp).w_buffer });
-        syn_block.set(unsafe { (*wp).w_s });
+        parsed_block.set(unsafe { (*wp).w_s });
     }
     changedtick.set(buf_get_changedtick(unsafe { Buf::new(syn_buf.get()) }));
     syn_win.set(wp);
 
     unsafe { syn_stack_alloc() };
-    if unsafe { (*syn_block.get()).b_sst_array }.is_null() {
+    if syn_block().b_sst_array.is_null() {
         return; // out of memory
     }
-    unsafe { (*syn_block.get()).b_sst_lasttick = display_tick.get() };
+    syn_block().b_sst_lasttick = display_tick.get();
 
     // If the state at the end of the previous line is useful, store it.
     if current_state_valid()
@@ -69,13 +69,11 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
     let mut last_valid = ::core::ptr::null_mut::<synstate_T>();
     if !current_state_valid() {
         let mut last_min_valid = ::core::ptr::null_mut::<synstate_T>();
-        let mut p = unsafe { (*syn_block.get()).b_sst_first };
+        let mut p = syn_block().b_sst_first;
         while !p.is_null() && unsafe { (*p).sst_lnum } <= lnum {
             if unsafe { (*p).sst_change_lnum } == 0 {
                 last_valid = p;
-                if unsafe { (*p).sst_lnum }
-                    >= lnum - unsafe { (*syn_block.get()).b_syn_sync_minlines }
-                {
+                if unsafe { (*p).sst_lnum } >= lnum - syn_block().b_syn_sync_minlines {
                     last_min_valid = p;
                 }
             }
@@ -94,7 +92,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
         } else {
             // "minlines" lines have to be parsed before a state can be
             // considered valid enough to store.
-            current_lnum.get() + unsafe { (*syn_block.get()).b_syn_sync_minlines }
+            current_lnum.get() + syn_block().b_syn_sync_minlines
         }
     } else {
         current_lnum.get()
@@ -135,7 +133,7 @@ pub(crate) fn current_state_valid() -> bool {
 /// How many lines apart to store cache entries for lines that are not
 /// displayed. Displayed lines get one each; the rest share what is left.
 unsafe fn store_distance() -> linenr_T {
-    let entries = unsafe { (*syn_block.get()).b_sst_len };
+    let entries = syn_block().b_sst_len;
     if entries <= Rows.get() {
         999999
     } else {
@@ -160,7 +158,7 @@ unsafe fn record_line(
         prev = unsafe { syn_stack_find_entry(current_lnum.get() - 1) };
     }
     let mut sp = if prev.is_null() {
-        unsafe { (*syn_block.get()).b_sst_first }
+        syn_block().b_sst_first
     } else {
         prev
     };
@@ -269,7 +267,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         while i < state_len() {
             let mut cur_si = unsafe { state_at(i) };
             if cur_si.si_idx >= 0
-                && unsafe { (*syn_pattern(cur_si.si_idx)).sp_type } as c_int == SPTYPE_MATCH
+                && unsafe { syn_pattern(cur_si.si_idx).sp_type } as c_int == SPTYPE_MATCH
                 && cur_si.si_m_endpos.lnum < current_lnum.get()
             {
                 cur_si.si_flags |= SynFlags::MATCHCONT;
@@ -326,7 +324,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
 pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
-    if syn_block.get() != unsafe { (*wp).w_s } {
+    if syn_block().raw() != unsafe { (*wp).w_s } {
         return; // not the right window
     }
     let mut sp = unsafe { syn_stack_find_entry(lnum) };
@@ -395,7 +393,7 @@ pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
             // Check for a match with a sync item.
             let cur_si = unsafe { state_top() };
             if cur_si.si_idx >= 0
-                && unsafe { (*syn_pattern(cur_si.si_idx)).sp_flags }
+                && unsafe { syn_pattern(cur_si.si_idx).sp_flags }
                     .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
             {
                 return true;

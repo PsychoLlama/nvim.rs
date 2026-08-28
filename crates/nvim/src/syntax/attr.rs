@@ -35,7 +35,7 @@ pub(crate) unsafe fn get_syntax_attr(
     if !can_spell.is_null() {
         unsafe { *can_spell = default_can_spell() };
     }
-    if unsafe { (*syn_block.get()).b_sst_array }.is_null() {
+    if syn_block().b_sst_array.is_null() {
         return 0; // out of memory
     }
 
@@ -67,11 +67,11 @@ pub(crate) unsafe fn get_syntax_attr(
 /// Whether spell checking is done outside every syntax item: only when there is
 /// no `@Spell` cluster, or when `:syntax spell toplevel` was used.
 unsafe fn default_can_spell() -> bool {
-    let block = syn_block.get();
-    if unsafe { (*block).b_syn_spell } == SYNSPL_DEFAULT {
-        unsafe { (*block).b_spell_cluster_id == 0 }
+    let mut block = syn_block();
+    if block.b_syn_spell == SYNSPL_DEFAULT {
+        block.b_spell_cluster_id == 0
     } else {
-        unsafe { (*block).b_syn_spell == SYNSPL_TOP }
+        block.b_syn_spell == SYNSPL_TOP
     }
 }
 
@@ -120,9 +120,8 @@ pub(crate) unsafe fn syn_current_attr(
     }
 
     // Only check for keywords when not syncing and there are some.
-    let do_keywords = !syncing
-        && (unsafe { (*syn_block.get()).b_keywtab.ht_used } > 0
-            || unsafe { (*syn_block.get()).b_keywtab_ic.ht_used } > 0);
+    let do_keywords =
+        !syncing && (syn_block().b_keywtab.ht_used > 0 || syn_block().b_keywtab_ic.ht_used > 0);
 
     // Zero-width matches with a nextlist already used here, so the same one
     // cannot match twice in this column and loop forever.
@@ -165,8 +164,7 @@ pub(crate) unsafe fn syn_current_attr(
         } else {
             None
         };
-        if unsafe { (*syn_block.get()).b_syn_containedin } != 0
-            || cur_si.is_none_or(|si| !si.si_cont_list.is_null())
+        if syn_block().b_syn_containedin != 0 || cur_si.is_none_or(|si| !si.si_cont_list.is_null())
         {
             // 2. A keyword, if we are on a keyword character after a
             //    non-keyword one. Never while syncing.
@@ -196,13 +194,13 @@ pub(crate) unsafe fn syn_current_attr(
                     let lspp = unsafe { syn_pattern(next_match_idx.get()) };
                     if next_match_m_endpos.get().lnum == current_lnum.get()
                         && next_match_m_endpos.get().col == current_col.get()
-                        && !unsafe { (*lspp).sp_next_list }.is_null()
+                        && !lspp.sp_next_list.is_null()
                     {
                         // A zero-width item with a nextgroup: do not push
                         // it, just set the nextgroup -- and remember it, so
                         // it cannot match here again.
-                        current_next_list.set(unsafe { (*lspp).sp_next_list });
-                        current_next_flags.set(unsafe { (*lspp).sp_flags });
+                        current_next_list.set(lspp.sp_next_list);
+                        current_next_flags.set(lspp.sp_flags);
                         keep_next_list = true;
                         zero_width_next_list = true;
                         unsafe { ga_push_int(&mut zero_width, next_match_idx.get()) };
@@ -380,26 +378,24 @@ unsafe fn scan_patterns(
     let mut idx = unsafe { syn_pattern_count() };
     while idx > 0 {
         idx -= 1;
-        let spp = unsafe { syn_pattern(idx) };
+        let mut spp = unsafe { syn_pattern(idx) };
         if !unsafe { pattern_admitted(spp, cur_si, syncing, displaying) } {
             continue;
         }
         // Already tried in this line, and it cannot match before the best
         // match so far.
-        if unsafe { (*spp).sp_line_id } == current_line_id.get()
-            && unsafe { (*spp).sp_startcol } >= next_match_col.get()
-        {
+        if spp.sp_line_id == current_line_id.get() && spp.sp_startcol >= next_match_col.get() {
             continue;
         }
-        unsafe { (*spp).sp_line_id = current_line_id.get() };
+        spp.sp_line_id = current_line_id.get();
 
-        let lc_col = (current_col.get() - unsafe { (*spp).sp_offsets[SPO_LC_OFF as usize] }).max(0);
+        let lc_col = (current_col.get() - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
         let mut regmatch = regmmatch_T {
-            regprog: unsafe { (*spp).sp_prog },
+            regprog: spp.sp_prog,
             startpos: [lpos_T { lnum: 0, col: 0 }; 10],
             endpos: [lpos_T { lnum: 0, col: 0 }; 10],
             rmm_matchcol: 0,
-            rmm_ic: unsafe { (*spp).sp_ic },
+            rmm_ic: spp.sp_ic,
             rmm_maxcol: 0,
         };
         let matched = unsafe {
@@ -407,13 +403,13 @@ unsafe fn scan_patterns(
                 &raw mut regmatch,
                 current_lnum.get(),
                 lc_col,
-                &raw mut (*spp).sp_time,
+                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_time)),
             )
         };
-        unsafe { (*spp).sp_prog = regmatch.regprog };
+        spp.sp_prog = regmatch.regprog;
         if !matched {
             // No match in this line; try another pattern.
-            unsafe { (*spp).sp_startcol = MAXCOL as c_int };
+            spp.sp_startcol = MAXCOL as c_int;
             continue;
         }
 
@@ -422,12 +418,12 @@ unsafe fn scan_patterns(
         if pos.lnum > current_lnum.get() {
             // Must have used the end of the match in a following line,
             // which we cannot handle.
-            unsafe { (*spp).sp_startcol = MAXCOL as c_int };
+            spp.sp_startcol = MAXCOL as c_int;
             continue;
         }
         let startcol = pos.col;
         // Remember the next column where this pattern matches in this line.
-        unsafe { (*spp).sp_startcol = startcol };
+        spp.sp_startcol = startcol;
         // A previously found match starts earlier: keep that one.
         if startcol >= next_match_col.get() {
             continue;
@@ -455,9 +451,7 @@ unsafe fn scan_patterns(
         let mut end_idx = 0;
         let mut hl_endpos = lpos_T { lnum: 0, col: 0 };
 
-        if unsafe { (*spp).sp_type } as c_int == SPTYPE_START
-            && unsafe { (*spp).sp_flags }.has(SynFlags::ONELINE)
-        {
+        if spp.sp_type as c_int == SPTYPE_START && spp.sp_flags.has(SynFlags::ONELINE) {
             // A "oneline" must end in this line too. Look for the end after
             // the start match, and set every resulting position at once.
             let end = unsafe { find_endpos(idx, endpos, *cur_extmatch) };
@@ -471,7 +465,7 @@ unsafe fn scan_patterns(
             if let Some(f) = end.flags {
                 flags = f;
             }
-        } else if unsafe { (*spp).sp_type } as c_int == SPTYPE_MATCH {
+        } else if spp.sp_type as c_int == SPTYPE_MATCH {
             // For a "match" the size must be > 0 once the end offset has
             // been added -- except when syncing.
             hl_endpos = unsafe { syn_add_end_off(spp, &regmatch, SPO_HE_OFF, 0) };
@@ -514,18 +508,18 @@ unsafe fn scan_patterns(
 /// circuits: `in_id_list` is the expensive one and runs last.
 #[inline]
 unsafe fn pattern_admitted(
-    spp: *mut synpat_T,
+    spp: Pat,
     cur_si: Option<Item>,
     syncing: bool,
     displaying: bool,
 ) -> bool {
-    if unsafe { (*spp).sp_syncing } != syncing {
+    if spp.sp_syncing != syncing {
         return false;
     }
-    if !displaying && unsafe { (*spp).sp_flags }.has(SynFlags::DISPLAY) {
+    if !displaying && spp.sp_flags.has(SynFlags::DISPLAY) {
         return false;
     }
-    let ty = unsafe { (*spp).sp_type } as c_int;
+    let ty = spp.sp_type as c_int;
     if ty != SPTYPE_MATCH && ty != SPTYPE_START {
         return false;
     }
@@ -535,7 +529,7 @@ unsafe fn pattern_admitted(
             in_id_list(
                 None,
                 current_next_list.get(),
-                &raw mut (*spp).sp_syn,
+                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
                 SynFlags::NONE,
             )
         }
@@ -545,13 +539,13 @@ unsafe fn pattern_admitted(
             in_id_list(
                 Some(cur_si),
                 cur_si.si_cont_list,
-                &raw mut (*spp).sp_syn,
-                (*spp).sp_flags,
+                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
+                spp.sp_flags,
             )
         }
     } else {
         // At the top level, anything that is not `contained`.
-        !unsafe { (*spp).sp_flags }.has(SynFlags::CONTAINED)
+        !spp.sp_flags.has(SynFlags::CONTAINED)
     }
 }
 
@@ -601,31 +595,31 @@ unsafe fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
 /// Whether spell checking should be done in the item the attribute walk left
 /// in `sip`.
 unsafe fn item_can_spell(sip: Item) -> bool {
-    let block = syn_block.get();
+    let mut block = syn_block();
     let mut sps = sp_syn {
         inc_tag: 0,
         id: 0,
         cont_in_list: ::core::ptr::null_mut(),
     };
-    if unsafe { (*block).b_spell_cluster_id } == 0 {
+    if block.b_spell_cluster_id == 0 {
         // There is no @Spell cluster: spell check items without a @NoSpell
         // cluster.
-        if unsafe { (*block).b_nospell_cluster_id } == 0 || current_trans_id.get() == 0 {
-            return unsafe { (*block).b_syn_spell } != SYNSPL_NOTOP;
+        if block.b_nospell_cluster_id == 0 || current_trans_id.get() == 0 {
+            return block.b_syn_spell != SYNSPL_NOTOP;
         }
-        sps.id = unsafe { (*block).b_nospell_cluster_id } as int16_t;
+        sps.id = block.b_nospell_cluster_id as int16_t;
         return !unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) };
     }
     // The @Spell cluster is defined: spell check in items carrying it, but
     // not when @NoSpell is there too. At the top level only spell check
     // when `:syntax spell toplevel` was used.
     if current_trans_id.get() == 0 {
-        return unsafe { (*block).b_syn_spell } == SYNSPL_TOP;
+        return block.b_syn_spell == SYNSPL_TOP;
     }
-    sps.id = unsafe { (*block).b_spell_cluster_id } as int16_t;
+    sps.id = block.b_spell_cluster_id as int16_t;
     let mut can = unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) };
-    if unsafe { (*block).b_nospell_cluster_id } != 0 {
-        sps.id = unsafe { (*block).b_nospell_cluster_id } as int16_t;
+    if block.b_nospell_cluster_id != 0 {
+        sps.id = block.b_nospell_cluster_id as int16_t;
         if unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) } {
             can = false;
         }

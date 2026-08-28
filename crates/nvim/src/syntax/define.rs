@@ -22,20 +22,20 @@ use crate::types::{ExArgt, FAIL, NUL};
 /// Sets the contained flag, and if the item is not already contained adds it to
 /// the top-level cluster the `:syntax include` named, if any.
 pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
-    if flags.has(SynFlags::CONTAINED) || unsafe { (*cur_syn_block()).b_syn_topgrp } == 0 {
+    if flags.has(SynFlags::CONTAINED) || cur_syn_block().b_syn_topgrp == 0 {
         return;
     }
     *flags |= SynFlags::CONTAINED | SynFlags::INCLUDED_TOPLEVEL;
-    if unsafe { (*cur_syn_block()).b_syn_topgrp } >= SYNID_CLUSTER {
+    if cur_syn_block().b_syn_topgrp >= SYNID_CLUSTER {
         // Allocated, because `syn_combine_list` consumes it.
         let mut grp_list =
             unsafe { xmalloc(2 * ::core::mem::size_of::<int16_t>()) } as *mut int16_t;
         unsafe { *grp_list = id as int16_t };
         unsafe { *grp_list.add(1) = 0 };
-        let tlg_id = unsafe { (*cur_syn_block()).b_syn_topgrp } - SYNID_CLUSTER;
+        let tlg_id = cur_syn_block().b_syn_topgrp - SYNID_CLUSTER;
         unsafe {
             syn_combine_list(
-                &mut (*cur_cluster(tlg_id)).scl_list,
+                &mut (*cur_cluster(tlg_id).raw()).scl_list,
                 &mut grp_list,
                 CLUSTER_ADD,
             )
@@ -98,8 +98,8 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
     let prev_syn_inc_tag = current_syn_inc_tag.get();
     running_syn_inc_tag.set(running_syn_inc_tag.get() + 1);
     current_syn_inc_tag.set(running_syn_inc_tag.get());
-    let prev_toplvl_grp = unsafe { (*cur_syn_block()).b_syn_topgrp };
-    unsafe { (*cur_syn_block()).b_syn_topgrp = sgl_id };
+    let prev_toplvl_grp = cur_syn_block().b_syn_topgrp;
+    cur_syn_block().b_syn_topgrp = sgl_id;
 
     let failed = if source {
         unsafe {
@@ -117,16 +117,14 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), (*eap).arg) };
     }
 
-    unsafe { (*cur_syn_block()).b_syn_topgrp = prev_toplvl_grp };
+    cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
     current_syn_inc_tag.set(prev_syn_inc_tag);
 }
 
 /// First call for this window: init the pattern array.
 pub(crate) unsafe fn init_syn_patterns() {
-    unsafe {
-        (*cur_syn_block()).b_syn_patterns.ga_itemsize = ::core::mem::size_of::<synpat_T>() as c_int
-    };
-    unsafe { ga_set_growsize(&raw mut (*cur_syn_block()).b_syn_patterns, 10) };
+    cur_syn_block().b_syn_patterns.ga_itemsize = ::core::mem::size_of::<synpat_T>() as c_int;
+    unsafe { ga_set_growsize(syn_field!(cur_syn_block(), b_syn_patterns), 10) };
 }
 
 /// A zeroed pattern, which is what upstream's `CLEAR_FIELD`/`xcalloc` leave.
@@ -199,37 +197,39 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
             if syn_id != 0 {
                 unsafe { syn_incl_toplevel(syn_id, &mut opt.flags) };
                 // Store the pattern in the item list.
-                let spp = unsafe {
-                    ga_append_via_ptr(
-                        &raw mut (*cur_syn_block()).b_syn_patterns,
+                // SAFETY: `ga_append_via_ptr` answered a fresh slot in the
+                // pattern array, which nothing grows before the writes below.
+                let mut spp = unsafe {
+                    Pat::new(ga_append_via_ptr(
+                        syn_field!(cur_syn_block(), b_syn_patterns),
                         ::core::mem::size_of::<synpat_T>(),
-                    )
-                } as *mut synpat_T;
-                unsafe { *spp = item };
-                unsafe { (*spp).sp_syncing = syncing != 0 };
-                unsafe { (*spp).sp_type = SPTYPE_MATCH as c_char };
-                unsafe { (*spp).sp_syn.id = syn_id as int16_t };
-                unsafe { (*spp).sp_syn.inc_tag = current_syn_inc_tag.get() };
-                unsafe { (*spp).sp_flags = opt.flags };
-                unsafe { (*spp).sp_sync_idx = sync_idx };
-                unsafe { (*spp).sp_cont_list = opt.cont_list };
-                unsafe { (*spp).sp_syn.cont_in_list = opt.cont_in_list };
-                unsafe { (*spp).sp_cchar = conceal_char };
+                    ) as *mut synpat_T)
+                };
+                *spp = item;
+                spp.sp_syncing = syncing != 0;
+                spp.sp_type = SPTYPE_MATCH as c_char;
+                spp.sp_syn.id = syn_id as int16_t;
+                spp.sp_syn.inc_tag = current_syn_inc_tag.get();
+                spp.sp_flags = opt.flags;
+                spp.sp_sync_idx = sync_idx;
+                spp.sp_cont_list = opt.cont_list;
+                spp.sp_syn.cont_in_list = opt.cont_in_list;
+                spp.sp_cchar = conceal_char;
                 if !opt.cont_in_list.is_null() {
-                    unsafe { (*cur_syn_block()).b_syn_containedin = 1 };
+                    cur_syn_block().b_syn_containedin = 1;
                 }
-                unsafe { (*spp).sp_next_list = opt.next_list };
+                spp.sp_next_list = opt.next_list;
 
                 // Remember that we found a match to sync on.
                 if opt.flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
-                    unsafe { (*cur_syn_block()).b_syn_sync_flags |= SF_MATCH };
+                    cur_syn_block().b_syn_sync_flags |= SF_MATCH;
                 }
                 if opt.flags.has(SynFlags::FOLD) {
-                    unsafe { (*cur_syn_block()).b_syn_folditems += 1 };
+                    cur_syn_block().b_syn_folditems += 1;
                 }
 
                 redraw_curbuf_later(UPD_SOME_VALID);
-                unsafe { syn_stack_free_all(cur_syn_block()) }; // Need to recompute all.
+                unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
                 stored = true;
             }
         }
@@ -402,13 +402,13 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
             rest = ::core::ptr::null_mut();
         } else {
             let pat_count: c_int = args.pats.iter().map(|v| v.len() as c_int).sum();
-            unsafe { ga_grow(&raw mut (*cur_syn_block()).b_syn_patterns, pat_count) };
+            unsafe { ga_grow(syn_field!(cur_syn_block(), b_syn_patterns), pat_count) };
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
                 unsafe { syn_incl_toplevel(syn_id, &mut args.opt.flags) };
                 unsafe { store_region(&args, syn_id, syncing != 0) };
                 redraw_curbuf_later(UPD_SOME_VALID);
-                unsafe { syn_stack_free_all(cur_syn_block()) }; // Need to recompute all.
+                unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
                 success = true; // don't free the progs and patterns now
             }
         }
@@ -441,39 +441,37 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
 /// only, and are handed over rather than copied — which is why the caller must
 /// not free them once this has run.
 unsafe fn store_region(args: &RegionArgs, syn_id: c_int, syncing: bool) {
-    let patterns = unsafe { &raw mut (*cur_syn_block()).b_syn_patterns };
+    let patterns: *mut garray_T = syn_field!(cur_syn_block(), b_syn_patterns);
     let mut idx = unsafe { (*patterns).ga_len };
     for item in [ITEM_START, ITEM_SKIP, ITEM_END] {
         for entry in &args.pats[item as usize] {
-            let spp = unsafe { cur_pattern(idx) };
-            unsafe { *spp = entry.pat };
-            unsafe { (*spp).sp_syncing = syncing };
-            unsafe {
-                (*spp).sp_type = if item == ITEM_START {
-                    SPTYPE_START
-                } else if item == ITEM_SKIP {
-                    SPTYPE_SKIP
-                } else {
-                    SPTYPE_END
-                } as c_char
-            };
-            unsafe { (*spp).sp_flags |= args.opt.flags };
-            unsafe { (*spp).sp_syn.id = syn_id as int16_t };
-            unsafe { (*spp).sp_syn.inc_tag = current_syn_inc_tag.get() };
-            unsafe { (*spp).sp_syn_match_id = entry.matchgroup_id as int16_t };
-            unsafe { (*spp).sp_cchar = args.conceal_char };
+            let mut spp = unsafe { cur_pattern(idx) };
+            *spp = entry.pat;
+            spp.sp_syncing = syncing;
+            spp.sp_type = if item == ITEM_START {
+                SPTYPE_START
+            } else if item == ITEM_SKIP {
+                SPTYPE_SKIP
+            } else {
+                SPTYPE_END
+            } as c_char;
+            spp.sp_flags |= args.opt.flags;
+            spp.sp_syn.id = syn_id as int16_t;
+            spp.sp_syn.inc_tag = current_syn_inc_tag.get();
+            spp.sp_syn_match_id = entry.matchgroup_id as int16_t;
+            spp.sp_cchar = args.conceal_char;
             if item == ITEM_START {
-                unsafe { (*spp).sp_cont_list = args.opt.cont_list };
-                unsafe { (*spp).sp_syn.cont_in_list = args.opt.cont_in_list };
+                spp.sp_cont_list = args.opt.cont_list;
+                spp.sp_syn.cont_in_list = args.opt.cont_in_list;
                 if !args.opt.cont_in_list.is_null() {
-                    unsafe { (*cur_syn_block()).b_syn_containedin = 1 };
+                    cur_syn_block().b_syn_containedin = 1;
                 }
-                unsafe { (*spp).sp_next_list = args.opt.next_list };
+                spp.sp_next_list = args.opt.next_list;
             }
             unsafe { (*patterns).ga_len += 1 };
             idx += 1;
             if args.opt.flags.has(SynFlags::FOLD) {
-                unsafe { (*cur_syn_block()).b_syn_folditems += 1 };
+                cur_syn_block().b_syn_folditems += 1;
             }
         }
     }
@@ -513,7 +511,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
     if ci.sp_prog.is_null() {
         return ::core::ptr::null_mut();
     }
-    ci.sp_ic = unsafe { (*cur_syn_block()).b_syn_ic };
+    ci.sp_ic = cur_syn_block().b_syn_ic;
     unsafe { syn_clear_time(&mut ci.sp_time) };
 
     let end = unsafe { read_pattern_offsets(ci, end.add(1)) };

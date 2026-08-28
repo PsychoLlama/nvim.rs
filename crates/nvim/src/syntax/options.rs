@@ -165,7 +165,7 @@ pub(crate) unsafe fn get_syn_options(
     if arg.is_null() {
         return ::core::ptr::null_mut(); // already detected error
     }
-    if unsafe { (*cur_syn_block()).b_syn_conceal } != 0 {
+    if cur_syn_block().b_syn_conceal != 0 {
         opt.flags |= SynFlags::CONCEAL;
     }
 
@@ -245,16 +245,14 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
         // The named group has to already have a region START item: this is
         // an index into the pattern array, not an id.
         let syn_id = unsafe { syn_name2id(gname) };
-        let mut i = unsafe { cur_pattern_count() };
+        let mut i = cur_pattern_count();
         let found = loop {
             i -= 1;
             if i < 0 {
                 break false;
             }
             let spp = unsafe { cur_pattern(i) };
-            if unsafe { (*spp).sp_syn.id } as c_int == syn_id
-                && unsafe { (*spp).sp_type } as c_int == SPTYPE_START
-            {
+            if spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START {
                 unsafe { *opt.sync_idx = i };
                 break true;
             }
@@ -544,8 +542,8 @@ pub(crate) unsafe fn in_id_list(
             if unsafe {
                 id_list_has(
                     (*ssp).cont_in_list,
-                    &raw mut (*spp).sp_syn,
-                    (*spp).sp_flags,
+                    spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
+                    spp.sp_flags,
                     0,
                 )
             } {
@@ -616,7 +614,7 @@ unsafe fn id_list_has(
             return retval;
         }
         if item as c_int >= SYNID_CLUSTER {
-            let scl_list = unsafe { (*cluster_of(item as c_int - SYNID_CLUSTER)).scl_list };
+            let scl_list = unsafe { cluster_of(item as c_int - SYNID_CLUSTER).scl_list };
             if !scl_list.is_null()
                 && depth < 30
                 && unsafe { id_list_has(scl_list, ssp, flags, depth + 1) }
@@ -632,8 +630,11 @@ unsafe fn id_list_has(
 
 /// The cluster at `idx` in the block being *parsed*.
 #[inline(always)]
-unsafe fn cluster_of(idx: c_int) -> *mut syn_cluster_T {
+unsafe fn cluster_of(idx: c_int) -> Cluster {
+    // SAFETY: the caller's promise -- a live index into the cluster array.
     unsafe {
-        ((*syn_block.get()).b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize)
+        Cluster::new(
+            (syn_block().b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize),
+        )
     }
 }

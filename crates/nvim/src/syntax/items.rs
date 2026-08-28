@@ -64,19 +64,17 @@ pub(crate) unsafe fn push_next_match() -> Item {
     cur_si.si_h_startpos = next_match_h_startpos.get();
     cur_si.si_m_startcol = current_col.get();
     cur_si.si_m_lnum = current_lnum.get();
-    unsafe { cur_si.si_flags = (*spp).sp_flags };
+    cur_si.si_flags = spp.sp_flags;
     cur_si.si_seqnr = take_seqnr();
-    unsafe { cur_si.si_cchar = (*spp).sp_cchar };
+    cur_si.si_cchar = spp.sp_cchar;
     if state_len() > 1 {
         // A concealed item conceals what it contains.
         unsafe { cur_si.si_flags |= state_at(state_len() - 2).si_flags.masked(SynFlags::CONCEAL) };
     }
-    unsafe { cur_si.si_next_list = (*spp).sp_next_list };
+    cur_si.si_next_list = spp.sp_next_list;
     unsafe { cur_si.si_extmatch = ref_extmatch(next_match_extmatch.get()) };
 
-    if unsafe { (*spp).sp_type } as c_int == SPTYPE_START
-        && !unsafe { (*spp).sp_flags }.has(SynFlags::ONELINE)
-    {
+    if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
         // A start-skip-end that may cross lines: work out how much of it
         // is in this line.
         unsafe { update_si_end(cur_si, next_match_m_endpos.get().col, true) };
@@ -101,8 +99,7 @@ pub(crate) unsafe fn push_next_match() -> Item {
 
     // If the start pattern has a `matchgroup=` of its own, push a second
     // item for it, ending where the start match ends.
-    if unsafe { (*spp).sp_type } as c_int == SPTYPE_START && unsafe { (*spp).sp_syn_match_id } != 0
-    {
+    if spp.sp_type as c_int == SPTYPE_START && spp.sp_syn_match_id != 0 {
         push_current_state(idx);
         cur_si = unsafe { state_top() };
         cur_si.si_h_startpos = next_match_h_startpos.get();
@@ -211,7 +208,7 @@ pub(crate) unsafe fn check_state_ends() {
         // from the end of the line (the end could be `end="x$"me=e-1`), and
         // not when "excludenl" is used (SynFlags::HAS_EOL will not be set).
         if cur_si.si_idx >= 0
-            && unsafe { (*syn_pattern(cur_si.si_idx)).sp_type } as c_int == SPTYPE_START
+            && unsafe { syn_pattern(cur_si.si_idx).sp_type } as c_int == SPTYPE_START
             && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
         {
             unsafe { update_si_end(cur_si, current_col.get(), true) };
@@ -237,14 +234,14 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
     let is_match = sip.si_flags.has(SynFlags::MATCH);
 
     let id = if is_match {
-        unsafe { (*spp).sp_syn_match_id as c_int }
+        spp.sp_syn_match_id as c_int
     } else {
-        unsafe { (*spp).sp_syn.id as c_int }
+        spp.sp_syn.id as c_int
     };
     let cont_list = if is_match {
         ::core::ptr::null_mut()
     } else {
-        unsafe { (*spp).sp_cont_list }
+        spp.sp_cont_list
     };
     sip.si_id = id;
     unsafe { sip.si_attr = syn_id2attr(id) };
@@ -254,7 +251,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
     // A transparent item takes its attributes from the item around it, and
     // its containment too when it has none of its own. Not for the
     // matchgroup of a start or end pattern.
-    if !unsafe { (*spp).sp_flags }.has(SynFlags::TRANSP) || is_match {
+    if !spp.sp_flags.has(SynFlags::TRANSP) || is_match {
         return;
     }
     if idx == 0 {
@@ -348,7 +345,7 @@ pub(crate) unsafe fn update_si_end(mut sip: Item, startcol: c_int, force: bool) 
 
     if end.m_endpos.lnum == 0 {
         // No end pattern matched.
-        if unsafe { (*syn_pattern(sip.si_idx)).sp_flags }.has(SynFlags::ONELINE) {
+        if unsafe { syn_pattern(sip.si_idx).sp_flags }.has(SynFlags::ONELINE) {
             // A "oneline" never continues in the next line.
             sip.si_ends = 1;
             sip.si_m_endpos.lnum = current_lnum.get();

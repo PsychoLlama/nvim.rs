@@ -39,8 +39,8 @@ unsafe fn syntime_clear() {
         unsafe { msg(gettext(MSG_NO_ITEMS.as_ptr()), 0) };
         return;
     }
-    for idx in 0..unsafe { cur_pattern_count() } {
-        unsafe { syn_clear_time(&mut (*cur_pattern(idx)).sp_time) };
+    for idx in 0..cur_pattern_count() {
+        unsafe { syn_clear_time(&mut (*cur_pattern(idx).raw()).sp_time) };
     }
 }
 
@@ -87,9 +87,9 @@ unsafe fn syntime_report() {
     let mut entries: Vec<TimeEntry> = Vec::new();
     let mut total_total = profile_zero();
     let mut total_count: c_int = 0;
-    for idx in 0..unsafe { cur_pattern_count() } {
+    for idx in 0..cur_pattern_count() {
         let spp = unsafe { cur_pattern(idx) };
-        let time = unsafe { (*spp).sp_time };
+        let time = spp.sp_time;
         if time.count <= 0 {
             continue;
         }
@@ -101,8 +101,8 @@ unsafe fn syntime_report() {
             matches: time.match_0,
             slowest: time.slowest,
             average: profile_divide(time.total, time.count),
-            id: unsafe { (*spp).sp_syn.id } as c_int,
-            pattern: unsafe { (*spp).sp_pattern },
+            id: spp.sp_syn.id as c_int,
+            pattern: spp.sp_pattern,
         });
     }
 

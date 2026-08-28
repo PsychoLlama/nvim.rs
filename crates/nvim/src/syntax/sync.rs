@@ -33,7 +33,7 @@ pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: linenr_T, last_valid: 
     let start_lnum = unsafe { sync_backoff(start_lnum) };
     current_lnum.set(start_lnum);
 
-    let flags = unsafe { (*syn_block.get()).b_syn_sync_flags };
+    let flags = syn_block().b_syn_sync_flags;
     if flags & SF_CCOMMENT != 0 {
         unsafe { sync_by_ccomment(wp, start_lnum) };
     } else if flags & SF_MATCH != 0 {
@@ -49,7 +49,7 @@ pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: linenr_T, last_valid: 
 /// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
 /// minlines is MAXLNUM.
 unsafe fn sync_backoff(start_lnum: linenr_T) -> linenr_T {
-    let minlines = unsafe { (*syn_block.get()).b_syn_sync_minlines };
+    let minlines = syn_block().b_syn_sync_minlines;
     if minlines > start_lnum {
         return 1;
     }
@@ -60,7 +60,7 @@ unsafe fn sync_backoff(start_lnum: linenr_T) -> linenr_T {
     } else {
         minlines * 3 / 2
     };
-    let maxlines = unsafe { (*syn_block.get()).b_syn_sync_maxlines };
+    let maxlines = syn_block().b_syn_sync_maxlines;
     if maxlines != 0 && back > maxlines {
         back = maxlines;
     }
@@ -100,14 +100,13 @@ unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
     unsafe { (*wp).w_cursor.col = 0 };
 
     // Restrict the search for the end of the comment to "maxlines".
-    if unsafe { find_start_comment((*syn_block.get()).b_syn_sync_maxlines as c_int) }.is_some() {
+    if unsafe { find_start_comment(syn_block().b_syn_sync_maxlines as c_int) }.is_some() {
         let mut idx = unsafe { syn_pattern_count() };
         while idx > 0 {
             idx -= 1;
             let spp = unsafe { syn_pattern(idx) };
-            if unsafe { (*spp).sp_syn.id } as c_int
-                == unsafe { (*syn_block.get()).b_syn_sync_id } as c_int
-                && unsafe { (*spp).sp_type } as c_int == SPTYPE_START
+            if spp.sp_syn.id as c_int == syn_block().b_syn_sync_id as c_int
+                && spp.sp_type as c_int == SPTYPE_START
             {
                 validate_current_state();
                 push_current_state(idx);
@@ -137,7 +136,7 @@ struct SyncPoint {
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
 unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
-    let maxlines = unsafe { (*syn_block.get()).b_syn_sync_maxlines };
+    let maxlines = syn_block().b_syn_sync_maxlines;
     let break_lnum = if maxlines != 0 && start_lnum > maxlines {
         start_lnum - maxlines
     } else {
@@ -246,7 +245,7 @@ unsafe fn scan_for_sync_point(
                 (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
             } else {
                 let spp = unsafe { syn_pattern(cur_si.si_idx) };
-                (unsafe { (*spp).sp_flags }, unsafe { (*spp).sp_sync_idx })
+                (spp.sp_flags, spp.sp_sync_idx)
             };
             let m_endpos = cur_si.si_m_endpos;
             found = Some(SyncPoint {
@@ -292,7 +291,7 @@ unsafe fn scan_for_sync_point(
 /// A no-op when the syntax has no `iskeyword` of its own, in which case
 /// [`restore_chartab`] is a no-op too and the saved buffer is never read.
 pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
-    if is_empty_option(unsafe { (*syn_block.get()).b_syn_isk }) {
+    if is_empty_option(syn_block().b_syn_isk) {
         return;
     }
     unsafe {
@@ -328,18 +327,18 @@ pub(crate) unsafe fn restore_chartab(chartab: *mut c_char) {
 /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
 /// line after it continue it?
 pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
-    if unsafe { (*syn_block.get()).b_syn_linecont_prog }.is_null() {
+    if syn_block().b_syn_linecont_prog.is_null() {
         return false;
     }
     let mut buf_chartab: [c_char; 32] = [0; 32];
     unsafe { save_chartab(&raw mut buf_chartab as *mut c_char) };
 
     let mut regmatch = regmmatch_T {
-        regprog: unsafe { (*syn_block.get()).b_syn_linecont_prog },
+        regprog: syn_block().b_syn_linecont_prog,
         startpos: [lpos_T { lnum: 0, col: 0 }; 10],
         endpos: [lpos_T { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
-        rmm_ic: unsafe { (*syn_block.get()).b_syn_linecont_ic },
+        rmm_ic: syn_block().b_syn_linecont_ic,
         rmm_maxcol: 0,
     };
     let r = unsafe {
@@ -347,10 +346,10 @@ pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
             &raw mut regmatch,
             lnum,
             0,
-            &raw mut (*syn_block.get()).b_syn_linecont_time,
+            syn_field!(syn_block(), b_syn_linecont_time),
         )
     };
-    unsafe { (*syn_block.get()).b_syn_linecont_prog = regmatch.regprog };
+    syn_block().b_syn_linecont_prog = regmatch.regprog;
 
     unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
     r
@@ -429,13 +428,13 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
 
         if unsafe { strcmp(key, c"CCOMMENT".as_ptr()) } == 0 {
             if unsafe { (*eap).skip } == 0 {
-                unsafe { (*cur_syn_block()).b_syn_sync_flags |= SF_CCOMMENT };
+                cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
             if ends_excmd(unsafe { *next_arg } as c_int) == 0 {
                 arg_end = unsafe { skiptowhite(next_arg) };
                 if unsafe { (*eap).skip } == 0 {
                     unsafe {
-                        (*cur_syn_block()).b_syn_sync_id =
+                        cur_syn_block().b_syn_sync_id =
                             syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
                                 as int16_t
                     };
@@ -443,7 +442,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                 next_arg = unsafe { skipwhite(arg_end) };
             } else if unsafe { (*eap).skip } == 0 {
                 unsafe {
-                    (*cur_syn_block()).b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
+                    cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
                 };
             }
         } else if let Some(count) = unsafe { sync_count_key(key) } {
@@ -456,17 +455,17 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
             }
             let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
             if unsafe { (*eap).skip } == 0 {
-                let block = unsafe { cur_syn_block() };
+                let mut block = cur_syn_block();
                 match count.field {
-                    SyncField::MinLines => unsafe { (*block).b_syn_sync_minlines = n },
-                    SyncField::MaxLines => unsafe { (*block).b_syn_sync_maxlines = n },
-                    SyncField::LineBreaks => unsafe { (*block).b_syn_sync_linebreaks = n },
+                    SyncField::MinLines => block.b_syn_sync_minlines = n,
+                    SyncField::MaxLines => block.b_syn_sync_maxlines = n,
+                    SyncField::LineBreaks => block.b_syn_sync_linebreaks = n,
                 }
             }
         } else if unsafe { strcmp(key, c"FROMSTART".as_ptr()) } == 0 {
             if unsafe { (*eap).skip } == 0 {
-                unsafe { (*cur_syn_block()).b_syn_sync_minlines = MAXLNUM as linenr_T };
-                unsafe { (*cur_syn_block()).b_syn_sync_maxlines = 0 };
+                cur_syn_block().b_syn_sync_minlines = MAXLNUM as linenr_T;
+                cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if unsafe { strcmp(key, c"LINECONT".as_ptr()) } == 0 {
             match unsafe { sync_linecont(eap, next_arg) } {
@@ -505,7 +504,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
     } else if !finished {
         unsafe { (*eap).nextcmd = check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);
-        unsafe { syn_stack_free_all(cur_syn_block()) }; // Need to recompute all syntax.
+        unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all syntax.
     }
 }
 
@@ -536,7 +535,7 @@ unsafe fn sync_linecont(
     if unsafe { *next_arg } as c_int == NUL {
         return Err(LineContError::Illegal); // missing pattern
     }
-    if !unsafe { (*cur_syn_block()).b_syn_linecont_pat }.is_null() {
+    if !cur_syn_block().b_syn_linecont_pat.is_null() {
         unsafe {
             emsg(gettext(
                 c"E403: syntax sync: line continuations pattern specified twice".as_ptr(),
@@ -550,25 +549,23 @@ unsafe fn sync_linecont(
     }
 
     if unsafe { (*eap).skip } == 0 {
-        let block = unsafe { cur_syn_block() };
+        let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.
         unsafe {
-            (*block).b_syn_linecont_pat =
+            block.b_syn_linecont_pat =
                 xstrnsave(next_arg.add(1), arg_end.offset_from(next_arg) as size_t - 1)
         };
-        unsafe { (*block).b_syn_linecont_ic = (*block).b_syn_ic };
+        block.b_syn_linecont_ic = block.b_syn_ic;
         let cpo_save = p_cpo.get();
         p_cpo.set(empty_option());
-        unsafe {
-            (*block).b_syn_linecont_prog = vim_regcomp((*block).b_syn_linecont_pat, RE_MAGIC)
-        };
+        unsafe { block.b_syn_linecont_prog = vim_regcomp(block.b_syn_linecont_pat, RE_MAGIC) };
         p_cpo.set(cpo_save);
-        unsafe { syn_clear_time(&mut (*block).b_syn_linecont_time) };
+        unsafe { syn_clear_time(&mut block.b_syn_linecont_time) };
 
-        if unsafe { (*block).b_syn_linecont_prog }.is_null() {
-            unsafe { xfree((*block).b_syn_linecont_pat as *mut ::core::ffi::c_void) };
-            unsafe { (*block).b_syn_linecont_pat = ::core::ptr::null_mut() };
+        if block.b_syn_linecont_prog.is_null() {
+            unsafe { xfree(block.b_syn_linecont_pat as *mut ::core::ffi::c_void) };
+            block.b_syn_linecont_pat = ::core::ptr::null_mut();
             return Err(LineContError::Reported);
         }
     }

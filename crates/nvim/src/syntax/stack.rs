@@ -37,19 +37,19 @@ unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut bufstate_T 
 }
 
 /// Free a synblock's whole cache.
-pub(crate) unsafe fn syn_stack_free_block(block: *mut synblock_T) {
-    if unsafe { (*block).b_sst_array }.is_null() {
+pub(crate) unsafe fn syn_stack_free_block(mut block: SynBlock) {
+    if block.b_sst_array.is_null() {
         return;
     }
-    let mut p = unsafe { (*block).b_sst_first };
+    let mut p = block.b_sst_first;
     while !p.is_null() {
         unsafe { clear_syn_state(p) };
         p = unsafe { (*p).sst_next };
     }
-    unsafe { xfree((*block).b_sst_array as *mut ::core::ffi::c_void) };
-    unsafe { (*block).b_sst_array = ::core::ptr::null_mut() };
-    unsafe { (*block).b_sst_first = ::core::ptr::null_mut() };
-    unsafe { (*block).b_sst_len = 0 };
+    unsafe { xfree(block.b_sst_array as *mut ::core::ffi::c_void) };
+    block.b_sst_array = ::core::ptr::null_mut();
+    block.b_sst_first = ::core::ptr::null_mut();
+    block.b_sst_len = 0;
 }
 
 /// Free a synblock's cache and force a resync everywhere.
@@ -57,11 +57,13 @@ pub(crate) unsafe fn syn_stack_free_block(block: *mut synblock_T) {
 /// Used when the syntax items themselves changed, so nothing cached can be
 /// trusted any more.
 pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
+    // SAFETY: the caller's promise -- a live syntax block.
+    let mut block = unsafe { SynBlock::new(block) };
     unsafe { syn_stack_free_block(block) };
 
     // With 'foldmethod' "syntax", every fold has to be recomputed too.
     for wp in windows() {
-        if wp.w_s == block && foldmethod_is_syntax(wp) {
+        if wp.w_s == block.raw() && foldmethod_is_syntax(wp) {
             fold_update_all(wp);
         }
     }
@@ -70,22 +72,20 @@ pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
 /// Allocate `syn_buf`'s cache, or resize it when the buffer's length has moved
 /// far enough that the current size is a poor fit.
 pub(crate) unsafe fn syn_stack_alloc() {
-    let block = syn_block.get();
+    let mut block = syn_block();
     let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count } as c_int;
     let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
-    if unsafe { (*block).b_sst_len } <= want * 2 && unsafe { (*block).b_sst_len } >= want {
+    if block.b_sst_len <= want * 2 && block.b_sst_len >= want {
         return; // neither much too big nor a bit too small
     }
 
     // Allocate 50% too much, to avoid reallocating too often.
     let mut len = clamp_entries((lines + lines / 2) / SST_DIST + Rows.get() * 2);
-    if !unsafe { (*block).b_sst_array }.is_null() {
+    if !block.b_sst_array.is_null() {
         // When shrinking, clean up the existing stack first and make sure
         // every entry that is still valid fits in the new array.
-        while unsafe { (*block).b_sst_len } - unsafe { (*block).b_sst_freecount } + 2 > len
-            && unsafe { syn_stack_cleanup() }
-        {}
-        len = len.max(unsafe { (*block).b_sst_len } - unsafe { (*block).b_sst_freecount } + 2);
+        while block.b_sst_len - block.b_sst_freecount + 2 > len && unsafe { syn_stack_cleanup() } {}
+        len = len.max(block.b_sst_len - block.b_sst_freecount + 2);
     }
     debug_assert!(len >= 0);
 
@@ -97,8 +97,8 @@ pub(crate) unsafe fn syn_stack_alloc() {
     // out-of-bounds pointer Rust may not form; counting moved entries says
     // the same thing.
     let mut moved = 0usize;
-    if !unsafe { (*block).b_sst_array }.is_null() {
-        let mut from = unsafe { (*block).b_sst_first };
+    if !block.b_sst_array.is_null() {
+        let mut from = block.b_sst_first;
         while !from.is_null() {
             let to = unsafe { sstp.add(moved) };
             unsafe { *to = *from };
@@ -109,14 +109,14 @@ pub(crate) unsafe fn syn_stack_alloc() {
     }
     if moved > 0 {
         unsafe { (*sstp.add(moved - 1)).sst_next = ::core::ptr::null_mut() };
-        unsafe { (*block).b_sst_first = sstp };
+        block.b_sst_first = sstp;
     } else {
-        unsafe { (*block).b_sst_first = ::core::ptr::null_mut() };
+        block.b_sst_first = ::core::ptr::null_mut();
     }
-    unsafe { (*block).b_sst_freecount = len - moved as c_int };
+    block.b_sst_freecount = len - moved as c_int;
 
     // Thread everything after them into the free list.
-    unsafe { (*block).b_sst_firstfree = sstp.add(moved) };
+    unsafe { block.b_sst_firstfree = sstp.add(moved) };
     let mut i = moved;
     while i < len as usize {
         unsafe { (*sstp.add(i)).sst_next = sstp.add(i + 1) };
@@ -124,9 +124,9 @@ pub(crate) unsafe fn syn_stack_alloc() {
     }
     unsafe { (*sstp.add(len as usize - 1)).sst_next = ::core::ptr::null_mut() };
 
-    unsafe { xfree((*block).b_sst_array as *mut ::core::ffi::c_void) };
-    unsafe { (*block).b_sst_array = sstp };
-    unsafe { (*block).b_sst_len = len };
+    unsafe { xfree(block.b_sst_array as *mut ::core::ffi::c_void) };
+    block.b_sst_array = sstp;
+    block.b_sst_len = len;
 }
 
 /// Keep a wanted entry count inside the array's size limits.
@@ -141,11 +141,11 @@ fn clamp_entries(len: c_int) -> c_int {
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
 pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
-    unsafe { syn_stack_apply_changes_block(&raw mut (*buf).b_s, buf) };
+    unsafe { syn_stack_apply_changes_block(SynBlock::new(&raw mut (*buf).b_s), buf) };
 
     for wp in windows() {
         if wp.w_buffer == buf && wp.w_s != unsafe { &raw mut (*buf).b_s } {
-            unsafe { syn_stack_apply_changes_block(wp.w_s, buf) };
+            unsafe { syn_stack_apply_changes_block(SynBlock::new(wp.w_s), buf) };
         }
     }
 }
@@ -155,19 +155,17 @@ pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
-unsafe fn syn_stack_apply_changes_block(block: *mut synblock_T, buf: *mut buf_T) {
+unsafe fn syn_stack_apply_changes_block(mut block: SynBlock, buf: *mut buf_T) {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
-    let mut p = unsafe { (*block).b_sst_first };
+    let mut p = block.b_sst_first;
     while !p.is_null() {
-        if unsafe { (*p).sst_lnum } + unsafe { (*block).b_syn_sync_linebreaks }
-            > unsafe { (*buf).b_mod_top }
-        {
+        if unsafe { (*p).sst_lnum } + block.b_syn_sync_linebreaks > unsafe { (*buf).b_mod_top } {
             let n = unsafe { (*p).sst_lnum } + unsafe { (*buf).b_mod_xlines };
             if n <= unsafe { (*buf).b_mod_bot } {
                 // Inside the changed area: remove it.
                 let np = unsafe { (*p).sst_next };
                 if prev.is_null() {
-                    unsafe { (*block).b_sst_first = np };
+                    block.b_sst_first = np;
                 } else {
                     unsafe { (*prev).sst_next = np };
                 }
@@ -206,13 +204,13 @@ unsafe fn syn_stack_apply_changes_block(block: *mut synblock_T, buf: *mut buf_T)
 /// the ones carrying the oldest display tick go. Freeing the oldest rather than
 /// the closest is what keeps the lines the user is actually looking at cached.
 pub(crate) unsafe fn syn_stack_cleanup() -> bool {
-    let block = syn_block.get();
-    if unsafe { (*block).b_sst_first }.is_null() {
+    let mut block = syn_block();
+    if block.b_sst_first.is_null() {
         return false;
     }
 
     // Normal distance between entries for lines that are not displayed.
-    let entries = unsafe { (*block).b_sst_len };
+    let entries = block.b_sst_len;
     let dist: linenr_T = if entries <= Rows.get() {
         999999
     } else {
@@ -223,13 +221,13 @@ pub(crate) unsafe fn syn_stack_cleanup() -> bool {
     // Find the tick of the oldest removable entry. `above` records that the
     // oldest tick is *above* `b_sst_lasttick`, because the display tick
     // wraps around.
-    let mut tick = unsafe { (*block).b_sst_lasttick };
+    let mut tick = block.b_sst_lasttick;
     let mut above = false;
-    let mut prev = unsafe { (*block).b_sst_first };
+    let mut prev = block.b_sst_first;
     let mut p = unsafe { (*prev).sst_next };
     while !p.is_null() {
         if unsafe { (*prev).sst_lnum } + dist > unsafe { (*p).sst_lnum } {
-            if unsafe { (*p).sst_tick } > unsafe { (*block).b_sst_lasttick } {
+            if unsafe { (*p).sst_tick } > block.b_sst_lasttick {
                 if !above || unsafe { (*p).sst_tick } < tick {
                     tick = unsafe { (*p).sst_tick };
                 }
@@ -244,7 +242,7 @@ pub(crate) unsafe fn syn_stack_cleanup() -> bool {
 
     // Free the entries carrying that tick which sit closer than `dist`.
     let mut freed = false;
-    let mut prev = unsafe { (*block).b_sst_first };
+    let mut prev = block.b_sst_first;
     let mut p = unsafe { (*prev).sst_next };
     while !p.is_null() {
         if unsafe { (*p).sst_tick } == tick
@@ -263,11 +261,11 @@ pub(crate) unsafe fn syn_stack_cleanup() -> bool {
 }
 
 /// Release an entry's memory and put it on the free list.
-pub(crate) unsafe fn syn_stack_free_entry(block: *mut synblock_T, p: *mut synstate_T) {
+pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlock, p: *mut synstate_T) {
     unsafe { clear_syn_state(p) };
-    unsafe { (*p).sst_next = (*block).b_sst_firstfree };
-    unsafe { (*block).b_sst_firstfree = p };
-    unsafe { (*block).b_sst_freecount += 1 };
+    unsafe { (*p).sst_next = block.b_sst_firstfree };
+    block.b_sst_firstfree = p;
+    block.b_sst_freecount += 1;
 }
 
 /// The cached entry for `lnum`, or the last one before it.
@@ -277,7 +275,7 @@ pub(crate) unsafe fn syn_stack_free_entry(block: *mut synblock_T, p: *mut synsta
 /// compare `sst_lnum` themselves.
 pub(crate) unsafe fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
-    let mut p = unsafe { (*syn_block.get()).b_sst_first };
+    let mut p = syn_block().b_sst_first;
     while !p.is_null() {
         if unsafe { (*p).sst_lnum } == lnum {
             return p;
@@ -296,7 +294,7 @@ pub(crate) unsafe fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
 /// The current state must be valid for the *start* of that line. Answers the
 /// entry it went into, or null when there was nothing to store or no room.
 pub(crate) unsafe fn store_current_state() -> *mut synstate_T {
-    let block = syn_block.get();
+    let mut block = syn_block();
     let mut sp = unsafe { syn_stack_find_entry(current_lnum.get()) };
 
     // A state that contains a start or end pattern continuing from the
@@ -340,12 +338,12 @@ unsafe fn state_continues_from_previous_line() -> bool {
 }
 
 /// Take `sp` out of the used list.
-unsafe fn unlink_entry(block: *mut synblock_T, sp: *mut synstate_T) {
-    if unsafe { (*block).b_sst_first } == sp {
-        unsafe { (*block).b_sst_first = (*sp).sst_next };
+unsafe fn unlink_entry(mut block: SynBlock, sp: *mut synstate_T) {
+    if block.b_sst_first == sp {
+        unsafe { block.b_sst_first = (*sp).sst_next };
         return;
     }
-    let mut p = unsafe { (*block).b_sst_first };
+    let mut p = block.b_sst_first;
     while !p.is_null() && unsafe { (*p).sst_next } != sp {
         p = unsafe { (*p).sst_next };
     }
@@ -359,21 +357,21 @@ unsafe fn unlink_entry(block: *mut synblock_T, sp: *mut synstate_T) {
 /// `after` (or at the front when that is null).
 ///
 /// Answers null when there is no room even after a cleanup.
-unsafe fn new_entry(block: *mut synblock_T, mut after: *mut synstate_T) -> *mut synstate_T {
-    if unsafe { (*block).b_sst_freecount } == 0 {
+unsafe fn new_entry(mut block: SynBlock, mut after: *mut synstate_T) -> *mut synstate_T {
+    if block.b_sst_freecount == 0 {
         unsafe { syn_stack_cleanup() };
         // "after" may have been moved to the free list by the cleanup.
         after = unsafe { syn_stack_find_entry(current_lnum.get()) };
     }
-    if unsafe { (*block).b_sst_freecount } == 0 {
+    if block.b_sst_freecount == 0 {
         return ::core::ptr::null_mut(); // must be a strange problem
     }
-    let p = unsafe { (*block).b_sst_firstfree };
-    unsafe { (*block).b_sst_firstfree = (*p).sst_next };
-    unsafe { (*block).b_sst_freecount -= 1 };
+    let p = block.b_sst_firstfree;
+    unsafe { block.b_sst_firstfree = (*p).sst_next };
+    block.b_sst_freecount -= 1;
     if after.is_null() {
-        unsafe { (*p).sst_next = (*block).b_sst_first };
-        unsafe { (*block).b_sst_first = p };
+        unsafe { (*p).sst_next = block.b_sst_first };
+        block.b_sst_first = p;
     } else {
         unsafe { (*p).sst_next = (*after).sst_next };
         unsafe { (*after).sst_next = p };
@@ -452,7 +450,7 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
             si.si_m_lnum = 0;
             unsafe {
                 si.si_next_list = if si.si_idx >= 0 {
-                    (*syn_pattern(si.si_idx)).sp_next_list
+                    syn_pattern(si.si_idx).sp_next_list
                 } else {
                     ::core::ptr::null_mut()
                 }
@@ -510,7 +508,7 @@ unsafe fn extmatch_equal(a: *mut reg_extmatch_T, b: *mut reg_extmatch_T, idx: c_
     if a.is_null() || b.is_null() {
         return false;
     }
-    let ic = unsafe { (*syn_pattern(idx)).sp_ic } != 0;
+    let ic = unsafe { syn_pattern(idx).sp_ic } != 0;
     let mut j = 0;
     while j < NSUBEXP as c_int {
         let (am, bm) = (unsafe { (*a).matches[j as usize] }, unsafe {

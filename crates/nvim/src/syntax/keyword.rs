@@ -123,7 +123,7 @@ struct KeywordDef {
 unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
     // With `:syntax case ignore` the table is keyed on the folded form,
     // and the lookup folds too.
-    let ignore_case = unsafe { (*cur_syn_block()).b_syn_ic } != 0;
+    let ignore_case = cur_syn_block().b_syn_ic != 0;
     let mut name_folded: [c_char; MAXKEYWLEN as usize + 1] = [0; MAXKEYWLEN as usize + 1];
     let (name_ic, name_iclen) = if ignore_case {
         let folded = unsafe {
@@ -150,15 +150,15 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
     unsafe { (*kp).k_char = def.conceal_char };
     unsafe { (*kp).k_syn.cont_in_list = copy_id_list(def.cont_in_list) };
     if !def.cont_in_list.is_null() {
-        unsafe { (*cur_syn_block()).b_syn_containedin = 1 };
+        cur_syn_block().b_syn_containedin = 1;
     }
     unsafe { (*kp).next_list = copy_id_list(def.next_list) };
 
     let hash = unsafe { hash_hash(key) };
     let ht = if ignore_case {
-        unsafe { &raw mut (*cur_syn_block()).b_keywtab_ic }
+        syn_field!(cur_syn_block(), b_keywtab_ic)
     } else {
-        unsafe { &raw mut (*cur_syn_block()).b_keywtab }
+        syn_field!(cur_syn_block(), b_keywtab)
     };
     let hi = unsafe { hash_lookup(ht, key, strlen(key), hash) };
     if unsafe { (*hi).is_kept() } {
@@ -304,5 +304,5 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
     }
 
     redraw_curbuf_later(UPD_SOME_VALID);
-    unsafe { syn_stack_free_all(cur_syn_block()) }; // Need to recompute all syntax.
+    unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all syntax.
 }

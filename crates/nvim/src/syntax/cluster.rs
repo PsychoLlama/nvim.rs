@@ -119,13 +119,13 @@ fn merge_id_lists(a: &[int16_t], b: &[int16_t], list_op: c_int) -> Vec<int16_t> 
 /// systems and the upper-cased form is stored alongside each name.
 unsafe fn scl_name2id(name: *const c_char) -> c_int {
     let name_u = unsafe { vim_strsave_up(name) };
-    let mut i = unsafe { cur_cluster_count() };
+    let mut i = cur_cluster_count();
     let id = loop {
         i -= 1;
         if i < 0 {
             break 0;
         }
-        let stored = unsafe { (*cur_cluster(i)).scl_name_u };
+        let stored = unsafe { cur_cluster(i).scl_name_u };
         if !stored.is_null() && unsafe { strcmp(name_u, stored) } == 0 {
             break i + SYNID_CLUSTER;
         }
@@ -159,7 +159,7 @@ pub(crate) unsafe fn syn_check_cluster(pp: *const c_char, len: c_int) -> c_int {
 /// Add a cluster with no members, answering its id, or 0 when the table is
 /// full. Consumes `name`.
 unsafe fn syn_add_cluster(name: *mut c_char) -> c_int {
-    let clusters = unsafe { &raw mut (*cur_syn_block()).b_syn_clusters };
+    let clusters: *mut garray_T = syn_field!(cur_syn_block(), b_syn_clusters);
     // First call for this window: init the growing array.
     if unsafe { (*clusters).ga_data }.is_null() {
         unsafe { (*clusters).ga_itemsize = ::core::mem::size_of::<syn_cluster_T>() as c_int };
@@ -181,10 +181,10 @@ unsafe fn syn_add_cluster(name: *mut c_char) -> c_int {
 
     // The two clusters the spell checker asks about by id.
     if unsafe { strcasecmp(name, c"Spell".as_ptr()) } == 0 {
-        unsafe { (*cur_syn_block()).b_spell_cluster_id = len + SYNID_CLUSTER };
+        cur_syn_block().b_spell_cluster_id = len + SYNID_CLUSTER;
     }
     if unsafe { strcasecmp(name, c"NoSpell".as_ptr()) } == 0 {
-        unsafe { (*cur_syn_block()).b_nospell_cluster_id = len + SYNID_CLUSTER };
+        cur_syn_block().b_nospell_cluster_id = len + SYNID_CLUSTER;
     }
 
     len + SYNID_CLUSTER
@@ -248,7 +248,7 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
             }
             unsafe {
                 syn_combine_list(
-                    &mut (*cur_cluster(scl_id)).scl_list,
+                    &mut (*cur_cluster(scl_id).raw()).scl_list,
                     &mut clstr_list,
                     list_op,
                 )
@@ -258,7 +258,7 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
 
         if got_clstr {
             redraw_curbuf_later(UPD_SOME_VALID);
-            unsafe { syn_stack_free_all(cur_syn_block()) }; // Need to recompute all.
+            unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
         }
     }
 
