@@ -1,6 +1,6 @@
 # The unsafe perimeter
 
-The tree carries ~152k lines of unchecked code, and reading that as one number
+The tree carries ~71k lines of unchecked code, and reading that as one number
 is misleading: some of it is transpiled editor logic that safe Rust will
 eventually replace, and some of it is the seam where this program meets a C
 library, the operating system, or raw memory — code that will still be
@@ -13,7 +13,8 @@ the migration's debt, counted by the ratchet as
 number is the one to drive to zero.
 
 Today: **13,523** unchecked lines inside the perimeter (136 files),
-**138,877** outside it (873 files, of 1,230 measured).
+**57,918** outside it (873 files, of 1,230 measured). It was 138,877 when
+this file was written, at the end of phase 23's slice 15.
 
 ## What qualifies
 

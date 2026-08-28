@@ -4534,6 +4534,7 @@ static const int KILL_TIMEOUT_MS = 2000;
 static const int KMAP_LLEN = 200;
 static const int KMarkNoContext = 4;
 static const int KS_EXTRA = 253;
+static const int KS_EXTRA_U8 = 253;
 static const int KS_HOR_SCROLLBAR = 248;
 static const int KS_KEY = 242;
 static const int KS_MODIFIER = 252;
