@@ -370,17 +370,12 @@ pub(crate) unsafe fn uc_add_command(
     force: bool,
 ) -> c_int {
     let mut rep_buf: *mut c_char = ptr::null_mut();
-    // SAFETY: caller contract.
+    let out = &raw mut rep_buf;
+    let (no_flags, no_did_simplify, cpo) = (0, ptr::null_mut(), p_cpo.get());
+    // SAFETY: caller contract; `rep_buf` is this frame's own.
     unsafe {
-        replace_termcodes(
-            rep,
-            strlen(rep),
-            &raw mut rep_buf,
-            0,
-            0,
-            ptr::null_mut(),
-            p_cpo.get(),
-        )
+        let len = strlen(rep);
+        replace_termcodes(rep, len, out, 0, no_flags, no_did_simplify, cpo)
     };
     if rep_buf.is_null() {
         rep_buf = unsafe { xstrdup(rep) };
@@ -544,27 +539,35 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
     let mut p = arg;
     // SAFETY: module contract; every step stays inside the NUL-terminated
     // argument.
-    let name_end = unsafe {
-        loop {
-            if *p != b'-' as c_char {
-                break uc_validate_name(p);
-            }
-            p = p.offset(1);
-            let end = skiptowhite(p);
-            let into = attr::Attributes {
-                argt: &mut argt,
-                def: &mut def,
-                flags: &mut flags,
-                complp: &mut context,
-                compl_arg: &mut compl_arg,
-                addr_type_arg: &mut addr_type_arg,
-            };
-            if attr::uc_scan_attr(p, end.offset_from(p) as size_t, into) == FAIL {
-                xfree(compl_arg.cast());
-                return;
-            }
-            p = skipwhite(end);
+    let name_end = loop {
+        // SAFETY: module contract; every step stays inside the argument.
+        if unsafe { *p } != b'-' as c_char {
+            // SAFETY: as above.
+            break unsafe { uc_validate_name(p) };
         }
+        // SAFETY: as above -- the byte just read was not the NUL.
+        let (attr_start, attr_end) = unsafe {
+            let start = p.offset(1);
+            (start, skiptowhite(start))
+        };
+        let into = attr::Attributes {
+            argt: &mut argt,
+            def: &mut def,
+            flags: &mut flags,
+            complp: &mut context,
+            compl_arg: &mut compl_arg,
+            addr_type_arg: &mut addr_type_arg,
+        };
+        // SAFETY: as above; `into` names this frame's own locals.
+        let len = unsafe { attr_end.offset_from(attr_start) } as size_t;
+        // SAFETY: as above.
+        if unsafe { attr::uc_scan_attr(attr_start, len, into) } == FAIL {
+            // SAFETY: nothing above took `compl_arg`.
+            unsafe { xfree(compl_arg.cast()) };
+            return;
+        }
+        // SAFETY: as above.
+        p = unsafe { skipwhite(attr_end) };
     };
 
     let name = p;
@@ -596,6 +599,8 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
     } else if context != ExpandContext::Nothing && !argt.has(ExArgt::EXTRA) {
         Some(c"E1208: -complete used without allowing arguments")
     } else {
+        let def = def as int64_t;
+        let (no_compl, no_preview, no_cb) = (LUA_NOREF, LUA_NOREF, LUA_NOREF);
         // SAFETY: module contract; `uc_add_command` takes `compl_arg`.
         unsafe {
             uc_add_command(
@@ -603,14 +608,14 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
                 name_len,
                 rest,
                 argt,
-                def as int64_t,
+                def,
                 flags,
                 context,
                 compl_arg,
-                LUA_NOREF,
-                LUA_NOREF,
+                no_compl,
+                no_preview,
                 addr_type_arg,
-                LUA_NOREF,
+                no_cb,
                 forceit,
             )
         };
@@ -721,16 +726,15 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
     }
 
     let Some(table) = found else {
-        // SAFETY: module contract.
+        let untranslated = if buffer_only {
+            c"E1237: No such user-defined command in current buffer: %s".as_ptr()
+        } else {
+            c"E184: No such user-defined command: %s".as_ptr()
+        };
+        // SAFETY: module contract; the one `%s` spends `arg`.
         unsafe {
-            semsg_c!(
-                gettext(if buffer_only {
-                    c"E1237: No such user-defined command in current buffer: %s".as_ptr()
-                } else {
-                    c"E184: No such user-defined command: %s".as_ptr()
-                }),
-                arg,
-            )
+            let fmt = gettext(untranslated);
+            semsg_c!(fmt, arg)
         };
         return;
     };

@@ -111,26 +111,21 @@ pub unsafe fn decor_to_dict_legacy(
     let flags = sh_hl.flags as c_int;
     if sh_hl.hl_id != 0 {
         unsafe { put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name)) };
-        unsafe {
-            put(
-                dict,
-                c"hl_eol",
-                Object::boolean(flags & kSHHlEol as c_int != 0),
-            )
-        };
+        let value = Object::boolean(flags & kSHHlEol as c_int != 0);
+        // SAFETY: the caller's dictionary, sized for every key this
+        // writes.
+        unsafe { put(dict, c"hl_eol", value) };
         priority = i32::from(sh_hl.priority);
     }
 
     if flags & kSHConceal as c_int != 0 {
         let mut buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
         unsafe { schar_get(buf.as_mut_ptr(), sh_hl.text[0]) };
-        unsafe {
-            put(
-                dict,
-                c"conceal",
-                Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-            )
-        };
+        // SAFETY: the string the decoration owns, live for the copy.
+        let value = unsafe { Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))) };
+        // SAFETY: the caller's dictionary, sized for every key this
+        // writes.
+        unsafe { put(dict, c"conceal", value) };
     }
 
     if flags & kSHConcealLines as c_int != 0 {
@@ -179,42 +174,32 @@ unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, aren
     // SAFETY: the caller's virtual text and arena.
     if vt.hl_mode != 0 {
         let mode = HL_MODE_STR[vt.hl_mode as usize];
-        unsafe {
-            put(
-                dict,
-                c"hl_mode",
-                Object::string(cstr_as_string(mode.as_ptr())),
-            )
-        };
+        // SAFETY: the string the decoration owns, live for the copy.
+        let value = unsafe { Object::string(cstr_as_string(mode.as_ptr())) };
+        // SAFETY: the caller's dictionary, sized for every key this
+        // writes.
+        unsafe { put(dict, c"hl_mode", value) };
     }
 
     let chunks = unsafe { virt_text_to_array(vt.data.virt_text, hl_name, arena) };
     unsafe { put(dict, c"virt_text", Object::array(chunks)) };
-    unsafe {
-        put(
-            dict,
-            c"virt_text_hide",
-            Object::boolean(vt.flags as c_int & kVTHide as c_int != 0),
-        )
-    };
-    unsafe {
-        put(
-            dict,
-            c"virt_text_repeat_linebreak",
-            Object::boolean(vt.flags as c_int & kVTRepeatLinebreak as c_int != 0),
-        )
-    };
+    let value = Object::boolean(vt.flags as c_int & kVTHide as c_int != 0);
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_text_hide", value) };
+    let value = Object::boolean(vt.flags as c_int & kVTRepeatLinebreak as c_int != 0);
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_text_repeat_linebreak", value) };
     if vt.pos == kVPosWinCol {
         unsafe { put(dict, c"virt_text_win_col", Object::integer(vt.col.into())) };
     }
     let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
-    unsafe {
-        put(
-            dict,
-            c"virt_text_pos",
-            Object::string(cstr_as_string(pos.as_ptr())),
-        )
-    };
+    // SAFETY: the string the decoration owns, live for the copy.
+    let value = unsafe { Object::string(cstr_as_string(pos.as_ptr())) };
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_text_pos", value) };
 }
 
 /// The virt-lines half of [`decor_to_dict_legacy`].
@@ -241,32 +226,24 @@ unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, are
     }
 
     unsafe { put(dict, c"virt_lines", Object::array(all_chunks)) };
-    unsafe {
-        put(
-            dict,
-            c"virt_lines_above",
-            Object::boolean(vt.flags as c_int & kVTLinesAbove as c_int != 0),
-        )
-    };
-    unsafe {
-        put(
-            dict,
-            c"virt_lines_leftcol",
-            Object::boolean(line_flags & kVLLeftcol as c_int != 0),
-        )
-    };
+    let value = Object::boolean(vt.flags as c_int & kVTLinesAbove as c_int != 0);
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_lines_above", value) };
+    let value = Object::boolean(line_flags & kVLLeftcol as c_int != 0);
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_lines_leftcol", value) };
     let overflow = if line_flags & kVLScroll as c_int != 0 {
         c"scroll"
     } else {
         c"trunc"
     };
-    unsafe {
-        put(
-            dict,
-            c"virt_lines_overflow",
-            Object::string(cstr_as_string(overflow.as_ptr())),
-        )
-    };
+    // SAFETY: the string the decoration owns, live for the copy.
+    let value = unsafe { Object::string(cstr_as_string(overflow.as_ptr())) };
+    // SAFETY: the caller's dictionary, sized for every key this
+    // writes.
+    unsafe { put(dict, c"virt_lines_overflow", value) };
 }
 
 /// The sign half of [`decor_to_dict_legacy`].
@@ -278,23 +255,19 @@ unsafe fn put_sign(dict: &mut Dict, sh: &mut DecorSignHighlight, hl_name: bool, 
     if sh.text[0] != 0 {
         let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
         unsafe { describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr()) };
-        unsafe {
-            put(
-                dict,
-                c"sign_text",
-                Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-            )
-        };
+        // SAFETY: the string the decoration owns, live for the copy.
+        let value = unsafe { Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))) };
+        // SAFETY: the caller's dictionary, sized for every key this
+        // writes.
+        unsafe { put(dict, c"sign_text", value) };
     }
 
     if !sh.sign_name.is_null() {
-        unsafe {
-            put(
-                dict,
-                c"sign_name",
-                Object::string(cstr_as_string(sh.sign_name)),
-            )
-        };
+        // SAFETY: the string the decoration owns, live for the copy.
+        let value = unsafe { Object::string(cstr_as_string(sh.sign_name)) };
+        // SAFETY: the caller's dictionary, sized for every key this
+        // writes.
+        unsafe { put(dict, c"sign_name", value) };
     }
 
     for (key, id) in [

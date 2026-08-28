@@ -34,7 +34,7 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::socket::socket_address_is_tcp;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
-use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{
     main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, t_colors, time_fd,
     ui_client_attached, ui_client_channel_id, ui_client_error_exit, ui_client_exit_status,
@@ -140,28 +140,27 @@ pub(crate) unsafe fn ui_client_start_server(
     on_err.fwd_err = true;
 
     let mut exit_status = 0;
+    // The wide argument list is bound out here so that the region below is
+    // the call and nothing else: a call spread over rustfmt's line width is
+    // one unchecked line per argument.
+    let no_exit_cb = Callback {
+        data: crate::types::Callback_data {
+            funcref: core::ptr::null_mut(),
+        },
+        type_0: kCallbackNone,
+    };
+    let stdin_mode = kChannelStdinPipe;
+    let no_term = core::ptr::null();
+    let no_env = core::ptr::null_mut::<dict_T>();
+    let (no_w, no_h) = (0 as uint16_t, 0 as uint16_t);
+    let status = &raw mut exit_status;
+    let (out, err) = (no_reader(), on_err);
+    // SAFETY: `args` is the NULL-terminated vector just built and `exepath`
+    // is the caller's C string; `exit_status` is this frame's own.
     let channel = unsafe {
         channel_job_start(
-            args,
-            exepath,
-            no_reader(),
-            on_err,
-            Callback {
-                data: crate::types::Callback_data {
-                    funcref: core::ptr::null_mut(),
-                },
-                type_0: kCallbackNone,
-            },
-            false,
-            true,
-            true,
-            true,
-            kChannelStdinPipe,
-            core::ptr::null(),
-            0 as uint16_t,
-            0 as uint16_t,
-            core::ptr::null_mut::<dict_T>(),
-            &raw mut exit_status,
+            args, exepath, out, err, no_exit_cb, false, true, true, true, stdin_mode, no_term,
+            no_w, no_h, no_env, status,
         )
     };
     if channel.is_null() {
@@ -171,13 +170,15 @@ pub(crate) unsafe fn ui_client_start_server(
         // The user piped something in, which the server will read from
         // the descriptor `dup` lands on; this process needs slot 0 for
         // the terminal.
-        unsafe { close(0) };
+        let keep = if stderr_isatty.get() {
+            STDERR_FILENO
+        } else {
+            STDOUT_FILENO
+        };
+        // SAFETY: both are descriptors this process owns.
         unsafe {
-            dup(if stderr_isatty.get() {
-                STDERR_FILENO
-            } else {
-                STDOUT_FILENO
-            })
+            close(0);
+            dup(keep);
         };
     }
     unsafe { (*channel).id }
@@ -299,17 +300,18 @@ unsafe fn log_startup_step(step: &'static CStr) {
 ///
 /// A channel must be set.
 pub(crate) unsafe fn ui_client_detach() {
-    unsafe {
-        rpc_send_event(
-            ui_client_channel_id.get(),
-            c"nvim_ui_detach".as_ptr(),
-            Array {
-                size: 0,
-                capacity: 0,
-                items: core::ptr::null_mut(),
-            },
-        )
-    };
+    let (id, name, no_args) = (
+        ui_client_channel_id.get(),
+        c"nvim_ui_detach".as_ptr(),
+        Array {
+            size: 0,
+            capacity: 0,
+            items: core::ptr::null_mut(),
+        },
+    );
+    // SAFETY: the caller's promise -- a channel is set -- and the event
+    // carries no arguments to own.
+    unsafe { rpc_send_event(id, name, no_args) };
     ui_client_attached.set(false);
 }
 
@@ -332,16 +334,10 @@ pub(crate) unsafe fn ui_client_run() -> ! {
     // The test harness waits for a line in the log before it starts
     // driving the terminal, so that it is not racing startup.
     if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), true) } {
-        unsafe {
-            logmsg_c!(
-                LOGLVL_ERR,
-                core::ptr::null(),
-                c"ui_client_run".as_ptr(),
-                line!() as c_int,
-                true,
-                c"test log message".as_ptr(),
-            )
-        };
+        let (who, fmt, line) = (c"ui_client_run", c"test log message", line!() as c_int);
+        // SAFETY: both names are static C strings and the format spends no
+        // argument.
+        unsafe { logmsg!(LOGLVL_ERR, who, line, fmt) };
     }
     time_finish();
 
@@ -515,18 +511,10 @@ unsafe fn arg(args: Array, index: usize, want: Option<ObjectType>) -> Option<Obj
 /// stream rather than a version mismatch; there is nothing to do about it
 /// but skip the event.
 fn bad_event(event: &'static CStr, wrapper: &'static CStr) {
+    let fmt = c"Error handling ui event '%s'";
+    let (line, name) = (line!() as c_int, event.as_ptr());
     // SAFETY: both names are static C strings and the format takes one.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            core::ptr::null(),
-            wrapper.as_ptr(),
-            line!() as c_int,
-            true,
-            c"Error handling ui event '%s'".as_ptr(),
-            event.as_ptr(),
-        )
-    };
+    unsafe { logmsg!(LOGLVL_ERR, wrapper, line, fmt, name) };
 }
 
 /// A `&'static CStr` from a name the macros have as a `&str`.
@@ -715,18 +703,16 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
         0
     };
     let (chars, attrs) = Unpacker::grid_line_cells();
+    let (grid, row, startcol) = (
+        Integer::from(grid),
+        Integer::from(row),
+        Integer::from(startcol),
+    );
+    // SAFETY: the decoder filled `g` for this event, and the TUI is started.
     unsafe {
+        let (t, attr) = (&mut *tui.get(), Integer::from((*g).cur_attr));
         tui_raw_line(
-            &mut *tui.get(),
-            Integer::from(grid),
-            Integer::from(row),
-            Integer::from(startcol),
-            endcol,
-            clearcol,
-            Integer::from((*g).cur_attr),
-            flags,
-            chars,
-            attrs,
+            t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
         )
     };
 }
@@ -848,43 +834,29 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         )
     };
     if !unsafe { strequal(err, c"".as_ptr()) } {
-        unsafe {
-            logmsg_c!(
-                LOGLVL_ERR,
-                core::ptr::null(),
-                c"channel_connect_event".as_ptr(),
-                line!() as c_int,
-                true,
-                c"Cannot connect to server %s: %s".as_ptr(),
-                server_addr,
-                err,
-            )
-        };
+        let who = c"channel_connect_event";
+        let fmt = c"Cannot connect to server %s: %s";
+        let line = line!() as c_int;
+        // SAFETY: the two `%s` spend the two C strings that follow them.
+        unsafe { logmsg!(LOGLVL_ERR, who, line, fmt, server_addr, err) };
         unsafe { xfree(server_addr.cast()) };
         ui_client_exit_status.set(1);
         unsafe { os_exit(1) };
     }
     ui_client_channel_id.set(chan);
-    unsafe {
-        ui_client_attach(
-            tui_width.get(),
-            tui_height.get(),
-            tui_term.get(),
-            tui_rgb.get(),
-        )
-    };
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            core::ptr::null(),
-            c"channel_connect_event".as_ptr(),
-            line!() as c_int,
-            true,
-            c"Connected to server %s on channel %ld".as_ptr(),
-            server_addr,
-            chan,
-        )
-    };
+    let (w, h, term, rgb) = (
+        tui_width.get(),
+        tui_height.get(),
+        tui_term.get(),
+        tui_rgb.get(),
+    );
+    // SAFETY: the terminal reported all four, and a channel is now set.
+    unsafe { ui_client_attach(w, h, term, rgb) };
+    let who = c"channel_connect_event";
+    let fmt = c"Connected to server %s on channel %ld";
+    let line = line!() as c_int;
+    // SAFETY: `%s` spends the address string and `%ld` the channel id.
+    unsafe { logmsg!(LOGLVL_INF, who, line, fmt, server_addr, chan) };
     unsafe { xfree(server_addr.cast()) };
 }
 
@@ -970,41 +942,27 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                     &raw mut err,
                 )
             };
+            let who = c"ui_client_attach_to_restarted_server";
             if !unsafe { strequal(err, c"".as_ptr()) } {
-                unsafe {
-                    logmsg_c!(
-                        LOGLVL_ERR,
-                        core::ptr::null(),
-                        c"ui_client_attach_to_restarted_server".as_ptr(),
-                        line!() as c_int,
-                        true,
-                        c"cannot connect to server %s: %s".as_ptr(),
-                        listen_addr,
-                        err,
-                    )
-                };
+                let fmt = c"cannot connect to server %s: %s";
+                let line = line!() as c_int;
+                // SAFETY: the two `%s` spend the two C strings after them.
+                unsafe { logmsg!(LOGLVL_ERR, who, line, fmt, listen_addr, err) };
             } else {
                 ui_client_channel_id.set(chan_id);
-                unsafe {
-                    ui_client_attach(
-                        tui_width.get(),
-                        tui_height.get(),
-                        tui_term.get(),
-                        tui_rgb.get(),
-                    )
-                };
-                unsafe {
-                    logmsg_c!(
-                        LOGLVL_INF,
-                        core::ptr::null(),
-                        c"ui_client_attach_to_restarted_server".as_ptr(),
-                        line!() as c_int,
-                        true,
-                        c"restarted server address=%s id=%ld".as_ptr(),
-                        listen_addr,
-                        chan_id,
-                    )
-                };
+                let (w, h, term, rgb) = (
+                    tui_width.get(),
+                    tui_height.get(),
+                    tui_term.get(),
+                    tui_rgb.get(),
+                );
+                // SAFETY: the terminal reported all four, and the channel is
+                // now set.
+                unsafe { ui_client_attach(w, h, term, rgb) };
+                let fmt = c"restarted server address=%s id=%ld";
+                let line = line!() as c_int;
+                // SAFETY: `%s` spends the address and `%ld` the channel id.
+                unsafe { logmsg!(LOGLVL_INF, who, line, fmt, listen_addr, chan_id) };
             }
         }
     }

@@ -29,7 +29,7 @@ use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_co
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::main::{display_tick, ns_hl_active};
 use crate::r#move::validate_botline_win;
@@ -106,27 +106,14 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
     // SAFETY: the caller's NUL-terminated strings, plus the editor's own
     // namespace table.
     let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            ptr::null(),
-            c"decor_provider_error".as_ptr(),
-            29,
-            true,
-            c"Error in decoration provider \"%s\" (ns=%s):\n%s".as_ptr(),
-            name,
-            ns,
-            msg,
-        )
-    };
-    unsafe {
-        msg_schedule_semsg_multiline_c!(
-            c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr(),
-            name,
-            ns,
-            msg,
-        )
-    };
+    let who = c"decor_provider_error";
+    let logged = c"Error in decoration provider \"%s\" (ns=%s):\n%s";
+    let shown = c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr();
+    // SAFETY: the caller's strings and the namespace name, and each format
+    // spends exactly the three `%s` that follow it.
+    unsafe { logmsg!(LOGLVL_ERR, who, 29, logged, name, ns, msg) };
+    // SAFETY: as above.
+    unsafe { msg_schedule_semsg_multiline_c!(shown, name, ns, msg) };
 }
 
 /// Call one provider callback and answer whether the provider is still good.
@@ -154,16 +141,11 @@ unsafe fn decor_provider_invoke(
     let want_list = res.is_some();
 
     let locked = Lock::text();
-    let ret = unsafe {
-        nlua_call_ref(
-            callback,
-            name,
-            args,
-            if want_list { kRetMulti } else { kRetNilBool },
-            ptr::null_mut(),
-            &raw mut err,
-        )
-    };
+    let mode = if want_list { kRetMulti } else { kRetNilBool };
+    let (no_arena, slot) = (ptr::null_mut(), &raw mut err);
+    // SAFETY: the caller's callback and name; `nlua_call_ref` owns `args`
+    // from here, and `err` is this frame's own.
+    let ret = unsafe { nlua_call_ref(callback, name, args, mode, no_arena, slot) };
     drop(locked);
 
     if err.type_0 == kErrorTypeNone {
@@ -173,14 +155,9 @@ unsafe fn decor_provider_invoke(
             *res = unsafe { ret.data.array };
             return true;
         }
-        if unsafe {
-            api_object_to_bool(
-                ret,
-                c"provider %s retval".as_ptr(),
-                default_true,
-                &raw mut err,
-            )
-        } {
+        let (what, slot) = (c"provider %s retval".as_ptr(), &raw mut err);
+        // SAFETY: the callback's return value, and this frame's own `err`.
+        if unsafe { api_object_to_bool(ret, what, default_true, slot) } {
             return true;
         }
     }
@@ -229,16 +206,10 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
             args.push(Object::integer(end_col.into()));
-            unsafe {
-                decor_provider_invoke(
-                    idx,
-                    c"spell".as_ptr(),
-                    p.spell_nav,
-                    args.array(),
-                    true,
-                    None,
-                )
-            };
+            let (name, cb, args) = (c"spell".as_ptr(), p.spell_nav, args.array());
+            // SAFETY: the provider is named by index, so the vector may
+            // move under the call; `args` is handed over.
+            unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
         }
     }
 }
@@ -259,16 +230,10 @@ pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_
             args.push(Object::integer(unsafe { (*wp).handle }.into()));
             args.push(Object::integer(unsafe { (*(*wp).w_buffer).handle }.into()));
             args.push(Object::integer(row.into()));
-            unsafe {
-                decor_provider_invoke(
-                    idx,
-                    c"conceal_line".as_ptr(),
-                    p.conceal_line,
-                    args.array(),
-                    true,
-                    None,
-                )
-            };
+            let (name, cb, args) = (c"conceal_line".as_ptr(), p.conceal_line, args.array());
+            // SAFETY: the provider is named by index, so the vector may
+            // move under the call; `args` is handed over.
+            unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
         }
     }
     // SAFETY: `wp` is live, so its buffer and marktree are.
@@ -291,16 +256,10 @@ pub(crate) unsafe fn decor_providers_start() {
         if p.redraw_start != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::integer(display_tick.get() as c_int as Integer));
-            let active = unsafe {
-                decor_provider_invoke(
-                    idx,
-                    c"start".as_ptr(),
-                    p.redraw_start,
-                    args.array(),
-                    true,
-                    None,
-                )
-            };
+            let (name, cb, args) = (c"start".as_ptr(), p.redraw_start, args.array());
+            // SAFETY: the provider is named by index, so the vector may move
+            // under the call; `args` is handed over.
+            let active = unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
             set_state(
                 idx,
                 if active {
@@ -397,16 +356,9 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
             args.push(Object::window(unsafe { (*wp).handle }));
             args.push(Object::buffer(unsafe { (*(*wp).w_buffer).handle }));
             args.push(Object::integer(row.into()));
-            if !unsafe {
-                decor_provider_invoke(
-                    idx,
-                    c"line".as_ptr(),
-                    p.redraw_line,
-                    args.array(),
-                    true,
-                    None,
-                )
-            } {
+            let (name, cb, args) = (c"line".as_ptr(), p.redraw_line, args.array());
+            // SAFETY: as above.
+            if !unsafe { decor_provider_invoke(idx, name, cb, args, true, None) } {
                 // returned 'false' or errored: skip the rest of this window
                 set_state(idx, kDecorProviderWinDisabled);
             }
@@ -455,16 +407,9 @@ pub(crate) unsafe fn decor_providers_invoke_range(
             capacity: 0,
             items: ptr::null_mut(),
         };
-        let status = unsafe {
-            decor_provider_invoke(
-                idx,
-                c"range".as_ptr(),
-                p.redraw_range,
-                args.array(),
-                true,
-                Some(&mut res),
-            )
-        };
+        let (name, cb, args) = (c"range".as_ptr(), p.redraw_range, args.array());
+        // SAFETY: as above; `res` receives the callback's return list.
+        let status = unsafe { decor_provider_invoke(idx, name, cb, args, true, Some(&mut res)) };
 
         // The Lua call may have reallocated the provider vector, so
         // everything below goes through the index again.
