@@ -115,12 +115,10 @@ pub(crate) unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
         // The count is written even when it is zero, as the C is.
         // SAFETY: the caller's promise, and `nv_scroll_line` reads the counts
         // just written.
-        unsafe {
-            (*cap).count1 = count;
-            if count > 0 {
-                (*cap).count0 = count;
-                nv_scroll_line(cap);
-            }
+        unsafe { (*cap).count1 = count };
+        if count > 0 {
+            unsafe { (*cap).count0 = count };
+            unsafe { nv_scroll_line(cap) };
         }
         return;
     }

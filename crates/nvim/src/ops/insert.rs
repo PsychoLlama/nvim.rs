@@ -397,10 +397,8 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
     // SAFETY: `ins_text` has room for `ins_len` bytes and the NUL, and
     // `bd.textcol` is a column of `firstline`.
     let ins_text = unsafe { xmalloc(ins_len as size_t + 1) } as *mut c_char;
-    unsafe {
-        let at = firstline.offset(bd.textcol as isize) as *const c_void;
-        xmemcpyz(ins_text as *mut c_void, at, ins_len as size_t);
-    }
+    let at = unsafe { firstline.offset(bd.textcol as isize) } as *const c_void;
+    unsafe { xmemcpyz(ins_text as *mut c_void, at, ins_len as size_t) };
 
     let mut linenr = oap.start.lnum + 1;
     while linenr <= oap.end.lnum {
@@ -421,33 +419,35 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
 
             // SAFETY: `newp` is sized for the old line, the pad and the
             // inserted text, which is exactly what is written into it.
+            let oldp = ml_get(linenr);
+            let old_len = ml_get_len(linenr) as size_t;
+            let size = old_len + vpos.coladd as size_t + ins_len as size_t + 1;
+            let newp = unsafe { xmalloc(size) } as *mut c_char;
+            // Up to the block's column, then the pad, then the text.
             unsafe {
-                let oldp = ml_get(linenr);
-                let old_len = ml_get_len(linenr) as size_t;
-                let size = old_len + vpos.coladd as size_t + ins_len as size_t + 1;
-                let newp = xmalloc(size) as *mut c_char;
-                // Up to the block's column, then the pad, then the text.
                 memmove(
                     newp as *mut c_void,
                     oldp as *const c_void,
                     bd.textcol as size_t,
-                );
-                let mut newlen = bd.textcol;
-                let pad = newp.offset(newlen as isize) as *mut c_void;
-                memset(pad, ' ' as c_int, vpos.coladd as size_t);
-                newlen += vpos.coladd;
-                let at = newp.offset(newlen as isize) as *mut c_void;
-                memmove(at, ins_text as *const c_void, ins_len as size_t);
-                newlen += ins_len;
+                )
+            };
+            let mut newlen = bd.textcol;
+            let pad = unsafe { newp.offset(newlen as isize) } as *mut c_void;
+            unsafe { memset(pad, ' ' as c_int, vpos.coladd as size_t) };
+            newlen += vpos.coladd;
+            let at = unsafe { newp.offset(newlen as isize) } as *mut c_void;
+            unsafe { memmove(at, ins_text as *const c_void, ins_len as size_t) };
+            newlen += ins_len;
+            unsafe {
                 strcpy(
                     newp.offset(newlen as isize),
                     oldp.offset(bd.textcol as isize),
-                );
-                ml_replace(linenr, newp, false);
-                let splice = vpos.coladd + ins_len;
-                let row = linenr as c_int - 1;
-                extmark_splice_cols(curbuf.get(), row, bd.textcol, 0, splice, kExtmarkUndo);
-            }
+                )
+            };
+            unsafe { ml_replace(linenr, newp, false) };
+            let splice = vpos.coladd + ins_len;
+            let row = linenr as c_int - 1;
+            unsafe { extmark_splice_cols(curbuf.get(), row, bd.textcol, 0, splice, kExtmarkUndo) };
         }
         linenr += 1;
     }

@@ -245,22 +245,24 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
             let pad = bd.startspaces + bd.endspaces;
             // SAFETY: `newp` is sized for the line minus the block plus the
             // padding, which is exactly what is written into it.
+            let oldp = ml_get(lnum);
+            let newp = unsafe { xmalloc((ml_get_len(lnum) - n + 1) as size_t) } as *mut c_char;
             unsafe {
-                let oldp = ml_get(lnum);
-                let newp = xmalloc((ml_get_len(lnum) - n + 1) as size_t) as *mut c_char;
                 memmove(
                     newp as *mut c_void,
                     oldp as *const c_void,
                     bd.textcol as size_t,
-                );
-                let at = newp.offset(bd.textcol as isize) as *mut c_void;
-                memset(at, ' ' as c_int, pad as size_t);
-                let tail = oldp.offset((bd.textcol + bd.textlen) as isize);
-                strcpy(newp.offset((bd.textcol + pad) as isize), tail);
-                ml_replace(lnum, newp, false);
-                let row = lnum as c_int - 1;
-                extmark_splice_cols(curbuf.get(), row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
-            }
+                )
+            };
+            let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
+            unsafe { memset(at, ' ' as c_int, pad as size_t) };
+            let tail = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
+            unsafe { strcpy(newp.offset((bd.textcol + pad) as isize), tail) };
+            unsafe { ml_replace(lnum, newp, false) };
+            let row = lnum as c_int - 1;
+            unsafe {
+                extmark_splice_cols(curbuf.get(), row, bd.textcol, bd.textlen, pad, kExtmarkUndo)
+            };
         }
         lnum += 1;
     }
@@ -471,11 +473,9 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
 
     let rows = oap.line_count as c_int - 1;
-    unsafe {
-        let row = startpos.lnum as c_int - 1;
-        let buf = curbuf.get();
-        extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo);
-    }
+    let row = startpos.lnum as c_int - 1;
+    let buf = curbuf.get();
+    unsafe { extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo) };
     Ok(())
 }
 
@@ -492,14 +492,12 @@ pub(crate) unsafe fn mb_adjust_opend(oap: *mut oparg_T) {
     if !oap.inclusive {
         return;
     }
-    unsafe {
-        let line: *const c_char = ml_get(oap.end.lnum);
-        let mut ptr = line.offset(oap.end.col as isize);
-        if *ptr as c_int != NUL {
-            ptr = ptr.offset(-(utf_head_off(line, ptr) as isize));
-            ptr = ptr.offset((utfc_ptr2len(ptr) - 1) as isize);
-            oap.end.col = ptr.offset_from(line) as colnr_T;
-        }
+    let line: *const c_char = ml_get(oap.end.lnum);
+    let mut ptr = unsafe { line.offset(oap.end.col as isize) };
+    if unsafe { *ptr } as c_int != NUL {
+        ptr = unsafe { ptr.offset(-(utf_head_off(line, ptr) as isize)) };
+        ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) - 1) as isize) };
+        oap.end.col = unsafe { ptr.offset_from(line) } as colnr_T;
     }
 }
 

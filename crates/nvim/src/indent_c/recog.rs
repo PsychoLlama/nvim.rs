@@ -103,10 +103,8 @@ pub(crate) unsafe fn cin_has_js_key(text: *const c_char) -> bool {
     // SAFETY: `i` is at most `bytes.len()`, so `s.add(i)` is at worst the
     // string's NUL; `cin_skipcomment` answers a pointer into the same string
     // and the `:` test is kept in front of the `add(1)` behind it.
-    unsafe {
-        let s = cin_skipcomment(s.add(i));
-        *s as u8 == b':' && *s.add(1) as u8 != b':'
-    }
+    let s = unsafe { cin_skipcomment(s.add(i)) };
+    unsafe { *s as u8 == b':' && *s.add(1) as u8 != b':' }
 }
 
 /// Whether `s` is a `case` or `default` switch label.
@@ -131,33 +129,36 @@ pub(crate) unsafe fn cin_iscase(s: *const c_char, strict: bool) -> bool {
     // steps over bytes the test in front of it has just seen, so `s` never
     // leaves the string; the `&&` chains are left whole so they keep doing
     // that.
-    unsafe {
-        let mut s = start.add(4);
-        while *s != 0 {
-            s = cin_skipcomment(s);
-            if *s == 0 {
-                break;
-            }
-            if *s as u8 == b':' {
-                if *s.add(1) as u8 == b':' {
-                    s = s.add(1); // skip over "::" for C++
-                } else {
-                    return true;
-                }
-            }
-            if *s as u8 == b'\'' && *s.add(1) != 0 && *s.add(2) as u8 == b'\'' {
-                s = s.add(2); // skip over ':'
-            } else if *s as u8 == b'/' && (*s.add(1) as u8 == b'*' || *s.add(1) as u8 == b'/') {
-                return false; // stop at comment
-            } else if *s as u8 == b'"' {
-                // A string ends the search under the C rules; under the
-                // relaxed ones it *is* the label (`case "x":` in JS).
-                return !strict;
-            }
-            s = s.add(1);
+    let mut s = unsafe { start.add(4) };
+    while unsafe { *s } != 0 {
+        s = unsafe { cin_skipcomment(s) };
+        if unsafe { *s } == 0 {
+            break;
         }
-        false
+        if unsafe { *s } as u8 == b':' {
+            if unsafe { *s.add(1) } as u8 == b':' {
+                s = unsafe { s.add(1) }; // skip over "::" for C++
+            } else {
+                return true;
+            }
+        }
+        if unsafe { *s } as u8 == b'\''
+            && unsafe { *s.add(1) } != 0
+            && unsafe { *s.add(2) } as u8 == b'\''
+        {
+            s = unsafe { s.add(2) }; // skip over ':'
+        } else if unsafe { *s } as u8 == b'/'
+            && (unsafe { *s.add(1) } as u8 == b'*' || unsafe { *s.add(1) } as u8 == b'/')
+        {
+            return false; // stop at comment
+        } else if unsafe { *s } as u8 == b'"' {
+            // A string ends the search under the C rules; under the
+            // relaxed ones it *is* the label (`case "x":` in JS).
+            return !strict;
+        }
+        s = unsafe { s.add(1) };
     }
+    false
 }
 
 /// Whether `s` is a `default:` switch label.
@@ -473,17 +474,15 @@ pub(crate) unsafe fn cin_ends_in(s: *const c_char, find: &[u8]) -> bool {
     // `cin_skipcomment`/`skipwhite` answer pointers into it.  `add(find.len())`
     // is inside because the `starts_with` in front of it matched that many
     // bytes, and `add(1)` runs only on a byte that is not the NUL.
-    unsafe {
-        while *p != 0 {
-            p = cin_skipcomment(p);
-            if CStr::from_ptr(p).to_bytes().starts_with(find)
-                && cin_nocode(skipwhite(p.add(find.len())))
-            {
-                return true;
-            }
-            if *p != 0 {
-                p = p.add(1);
-            }
+    while unsafe { *p } != 0 {
+        p = unsafe { cin_skipcomment(p) };
+        if unsafe { CStr::from_ptr(p) }.to_bytes().starts_with(find)
+            && unsafe { cin_nocode(skipwhite(p.add(find.len()))) }
+        {
+            return true;
+        }
+        if unsafe { *p } != 0 {
+            p = unsafe { p.add(1) };
         }
     }
     false
@@ -525,27 +524,27 @@ pub(crate) unsafe fn cin_isterminated(s: *const c_char, incl_open: bool, incl_co
     // `skip_string` answer pointers into it, `add(1)` is at worst its NUL --
     // which `cin_nocode` only reads -- and the final `add(1)` runs only on a
     // byte that is not the NUL.
-    unsafe {
-        while *s != 0 {
-            // Skip over comments, "" strings and 'c'haracters.
-            s = skip_string(cin_skipcomment(s));
-            if *s as u8 == b'}' && n_open > 0 {
-                n_open -= 1;
+    while unsafe { *s } != 0 {
+        // Skip over comments, "" strings and 'c'haracters.
+        s = unsafe { skip_string(cin_skipcomment(s)) };
+        if unsafe { *s } as u8 == b'}' && n_open > 0 {
+            n_open -= 1;
+        }
+        if (!is_else || n_open == 0)
+            && (unsafe { *s } as u8 == b';'
+                || unsafe { *s } as u8 == b'}'
+                || (incl_comma && unsafe { *s } as u8 == b','))
+            && unsafe { cin_nocode(s.add(1)) }
+        {
+            return unsafe { *s } as u8;
+        } else if unsafe { *s } as u8 == b'{' {
+            if incl_open && unsafe { cin_nocode(s.add(1)) } {
+                return unsafe { *s } as u8;
             }
-            if (!is_else || n_open == 0)
-                && (*s as u8 == b';' || *s as u8 == b'}' || (incl_comma && *s as u8 == b','))
-                && cin_nocode(s.add(1))
-            {
-                return *s as u8;
-            } else if *s as u8 == b'{' {
-                if incl_open && cin_nocode(s.add(1)) {
-                    return *s as u8;
-                }
-                n_open += 1;
-            }
-            if *s != 0 {
-                s = s.add(1);
-            }
+            n_open += 1;
+        }
+        if unsafe { *s } != 0 {
+            s = unsafe { s.add(1) };
         }
     }
     found_start

@@ -284,10 +284,10 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
         let added = plan.spaces_at(t);
         if t > 0 && curbuf_splice_pending.get() == 0 {
             let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as colnr_T;
+            let row = cur_win().w_cursor.lnum as c_int - 1;
+            let (old, new) = ((removed + 1) as bcount_t, added as bcount_t);
+            let op = kExtmarkUndo;
             unsafe {
-                let row = cur_win().w_cursor.lnum as c_int - 1;
-                let (old, new) = ((removed + 1) as bcount_t, added as bcount_t);
-                let op = kExtmarkUndo;
                 extmark_splice(
                     curbuf.get(),
                     row,
@@ -299,8 +299,8 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
                     added,
                     new,
                     op,
-                );
-            }
+                )
+            };
         }
 
         plan.currsize = unsafe { strlen(plan.curr) } as c_int;
@@ -309,14 +309,12 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
         endcurr1 = NUL;
         endcurr2 = NUL;
         if insert_space && plan.currsize > 0 {
-            unsafe {
-                let mut cend = plan.curr.offset(plan.currsize as isize);
-                cend = mb_ptr_back(plan.curr, cend);
-                endcurr1 = utf_ptr2char(cend);
-                if cend > plan.curr {
-                    cend = mb_ptr_back(plan.curr, cend);
-                    endcurr2 = utf_ptr2char(cend);
-                }
+            let mut cend = unsafe { plan.curr.offset(plan.currsize as isize) };
+            cend = unsafe { mb_ptr_back(plan.curr, cend) };
+            endcurr1 = unsafe { utf_ptr2char(cend) };
+            if cend > plan.curr {
+                cend = unsafe { mb_ptr_back(plan.curr, cend) };
+                endcurr2 = unsafe { utf_ptr2char(cend) };
             }
         }
 

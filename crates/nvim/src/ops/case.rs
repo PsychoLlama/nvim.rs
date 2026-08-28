@@ -109,8 +109,8 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
                     oap.line_count as ::core::ffi::c_ulong,
                 ),
                 oap.line_count as int64_t,
-            );
-        }
+            )
+        };
     }
 }
 
@@ -186,10 +186,8 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
         // characters with it.
         let saved: pos_T = cur_win().w_cursor;
         cur_win().w_cursor = unsafe { *pos };
-        unsafe {
-            del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false);
-            ins_char(nc);
-        }
+        unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
+        unsafe { ins_char(nc) };
         cur_win().w_cursor = saved;
     } else {
         unsafe { pbyte(*pos, nc) };

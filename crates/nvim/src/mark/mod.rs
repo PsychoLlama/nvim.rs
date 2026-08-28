@@ -157,10 +157,8 @@ pub unsafe fn free_fmark(fm: fmark_T) {
 /// As [`free_fmark`], plus `fm.fname` must be an owned allocation or null.
 pub unsafe fn free_xfmark(fm: xfmark_T) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        xfree(fm.fname.cast());
-        free_fmark(fm.fmark);
-    }
+    unsafe { xfree(fm.fname.cast()) };
+    unsafe { free_fmark(fm.fmark) };
 }
 
 /// Free and clear fmark_T item.
@@ -194,46 +192,46 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
     // SAFETY: the three keys are `'static` C strings, `mark_str` and `items`
     // outlive the `aucmd_defer` call, and `aucmd_defer` copies the payload
     // before it returns. `buf` is the caller's live buffer.
+    let mut items: [KeyValuePair; 3] = [
+        key_value_pair {
+            key: unsafe { cstr_as_string(c"name".as_ptr()) },
+            value: object {
+                type_0: kObjectTypeString,
+                data: object_data {
+                    string: String_0::from_raw_parts(mark_str.as_mut_ptr(), 1),
+                },
+            },
+        },
+        key_value_pair {
+            key: unsafe { cstr_as_string(c"line".as_ptr()) },
+            value: object {
+                type_0: kObjectTypeInteger,
+                data: object_data {
+                    integer: Integer::from(pos.lnum),
+                },
+            },
+        },
+        key_value_pair {
+            key: unsafe { cstr_as_string(c"col".as_ptr()) },
+            value: object {
+                type_0: kObjectTypeInteger,
+                data: object_data {
+                    integer: Integer::from(pos.col),
+                },
+            },
+        },
+    ];
+    let mut payload: Object = object {
+        type_0: kObjectTypeDict,
+        data: object_data {
+            dict: Dict {
+                size: items.len(),
+                capacity: items.len(),
+                items: items.as_mut_ptr(),
+            },
+        },
+    };
     unsafe {
-        let mut items: [KeyValuePair; 3] = [
-            key_value_pair {
-                key: cstr_as_string(c"name".as_ptr()),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: object_data {
-                        string: String_0::from_raw_parts(mark_str.as_mut_ptr(), 1),
-                    },
-                },
-            },
-            key_value_pair {
-                key: cstr_as_string(c"line".as_ptr()),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: object_data {
-                        integer: Integer::from(pos.lnum),
-                    },
-                },
-            },
-            key_value_pair {
-                key: cstr_as_string(c"col".as_ptr()),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: object_data {
-                        integer: Integer::from(pos.col),
-                    },
-                },
-            },
-        ];
-        let mut payload: Object = object {
-            type_0: kObjectTypeDict,
-            data: object_data {
-                dict: Dict {
-                    size: items.len(),
-                    capacity: items.len(),
-                    items: items.as_mut_ptr(),
-                },
-            },
-        };
         aucmd_defer(
             EVENT_MARKSET,
             mark_str.as_mut_ptr(),
@@ -242,8 +240,8 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
             Buf::new(buf),
             ptr::null_mut(),
             &raw mut payload,
-        );
-    }
+        )
+    };
 }
 
 /// Set named mark "c" to position "pos".
@@ -342,16 +340,16 @@ pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
         wp.w_tagstacklen -= 1;
         // SAFETY: source and destination are inside `[taggy_T; 20]` and the
         // length is what is left above `i`, so the move stays in the array.
+        let stack = unsafe { &raw mut (*wp.raw()).w_tagstack }.cast::<taggy_T>();
         unsafe {
-            let stack = (&raw mut (*wp.raw()).w_tagstack).cast::<taggy_T>();
             memmove(
                 stack.offset(i as isize).cast(),
                 stack.offset(i as isize + 1).cast(),
                 size_t::try_from(wp.w_tagstacklen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<taggy_T>()),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -463,24 +461,26 @@ pub(super) unsafe fn fname2fnum(fm: *mut xfmark_T) {
     // `name`/`dir` are `MAXPATHL`/`IOSIZE` bytes of this frame's own storage.
     // Upstream shares `NameBuff`/`IObuff`, which `buflist_new` runs
     // autocommands over.
-    unsafe {
-        // `~/` is expanded here rather than by `buflist_new`, because the
-        // shada file stores the tilde form and two spellings of one path
-        // would open two buffers.
-        if *fname == '~' as c_char && vim_ispathsep_nocolon(c_int::from(*fname.offset(1))) {
-            let len = expand_env(c"~/".as_ptr().cast_mut(), name_buf, MAXPATHL);
+    // `~/` is expanded here rather than by `buflist_new`, because the
+    // shada file stores the tilde form and two spellings of one path
+    // would open two buffers.
+    if unsafe { *fname } == '~' as c_char
+        && vim_ispathsep_nocolon(c_int::from(unsafe { *fname.offset(1) }))
+    {
+        let len = unsafe { expand_env(c"~/".as_ptr().cast_mut(), name_buf, MAXPATHL) };
+        unsafe {
             xstrlcpy(
                 name_buf.add(len),
                 fname.offset(2),
                 (MAXPATHL as size_t).wrapping_sub(len),
-            );
-        } else {
-            xstrlcpy(name_buf, fname, MAXPATHL as size_t);
-        }
-        os_dirname(dir_buf, IOSIZE as size_t);
-        let short = path_shorten_fname(name_buf, dir_buf);
-        buflist_new(name_buf, short, 1, 0);
+            )
+        };
+    } else {
+        unsafe { xstrlcpy(name_buf, fname, MAXPATHL as size_t) };
     }
+    unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
+    let short = unsafe { path_shorten_fname(name_buf, dir_buf) };
+    unsafe { buflist_new(name_buf, short, 1, 0) };
 }
 
 /// Check all file marks for a name that matches the file name in buf.
@@ -649,24 +649,22 @@ pub unsafe fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T) {
         return;
     }
     // SAFETY: the caller promised a live buffer and a line of it.
-    unsafe {
-        let p = ml_get_buf(buf, pos.lnum);
-        if *p == NUL_BYTE || ml_get_buf_len(buf, pos.lnum) < pos.col {
-            pos.col = 0;
-        } else {
-            pos.col -= utf_head_off(p, p.offset(pos.col as isize));
-        }
-        // A `coladd` of 1 on a printable wide character is the "one cell into
-        // it" position virtual editing produces; the head byte has no such
-        // offset, so it goes.
-        let at = p.offset(pos.col as isize);
-        if pos.coladd == 1
-            && c_int::from(*at) != TAB
-            && vim_isprintc(utf_ptr2char(at))
-            && ptr2cells(at) > 1
-        {
-            pos.coladd = 0;
-        }
-        *lp = pos;
+    let p = unsafe { ml_get_buf(buf, pos.lnum) };
+    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buf, pos.lnum) } < pos.col {
+        pos.col = 0;
+    } else {
+        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
     }
+    // A `coladd` of 1 on a printable wide character is the "one cell into
+    // it" position virtual editing produces; the head byte has no such
+    // offset, so it goes.
+    let at = unsafe { p.offset(pos.col as isize) };
+    if pos.coladd == 1
+        && c_int::from(unsafe { *at }) != TAB
+        && unsafe { vim_isprintc(utf_ptr2char(at)) }
+        && unsafe { ptr2cells(at) } > 1
+    {
+        pos.coladd = 0;
+    }
+    unsafe { *lp = pos };
 }

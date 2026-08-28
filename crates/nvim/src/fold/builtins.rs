@@ -132,16 +132,14 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // `dashes` and `s`; `r` is an allocation big enough for all of them.
     let one = c"+-%s%3d line: ".as_ptr();
     let many = c"+-%s%3d lines: ".as_ptr();
-    unsafe {
-        let txt = ngettext(one, many, count as c_ulong);
-        let mut len = strlen(txt) + strlen(dashes) + 20 + strlen(s);
-        let r = xmalloc(len) as *mut c_char;
-        snprintf(r, len, txt, dashes, count);
-        len = strlen(r);
-        strcat(r, s);
-        foldtext_cleanup(r.add(len));
-        rv.vval.v_string = r;
-    }
+    let txt = unsafe { ngettext(one, many, count as c_ulong) };
+    let mut len = unsafe { strlen(txt) } + unsafe { strlen(dashes) } + 20 + unsafe { strlen(s) };
+    let r = unsafe { xmalloc(len) } as *mut c_char;
+    unsafe { snprintf(r, len, txt, dashes, count) };
+    len = unsafe { strlen(r) };
+    unsafe { strcat(r, s) };
+    unsafe { foldtext_cleanup(r.add(len)) };
+    rv.vval.v_string = r;
 }
 
 /// "foldtextresult(lnum)" function

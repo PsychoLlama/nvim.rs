@@ -135,39 +135,40 @@ pub(crate) unsafe fn block_insert(
         let mut skipped = 0;
         // SAFETY: `newp` was allocated for exactly what is written here, and
         // `oldp` is a NUL-terminated buffer line at least `offset` bytes long.
+        // Up to the shifted part.
+        unsafe { memmove(newp as *mut c_void, oldp as *const c_void, offset as size_t) };
+        oldp = unsafe { oldp.offset(offset as isize) };
+
+        // Pre-padding, then the new text.
+        let pad = unsafe { newp.offset(offset as isize) } as *mut c_void;
+        unsafe { memset(pad, ' ' as c_int, spaces as size_t) };
+        let at = unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
+        unsafe { memmove(at, s as *const c_void, slen) };
+        offset += slen as colnr_T;
+
+        if spaces > 0 && bdp.is_short == 0 {
+            if unsafe { *oldp } as c_int == TAB {
+                // Post-padding: the rest of the TAB being split, which is
+                // then dropped rather than copied.
+                let tail =
+                    unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
+                unsafe { memset(tail, ' ' as c_int, (ts_val - spaces) as size_t) };
+                oldp = unsafe { oldp.offset(1) };
+                count += 1;
+                skipped = 1;
+            } else {
+                // Not a TAB, so no extra spaces.
+                count = spaces;
+            }
+        }
+        if spaces > 0 {
+            offset += count;
+        }
+        unsafe { strcpy(newp.offset(offset as isize), oldp) };
+
+        unsafe { ml_replace(lnum, newp, false) };
+        let splice = offset - startcol;
         unsafe {
-            // Up to the shifted part.
-            memmove(newp as *mut c_void, oldp as *const c_void, offset as size_t);
-            oldp = oldp.offset(offset as isize);
-
-            // Pre-padding, then the new text.
-            let pad = newp.offset(offset as isize) as *mut c_void;
-            memset(pad, ' ' as c_int, spaces as size_t);
-            let at = newp.offset((offset + spaces as colnr_T) as isize) as *mut c_void;
-            memmove(at, s as *const c_void, slen);
-            offset += slen as colnr_T;
-
-            if spaces > 0 && bdp.is_short == 0 {
-                if *oldp as c_int == TAB {
-                    // Post-padding: the rest of the TAB being split, which is
-                    // then dropped rather than copied.
-                    let tail = newp.offset((offset + spaces as colnr_T) as isize) as *mut c_void;
-                    memset(tail, ' ' as c_int, (ts_val - spaces) as size_t);
-                    oldp = oldp.offset(1);
-                    count += 1;
-                    skipped = 1;
-                } else {
-                    // Not a TAB, so no extra spaces.
-                    count = spaces;
-                }
-            }
-            if spaces > 0 {
-                offset += count;
-            }
-            strcpy(newp.offset(offset as isize), oldp);
-
-            ml_replace(lnum, newp, false);
-            let splice = offset - startcol;
             extmark_splice_cols(
                 curbuf.get(),
                 lnum as c_int - 1,
@@ -175,8 +176,8 @@ pub(crate) unsafe fn block_insert(
                 skipped,
                 splice,
                 kExtmarkUndo,
-            );
-        }
+            )
+        };
 
         if lnum == oap.end.lnum {
             // `']` goes to the end of the block, not the end of the insert

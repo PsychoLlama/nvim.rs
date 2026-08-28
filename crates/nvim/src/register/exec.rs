@@ -51,28 +51,25 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
         // SAFETY: a non-null `y_array` holds `y_size` lines, so `pp` names
         // the last of them; `tmp` is sized for that line's bytes, `p`'s
         // `plen`, and a NUL, and both originals are freed once copied.
-        unsafe {
-            let pp = (*reg).y_array.add((*reg).y_size.wrapping_sub(1));
-            let tmplen = (*pp).len().wrapping_add(plen);
-            let tmp = xmalloc(tmplen.wrapping_add(1)) as *mut c_char;
-            memcpy(tmp as *mut c_void, (*pp).data().cast(), (*pp).len());
-            memcpy(tmp.add((*pp).len()).cast(), p as *const c_void, plen);
-            *tmp.add(tmplen) = NUL as c_char;
-            xfree(p as *mut c_void);
-            xfree((*pp).data() as *mut c_void);
-            *pp = String_0::from_raw_parts(tmp, tmplen);
-        }
+        let last = unsafe { (*reg).y_size }.wrapping_sub(1);
+        let pp = unsafe { (*reg).y_array.add(last) };
+        let tmplen = unsafe { *pp }.len().wrapping_add(plen);
+        let tmp = unsafe { xmalloc(tmplen.wrapping_add(1)) } as *mut c_char;
+        unsafe { memcpy(tmp as *mut c_void, (*pp).data().cast(), (*pp).len()) };
+        unsafe { memcpy(tmp.add((*pp).len()).cast(), p as *const c_void, plen) };
+        unsafe { *tmp.add(tmplen) = NUL as c_char };
+        unsafe { xfree(p as *mut c_void) };
+        unsafe { xfree((*pp).data() as *mut c_void) };
+        unsafe { *pp = String_0::from_raw_parts(tmp, tmplen) };
     } else {
         // SAFETY: `reg` is a live register. It is emptied and then given a
         // one-element array holding `p`, whose ownership passes to it.
-        unsafe {
-            free_register(reg);
-            (*reg).additional_data = ::core::ptr::null_mut();
-            (*reg).y_array = xmalloc(::core::mem::size_of::<String_0>()) as *mut String_0;
-            *(*reg).y_array = String_0::from_raw_parts(p, plen);
-            (*reg).y_size = 1;
-            (*reg).y_type = kMTCharWise;
-        }
+        unsafe { free_register(reg) };
+        unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
+        unsafe { (*reg).y_array = xmalloc(::core::mem::size_of::<String_0>()) as *mut String_0 };
+        unsafe { *(*reg).y_array = String_0::from_raw_parts(p, plen) };
+        unsafe { (*reg).y_size = 1 };
+        unsafe { (*reg).y_type = kMTCharWise };
     }
     // SAFETY: `reg` is a live register.
     unsafe { (*reg).timestamp = os_time() };
@@ -322,11 +319,9 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
         // SAFETY: `cmd_start` only ever falls from the caller's `*idx`, so it
         // is one of the `*idx + 1` lines; each is NUL-terminated, which is
         // what `skipwhite` and the two tests below need.
-        unsafe {
-            let p = skipwhite((*lines.add(cmd_start)).data());
-            if c_int::from(*p) != '\\' as c_int && !is_continuation_comment(p) {
-                break;
-            }
+        let p = unsafe { skipwhite((*lines.add(cmd_start)).data()) };
+        if c_int::from(unsafe { *p }) != '\\' as c_int && !unsafe { is_continuation_comment(p) } {
+            break;
         }
     }
 
@@ -334,20 +329,18 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
     // SAFETY: `cmd_start..=cmd_end` are lines of `lines`, as above, and each
     // is NUL-terminated; `p` walks inside one of them, so the length handed
     // to `ga_concat_len` is the rest of that line.
-    unsafe {
-        let mut tmp = lines.add(cmd_start);
-        ga_concat_len(&raw mut ga, (*tmp).data(), (*tmp).len());
-        for j in cmd_start + 1..=cmd_end {
-            tmp = lines.add(j);
-            let mut p = skipwhite((*tmp).data());
-            if c_int::from(*p) == '\\' as c_int {
-                if ga.ga_len > 400 {
-                    ga_set_growsize(&raw mut ga, ga.ga_len.min(8000));
-                }
-                p = p.add(1);
-                let rest = (*tmp).data().add((*tmp).len()).offset_from(p) as size_t;
-                ga_concat_len(&raw mut ga, p, rest);
+    let mut tmp = unsafe { lines.add(cmd_start) };
+    unsafe { ga_concat_len(&raw mut ga, (*tmp).data(), (*tmp).len()) };
+    for j in cmd_start + 1..=cmd_end {
+        tmp = unsafe { lines.add(j) };
+        let mut p = unsafe { skipwhite((*tmp).data()) };
+        if c_int::from(unsafe { *p }) == '\\' as c_int {
+            if ga.ga_len > 400 {
+                unsafe { ga_set_growsize(&raw mut ga, ga.ga_len.min(8000)) };
             }
+            p = unsafe { p.add(1) };
+            let rest = unsafe { (*tmp).data().add((*tmp).len()).offset_from(p) } as size_t;
+            unsafe { ga_concat_len(&raw mut ga, p, rest) };
         }
     }
     // SAFETY: `ga` holds `ga_len` bytes, which are copied out before it is
@@ -370,11 +363,9 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
 unsafe fn is_continuation_comment(p: *const c_char) -> bool {
     // SAFETY: `p` is NUL-terminated, and each test in the chain is the proof
     // that the next byte is still inside the string, so it stays whole.
-    unsafe {
-        c_int::from(*p) == '"' as c_int
-            && c_int::from(*p.add(1)) == '\\' as c_int
-            && c_int::from(*p.add(2)) == ' ' as c_int
-    }
+    c_int::from(unsafe { *p }) == '"' as c_int
+        && c_int::from(unsafe { *p.add(1) }) == '\\' as c_int
+        && c_int::from(unsafe { *p.add(2) }) == ' ' as c_int
 }
 
 /// Queue the *contents* of register `regname` in the typeahead buffer, so
@@ -520,12 +511,11 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
             // SAFETY: `str` is that NUL-terminated line, so `skipwhite` stops
             // inside it and `*p` is one of its bytes; `i` is in range and
             // above zero, which is what `execreg_line_continuation` asks for.
-            unsafe {
-                let p = skipwhite(str);
-                if c_int::from(*p) == '\\' as c_int || is_continuation_comment(p) {
-                    str = execreg_line_continuation((*reg).y_array, &raw mut i);
-                    free_str = true;
-                }
+            let p = unsafe { skipwhite(str) };
+            if c_int::from(unsafe { *p }) == '\\' as c_int || unsafe { is_continuation_comment(p) }
+            {
+                str = unsafe { execreg_line_continuation((*reg).y_array, &raw mut i) };
+                free_str = true;
             }
         }
         // SAFETY: `str` is NUL-terminated either way -- a register line, or

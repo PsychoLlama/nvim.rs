@@ -196,10 +196,8 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe {
-        ml_replace(lnum, newp, false);
-        inserted_bytes(lnum, col as colnr_T, oldlen as c_int, newlen as c_int);
-    }
+    unsafe { ml_replace(lnum, newp, false) };
+    unsafe { inserted_bytes(lnum, col as colnr_T, oldlen as c_int, newlen as c_int) };
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
@@ -250,10 +248,8 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
     move_bytes(at.wrapping_add(slen), tail, bytes as size_t);
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe {
-        ml_replace(lnum, newp, false);
-        inserted_bytes(lnum, col, 0, slen as c_int);
-    }
+    unsafe { ml_replace(lnum, newp, false) };
+    unsafe { inserted_bytes(lnum, col, 0, slen as c_int) };
     cur_win().w_cursor.col += slen as colnr_T;
 }
 
@@ -418,10 +414,8 @@ pub unsafe fn truncate_line(fixpos: c_int) {
 
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe {
-        ml_replace(lnum, newp, false);
-        inserted_bytes(lnum, col, deleted, 0);
-    }
+    unsafe { ml_replace(lnum, newp, false) };
+    unsafe { inserted_bytes(lnum, col, deleted, 0) };
 
     // Don't leave the cursor past the end of the line.
     if fixpos != 0 && cur_win().w_cursor.col > 0 {

@@ -31,84 +31,84 @@ pub(crate) unsafe fn getvcol(
     cursor: *mut colnr_T,
     end: *mut colnr_T,
 ) {
-    unsafe {
-        let line = ml_get_buf(wp.w_buffer, (*pos).lnum);
-        let end_col = (*pos).col;
+    let line = unsafe { ml_get_buf(wp.w_buffer, (*pos).lnum) };
+    let end_col = unsafe { (*pos).col };
 
-        let mut csarg = CharsizeArg::default();
-        let cstype = init_charsize_arg(&mut csarg, wp, (*pos).lnum, line);
-        csarg.max_head_vcol = -1;
+    let mut csarg = CharsizeArg::default();
+    let cstype = unsafe { init_charsize_arg(&mut csarg, wp, (*pos).lnum, line) };
+    csarg.max_head_vcol = -1;
 
-        let mut on_nul = false;
-        let mut vcol: colnr_T = 0;
-        let mut char_size;
-        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
+    let mut on_nul = false;
+    let mut vcol: colnr_T = 0;
+    let mut char_size;
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
 
-        if cstype == CharsizeKind::Fast {
-            let use_tabstop = csarg.use_tabstop;
-            loop {
-                if *ci.ptr == NUL as c_char {
-                    // The cursor on a NUL is treated like a one-cell char.
-                    char_size = CharSize { width: 1, head: 0 };
-                    break;
-                }
-                char_size = charsize_fast_impl(wp.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value);
-                let next = utfc_next(ci);
-                if next.ptr.offset_from(line) > end_col as isize {
-                    break;
-                }
-                ci = next;
-                vcol += char_size.width;
+    if cstype == CharsizeKind::Fast {
+        let use_tabstop = csarg.use_tabstop;
+        loop {
+            if unsafe { *ci.ptr } == NUL as c_char {
+                // The cursor on a NUL is treated like a one-cell char.
+                char_size = CharSize { width: 1, head: 0 };
+                break;
             }
+            char_size =
+                unsafe { charsize_fast_impl(wp.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value) };
+            let next = unsafe { utfc_next(ci) };
+            if unsafe { next.ptr.offset_from(line) } > end_col as isize {
+                break;
+            }
+            ci = next;
+            vcol += char_size.width;
+        }
+    } else {
+        loop {
+            char_size = unsafe { charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value) };
+            // Don't go past the end of the line.
+            if unsafe { *ci.ptr } == NUL as c_char {
+                // A NUL at the end of the line takes one column, unless
+                // there is virtual text.
+                char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
+                on_nul = true;
+                break;
+            }
+            let next = unsafe { utfc_next(ci) };
+            if unsafe { next.ptr.offset_from(line) } > end_col as isize {
+                break;
+            }
+            ci = next;
+            vcol += char_size.width;
+        }
+    }
+
+    if unsafe { *ci.ptr } == NUL as c_char
+        && end_col < MAXCOL
+        && end_col as isize > unsafe { ci.ptr.offset_from(line) }
+    {
+        unsafe { (*pos).col = ci.ptr.offset_from(line) as colnr_T };
+    }
+
+    let head = char_size.head;
+    let incr = char_size.width;
+
+    if !start.is_null() {
+        unsafe { *start = vcol + head };
+    }
+    if !end.is_null() {
+        unsafe { *end = vcol + incr - 1 };
+    }
+    if !cursor.is_null() {
+        let cursor_at_tab_end = ci.chr.value == TAB
+            && State.get() & MODE_NORMAL != 0
+            && wp.w_onebuf_opt.wo_list == 0
+            && !virtual_active(wp)
+            && !(visual_active()
+                && (unsafe { *p_sel.get() } == b'e' as c_char
+                    || ltoreq(unsafe { *pos }, visual_anchor())));
+        if cursor_at_tab_end {
+            unsafe { *cursor = vcol + incr - 1 };
         } else {
-            loop {
-                char_size = charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value);
-                // Don't go past the end of the line.
-                if *ci.ptr == NUL as c_char {
-                    // A NUL at the end of the line takes one column, unless
-                    // there is virtual text.
-                    char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
-                    on_nul = true;
-                    break;
-                }
-                let next = utfc_next(ci);
-                if next.ptr.offset_from(line) > end_col as isize {
-                    break;
-                }
-                ci = next;
-                vcol += char_size.width;
-            }
-        }
-
-        if *ci.ptr == NUL as c_char
-            && end_col < MAXCOL
-            && end_col as isize > ci.ptr.offset_from(line)
-        {
-            (*pos).col = ci.ptr.offset_from(line) as colnr_T;
-        }
-
-        let head = char_size.head;
-        let incr = char_size.width;
-
-        if !start.is_null() {
-            *start = vcol + head;
-        }
-        if !end.is_null() {
-            *end = vcol + incr - 1;
-        }
-        if !cursor.is_null() {
-            let cursor_at_tab_end = ci.chr.value == TAB
-                && State.get() & MODE_NORMAL != 0
-                && wp.w_onebuf_opt.wo_list == 0
-                && !virtual_active(wp)
-                && !(visual_active()
-                    && (*p_sel.get() == b'e' as c_char || ltoreq(*pos, visual_anchor())));
-            if cursor_at_tab_end {
-                *cursor = vcol + incr - 1;
-            } else {
-                vcol += virt_text_cursor_off(&csarg, on_nul);
-                *cursor = vcol + head;
-            }
+            vcol += virt_text_cursor_off(&csarg, on_nul);
+            unsafe { *cursor = vcol + head };
         }
     }
 }
@@ -118,21 +118,19 @@ pub(crate) unsafe fn getvcol(
 /// # Safety
 /// `posp` must be live.
 pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
-    unsafe {
-        let win = curwin.get();
-        let list_save = (*win).w_onebuf_opt.wo_list;
-        let mut vcol: colnr_T = 0;
-        let null = ::core::ptr::null_mut::<colnr_T>();
+    let win = curwin.get();
+    let list_save = unsafe { (*win).w_onebuf_opt.wo_list };
+    let mut vcol: colnr_T = 0;
+    let null = ::core::ptr::null_mut::<colnr_T>();
 
-        (*win).w_onebuf_opt.wo_list = 0;
-        if (*posp).coladd != 0 {
-            getvvcol(Win::new(win), posp, null, &raw mut vcol, null);
-        } else {
-            getvcol(Win::new(win), posp, null, &raw mut vcol, null);
-        }
-        (*win).w_onebuf_opt.wo_list = list_save;
-        vcol
+    unsafe { (*win).w_onebuf_opt.wo_list = 0 };
+    if unsafe { (*posp).coladd } != 0 {
+        unsafe { getvvcol(Win::new(win), posp, null, &raw mut vcol, null) };
+    } else {
+        unsafe { getvcol(Win::new(win), posp, null, &raw mut vcol, null) };
     }
+    unsafe { (*win).w_onebuf_opt.wo_list = list_save };
+    vcol
 }
 
 /// [`getvcol`] in virtual-edit mode, where the cursor can sit past the end of
@@ -147,45 +145,43 @@ pub(crate) unsafe fn getvvcol(
     cursor: *mut colnr_T,
     end: *mut colnr_T,
 ) {
-    unsafe {
-        if !virtual_active(wp) {
-            getvcol(wp, pos, start, cursor, end);
-            return;
-        }
+    if !virtual_active(wp) {
+        unsafe { getvcol(wp, pos, start, cursor, end) };
+        return;
+    }
 
-        // In virtual mode only one value is wanted.
-        let null = ::core::ptr::null_mut::<colnr_T>();
-        let mut col: colnr_T = 0;
-        getvcol(wp, pos, &raw mut col, null, null);
+    // In virtual mode only one value is wanted.
+    let null = ::core::ptr::null_mut::<colnr_T>();
+    let mut col: colnr_T = 0;
+    unsafe { getvcol(wp, pos, &raw mut col, null, null) };
 
-        let mut coladd = (*pos).coladd;
-        let mut endadd: colnr_T = 0;
+    let mut coladd = unsafe { (*pos).coladd };
+    let mut endadd: colnr_T = 0;
 
-        // The cursor cannot sit on part of a wide character.
-        let ptr = ml_get_buf(wp.w_buffer, (*pos).lnum);
-        if (*pos).col < ml_get_buf_len(wp.w_buffer, (*pos).lnum) {
-            let c = utf_ptr2char(ptr.offset((*pos).col as isize));
-            if c != TAB && vim_isprintc(c) {
-                endadd = ptr2cells(ptr.offset((*pos).col as isize)) - 1;
-                if coladd > endadd {
-                    // Past the end of the line.
-                    endadd = 0;
-                } else {
-                    coladd = 0;
-                }
+    // The cursor cannot sit on part of a wide character.
+    let ptr = unsafe { ml_get_buf(wp.w_buffer, (*pos).lnum) };
+    if unsafe { (*pos).col } < unsafe { ml_get_buf_len(wp.w_buffer, (*pos).lnum) } {
+        let c = unsafe { utf_ptr2char(ptr.offset((*pos).col as isize)) };
+        if c != TAB && unsafe { vim_isprintc(c) } {
+            endadd = unsafe { ptr2cells(ptr.offset((*pos).col as isize)) } - 1;
+            if coladd > endadd {
+                // Past the end of the line.
+                endadd = 0;
+            } else {
+                coladd = 0;
             }
         }
-        col += coladd;
+    }
+    col += coladd;
 
-        if !start.is_null() {
-            *start = col;
-        }
-        if !cursor.is_null() {
-            *cursor = col;
-        }
-        if !end.is_null() {
-            *end = col + endadd;
-        }
+    if !start.is_null() {
+        unsafe { *start = col };
+    }
+    if !cursor.is_null() {
+        unsafe { *cursor = col };
+    }
+    if !end.is_null() {
+        unsafe { *end = col + endadd };
     }
 }
 
@@ -201,26 +197,26 @@ pub(crate) unsafe fn getvcols(
     left: *mut colnr_T,
     right: *mut colnr_T,
 ) {
+    let (first, second) = if lt(unsafe { *pos1 }, unsafe { *pos2 }) {
+        (pos1, pos2)
+    } else {
+        (pos2, pos1)
+    };
+
+    let null = ::core::ptr::null_mut::<colnr_T>();
+    let mut from1: colnr_T = 0;
+    let mut from2: colnr_T = 0;
+    let mut to1: colnr_T = 0;
+    let mut to2: colnr_T = 0;
+    unsafe { getvvcol(wp, first, &raw mut from1, null, &raw mut to1) };
+    unsafe { getvvcol(wp, second, &raw mut from2, null, &raw mut to2) };
+
+    unsafe { *left = from1.min(from2) };
+    // With 'selection' exclusive the block stops one column short of the
+    // second position -- but only when that still leaves the first one's
+    // last column inside the block.
+    let before_second = from2 - 1;
     unsafe {
-        let (first, second) = if lt(*pos1, *pos2) {
-            (pos1, pos2)
-        } else {
-            (pos2, pos1)
-        };
-
-        let null = ::core::ptr::null_mut::<colnr_T>();
-        let mut from1: colnr_T = 0;
-        let mut from2: colnr_T = 0;
-        let mut to1: colnr_T = 0;
-        let mut to2: colnr_T = 0;
-        getvvcol(wp, first, &raw mut from1, null, &raw mut to1);
-        getvvcol(wp, second, &raw mut from2, null, &raw mut to2);
-
-        *left = from1.min(from2);
-        // With 'selection' exclusive the block stops one column short of the
-        // second position -- but only when that still leaves the first one's
-        // last column inside the block.
-        let before_second = from2 - 1;
         *right = if to2 > to1 {
             if *p_sel.get() == b'e' as c_char && before_second >= to1 {
                 before_second
@@ -229,6 +225,6 @@ pub(crate) unsafe fn getvcols(
             }
         } else {
             to1
-        };
-    }
+        }
+    };
 }

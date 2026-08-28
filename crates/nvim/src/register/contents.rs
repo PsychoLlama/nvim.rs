@@ -237,12 +237,10 @@ unsafe fn count_lines(
         let mut newlines: size_t = 0;
         // SAFETY: with `str_list`, `str` is a null-terminated array of string
         // pointers, so the walk stops on its terminator without leaving it.
-        unsafe {
-            let mut ss = str as *mut *mut c_char;
-            while !(*ss).is_null() {
-                newlines = newlines.wrapping_add(1);
-                ss = ss.add(1);
-            }
+        let mut ss = str as *mut *mut c_char;
+        while !unsafe { *ss }.is_null() {
+            newlines = newlines.wrapping_add(1);
+            ss = unsafe { ss.add(1) };
         }
         return (newlines, false, false);
     }
@@ -313,10 +311,8 @@ unsafe fn str_to_reg(
     if y_size.wrapping_add(newlines) == 0 {
         // SAFETY: `y_array` is the register's own allocation, and the field
         // is nulled in the same breath so nothing reads the freed block.
-        unsafe {
-            xfree((*y_ptr).y_array as *mut c_void);
-            (*y_ptr).y_array = ::core::ptr::null_mut();
-        }
+        unsafe { xfree((*y_ptr).y_array as *mut c_void) };
+        unsafe { (*y_ptr).y_array = ::core::ptr::null_mut() };
         return;
     }
 
@@ -337,16 +333,14 @@ unsafe fn str_to_reg(
         // NUL-terminated strings, so the walk stops on its terminator and
         // every string it hands on is readable; `count_lines` counted the
         // same elements, so `pp` has room for all of them from `lnum` on.
-        unsafe {
-            let mut ss = str as *mut *mut c_char;
-            while !(*ss).is_null() {
-                *pp.add(lnum) = cstr_to_string(*ss);
-                if yank_type == kMTBlockWise {
-                    maxlen = maxlen.max(mb_string2cells(*ss));
-                }
-                ss = ss.add(1);
-                lnum = lnum.wrapping_add(1);
+        let mut ss = str as *mut *mut c_char;
+        while !unsafe { *ss }.is_null() {
+            unsafe { *pp.add(lnum) = cstr_to_string(*ss) };
+            if yank_type == kMTBlockWise {
+                maxlen = maxlen.max(unsafe { mb_string2cells(*ss) });
             }
+            ss = unsafe { ss.add(1) };
+            lnum = lnum.wrapping_add(1);
         }
     } else {
         let mut start = str;
@@ -364,22 +358,21 @@ unsafe fn str_to_reg(
             // inside `str`'s `len` bytes; the two UTF-8 helpers are handed
             // the number of bytes left, so neither reads past `end`, and a
             // NUL byte is stepped over singly rather than measured.
-            unsafe {
-                while line_end < end {
-                    if c_int::from(*line_end) == '\n' as c_int {
-                        break;
-                    }
-                    if yank_type == kMTBlockWise {
-                        charlen += utf_ptr2cells_len(line_end, end.offset_from(line_end) as c_int);
-                    }
-                    // A NUL is one byte and is translated below, so it must
-                    // not be handed to the UTF-8 length.
-                    if c_int::from(*line_end) == NUL {
-                        line_end = line_end.add(1);
-                    } else {
-                        let left = end.offset_from(line_end) as c_int;
-                        line_end = line_end.offset(utf_ptr2len_len(line_end, left) as isize);
-                    }
+            while line_end < end {
+                if c_int::from(unsafe { *line_end }) == '\n' as c_int {
+                    break;
+                }
+                if yank_type == kMTBlockWise {
+                    charlen +=
+                        unsafe { utf_ptr2cells_len(line_end, end.offset_from(line_end) as c_int) };
+                }
+                // A NUL is one byte and is translated below, so it must
+                // not be handed to the UTF-8 length.
+                if c_int::from(unsafe { *line_end }) == NUL {
+                    line_end = unsafe { line_end.add(1) };
+                } else {
+                    let left = unsafe { end.offset_from(line_end) } as c_int;
+                    line_end = unsafe { line_end.offset(utf_ptr2len_len(line_end, left) as isize) };
                 }
             }
             debug_assert!(line_end >= start);
@@ -442,14 +435,12 @@ unsafe fn str_to_reg(
     // SAFETY: `y_ptr` is a live register, now holding `lnum` lines; its
     // `additional_data` is its own allocation and described the text that has
     // just been replaced, so it is dropped and the field nulled.
-    unsafe {
-        (*y_ptr).y_type = yank_type;
-        (*y_ptr).y_size = lnum;
-        xfree((*y_ptr).additional_data as *mut c_void);
-        (*y_ptr).additional_data = ::core::ptr::null_mut();
-        (*y_ptr).timestamp = os_time();
-        (*y_ptr).y_width = y_width;
-    }
+    unsafe { (*y_ptr).y_type = yank_type };
+    unsafe { (*y_ptr).y_size = lnum };
+    unsafe { xfree((*y_ptr).additional_data as *mut c_void) };
+    unsafe { (*y_ptr).additional_data = ::core::ptr::null_mut() };
+    unsafe { (*y_ptr).timestamp = os_time() };
+    unsafe { (*y_ptr).y_width = y_width };
 }
 
 /// Push the write out to the clipboard and put `""` back where it was.
@@ -507,8 +498,8 @@ pub unsafe fn write_reg_contents_lst(
                 emsg(gettext(
                     e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines
                         .as_ptr(),
-                ));
-            }
+                ))
+            };
             return;
         } else {
             first
@@ -531,11 +522,9 @@ pub unsafe fn write_reg_contents_lst(
     // it; upstream passes `strlen((char *)strings)` all the same.
     // SAFETY: `strings` is the null-terminated array of NUL-terminated
     // strings `str_list` asks for, and `reg` is the register just prepared.
-    unsafe {
-        let len = strlen(strings as *mut c_char);
-        str_to_reg(reg, yank_type, strings as *mut c_char, len, block_len, true);
-        finish_write_reg(name, reg, old_y_previous);
-    }
+    let len = unsafe { strlen(strings as *mut c_char) };
+    unsafe { str_to_reg(reg, yank_type, strings as *mut c_char, len, block_len, true) };
+    unsafe { finish_write_reg(name, reg, old_y_previous) };
 }
 
 /// Write `str` to register `name` as `yank_type`.
@@ -638,10 +627,8 @@ pub unsafe fn write_reg_contents_ex(
     }
     // SAFETY: `str` holds `len` bytes -- `strlen`'s answer, when the caller
     // gave -1 -- and `reg` is the register just prepared.
-    unsafe {
-        str_to_reg(reg, yank_type, str, len as size_t, block_len, false);
-        finish_write_reg(name, reg, old_y_previous);
-    }
+    unsafe { str_to_reg(reg, yank_type, str, len as size_t, block_len, false) };
+    unsafe { finish_write_reg(name, reg, old_y_previous) };
 }
 
 /// Set `reg`'s type from an API `regtype` string (`""`, `v`/`c`, `V`/`l`,
@@ -673,10 +660,8 @@ pub unsafe fn prepare_yankreg_from_object(
     // SAFETY: the caller promises a writable `reg`. As upstream, both fields
     // are settled before the width is parsed, so a `regtype` that fails below
     // still leaves the type behind.
-    unsafe {
-        (*reg).y_type = y_type;
-        (*reg).y_width = 0;
-    }
+    unsafe { (*reg).y_type = y_type };
+    unsafe { (*reg).y_width = 0 };
 
     if regtype.len() > 1 {
         // A width only means something for a block.
@@ -692,9 +677,7 @@ pub unsafe fn prepare_yankreg_from_object(
         // SAFETY: `p` is a writable local, pointing at the digit just seen;
         // `getdigits_int` walks it to the end of the run and no further, so
         // it stays inside `regtype`, and `reg` is writable.
-        unsafe {
-            (*reg).y_width = getdigits_int(&raw mut p as *mut *mut c_char, false, 1) - 1;
-        }
+        unsafe { (*reg).y_width = getdigits_int(&raw mut p as *mut *mut c_char, false, 1) - 1 };
         // Nothing may follow the width.
         // SAFETY: `p` and `regtype.data()` are into the same string.
         if regtype.len() > unsafe { p.offset_from(regtype.data()) } as size_t {
@@ -702,10 +685,8 @@ pub unsafe fn prepare_yankreg_from_object(
         }
     }
     // SAFETY: a writable `reg`, as above.
-    unsafe {
-        (*reg).additional_data = ::core::ptr::null_mut();
-        (*reg).timestamp = 0;
-    }
+    unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
+    unsafe { (*reg).timestamp = 0 };
     true
 }
 

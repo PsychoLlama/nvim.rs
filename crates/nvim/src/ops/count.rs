@@ -146,12 +146,10 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
 
         bom_count = varnumber_T::from(unsafe { bomb_size() });
         if dict.is_null() && bom_count > 0 {
-            unsafe {
-                let len = strlen(report.as_ptr());
-                let at = report.as_mut_ptr().add(len);
-                let fmt = gettext(c"(+%ld for BOM)".as_ptr());
-                vim_snprintf(at, IOSIZE as size_t - len, fmt, bom_count);
-            }
+            let len = unsafe { strlen(report.as_ptr()) };
+            let at = unsafe { report.as_mut_ptr().add(len) };
+            let fmt = unsafe { gettext(c"(+%ld for BOM)".as_ptr()) };
+            unsafe { vim_snprintf(at, IOSIZE as size_t - len, fmt, bom_count) };
         }
 
         if dict.is_null() {
@@ -198,10 +196,8 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         oparg.motion_type = kMTBlockWise;
         oparg.op_type = OP_NOP;
         // SAFETY: a live window and two live positions in its buffer.
-        unsafe {
-            let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
-            getvcols(cur_win(), &raw mut min, &raw mut max, sv, ev);
-        }
+        let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
+        unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, sv, ev) };
 
         p_sbr.set(saved_sbr);
         cur_win().w_onebuf_opt.wo_sbr = saved_w_sbr;
@@ -374,13 +370,13 @@ fn report_counts(
         let (n2, b2) = (buf2.len(), buf2.as_mut_ptr());
         let lnum = cur_win().w_cursor.lnum as int64_t;
         let (col, virtcol) = (cur_win().w_cursor.col + 1, cur_win().w_virtcol + 1);
-        unsafe {
-            let p = get_cursor_line_ptr();
-            validate_virtcol(cur_win());
-            col_print(b1, n1, col, virtcol);
-            col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p));
-            if same_as_bytes {
-                let f = c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld";
+        let p = get_cursor_line_ptr();
+        validate_virtcol(cur_win());
+        unsafe { col_print(b1, n1, col, virtcol) };
+        unsafe { col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p)) };
+        if same_as_bytes {
+            let f = c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld";
+            unsafe {
                 vim_snprintf(
                     out,
                     n,
@@ -393,14 +389,17 @@ fn report_counts(
                     words,
                     bc,
                     bytes,
-                );
-            } else {
-                let f = c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld";
-                let f = gettext(f.as_ptr());
+                )
+            };
+        } else {
+            let f =
+                c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld";
+            let f = unsafe { gettext(f.as_ptr()) };
+            unsafe {
                 vim_snprintf(
                     out, n, f, b1, b2, lnum, lines, wc, words, cc, chars, bc, bytes,
-                );
-            }
+                )
+            };
         }
         return;
     };
@@ -412,28 +411,27 @@ fn report_counts(
         // Both vcols are `c_int`, so the difference cannot overflow an
         // `int64_t` (upstream computes it under STRICT_SUB and aborts).
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
-        unsafe {
-            let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
-            getvcols(cur_win(), &raw mut min, &raw mut max, minc, maxc);
-            vim_snprintf(b1, n1, gettext(c"%ld Cols; ".as_ptr()), cols);
-        }
+        let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
+        unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, minc, maxc) };
+        unsafe { vim_snprintf(b1, n1, gettext(c"%ld Cols; ".as_ptr()), cols) };
     } else {
         buf1[0] = NUL as c_char;
     }
 
     let sel_lines = int64_t::from(sel.line_count);
-    unsafe {
-        if same_as_bytes {
-            let f = c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes";
-            let f = gettext(f.as_ptr());
-            vim_snprintf(out, n, f, b1, sel_lines, lines, wc, words, bc, bytes);
-        } else {
-            let f = c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes";
-            let f = gettext(f.as_ptr());
+    if same_as_bytes {
+        let f = c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes";
+        let f = unsafe { gettext(f.as_ptr()) };
+        unsafe { vim_snprintf(out, n, f, b1, sel_lines, lines, wc, words, bc, bytes) };
+    } else {
+        let f =
+            c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes";
+        let f = unsafe { gettext(f.as_ptr()) };
+        unsafe {
             vim_snprintf(
                 out, n, f, b1, sel_lines, lines, wc, words, cc, chars, bc, bytes,
-            );
-        }
+            )
+        };
     }
 }
 

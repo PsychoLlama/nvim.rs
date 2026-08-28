@@ -46,19 +46,17 @@ impl Leader {
     /// # Safety
     /// `self.flags` must be null or NUL-terminated.
     unsafe fn has_flag(self, flag: c_int) -> bool {
-        unsafe {
-            let mut p = self.flags;
-            if p.is_null() {
-                return false;
-            }
-            while *p as c_int != NUL && *p as c_int != ':' as c_int {
-                if *p as c_int == flag {
-                    return true;
-                }
-                p = p.add(1);
-            }
-            false
+        let mut p = self.flags;
+        if p.is_null() {
+            return false;
         }
+        while unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != ':' as c_int {
+            if unsafe { *p } as c_int == flag {
+                return true;
+            }
+            p = unsafe { p.add(1) };
+        }
+        false
     }
 }
 
@@ -80,14 +78,14 @@ impl Leader {
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub(crate) unsafe fn fmt_check_par(lnum: linenr_T, leader: &mut Leader, do_comments: bool) -> bool {
+    let ptr = ml_get(lnum);
+    leader.len = if do_comments {
+        unsafe { get_leader_len(ptr, &raw mut leader.flags, false, true) }
+    } else {
+        0
+    };
+    let ends_a_comment = leader.len > 0 && unsafe { leader.has_flag(COM_END) };
     unsafe {
-        let ptr = ml_get(lnum);
-        leader.len = if do_comments {
-            get_leader_len(ptr, &raw mut leader.flags, false, true)
-        } else {
-            0
-        };
-        let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
         *skipwhite(ptr.offset(leader.len as isize)) as c_int == NUL
             || ends_a_comment
             || starts_para(lnum, NUL, false)
@@ -99,14 +97,12 @@ pub(crate) unsafe fn fmt_check_par(lnum: linenr_T, leader: &mut Leader, do_comme
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub(crate) unsafe fn ends_in_white(lnum: linenr_T) -> bool {
-    unsafe {
-        let s = ml_get(lnum);
-        if *s as c_int == NUL {
-            return false;
-        }
-        let last = ml_get_len(lnum) - 1;
-        ascii_iswhite(*s.offset(last as isize) as u8 as c_int)
+    let s = ml_get(lnum);
+    if unsafe { *s } as c_int == NUL {
+        return false;
     }
+    let last = ml_get_len(lnum) - 1;
+    ascii_iswhite(unsafe { *s.offset(last as isize) } as u8 as c_int)
 }
 
 /// Whether the leaders of line `lnum` and the line after it are the same, so
@@ -124,67 +120,65 @@ pub(crate) unsafe fn ends_in_white(lnum: linenr_T) -> bool {
 /// # Safety
 /// `lnum` and `lnum + 1` must be valid lines of the current buffer.
 pub(crate) unsafe fn same_leader(lnum: linenr_T, first: Leader, second: Leader) -> bool {
-    unsafe {
-        if first.len == 0 {
-            return second.len == 0;
-        }
-        if !first.flags.is_null() {
-            let mut p = first.flags;
-            while *p as c_int != NUL && *p as c_int != ':' as c_int {
-                match *p as c_int {
-                    COM_FIRST => return second.len == 0,
-                    COM_END => return false,
-                    COM_START => {
-                        // A comment's opening line joins the next one only
-                        // when it has text of its own and the next line's
-                        // item is the comment's middle.
-                        if ml_get_len(lnum) <= first.len {
-                            return false;
-                        }
-                        if second.flags.is_null() || second.len == 0 {
-                            return false;
-                        }
-                        return second.has_flag(COM_MIDDLE);
-                    }
-                    _ => {}
-                }
-                p = p.add(1);
-            }
-        }
-
-        // Compare the two leaders as text. The first line has to be copied:
-        // only one line can be locked at a time.
-        let line1: Vec<u8> =
-            ::core::slice::from_raw_parts(ml_get(lnum) as *const u8, ml_get_len(lnum) as usize)
-                .to_vec();
-        let mut idx1 = 0usize;
-        while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
-            idx1 += 1;
-        }
-        let line2 = ::core::slice::from_raw_parts(
-            ml_get(lnum + 1) as *const u8,
-            ml_get_len(lnum + 1) as usize,
-        );
-        let mut idx2 = 0usize;
-        while idx2 < second.len as usize {
-            let c = byte_at(line2, idx2);
-            if ascii_iswhite(c_int::from(c)) {
-                // White space in the second leader matches any run of it in
-                // the first.
-                while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
-                    idx1 += 1;
-                }
-            } else {
-                let c1 = byte_at(&line1, idx1);
-                idx1 += 1;
-                if c1 != c {
-                    break;
-                }
-            }
-            idx2 += 1;
-        }
-        idx2 == second.len as usize && idx1 == first.len as usize
+    if first.len == 0 {
+        return second.len == 0;
     }
+    if !first.flags.is_null() {
+        let mut p = first.flags;
+        while unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != ':' as c_int {
+            match unsafe { *p } as c_int {
+                COM_FIRST => return second.len == 0,
+                COM_END => return false,
+                COM_START => {
+                    // A comment's opening line joins the next one only
+                    // when it has text of its own and the next line's
+                    // item is the comment's middle.
+                    if ml_get_len(lnum) <= first.len {
+                        return false;
+                    }
+                    if second.flags.is_null() || second.len == 0 {
+                        return false;
+                    }
+                    return unsafe { second.has_flag(COM_MIDDLE) };
+                }
+                _ => {}
+            }
+            p = unsafe { p.add(1) };
+        }
+    }
+
+    // Compare the two leaders as text. The first line has to be copied:
+    // only one line can be locked at a time.
+    let line1: Vec<u8> = unsafe {
+        ::core::slice::from_raw_parts(ml_get(lnum) as *const u8, ml_get_len(lnum) as usize)
+    }
+    .to_vec();
+    let mut idx1 = 0usize;
+    while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
+        idx1 += 1;
+    }
+    let line2 = unsafe {
+        ::core::slice::from_raw_parts(ml_get(lnum + 1) as *const u8, ml_get_len(lnum + 1) as usize)
+    };
+    let mut idx2 = 0usize;
+    while idx2 < second.len as usize {
+        let c = byte_at(line2, idx2);
+        if ascii_iswhite(c_int::from(c)) {
+            // White space in the second leader matches any run of it in
+            // the first.
+            while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
+                idx1 += 1;
+            }
+        } else {
+            let c1 = byte_at(&line1, idx1);
+            idx1 += 1;
+            if c1 != c {
+                break;
+            }
+        }
+        idx2 += 1;
+    }
+    idx2 == second.len as usize && idx1 == first.len as usize
 }
 
 /// Whether a paragraph starts at line `lnum` -- that is, whether the line
@@ -193,29 +187,27 @@ pub(crate) unsafe fn same_leader(lnum: linenr_T, first: Leader, second: Leader) 
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub(crate) unsafe fn paragraph_start(lnum: linenr_T) -> bool {
-    unsafe {
-        if lnum <= 1 {
-            return true; // start of the file
-        }
-        if *ml_get(lnum - 1) as c_int == NUL {
-            return true; // after an empty line
-        }
-        let do_comments = has_format_option(FoFlag::Q_COMS);
-        let mut prev = Leader::NONE;
-        let mut this = Leader::NONE;
-        if fmt_check_par(lnum - 1, &mut prev, do_comments) {
-            return true; // after a non-paragraph line
-        }
-        if fmt_check_par(lnum, &mut this, do_comments) {
-            return true; // `lnum` is not a paragraph line
-        }
-        if has_format_option(FoFlag::WHITE_PAR) && !ends_in_white(lnum - 1) {
-            return true; // the previous line is missing its trailing space
-        }
-        if has_format_option(FoFlag::Q_NUMBER) && get_number_indent(lnum) > 0 {
-            return true; // a numbered item starts at `lnum`
-        }
-        // A change of comment leader.
-        !same_leader(lnum - 1, prev, this)
+    if lnum <= 1 {
+        return true; // start of the file
     }
+    if unsafe { *ml_get(lnum - 1) } as c_int == NUL {
+        return true; // after an empty line
+    }
+    let do_comments = has_format_option(FoFlag::Q_COMS);
+    let mut prev = Leader::NONE;
+    let mut this = Leader::NONE;
+    if unsafe { fmt_check_par(lnum - 1, &mut prev, do_comments) } {
+        return true; // after a non-paragraph line
+    }
+    if unsafe { fmt_check_par(lnum, &mut this, do_comments) } {
+        return true; // `lnum` is not a paragraph line
+    }
+    if has_format_option(FoFlag::WHITE_PAR) && !unsafe { ends_in_white(lnum - 1) } {
+        return true; // the previous line is missing its trailing space
+    }
+    if has_format_option(FoFlag::Q_NUMBER) && unsafe { get_number_indent(lnum) } > 0 {
+        return true; // a numbered item starts at `lnum`
+    }
+    // A change of comment leader.
+    !unsafe { same_leader(lnum - 1, prev, this) }
 }

@@ -76,12 +76,10 @@ pub unsafe fn get_foldtext(
         dashes[level as usize] = NUL as c_char;
         // SAFETY: `dashes` is this frame's, and `level` bytes of it are set.
         let ds = dashes.as_mut_ptr();
-        unsafe {
-            set_vim_var_nr(Vv::Foldstart, lnum as varnumber_T);
-            set_vim_var_nr(Vv::Foldend, lnume as varnumber_T);
-            set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t);
-            set_vim_var_nr(Vv::Foldlevel, level as varnumber_T);
-        }
+        unsafe { set_vim_var_nr(Vv::Foldstart, lnum as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Foldend, lnume as varnumber_T) };
+        unsafe { set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t) };
+        unsafe { set_vim_var_nr(Vv::Foldlevel, level as varnumber_T) };
         if !got_fdt_error.get() {
             let save_curwin = curwin.get();
             let saved_sctx = current_sctx.get();
@@ -152,10 +150,8 @@ pub unsafe fn get_foldtext(
             }
             if at(p) != NUL {
                 // SAFETY: `text` is a live NUL-terminated allocation of ours.
-                unsafe {
-                    p = transstr(text, true);
-                    xfree(text as *mut c_void);
-                }
+                p = unsafe { transstr(text, true) };
+                unsafe { xfree(text as *mut c_void) };
                 text = p;
             }
         }

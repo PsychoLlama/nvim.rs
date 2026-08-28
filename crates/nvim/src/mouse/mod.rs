@@ -455,19 +455,17 @@ fn mouse_tab_close(c1: c_int) {
 fn scroll_line_len(win: Win, lnum: linenr_T) -> colnr_T {
     // SAFETY: a live window, and a line of the buffer it shows -- so the walk
     // below stays inside that NUL-terminated line.
-    unsafe {
-        let mut p = win.buffer().line(lnum).raw();
-        let mut col: colnr_T = 0;
-        while *p != NUL as c_char {
-            let numchar = win_chartabsize(win, p, col);
-            p = p.offset(utfc_ptr2len(p) as isize);
-            if *p == NUL as c_char {
-                break; // don't count the last character
-            }
-            col += numchar;
+    let mut p = unsafe { win.buffer().line(lnum) }.raw();
+    let mut col: colnr_T = 0;
+    while unsafe { *p } != NUL as c_char {
+        let numchar = unsafe { win_chartabsize(win, p, col) };
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        if unsafe { *p } == NUL as c_char {
+            break; // don't count the last character
         }
-        col
+        col += numchar;
     }
+    col
 }
 
 /// The longest line on screen, closest to the cursor line when several tie.
@@ -578,10 +576,8 @@ pub(crate) unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
     }
 
     // SAFETY: the caller's promise, and `curwin` is a live window.
-    unsafe {
-        do_mousescroll(cap);
-        Win::current().w_redr_status = true;
-    }
+    unsafe { do_mousescroll(cap) };
+    unsafe { Win::current() }.w_redr_status = true;
     curwin.set(old_curwin);
     // SAFETY: `old_curwin` was live and nothing above closes a window.
     curbuf.set(unsafe { Win::current() }.buffer().raw());

@@ -20,17 +20,15 @@ use super::*;
 /// `fd` must be an open stream.
 pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> c_int {
     // SAFETY: the caller's promise -- an open stream.
-    unsafe {
-        if foldmethod_is_manual(wp)
-            && (put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
-                || put_folds_recurse(fd, window_folds(wp), 0) == FAIL
-                || put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) == FAIL)
-        {
-            return FAIL;
-        }
-        if wp.w_fold_manual {
-            return put_foldopen_recurse(fd, wp, window_folds(wp), 0);
-        }
+    if foldmethod_is_manual(wp)
+        && (unsafe { put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) } == FAIL
+            || unsafe { put_folds_recurse(fd, window_folds(wp), 0) } == FAIL
+            || unsafe { put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) } == FAIL)
+    {
+        return FAIL;
+    }
+    if wp.w_fold_manual {
+        return unsafe { put_foldopen_recurse(fd, wp, window_folds(wp), 0) };
     }
     OK
 }
@@ -130,10 +128,10 @@ pub(super) unsafe fn put_foldopen_recurse(
 /// `fd` must be an open stream.
 pub(super) unsafe fn put_fold_open_close(fd: *mut FILE, fold: Fold, off: linenr_T) -> c_int {
     // SAFETY: the caller's promise; both formats match their arguments.
-    unsafe {
-        if fprintf(fd, c"%d".as_ptr(), fold.top() + off) < 0
-            || put_eol(fd) == FAIL
-            || fprintf(
+    if unsafe { fprintf(fd, c"%d".as_ptr(), fold.top() + off) } < 0
+        || unsafe { put_eol(fd) } == FAIL
+        || unsafe {
+            fprintf(
                 fd,
                 c"sil! normal! z%c".as_ptr(),
                 if fold.is(FD_CLOSED) {
@@ -141,11 +139,11 @@ pub(super) unsafe fn put_fold_open_close(fd: *mut FILE, fold: Fold, off: linenr_
                 } else {
                     'o' as c_int
                 },
-            ) < 0
-            || put_eol(fd) == FAIL
-        {
-            return FAIL;
-        }
+            )
+        } < 0
+        || unsafe { put_eol(fd) } == FAIL
+    {
+        return FAIL;
     }
     OK
 }

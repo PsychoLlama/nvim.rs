@@ -169,13 +169,11 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             // SAFETY: `look` walks the option string and both loops stop at
             // its NUL -- pure pointer work, so one region around it is as
             // tight as this gets.
-            unsafe {
-                while *look != 0 && *look as u8 != b'>' {
-                    look = look.add(1);
-                }
-                while *look as u8 == b'>' {
-                    look = look.add(1);
-                }
+            while unsafe { *look } != 0 && unsafe { *look } as u8 != b'>' {
+                look = unsafe { look.add(1) };
+            }
+            while unsafe { *look } as u8 == b'>' {
+                look = unsafe { look.add(1) };
             }
         // SAFETY: the `=` in front of `look.add(1)` is what says that byte is
         // inside the option string; the chain is left whole.
@@ -268,10 +266,8 @@ unsafe fn colon_reindents() -> bool {
     };
     // SAFETY: the recognisers may have unlocked the line, so it is fetched
     // again before the colon goes back.
-    unsafe {
-        p = get_cursor_line_ptr();
-        *p.offset(col - 1) = b':' as c_char;
-    }
+    p = get_cursor_line_ptr();
+    unsafe { *p.offset(col - 1) = b':' as c_char };
     looks_like_one
 }
 
@@ -298,12 +294,10 @@ unsafe fn word_matches(
         // SAFETY: local to this body and reached only from the two sites
         // below, each of which has just established that `a` and `b` have
         // `len` readable bytes in front of them.
-        unsafe {
-            if icase {
-                mb_strnicmp(a, b, len) == 0
-            } else {
-                strncmp(a, b, len) == 0
-            }
+        if icase {
+            unsafe { mb_strnicmp(a, b, len) == 0 }
+        } else {
+            unsafe { strncmp(a, b, len) == 0 }
         }
     };
 
@@ -314,18 +308,16 @@ unsafe fn word_matches(
         // bytes into it; `mb_prevptr` walks back inside that same line, and
         // `same` is asked only once `s.add(len)` is known to be within it --
         // the `&&` chain is left whole so that it keeps being so.
-        unsafe {
-            let line = get_cursor_line_ptr();
-            let mut s = line.offset(cur_win().w_cursor.col as isize);
-            while s > line {
-                let n = mb_prevptr(line, s);
-                if !vim_iswordp(n) {
-                    break;
-                }
-                s = n;
+        let line = get_cursor_line_ptr();
+        let mut s = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+        while s > line {
+            let n = unsafe { mb_prevptr(line, s) };
+            if !unsafe { vim_iswordp(n) } {
+                break;
             }
-            s.add(len) <= line.offset(cur_win().w_cursor.col as isize) && same(s, look)
+            s = n;
         }
+        unsafe { s.add(len) <= line.offset(cur_win().w_cursor.col as isize) && same(s, look) }
     } else {
         // TODO(@brammool): multi-byte.
         // `look[len - 1]` is upstream's `p[-1]`, read off the *end* of
@@ -348,12 +340,10 @@ unsafe fn word_matches(
         // has established that `col >= len`, so the `len + 1` bytes behind it
         // are on that line -- except when `col == len`, which the `||` chain
         // keeps in front of the read and which is left whole for that reason.
-        unsafe {
-            let line = get_cursor_pos_ptr();
-            (cur_win().w_cursor.col == len as colnr_T
-                || !vim_iswordc(c_int::from(*line.sub(len + 1) as u8)))
-                && same(line.sub(len), look)
-        }
+        let line = get_cursor_pos_ptr();
+        (cur_win().w_cursor.col == len as colnr_T
+            || !unsafe { vim_iswordc(c_int::from(*line.sub(len + 1) as u8)) })
+            && same(unsafe { line.sub(len) }, look)
     };
 
     // "0=word" also requires that only blanks precede the word.

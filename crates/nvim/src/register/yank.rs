@@ -60,15 +60,13 @@ unsafe fn yank_copy_line(
     // SAFETY: the three runs are together exactly the `size` bytes `start`
     // owns, and `textstart` points at `textlen` bytes of the current line.
     let mut pnew = start;
-    unsafe {
-        memset(pnew as *mut c_void, ' ' as c_int, def.startspaces as size_t);
-        pnew = pnew.offset(def.startspaces as isize);
-        let text = def.textstart as *const c_void;
-        memmove(pnew as *mut c_void, text, def.textlen as size_t);
-        pnew = pnew.offset(def.textlen as isize);
-        memset(pnew as *mut c_void, ' ' as c_int, def.endspaces as size_t);
-        pnew = pnew.offset(def.endspaces as isize);
-    }
+    unsafe { memset(pnew as *mut c_void, ' ' as c_int, def.startspaces as size_t) };
+    pnew = unsafe { pnew.offset(def.startspaces as isize) };
+    let text = def.textstart as *const c_void;
+    unsafe { memmove(pnew as *mut c_void, text, def.textlen as size_t) };
+    pnew = unsafe { pnew.offset(def.textlen as isize) };
+    unsafe { memset(pnew as *mut c_void, ' ' as c_int, def.endspaces as size_t) };
+    pnew = unsafe { pnew.offset(def.endspaces as isize) };
 
     if exclude_trailing_space {
         // Walk back over the trailing white space, a character at a time
@@ -79,11 +77,13 @@ unsafe fn yank_copy_line(
         // read is what proves the byte at `s - 1` is one of them.  `pnew`
         // steps back over bytes it just wrote.
         let mut s = def.textlen + def.endspaces;
-        unsafe {
-            while s > 0 && ascii_iswhite(c_int::from(*def.textstart.offset((s - 1) as isize))) {
-                s -= utf_head_off(def.textstart, def.textstart.offset((s - 1) as isize)) + 1;
-                pnew = pnew.offset(-1);
-            }
+        while s > 0
+            && ascii_iswhite(c_int::from(unsafe {
+                *def.textstart.offset((s - 1) as isize)
+            }))
+        {
+            s -= unsafe { utf_head_off(def.textstart, def.textstart.offset((s - 1) as isize)) } + 1;
+            pnew = unsafe { pnew.offset(-1) };
         }
     }
     // SAFETY: `pnew` is at most one past the text, and `xmallocz` left room
@@ -135,22 +135,20 @@ unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_typ
         // because a charwise register holds a line, and the caller promises
         // `reg` holds one too.  Both strings are NUL-terminated and carry
         // their own lengths, and the joined allocation is the sum plus a NUL.
-        unsafe {
-            let first_new = *(*reg).y_array;
-            j = j.wrapping_sub(1);
-            let last_old = &mut *(*curr).y_array.add(j);
-            let joined_size = last_old.len().wrapping_add(first_new.len());
-            let pnew = xmalloc(joined_size.wrapping_add(1)) as *mut c_char;
-            strcpy(pnew, last_old.data());
-            strcpy(pnew.add(last_old.len()), first_new.data());
-            xfree(last_old.data() as *mut c_void);
-            *last_old = String_0::from_raw_parts(pnew, joined_size);
-            j = j.wrapping_add(1);
+        let first_new = unsafe { *(*reg).y_array };
+        j = j.wrapping_sub(1);
+        let last_old = unsafe { &mut *(*curr).y_array.add(j) };
+        let joined_size = last_old.len().wrapping_add(first_new.len());
+        let pnew = unsafe { xmalloc(joined_size.wrapping_add(1)) } as *mut c_char;
+        unsafe { strcpy(pnew, last_old.data()) };
+        unsafe { strcpy(pnew.add(last_old.len()), first_new.data()) };
+        unsafe { xfree(last_old.data() as *mut c_void) };
+        *last_old = String_0::from_raw_parts(pnew, joined_size);
+        j = j.wrapping_add(1);
 
-            xfree(first_new.data() as *mut c_void);
-            (*(*reg).y_array).set_data(::core::ptr::null_mut());
-            (*(*reg).y_array).set_len(0);
-        }
+        unsafe { xfree(first_new.data() as *mut c_void) };
+        unsafe { *(*reg).y_array }.set_data(::core::ptr::null_mut());
+        unsafe { *(*reg).y_array }.set_len(0);
         y_idx = 1;
     }
 
@@ -159,15 +157,13 @@ unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_typ
     //
     // SAFETY: the space for them was made above, and `y_idx` walks `reg`'s
     // own `y_size` strings.
-    unsafe {
-        while y_idx < (*reg).y_size {
-            *(*curr).y_array.add(j) = *(*reg).y_array.add(y_idx);
-            y_idx = y_idx.wrapping_add(1);
-            j = j.wrapping_add(1);
-        }
-        (*curr).y_size = j;
-        xfree((*reg).y_array as *mut c_void);
+    while y_idx < unsafe { (*reg).y_size } {
+        unsafe { *(*curr).y_array.add(j) = *(*reg).y_array.add(y_idx) };
+        y_idx = y_idx.wrapping_add(1);
+        j = j.wrapping_add(1);
     }
+    unsafe { (*curr).y_size = j };
+    unsafe { xfree((*reg).y_array as *mut c_void) };
 }
 
 /// The "N lines yanked" message.
@@ -280,24 +276,22 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
 
     // SAFETY: `reg` is live and its array is being replaced wholesale; the
     // new one has a slot per line the walk below fills in.
+    unsafe { (*reg).y_size = yanklines };
+    unsafe { (*reg).y_type = yank_type };
+    unsafe { (*reg).y_width = 0 };
     unsafe {
-        (*reg).y_size = yanklines;
-        (*reg).y_type = yank_type;
-        (*reg).y_width = 0;
-        (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>()) as *mut String_0;
-        (*reg).additional_data = ::core::ptr::null_mut();
-        (*reg).timestamp = os_time();
-    }
+        (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>()) as *mut String_0
+    };
+    unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
+    unsafe { (*reg).timestamp = os_time() };
 
     if yank_type == kMTBlockWise {
         // A `$`-extended block has no fixed width.
         let narrow = cur_win().w_curswant == MAXCOL;
         // SAFETY: `reg` is live.
-        unsafe {
-            (*reg).y_width = op.end_vcol - op.start_vcol;
-            if narrow && (*reg).y_width > 0 {
-                (*reg).y_width -= 1;
-            }
+        unsafe { (*reg).y_width = op.end_vcol - op.start_vcol };
+        if narrow && unsafe { (*reg).y_width } > 0 {
+            unsafe { (*reg).y_width -= 1 };
         }
     }
 
@@ -318,10 +312,8 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
                 // SAFETY: `lnum` is a line of the current buffer, so `ml_get`
                 // hands back its NUL-terminated text and `ml_get_len` its
                 // length; the slot is this walk's own.
-                unsafe {
-                    let text = cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t);
-                    *(*reg).y_array.add(y_idx) = text;
-                }
+                let text = unsafe { cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t) };
+                unsafe { *(*reg).y_array.add(y_idx) = text };
             }
             kMTCharWise => {
                 // SAFETY: `lnum` is a line of the region, and `bd` is this

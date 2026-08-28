@@ -330,19 +330,17 @@ pub(crate) unsafe fn jumpto_tag(lbuf_arg: *const c_char, forceit: c_int, keep_he
     let retval = if unsafe { parse_match(lbuf.as_mut_ptr(), &mut tagp) } {
         // Truncate the file name, so that it reads as a string.
         unsafe { *tagp.fname_end = 0 };
-        unsafe {
-            Jump {
-                pattern: Pattern::of_command(&tagp),
-                expanded: expand_tag_fname(tagp.fname, tagp.tag_fname, true),
-                full_fname: ptr::null_mut(),
-                preview: g_do_tagpreview.get() != 0,
-                saved_win: None,
-                reused_window: false,
-                // Opening the file may reset it.
-                key_typed: KeyTyped.get(),
-            }
-            .run(&tagp, forceit, keep_help)
+        Jump {
+            pattern: Pattern::of_command(&tagp),
+            expanded: unsafe { expand_tag_fname(tagp.fname, tagp.tag_fname, true) },
+            full_fname: ptr::null_mut(),
+            preview: g_do_tagpreview.get() != 0,
+            saved_win: None,
+            reused_window: false,
+            // Opening the file may reset it.
+            key_typed: KeyTyped.get(),
         }
+        .run(&tagp, forceit, keep_help)
     } else {
         FAIL
     };

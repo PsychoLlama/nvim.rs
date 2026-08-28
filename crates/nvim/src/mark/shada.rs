@@ -67,9 +67,9 @@ pub unsafe fn mark_global_iter(
             'A' as c_int + at
         } else {
             '0' as c_int + at - NMARKS
-        });
-        *fm = GlobalMarks::at(at).read();
-    }
+        })
+    };
+    unsafe { *fm = GlobalMarks::at(at).read() };
     match set_global_at_or_after(at + 1) {
         Some(next) => GlobalMarks::at(next).raw().cast(),
         None => ptr::null(),
@@ -171,10 +171,8 @@ pub unsafe fn mark_buffer_iter(
         return ptr::null();
     }
     // SAFETY: writable out-parameters, and a live record.
-    unsafe {
-        *name = at;
-        *fm = (*iter_mark).clone();
-    }
+    unsafe { *name = at };
+    unsafe { *fm = (*iter_mark).clone() };
     iter_mark.cast()
 }
 

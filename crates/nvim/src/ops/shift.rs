@@ -92,19 +92,23 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
         let lines = oap.line_count as c_ulong;
         // SAFETY: `report` is `IOSIZE` bytes, and the format's `%ld %s %d`
         // match the three arguments handed after it.
-        unsafe {
-            let single = ngettext(
+        let single = unsafe {
+            ngettext(
                 c"%ld line %sed %d time".as_ptr(),
                 c"%ld line %sed %d times".as_ptr(),
                 amount as c_ulong,
-            );
-            let plural = ngettext(
+            )
+        };
+        let plural = unsafe {
+            ngettext(
                 c"%ld lines %sed %d time".as_ptr(),
                 c"%ld lines %sed %d times".as_ptr(),
                 amount as c_ulong,
-            );
-            let fmt = ngettext(single, plural, lines);
-            let out = report.as_mut_ptr();
+            )
+        };
+        let fmt = unsafe { ngettext(single, plural, lines) };
+        let out = report.as_mut_ptr();
+        unsafe {
             vim_snprintf(
                 out,
                 IOSIZE as size_t,
@@ -112,9 +116,9 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
                 oap.line_count as int64_t,
                 op,
                 amount,
-            );
-            msg_keep(out, 0, true, false);
-        }
+            )
+        };
+        unsafe { msg_keep(out, 0, true, false) };
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -348,12 +352,10 @@ fn shift_block(oap: Op, amount: c_int) {
         shift_block_right(&mut bd, total)
     };
 
-    unsafe {
-        ml_replace(lnum, shifted.line, false);
-        changed_bytes(lnum, bd.textcol);
-        let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
-        extmark_splice_cols(curbuf.get(), lnum as c_int - 1, at, old, new, kExtmarkUndo);
-    }
+    unsafe { ml_replace(lnum, shifted.line, false) };
+    unsafe { changed_bytes(lnum, bd.textcol) };
+    let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
+    unsafe { extmark_splice_cols(curbuf.get(), lnum as c_int - 1, at, old, new, kExtmarkUndo) };
 
     State.set(old_state);
     cur_win().w_cursor.col = old_col;

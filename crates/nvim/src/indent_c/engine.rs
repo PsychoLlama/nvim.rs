@@ -77,13 +77,11 @@ pub unsafe fn get_c_indent() -> c_int {
     // SAFETY: `linecopy` is a NUL-terminated copy of the line, and the
     // `strlen` test -- which the `&&` chain keeps in front -- is what says
     // `col` indexes inside it.
-    unsafe {
-        if State.get() & MODE_INSERT != 0
-            && (col as size_t) < strlen(linecopy)
-            && *linecopy.offset(col as isize) as u8 == b')'
-        {
-            *linecopy.offset(col as isize) = NUL as c_char;
-        }
+    if State.get() & MODE_INSERT != 0
+        && (col as size_t) < unsafe { strlen(linecopy) }
+        && unsafe { *linecopy.offset(col as isize) } as u8 == b')'
+    {
+        unsafe { *linecopy.offset(col as isize) = NUL as c_char };
     }
 
     // SAFETY: `linecopy` is NUL-terminated, so `skipwhite` stops inside it.

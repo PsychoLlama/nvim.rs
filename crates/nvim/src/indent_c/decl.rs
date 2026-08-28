@@ -33,17 +33,15 @@ pub(crate) unsafe fn cin_islabel_skip(s: &mut *const c_char) -> bool {
     // which is not an ID character -- and `cin_skipcomment` a pointer into
     // that string.  The `:` test in front of the `add(1)` is what says the
     // byte behind it is there too.
-    unsafe {
-        while vim_is_ident_char(c_int::from(**s as u8)) {
-            *s = (*s).offset(utfc_ptr2len(*s) as isize);
-        }
-        *s = cin_skipcomment(*s);
-        if **s as u8 != b':' {
-            return false;
-        }
-        *s = (*s).add(1);
-        **s as u8 != b':'
+    while unsafe { vim_is_ident_char(c_int::from(**s as u8)) } {
+        *s = unsafe { (*s).offset(utfc_ptr2len(*s) as isize) };
     }
+    *s = unsafe { cin_skipcomment(*s) };
+    if unsafe { **s } as u8 != b':' {
+        return false;
+    }
+    *s = unsafe { (*s).add(1) };
+    unsafe { **s as u8 != b':' }
 }
 
 /// Whether the cursor's line is a jump label (`foo:`).
@@ -152,34 +150,33 @@ pub(crate) unsafe fn cin_is_compound_init(s: *const c_char) -> bool {
     // below stops at its NUL; each `add(1)` steps over a byte the test in
     // front of it has just read, and `cin_nocode` reads no further than the
     // NUL either.
-    unsafe {
-        let mut p = r; // now just after the '=' or the "return"
-        if cin_nocode(p) {
-            return true;
-        }
-        if *p as u8 == b'&' {
-            p = cin_skipcomment(p.add(1));
-        }
-        if *p as u8 == b'(' {
-            // Skip a typecast.
-            let mut open_count = 1i32;
-            while open_count != 0 {
-                p = cin_skip_comment_and_string(p.add(1));
-                if cin_nocode(p) {
-                    return true;
-                }
-                open_count += i32::from(*p as u8 == b'(') - i32::from(*p as u8 == b')');
-            }
-            p = cin_skipcomment(p.add(1));
-            if cin_nocode(p) {
+    let mut p = r; // now just after the '=' or the "return"
+    if unsafe { cin_nocode(p) } {
+        return true;
+    }
+    if unsafe { *p } as u8 == b'&' {
+        p = unsafe { cin_skipcomment(p.add(1)) };
+    }
+    if unsafe { *p } as u8 == b'(' {
+        // Skip a typecast.
+        let mut open_count = 1i32;
+        while open_count != 0 {
+            p = unsafe { cin_skip_comment_and_string(p.add(1)) };
+            if unsafe { cin_nocode(p) } {
                 return true;
             }
+            open_count +=
+                i32::from(unsafe { *p } as u8 == b'(') - i32::from(unsafe { *p } as u8 == b')');
         }
-        while *p as u8 == b'{' {
-            p = cin_skipcomment(p.add(1));
+        p = unsafe { cin_skipcomment(p.add(1)) };
+        if unsafe { cin_nocode(p) } {
+            return true;
         }
-        cin_nocode(p)
     }
+    while unsafe { *p } as u8 == b'{' {
+        p = unsafe { cin_skipcomment(p.add(1)) };
+    }
+    unsafe { cin_nocode(p) }
 }
 
 /// Whether the cursor's line is an enumeration or a structure
@@ -198,15 +195,14 @@ pub(crate) unsafe fn cin_isinit() -> bool {
     let mut s = unsafe { cin_skipcomment(get_cursor_line_ptr()) };
     // SAFETY: each `add` steps over a word `cin_starts_with` has just matched
     // on that same line, so `s` never leaves it.
-    unsafe {
-        if cin_starts_with(s, b"typedef") {
-            s = cin_skipcomment(s.add(7));
-        }
-        while let Some(word) = SKIP.iter().find(|word| cin_starts_with(s, word)) {
-            s = cin_skipcomment(s.add(word.len()));
-        }
-        cin_starts_with(s, b"enum") || cin_is_compound_init(s)
+    if unsafe { cin_starts_with(s, b"typedef") } {
+        s = unsafe { cin_skipcomment(s.add(7)) };
     }
+    while let Some(word) = SKIP.iter().find(|word| unsafe { cin_starts_with(s, word) }) {
+        s = unsafe { cin_skipcomment(s.add(word.len())) };
+    }
+    let is_enum = unsafe { cin_starts_with(s, b"enum") };
+    is_enum || unsafe { cin_is_compound_init(s) }
 }
 
 /// Whether `s` is a preprocessor directive: anything starting with `#`.
@@ -336,27 +332,25 @@ pub(crate) unsafe fn cin_isfuncdecl(
     // SAFETY: `s` walks that same line and stops at its NUL;
     // `cin_skipcomment` answers a pointer into it, and `add(1)`/`add(2)` step
     // over bytes the tests in front of them have just read.
-    unsafe {
-        while *s != 0
-            && *s as u8 != b'('
-            && *s as u8 != b';'
-            && *s as u8 != b'\''
-            && *s as u8 != b'"'
-        {
-            if cin_iscomment(s) {
-                s = cin_skipcomment(s);
-            } else if *s as u8 == b':' {
-                if *s.add(1) as u8 != b':' {
-                    // A constructor's initialiser list is not a declaration:
-                    //     A::A(int a, int b)
-                    //         : a(0)  // <-- not a function decl
-                    //         , b(0)
-                    return false;
-                }
-                s = s.add(2);
-            } else {
-                s = s.add(1);
+    while unsafe { *s } != 0
+        && unsafe { *s } as u8 != b'('
+        && unsafe { *s } as u8 != b';'
+        && unsafe { *s } as u8 != b'\''
+        && unsafe { *s } as u8 != b'"'
+    {
+        if unsafe { cin_iscomment(s) } {
+            s = unsafe { cin_skipcomment(s) };
+        } else if unsafe { *s } as u8 == b':' {
+            if unsafe { *s.add(1) } as u8 != b':' {
+                // A constructor's initialiser list is not a declaration:
+                //     A::A(int a, int b)
+                //         : a(0)  // <-- not a function decl
+                //         , b(0)
+                return false;
             }
+            s = unsafe { s.add(2) };
+        } else {
+            s = unsafe { s.add(1) };
         }
     }
     // SAFETY: `s` is inside that line.

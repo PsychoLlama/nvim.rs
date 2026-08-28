@@ -240,25 +240,25 @@ pub unsafe fn dbg_check_breakpoint(eap: *mut exarg_T) {
     // announce it the way the user spells it.
     // SAFETY: `name` is the NUL-terminated function or file name the
     // breakpoint matched.
+    let is_snr = unsafe { *name } as uint8_t as c_int == K_SPECIAL
+        && unsafe { *name.offset(1) } as uint8_t as c_int == KS_EXTRA
+        && unsafe { *name.offset(2) } as c_int == KE_SNR as c_int;
+    let (prefix, rest) = if is_snr {
+        (c"<SNR>".as_ptr(), unsafe { name.offset(3) })
+    } else {
+        (c"".as_ptr(), name)
+    };
     unsafe {
-        let is_snr = *name as uint8_t as c_int == K_SPECIAL
-            && *name.offset(1) as uint8_t as c_int == KS_EXTRA
-            && *name.offset(2) as c_int == KE_SNR as c_int;
-        let (prefix, rest) = if is_snr {
-            (c"<SNR>".as_ptr(), name.offset(3))
-        } else {
-            (c"".as_ptr(), name)
-        };
         smsg_c!(
             0,
             c"Breakpoint in \"%s%s\" line %ld".as_ptr(),
             prefix,
             rest,
             debug_breakpoint_lnum.get() as int64_t,
-        );
-        debug_breakpoint_name.set(ptr::null_mut());
-        do_debug((*eap).cmd);
-    }
+        )
+    };
+    debug_breakpoint_name.set(ptr::null_mut());
+    unsafe { do_debug((*eap).cmd) };
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
@@ -276,11 +276,9 @@ pub unsafe fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.get());
     // SAFETY: caller contract; `eap.skip` is true on entry, and is put back.
-    unsafe {
-        (*eap).skip = 0;
-        dbg_check_breakpoint(eap);
-        (*eap).skip = 1;
-    }
+    unsafe { (*eap).skip = 0 };
+    unsafe { dbg_check_breakpoint(eap) };
+    unsafe { (*eap).skip = 1 };
     got_int.set(got_int.get() | prev_got_int);
     true
 }
@@ -478,11 +476,9 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
     }
 
     // SAFETY: as above.
-    unsafe {
-        if (*bp).dbg_lnum == 0 as linenr_T {
-            // The default line number is the first.
-            (*bp).dbg_lnum = 1 as linenr_T;
-        }
+    if unsafe { (*bp).dbg_lnum } == 0 as linenr_T {
+        // The default line number is the first.
+        unsafe { (*bp).dbg_lnum = 1 as linenr_T };
     }
     // A profiling point is not numbered and does not bump `debug_tick`:
     // nothing lists or deletes it by number.
@@ -568,14 +564,12 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
     while !list.is_empty() {
         // SAFETY: `todel` is below `ga_len`; the entry owns its name, its
         // compiled pattern and (for a watch) its last value.
-        unsafe {
-            let bp = list.entry(todel);
-            xfree((*bp).dbg_name.cast());
-            if (*bp).dbg_type == DBG_EXPR && !(*bp).dbg_val.is_null() {
-                tv_free((*bp).dbg_val);
-            }
-            vim_regfree((*bp).dbg_prog);
+        let bp = unsafe { list.entry(todel) };
+        unsafe { xfree((*bp).dbg_name.cast()) };
+        if unsafe { (*bp).dbg_type } == DBG_EXPR && !unsafe { (*bp).dbg_val }.is_null() {
+            unsafe { tv_free((*bp).dbg_val) };
         }
+        unsafe { vim_regfree((*bp).dbg_prog) };
         let len = list.cell().with_mut(|ga| {
             ga.ga_len -= 1;
             ga.ga_len
@@ -588,8 +582,8 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
                     list.entry(todel).cast(),
                     list.entry(todel + 1).cast::<c_void>(),
                     ((len - todel) as size_t) * ::core::mem::size_of::<debuggy>(),
-                );
-            }
+                )
+            };
         }
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
@@ -627,26 +621,28 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
     for i in 0..list.len() {
         // SAFETY: `i` is below `ga_len`; the entry's name is owned and
         // NUL-terminated, and the messages print bytes verbatim.
-        unsafe {
-            let bp = list.entry(i);
-            let kind = (*bp).dbg_type;
-            if kind == DBG_FILE {
+        let bp = unsafe { list.entry(i) };
+        let kind = unsafe { (*bp).dbg_type };
+        if kind == DBG_FILE {
+            unsafe {
                 home_replace(
                     ptr::null::<buf_T>(),
                     (*bp).dbg_name,
                     namebuff,
                     MAXPATHL as size_t,
                     true,
-                );
-            }
-            if kind == DBG_EXPR {
-                smsg_c!(0, c"%3d  expr %s".as_ptr(), (*bp).dbg_nr, (*bp).dbg_name);
+                )
+            };
+        }
+        if kind == DBG_EXPR {
+            unsafe { smsg_c!(0, c"%3d  expr %s".as_ptr(), (*bp).dbg_nr, (*bp).dbg_name) };
+        } else {
+            let (label, shown) = if kind == DBG_FUNC {
+                (c"func".as_ptr(), unsafe { (*bp).dbg_name })
             } else {
-                let (label, shown) = if kind == DBG_FUNC {
-                    (c"func".as_ptr(), (*bp).dbg_name)
-                } else {
-                    (c"file".as_ptr(), namebuff)
-                };
+                (c"file".as_ptr(), namebuff)
+            };
+            unsafe {
                 smsg_c!(
                     0,
                     c"%3d  %s %s  line %ld".as_ptr(),
@@ -654,8 +650,8 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
                     label,
                     shown,
                     (*bp).dbg_lnum as int64_t,
-                );
-            }
+                )
+            };
         }
     }
 }
@@ -737,12 +733,10 @@ unsafe fn debuggy_find(
             got_int.set(false);
             // SAFETY: `dbg_prog` is this entry's compiled pattern and `name`
             // is NUL-terminated.
-            unsafe {
-                if vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as colnr_T) {
-                    lnum = (*bp).dbg_lnum;
-                    if !fp.is_null() {
-                        *fp = (*bp).dbg_forceit != 0;
-                    }
+            if unsafe { vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as colnr_T) } {
+                lnum = unsafe { (*bp).dbg_lnum };
+                if !fp.is_null() {
+                    unsafe { *fp = (*bp).dbg_forceit != 0 };
                 }
             }
             got_int.set(got_int.get() | prev_got_int);
@@ -776,48 +770,46 @@ unsafe fn watch_changed(bp: *mut debuggy) -> bool {
     // arbitrary Vimscript, so `bp` outliving the call rests on the same
     // assumption the C makes -- that a watch does not itself add a
     // breakpoint, which would grow the array and move every entry.
-    unsafe {
-        let tv = eval_expr_no_emsg(bp);
-        let previous = (*bp).dbg_val;
+    let tv = unsafe { eval_expr_no_emsg(bp) };
+    let previous = unsafe { (*bp).dbg_val };
 
-        if tv.is_null() {
-            // The expression stopped evaluating at all, which counts as a
-            // change -- but only if there was a value to change from.
-            if previous.is_null() {
-                return false;
-            }
-            set_oldval(previous);
-            set_newval(ptr::null_mut());
-            tv_free(previous);
-            (*bp).dbg_val = ptr::null_mut();
-            return true;
-        }
-
+    if tv.is_null() {
+        // The expression stopped evaluating at all, which counts as a
+        // change -- but only if there was a value to change from.
         if previous.is_null() {
-            // First evaluation: the baseline, with no old value to show.
-            set_oldval(ptr::null_mut());
-            (*bp).dbg_val = tv;
-            set_newval(tv);
-            return true;
+            return false;
         }
-
-        // `EXPR_IS` answers "is the same value"; a false answer is a change.
-        let changed =
-            typval_compare(tv, previous, EXPR_IS, false) == OK && (*tv).vval.v_number == 0;
-        if changed {
-            // Render the old value before re-evaluating, because evaluating
-            // can reach whatever the old value refers to.
-            set_oldval(previous);
-            // `typval_compare` overwrote `tv`, so the new value has to be
-            // evaluated a second time before it can be shown.
-            let fresh = eval_expr_no_emsg(bp);
-            set_newval(fresh);
-            tv_free(previous);
-            (*bp).dbg_val = fresh;
-        }
-        tv_free(tv);
-        changed
+        unsafe { set_oldval(previous) };
+        unsafe { set_newval(ptr::null_mut()) };
+        unsafe { tv_free(previous) };
+        unsafe { (*bp).dbg_val = ptr::null_mut() };
+        return true;
     }
+
+    if previous.is_null() {
+        // First evaluation: the baseline, with no old value to show.
+        unsafe { set_oldval(ptr::null_mut()) };
+        unsafe { (*bp).dbg_val = tv };
+        unsafe { set_newval(tv) };
+        return true;
+    }
+
+    // `EXPR_IS` answers "is the same value"; a false answer is a change.
+    let changed = unsafe { typval_compare(tv, previous, EXPR_IS, false) } == OK
+        && unsafe { (*tv).vval.v_number } == 0;
+    if changed {
+        // Render the old value before re-evaluating, because evaluating
+        // can reach whatever the old value refers to.
+        unsafe { set_oldval(previous) };
+        // `typval_compare` overwrote `tv`, so the new value has to be
+        // evaluated a second time before it can be shown.
+        let fresh = unsafe { eval_expr_no_emsg(bp) };
+        unsafe { set_newval(fresh) };
+        unsafe { tv_free(previous) };
+        unsafe { (*bp).dbg_val = fresh };
+    }
+    unsafe { tv_free(tv) };
+    changed
 }
 
 /// Record the "before" value the prompt banner prints, freeing whatever an
@@ -827,10 +819,8 @@ unsafe fn watch_changed(bp: *mut debuggy) -> bool {
 /// `tv` must be null or a live typval.
 unsafe fn set_oldval(tv: *mut typval_T) {
     // SAFETY: caller contract; the cell owns what it holds.
-    unsafe {
-        xfree(debug_oldval.get().cast());
-        debug_oldval.set(typval_tostring(tv, true));
-    }
+    unsafe { xfree(debug_oldval.get().cast()) };
+    debug_oldval.set(unsafe { typval_tostring(tv, true) });
 }
 
 /// [`set_oldval`] for the "after" value.
@@ -839,8 +829,6 @@ unsafe fn set_oldval(tv: *mut typval_T) {
 /// As [`set_oldval`].
 unsafe fn set_newval(tv: *mut typval_T) {
     // SAFETY: as `set_oldval`.
-    unsafe {
-        xfree(debug_newval.get().cast());
-        debug_newval.set(typval_tostring(tv, true));
-    }
+    unsafe { xfree(debug_newval.get().cast()) };
+    debug_newval.set(unsafe { typval_tostring(tv, true) });
 }

@@ -171,8 +171,8 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
                     change_cnt as c_ulong,
                 ),
                 change_cnt as int64_t,
-            );
-        }
+            )
+        };
     }
 }
 
@@ -562,11 +562,9 @@ unsafe fn replace_number(
         + (if fmt.oct { STR2NR_OCT as c_int } else { 0 })
         + (if fmt.hex { STR2NR_HEX as c_int } else { 0 });
     let none = ::core::ptr::null_mut();
-    unsafe {
-        let at = ptr.offset(col as isize);
-        let (prep, np, op) = (&raw mut pre, &raw mut n, &raw mut overflow);
-        vim_str2nr(at, prep, length, bases, none, np, maxlen, false, op);
-    }
+    let at = unsafe { ptr.offset(col as isize) };
+    let (prep, np, op) = (&raw mut pre, &raw mut n, &raw mut overflow);
+    unsafe { vim_str2nr(at, prep, length, bases, none, np, maxlen, false, op) };
 
     // A leading `-` is not a sign for hex, octal or binary.
     if pre != 0 && negative {
@@ -695,22 +693,19 @@ unsafe fn render_number(
     // which is also what `digits` is sized by.
     let buf = unsafe { xmalloc(length as size_t + NUMBUFLEN as size_t) } as *mut c_char;
     let mut at = buf;
-    unsafe {
-        if negative && (!visual || was_positive) {
-            *at = '-' as c_char;
-            at = at.offset(1);
-        }
-        if pre != 0 {
-            *at = '0' as c_char;
-            at = at.offset(1);
-            length -= 1;
-        }
-        if pre == 'b' as c_int || pre == 'B' as c_int || pre == 'x' as c_int || pre == 'X' as c_int
-        {
-            *at = pre as c_char;
-            at = at.offset(1);
-            length -= 1;
-        }
+    if negative && (!visual || was_positive) {
+        unsafe { *at = '-' as c_char };
+        at = unsafe { at.offset(1) };
+    }
+    if pre != 0 {
+        unsafe { *at = '0' as c_char };
+        at = unsafe { at.offset(1) };
+        length -= 1;
+    }
+    if pre == 'b' as c_int || pre == 'B' as c_int || pre == 'x' as c_int || pre == 'X' as c_int {
+        unsafe { *at = pre as c_char };
+        at = unsafe { at.offset(1) };
+        length -= 1;
     }
 
     // The digits themselves.
@@ -734,24 +729,22 @@ unsafe fn render_number(
 
     // Keep the total width by padding with zeros -- unless the result
     // would then look like an octal number.
-    unsafe {
-        if firstdigit == '0' as c_int && !(fmt.oct && pre == 0) {
-            while length > 0 {
-                length -= 1;
-                *at = '0' as c_char;
-                at = at.offset(1);
-            }
+    if firstdigit == '0' as c_int && !(fmt.oct && pre == 0) {
+        while length > 0 {
+            length -= 1;
+            unsafe { *at = '0' as c_char };
+            at = unsafe { at.offset(1) };
         }
-        *at = NUL as c_char;
-
-        let mut buflen = at.offset_from(buf) as c_int;
-        let tail = buf.offset(buflen as isize);
-        strcpy(tail, &raw const digits as *const c_char);
-        buflen += digits_len;
-
-        ins_str(buf, buflen as size_t);
-        xfree(buf as *mut c_void);
     }
+    unsafe { *at = NUL as c_char };
+
+    let mut buflen = unsafe { at.offset_from(buf) } as c_int;
+    let tail = unsafe { buf.offset(buflen as isize) };
+    unsafe { strcpy(tail, &raw const digits as *const c_char) };
+    buflen += digits_len;
+
+    unsafe { ins_str(buf, buflen as size_t) };
+    unsafe { xfree(buf as *mut c_void) };
 }
 
 /// Write `n` in binary, most significant one-bit first; answers its length.

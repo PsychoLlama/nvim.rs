@@ -30,29 +30,30 @@ pub(crate) unsafe fn after_label(l: *const c_char) -> *const c_char {
     // SAFETY: the caller's promise.  Every step stays inside the string:
     // the `l.add(1)`/`l.add(2)` skips run only after the byte before them
     // has been seen to be non-NUL, which the `&&` chains keep in front.
-    unsafe {
-        let mut l = l;
-        while *l != 0 {
-            if *l as u8 == b':' {
-                if *l.add(1) as u8 == b':' {
-                    l = l.add(1); // skip over "::" for C++
-                } else if !cin_iscase(l.add(1), false) {
-                    break;
-                }
-            } else if *l as u8 == b'\'' && *l.add(1) != 0 && *l.add(2) as u8 == b'\'' {
-                l = l.add(2); // skip over 'x'
+    let mut l = l;
+    while unsafe { *l } != 0 {
+        if unsafe { *l } as u8 == b':' {
+            if unsafe { *l.add(1) } as u8 == b':' {
+                l = unsafe { l.add(1) }; // skip over "::" for C++
+            } else if !unsafe { cin_iscase(l.add(1), false) } {
+                break;
             }
-            l = l.add(1);
+        } else if unsafe { *l } as u8 == b'\''
+            && unsafe { *l.add(1) } != 0
+            && unsafe { *l.add(2) } as u8 == b'\''
+        {
+            l = unsafe { l.add(2) }; // skip over 'x'
         }
-        if *l == 0 {
-            return ::core::ptr::null::<c_char>();
-        }
-        let l = cin_skipcomment(l.add(1));
-        if *l == 0 {
-            ::core::ptr::null::<c_char>()
-        } else {
-            l
-        }
+        l = unsafe { l.add(1) };
+    }
+    if unsafe { *l } == 0 {
+        return ::core::ptr::null::<c_char>();
+    }
+    let l = unsafe { cin_skipcomment(l.add(1)) };
+    if unsafe { *l } == 0 {
+        ::core::ptr::null::<c_char>()
+    } else {
+        l
     }
 }
 
@@ -126,49 +127,52 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
     // SAFETY: the cursor is on a line of the current buffer, and every walk
     // below starts from the NUL-terminated line it names.  `p.add(len)` is
     // inside it because `len` counts bytes the walk has already read.
-    unsafe {
-        let line = get_cursor_line_ptr().cast_const();
-        let mut p = skipwhite(line).cast_const();
+    let line = get_cursor_line_ptr().cast_const();
+    let mut p = unsafe { skipwhite(line) }.cast_const();
 
-        // Step over the storage class and the type's first word, so that the
-        // identifier the answer is about is what `p` ends on.
-        let mut len = skiptowhite(p).offset_from(p) as usize;
-        if len == 6 && CStr::from_ptr(p).to_bytes().starts_with(b"static") {
-            p = skipwhite(p.add(6));
-            len = skiptowhite(p).offset_from(p) as usize;
-        }
-        let word = CStr::from_ptr(p).to_bytes();
-        if len == 6 && word.starts_with(b"struct") {
-            p = skipwhite(p.add(6));
-        } else if len == 4 && word.starts_with(b"enum") {
-            p = skipwhite(p.add(4));
-        } else if (len == 8 && word.starts_with(b"unsigned"))
-            || (len == 6 && word.starts_with(b"signed"))
-        {
-            // `unsigned`/`signed` only prefixes a type; take the type with it.
-            let s = skipwhite(p.add(len)).cast_const();
-            let rest = CStr::from_ptr(s).to_bytes();
-            let takes_type = [&b"int"[..], b"long", b"short", b"char"]
-                .into_iter()
-                .any(|kw| {
-                    rest.starts_with(kw) && ascii_iswhite(c_int::from(byte_at(rest, kw.len())))
-                });
-            if takes_type {
-                p = s.cast_mut();
-            }
-        }
-
-        let mut len = 0usize;
-        while vim_is_ident_char(c_int::from(*p.add(len) as u8)) {
-            len += 1;
-        }
-        if len == 0 || !ascii_iswhite(c_int::from(*p.add(len) as u8)) || cin_nocode(p) {
-            return 0;
-        }
-
-        let p = skipwhite(p.add(len)).cast_const();
-        line_vcol(cur_win().w_cursor.lnum, p.offset_from(line) as colnr_T)
+    // Step over the storage class and the type's first word, so that the
+    // identifier the answer is about is what `p` ends on.
+    let mut len = unsafe { skiptowhite(p).offset_from(p) } as usize;
+    if len == 6
+        && unsafe { CStr::from_ptr(p) }
+            .to_bytes()
+            .starts_with(b"static")
+    {
+        p = unsafe { skipwhite(p.add(6)) };
+        len = unsafe { skiptowhite(p).offset_from(p) } as usize;
     }
+    let word = unsafe { CStr::from_ptr(p) }.to_bytes();
+    if len == 6 && word.starts_with(b"struct") {
+        p = unsafe { skipwhite(p.add(6)) };
+    } else if len == 4 && word.starts_with(b"enum") {
+        p = unsafe { skipwhite(p.add(4)) };
+    } else if (len == 8 && word.starts_with(b"unsigned"))
+        || (len == 6 && word.starts_with(b"signed"))
+    {
+        // `unsigned`/`signed` only prefixes a type; take the type with it.
+        let s = unsafe { skipwhite(p.add(len)) }.cast_const();
+        let rest = unsafe { CStr::from_ptr(s) }.to_bytes();
+        let takes_type = [&b"int"[..], b"long", b"short", b"char"]
+            .into_iter()
+            .any(|kw| rest.starts_with(kw) && ascii_iswhite(c_int::from(byte_at(rest, kw.len()))));
+        if takes_type {
+            p = s.cast_mut();
+        }
+    }
+
+    let mut len = 0usize;
+    while unsafe { vim_is_ident_char(c_int::from(*p.add(len) as u8)) } {
+        len += 1;
+    }
+    if len == 0
+        || !ascii_iswhite(c_int::from(unsafe { *p.add(len) } as u8))
+        || unsafe { cin_nocode(p) }
+    {
+        return 0;
+    }
+
+    let p = unsafe { skipwhite(p.add(len)) }.cast_const();
+    unsafe { line_vcol(cur_win().w_cursor.lnum, p.offset_from(line) as colnr_T) }
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -195,29 +199,29 @@ pub(crate) unsafe fn cin_get_equal_amount(lnum: linenr_T) -> c_int {
 
     // SAFETY: the same, and every walk below stays inside that line: the
     // `s.add(1)` steps run only past a byte already seen to be non-NUL.
-    unsafe {
-        let line = ml_get(lnum).cast_const();
-        let mut s = line;
-        while *s != 0 && vim_strchr(c"=;{}\"'".as_ptr(), c_int::from(*s as u8)).is_null() {
-            if cin_iscomment(s) {
-                s = cin_skipcomment(s);
-            } else {
-                s = s.add(1);
-            }
+    let line = ml_get(lnum).cast_const();
+    let mut s = line;
+    while unsafe { *s } != 0
+        && unsafe { vim_strchr(c"=;{}\"'".as_ptr(), c_int::from(*s as u8)) }.is_null()
+    {
+        if unsafe { cin_iscomment(s) } {
+            s = unsafe { cin_skipcomment(s) };
+        } else {
+            s = unsafe { s.add(1) };
         }
-        if *s as u8 != b'=' {
-            return 0;
-        }
-
-        let mut s = skipwhite(s.add(1)).cast_const();
-        if cin_nocode(s) {
-            return 0;
-        }
-        if *s as u8 == b'"' {
-            s = s.add(1); // nice alignment for continued strings
-        }
-        line_vcol(lnum, s.offset_from(line) as colnr_T)
     }
+    if unsafe { *s } as u8 != b'=' {
+        return 0;
+    }
+
+    let mut s = unsafe { skipwhite(s.add(1)) }.cast_const();
+    if unsafe { cin_nocode(s) } {
+        return 0;
+    }
+    if unsafe { *s } as u8 == b'"' {
+        s = unsafe { s.add(1) }; // nice alignment for continued strings
+    }
+    unsafe { line_vcol(lnum, s.offset_from(line) as colnr_T) }
 }
 
 /// The window the editor is working in.

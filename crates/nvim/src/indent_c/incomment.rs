@@ -114,13 +114,11 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut pos_T) -> c_int
         // buffer, so `col + 2` lands on the byte after the `*` -- at worst
         // the line's NUL, which is what the test below reads.  `skipwhite`
         // then stops at that NUL at the latest, so it stays inside `start`.
-        unsafe {
-            let start = ml_get(comment.lnum);
-            let look = start.offset(comment.col as isize).add(2); // skip / and *
-            nothing_after_opener = *look == 0;
-            if !nothing_after_opener {
-                comment.col = skipwhite(look).offset_from(start) as colnr_T;
-            }
+        let start = ml_get(comment.lnum);
+        let look = unsafe { start.offset(comment.col as isize).add(2) }; // skip / and *
+        nothing_after_opener = unsafe { *look } == 0;
+        if !nothing_after_opener {
+            comment.col = unsafe { skipwhite(look).offset_from(start) } as colnr_T;
         }
     }
     // SAFETY: `comment` is still a position in the current buffer -- the

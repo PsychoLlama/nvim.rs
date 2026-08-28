@@ -56,21 +56,19 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
     // What msg() does, but with a column offset.
     // SAFETY: every string here is this file's own static message or the
     // catalogue's translation of it.
-    unsafe {
-        msg_start();
-        if msg_row.get() == Rows.get() - 1 {
-            msg_col.set(col);
-        }
-        msg_source(HLF_W);
-        msg_ext_set_kind(c"wmsg".as_ptr());
-        msg_puts_hl(gettext(W_READONLY), HLF_W, true);
-        set_vim_var_string(Vv::Warningmsg, gettext(W_READONLY), -1);
-        msg_clr_eos();
-        msg_end();
-        if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
-            // Give the user time to think about it.
-            msg_delay(1002, true);
-        }
+    unsafe { msg_start() };
+    if msg_row.get() == Rows.get() - 1 {
+        msg_col.set(col);
+    }
+    unsafe { msg_source(HLF_W) };
+    unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
+    unsafe { msg_puts_hl(gettext(W_READONLY), HLF_W, true) };
+    unsafe { set_vim_var_string(Vv::Warningmsg, gettext(W_READONLY), -1) };
+    unsafe { msg_clr_eos() };
+    unsafe { msg_end() };
+    if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
+        // Give the user time to think about it.
+        unsafe { msg_delay(1002, true) };
     }
     buf.b_did_warn = true;
     // Don't redraw and erase the message.
@@ -116,10 +114,8 @@ pub unsafe fn changed(buf: Buf) {
                 && !ui_has(kUIMessages)
             {
                 // SAFETY: waiting on the message just shown.
-                unsafe {
-                    msg_delay(2002, true);
-                    wait_return(true as c_int);
-                }
+                unsafe { msg_delay(2002, true) };
+                unsafe { wait_return(true as c_int) };
                 msg_scroll.set(save_msg_scroll);
             } else {
                 need_wait_return.set(save_need_wait_return);
@@ -140,10 +136,8 @@ pub fn changed_internal(mut buf: Buf) {
     buf.b_changed = true as c_int;
     buf.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
-    unsafe {
-        ml_setflags(buf.raw());
-        redraw_buf_status_later(buf.raw());
-    }
+    unsafe { ml_setflags(buf.raw()) };
+    unsafe { redraw_buf_status_later(buf.raw()) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }

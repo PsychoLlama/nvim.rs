@@ -116,10 +116,11 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         let grid = unsafe { ui_comp_mouse_focus(pos.row, pos.col) };
         if ptr::eq(grid, pum_grid_ref().raw()) {
             // SAFETY: the popup menu's grid is live.
-            unsafe {
-                pos.grid = (*grid).handle as c_int;
-                (pos.row, pos.col) = (pos.row - (*grid).comp_row, pos.col - (*grid).comp_col);
-            }
+            pos.grid = unsafe { (*grid).handle } as c_int;
+            (pos.row, pos.col) = (
+                pos.row - unsafe { (*grid).comp_row },
+                pos.col - unsafe { (*grid).comp_col },
+            );
             // The popup menu doesn't have a window, so answer None.
             return None;
         }
@@ -231,15 +232,14 @@ pub(crate) fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, 
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column.
     // SAFETY: `ci` walks that line and the loop stops at its terminating NUL.
-    unsafe {
-        while cur_vcol < vcol && !line.ended(ci) {
-            let width = win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg).width;
-            if cur_vcol + width > vcol {
-                break;
-            }
-            cur_vcol += width;
-            ci = line.next_char(ci);
+    while cur_vcol < vcol && !unsafe { line.ended(ci) } {
+        let width =
+            unsafe { win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        if cur_vcol + width > vcol {
+            break;
         }
+        cur_vcol += width;
+        ci = unsafe { line.next_char(ci) };
     }
     (line.index_of(ci), vcol - cur_vcol)
 }

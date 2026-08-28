@@ -200,11 +200,11 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
             newp as *mut c_void,
             oldp as *const c_void,
             bd.textcol as size_t,
-        );
-        oldp = oldp.offset((bd.textcol + bd.textlen) as isize);
-        let at = newp.offset(bd.textcol as isize) as *mut c_void;
-        memset(at, ' ' as c_int, bd.startspaces as size_t);
-    }
+        )
+    };
+    oldp = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
+    let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
+    unsafe { memset(at, ' ' as c_int, bd.startspaces as size_t) };
 
     // What is left of the line after the block, NUL included.
     let col = oldlen - bd.textcol - bd.textlen + 1;
@@ -214,28 +214,26 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     let mut after_p_len: size_t = 0;
     let mut newrows = 0;
     let mut newcols = 0;
-    unsafe {
-        if !splits_line {
-            let mut newp_len = bd.textcol + bd.startspaces;
-            while num_chars > 0 {
-                num_chars -= 1;
-                newp_len += utf_char2bytes(c, newp.offset(newp_len as isize));
-            }
-            if bd.is_short == 0 {
-                let at = newp.offset(newp_len as isize) as *mut c_void;
-                memset(at, ' ' as c_int, bd.endspaces as size_t);
-                newp_len += bd.endspaces;
-                let tail = newp.offset(newp_len as isize) as *mut c_void;
-                memmove(tail, oldp as *const c_void, col as size_t);
-            }
-            newcols = newp_len - bd.textcol;
-        } else {
-            // The tail becomes the next line.
-            after_p_len = col as size_t;
-            after_p = xmalloc(after_p_len) as *mut c_char;
-            memmove(after_p as *mut c_void, oldp as *const c_void, after_p_len);
-            newrows = 1;
+    if !splits_line {
+        let mut newp_len = bd.textcol + bd.startspaces;
+        while num_chars > 0 {
+            num_chars -= 1;
+            newp_len += unsafe { utf_char2bytes(c, newp.offset(newp_len as isize)) };
         }
+        if bd.is_short == 0 {
+            let at = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
+            unsafe { memset(at, ' ' as c_int, bd.endspaces as size_t) };
+            newp_len += bd.endspaces;
+            let tail = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
+            unsafe { memmove(tail, oldp as *const c_void, col as size_t) };
+        }
+        newcols = newp_len - bd.textcol;
+    } else {
+        // The tail becomes the next line.
+        after_p_len = col as size_t;
+        after_p = unsafe { xmalloc(after_p_len) } as *mut c_char;
+        unsafe { memmove(after_p as *mut c_void, oldp as *const c_void, after_p_len) };
+        newrows = 1;
     }
 
     let baselnum = cur_win().w_cursor.lnum;
@@ -252,10 +250,10 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
     let old_bytes = bd.textlen as bcount_t;
     let new_bytes = (newrows + newcols) as bcount_t;
+    let row = baselnum as c_int - 1;
+    let (col, len) = (bd.textcol, bd.textlen);
+    let op = kExtmarkUndo;
     unsafe {
-        let row = baselnum as c_int - 1;
-        let (col, len) = (bd.textcol, bd.textlen);
-        let op = kExtmarkUndo;
         extmark_splice(
             curbuf.get(),
             row,
@@ -267,8 +265,8 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
             newcols,
             new_bytes,
             op,
-        );
-    }
+        )
+    };
 }
 
 /// The charwise and linewise arm: walk the region a character at a time.

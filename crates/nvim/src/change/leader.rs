@@ -118,10 +118,8 @@ impl ComItem {
         }
         // SAFETY: `colon` points at the `:` inside `buf`, so the byte after
         // it is inside `buf` too.
-        unsafe {
-            *colon = NUL as c_char;
-            Some(colon.add(1))
-        }
+        unsafe { *colon = NUL as c_char };
+        Some(unsafe { colon.add(1) })
     }
 
     /// Whether the item's flag letters contain `flag`.

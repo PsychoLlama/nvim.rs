@@ -56,25 +56,23 @@ impl AucmdWins {
         // and this whole run is `kv_pushp` -- every step of it reads or
         // writes through `vec`, so one region around it is as tight as it
         // gets.
-        unsafe {
-            if (*vec).size == (*vec).capacity {
-                (*vec).capacity = if (*vec).capacity != 0 {
-                    (*vec).capacity << 1
-                } else {
-                    8
-                };
-                (*vec).items = xrealloc(
-                    (*vec).items.cast::<::core::ffi::c_void>(),
-                    ::core::mem::size_of::<aucmdwin_T>().wrapping_mul((*vec).capacity),
-                )
-                .cast::<aucmdwin_T>();
-            }
-            *(*vec).items.add((*vec).size) = aucmdwin_T {
-                auc_win: ::core::ptr::null_mut(),
-                auc_win_used: false,
+        if unsafe { (*vec).size } == unsafe { (*vec).capacity } {
+            let capacity = unsafe { (*vec).capacity };
+            let grown = if capacity != 0 { capacity << 1 } else { 8 };
+            let bytes = ::core::mem::size_of::<aucmdwin_T>().wrapping_mul(grown);
+            unsafe {
+                (*vec).capacity = grown;
+                (*vec).items = xrealloc((*vec).items.cast(), bytes).cast::<aucmdwin_T>();
             };
-            (*vec).size = (*vec).size.wrapping_add(1);
         }
+        let empty = aucmdwin_T {
+            auc_win: ::core::ptr::null_mut(),
+            auc_win_used: false,
+        };
+        unsafe {
+            *(*vec).items.add((*vec).size) = empty;
+            (*vec).size = (*vec).size.wrapping_add(1);
+        };
     }
 }
 

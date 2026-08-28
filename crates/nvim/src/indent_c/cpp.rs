@@ -36,15 +36,13 @@ pub(crate) unsafe fn cin_is_cpp_namespace(s: *const c_char) -> bool {
         // only once the six bytes of "inline"/"export" have been seen there,
         // so it is at worst that string's NUL, and neither skipper walks past
         // one.
-        unsafe {
-            let bytes = CStr::from_ptr(s).to_bytes();
-            if !(bytes.starts_with(b"inline") || bytes.starts_with(b"export"))
-                || vim_iswordc(c_int::from(byte_at(bytes, 6)))
-            {
-                break;
-            }
-            s = cin_skipcomment(skipwhite(s.add(6)));
+        let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+        if !(bytes.starts_with(b"inline") || bytes.starts_with(b"export"))
+            || unsafe { vim_iswordc(c_int::from(byte_at(bytes, 6))) }
+        {
+            break;
         }
+        s = unsafe { cin_skipcomment(skipwhite(s.add(6))) };
     }
 
     // SAFETY: as above -- `s.add(9)` runs only once "namespace" has been seen

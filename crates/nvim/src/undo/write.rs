@@ -101,8 +101,8 @@ unsafe fn write_undo_file(
             semsg_c!(
                 gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
                 file_name,
-            );
-        }
+            )
+        };
         return;
     }
     // SAFETY: a NUL-terminated path, by the contract above.
@@ -124,10 +124,10 @@ unsafe fn write_undo_file(
             semsg_c!(
                 gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
                 file_name,
-            );
-            close(fd);
-            os_remove(file_name);
-        }
+            )
+        };
+        unsafe { close(fd) };
+        unsafe { os_remove(file_name) };
         return;
     }
     u_sync(true);
@@ -146,8 +146,8 @@ unsafe fn write_undo_file(
             semsg_c!(
                 gettext(c"E829: Write error in undo file: %s".as_ptr()),
                 file_name,
-            );
-        }
+            )
+        };
     }
     if !buf.b_ffname.is_null() {
         let acl: vim_acl_T = os_get_acl(buf.b_ffname);
@@ -168,10 +168,9 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
     if fd < 0 {
         verbosely(automatic, || {
             // SAFETY: a NUL-terminated literal and path.
-            unsafe {
-                let fmt = gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr());
-                smsg_c!(0, fmt, file_name);
-            }
+            let fmt =
+                unsafe { gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, file_name) };
         });
         return false;
     }
@@ -185,10 +184,8 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
     }
     verbosely(automatic, || {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe {
-            let fmt = gettext(c"Will not overwrite, this is not an undo file: %s".as_ptr());
-            smsg_c!(0, fmt, file_name);
-        }
+        let fmt = unsafe { gettext(c"Will not overwrite, this is not an undo file: %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, file_name) };
     });
     false
 }

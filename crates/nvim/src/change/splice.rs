@@ -401,9 +401,7 @@ pub unsafe fn inserted_bytes(lnum: linenr_T, start_col: colnr_T, old_col: c_int,
     if curbuf_splice_pending.get() == 0 {
         let cb = curbuf.get();
         // SAFETY: the current buffer is live and `lnum` is a line of it.
-        unsafe {
-            extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo);
-        }
+        unsafe { extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo) };
     }
     // SAFETY: as above.
     unsafe { changed_bytes(lnum, start_col) };
@@ -437,10 +435,8 @@ pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
     let max = MAXLNUM as linenr_T;
     let cb = curbuf.get();
     // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe {
-        mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo);
-        changed_lines(Buf::new(cb), lnum + 1, 0, lnum + 1, count, true);
-    }
+    unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
+    changed_lines(unsafe { Buf::new(cb) }, lnum + 1, 0, lnum + 1, count, true);
 }
 
 /// `count` lines were deleted at line `lnum` of `buf`.
@@ -478,11 +474,9 @@ pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
     // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe {
-        mark_adjust(lnum, last, max, -count, kExtmarkNOOP);
-        extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo);
-        changed_lines(Buf::new(cb), lnum, 0, lnum + count, -count, true);
-    }
+    unsafe { mark_adjust(lnum, last, max, -count, kExtmarkNOOP) };
+    unsafe { extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo) };
+    changed_lines(unsafe { Buf::new(cb) }, lnum, 0, lnum + count, -count, true);
 }
 
 /// Widen `buf`'s pending redraw area (`b_mod_*`) to cover a change.

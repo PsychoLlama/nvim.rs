@@ -395,13 +395,11 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut list_T) {
     // SAFETY: `l` is a valid list; `utf_char2bytes` writes at most six bytes
     // into `buf`; both local buffers are NUL-terminated and outlive the
     // appends, which copy what they keep.
-    unsafe {
-        let l2 = tv_list_alloc(2);
-        tv_list_append_list(l, l2);
-        tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1);
-        utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char);
-        tv_list_append_string(l2, buf.as_ptr() as *const c_char, -1);
-    }
+    let l2 = unsafe { tv_list_alloc(2) };
+    unsafe { tv_list_append_list(l, l2) };
+    unsafe { tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1) };
+    unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };
+    unsafe { tv_list_append_string(l2, buf.as_ptr() as *const c_char, -1) };
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
@@ -465,10 +463,8 @@ fn next_char(s: &[u8]) -> (c_int, &[u8]) {
 unsafe fn tv_string(arg: *const typval_T, buf: &mut [c_char; 65]) -> Option<&[u8]> {
     // SAFETY: caller contract; the result is null or a NUL-terminated string
     // owned by the typval or by `buf`, both of which outlive the borrow.
-    unsafe {
-        let s = tv_get_string_buf_chk(arg, buf.as_mut_ptr());
-        (!s.is_null()).then(|| CStr::from_ptr(s).to_bytes())
-    }
+    let s = unsafe { tv_get_string_buf_chk(arg, buf.as_mut_ptr()) };
+    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
 /// The two digraph characters of `chars`. Reports E1214 on anything but
@@ -525,14 +521,14 @@ unsafe fn digraph_set_common(argchars: *const typval_T, argdigraph: *const typva
 /// `rettv` must be a valid return-value slot.
 unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
     // SAFETY: caller contract.
+    unsafe { (*rettv).v_type = VAR_BOOL };
     unsafe {
-        (*rettv).v_type = VAR_BOOL;
         (*rettv).vval.v_bool = if value {
             K_BOOL_VAR_TRUE
         } else {
             K_BOOL_VAR_FALSE
-        };
-    }
+        }
+    };
 }
 
 /// `digraph_get()`.
@@ -566,10 +562,8 @@ pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut buf = [0u8; 7];
     // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
     // `xmemdupz` copies exactly the `len` it wrote.
-    unsafe {
-        let len = utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) as usize;
-        (*rettv).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char;
-    }
+    let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
+    unsafe { (*rettv).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char };
 }
 
 /// `digraph_getlist()`.
@@ -634,24 +628,22 @@ unsafe fn digraph_setlist_common(arg: *const typval_T) -> bool {
     }
     // SAFETY: `pl` is a valid list; the walk only follows its links, and
     // `digraph_set_common` does not touch the list it is reading from.
-    unsafe {
-        let mut pli = (*pl).lv_first;
-        while !pli.is_null() {
-            if (*pli).li_tv.v_type != VAR_LIST {
-                crate::semsg!("{E_DIGRAPH_SETLIST}");
-                return false;
-            }
-            let l = (*pli).li_tv.vval.v_list;
-            if l.is_null() || (*l).lv_len != 2 {
-                crate::semsg!("{E_DIGRAPH_SETLIST}");
-                return false;
-            }
-            let first = (*l).lv_first;
-            if !digraph_set_common(&(*first).li_tv, &(*(*first).li_next).li_tv) {
-                return false;
-            }
-            pli = (*pli).li_next;
+    let mut pli = unsafe { (*pl).lv_first };
+    while !pli.is_null() {
+        if unsafe { (*pli).li_tv.v_type } != VAR_LIST {
+            crate::semsg!("{E_DIGRAPH_SETLIST}");
+            return false;
         }
+        let l = unsafe { (*pli).li_tv.vval.v_list };
+        if l.is_null() || unsafe { (*l).lv_len } != 2 {
+            crate::semsg!("{E_DIGRAPH_SETLIST}");
+            return false;
+        }
+        let first = unsafe { (*l).lv_first };
+        if !unsafe { digraph_set_common(&(*first).li_tv, &(*(*first).li_next).li_tv) } {
+            return false;
+        }
+        pli = unsafe { (*pli).li_next };
     }
     true
 }
@@ -741,10 +733,8 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     let buf = curbuf.get();
     // SAFETY: curbuf is valid and `keymap_unload` left its keymap garray
     // cleared.
-    unsafe {
-        (*buf).b_kmap_state = 0;
-        ga_init(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>() as c_int, 20);
-    }
+    unsafe { (*buf).b_kmap_state = 0 };
+    unsafe { ga_init(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>() as c_int, 20) };
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
@@ -755,10 +745,8 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     unsafe { apply_keymap_entries(buf) };
     p_cpo.set(save_cpo);
     // SAFETY: curbuf is still valid.
-    unsafe {
-        (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t;
-        status_redraw_curbuf();
-    }
+    unsafe { (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t };
+    unsafe { status_redraw_curbuf() };
 }
 
 /// Read `{from} {to}` pairs from the file being sourced into `buf`'s keymap
@@ -792,13 +780,15 @@ unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
             } else {
                 // SAFETY: the garray is sized for `kmap_T`, so the appended
                 // slot is one; `xmemdupz` copies both slices out of `line`.
-                unsafe {
-                    let kp = ga_append_via_ptr(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>())
+                let kp =
+                    unsafe { ga_append_via_ptr(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>()) }
                         as *mut kmap_T;
-                    (*kp).from =
-                        xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char;
-                    (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char;
-                }
+                unsafe {
+                    (*kp).from = xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char
+                };
+                unsafe {
+                    (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char
+                };
             }
         }
         // SAFETY: the line is ours to free, and nothing borrows it now.
@@ -815,19 +805,19 @@ unsafe fn apply_keymap_entries(buf: *mut buf_T) {
     // SAFETY: caller contract; the garray holds `ga_len` entries with
     // NUL-terminated strings, and `do_map` only reads the command it is
     // given.
-    unsafe {
-        for i in 0..(*buf).b_kmap_ga.ga_len {
-            let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
-            let from = CStr::from_ptr((*kp).from).to_bytes();
-            let to = CStr::from_ptr((*kp).to).to_bytes();
-            let mut cmd = keymap_map_cmd(from, Some(to));
+    for i in 0..unsafe { (*buf).b_kmap_ga.ga_len } {
+        let kp = unsafe { ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize) };
+        let from = unsafe { CStr::from_ptr((*kp).from) }.to_bytes();
+        let to = unsafe { CStr::from_ptr((*kp).to) }.to_bytes();
+        let mut cmd = keymap_map_cmd(from, Some(to));
+        unsafe {
             do_map(
                 MAPTYPE_MAP,
                 cmd.as_mut_ptr() as *mut c_char,
                 MODE_LANGMAP,
                 false,
-            );
-        }
+            )
+        };
     }
 }
 
@@ -854,12 +844,10 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
 pub unsafe fn keymap_ga_clear(kmap_ga: *mut garray_T) {
     // SAFETY: caller contract; the garray holds `ga_len` live entries, and
     // each owns its two strings.
-    unsafe {
-        for i in 0..(*kmap_ga).ga_len {
-            let kp = ((*kmap_ga).ga_data as *mut kmap_T).offset(i as isize);
-            xfree((*kp).from as *mut c_void);
-            xfree((*kp).to as *mut c_void);
-        }
+    for i in 0..unsafe { (*kmap_ga).ga_len } {
+        let kp = unsafe { ((*kmap_ga).ga_data as *mut kmap_T).offset(i as isize) };
+        unsafe { xfree((*kp).from as *mut c_void) };
+        unsafe { xfree((*kp).to as *mut c_void) };
     }
 }
 
@@ -875,26 +863,24 @@ fn keymap_unload() {
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: the garray holds `ga_len` entries with NUL-terminated strings;
     // `do_map` only reads the command, and the entries own what is freed.
-    unsafe {
-        for i in 0..(*buf).b_kmap_ga.ga_len {
-            let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
-            let mut cmd = keymap_map_cmd(CStr::from_ptr((*kp).from).to_bytes(), None);
+    for i in 0..unsafe { (*buf).b_kmap_ga.ga_len } {
+        let kp = unsafe { ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize) };
+        let mut cmd = keymap_map_cmd(unsafe { CStr::from_ptr((*kp).from) }.to_bytes(), None);
+        unsafe {
             do_map(
                 MAPTYPE_UNMAP,
                 cmd.as_mut_ptr() as *mut c_char,
                 MODE_LANGMAP,
                 false,
-            );
-        }
-        keymap_ga_clear(&raw mut (*buf).b_kmap_ga);
+            )
+        };
     }
+    unsafe { keymap_ga_clear(&raw mut (*buf).b_kmap_ga) };
     p_cpo.set(save_cpo);
     // SAFETY: the garray's entries were just freed, so clearing it is safe.
-    unsafe {
-        ga_clear(&raw mut (*buf).b_kmap_ga);
-        (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t);
-        status_redraw_curbuf();
-    }
+    unsafe { ga_clear(&raw mut (*buf).b_kmap_ga) };
+    unsafe { (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t) };
+    unsafe { status_redraw_curbuf() };
 }
 
 /// The keymap name to show in the status line ('statusline' `%k`/`%K` and

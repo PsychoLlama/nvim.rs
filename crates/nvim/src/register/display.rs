@@ -107,15 +107,13 @@ unsafe fn dis_register(yb: *mut yankreg_T, name: c_int, type_0: c_int, hl_id: c_
 
     // SAFETY: main thread; every argument is a NUL-terminated literal or a
     // single character to print.
-    unsafe {
-        msg_putchar('\n' as c_int);
-        msg_puts(c"  ".as_ptr());
-        msg_putchar(type_0);
-        msg_puts(c"  ".as_ptr());
-        msg_putchar('"' as c_int);
-        msg_putchar(name);
-        msg_puts(c"   ".as_ptr());
-    }
+    unsafe { msg_putchar('\n' as c_int) };
+    unsafe { msg_puts(c"  ".as_ptr()) };
+    unsafe { msg_putchar(type_0) };
+    unsafe { msg_puts(c"  ".as_ptr()) };
+    unsafe { msg_putchar('"' as c_int) };
+    unsafe { msg_putchar(name) };
+    unsafe { msg_puts(c"   ".as_ptr()) };
 
     // The content, cut off at the window width. A line break inside the
     // register shows as `^J`.

@@ -84,43 +84,41 @@ pub unsafe fn ex_marks(eap: *mut exarg_T) {
 
     // SAFETY: `arg` is a NUL-terminated string or null, every name below is
     // one too, and `show_one_mark` allocates and frees its own line text.
-    unsafe {
-        show_one_mark('\'' as c_int, arg, win.w_pcmark, ptr::null_mut(), 1);
-        for (c, pos) in locals {
-            show_one_mark(c, arg, pos, ptr::null_mut(), 1);
-        }
-        // The global table, whose rows carry a FILE NAME rather than the
-        // line's text when the mark is in another buffer. A slot whose buffer
-        // is loaded allocates its name here; one that came out of the shada
-        // file lends the name it still carries, which must not be freed.
-        for (i, mark) in GlobalMarks::indexed() {
-            let fnum = mark.fmark().fnum();
-            let name = if fnum != 0 {
-                fm_getname(mark.fmark().raw(), 15)
-            } else {
-                mark.fname()
-            };
-            if name.is_null() {
-                continue;
-            }
-            let c = if i >= NMARKS {
-                i - NMARKS + '0' as c_int
-            } else {
-                i + 'A' as c_int
-            };
-            let current = c_int::from(fnum == buf.handle);
-            show_one_mark(c, arg, mark.fmark().pos(), name, current);
-            if fnum != 0 {
-                xfree(name.cast());
-            }
-        }
-        for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
-            show_one_mark(c, arg, pos, ptr::null_mut(), 1);
-        }
-        // The footer: "No marks set" (or E283) if nothing above printed a
-        // title.
-        finish_marks(arg);
+    unsafe { show_one_mark('\'' as c_int, arg, win.w_pcmark, ptr::null_mut(), 1) };
+    for (c, pos) in locals {
+        unsafe { show_one_mark(c, arg, pos, ptr::null_mut(), 1) };
     }
+    // The global table, whose rows carry a FILE NAME rather than the
+    // line's text when the mark is in another buffer. A slot whose buffer
+    // is loaded allocates its name here; one that came out of the shada
+    // file lends the name it still carries, which must not be freed.
+    for (i, mark) in GlobalMarks::indexed() {
+        let fnum = mark.fmark().fnum();
+        let name = if fnum != 0 {
+            unsafe { fm_getname(mark.fmark().raw(), 15) }
+        } else {
+            mark.fname()
+        };
+        if name.is_null() {
+            continue;
+        }
+        let c = if i >= NMARKS {
+            i - NMARKS + '0' as c_int
+        } else {
+            i + 'A' as c_int
+        };
+        let current = c_int::from(fnum == buf.handle);
+        unsafe { show_one_mark(c, arg, mark.fmark().pos(), name, current) };
+        if fnum != 0 {
+            unsafe { xfree(name.cast()) };
+        }
+    }
+    for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
+        unsafe { show_one_mark(c, arg, pos, ptr::null_mut(), 1) };
+    }
+    // The footer: "No marks set" (or E283) if nothing above printed a
+    // title.
+    unsafe { finish_marks(arg) };
 }
 
 /// The `-1` row of upstream's `show_one_mark`: whatever `:marks` prints when
@@ -134,12 +132,10 @@ unsafe fn finish_marks(arg: *mut c_char) {
         return;
     }
     // SAFETY: `'static` C strings, and `arg` is the caller's.
-    unsafe {
-        if arg.is_null() {
-            msg(gettext(c"No marks set".as_ptr()), 0);
-        } else {
-            semsg_c!(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg);
-        }
+    if arg.is_null() {
+        unsafe { msg(gettext(c"No marks set".as_ptr()), 0) };
+    } else {
+        unsafe { semsg_c!(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg) };
     }
 }
 
@@ -178,13 +174,13 @@ pub(super) unsafe fn show_one_mark(
     let mut prefix = [0 as c_char; IOSIZE as usize];
     // SAFETY: `name` is null or a NUL-terminated string, and `prefix` is
     // `IOSIZE` bytes of live storage.
-    unsafe {
-        if !message_filtered(name) {
-            if !DID_TITLE.replace(true) {
-                msg_puts_title(gettext(c"\nmark line  col file/text".as_ptr()));
-            }
-            msg_putchar('\n' as c_int);
-            if !got_int.get() {
+    if !unsafe { message_filtered(name) } {
+        if !DID_TITLE.replace(true) {
+            unsafe { msg_puts_title(gettext(c"\nmark line  col file/text".as_ptr())) };
+        }
+        unsafe { msg_putchar('\n' as c_int) };
+        if !got_int.get() {
+            unsafe {
                 snprintf(
                     prefix.as_mut_ptr(),
                     IOSIZE as size_t,
@@ -192,16 +188,16 @@ pub(super) unsafe fn show_one_mark(
                     c,
                     pos.lnum,
                     pos.col,
-                );
-                msg_outtrans(prefix.as_mut_ptr(), 0, false);
-                if !name.is_null() {
-                    msg_outtrans(name, if current != 0 { HLF_D } else { 0 }, false);
-                }
+                )
+            };
+            unsafe { msg_outtrans(prefix.as_mut_ptr(), 0, false) };
+            if !name.is_null() {
+                unsafe { msg_outtrans(name, if current != 0 { HLF_D } else { 0 }, false) };
             }
         }
-        if mustfree {
-            xfree(name.cast());
-        }
+    }
+    if mustfree {
+        unsafe { xfree(name.cast()) };
     }
 }
 
@@ -435,16 +431,14 @@ pub(super) unsafe fn mark_line(pos: pos_T, lead_len: c_int) -> *mut c_char {
     let mut len: c_int = 0;
     // SAFETY: `s` is a NUL-terminated allocation, so the walk stops at its
     // end; `utfc_ptr2len` never steps past the NUL.
-    unsafe {
-        while c_int::from(*p) != NUL {
-            len += ptr2cells(p);
-            if len >= Columns.get() - lead_len {
-                break;
-            }
-            p = p.offset(utfc_ptr2len(p) as isize);
+    while c_int::from(unsafe { *p }) != NUL {
+        len += unsafe { ptr2cells(p) };
+        if len >= Columns.get() - lead_len {
+            break;
         }
-        *p = NUL_BYTE;
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
     }
+    unsafe { *p = NUL_BYTE };
     s
 }
 

@@ -75,14 +75,14 @@ pub fn setpcmark() {
         // SAFETY: source and destination are inside `[xfmark_T; 100]` and the
         // length is the constant `JUMPLISTSIZE - 1`, so the move ends exactly
         // at the array's last element. Raising it writes past the array.
+        let list = unsafe { &raw mut (*win.raw()).w_jumplist }.cast::<xfmark_T>();
         unsafe {
-            let list = (&raw mut (*win.raw()).w_jumplist).cast::<xfmark_T>();
             memmove(
                 list.cast(),
                 list.offset(1).cast(),
                 ((JUMPLISTSIZE - 1) as size_t).wrapping_mul(size_of::<xfmark_T>()),
-            );
-        }
+            )
+        };
     }
     // One PAST the newest entry: see the module docs.
     win.w_jumplistidx = win.w_jumplistlen;
@@ -230,16 +230,16 @@ pub unsafe fn mark_jumplist_forget_file(wp: *mut win_T, fnum: c_int) {
         wp.w_jumplistlen -= 1;
         // SAFETY: source and destination are inside `[xfmark_T; 100]` and the
         // length is what is left above `i`, so the move stays in the array.
+        let list = unsafe { &raw mut (*wp.raw()).w_jumplist }.cast::<xfmark_T>();
         unsafe {
-            let list = (&raw mut (*wp.raw()).w_jumplist).cast::<xfmark_T>();
             memmove(
                 list.offset(i as isize).cast(),
                 list.offset(i as isize + 1).cast(),
                 size_t::try_from(wp.w_jumplistlen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<xfmark_T>()),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -372,11 +372,9 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let win = unsafe { Win::current() };
     // SAFETY: as above.
-    unsafe {
-        cleanup_jumplist(win.raw(), true);
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_puts_title(gettext(c"\n jump line  col file/text".as_ptr()));
-    }
+    unsafe { cleanup_jumplist(win.raw(), true) };
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    unsafe { msg_puts_title(gettext(c"\n jump line  col file/text".as_ptr())) };
     let mut i: c_int = 0;
     while i < win.w_jumplistlen && !got_int.get() {
         let jump = win.jump(i);
@@ -391,17 +389,17 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
             }
             // SAFETY: `name` is a NUL-terminated allocation or null, owned
             // here; every path below frees it exactly once.
-            unsafe {
-                if name.is_null() || message_filtered(name) {
-                    xfree(name.cast());
-                } else {
-                    msg_putchar('\n' as c_int);
-                    if got_int.get() {
-                        xfree(name.cast());
-                        break;
-                    }
-                    // SAFETY: `curbuf` is live.
-                    let here = Buf::current().handle;
+            if name.is_null() || unsafe { message_filtered(name) } {
+                unsafe { xfree(name.cast()) };
+            } else {
+                unsafe { msg_putchar('\n' as c_int) };
+                if got_int.get() {
+                    unsafe { xfree(name.cast()) };
+                    break;
+                }
+                // SAFETY: `curbuf` is live.
+                let here = unsafe { Buf::current() }.handle;
+                unsafe {
                     snprintf(
                         row.as_mut_ptr(),
                         IOSIZE as size_t,
@@ -414,17 +412,17 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
                         (i - win.w_jumplistidx).abs(),
                         jump.fmark().lnum(),
                         jump.fmark().col(),
-                    );
-                    msg_outtrans(row.as_ptr(), 0, false);
-                    let attr = if jump.fmark().fnum() == here {
-                        HLF_D
-                    } else {
-                        0
-                    };
-                    msg_outtrans(name, attr, false);
-                    xfree(name.cast());
-                    os_breakcheck();
-                }
+                    )
+                };
+                unsafe { msg_outtrans(row.as_ptr(), 0, false) };
+                let attr = if jump.fmark().fnum() == here {
+                    HLF_D
+                } else {
+                    0
+                };
+                unsafe { msg_outtrans(name, attr, false) };
+                unsafe { xfree(name.cast()) };
+                os_breakcheck();
             }
         }
         i += 1;
@@ -457,10 +455,8 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let (buf, win) = unsafe { (Buf::current(), Win::current()) };
     // SAFETY: as above.
-    unsafe {
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_puts_title(gettext(c"\nchange line  col text".as_ptr()));
-    }
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    unsafe { msg_puts_title(gettext(c"\nchange line  col text".as_ptr())) };
     let mut i: c_int = 0;
     while i < buf.b_changelistlen && !got_int.get() {
         let change = buf.change(i);
@@ -485,13 +481,13 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
                     (i - win.w_changelistidx).abs(),
                     change.lnum(),
                     change.col(),
-                );
-                msg_outtrans(row.as_ptr(), 0, false);
-                let name = mark_line(change.pos(), 17);
-                msg_outtrans(name, HLF_D, false);
-                xfree(name.cast());
-                os_breakcheck();
-            }
+                )
+            };
+            unsafe { msg_outtrans(row.as_ptr(), 0, false) };
+            let name = unsafe { mark_line(change.pos(), 17) };
+            unsafe { msg_outtrans(name, HLF_D, false) };
+            unsafe { xfree(name.cast()) };
+            os_breakcheck();
         }
         i += 1;
     }

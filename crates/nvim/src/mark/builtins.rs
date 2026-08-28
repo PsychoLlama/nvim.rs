@@ -53,15 +53,15 @@ pub(super) unsafe fn add_mark(
     // SAFETY: the caller promised a live list and NUL-terminated strings; the
     // dict and the position list are handed to `l`, which owns them from
     // `tv_list_append_dict` on.
+    let d = unsafe { tv_dict_alloc() };
+    unsafe { tv_list_append_dict(l, d) };
+    let lpos = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    unsafe { tv_list_append_number(lpos, varnumber_T::from(bufnr)) };
+    unsafe { tv_list_append_number(lpos, varnumber_T::from(pos.lnum)) };
+    // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
+    // what a linewise `'>` carries — is passed through rather than
+    // incremented, so it stays recognisable.
     unsafe {
-        let d = tv_dict_alloc();
-        tv_list_append_dict(l, d);
-        let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        tv_list_append_number(lpos, varnumber_T::from(bufnr));
-        tv_list_append_number(lpos, varnumber_T::from(pos.lnum));
-        // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
-        // what a linewise `'>` carries — is passed through rather than
-        // incremented, so it stays recognisable.
         tv_list_append_number(
             lpos,
             varnumber_T::from(if pos.col < MAXCOL {
@@ -69,15 +69,16 @@ pub(super) unsafe fn add_mark(
             } else {
                 MAXCOL
             }),
-        );
-        tv_list_append_number(lpos, varnumber_T::from(pos.coladd));
-        if tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) == FAIL
-            || tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) == FAIL
-            || (!fname.is_null()
-                && tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) == FAIL)
-        {
-            return FAIL;
-        }
+        )
+    };
+    unsafe { tv_list_append_number(lpos, varnumber_T::from(pos.coladd)) };
+    if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) } == FAIL
+        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) } == FAIL
+        || (!fname.is_null()
+            && unsafe { tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) }
+                == FAIL)
+    {
+        return FAIL;
     }
     OK
 }
@@ -120,8 +121,8 @@ pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
             &raw const (*win.raw()).w_pcmark,
             cur.handle as c_int,
             ptr::null(),
-        );
-    }
+        )
+    };
     let positions: [(&core::ffi::CStr, *const pos_T); 7] = [
         (c"'\"", buf.last_cursor().pos_raw()),
         (c"'[", &raw const buf.b_op_start),

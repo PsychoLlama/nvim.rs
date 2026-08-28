@@ -605,17 +605,17 @@ unsafe fn delete_fold_entry(folds: FoldList, idx: c_int, recursive: bool) {
     // SAFETY: both moves stay inside the array `ga_grow` just sized for
     // `moved - 1` more entries; the second reads the nested array, which is a
     // separate allocation.
-    unsafe {
-        if idx + 1 < folds.len() {
+    if idx + 1 < folds.len() {
+        unsafe {
             ptr::copy(
                 fold.entry().add(1),
                 fold.entry().add(moved as usize),
                 (folds.len() - (idx + 1)) as usize,
-            );
-        }
-        ptr::copy(children, fold.entry(), moved as usize);
-        xfree(children as *mut c_void);
+            )
+        };
     }
+    unsafe { ptr::copy(children, fold.entry(), moved as usize) };
+    unsafe { xfree(children as *mut c_void) };
     folds.set_len(folds.len() + moved - 1);
 }
 

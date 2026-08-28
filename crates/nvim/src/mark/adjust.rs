@@ -200,8 +200,8 @@ pub unsafe fn mark_adjust(
             true,
             kMarkAdjustNormal,
             op,
-        );
-    }
+        )
+    };
 }
 
 /// mark_adjust_nofold() does the same as mark_adjust() but without adjusting
@@ -230,8 +230,8 @@ pub unsafe fn mark_adjust_nofold(
             false,
             kMarkAdjustNormal,
             op,
-        );
-    }
+        )
+    };
 }
 
 /// # Safety

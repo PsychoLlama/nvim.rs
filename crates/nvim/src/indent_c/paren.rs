@@ -29,19 +29,21 @@ pub(crate) unsafe fn cin_skip2pos(trypos: pos_T) -> c_int {
     // a NUL-terminated line, which is all the two skippers ask for, and the
     // walk stops at its NUL.  Every step of it is a pointer operation, so one
     // region around the whole walk is as tight as this gets.
-    unsafe {
-        let line = ml_get(trypos.lnum);
-        let mut p = line.cast_const();
-        while *p != 0 && (p.offset_from(line) as colnr_T) < trypos.col {
-            if cin_iscomment(p) {
-                p = cin_skipcomment(p);
+    let line = ml_get(trypos.lnum);
+    let mut p = line.cast_const();
+    while unsafe { *p } != 0 && (unsafe { p.offset_from(line) } as colnr_T) < trypos.col {
+        if unsafe { cin_iscomment(p) } {
+            p = unsafe { cin_skipcomment(p) };
+        } else {
+            let new_p = unsafe { skip_string(p) };
+            p = if new_p == p {
+                unsafe { p.add(1) }
             } else {
-                let new_p = skip_string(p);
-                p = if new_p == p { p.add(1) } else { new_p };
-            }
+                new_p
+            };
         }
-        p.offset_from(line) as c_int
     }
+    unsafe { p.offset_from(line) as c_int }
 }
 
 /// The `{` opening the block the cursor is in, or null.
