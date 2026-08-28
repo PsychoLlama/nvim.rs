@@ -70,6 +70,9 @@ pub(crate) fn langmap_init() {
 /// # Safety
 /// `p` must point into a NUL-terminated string, at a byte that is not the NUL.
 unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
+    // SAFETY: the caller's promise -- `p` is on a non-NUL byte of a
+    // NUL-terminated string, so the byte after it is readable, and
+    // `utfc_ptr2len` never steps past the NUL.
     unsafe {
         let p = if *p == b'\\' as c_char && *p.add(1) != 0 {
             p.add(1)
@@ -91,64 +94,86 @@ unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
 /// `args` must point at a live `optset_T` whose `os_errbuf` has room for
 /// `os_errbuflen` bytes.
 pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
-    unsafe {
-        langmap_init(); // back to a one-to-one map
-        let mut p = p_langmap.get();
-        while *p != 0 {
-            // Find the ';' of an "abc;ABC" pair, if this comma-separated
-            // group has one; p2 then walks the second half alongside p.
-            let mut p2 = p;
-            while *p2 != 0 && *p2 != b',' as c_char && *p2 != b';' as c_char {
-                p2 = skip_escaped_char(p2);
+    // SAFETY: the caller's promise -- `args` is a live `optset_T`, whose
+    // `os_errbuf` has room for `os_errbuflen` bytes.
+    let opts = unsafe { Live::new(args) };
+    langmap_init(); // back to a one-to-one map
+    let mut p = p_langmap.get();
+    // SAFETY (this body): `p` and `p2` walk `'langmap'`, which is a live
+    // NUL-terminated option string; every step below is guarded by the byte
+    // it just read being non-NUL, so neither pointer leaves the string.
+    loop {
+        if unsafe { *p } == 0 {
+            break;
+        }
+        // Find the ';' of an "abc;ABC" pair, if this comma-separated
+        // group has one; p2 then walks the second half alongside p.
+        let mut p2 = p;
+        loop {
+            let c = unsafe { *p2 };
+            if c == 0 || c == b',' as c_char || c == b';' as c_char {
+                break;
             }
-            p2 = if *p2 == b';' as c_char {
-                p2.add(1) // "abcd;ABCD" form, p2 points at A
+            p2 = unsafe { skip_escaped_char(p2) };
+        }
+        p2 = if unsafe { *p2 } == b';' as c_char {
+            unsafe { p2.add(1) } // "abcd;ABCD" form, p2 points at A
+        } else {
+            core::ptr::null_mut() // "aAbBcCdD" form
+        };
+
+        loop {
+            let c = unsafe { *p };
+            if c == 0 {
+                break;
+            }
+            if c == b',' as c_char {
+                p = unsafe { p.add(1) };
+                break;
+            }
+            if c == b'\\' as c_char && unsafe { *p.add(1) } != 0 {
+                p = unsafe { p.add(1) };
+            }
+            let from = unsafe { utf_ptr2char(p) };
+            let from_ptr: *const c_char = p;
+            let mut to = NUL;
+            let mut to_ptr: *const c_char = c"".as_ptr();
+            if p2.is_null() {
+                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+                if unsafe { *p } != b',' as c_char {
+                    if unsafe { *p } == b'\\' as c_char {
+                        p = unsafe { p.add(1) };
+                    }
+                    to_ptr = p;
+                    to = unsafe { utf_ptr2char(to_ptr) };
+                }
+            } else if unsafe { *p2 } != b',' as c_char {
+                if unsafe { *p2 } == b'\\' as c_char {
+                    p2 = unsafe { p2.add(1) };
+                }
+                to_ptr = p2;
+                to = unsafe { utf_ptr2char(to_ptr) };
+            }
+            if to == NUL {
+                let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
+                let missing = c"E357: 'langmap': Matching character missing for %s";
+                // SAFETY: `os_errbuf` has room for `os_errbuflen` bytes, and
+                // the format's one conversion is the rendering below it.
+                unsafe {
+                    let shown = transchar(from);
+                    let fmt = gettext(missing.as_ptr());
+                    snprintf(errbuf, errlen, fmt, shown.as_ptr());
+                }
+                return errbuf;
+            }
+
+            if from >= 256 {
+                langmap_set_entry(from, to);
             } else {
-                core::ptr::null_mut() // "aAbBcCdD" form
-            };
-
-            while *p != 0 {
-                if *p == b',' as c_char {
-                    p = p.add(1);
-                    break;
-                }
-                if *p == b'\\' as c_char && *p.add(1) != 0 {
-                    p = p.add(1);
-                }
-                let from = utf_ptr2char(p);
-                let from_ptr: *const c_char = p;
-                let mut to = NUL;
-                let mut to_ptr: *const c_char = c"".as_ptr();
-                if p2.is_null() {
-                    p = p.add(utfc_ptr2len(p) as usize);
-                    if *p != b',' as c_char {
-                        if *p == b'\\' as c_char {
-                            p = p.add(1);
-                        }
-                        to_ptr = p;
-                        to = utf_ptr2char(to_ptr);
-                    }
-                } else if *p2 != b',' as c_char {
-                    if *p2 == b'\\' as c_char {
-                        p2 = p2.add(1);
-                    }
-                    to_ptr = p2;
-                    to = utf_ptr2char(to_ptr);
-                }
-                if to == NUL {
-                    snprintf(
-                        (*args).os_errbuf,
-                        (*args).os_errbuflen,
-                        gettext(c"E357: 'langmap': Matching character missing for %s".as_ptr()),
-                        transchar(from).as_ptr(),
-                    );
-                    return (*args).os_errbuf;
-                }
-
-                if from >= 256 {
-                    langmap_set_entry(from, to);
-                } else {
-                    if to > UCHAR_MAX {
+                if to > UCHAR_MAX {
+                    // SAFETY: both `%.*s` pairs are a length and the bytes it
+                    // counts, taken off the option string itself.
+                    unsafe {
                         swmsg_c!(
                             true,
                             c"'langmap': Mapping from %.*s to %.*s will not work properly".as_ptr(),
@@ -158,39 +183,38 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                             to_ptr,
                         );
                     }
-                    // The closure is a store; it cannot re-enter the cell.
-                    langmap_mapchar.with_mut(|map| map[(from & 255) as usize] = to as u8);
                 }
-
-                // Advance to the next pair.
-                p = p.add(utfc_ptr2len(p) as usize);
-                if p2.is_null() {
-                    continue;
-                }
-                p2 = p2.add(utfc_ptr2len(p2) as usize);
-                if *p != b';' as c_char {
-                    continue;
-                }
-                // The first half is exhausted; the rest of this group is
-                // whatever p2 has left, which must be a comma or the end.
-                p = p2;
-                if *p != 0 {
-                    if *p != b',' as c_char {
-                        snprintf(
-                            (*args).os_errbuf,
-                            (*args).os_errbuflen,
-                            gettext(
-                                c"E358: 'langmap': Extra characters after semicolon: %s".as_ptr(),
-                            ),
-                            p,
-                        );
-                        return (*args).os_errbuf;
-                    }
-                    p = p.add(1);
-                }
-                break;
+                // The closure is a store; it cannot re-enter the cell.
+                langmap_mapchar.with_mut(|map| map[(from & 255) as usize] = to as u8);
             }
+
+            // Advance to the next pair.
+            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            if p2.is_null() {
+                continue;
+            }
+            p2 = unsafe { p2.add(utfc_ptr2len(p2) as usize) };
+            if unsafe { *p } != b';' as c_char {
+                continue;
+            }
+            // The first half is exhausted; the rest of this group is
+            // whatever p2 has left, which must be a comma or the end.
+            p = p2;
+            if unsafe { *p } != 0 {
+                if unsafe { *p } != b',' as c_char {
+                    let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
+                    let extra = c"E358: 'langmap': Extra characters after semicolon: %s";
+                    // SAFETY: as the `E357` message above.
+                    unsafe {
+                        let fmt = gettext(extra.as_ptr());
+                        snprintf(errbuf, errlen, fmt, p);
+                    }
+                    return errbuf;
+                }
+                p = unsafe { p.add(1) };
+            }
+            break;
         }
-        core::ptr::null()
     }
+    core::ptr::null()
 }

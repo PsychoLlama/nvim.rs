@@ -72,6 +72,7 @@ use crate::types::{
     mapblock_T, object_data, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t, typval_T,
     typval_vval_union, uint64_t, varnumber_T,
 };
+use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strcmp, strlen, strpbrk};
 
 // The carve of the transpiled module; see each child's docs.
@@ -102,6 +103,23 @@ pub const REPTERM_NO_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetObject: LuaRetMode = 0;
+/// One mapping or abbreviation, whose caller has promised it is still linked.
+///
+/// The promise is discharged by the mapping tables: an entry lives until
+/// [`mapblock_free`] takes it off its list, so a handle derived during a walk
+/// is good until the walk unlinks something.  The two functions that *delete*
+/// while walking keep raw pointers instead — they hold the address of an
+/// entry's own `m_next`, and [`Live`]'s `DerefMut` would invalidate it.
+pub(crate) type Mb = Live<mapblock_T>;
+
+/// The `:map` arguments being parsed, whose caller has promised the struct
+/// outlives the value.
+///
+/// Every parse writes into one `MapArguments` its caller owns — a local of
+/// `do_map`, of `do_exmap` or of an API entry point — so the promise is
+/// discharged by that frame outliving the call.
+pub(crate) type Ma = Live<MapArguments>;
+
 pub type MapArguments = map_arguments;
 #[derive(Copy, Clone)]
 pub struct map_arguments {

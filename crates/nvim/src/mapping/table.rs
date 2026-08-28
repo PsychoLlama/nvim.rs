@@ -112,20 +112,22 @@ impl MapTable {
 pub(crate) unsafe fn map_walk<T>(
     table: MapTable,
     abbr: bool,
-    mut visit: impl FnMut(*mut mapblock_T) -> Option<T>,
+    mut visit: impl FnMut(Mb) -> Option<T>,
 ) -> Option<T> {
-    unsafe {
-        for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
-            let mut mp = table.head(hash, abbr);
-            while !mp.is_null() {
-                if let Some(answer) = visit(mp) {
-                    return Some(answer);
-                }
-                mp = (*mp).m_next;
+    for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
+        let mut head = table.head(hash, abbr);
+        while !head.is_null() {
+            // SAFETY: a non-null entry of one of `table`'s lists, which the
+            // caller has promised `visit` neither unlinks nor frees, so it
+            // stays live across the call that reads `m_next` off it.
+            let mp = unsafe { Mb::new(head) };
+            if let Some(answer) = visit(mp) {
+                return Some(answer);
             }
+            head = mp.m_next;
         }
-        None
     }
+    None
 }
 
 /// Delete one entry from the abbrlist or [`MAPHASH`].
@@ -140,22 +142,36 @@ pub(crate) unsafe fn map_walk<T>(
 /// # Safety
 /// `mpp` must point at a non-null entry of a live list.
 pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
-    unsafe {
-        let mp = *mpp;
-        xfree((*mp).m_keys.cast());
-        if !(*mp).m_alt.is_null() {
-            (*(*mp).m_alt).m_alt = ptr::null_mut();
-        } else {
-            if (*mp).m_luaref != LUA_NOREF {
-                api_free_luaref((*mp).m_luaref);
-                (*mp).m_luaref = LUA_NOREF;
-            }
-            xfree((*mp).m_str.cast());
-            xfree((*mp).m_orig_str.cast());
-            xfree((*mp).m_desc.cast());
+    // SAFETY: the caller's promise — `mpp` names a live link, and the entry it
+    // holds is live until this function frees it.  `mpp` itself is the
+    // *previous* entry's field, so writing through `mp` cannot disturb it.
+    let mut mp = unsafe { Mb::new(*mpp) };
+    // SAFETY: `m_keys` is this entry's own `xstrdup`, freed once.
+    unsafe { xfree(mp.m_keys.cast()) };
+    let alt = mp.m_alt;
+    if !alt.is_null() {
+        // SAFETY: a non-null `m_alt` is the live twin that shares this RHS;
+        // clearing its back-link leaves it owning the strings.
+        unsafe { (*alt).m_alt = ptr::null_mut() };
+    } else {
+        if mp.m_luaref != LUA_NOREF {
+            // SAFETY: a reference this entry owns, released once.
+            unsafe { api_free_luaref(mp.m_luaref) };
+            mp.m_luaref = LUA_NOREF;
         }
-        *mpp = (*mp).m_next;
-        xfree(mp.cast());
+        let (str, orig, desc) = (mp.m_str, mp.m_orig_str, mp.m_desc);
+        // SAFETY: the three strings this entry owns once its twin is gone.
+        unsafe {
+            xfree(str.cast());
+            xfree(orig.cast());
+            xfree(desc.cast());
+        }
+    }
+    let next = mp.m_next;
+    // SAFETY: `mpp` is the live link that held `mp`; unlink, then free.
+    unsafe {
+        *mpp = next;
+        xfree(mp.raw().cast());
     }
 }
 
@@ -186,51 +202,69 @@ pub(crate) unsafe fn map_add(
     // through `Buf`'s `DerefMut`: `map_table` already points into
     // `b_maphash`, and a fresh `&mut buf_T` would invalidate it.
     let buf = buf.raw();
-    unsafe {
-        let mp: *mut mapblock_T = xcalloc(1, size_of::<mapblock_T>()).cast();
+    // SAFETY: `xcalloc` never returns null, and the zeroed block is a valid
+    // `mapblock_T` that this function goes on to fill in and link.
+    let mut mp = unsafe { Mb::new(xcalloc(1, size_of::<mapblock_T>()).cast()) };
 
-        // If CTRL-C has been mapped, don't always use it for Interrupting.
-        if c_int::from(*keys) == Ctrl_C {
-            if map_table == (&raw mut (*buf).b_maphash).cast() {
-                (*buf).b_mapped_ctrl_c |= mode;
-            } else {
-                mapped_ctrl_c.set(mapped_ctrl_c.get() | mode);
-            }
-        }
-
-        (*mp).m_keys = xstrdup(keys);
-        (*mp).m_str = (*args).rhs;
-        (*mp).m_orig_str = (*args).orig_rhs;
-        (*mp).m_luaref = (*args).rhs_lua;
-        (*mp).m_keylen = strlen((*mp).m_keys) as c_int;
-        (*mp).m_noremap = noremap;
-        (*mp).m_nowait = (*args).nowait as c_char;
-        (*mp).m_silent = (*args).silent as c_char;
-        (*mp).m_mode = mode;
-        (*mp).m_simplified = c_int::from(simplified);
-        (*mp).m_expr = (*args).expr as c_char;
-        (*mp).m_replace_keycodes = (*args).replace_keycodes;
-        if sid != 0 {
-            (*mp).m_script_ctx.sc_sid = sid;
-            (*mp).m_script_ctx.sc_lnum = lnum;
+    // If CTRL-C has been mapped, don't always use it for Interrupting.
+    // SAFETY: `keys` is the caller's NUL-terminated string, and `buf` a live
+    // buffer.
+    if unsafe { c_int::from(*keys) } == Ctrl_C {
+        // SAFETY: a live buffer's own field address; no read happens.
+        if map_table == unsafe { &raw mut (*buf).b_maphash }.cast() {
+            // SAFETY: as above.
+            unsafe { (*buf).b_mapped_ctrl_c |= mode };
         } else {
-            (*mp).m_script_ctx = current_sctx.get();
-            (*mp).m_script_ctx.sc_lnum += sourcing_lnum();
-            nlua_set_sctx(&raw mut (*mp).m_script_ctx);
+            mapped_ctrl_c.set(mapped_ctrl_c.get() | mode);
         }
-        (*mp).m_desc = (*args).desc;
-
-        // Add the new entry in front of the abbrlist or of its maphash bucket.
-        if is_abbr {
-            (*mp).m_next = *abbr_table;
-            *abbr_table = mp;
-        } else {
-            let n = map_hash((*mp).m_mode, c_int::from(*(*mp).m_keys as u8));
-            (*mp).m_next = *map_table.add(n);
-            *map_table.add(n) = mp;
-        }
-        mp
     }
+
+    // SAFETY: `keys` is NUL-terminated and `args` a live `MapArguments`; the
+    // three string fields move into the new entry, which now owns them.
+    let args = unsafe { Live::new(args) };
+    // SAFETY: as above.
+    mp.m_keys = unsafe { xstrdup(keys) };
+    mp.m_str = args.rhs;
+    mp.m_orig_str = args.orig_rhs;
+    mp.m_luaref = args.rhs_lua;
+    // SAFETY: the `xstrdup` just above.
+    mp.m_keylen = unsafe { strlen(mp.m_keys) } as c_int;
+    mp.m_noremap = noremap;
+    mp.m_nowait = args.nowait as c_char;
+    mp.m_silent = args.silent as c_char;
+    mp.m_mode = mode;
+    mp.m_simplified = c_int::from(simplified);
+    mp.m_expr = args.expr as c_char;
+    mp.m_replace_keycodes = args.replace_keycodes;
+    if sid != 0 {
+        mp.m_script_ctx.sc_sid = sid;
+        mp.m_script_ctx.sc_lnum = lnum;
+    } else {
+        mp.m_script_ctx = current_sctx.get();
+        mp.m_script_ctx.sc_lnum += sourcing_lnum();
+        // Off `raw()`, not off a `Deref`: the address has to outlive the
+        // borrow that produced it.
+        let sctx = mp.field_ptr(core::mem::offset_of!(mapblock_T, m_script_ctx));
+        // SAFETY: the entry's own field, and `mp` is live.
+        unsafe { nlua_set_sctx(sctx) };
+    }
+    mp.m_desc = args.desc;
+
+    // Add the new entry in front of the abbrlist or of its maphash bucket.
+    if is_abbr {
+        // SAFETY: the caller's promise — `abbr_table` names a live link.
+        mp.m_next = unsafe { *abbr_table };
+        unsafe { *abbr_table = mp.raw() };
+    } else {
+        // SAFETY: `m_keys` is the NUL-terminated copy made above, so its first
+        // byte is readable, and `map_table` has `MAX_MAPHASH` entries.
+        let n = map_hash(mp.m_mode, c_int::from(unsafe { *mp.m_keys } as u8));
+        unsafe {
+            mp.m_next = *map_table.add(n);
+            *map_table.add(n) = mp.raw();
+        }
+    }
+    mp.raw()
 }
 
 /// Clear all mappings (or abbreviations) in `mode`.
@@ -246,43 +280,60 @@ pub unsafe fn map_clear_mode(buf: Buf, mode: c_int, local: bool, abbr: bool) {
     // As in [`map_add`]: `mpp` points into `b_maphash`, so the tables are
     // reached through the one raw pointer rather than through `DerefMut`.
     let buf = buf.raw();
-    unsafe {
-        for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
-            let mut mpp: *mut *mut mapblock_T = match (local, abbr) {
-                (true, true) => &raw mut (*buf).b_first_abbr,
-                (false, true) => global_abbr_head(),
-                (true, false) => (&raw mut (*buf).b_maphash)
-                    .cast::<*mut mapblock_T>()
-                    .add(hash),
-                (false, false) => global_map_heads().add(hash),
-            };
-            while !(*mpp).is_null() {
-                let mp = *mpp;
-                if (*mp).m_mode & mode != 0 {
-                    (*mp).m_mode &= !mode;
-                    if (*mp).m_mode == 0 {
-                        mapblock_free(mpp);
-                        continue; // continue with *mpp
-                    }
-                    // May need to put this entry into another hash list.
-                    let new_hash = map_hash((*mp).m_mode, c_int::from(*(*mp).m_keys as u8));
-                    if !abbr && new_hash != hash {
-                        *mpp = (*mp).m_next;
-                        // Through raw pointers, not `with_mut`: `mpp` may
-                        // itself point into one of these two tables, and a
-                        // `&mut` to the whole array would invalidate it.
-                        let head: *mut *mut mapblock_T = if local {
-                            (&raw mut (*buf).b_maphash).cast()
-                        } else {
-                            global_map_heads()
-                        };
-                        (*mp).m_next = *head.add(new_hash);
-                        *head.add(new_hash) = mp;
-                        continue; // continue with *mpp
-                    }
-                }
-                mpp = &raw mut (*mp).m_next;
+    // SAFETY: `Buf`'s promise — a live buffer.  `&raw` reads nothing, and both
+    // addresses come off the one raw pointer rather than off a `&mut`.
+    let local_abbr = unsafe { &raw mut (*buf).b_first_abbr };
+    // SAFETY: as above.
+    let local_maps = unsafe { &raw mut (*buf).b_maphash }.cast::<*mut mapblock_T>();
+    // Through raw pointers, not `with_mut`: `mpp` may itself point into one of
+    // these two tables, and a `&mut` to the whole array would invalidate it.
+    let (abbr_head, map_heads) = if local {
+        (local_abbr, local_maps)
+    } else {
+        (global_abbr_head(), global_map_heads())
+    };
+    for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
+        // SAFETY: `hash` is below `MAX_MAPHASH`, the length of both tables.
+        let mut mpp = if abbr {
+            abbr_head
+        } else {
+            unsafe { map_heads.add(hash) }
+        };
+        loop {
+            // SAFETY: the caller's promise — nothing else reaches these lists
+            // while this runs, so `mpp` and everything it links to are live.
+            let mp = unsafe { *mpp };
+            if mp.is_null() {
+                break;
             }
+            // SAFETY: as above.
+            let m_mode = unsafe { (*mp).m_mode };
+            if m_mode & mode != 0 {
+                let left = m_mode & !mode;
+                // SAFETY: as above.
+                unsafe { (*mp).m_mode = left };
+                if left == 0 {
+                    // SAFETY: as above; `mpp` holds the entry being deleted.
+                    unsafe { mapblock_free(mpp) };
+                    continue; // continue with *mpp
+                }
+                // May need to put this entry into another hash list.
+                // SAFETY: `m_keys` is NUL-terminated, so byte 0 is readable.
+                let first = unsafe { *(*mp).m_keys } as u8;
+                let new_hash = map_hash(left, c_int::from(first));
+                if !abbr && new_hash != hash {
+                    // SAFETY: as above; `new_hash` is below `MAX_MAPHASH`.
+                    unsafe {
+                        *mpp = (*mp).m_next;
+                        let head = map_heads.add(new_hash);
+                        (*mp).m_next = *head;
+                        *head = mp;
+                    }
+                    continue; // continue with *mpp
+                }
+            }
+            // SAFETY: `mp`'s own field; `&raw` reads nothing.
+            mpp = unsafe { &raw mut (*mp).m_next };
         }
     }
 }
@@ -310,29 +361,30 @@ pub(crate) unsafe fn map_to_exists(
     modechars: *const c_char,
     abbr: bool,
 ) -> bool {
-    unsafe {
-        let mut buf: *mut c_char = ptr::null_mut();
-        let rhs = replace_termcodes(
-            str,
-            strlen(str),
-            &raw mut buf,
-            0,
-            REPTERM_DO_LT as c_int,
-            ptr::null_mut(),
-            p_cpo.get(),
-        );
+    let mut buf: *mut c_char = ptr::null_mut();
+    let out = &raw mut buf;
+    let cpo = p_cpo.get();
+    let dolt = REPTERM_DO_LT as c_int;
+    let simplify = ptr::null_mut();
+    // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
+    // allocation `replace_termcodes` may leave in `buf` is freed below.
+    let len = unsafe { strlen(str) };
+    // SAFETY: as above.
+    let rhs = unsafe { replace_termcodes(str, len, out, 0, dolt, simplify, cpo) };
 
-        let mut mode = 0;
-        for (ch, flags) in MODE_CHARS {
-            if !strchr(modechars, c_int::from(ch)).is_null() {
-                mode |= flags;
-            }
+    let mut mode = 0;
+    for (ch, flags) in MODE_CHARS {
+        // SAFETY: the caller's promise — `modechars` is NUL-terminated.
+        if !unsafe { strchr(modechars, c_int::from(ch)) }.is_null() {
+            mode |= flags;
         }
-
-        let retval = map_to_exists_mode(rhs, mode, abbr);
-        xfree(buf.cast());
-        retval
     }
+
+    // SAFETY: `rhs` is `replace_termcodes`'s NUL-terminated answer, and `buf`
+    // its allocation, freed once.
+    let retval = unsafe { map_to_exists_mode(rhs, mode, abbr) };
+    unsafe { xfree(buf.cast()) };
+    retval
 }
 
 /// Whether any mapping in `mode` has `rhs` as a substring of its RHS.
@@ -342,18 +394,21 @@ pub(crate) unsafe fn map_to_exists(
 /// # Safety
 /// `rhs` must be live and NUL-terminated, and `curbuf` a live buffer.
 pub unsafe fn map_to_exists_mode(rhs: *const c_char, mode: c_int, abbr: bool) -> bool {
-    unsafe {
-        // Do it twice: once for global maps and once for local maps.
-        for table in [MapTable::Global, MapTable::Buffer(Buf::current())] {
-            let found = map_walk(table, abbr, |mp| {
-                ((*mp).m_mode & mode != 0 && !strstr((*mp).m_str, rhs).is_null()).then_some(())
-            });
-            if found.is_some() {
-                return true;
-            }
+    // SAFETY: the caller's promise — `curbuf` is a live buffer.
+    let cur = unsafe { Buf::current() };
+    // Do it twice: once for global maps and once for local maps.
+    for table in [MapTable::Global, MapTable::Buffer(cur)] {
+        let visit = |mp: Mb| {
+            // SAFETY: `m_str` and `rhs` are both NUL-terminated.
+            let hit = mp.m_mode & mode != 0 && !unsafe { strstr(mp.m_str, rhs) }.is_null();
+            hit.then_some(())
+        };
+        // SAFETY: the tables are live and `visit` only reads.
+        if unsafe { map_walk(table, abbr, visit) }.is_some() {
+            return true;
         }
-        false
     }
+    false
 }
 
 /// What [`check_map`] found.
@@ -384,44 +439,55 @@ pub(crate) unsafe fn check_map(
     ign_mod: bool,
     abbr: bool,
 ) -> Option<MapMatch> {
-    unsafe {
-        let len = strlen(keys) as c_int;
-        for (local, table) in [
-            (true, MapTable::Buffer(Buf::current())),
-            (false, MapTable::Global),
-        ] {
-            let found = map_walk(table, abbr, |mp| {
-                // Skip entries with the wrong mode, the wrong length, and the
-                // ones that do not match.
-                if (*mp).m_mode & mode == 0 || (exact && (*mp).m_keylen != len) {
-                    return None;
-                }
-                let mut s = (*mp).m_keys;
-                let mut keylen = (*mp).m_keylen;
-                if ign_mod
-                    && keylen >= 3
-                    && c_int::from(*s as u8) == K_SPECIAL
-                    && c_int::from(*s.add(1) as u8) == KS_MODIFIER
-                {
-                    s = s.add(3);
-                    keylen -= 3;
-                }
-                let minlen = keylen.min(len);
-                (strncmp(s, keys, minlen as size_t) == 0).then(|| MapMatch {
-                    mp,
-                    local,
-                    rhs: if (*mp).m_luaref == LUA_NOREF {
-                        (*mp).m_str
-                    } else {
-                        ptr::null_mut()
-                    },
-                    rhs_lua: (*mp).m_luaref,
-                })
-            });
-            if found.is_some() {
-                return found;
+    // SAFETY: the caller's promise — `keys` is NUL-terminated, and `curbuf` a
+    // live buffer.
+    let len = unsafe { strlen(keys) } as c_int;
+    // SAFETY: as above.
+    let cur = unsafe { Buf::current() };
+    let visit = |local: bool| {
+        move |mp: Mb| {
+            // Skip entries with the wrong mode, the wrong length, and the
+            // ones that do not match.
+            if mp.m_mode & mode == 0 || (exact && mp.m_keylen != len) {
+                return None;
             }
+            let mut s = mp.m_keys;
+            let mut keylen = mp.m_keylen;
+            // SAFETY: `m_keys` is NUL-terminated and `m_keylen` is its length,
+            // so the two leading bytes a modifier escape needs are there
+            // whenever `keylen >= 3`, and so is the `s.add(3)` tail.
+            let modifier = keylen >= 3
+                && unsafe {
+                    c_int::from(*s as u8) == K_SPECIAL
+                        && c_int::from(*s.add(1) as u8) == KS_MODIFIER
+                };
+            if ign_mod && modifier {
+                // SAFETY: as above.
+                s = unsafe { s.add(3) };
+                keylen -= 3;
+            }
+            let minlen = keylen.min(len);
+            // SAFETY: both strings are NUL-terminated and `minlen` is no
+            // longer than either.
+            let hit = unsafe { strncmp(s, keys, minlen as size_t) } == 0;
+            hit.then(|| MapMatch {
+                mp: mp.raw(),
+                local,
+                rhs: if mp.m_luaref == LUA_NOREF {
+                    mp.m_str
+                } else {
+                    ptr::null_mut()
+                },
+                rhs_lua: mp.m_luaref,
+            })
         }
-        None
+    };
+    for (local, table) in [(true, MapTable::Buffer(cur)), (false, MapTable::Global)] {
+        // SAFETY: the tables are live and the visitor only reads.
+        let found = unsafe { map_walk(table, abbr, visit(local)) };
+        if found.is_some() {
+            return found;
+        }
     }
+    None
 }

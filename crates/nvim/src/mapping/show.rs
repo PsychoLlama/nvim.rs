@@ -26,72 +26,97 @@ static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// `mp` must be a live mapblock.
-pub(crate) unsafe fn showmap(mp: *mut mapblock_T, local: bool) {
-    unsafe {
-        if message_filtered((*mp).m_keys)
-            && message_filtered((*mp).m_str)
-            && ((*mp).m_desc.is_null() || message_filtered((*mp).m_desc))
-        {
-            return;
-        }
+pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
+    let (keys, str, desc) = (mp.m_keys, mp.m_str, mp.m_desc);
+    // SAFETY: the three strings a live mapblock owns are NUL-terminated, and
+    // `m_desc` is either null or one of them.
+    let filtered = unsafe {
+        message_filtered(keys)
+            && message_filtered(str)
+            && (desc.is_null() || message_filtered(desc))
+    };
+    if filtered {
+        return;
+    }
 
-        if msg_col.get() > 0 || msg_silent.get() != 0 {
-            msg_putchar(c_int::from(b'\n'));
-            if got_int.get() {
-                return; // 'q' typed at the MORE prompt
-            }
+    if msg_col.get() > 0 || msg_silent.get() != 0 {
+        // SAFETY: a message primitive that reads nothing of ours.
+        unsafe { msg_putchar(c_int::from(b'\n')) };
+        if got_int.get() {
+            return; // 'q' typed at the MORE prompt
         }
+    }
 
-        let mut mapchars = map_mode_to_chars((*mp).m_mode);
+    let mut mapchars = map_mode_to_chars(mp.m_mode);
+    // SAFETY: `map_mode_to_chars` answers a NUL-terminated seven-byte array
+    // that lives until the end of this body.
+    let mut len = unsafe {
         msg_puts(mapchars.as_ptr());
-        let mut len = strlen(mapchars.as_mut_ptr());
+        strlen(mapchars.as_mut_ptr())
+    };
+    len += 1;
+    while len <= 3 {
+        // SAFETY: as above.
+        unsafe { msg_putchar(c_int::from(b' ')) };
         len += 1;
-        while len <= 3 {
-            msg_putchar(c_int::from(b' '));
-            len += 1;
-        }
+    }
 
-        // Display the LHS, and pad to at least twelve columns.
-        len = msg_outtrans_special((*mp).m_keys, true, 0) as size_t;
-        loop {
-            msg_putchar(c_int::from(b' '));
-            len += 1;
-            if len >= 12 {
-                break;
-            }
+    // Display the LHS, and pad to at least twelve columns.
+    // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS.
+    len = unsafe { msg_outtrans_special(keys, true, 0) } as size_t;
+    loop {
+        // SAFETY: as above.
+        unsafe { msg_putchar(c_int::from(b' ')) };
+        len += 1;
+        if len >= 12 {
+            break;
         }
+    }
 
-        if (*mp).m_noremap == REMAP_NONE {
+    // SAFETY: static NUL-terminated markers, and the message primitives.
+    unsafe {
+        if mp.m_noremap == REMAP_NONE {
             msg_puts_hl(c"*".as_ptr(), HLF_8, false);
-        } else if (*mp).m_noremap == REMAP_SCRIPT {
+        } else if mp.m_noremap == REMAP_SCRIPT {
             msg_puts_hl(c"&".as_ptr(), HLF_8, false);
         } else {
             msg_putchar(c_int::from(b' '));
         }
 
         msg_putchar(c_int::from(if local { b'@' } else { b' ' }));
-
-        // `false` below would show only things like <Up> as such on the rhs
-        // and not M-x etc; `true` gets both -- webb
-        if (*mp).m_luaref != LUA_NOREF {
-            let str = nlua_funcref_str((*mp).m_luaref, ptr::null_mut());
-            msg_puts_hl(str, HLF_8, false);
-            xfree(str.cast());
-        } else if c_int::from(*(*mp).m_str) == NUL {
-            msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false);
-        } else {
-            msg_outtrans_special((*mp).m_str, false, 0);
-        }
-
-        if !(*mp).m_desc.is_null() {
-            msg_puts(c"\n                 ".as_ptr()); // shift to the rhs column
-            msg_puts((*mp).m_desc);
-        }
-        if p_verbose.get() > 0 {
-            last_set_msg((*mp).m_script_ctx);
-        }
-        msg_clr_eos();
     }
+
+    // `false` below would show only things like <Up> as such on the rhs
+    // and not M-x etc; `true` gets both -- webb
+    if mp.m_luaref != LUA_NOREF {
+        // SAFETY: the mapping's own reference; the rendering is ours to free.
+        unsafe {
+            let text = nlua_funcref_str(mp.m_luaref, ptr::null_mut());
+            msg_puts_hl(text, HLF_8, false);
+            xfree(text.cast());
+        }
+    // SAFETY: `m_str` is the mapping's own NUL-terminated RHS.
+    } else if unsafe { c_int::from(*str) } == NUL {
+        // SAFETY: a static NUL-terminated marker.
+        unsafe { msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false) };
+    } else {
+        // SAFETY: as above.
+        unsafe { msg_outtrans_special(str, false, 0) };
+    }
+
+    if !desc.is_null() {
+        // SAFETY: a static text, then the mapping's own NUL-terminated `desc`.
+        unsafe {
+            msg_puts(c"\n                 ".as_ptr()); // shift to the rhs column
+            msg_puts(desc);
+        }
+    }
+    if p_verbose.get() > 0 {
+        // SAFETY: a plain copy of the mapping's script context.
+        unsafe { last_set_msg(mp.m_script_ctx) };
+    }
+    // SAFETY: a message primitive that reads nothing of ours.
+    unsafe { msg_clr_eos() };
 }
 
 /// Translate a mapping's internal LHS into the external form `:map` and
@@ -106,59 +131,81 @@ pub(crate) unsafe fn translate_mapping(
     str_in: *const c_char,
     cpo_val: *const c_char,
 ) -> *mut c_char {
-    unsafe {
-        let mut ga: garray_T = core::mem::zeroed();
-        ga_init(&raw mut ga, 1, 40);
+    let mut ga: garray_T = garray_T::default();
+    let gap = &raw mut ga;
+    // SAFETY: `gap` names the local growarray just above.
+    unsafe { ga_init(gap, 1, 40) };
 
-        let cpo_bslash = !vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()).is_null();
-        let mut str = str_in.cast::<u8>();
-        while *str != 0 {
-            let mut c = c_int::from(*str);
-            'next: {
-                if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
-                    let mut modifiers = 0;
-                    if c_int::from(*str.add(1)) == KS_MODIFIER {
+    // SAFETY: the caller's promise — `cpo_val` is NUL-terminated.
+    let cpo_bslash = !unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
+    let mut str = str_in.cast::<u8>();
+    loop {
+        // SAFETY: the caller's promise — `str_in` is NUL-terminated — and the
+        // walk stops here at its NUL, so `str` is always inside the string.
+        let mut c = c_int::from(unsafe { *str });
+        if c == 0 {
+            break;
+        }
+        'next: {
+            // SAFETY: `str` is on a non-NUL byte, so `add(1)` is readable, and
+            // `add(2)` only once `add(1)` is itself known non-NUL.
+            if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
+                let mut modifiers = 0;
+                // SAFETY: as above.
+                if c_int::from(unsafe { *str.add(1) }) == KS_MODIFIER {
+                    // SAFETY: `str[1]` and `str[2]` are both non-NUL, so both
+                    // steps land on a byte of the same string.
+                    unsafe {
                         str = str.add(2);
                         modifiers = c_int::from(*str);
                         str = str.add(1);
                         c = c_int::from(*str);
                     }
-
-                    if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
-                        c = key_unescape(*str.add(1), *str.add(2));
-                        if c == K_ZERO {
-                            c = NUL; // display <Nul> as ^@
-                        }
-                        str = str.add(2);
-                    }
-                    if c < 0 || modifiers != 0 {
-                        // A special key.
-                        ga_concat(&raw mut ga, get_special_key_name(c, modifiers).as_ptr());
-                        break 'next;
-                    }
                 }
 
-                if c == c_int::from(b' ')
-                    || c == c_int::from(b'\t')
-                    || c == Ctrl_J
-                    || c == Ctrl_V
-                    || c == c_int::from(b'<')
-                    || (c == c_int::from(b'\\') && !cpo_bslash)
-                {
-                    ga_append(
-                        &raw mut ga,
-                        if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8,
-                    );
+                // SAFETY: as the first test — `c` is what `str` points at, so
+                // a non-`K_SPECIAL` `c` stops the reads before they run.
+                if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
+                    // SAFETY: as above.
+                    c = unsafe { key_unescape(*str.add(1), *str.add(2)) };
+                    if c == K_ZERO {
+                        c = NUL; // display <Nul> as ^@
+                    }
+                    // SAFETY: as above.
+                    str = unsafe { str.add(2) };
                 }
-                if c != 0 {
-                    ga_append(&raw mut ga, c as u8);
+                if c < 0 || modifiers != 0 {
+                    // A special key.
+                    let name = get_special_key_name(c, modifiers);
+                    // SAFETY: `gap` is the local growarray, and `name` is a
+                    // NUL-terminated rendering that outlives the call.
+                    unsafe { ga_concat(gap, name.as_ptr()) };
+                    break 'next;
                 }
             }
-            str = str.add(1);
+
+            if c == c_int::from(b' ')
+                || c == c_int::from(b'\t')
+                || c == Ctrl_J
+                || c == Ctrl_V
+                || c == c_int::from(b'<')
+                || (c == c_int::from(b'\\') && !cpo_bslash)
+            {
+                let escape = if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8;
+                // SAFETY: `gap` is the local growarray.
+                unsafe { ga_append(gap, escape) };
+            }
+            if c != 0 {
+                // SAFETY: as above.
+                unsafe { ga_append(gap, c as u8) };
+            }
         }
-        ga_append(&raw mut ga, NUL as u8);
-        ga.ga_data.cast()
+        // SAFETY: `str` is on a non-NUL byte, so the next one is in the string.
+        str = unsafe { str.add(1) };
     }
+    // SAFETY: as above.
+    unsafe { ga_append(gap, NUL as u8) };
+    ga.ga_data.cast()
 }
 
 /// The `:map-arguments` that may precede the `{lhs}` on a completed command
@@ -191,41 +238,45 @@ pub unsafe fn set_context_in_map_cmd(
     isunmap: bool,
     cmdidx: cmdidx_T,
 ) -> *mut c_char {
-    unsafe {
-        if forceit && cmdidx != CMD_map && cmdidx != CMD_unmap {
-            (*xp).xp_context = ExpandContext::Nothing;
-            return ptr::null_mut();
-        }
-
-        if isunmap {
-            EXPAND_MAPMODES.set(get_map_mode(&raw mut cmd, forceit || isabbrev));
-        } else {
-            let mut modes = MODE_INSERT | MODE_CMDLINE;
-            if !isabbrev {
-                modes |= MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
-            }
-            EXPAND_MAPMODES.set(modes);
-        }
-        EXPAND_ISABBREV.set(isabbrev);
-        (*xp).xp_context = ExpandContext::Mappings;
-        EXPAND_BUFFER.set(false);
-
-        // Skip the map arguments; only `<buffer>` changes what is offered.
-        'skip: loop {
-            for (i, word) in CONTEXT_ARGS.into_iter().enumerate() {
-                if take_map_arg(&mut arg, word) {
-                    if i == CONTEXT_ARG_BUFFER {
-                        EXPAND_BUFFER.set(true);
-                    }
-                    continue 'skip;
-                }
-            }
-            break;
-        }
-        (*xp).xp_pattern = arg;
-
-        ptr::null_mut()
+    // SAFETY: the caller's promise — `xp` is a live `expand_T`.
+    let mut xp = unsafe { Live::new(xp) };
+    if forceit && cmdidx != CMD_map && cmdidx != CMD_unmap {
+        xp.xp_context = ExpandContext::Nothing;
+        return ptr::null_mut();
     }
+
+    if isunmap {
+        // SAFETY: the caller's promise — `cmd` is a live command name.
+        let mode = unsafe { get_map_mode(&raw mut cmd, forceit || isabbrev) };
+        EXPAND_MAPMODES.set(mode);
+    } else {
+        let mut modes = MODE_INSERT | MODE_CMDLINE;
+        if !isabbrev {
+            modes |= MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
+        }
+        EXPAND_MAPMODES.set(modes);
+    }
+    EXPAND_ISABBREV.set(isabbrev);
+    xp.xp_context = ExpandContext::Mappings;
+    EXPAND_BUFFER.set(false);
+
+    // Skip the map arguments; only `<buffer>` changes what is offered.
+    'skip: loop {
+        for (i, word) in CONTEXT_ARGS.into_iter().enumerate() {
+            // SAFETY: the caller's promise — `arg` is NUL-terminated, and
+            // stays so as it is stepped forward.
+            if unsafe { take_map_arg(&mut arg, word) } {
+                if i == CONTEXT_ARG_BUFFER {
+                    EXPAND_BUFFER.set(true);
+                }
+                continue 'skip;
+            }
+        }
+        break;
+    }
+    xp.xp_pattern = arg;
+
+    ptr::null_mut()
 }
 
 /// The map arguments `:map <Tab>` offers, in upstream's order.  `<buffer>` is
@@ -257,94 +308,126 @@ pub unsafe fn expand_mappings(
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    unsafe {
-        let fuzzy = cmdline_fuzzy_complete(pat);
+    // SAFETY: the caller's promise — `pat` is a live, NUL-terminated pattern.
+    let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
 
+    // SAFETY: the caller's promise — both out-parameters are writable.
+    unsafe {
         *numMatches = 0; // return values in case of FAIL
         *matches = ptr::null_mut();
+    }
 
-        let mut ga: garray_T = core::mem::zeroed();
-        let itemsize = if fuzzy {
-            size_of::<fuzmatch_str_T>()
+    let mut ga: garray_T = garray_T::default();
+    let itemsize = if fuzzy {
+        size_of::<fuzmatch_str_T>()
+    } else {
+        size_of::<*mut c_char>()
+    };
+    // SAFETY: `ga` is the local growarray just above.
+    unsafe { ga_init(&raw mut ga, itemsize as c_int, 3) };
+
+    // Whether `p` matches, and with what fuzzy score.
+    let matched = |p: *mut c_char| -> Option<c_int> {
+        if fuzzy {
+            // SAFETY: `p` and `pat` are both live and NUL-terminated.
+            let score = unsafe { fuzzy_match_str(p, pat) };
+            (score != FUZZY_SCORE_NONE).then_some(score)
         } else {
-            size_of::<*mut c_char>()
-        };
-        ga_init(&raw mut ga, itemsize as c_int, 3);
-
-        // Whether `p` matches, and with what fuzzy score.
-        let matched = |p: *mut c_char| -> Option<c_int> {
-            if fuzzy {
-                let score = fuzzy_match_str(p, pat);
-                (score != FUZZY_SCORE_NONE).then_some(score)
-            } else {
-                vim_regexec(regmatch, p, 0).then_some(0)
-            }
-        };
-        // C's `GA_APPEND`, in whichever of the two element shapes is in use.
-        // `ga` is a parameter rather than a capture so the loops below can
-        // still read it.
-        let push = |ga: &mut garray_T, s: *mut c_char, score: c_int| {
+            // SAFETY: the caller's promise — `regmatch` is a live, compiled
+            // match — and `p` is NUL-terminated.
+            unsafe { vim_regexec(regmatch, p, 0) }.then_some(0)
+        }
+    };
+    // C's `GA_APPEND`, in whichever of the two element shapes is in use.
+    // `ga` is a parameter rather than a capture so the loops below can
+    // still read it.
+    let push = |ga: &mut garray_T, s: *mut c_char, score: c_int| {
+        // SAFETY: `ga_grow` makes room for one more element of `ga_itemsize`,
+        // which is the size of whichever of the two shapes is written below,
+        // and `ga_len` is the index it just made room for.
+        unsafe {
             ga_grow(ga, 1);
             if fuzzy {
-                *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) = fuzmatch_str_T {
+                let at = ga
+                    .ga_data
+                    .cast::<fuzmatch_str_T>()
+                    .offset(ga.ga_len as isize);
+                *at = fuzmatch_str_T {
                     idx: ga.ga_len,
                     str: s,
                     score,
                 };
             } else {
-                *(ga.ga_data as *mut *mut c_char).offset(ga.ga_len as isize) = s;
-            }
-            ga.ga_len += 1;
-        };
-
-        // First search in map modifier arguments.
-        for (i, word) in EXPAND_ARGS.into_iter().enumerate() {
-            if i == EXPAND_ARG_BUFFER && EXPAND_BUFFER.get() {
-                continue;
-            }
-            let p = word.as_ptr().cast_mut();
-            if let Some(score) = matched(p) {
-                push(&mut ga, xstrdup(p), score);
+                let at = ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize);
+                *at = s;
             }
         }
+        ga.ga_len += 1;
+    };
 
-        // Then the mapping names themselves. Note that `<buffer>` only
-        // redirects the *mapping* lookup: upstream reads the global
-        // abbreviation list either way.
-        let abbr = EXPAND_ISABBREV.get();
-        let table = if !abbr && EXPAND_BUFFER.get() {
-            MapTable::Buffer(Buf::current())
-        } else {
-            MapTable::Global
-        };
-        map_walk::<()>(table, abbr, |mp| {
-            if (*mp).m_simplified != 0 || (*mp).m_mode & EXPAND_MAPMODES.get() == 0 {
-                return None;
-            }
-            let p = translate_mapping((*mp).m_keys, p_cpo.get());
-            if p.is_null() {
-                return None;
-            }
-            match matched(p) {
-                Some(score) => push(&mut ga, p, score),
-                None => xfree(p.cast()),
-            }
-            None
-        });
-
-        if ga.ga_len == 0 {
-            return FAIL;
+    // First search in map modifier arguments.
+    for (i, word) in EXPAND_ARGS.into_iter().enumerate() {
+        if i == EXPAND_ARG_BUFFER && EXPAND_BUFFER.get() {
+            continue;
         }
+        let p = word.as_ptr().cast_mut();
+        if let Some(score) = matched(p) {
+            // SAFETY: `p` is a static NUL-terminated word; the copy is owned
+            // by the growarray from here on.
+            push(&mut ga, unsafe { xstrdup(p) }, score);
+        }
+    }
 
+    // Then the mapping names themselves. Note that `<buffer>` only
+    // redirects the *mapping* lookup: upstream reads the global
+    // abbreviation list either way.
+    let abbr = EXPAND_ISABBREV.get();
+    let table = if !abbr && EXPAND_BUFFER.get() {
+        // SAFETY: `curbuf` is set from startup to exit.
+        MapTable::Buffer(unsafe { Buf::current() })
+    } else {
+        MapTable::Global
+    };
+    let collect = |mp: Mb| {
+        if mp.m_simplified != 0 || mp.m_mode & EXPAND_MAPMODES.get() == 0 {
+            return None;
+        }
+        // SAFETY: `m_keys` and `'cpoptions'` are both NUL-terminated; the
+        // rendering is owned by the growarray from here on, or freed here.
+        let p = unsafe { translate_mapping(mp.m_keys, p_cpo.get()) };
+        if p.is_null() {
+            return None;
+        }
+        match matched(p) {
+            Some(score) => push(&mut ga, p, score),
+            // SAFETY: the rendering nothing took ownership of.
+            None => unsafe { xfree(p.cast()) },
+        }
+        None
+    };
+    // SAFETY: the tables are live and `collect` neither unlinks nor frees an
+    // entry.
+    unsafe { map_walk::<()>(table, abbr, collect) };
+
+    if ga.ga_len == 0 {
+        return FAIL;
+    }
+
+    // SAFETY: the growarray holds `ga_len` elements of the shape `fuzzy`
+    // names, and both out-parameters are the caller's writable slots.
+    let mut count = unsafe {
         if fuzzy {
             fuzzymatches_to_strmatches(ga.ga_data.cast(), matches, ga.ga_len, false);
         } else {
             *matches = ga.ga_data.cast();
         }
         *numMatches = ga.ga_len;
-
-        let mut count = *numMatches;
-        if count > 1 {
+        *numMatches
+    };
+    if count > 1 {
+        // SAFETY: `*matches` now holds `count` NUL-terminated strings, which
+        // is what the sort and the comparison below read.
+        unsafe {
             // Sort the matches; fuzzy matching already sorted them.
             if !fuzzy {
                 sort_strings(*matches, count);
@@ -362,8 +445,9 @@ pub unsafe fn expand_mappings(
                 }
             }
         }
-
-        *numMatches = count;
-        if count == 0 { FAIL } else { OK }
     }
+
+    // SAFETY: the caller's writable out-parameter.
+    unsafe { *numMatches = count };
+    if count == 0 { FAIL } else { OK }
 }
