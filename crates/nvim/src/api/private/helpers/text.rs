@@ -144,7 +144,6 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
         }
         i += 1;
     }
-    drop(items);
     // SAFETY: `ret` is this frame's builder, filled in above.
     unsafe { arena_take_arraybuilder(arena, &raw mut ret) }
 }

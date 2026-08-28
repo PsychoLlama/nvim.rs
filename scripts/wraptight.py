@@ -570,6 +570,33 @@ def all_files(paths: list[str]) -> list[str]:
     return found
 
 
+MACRO_HEAD = re.compile(rb"macro_rules!\s*[A-Za-z_][A-Za-z0-9_]*\s*\{")
+
+
+def macro_bodies(raw: bytes) -> list[bytes]:
+    """Every `macro_rules!` body in `raw`, whitespace-collapsed.
+
+    **No pass here may edit one.** A macro's `unsafe` contract is a tree-wide
+    interface: the region belongs at the call site or inside the body, and
+    which one it is decides whether every *caller* needs a region of its own.
+    rustc reports an uncovered expansion at the macro's own definition, so
+    `wrap` sees a span inside `macro_rules!` and dutifully wraps it -- which
+    silently flips the contract and turns every existing call site into a
+    deny-level `unused_unsafe`, in families the author does not own.
+
+    That happened to `logmsg_c!` during phase 23's batch 4 and broke the build
+    for five families across three workers. The script cannot judge which
+    contract is right, so it refuses the edit and says so.
+    """
+    scan = masked(raw)
+    bodies = []
+    for match in MACRO_HEAD.finditer(scan):
+        close = closing_brace(scan, match.end() - 1)
+        if close is not None:
+            bodies.append(b" ".join(raw[match.end() : close].split()))
+    return bodies
+
+
 def unparsed(paths: list[str]) -> int:
     """Report any file in scope that does not parse, and say so loudly.
 
@@ -632,7 +659,14 @@ def main() -> int:
             count = 0
             for path, spans in per_file.items():
                 p = pathlib.Path(path)
-                raw, n = apply(p.read_bytes(), spans)
+                before = p.read_bytes()
+                raw, n = apply(before, spans)
+                if macro_bodies(raw) != macro_bodies(before):
+                    print(
+                        f"  {name}: REFUSED, it would rewrite a macro_rules! "
+                        f"body in {path} -- see `macro_bodies`"
+                    )
+                    continue
                 p.write_bytes(raw)
                 count += n
             print(f"round {round_no}: {name} {count} site(s)")

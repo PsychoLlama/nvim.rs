@@ -325,6 +325,11 @@ pub(crate) fn api_metadata_raw() -> String_0 {
 // kObjectTypeX { o.data.x }` in the api/ family was an `unsafe` region
 // spelling out this one line, and the transpile has hundreds of them.
 
+// `then_some` would read the union arm *before* the tag was consulted, which
+// is the whole bug these readers exist to prevent: a `bool` or a pointer built
+// from the bytes of another arm is not merely wrong, it is undefined. The
+// laziness is load-bearing, so clippy's suggestion is refused here.
+#[allow(clippy::unnecessary_lazy_evaluations)]
 impl Object {
     /// The boolean payload, when the tag says there is one. A `Boolean`
     /// object only -- an integer that happens to be 0 or 1 is not one, which
