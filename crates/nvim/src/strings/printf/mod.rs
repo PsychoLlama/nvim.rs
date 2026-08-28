@@ -46,27 +46,23 @@ const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 /// count, so that entry is the only bound there is. The index moves on only
 /// when an argument was actually there.
 unsafe fn next_arg(tvs: *mut typval_T, idxp: &mut c_int) -> Option<*mut typval_T> {
-    unsafe {
-        let tv = tvs.offset(*idxp as isize - 1);
-        if !given(&*tv) {
-            emsg(gettext(E_INSUFFICIENT_ARGS.as_ptr()));
-            return None;
-        }
-        *idxp += 1;
-        Some(tv)
+    let tv = unsafe { tvs.offset(*idxp as isize - 1) };
+    if !given(unsafe { &*tv }) {
+        unsafe { emsg(gettext(E_INSUFFICIENT_ARGS.as_ptr())) };
+        return None;
     }
+    *idxp += 1;
+    Some(tv)
 }
 
 /// The next argument as a number; 0 if it is not one.
 pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> varnumber_T {
-    unsafe {
-        let Some(tv) = next_arg(tvs, idxp) else {
-            return 0;
-        };
-        let mut err = false;
-        let n = tv_get_number_chk(tv, &raw mut err);
-        if err { 0 } else { n }
-    }
+    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+        return 0;
+    };
+    let mut err = false;
+    let n = unsafe { tv_get_number_chk(tv, &raw mut err) };
+    if err { 0 } else { n }
 }
 
 /// The next argument as a string.
@@ -83,17 +79,15 @@ pub(crate) unsafe fn tv_str(
     tofree: &mut *mut c_char,
     numbuf: *mut c_char,
 ) -> *const c_char {
-    unsafe {
-        let Some(tv) = next_arg(tvs, idxp) else {
-            return ptr::null();
-        };
-        if matches!((*tv).v_type, VAR_STRING | VAR_NUMBER) {
-            *tofree = ptr::null_mut();
-            tv_get_string_buf_chk(tv, numbuf)
-        } else {
-            *tofree = encode_tv2echo(tv, ptr::null_mut());
-            *tofree
-        }
+    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+        return ptr::null();
+    };
+    if matches!(unsafe { (*tv).v_type }, VAR_STRING | VAR_NUMBER) {
+        *tofree = ptr::null_mut();
+        unsafe { tv_get_string_buf_chk(tv, numbuf) }
+    } else {
+        *tofree = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
+        *tofree
     }
 }
 
@@ -102,28 +96,24 @@ pub(crate) unsafe fn tv_str(
 /// Every pointer-shaped value -- String, List, Dict, Blob, Partial --
 /// occupies the same union slot, so reading `v_string` reads all of them.
 pub(crate) unsafe fn tv_ptr(tvs: *const typval_T, idxp: &mut c_int) -> *const c_void {
-    unsafe {
-        match next_arg(tvs.cast_mut(), idxp) {
-            Some(tv) => (*tv).vval.v_string as *const c_void,
-            None => ptr::null(),
-        }
+    match unsafe { next_arg(tvs.cast_mut(), idxp) } {
+        Some(tv) => unsafe { (*tv).vval.v_string as *const c_void },
+        None => ptr::null(),
     }
 }
 
 /// The next argument as a float; a Number is widened, anything else is
 /// `E807` and zero.
 pub(crate) unsafe fn tv_float(tvs: *mut typval_T, idxp: &mut c_int) -> float_T {
-    unsafe {
-        let Some(tv) = next_arg(tvs, idxp) else {
-            return 0.0;
-        };
-        match (*tv).v_type {
-            VAR_FLOAT => (*tv).vval.v_float,
-            VAR_NUMBER => (*tv).vval.v_number as float_T,
-            _ => {
-                emsg(gettext(E_EXPECTED_FLOAT.as_ptr()));
-                0.0
-            }
+    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+        return 0.0;
+    };
+    match unsafe { (*tv).v_type } {
+        VAR_FLOAT => unsafe { (*tv).vval.v_float },
+        VAR_NUMBER => unsafe { (*tv).vval.v_number as float_T },
+        _ => {
+            unsafe { emsg(gettext(E_EXPECTED_FLOAT.as_ptr())) };
+            0.0
         }
     }
 }
@@ -135,11 +125,9 @@ pub unsafe extern "C" fn vim_snprintf_add(
     fmt: *const c_char,
     mut args: ...
 ) -> c_int {
-    unsafe {
-        let len = strlen(str);
-        let space = str_m.saturating_sub(len);
-        vim_vsnprintf(str.add(len), space, fmt, args.clone())
-    }
+    let len = unsafe { strlen(str) };
+    let space = str_m.saturating_sub(len);
+    unsafe { vim_vsnprintf(str.add(len), space, fmt, args.clone()) }
 }
 
 /// Write a formatted value to `str`.
@@ -164,17 +152,15 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     fmt: *const c_char,
     mut args: ...
 ) -> size_t {
-    unsafe {
-        if str_m == 0 {
-            return 0;
-        }
-        let str_l = vim_vsnprintf_typval(str, str_m, fmt, args.clone(), ptr::null_mut());
-        if str_l < 0 {
-            *str = 0;
-            return 0;
-        }
-        (str_l as size_t).min(str_m - 1)
+    if str_m == 0 {
+        return 0;
     }
+    let str_l = unsafe { vim_vsnprintf_typval(str, str_m, fmt, args.clone(), ptr::null_mut()) };
+    if str_l < 0 {
+        unsafe { *str = 0 };
+        return 0;
+    }
+    (str_l as size_t).min(str_m - 1)
 }
 
 pub unsafe fn vim_vsnprintf(
@@ -223,46 +209,47 @@ pub unsafe extern "C" fn kv_do_printf(
     fmt: *const c_char,
     mut args: ...
 ) -> c_int {
-    unsafe {
-        let remaining = (*str).capacity - (*str).size;
-        let tail = if (*str).items.is_null() {
-            ptr::null_mut()
-        } else {
-            (*str).items.add((*str).size)
-        };
-        let mut printed = vsnprintf(tail, remaining, fmt, args.clone());
-        if printed < 0 {
-            return -1;
-        }
+    let remaining = unsafe { (*str).capacity } - unsafe { (*str).size };
+    let tail = if unsafe { (*str).items }.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { (*str).items.add((*str).size) }
+    };
+    let mut printed = unsafe { vsnprintf(tail, remaining, fmt, args.clone()) };
+    if printed < 0 {
+        return -1;
+    }
 
-        if printed as size_t >= remaining {
-            // `kv_ensure_space`, with room for the terminator.
-            let wanted = (*str).size + printed as size_t + 1;
-            if (*str).capacity < wanted {
-                // Round up to a power of two.
-                let mut capacity = wanted - 1;
-                for shift in [1, 2, 4, 8, 16] {
-                    capacity |= capacity >> shift;
-                }
-                (*str).capacity = capacity + 1;
-                (*str).items =
-                    xrealloc((*str).items as *mut c_void, (*str).capacity) as *mut c_char;
+    if printed as size_t >= remaining {
+        // `kv_ensure_space`, with room for the terminator.
+        let wanted = unsafe { (*str).size } + printed as size_t + 1;
+        if unsafe { (*str).capacity } < wanted {
+            // Round up to a power of two.
+            let mut capacity = wanted - 1;
+            for shift in [1, 2, 4, 8, 16] {
+                capacity |= capacity >> shift;
             }
-            debug_assert!(!(*str).items.is_null());
-            printed = vsnprintf(
+            unsafe { (*str).capacity = capacity + 1 };
+            unsafe {
+                (*str).items = xrealloc((*str).items as *mut c_void, (*str).capacity) as *mut c_char
+            };
+        }
+        debug_assert!(!unsafe { (*str).items }.is_null());
+        printed = unsafe {
+            vsnprintf(
                 (*str).items.add((*str).size),
                 (*str).capacity - (*str).size,
                 fmt,
                 args.clone(),
-            );
-            if printed < 0 {
-                return -1;
-            }
+            )
+        };
+        if printed < 0 {
+            return -1;
         }
-
-        (*str).size += printed as size_t;
-        printed
     }
+
+    unsafe { (*str).size += printed as size_t };
+    printed
 }
 
 /// `vsnprintf` into an arena.
@@ -275,32 +262,30 @@ pub unsafe extern "C" fn arena_printf(
     fmt: *const c_char,
     mut args: ...
 ) -> String_0 {
-    unsafe {
-        let mut remaining: size_t = 0;
-        let mut buf = ptr::null_mut::<c_char>();
-        if !arena.is_null() {
-            if (*arena).cur_blk.is_null() {
-                arena_alloc_block(arena);
-            }
-            remaining = (*arena).size - (*arena).pos;
-            buf = (*arena).cur_blk.add((*arena).pos);
+    let mut remaining: size_t = 0;
+    let mut buf = ptr::null_mut::<c_char>();
+    if !arena.is_null() {
+        if unsafe { (*arena).cur_blk }.is_null() {
+            unsafe { arena_alloc_block(arena) };
         }
+        remaining = unsafe { (*arena).size } - unsafe { (*arena).pos };
+        buf = unsafe { (*arena).cur_blk.add((*arena).pos) };
+    }
 
-        let mut printed = vsnprintf(buf, remaining, fmt, args.clone());
+    let mut printed = unsafe { vsnprintf(buf, remaining, fmt, args.clone()) };
+    if printed < 0 {
+        return String_0::NULL;
+    }
+
+    if printed as size_t >= remaining {
+        buf = unsafe { arena_alloc(arena, printed as size_t + 1, false) as *mut c_char };
+        printed = unsafe { vsnprintf(buf, printed as size_t + 1, fmt, args.clone()) };
         if printed < 0 {
             return String_0::NULL;
         }
-
-        if printed as size_t >= remaining {
-            buf = arena_alloc(arena, printed as size_t + 1, false) as *mut c_char;
-            printed = vsnprintf(buf, printed as size_t + 1, fmt, args.clone());
-            if printed < 0 {
-                return String_0::NULL;
-            }
-        } else {
-            (*arena).pos += printed as size_t + 1;
-        }
-
-        String_0::from_raw_parts(buf, printed as size_t)
+    } else {
+        unsafe { (*arena).pos += printed as size_t + 1 };
     }
+
+    String_0::from_raw_parts(buf, printed as size_t)
 }

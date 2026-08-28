@@ -40,29 +40,25 @@ pub(crate) fn given(tv: &typval_T) -> bool {
 /// Returns `None` after raising the error, which both callers turn into a
 /// silent `-1` result.
 pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
-    unsafe {
-        let mut error = false;
-        let value = tv_get_bool_chk(tv, &raw mut error);
-        if error {
-            return None;
-        }
-        if !(0..=1).contains(&value) {
-            semsg_c!(gettext(e_using_number_as_bool_nr.as_ptr()), value,);
-            return None;
-        }
-        Some(value != 0)
+    let mut error = false;
+    let value = unsafe { tv_get_bool_chk(tv, &raw mut error) };
+    if error {
+        return None;
     }
+    if !(0..=1).contains(&value) {
+        unsafe { semsg_c!(gettext(e_using_number_as_bool_nr.as_ptr()), value,) };
+        return None;
+    }
+    Some(value != 0)
 }
 
 /// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
 unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
-    unsafe {
-        let mut n = 0;
-        while n < maxlen && *s.add(n) != 0 {
-            n += 1;
-        }
-        n
+    let mut n = 0;
+    while n < maxlen && unsafe { *s.add(n) } != 0 {
+        n += 1;
     }
+    n
 }
 
 /// Any byte outside 7-bit ASCII?
@@ -111,59 +107,50 @@ fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated
 /// buffer, zero-filling the remainder (strncpy semantics).
 pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
-    unsafe {
-        let n = strnlen(string, len);
-        let ret = xmallocz(len) as *mut c_char;
-        let out = slice::from_raw_parts_mut(ret as *mut u8, len);
-        if n != 0 {
-            out[..n].copy_from_slice(slice::from_raw_parts(string as *const u8, n));
-        }
-        out[n..].fill(0);
-        ret
+    let n = unsafe { strnlen(string, len) };
+    let ret = unsafe { xmallocz(len) as *mut c_char };
+    let out = unsafe { slice::from_raw_parts_mut(ret as *mut u8, len) };
+    if n != 0 {
+        out[..n].copy_from_slice(unsafe { slice::from_raw_parts(string as *const u8, n) });
     }
+    out[n..].fill(0);
+    ret
 }
 
 /// Truncate unescaped trailing spaces and tabs in place.
 pub unsafe fn del_trailing_spaces(ptr: *mut c_char) {
-    unsafe {
-        let len = CStr::from_ptr(ptr).to_bytes().len();
-        let s = slice::from_raw_parts_mut(ptr as *mut u8, len);
-        let end = trailing_spaces_start(s);
-        s[end..].fill(0);
-    }
+    let len = unsafe { CStr::from_ptr(ptr) }.to_bytes().len();
+    let s = unsafe { slice::from_raw_parts_mut(ptr as *mut u8, len) };
+    let end = trailing_spaces_start(s);
+    s[end..].fill(0);
 }
 
 /// Case-insensitive `strcmp` equality where NULL only equals NULL.
 /// strcasecmp is locale-aware, so the libc call stays.
 pub unsafe fn striequal(a: *const c_char, b: *const c_char) -> bool {
-    unsafe {
-        (a.is_null() && b.is_null()) || (!a.is_null() && !b.is_null() && strcasecmp(a, b) == 0)
-    }
+    (a.is_null() && b.is_null())
+        || (!a.is_null() && !b.is_null() && unsafe { strcasecmp(a, b) } == 0)
 }
 
 pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t) -> c_int {
-    unsafe {
-        strnicmp_asc(
-            CStr::from_ptr(s1).to_bytes(),
-            CStr::from_ptr(s2).to_bytes(),
-            len,
-        )
-    }
+    strnicmp_asc(
+        unsafe { CStr::from_ptr(s1) }.to_bytes(),
+        unsafe { CStr::from_ptr(s2) }.to_bytes(),
+        len,
+    )
 }
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
 pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
-    unsafe {
-        if c <= 0 {
-            ptr::null_mut()
-        } else if c < 0x80 {
-            strchr(string, c)
-        } else {
-            let mut u8char = [0 as c_char; 22];
-            let len = utf_char2bytes(c, u8char.as_mut_ptr());
-            u8char[len as usize] = 0;
-            strstr(string, u8char.as_ptr())
-        }
+    if c <= 0 {
+        ptr::null_mut()
+    } else if c < 0x80 {
+        unsafe { strchr(string, c) }
+    } else {
+        let mut u8char = [0 as c_char; 22];
+        let len = unsafe { utf_char2bytes(c, u8char.as_mut_ptr()) };
+        u8char[len as usize] = 0;
+        unsafe { strstr(string, u8char.as_ptr()) }
     }
 }
 
@@ -187,8 +174,8 @@ pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
                         *const ::core::ffi::c_void,
                     ) -> c_int,
             ),
-        );
-    }
+        )
+    };
 }
 
 pub unsafe fn has_non_ascii(s: *const c_char) -> bool {
@@ -197,15 +184,13 @@ pub unsafe fn has_non_ascii(s: *const c_char) -> bool {
 
 /// Freshly allocated `str1 ++ str2`, NUL-terminated.
 pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
-    unsafe {
-        let a = CStr::from_ptr(str1).to_bytes();
-        let b = CStr::from_ptr(str2).to_bytes_with_nul();
-        let dest = xmalloc(a.len() + b.len()) as *mut c_char;
-        let out = slice::from_raw_parts_mut(dest as *mut u8, a.len() + b.len());
-        out[..a.len()].copy_from_slice(a);
-        out[a.len()..].copy_from_slice(b);
-        dest
-    }
+    let a = unsafe { CStr::from_ptr(str1) }.to_bytes();
+    let b = unsafe { CStr::from_ptr(str2) }.to_bytes_with_nul();
+    let dest = unsafe { xmalloc(a.len() + b.len()) as *mut c_char };
+    let out = unsafe { slice::from_raw_parts_mut(dest as *mut u8, a.len() + b.len()) };
+    out[..a.len()].copy_from_slice(a);
+    out[a.len()..].copy_from_slice(b);
+    dest
 }
 /// Reverse `s` character by character into freshly allocated memory.
 ///
@@ -213,71 +198,67 @@ pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_cha
 /// the whole character at each position — so the source is walked forwards
 /// while the destination is filled from the back.
 pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
-    unsafe {
-        let len = CStr::from_ptr(s).to_bytes().len();
-        // `xmallocz` writes the terminator the C wrote by hand.
-        let rev = xmallocz(len) as *mut c_char;
-        let src = slice::from_raw_parts(s as *const u8, len);
-        let dst = slice::from_raw_parts_mut(rev as *mut u8, len);
-        let mut at = len;
-        let mut i = 0;
-        while i < len {
-            // Never past the terminator: `utfc_ptr2len` stops there.
-            let char_len = utfc_ptr2len(s.add(i)) as usize;
-            at -= char_len;
-            dst[at..at + char_len].copy_from_slice(&src[i..i + char_len]);
-            i += char_len;
-        }
-        rev
+    let len = unsafe { CStr::from_ptr(s) }.to_bytes().len();
+    // `xmallocz` writes the terminator the C wrote by hand.
+    let rev = unsafe { xmallocz(len) as *mut c_char };
+    let src = unsafe { slice::from_raw_parts(s as *const u8, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(rev as *mut u8, len) };
+    let mut at = len;
+    let mut i = 0;
+    while i < len {
+        // Never past the terminator: `utfc_ptr2len` stops there.
+        let char_len = unsafe { utfc_ptr2len(s.add(i)) as usize };
+        at -= char_len;
+        dst[at..at + char_len].copy_from_slice(&src[i..i + char_len]);
+        i += char_len;
     }
+    rev
 }
 
 /// Every occurrence of `what` in `src` replaced by `rep`, freshly
 /// allocated, or NULL when `what` does not occur at all.
 pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
-    unsafe {
-        let what_len = strlen(what);
+    let what_len = unsafe { strlen(what) };
 
-        let mut count: size_t = 0;
-        let mut pos = src;
-        loop {
-            pos = strstr(pos, what);
-            if pos.is_null() {
-                break;
-            }
-            count += 1;
-            pos = pos.add(what_len);
+    let mut count: size_t = 0;
+    let mut pos = src;
+    loop {
+        pos = unsafe { strstr(pos, what) };
+        if pos.is_null() {
+            break;
         }
-        if count == 0 {
-            return ptr::null_mut();
-        }
-
-        // `replen - whatlen` underflows when the replacement is shorter;
-        // the product then wraps back to the right (smaller) total.
-        let rep_len = strlen(rep);
-        let size = strlen(src)
-            .wrapping_add(count.wrapping_mul(rep_len.wrapping_sub(what_len)))
-            .wrapping_add(1);
-        let ret = xmalloc(size) as *mut c_char;
-
-        let mut src = src;
-        let mut out = ret;
-        loop {
-            pos = strstr(src, what);
-            if pos.is_null() {
-                break;
-            }
-            let prefix = pos.offset_from(src) as size_t;
-            ptr::copy_nonoverlapping(src, out, prefix);
-            out = out.add(prefix);
-            ptr::copy_nonoverlapping(rep, out, rep_len);
-            out = out.add(rep_len);
-            src = pos.add(what_len);
-        }
-        let tail = strlen(src);
-        ptr::copy_nonoverlapping(src, out, tail + 1);
-        ret
+        count += 1;
+        pos = unsafe { pos.add(what_len) };
     }
+    if count == 0 {
+        return ptr::null_mut();
+    }
+
+    // `replen - whatlen` underflows when the replacement is shorter;
+    // the product then wraps back to the right (smaller) total.
+    let rep_len = unsafe { strlen(rep) };
+    let size = unsafe { strlen(src) }
+        .wrapping_add(count.wrapping_mul(rep_len.wrapping_sub(what_len)))
+        .wrapping_add(1);
+    let ret = unsafe { xmalloc(size) as *mut c_char };
+
+    let mut src = src;
+    let mut out = ret;
+    loop {
+        pos = unsafe { strstr(src, what) };
+        if pos.is_null() {
+            break;
+        }
+        let prefix = unsafe { pos.offset_from(src) as size_t };
+        unsafe { ptr::copy_nonoverlapping(src, out, prefix) };
+        out = unsafe { out.add(prefix) };
+        unsafe { ptr::copy_nonoverlapping(rep, out, rep_len) };
+        out = unsafe { out.add(rep_len) };
+        src = unsafe { pos.add(what_len) };
+    }
+    let tail = unsafe { strlen(src) };
+    unsafe { ptr::copy_nonoverlapping(src, out, tail + 1) };
+    ret
 }
 
 /// `qsort` comparator: two `keyvalue_T` by value, case-sensitively.
@@ -286,11 +267,9 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
 /// before the string it prefixes — `strncmp` stops at the shorter one's
 /// terminator either way.
 pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
-    unsafe {
-        let kv1 = &*(a as *const keyvalue_T);
-        let kv2 = &*(b as *const keyvalue_T);
-        strncmp(kv1.value, kv2.value, kv1.length.max(kv2.length))
-    }
+    let kv1 = unsafe { &*(a as *const keyvalue_T) };
+    let kv2 = unsafe { &*(b as *const keyvalue_T) };
+    unsafe { strncmp(kv1.value, kv2.value, kv1.length.max(kv2.length)) }
 }
 #[cfg(test)]
 mod tests {

@@ -56,67 +56,67 @@ pub unsafe fn vim_strsave_escaped_ext(
     cc: c_char,
     bsl: bool,
 ) -> *mut c_char {
-    unsafe {
-        // First pass: measure (1 for the terminating NUL).
-        let mut length: size_t = 1;
-        let mut p = string;
-        while *p != 0 {
-            let l = utfc_ptr2len(p) as size_t;
-            if l > 1 {
-                length = length.wrapping_add(l);
-                p = p.add(l);
-                continue;
-            }
-            if !vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rem_backslash(p)) {
-                length = length.wrapping_add(1);
-            }
+    // First pass: measure (1 for the terminating NUL).
+    let mut length: size_t = 1;
+    let mut p = string;
+    while unsafe { *p } != 0 {
+        let l = unsafe { utfc_ptr2len(p) as size_t };
+        if l > 1 {
+            length = length.wrapping_add(l);
+            p = unsafe { p.add(l) };
+            continue;
+        }
+        if !unsafe { vim_strchr(esc_chars, *p as u8 as c_int) }.is_null()
+            || (bsl && unsafe { rem_backslash(p) })
+        {
             length = length.wrapping_add(1);
-            p = p.add(1);
         }
-
-        let escaped_string = xmalloc(length) as *mut c_char;
-        let mut p2 = escaped_string;
-        let mut p = string;
-        while *p != 0 {
-            let l = utfc_ptr2len(p) as size_t;
-            if l > 1 {
-                ptr::copy_nonoverlapping(p, p2, l);
-                p2 = p2.add(l);
-                p = p.add(l);
-                continue;
-            }
-            if !vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rem_backslash(p)) {
-                *p2 = cc;
-                p2 = p2.add(1);
-            }
-            *p2 = *p;
-            p2 = p2.add(1);
-            p = p.add(1);
-        }
-        *p2 = 0;
-        escaped_string
+        length = length.wrapping_add(1);
+        p = unsafe { p.add(1) };
     }
+
+    let escaped_string = unsafe { xmalloc(length) as *mut c_char };
+    let mut p2 = escaped_string;
+    let mut p = string;
+    while unsafe { *p } != 0 {
+        let l = unsafe { utfc_ptr2len(p) as size_t };
+        if l > 1 {
+            unsafe { ptr::copy_nonoverlapping(p, p2, l) };
+            p2 = unsafe { p2.add(l) };
+            p = unsafe { p.add(l) };
+            continue;
+        }
+        if !unsafe { vim_strchr(esc_chars, *p as u8 as c_int) }.is_null()
+            || (bsl && unsafe { rem_backslash(p) })
+        {
+            unsafe { *p2 = cc };
+            p2 = unsafe { p2.add(1) };
+        }
+        unsafe { *p2 = *p };
+        p2 = unsafe { p2.add(1) };
+        p = unsafe { p.add(1) };
+    }
+    unsafe { *p2 = 0 };
+    escaped_string
 }
 
 /// Copy `length` bytes of `string` with shell-style double-quoting
 /// resolved (see `unquote`), NUL-terminated.
 pub unsafe fn vim_strnsave_unquoted(string: *const c_char, length: size_t) -> *mut c_char {
-    unsafe {
-        if length == 0 {
-            return xmallocz(0) as *mut c_char;
-        }
-        let src = slice::from_raw_parts(string as *const u8, length);
-        let mut n: size_t = 0;
-        unquote(src, &mut |_| n += 1);
-        let ret = xmallocz(n) as *mut c_char;
-        let out = slice::from_raw_parts_mut(ret as *mut u8, n);
-        let mut o = 0;
-        unquote(src, &mut |b| {
-            out[o] = b;
-            o += 1;
-        });
-        ret
+    if length == 0 {
+        return unsafe { xmallocz(0) as *mut c_char };
     }
+    let src = unsafe { slice::from_raw_parts(string as *const u8, length) };
+    let mut n: size_t = 0;
+    unquote(src, &mut |_| n += 1);
+    let ret = unsafe { xmallocz(n) as *mut c_char };
+    let out = unsafe { slice::from_raw_parts_mut(ret as *mut u8, n) };
+    let mut o = 0;
+    unquote(src, &mut |b| {
+        out[o] = b;
+        o += 1;
+    });
+    ret
 }
 
 /// Single-quote `string` for the shell, doubling embedded quotes
@@ -127,87 +127,85 @@ pub unsafe fn vim_strsave_shellescape(
     do_special: bool,
     do_newline: bool,
 ) -> *mut c_char {
-    unsafe {
-        let csh_like = csh_like_shell();
-        let fish_like = fish_like_shell();
-        let mut l: size_t = 0;
+    let csh_like = csh_like_shell();
+    let fish_like = fish_like_shell();
+    let mut l: size_t = 0;
 
-        // First pass: measure (3 = the surrounding quotes plus NUL).
-        let mut length: size_t = strlen(string).wrapping_add(3);
-        let mut p = string;
-        while *p != 0 {
-            if *p == b'\'' as c_char {
-                length = length.wrapping_add(3);
-            }
-            if (*p == b'\n' as c_char && (csh_like || do_newline))
-                || (*p == b'!' as c_char && (csh_like || do_special))
-            {
-                length = length.wrapping_add(1);
-                if csh_like && do_special {
-                    length = length.wrapping_add(1);
-                }
-            }
-            if do_special && find_cmdline_var(p, &mut l) >= 0 {
-                length = length.wrapping_add(1); // insert backslash
-                p = p.add(l.wrapping_sub(1));
-            }
-            if *p == b'\\' as c_char && fish_like {
+    // First pass: measure (3 = the surrounding quotes plus NUL).
+    let mut length: size_t = unsafe { strlen(string) }.wrapping_add(3);
+    let mut p = string;
+    while unsafe { *p } != 0 {
+        if unsafe { *p } == b'\'' as c_char {
+            length = length.wrapping_add(3);
+        }
+        if (unsafe { *p } == b'\n' as c_char && (csh_like || do_newline))
+            || (unsafe { *p } == b'!' as c_char && (csh_like || do_special))
+        {
+            length = length.wrapping_add(1);
+            if csh_like && do_special {
                 length = length.wrapping_add(1);
             }
-            p = p.add(utfc_ptr2len(p) as usize);
         }
-
-        let escaped_string = xmalloc(length) as *mut c_char;
-        let mut d = escaped_string;
-        *d = b'\'' as c_char;
-        d = d.add(1);
-        let mut p = string;
-        while *p != 0 {
-            if *p == b'\'' as c_char {
-                // A single-quoted string cannot contain a quote: close it,
-                // emit an escaped quote, and reopen.
-                for &b in b"'\\''" {
-                    *d = b as c_char;
-                    d = d.add(1);
-                }
-                p = p.add(1);
-                continue;
-            }
-            if (*p == b'\n' as c_char && (csh_like || do_newline))
-                || (*p == b'!' as c_char && (csh_like || do_special))
-            {
-                *d = b'\\' as c_char;
-                d = d.add(1);
-                if csh_like && do_special {
-                    *d = b'\\' as c_char;
-                    d = d.add(1);
-                }
-                *d = *p;
-                d = d.add(1);
-                p = p.add(1);
-                continue;
-            }
-            if do_special && find_cmdline_var(p, &mut l) >= 0 {
-                *d = b'\\' as c_char; // insert backslash
-                d = d.add(1);
-                ptr::copy_nonoverlapping(p, d, l); // copy the var
-                d = d.add(l);
-                p = p.add(l);
-                continue;
-            }
-            if *p == b'\\' as c_char && fish_like {
-                *d = b'\\' as c_char;
-                d = d.add(1);
-                *d = *p;
-                d = d.add(1);
-                p = p.add(1);
-                continue;
-            }
-            mb_copy_char(&mut p, &mut d);
+        if do_special && unsafe { find_cmdline_var(p, &mut l) } >= 0 {
+            length = length.wrapping_add(1); // insert backslash
+            p = unsafe { p.add(l.wrapping_sub(1)) };
         }
-        *d = b'\'' as c_char;
-        d = d.add(1);
-        *d = 0;
-        escaped_string
+        if unsafe { *p } == b'\\' as c_char && fish_like {
+            length = length.wrapping_add(1);
+        }
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
+
+    let escaped_string = unsafe { xmalloc(length) as *mut c_char };
+    let mut d = escaped_string;
+    unsafe { *d = b'\'' as c_char };
+    d = unsafe { d.add(1) };
+    let mut p = string;
+    while unsafe { *p } != 0 {
+        if unsafe { *p } == b'\'' as c_char {
+            // A single-quoted string cannot contain a quote: close it,
+            // emit an escaped quote, and reopen.
+            for &b in b"'\\''" {
+                unsafe { *d = b as c_char };
+                d = unsafe { d.add(1) };
+            }
+            p = unsafe { p.add(1) };
+            continue;
+        }
+        if (unsafe { *p } == b'\n' as c_char && (csh_like || do_newline))
+            || (unsafe { *p } == b'!' as c_char && (csh_like || do_special))
+        {
+            unsafe { *d = b'\\' as c_char };
+            d = unsafe { d.add(1) };
+            if csh_like && do_special {
+                unsafe { *d = b'\\' as c_char };
+                d = unsafe { d.add(1) };
+            }
+            unsafe { *d = *p };
+            d = unsafe { d.add(1) };
+            p = unsafe { p.add(1) };
+            continue;
+        }
+        if do_special && unsafe { find_cmdline_var(p, &mut l) } >= 0 {
+            unsafe { *d = b'\\' as c_char }; // insert backslash
+            d = unsafe { d.add(1) };
+            unsafe { ptr::copy_nonoverlapping(p, d, l) }; // copy the var
+            d = unsafe { d.add(l) };
+            p = unsafe { p.add(l) };
+            continue;
+        }
+        if unsafe { *p } == b'\\' as c_char && fish_like {
+            unsafe { *d = b'\\' as c_char };
+            d = unsafe { d.add(1) };
+            unsafe { *d = *p };
+            d = unsafe { d.add(1) };
+            p = unsafe { p.add(1) };
+            continue;
+        }
+        unsafe { mb_copy_char(&mut p, &mut d) };
+    }
+    unsafe { *d = b'\'' as c_char };
+    d = unsafe { d.add(1) };
+    unsafe { *d = 0 };
+    escaped_string
 }
