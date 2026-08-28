@@ -214,14 +214,10 @@ unsafe fn skip_past(
     let mut regmatch = empty_regmmatch();
     regmatch.rmm_ic = spp_skip.sp_ic;
     regmatch.regprog = spp_skip.sp_prog;
-    let matched = unsafe {
-        syn_regexec(
-            &raw mut regmatch,
-            startpos.lnum,
-            lc_col as colnr_T,
-            spp_skip.field_ptr(::core::mem::offset_of!(synpat_T, sp_time)),
-        )
-    };
+    let time = spp_skip.field_ptr(::core::mem::offset_of!(synpat_T, sp_time));
+    let lc_col = lc_col as colnr_T;
+    // SAFETY: the caller's SKIP pattern, timed into its own `sp_time`.
+    let matched = unsafe { syn_regexec(&raw mut regmatch, startpos.lnum, lc_col, time) };
     spp_skip.sp_prog = regmatch.regprog;
     if !matched || regmatch.startpos[0].col > best_start.col {
         return Skipped::No;
@@ -458,17 +454,9 @@ pub(crate) unsafe fn syn_regexec(
     }
     unsafe { (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as colnr_T };
     let mut timed_out: c_int = 0;
-    let r = unsafe {
-        vim_regexec_multi(
-            rmp,
-            syn_win.get(),
-            syn_buf.get(),
-            lnum,
-            col,
-            syn_tm.get(),
-            &raw mut timed_out,
-        )
-    };
+    let (win, buf, tm) = (syn_win.get(), syn_buf.get(), syn_tm.get());
+    // SAFETY: the window and buffer the parser was started for.
+    let r = unsafe { vim_regexec_multi(rmp, win, buf, lnum, col, tm, &raw mut timed_out) };
 
     if timing {
         let took = profile_end(start);
@@ -591,26 +579,18 @@ unsafe fn match_keyword(
             .offset(-(::core::mem::offset_of!(keyentry, keyword) as isize))
     } as *mut keyentry_T;
     while !kp.is_null() {
+        // SAFETY: `kp` walks a chain of live keyword entries.
+        let (syn, flags) = unsafe { (&raw mut (*kp).k_syn, (*kp).flags) };
         let ok = if !current_next_list.get().is_null() {
-            unsafe {
-                in_id_list(
-                    None,
-                    current_next_list.get(),
-                    &raw mut (*kp).k_syn,
-                    SynFlags::NONE,
-                )
-            }
+            let next = current_next_list.get();
+            // SAFETY: the parser's own lists.
+            unsafe { in_id_list(None, next, syn, SynFlags::NONE) }
         } else if let Some(cur_si) = cur_si {
-            unsafe {
-                in_id_list(
-                    Some(cur_si),
-                    cur_si.si_cont_list,
-                    &raw mut (*kp).k_syn,
-                    (*kp).flags,
-                )
-            }
+            let contains = cur_si.si_cont_list;
+            // SAFETY: as above, inside the item the caller named.
+            unsafe { in_id_list(Some(cur_si), contains, syn, flags) }
         } else {
-            !unsafe { (*kp).flags }.has(SynFlags::CONTAINED)
+            !flags.has(SynFlags::CONTAINED)
         };
         if ok {
             return kp;

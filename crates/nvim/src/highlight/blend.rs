@@ -103,14 +103,14 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
     blended.hl_blend = -1;
 
     let kind = if *through { kHlBlendThrough } else { kHlBlend };
-    let id = unsafe {
-        get_attr_entry(HlEntry {
-            attr: blended,
-            kind,
-            id1: back_attr,
-            id2: front_attr,
-        })
+    let entry = HlEntry {
+        attr: blended,
+        kind,
+        id1: back_attr,
+        id2: front_attr,
     };
+    // SAFETY: the caller's editor state.
+    let id = unsafe { get_attr_entry(entry) };
     if id > 0 {
         cache.with_mut(|c| c.insert(back_attr, front_attr, id));
     }

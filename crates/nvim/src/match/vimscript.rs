@@ -263,29 +263,13 @@ pub(crate) unsafe fn f_setmatches(
 
         let added = if positions.is_null() {
             let pattern = unsafe { numbuf2.dict_string(d, c"pattern".as_ptr()) };
-            unsafe {
-                match_add(
-                    win,
-                    group,
-                    pattern,
-                    priority,
-                    id,
-                    ::core::ptr::null_mut(),
-                    conceal,
-                )
-            }
+            let no_pos = ::core::ptr::null_mut();
+            // SAFETY: the caller's window and the arguments checked above.
+            unsafe { match_add(win, group, pattern, priority, id, no_pos, conceal) }
         } else {
-            let rc = unsafe {
-                match_add(
-                    win,
-                    group,
-                    ::core::ptr::null(),
-                    priority,
-                    id,
-                    positions,
-                    conceal,
-                )
-            };
+            let no_pat = ::core::ptr::null();
+            // SAFETY: as above, with the positions list instead of a pattern.
+            let rc = unsafe { match_add(win, group, no_pat, priority, id, positions, conceal) };
             unsafe { tv_list_unref(positions) };
             rc
         };
@@ -378,15 +362,9 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
     }
 
     unsafe {
-        (*rettv).vval.v_number = match_add(
-            win,
-            grp,
-            pat,
-            prio,
-            id,
-            ::core::ptr::null_mut(),
-            conceal_char,
-        ) as varnumber_T
+        let no_pos = ::core::ptr::null_mut();
+        (*rettv).vval.v_number =
+            match_add(win, grp, pat, prio, id, no_pos, conceal_char) as varnumber_T
     };
 }
 

@@ -246,13 +246,10 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
                 unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), rest) };
                 break;
             }
-            unsafe {
-                syn_combine_list(
-                    &mut (*cur_cluster(scl_id).raw()).scl_list,
-                    &mut clstr_list,
-                    list_op,
-                )
-            };
+            // SAFETY: `scl_id` is a live cluster index; the address comes off
+            // the pointer rather than a `Deref` borrow.
+            let list = unsafe { &mut (*cur_cluster(scl_id).raw()).scl_list };
+            unsafe { syn_combine_list(list, &mut clstr_list, list_op) };
             got_clstr = true;
         }
 

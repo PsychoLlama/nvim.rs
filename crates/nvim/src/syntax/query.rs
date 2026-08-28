@@ -141,14 +141,12 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
             if idx >= cur_cluster_count() {
                 return ::core::ptr::null_mut();
             }
-            unsafe {
-                vim_snprintf(
-                    &raw mut (*xp).xp_buf as *mut c_char,
-                    EXPAND_BUF_LEN as size_t,
-                    c"@%s".as_ptr(),
-                    cur_cluster(idx).scl_name,
-                )
-            };
+            // SAFETY: the caller's completion state.
+            let buf = unsafe { &raw mut (*xp).xp_buf }.cast::<c_char>();
+            // SAFETY: `idx` is below `cur_cluster_count()`.
+            let name = unsafe { cur_cluster(idx).scl_name };
+            // SAFETY: the buffer is `EXPAND_BUF_LEN` bytes.
+            unsafe { vim_snprintf(buf, EXPAND_BUF_LEN as size_t, c"@%s".as_ptr(), name) };
             unsafe { &raw mut (*xp).xp_buf as *mut c_char }
         }
     }

@@ -569,37 +569,24 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> c_int {
     }
     RECURSIVE.set(true);
 
-    unsafe {
-        apply_autocmds(
-            EVENT_COLORSCHEMEPRE,
-            name,
-            (*curbuf.get()).b_fname,
-            false,
-            curbuf.get(),
-        )
-    };
+    let buf = curbuf.get();
+    // SAFETY: the editor's current buffer.
+    let fname = unsafe { (*buf).b_fname };
+    unsafe { apply_autocmds(EVENT_COLORSCHEMEPRE, name, fname, false, buf) };
     let mut pattern = [
         b"colors/",
         unsafe { CStr::from_ptr(name) }.to_bytes(),
         b".*\0",
     ]
     .concat();
-    let retval = unsafe {
-        source_runtime_vim_lua(
-            pattern.as_mut_ptr().cast(),
-            RuntimeOpts::START | RuntimeOpts::OPT,
-        )
-    };
+    let pattern = pattern.as_mut_ptr().cast();
+    // SAFETY: a NUL-terminated pattern this frame owns.
+    let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
     if retval == OK {
-        unsafe {
-            apply_autocmds(
-                EVENT_COLORSCHEME,
-                name,
-                (*curbuf.get()).b_fname,
-                false,
-                curbuf.get(),
-            )
-        };
+        let buf = curbuf.get();
+        // SAFETY: the editor's current buffer.
+        let fname = unsafe { (*buf).b_fname };
+        unsafe { apply_autocmds(EVENT_COLORSCHEME, name, fname, false, buf) };
     }
 
     RECURSIVE.set(false);

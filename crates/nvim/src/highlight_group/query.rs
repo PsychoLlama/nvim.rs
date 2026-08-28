@@ -81,13 +81,10 @@ unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena
     }
     if link > 0 {
         assert!(link <= highlight_num_groups(), "link out of bounds");
-        unsafe {
-            put(
-                hl,
-                c"link",
-                Object::string(cstr_as_string(group(link).name.as_ptr())),
-            )
-        };
+        // SAFETY: the group's own name, which outlives the answer.
+        let value = Object::string(unsafe { cstr_as_string(group(link).name.as_ptr()) });
+        // SAFETY: the arena dict has room for one more entry.
+        unsafe { put(hl, c"link", value) };
     }
     let mut cterm = arena_dict(arena, HLATTRS_DICT_SIZE);
     unsafe { hlattrs2dict(hl, None, attr, true, true) };
@@ -138,25 +135,20 @@ pub(crate) unsafe fn ns_get_hl_defs(
 
     if id != -1 {
         if id < 1 || id > highlight_num_groups() {
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"%s".as_ptr(),
-                    c"Highlight id out of bounds".as_ptr(),
-                )
-            };
+            let msg = c"Highlight id out of bounds".as_ptr();
+            // SAFETY: the caller's error slot.
+            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
             return NO_DICT;
         }
         let mut attrs = NO_DICT;
-        unsafe {
-            hlgroup2dict(
-                &mut attrs,
-                ns_id,
-                if link { id } else { syn_get_final_id(id) },
-                arena,
-            )
+        // SAFETY: a live group id.
+        let id = if link {
+            id
+        } else {
+            unsafe { syn_get_final_id(id) }
         };
+        // SAFETY: the caller's arena.
+        unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) };
         return attrs;
     }
 

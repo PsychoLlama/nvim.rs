@@ -161,42 +161,34 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
             unsafe { msg_outtrans(gettext(c"syntax iskeyword not set".as_ptr()), 0, false) };
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
-        let chartab = syn_field!(cur_syn_block(), b_syn_chartab);
-        unsafe {
-            memmove(
-                chartab as *mut c_void,
-                &raw const (*curbuf.get()).b_chartab as *const c_void,
-                32,
-            )
-        };
+        let chartab: *mut [uint8_t; 32] = syn_field!(cur_syn_block(), b_syn_chartab);
+        // SAFETY: the editor's current buffer.
+        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
+        // SAFETY: both tables are 32 bytes wide.
+        unsafe { memmove(chartab.cast::<c_void>(), src, 32) };
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     } else {
         let mut save_chartab: [c_char; 32] = [0; 32];
-        unsafe {
-            memmove(
-                &raw mut save_chartab as *mut c_void,
-                &raw const (*curbuf.get()).b_chartab as *const c_void,
-                32,
-            )
-        };
+        let dst = (&raw mut save_chartab).cast::<c_void>();
+        // SAFETY: the editor's current buffer.
+        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
+        // SAFETY: both tables are 32 bytes wide.
+        unsafe { memmove(dst, src, 32) };
         let save_isk = unsafe { (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = xstrdup(arg) };
 
         unsafe { buf_init_chartab(curbuf.get(), false) };
-        unsafe {
-            memmove(
-                syn_field!(cur_syn_block(), b_syn_chartab) as *mut c_void,
-                &raw const (*curbuf.get()).b_chartab as *const c_void,
-                32,
-            )
-        };
-        unsafe {
-            memmove(
-                &raw mut (*curbuf.get()).b_chartab as *mut c_void,
-                &raw const save_chartab as *const c_void,
-                32,
-            )
-        };
+        let dst: *mut [uint8_t; 32] = syn_field!(cur_syn_block(), b_syn_chartab);
+        let dst = dst.cast::<c_void>();
+        // SAFETY: the editor's current buffer.
+        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
+        // SAFETY: both tables are 32 bytes wide.
+        unsafe { memmove(dst, src, 32) };
+        // SAFETY: the editor's current buffer.
+        let dst = unsafe { &raw mut (*curbuf.get()).b_chartab }.cast::<c_void>();
+        let src = (&raw const save_chartab).cast::<c_void>();
+        // SAFETY: both tables are 32 bytes wide.
+        unsafe { memmove(dst, src, 32) };
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
         unsafe { cur_syn_block().b_syn_isk = (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = save_isk };
@@ -239,14 +231,9 @@ unsafe fn syn_cmd_onoff(eap: *mut exarg_T, name: &CStr) {
     buf[0] = b's' as c_char;
     buf[1] = b'o' as c_char;
     buf[2] = b' ' as c_char;
-    unsafe {
-        vim_snprintf(
-            buf.as_mut_ptr().add(3),
-            buf.len() - 3,
-            SYNTAX_FNAME.as_ptr(),
-            name.as_ptr(),
-        )
-    };
+    let (at, room) = (unsafe { buf.as_mut_ptr().add(3) }, buf.len() - 3);
+    // SAFETY: `at` is three bytes into a buffer with `room` left.
+    unsafe { vim_snprintf(at, room, SYNTAX_FNAME.as_ptr(), name.as_ptr()) };
     unsafe { do_cmdline_cmd(buf.as_ptr()) };
 }
 
@@ -361,15 +348,10 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
     }
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
-    unsafe {
-        apply_autocmds(
-            EVENT_SYNTAX,
-            (*eap).arg,
-            (*curbuf.get()).b_fname,
-            true,
-            curbuf.get(),
-        )
-    };
+    let buf = curbuf.get();
+    // SAFETY: the caller's command and the editor's current buffer.
+    let (arg, fname) = unsafe { ((*eap).arg, (*buf).b_fname) };
+    unsafe { apply_autocmds(EVENT_SYNTAX, arg, fname, true, buf) };
 
     // Move the value of b:current_syntax to w:current_syntax.
     let new_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };

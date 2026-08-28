@@ -265,13 +265,9 @@ unsafe fn put_colors(
             } else {
                 c"foreground"
             };
-            unsafe {
-                put(
-                    hl,
-                    key,
-                    Object::integer(Integer::from(ae.cterm_fg_color - 1)),
-                )
-            };
+            let value = Object::integer(Integer::from(ae.cterm_fg_color - 1));
+            // SAFETY: the arena dict has room for one more entry.
+            unsafe { put(hl, key, value) };
         }
         if ae.cterm_bg_color != 0 {
             let key = if short_keys {
@@ -279,13 +275,9 @@ unsafe fn put_colors(
             } else {
                 c"background"
             };
-            unsafe {
-                put(
-                    hl,
-                    key,
-                    Object::integer(Integer::from(ae.cterm_bg_color - 1)),
-                )
-            };
+            let value = Object::integer(Integer::from(ae.cterm_bg_color - 1));
+            // SAFETY: the arena dict has room for one more entry.
+            unsafe { put(hl, key, value) };
         }
     }
     // `nvim_get_hl` reports blend once, with the gui half.
@@ -606,14 +598,9 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
         return unsafe { val.data.integer } as int32_t;
     }
     if val.type_0 != kObjectTypeString {
-        unsafe {
-            api_err_exp(
-                err,
-                key.as_ptr(),
-                c"String or Integer".as_ptr(),
-                ::core::ptr::null(),
-            )
-        };
+        let expected = c"String or Integer".as_ptr();
+        // SAFETY: the caller's error slot.
+        unsafe { api_err_exp(err, key.as_ptr(), expected, ::core::ptr::null()) };
         return 0;
     }
     let str = unsafe { val.data.string };

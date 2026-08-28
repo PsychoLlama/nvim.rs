@@ -233,16 +233,9 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         };
         RECURSIVE.set(RECURSIVE.get() + 1);
         let name = c"hl_def".as_ptr();
-        let ret = unsafe {
-            nlua_call_ref(
-                hl_def,
-                name,
-                args.array(),
-                kRetObject,
-                ::core::ptr::null_mut(),
-                &raw mut err,
-            )
-        };
+        let (args, arena) = (args.array(), ::core::ptr::null_mut());
+        // SAFETY: the namespace's own callback reference.
+        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena, &raw mut err) };
         RECURSIVE.set(RECURSIVE.get() - 1);
 
         // Anything but a dict means the callback declined; fall back.
@@ -413,14 +406,14 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
     if optional && !available {
         return 0;
     }
-    unsafe {
-        get_attr_entry(HlEntry {
-            attr: attrs,
-            kind: kHlUI,
-            id1: idx,
-            id2: final_id,
-        })
-    }
+    let entry = HlEntry {
+        attr: attrs,
+        kind: kHlUI,
+        id1: idx,
+        id2: final_id,
+    };
+    // SAFETY: the caller's editor state.
+    unsafe { get_attr_entry(entry) }
 }
 
 /// Brings `wp`'s cached highlight state up to date: which namespace table it

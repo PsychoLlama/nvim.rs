@@ -539,14 +539,12 @@ pub(crate) unsafe fn in_id_list(
         // si_idx is -1 for keywords, which never contain anything.
         if si.si_idx >= 0 {
             let spp = unsafe { syn_pattern(si.si_idx) };
-            if unsafe {
-                id_list_has(
-                    (*ssp).cont_in_list,
-                    spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
-                    spp.sp_flags,
-                    0,
-                )
-            } {
+            // SAFETY: the caller's group.
+            let cont_in = unsafe { (*ssp).cont_in_list };
+            let syn = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn));
+            let flags = spp.sp_flags;
+            // SAFETY: the parser's own lists.
+            if unsafe { id_list_has(cont_in, syn, flags, 0) } {
                 return true;
             }
         }

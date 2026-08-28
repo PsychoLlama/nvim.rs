@@ -403,15 +403,14 @@ pub unsafe fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int
     if !anything_set {
         return 0;
     }
+    let entry = HlEntry {
+        attr: at_en,
+        kind: kHlSyntax,
+        id1: idx,
+        id2: ns_id,
+    };
     // SAFETY: the caller's editor state.
-    unsafe {
-        get_attr_entry(HlEntry {
-            attr: at_en,
-            kind: kHlSyntax,
-            id1: idx,
-            id2: ns_id,
-        })
-    }
+    unsafe { get_attr_entry(entry) }
 }
 
 /// `attr` with `'winblend'` applied, unless it carries a `blend=` of its own
@@ -437,15 +436,14 @@ pub unsafe fn hl_get_underline() -> c_int {
     let mut attrs = HLATTRS_INIT;
     attrs.cterm_ae_attr = HlAttrFlags::UNDERLINE;
     attrs.rgb_ae_attr = HlAttrFlags::UNDERLINE;
+    let entry = HlEntry {
+        attr: attrs,
+        kind: kHlUI,
+        id1: 0,
+        id2: 0,
+    };
     // SAFETY: the caller's editor state.
-    unsafe {
-        get_attr_entry(HlEntry {
-            attr: attrs,
-            kind: kHlUI,
-            id1: 0,
-            id2: 0,
-        })
-    }
+    unsafe { get_attr_entry(entry) }
 }
 
 /// `attr` combined with an entry carrying `url`.
@@ -460,15 +458,14 @@ pub unsafe fn hl_add_url(attr: c_int, url: *const c_char) -> c_int {
     // SAFETY: the caller's string.
     let url = unsafe { CStr::from_ptr(url) };
     attrs.url = URLS.with_mut(|urls| urls.intern(url)) as i32;
-    // SAFETY: the caller's editor state.
-    let with_url = unsafe {
-        get_attr_entry(HlEntry {
-            attr: attrs,
-            kind: kHlUI,
-            id1: 0,
-            id2: 0,
-        })
+    let entry = HlEntry {
+        attr: attrs,
+        kind: kHlUI,
+        id1: 0,
+        id2: 0,
     };
+    // SAFETY: the caller's editor state.
+    let with_url = unsafe { get_attr_entry(entry) };
     unsafe { hl_combine_attr(attr, with_url) }
 }
 
@@ -486,15 +483,14 @@ pub fn hl_get_url(index: uint32_t) -> *const c_char {
 /// # Safety
 /// As [`get_attr_entry`].
 pub unsafe fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
+    let entry = HlEntry {
+        attr: attrs,
+        kind: kHlTerminal,
+        id1: 0,
+        id2: 0,
+    };
     // SAFETY: the caller's editor state.
-    unsafe {
-        get_attr_entry(HlEntry {
-            attr: attrs,
-            kind: kHlTerminal,
-            id1: 0,
-            id2: 0,
-        })
-    }
+    unsafe { get_attr_entry(entry) }
 }
 
 /// Empties every attribute table, invalidating every id in existence.
@@ -608,14 +604,14 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
         new_en.url = prim_aep.url;
     }
 
-    let id = unsafe {
-        get_attr_entry(HlEntry {
-            attr: new_en,
-            kind: kHlCombine,
-            id1: char_attr,
-            id2: prim_attr,
-        })
+    let entry = HlEntry {
+        attr: new_en,
+        kind: kHlCombine,
+        id1: char_attr,
+        id2: prim_attr,
     };
+    // SAFETY: the caller's editor state.
+    let id = unsafe { get_attr_entry(entry) };
     if id > 0 {
         COMBINE.with_mut(|cache| cache.insert(char_attr, prim_attr, id));
     }

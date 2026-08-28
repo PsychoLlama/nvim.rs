@@ -33,13 +33,10 @@ pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
         unsafe { *grp_list = id as int16_t };
         unsafe { *grp_list.add(1) = 0 };
         let tlg_id = cur_syn_block().b_syn_topgrp - SYNID_CLUSTER;
-        unsafe {
-            syn_combine_list(
-                &mut (*cur_cluster(tlg_id).raw()).scl_list,
-                &mut grp_list,
-                CLUSTER_ADD,
-            )
-        };
+        // SAFETY: `tlg_id` is a live cluster index; the address comes off the
+        // pointer rather than a `Deref` borrow.
+        let list = unsafe { &mut (*cur_cluster(tlg_id).raw()).scl_list };
+        unsafe { syn_combine_list(list, &mut grp_list, CLUSTER_ADD) };
     }
 }
 
@@ -101,15 +98,11 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
     let prev_toplvl_grp = cur_syn_block().b_syn_topgrp;
     cur_syn_block().b_syn_topgrp = sgl_id;
 
+    // SAFETY: the caller's command.
+    let arg = unsafe { (*eap).arg };
     let failed = if source {
-        unsafe {
-            do_source(
-                (*eap).arg,
-                false,
-                DOSO_NONE as c_int,
-                ::core::ptr::null_mut(),
-            ) == FAIL
-        }
+        // SAFETY: sourcing the file the user named.
+        unsafe { do_source(arg, false, DOSO_NONE as c_int, ::core::ptr::null_mut()) == FAIL }
     } else {
         unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL }
     };

@@ -242,39 +242,24 @@ unsafe fn put_item_patterns(mut idx: c_int) -> c_int {
     let sp_type = |i: c_int| unsafe { cur_pattern(i).sp_type } as c_int;
 
     if sp_type(idx) == SPTYPE_MATCH {
-        unsafe {
-            put_pattern(
-                &mut last_matchgroup,
-                c"match",
-                ' ' as c_int,
-                cur_pattern(idx),
-            )
-        };
+        // SAFETY: `idx` is a live pattern index.
+        let spp = unsafe { cur_pattern(idx) };
+        unsafe { put_pattern(&mut last_matchgroup, c"match", ' ' as c_int, spp) };
         unsafe { msg_putchar(' ' as c_int) };
     } else if sp_type(idx) == SPTYPE_START {
         // The three loops bound themselves on `count`; upstream bounds only
         // the last of them and reads past the array if a region's END
         // entries are ever missing.
         while idx < count && sp_type(idx) == SPTYPE_START {
-            unsafe {
-                put_pattern(
-                    &mut last_matchgroup,
-                    c"start",
-                    '=' as c_int,
-                    cur_pattern(idx),
-                )
-            };
+            // SAFETY: `idx` is a live pattern index.
+            let spp = unsafe { cur_pattern(idx) };
+            unsafe { put_pattern(&mut last_matchgroup, c"start", '=' as c_int, spp) };
             idx += 1;
         }
         if idx < count && sp_type(idx) == SPTYPE_SKIP {
-            unsafe {
-                put_pattern(
-                    &mut last_matchgroup,
-                    c"skip",
-                    '=' as c_int,
-                    cur_pattern(idx),
-                )
-            };
+            // SAFETY: `idx` is a live pattern index.
+            let spp = unsafe { cur_pattern(idx) };
+            unsafe { put_pattern(&mut last_matchgroup, c"skip", '=' as c_int, spp) };
             idx += 1;
         }
         while idx < count && sp_type(idx) == SPTYPE_END {
@@ -297,13 +282,8 @@ unsafe fn put_sync_group(spp: Pat) {
     unsafe { msg_putchar(' ' as c_int) };
     if spp.sp_sync_idx >= 0 {
         let target = unsafe { cur_pattern(spp.sp_sync_idx) };
-        unsafe {
-            msg_outtrans(
-                highlight_group_name(target.sp_syn.id as c_int - 1),
-                0,
-                false,
-            )
-        };
+        let name = highlight_group_name(target.sp_syn.id as c_int - 1);
+        unsafe { msg_outtrans(name, 0, false) };
     } else {
         unsafe { msg_puts(c"NONE".as_ptr()) };
     }

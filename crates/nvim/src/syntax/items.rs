@@ -296,6 +296,9 @@ pub(crate) unsafe fn check_keepend() {
     while i < state_len() {
         let mut sip = unsafe { state_at(i) };
         if maxpos.lnum != 0 {
+            // Each borrow is handed straight to `limit_pos_zero`, which
+            // touches only the position it was given, and dies with the
+            // statement -- so no two of them are live at once.
             limit_pos_zero(&mut sip.si_m_endpos, maxpos);
             limit_pos_zero(&mut sip.si_h_endpos, maxpos_h);
             limit_pos_zero(&mut sip.si_eoe_pos, maxpos);

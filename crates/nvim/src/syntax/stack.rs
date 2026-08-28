@@ -389,13 +389,11 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
     if size > SST_FIX_STATES {
         // Needs clearing: something may remain from when the length was
         // below SST_FIX_STATES and the inline array was in use.
-        unsafe {
-            ga_init(
-                &raw mut (*sp).sst_union.sst_ga,
-                ::core::mem::size_of::<bufstate_T>() as c_int,
-                1,
-            )
-        };
+        // SAFETY: `sp` is the cache entry being resized.
+        let ga = unsafe { &raw mut (*sp).sst_union.sst_ga };
+        let item_size = ::core::mem::size_of::<bufstate_T>() as c_int;
+        // SAFETY: a growarray the entry owns.
+        unsafe { ga_init(ga, item_size, 1) };
         unsafe { ga_grow(&raw mut (*sp).sst_union.sst_ga, size) };
         unsafe { (*sp).sst_union.sst_ga.ga_len = size };
     }
@@ -519,14 +517,10 @@ unsafe fn extmatch_equal(a: *mut reg_extmatch_T, b: *mut reg_extmatch_T, idx: c_
             if am.is_null() || bm.is_null() {
                 return false;
             }
-            if unsafe {
-                mb_strcmp_ic(
-                    ic,
-                    am as *const ::core::ffi::c_char,
-                    bm as *const ::core::ffi::c_char,
-                )
-            } != 0
-            {
+            let am = am as *const ::core::ffi::c_char;
+            let bm = bm as *const ::core::ffi::c_char;
+            // SAFETY: both are NUL-terminated keywords.
+            if unsafe { mb_strcmp_ic(ic, am, bm) } != 0 {
                 return false;
             }
         }

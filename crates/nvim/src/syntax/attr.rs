@@ -132,13 +132,9 @@ pub(crate) unsafe fn syn_current_attr(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut(),
     };
-    unsafe {
-        ga_init(
-            &raw mut zero_width,
-            ::core::mem::size_of::<c_int>() as c_int,
-            10,
-        )
-    };
+    let item_size = ::core::mem::size_of::<c_int>() as c_int;
+    // SAFETY: a growarray this frame owns.
+    unsafe { ga_init(&raw mut zero_width, item_size, 10) };
 
     // Use the `syntax iskeyword` option while matching.
     let mut buf_chartab: [c_char; 32] = [0; 32];
@@ -178,15 +174,10 @@ pub(crate) unsafe fn syn_current_attr(
                 // If we have not looked yet, or we are past what we found,
                 // look for a match with any pattern.
                 if next_match_idx.get() < 0 || next_match_col.get() < current_col.get() {
+                    let (zw, ext) = (&zero_width, &mut cur_extmatch);
+                    // SAFETY: the parser's own state.
                     unsafe {
-                        scan_patterns(
-                            syncing,
-                            displaying,
-                            cur_si,
-                            &zero_width,
-                            &mut cur_extmatch,
-                            &try_next_column,
-                        )
+                        scan_patterns(syncing, displaying, cur_si, zw, ext, &try_next_column)
                     };
                 }
                 // If we found a match at the current column, use it.
@@ -308,12 +299,10 @@ unsafe fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     }
     if current_col.get() != 0 {
         let prev = unsafe { cur_pos.offset(-1) };
-        if unsafe {
-            vim_iswordp_buf(
-                prev.offset(-(utf_head_off(line, prev) as isize)),
-                syn_buf.get(),
-            )
-        } {
+        // SAFETY: `prev` is inside the line the parser is on.
+        let head = unsafe { prev.offset(-(utf_head_off(line, prev) as isize)) };
+        // SAFETY: the buffer the parser was started for.
+        if unsafe { vim_iswordp_buf(head, syn_buf.get()) } {
             return None;
         }
     }
@@ -398,14 +387,10 @@ unsafe fn scan_patterns(
             rmm_ic: spp.sp_ic,
             rmm_maxcol: 0,
         };
-        let matched = unsafe {
-            syn_regexec(
-                &raw mut regmatch,
-                current_lnum.get(),
-                lc_col,
-                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_time)),
-            )
-        };
+        let time = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_time));
+        let lnum = current_lnum.get();
+        // SAFETY: the caller's pattern, timed into its own `sp_time`.
+        let matched = unsafe { syn_regexec(&raw mut regmatch, lnum, lc_col, time) };
         spp.sp_prog = regmatch.regprog;
         if !matched {
             // No match in this line; try another pattern.
@@ -525,24 +510,17 @@ unsafe fn pattern_admitted(
     }
     if !current_next_list.get().is_null() {
         // A pending `nextgroup=` admits only what it names.
-        unsafe {
-            in_id_list(
-                None,
-                current_next_list.get(),
-                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
-                SynFlags::NONE,
-            )
-        }
+        let next = current_next_list.get();
+        let syn = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn));
+        // SAFETY: the caller's pattern and the parser's own lists.
+        unsafe { in_id_list(None, next, syn, SynFlags::NONE) }
     } else if let Some(cur_si) = cur_si {
         // Inside an item, only what its `contains=` names.
-        unsafe {
-            in_id_list(
-                Some(cur_si),
-                cur_si.si_cont_list,
-                spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn)),
-                spp.sp_flags,
-            )
-        }
+        let contains = cur_si.si_cont_list;
+        let syn = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn));
+        let flags = spp.sp_flags;
+        // SAFETY: as above, inside the item the caller named.
+        unsafe { in_id_list(Some(cur_si), contains, syn, flags) }
     } else {
         // At the top level, anything that is not `contained`.
         !spp.sp_flags.has(SynFlags::CONTAINED)

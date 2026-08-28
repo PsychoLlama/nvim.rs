@@ -490,17 +490,13 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
             // the delimiter back so `find_nextcmd` sees the whole line.
             let c = unsafe { *end } as uint8_t;
             unsafe { *end = 0 };
-            unsafe {
-                match_add(
-                    curwin.get(),
-                    g,
-                    p.offset(1),
-                    DEFAULT_PRIORITY,
-                    id,
-                    ::core::ptr::null_mut(),
-                    ::core::ptr::null(),
-                )
-            };
+            // SAFETY: the pattern is NUL-terminated in place just above.
+            let pat = unsafe { p.offset(1) };
+            let win = curwin.get();
+            let no_pos = ::core::ptr::null_mut();
+            let no_conceal = ::core::ptr::null();
+            // SAFETY: the editor's own window and the group checked above.
+            unsafe { match_add(win, g, pat, DEFAULT_PRIORITY, id, no_pos, no_conceal) };
             unsafe { xfree(g.cast()) };
             unsafe { *end = c as c_char };
         }

@@ -341,14 +341,9 @@ pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
         rmm_ic: syn_block().b_syn_linecont_ic,
         rmm_maxcol: 0,
     };
-    let r = unsafe {
-        syn_regexec(
-            &raw mut regmatch,
-            lnum,
-            0,
-            syn_field!(syn_block(), b_syn_linecont_time),
-        )
-    };
+    let time = syn_field!(syn_block(), b_syn_linecont_time);
+    // SAFETY: the parsed block's own `b_syn_linecont_time`.
+    let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time) };
     syn_block().b_syn_linecont_prog = regmatch.regprog;
 
     unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
