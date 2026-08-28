@@ -67,7 +67,7 @@ use crate::types::{
     AdditionalData, Callback, Callback_data, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T,
     exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t,
     linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T,
-    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    typval_T, typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_has;
 use crate::window::{

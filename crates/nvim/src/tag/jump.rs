@@ -15,7 +15,7 @@ use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
 use crate::types::{CpoFlag, FAIL, OK};
 use crate::window::WSP_VERT;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -336,7 +336,7 @@ pub(crate) unsafe fn jumpto_tag(lbuf_arg: *const c_char, forceit: c_int, keep_he
                 expanded: expand_tag_fname(tagp.fname, tagp.tag_fname, true),
                 full_fname: ptr::null_mut(),
                 preview: g_do_tagpreview.get() != 0,
-                saved_win: ptr::null_mut(),
+                saved_win: None,
                 reused_window: false,
                 // Opening the file may reset it.
                 key_typed: KeyTyped.get(),
@@ -364,8 +364,10 @@ struct Jump {
     full_fname: *mut c_char,
     /// Whether this is a `:ptag`, landing in the preview window.
     preview: bool,
-    /// The window to go back to afterwards, for a preview jump.
-    saved_win: *mut win_T,
+    /// The window to go back to afterwards, for a preview jump. By
+    /// identity, not by address: `getfile` below runs autocommands that may
+    /// close it, and a freed `win_T`'s address can be handed back out.
+    saved_win: Option<WinId>,
     /// Whether `'switchbuf'` already put us in a window holding the file,
     /// so that the usual loading must be skipped.
     reused_window: bool,
@@ -420,8 +422,14 @@ impl Jump {
             // A `:ta` from a help file keeps the help flag set. For
             // `:ptag` it is the flag of the window we came from.
             keep_help_flag.set(if self.preview {
-                // SAFETY: the window the jump started from is live.
-                buf_is_help(unsafe { Buf::from_raw((*self.saved_win).w_buffer) })
+                // `open_preview` took the id a moment ago and nothing since
+                // can have closed the window, but ask rather than assume.
+                buf_is_help(
+                    self.saved_win
+                        .and_then(WinId::get)
+                        // SAFETY: reading a live window's buffer pointer.
+                        .and_then(|w| unsafe { Buf::from_raw(w.w_buffer) }),
+                )
             } else {
                 cur_buf().b_help
             });
@@ -463,11 +471,20 @@ impl Jump {
                 unsafe { fold_open_cursor() };
             }
         }
-        if self.preview && curwin.get() != self.saved_win && win_valid(self.saved_win) {
+        // `getfile` above runs autocommands, so the window the jump started
+        // from may be gone; ask the registry for it rather than the address.
+        // `win_valid` is still the second question — the object may exist and
+        // yet be off this tab page's list.
+        let saved = self.saved_win.and_then(WinId::get);
+        if self.preview
+            && let Some(saved) = saved
+            && !saved.is_current()
+            && win_valid(saved.raw())
+        {
             // Put the cursor back where it was.
             validate_cursor(unsafe { Win::current() });
             unsafe { redraw_later(curwin.get(), UPD_VALID) };
-            unsafe { win_enter(self.saved_win, true) };
+            unsafe { win_enter(saved.raw(), true) };
         }
         drop(redraw_off);
         retval
@@ -481,7 +498,7 @@ impl Jump {
         // SAFETY: the caller's promise.
         // Don't split again below.
         postponed_split.set(0);
-        self.saved_win = curwin.get();
+        self.saved_win = Some(cur_win().id());
         if cur_win().w_onebuf_opt.wo_pvw == 0 {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
