@@ -243,74 +243,74 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
 /// # Safety
 /// `wp` must be live.
 pub unsafe fn win_grid_alloc(wp: *mut win_T) {
-    unsafe {
-        let grid: *mut GridView = &raw mut (*wp).w_grid;
-        let grid_allocated: *mut ScreenGrid = &raw mut (*wp).w_grid_alloc;
+    let grid: *mut GridView = unsafe { &raw mut (*wp).w_grid };
+    let grid_allocated: *mut ScreenGrid = unsafe { &raw mut (*wp).w_grid_alloc };
 
-        let total_rows = (*wp).w_height_outer;
-        let total_cols = (*wp).w_width_outer;
+    let total_rows = unsafe { (*wp).w_height_outer };
+    let total_cols = unsafe { (*wp).w_width_outer };
 
-        // A window only gets a grid of its own when the UI asked for
-        // multigrid, or when it is a float (which needs one to be composed).
-        let want_allocation = ui_has(kUIMultigrid) || (*wp).w_floating;
-        let has_allocation = (*grid_allocated).is_allocated();
+    // A window only gets a grid of its own when the UI asked for
+    // multigrid, or when it is a float (which needs one to be composed).
+    let want_allocation = ui_has(kUIMultigrid) || unsafe { (*wp).w_floating };
+    let has_allocation = unsafe { (*grid_allocated).is_allocated() };
 
-        if (*wp).w_view_height > (*wp).w_lines_size {
-            (*wp).w_lines_valid = 0;
-            xfree((*wp).w_lines.cast::<c_void>());
+    if unsafe { (*wp).w_view_height } > unsafe { (*wp).w_lines_size } {
+        unsafe { (*wp).w_lines_valid = 0 };
+        unsafe { xfree((*wp).w_lines.cast::<c_void>()) };
+        unsafe {
             (*wp).w_lines =
-                xcalloc((*wp).w_view_height as size_t + 1, size_of::<wline_T>()).cast::<wline_T>();
-            (*wp).w_lines_size = (*wp).w_view_height;
-        }
+                xcalloc((*wp).w_view_height as size_t + 1, size_of::<wline_T>()).cast::<wline_T>()
+        };
+        unsafe { (*wp).w_lines_size = (*wp).w_view_height };
+    }
 
-        let mut was_resized = false;
-        if want_allocation
-            && (!has_allocation
-                || (*grid_allocated).rows != total_rows
-                || (*grid_allocated).cols != total_cols)
-        {
-            grid_alloc(
-                &mut *grid_allocated,
-                total_rows,
-                total_cols,
-                (*wp).w_grid_alloc.valid,
-                false,
-            );
-            (*grid_allocated).valid = true;
-            if (*wp).w_floating && (*wp).w_config.border {
-                (*wp).w_redr_border = true;
-            }
-            was_resized = true;
-        } else if !want_allocation && has_allocation {
-            // Single-grid mode: all rendering is redirected to default_grid
-            // and only the window's size and offset are tracked.
-            (*grid_allocated).free();
-            (*grid_allocated).valid = false;
-            was_resized = true;
-        } else if want_allocation && has_allocation && !(*wp).w_grid_alloc.valid {
-            (*grid_allocated).revalidate();
+    let mut was_resized = false;
+    if want_allocation
+        && (!has_allocation
+            || unsafe { (*grid_allocated).rows } != total_rows
+            || unsafe { (*grid_allocated).cols } != total_cols)
+    {
+        grid_alloc(
+            unsafe { &mut *grid_allocated },
+            total_rows,
+            total_cols,
+            unsafe { (*wp).w_grid_alloc.valid },
+            false,
+        );
+        unsafe { (*grid_allocated).valid = true };
+        if unsafe { (*wp).w_floating } && unsafe { (*wp).w_config.border } {
+            unsafe { (*wp).w_redr_border = true };
         }
+        was_resized = true;
+    } else if !want_allocation && has_allocation {
+        // Single-grid mode: all rendering is redirected to default_grid
+        // and only the window's size and offset are tracked.
+        unsafe { (*grid_allocated).free() };
+        unsafe { (*grid_allocated).valid = false };
+        was_resized = true;
+    } else if want_allocation && has_allocation && !unsafe { (*wp).w_grid_alloc.valid } {
+        unsafe { (*grid_allocated).revalidate() };
+    }
 
-        if want_allocation {
-            (*grid).target = grid_allocated;
-            (*grid).row_offset = (*wp).w_winrow_off;
-            (*grid).col_offset = (*wp).w_wincol_off;
-        } else {
-            (*grid).target = default_grid_ref().raw();
-            (*grid).row_offset = (*wp).w_winrow + (*wp).w_winrow_off;
-            (*grid).col_offset = (*wp).w_wincol + (*wp).w_wincol_off;
-        }
+    if want_allocation {
+        unsafe { (*grid).target = grid_allocated };
+        unsafe { (*grid).row_offset = (*wp).w_winrow_off };
+        unsafe { (*grid).col_offset = (*wp).w_wincol_off };
+    } else {
+        unsafe { (*grid).target = default_grid_ref().raw() };
+        unsafe { (*grid).row_offset = (*wp).w_winrow + (*wp).w_winrow_off };
+        unsafe { (*grid).col_offset = (*wp).w_wincol + (*wp).w_wincol_off };
+    }
 
-        // Send a grid resize event when a grid was just resized, or when
-        // screen_resize asked for every size to be re-sent.
-        if (resizing_screen.get() || was_resized) && want_allocation {
-            ui_call_grid_resize(
-                (*grid_allocated).handle as Integer,
-                (*grid_allocated).cols as Integer,
-                (*grid_allocated).rows as Integer,
-            );
-            ui_check_cursor_grid((*grid_allocated).handle);
-        }
+    // Send a grid resize event when a grid was just resized, or when
+    // screen_resize asked for every size to be re-sent.
+    if (resizing_screen.get() || was_resized) && want_allocation {
+        ui_call_grid_resize(
+            unsafe { (*grid_allocated).handle } as Integer,
+            unsafe { (*grid_allocated).cols } as Integer,
+            unsafe { (*grid_allocated).rows } as Integer,
+        );
+        ui_check_cursor_grid(unsafe { (*grid_allocated).handle });
     }
 }
 

@@ -169,10 +169,8 @@ pub struct LineAttrs {
 pub unsafe fn grid_line_start(view: GridView, mut row: c_int) {
     let mut col = 0;
     // SAFETY: the caller's promise, for both calls.
-    unsafe {
-        let grid = grid_adjust(view, &mut row, &mut col);
-        screengrid_line_start(grid, row, col);
-    }
+    let grid = unsafe { grid_adjust(view, &mut row, &mut col) };
+    unsafe { screengrid_line_start(grid, row, col) };
 }
 
 /// [`grid_line_start`] against a `ScreenGrid` directly, for the callers that
@@ -215,21 +213,19 @@ pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
 /// # Safety
 /// A batch must be in progress.
 pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
-    unsafe {
-        let b = *batch();
-        if col >= b.maxcol {
-            // NUL is a very special value (right half of a double-width
-            // cell); a space is True Neutral.
-            return schar_from_ascii(b' ');
-        }
-        col += b.coloff;
-        let grid = b.grid.expect("a batch is in progress");
-        let off = grid.cell_offset(b.row, col);
-        if !attr.is_null() {
-            *attr = grid.attr_at(off);
-        }
-        grid.char_at(off)
+    let b = *batch();
+    if col >= b.maxcol {
+        // NUL is a very special value (right half of a double-width
+        // cell); a space is True Neutral.
+        return schar_from_ascii(b' ');
     }
+    col += b.coloff;
+    let grid = b.grid.expect("a batch is in progress");
+    let off = grid.cell_offset(b.row, col);
+    if !attr.is_null() {
+        unsafe { *attr = grid.attr_at(off) };
+    }
+    grid.char_at(off)
 }
 
 /// Put one glyph at `col`. A no-op when no batch is open.
@@ -265,68 +261,66 @@ pub unsafe fn grid_line_puts(
     let (chars, attrs, vcols) = buf.parts_mut();
     let mut b = batch();
     // SAFETY: the caller's promise, for the batch and for `text`.
-    unsafe {
-        debug_assert!(b.grid.is_some(), "grid_line_grid");
+    debug_assert!(b.grid.is_some(), "grid_line_grid");
 
-        let max_col = b.maxcol;
-        let start_col = col;
-        let mut col = col;
-        let mut ptr = text;
+    let max_col = b.maxcol;
+    let start_col = col;
+    let mut col = col;
+    let mut ptr = text;
 
-        while col < max_col
-            && (textlen < 0 || (ptr.offset_from(text) as c_int) < textlen)
-            && *ptr != NUL as c_char
-        {
-            // How many bytes is this character, composing marks included?
-            let mbyte_blen = if textlen >= 0 {
-                let maxlen = text.offset(textlen as isize).offset_from(ptr) as c_int;
-                let blen = utfc_ptr2len_len(ptr, maxlen);
-                if blen > maxlen { 1 } else { blen }
-            } else {
-                utfc_ptr2len(ptr)
-            };
+    while col < max_col
+        && (textlen < 0 || (unsafe { ptr.offset_from(text) } as c_int) < textlen)
+        && unsafe { *ptr } != NUL as c_char
+    {
+        // How many bytes is this character, composing marks included?
+        let mbyte_blen = if textlen >= 0 {
+            let maxlen = unsafe { text.offset(textlen as isize).offset_from(ptr) } as c_int;
+            let blen = unsafe { utfc_ptr2len_len(ptr, maxlen) };
+            if blen > maxlen { 1 } else { blen }
+        } else {
+            unsafe { utfc_ptr2len(ptr) }
+        };
 
-            let mut firstc = 0;
-            let mut schar = utfc_ptrlen2schar(ptr, mbyte_blen, &raw mut firstc);
-            let mut mbyte_cells = utf_ptr2cells_len(ptr, mbyte_blen);
-            if mbyte_cells > 2 || schar == 0 {
-                mbyte_cells = 1;
-                schar = schar_from_char(0xfffd);
-            }
-
-            if col + mbyte_cells > max_col {
-                // Only one cell left but the character needs two: show a '>'
-                // in the last column rather than wrap.
-                schar = schar_from_ascii(b'>');
-                mbyte_cells = 1;
-            }
-
-            // At the start of the text, overwriting the right half of a
-            // two-cell character already in this batch truncates it to '>'.
-            if ptr == text && col > b.first && col < b.last && chars[col as size_t] == 0 {
-                chars[(col - 1) as size_t] = schar_from_ascii(b'>');
-            }
-
-            chars[col as size_t] = schar;
-            attrs[col as size_t] = attr;
-            vcols[col as size_t] = -1;
-            if mbyte_cells == 2 {
-                chars[(col + 1) as size_t] = 0;
-                attrs[(col + 1) as size_t] = attr;
-                vcols[(col + 1) as size_t] = -1;
-            }
-
-            col += mbyte_cells;
-            ptr = ptr.offset(mbyte_blen as isize);
+        let mut firstc = 0;
+        let mut schar = unsafe { utfc_ptrlen2schar(ptr, mbyte_blen, &raw mut firstc) };
+        let mut mbyte_cells = unsafe { utf_ptr2cells_len(ptr, mbyte_blen) };
+        if mbyte_cells > 2 || schar == 0 {
+            mbyte_cells = 1;
+            schar = schar_from_char(0xfffd);
         }
 
-        if col > start_col {
-            b.first = b.first.min(start_col);
-            b.last = b.last.max(col);
+        if col + mbyte_cells > max_col {
+            // Only one cell left but the character needs two: show a '>'
+            // in the last column rather than wrap.
+            schar = schar_from_ascii(b'>');
+            mbyte_cells = 1;
         }
 
-        col - start_col
+        // At the start of the text, overwriting the right half of a
+        // two-cell character already in this batch truncates it to '>'.
+        if ptr == text && col > b.first && col < b.last && chars[col as size_t] == 0 {
+            chars[(col - 1) as size_t] = schar_from_ascii(b'>');
+        }
+
+        chars[col as size_t] = schar;
+        attrs[col as size_t] = attr;
+        vcols[col as size_t] = -1;
+        if mbyte_cells == 2 {
+            chars[(col + 1) as size_t] = 0;
+            attrs[(col + 1) as size_t] = attr;
+            vcols[(col + 1) as size_t] = -1;
+        }
+
+        col += mbyte_cells;
+        ptr = unsafe { ptr.offset(mbyte_blen as isize) };
     }
+
+    if col > start_col {
+        b.first = b.first.min(start_col);
+        b.last = b.last.max(col);
+    }
+
+    col - start_col
 }
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
@@ -408,19 +402,19 @@ pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int,
 /// # Safety
 /// A batch must be in progress.
 pub unsafe fn grid_line_flush() {
-    unsafe {
-        let mut b = batch();
-        // Ended here, whether or not there turns out to be anything to send.
-        let grid = b.grid.take();
-        b.clear_to = b.last.max(b.clear_to);
-        debug_assert!(
-            b.clear_to <= b.maxcol,
-            "grid_line_clear_to <= grid_line_maxcol"
-        );
-        if b.first >= b.clear_to {
-            return;
-        }
+    let mut b = batch();
+    // Ended here, whether or not there turns out to be anything to send.
+    let grid = b.grid.take();
+    b.clear_to = b.last.max(b.clear_to);
+    debug_assert!(
+        b.clear_to <= b.maxcol,
+        "grid_line_clear_to <= grid_line_maxcol"
+    );
+    if b.first >= b.clear_to {
+        return;
+    }
 
+    unsafe {
         grid_put_linebuf(
             grid.expect("a batch is in progress"),
             b.row,
@@ -436,8 +430,8 @@ pub unsafe fn grid_line_flush() {
             },
             -1,
             b.flags,
-        );
-    }
+        )
+    };
 }
 
 /// Flush the batch, but only if it is on a row the grid really has.
@@ -447,17 +441,15 @@ pub unsafe fn grid_line_flush() {
 /// # Safety
 /// A batch must be in progress.
 pub unsafe fn grid_line_flush_if_valid_row() {
-    unsafe {
-        let mut b = batch();
-        if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
-            if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
-                abort();
-            }
-            b.grid = None;
-            return;
+    let mut b = batch();
+    if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
+        if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
+            unsafe { abort() };
         }
-        grid_line_flush();
+        b.grid = None;
+        return;
     }
+    unsafe { grid_line_flush() };
 }
 
 /// Clear a rectangle of `grid` to `attr`.
@@ -472,21 +464,19 @@ pub unsafe fn grid_clear(
     mut end_col: c_int,
     attr: c_int,
 ) {
-    unsafe {
-        let mut row = start_row;
-        while row < end_row {
-            grid_line_start(view, row);
-            let mut b = batch();
-            end_col = end_col.min(b.maxcol);
-            if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
-                // TODO(bfredl): make callers behave instead.
-                b.grid = None;
-                return;
-            }
-            grid_line_clear_end(start_col, end_col, attr, 0);
-            grid_line_flush();
-            row += 1;
+    let mut row = start_row;
+    while row < end_row {
+        unsafe { grid_line_start(view, row) };
+        let mut b = batch();
+        end_col = end_col.min(b.maxcol);
+        if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
+            // TODO(bfredl): make callers behave instead.
+            b.grid = None;
+            return;
         }
+        grid_line_clear_end(start_col, end_col, attr, 0);
+        unsafe { grid_line_flush() };
+        row += 1;
     }
 }
 
@@ -689,18 +679,18 @@ pub unsafe fn grid_put_linebuf(
 ) {
     let mut line = linebuf();
     // SAFETY: the caller's promise about `row` and the buffers.
-    unsafe {
-        let LineSpan {
-            mut col,
-            mut endcol,
-            mut clear_width,
-        } = span;
-        debug_assert!(0 <= row && row < grid.rows, "0 <= row && row < grid->rows");
-        // TODO(bfredl): check all callsites and eliminate.
-        endcol = endcol.min(grid.cols);
+    let LineSpan {
+        mut col,
+        mut endcol,
+        mut clear_width,
+    } = span;
+    debug_assert!(0 <= row && row < grid.rows, "0 <= row && row < grid->rows");
+    // TODO(bfredl): check all callsites and eliminate.
+    endcol = endcol.min(grid.cols);
 
-        // Safety check; avoids clang warnings down the call stack.
-        if !grid.is_allocated() || row >= grid.rows || coloff >= grid.cols {
+    // Safety check; avoids clang warnings down the call stack.
+    if !grid.is_allocated() || row >= grid.rows || coloff >= grid.cols {
+        unsafe {
             logmsg_c!(
                 LOGLVL_DBG,
                 ::core::ptr::null(),
@@ -708,77 +698,79 @@ pub unsafe fn grid_put_linebuf(
                 line!() as c_int,
                 true,
                 c"invalid state, skipped".as_ptr(),
-            );
-            return;
+            )
+        };
+        return;
+    }
+
+    let invalid_row = !grid.same(default_grid_ref()) && grid.invalid_row(row) && col == 0;
+    // The row from `coloff` on: every column below indexes into it.
+    let off_to = grid.cell_offset(row, coloff);
+    let span_width = (grid.cols - coloff) as size_t;
+
+    // At the start of the text, overwriting the right half of a two-cell
+    // character already on the grid truncates it into a '>'.
+    if col > 0 && grid.char_at(off_to + col as size_t) == 0 {
+        let at = (col - 1) as size_t;
+        line.chars_mut()[at] = schar_from_ascii(b'>');
+        line.attrs_mut()[at] = grid.attr_at(off_to + col as size_t - 1);
+        col -= 1;
+    }
+
+    let mut clear_start = endcol;
+    if flags & SLF_RIGHTLEFT != 0 {
+        clear_start = col;
+        col = endcol;
+        endcol = clear_width;
+        clear_width = col;
+    }
+
+    if p_arshape.get() != 0 && p_tbidi.get() == 0 && endcol > col {
+        unsafe { line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]) };
+    }
+
+    if attrs.bg != 0 {
+        for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
+            *cell = unsafe { hl_combine_attr(attrs.bg, *cell) };
         }
+    }
 
-        let invalid_row = !grid.same(default_grid_ref()) && grid.invalid_row(row) && col == 0;
-        // The row from `coloff` on: every column below indexes into it.
-        let off_to = grid.cell_offset(row, coloff);
-        let span_width = (grid.cols - coloff) as size_t;
+    let clear_attr = unsafe { hl_combine_attr(attrs.bg, attrs.clear) };
+    let mut on_grid = grid.cells_mut(off_to, span_width);
+    let copied = copy_changed_cells(&line, &mut on_grid, col, endcol);
+    let mut start_dirty = copied.dirty.start;
+    let mut end_dirty = copied.dirty.end;
+    col = copied.col;
 
-        // At the start of the text, overwriting the right half of a two-cell
-        // character already on the grid truncates it into a '>'.
-        if col > 0 && grid.char_at(off_to + col as size_t) == 0 {
-            let at = (col - 1) as size_t;
-            line.chars_mut()[at] = schar_from_ascii(b'>');
-            line.attrs_mut()[at] = grid.attr_at(off_to + col as size_t - 1);
-            col -= 1;
-        }
+    if copied.clear_next {
+        // Clear the second half of a double-width character whose left
+        // half was overwritten with a single-width one.
+        on_grid.chars[col as size_t] = schar_from_ascii(b' ');
+        end_dirty += 1;
+    }
 
-        let mut clear_start = endcol;
-        if flags & SLF_RIGHTLEFT != 0 {
-            clear_start = col;
-            col = endcol;
-            endcol = clear_width;
-            clear_width = col;
-        }
+    // Clearing the left half of a double-width char clears the right too.
+    if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
+        clear_width += 1;
+    }
 
-        if p_arshape.get() != 0 && p_tbidi.get() == 0 && endcol > col {
-            line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]);
-        }
+    let cleared = clear_rest_of_line(
+        &mut on_grid,
+        clear_start,
+        clear_width,
+        clear_attr,
+        flags,
+        last_vcol,
+    );
+    let mut clear_end = cleared.end;
 
-        if attrs.bg != 0 {
-            for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
-                *cell = hl_combine_attr(attrs.bg, *cell);
-            }
-        }
-
-        let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
-        let mut on_grid = grid.cells_mut(off_to, span_width);
-        let copied = copy_changed_cells(&line, &mut on_grid, col, endcol);
-        let mut start_dirty = copied.dirty.start;
-        let mut end_dirty = copied.dirty.end;
-        col = copied.col;
-
-        if copied.clear_next {
-            // Clear the second half of a double-width character whose left
-            // half was overwritten with a single-width one.
-            on_grid.chars[col as size_t] = schar_from_ascii(b' ');
-            end_dirty += 1;
-        }
-
-        // Clearing the left half of a double-width char clears the right too.
-        if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
-            clear_width += 1;
-        }
-
-        let cleared = clear_rest_of_line(
-            &mut on_grid,
-            clear_start,
-            clear_width,
-            clear_attr,
-            flags,
-            last_vcol,
-        );
-        let mut clear_end = cleared.end;
-
-        if flags & SLF_RIGHTLEFT != 0 && start_dirty != -1 && cleared.start != -1 {
-            if grid.throttled || cleared.start >= start_dirty - 5 {
-                // Cannot draw now, or too small to be worth a separate
-                // "clear" event.
-                start_dirty = cleared.start;
-            } else {
+    if flags & SLF_RIGHTLEFT != 0 && start_dirty != -1 && cleared.start != -1 {
+        if grid.throttled || cleared.start >= start_dirty - 5 {
+            // Cannot draw now, or too small to be worth a separate
+            // "clear" event.
+            start_dirty = cleared.start;
+        } else {
+            unsafe {
                 ui_line(
                     grid,
                     row,
@@ -788,22 +780,24 @@ pub unsafe fn grid_put_linebuf(
                     coloff + clear_end,
                     clear_attr,
                     flags & SLF_WRAP != 0,
-                );
-            }
-            clear_end = end_dirty;
-        } else if start_dirty == -1 {
-            // Clear only.
-            start_dirty = cleared.start;
-            end_dirty = cleared.start;
-        } else if clear_end < end_dirty {
-            // Put only.
-            clear_end = end_dirty;
-        } else {
-            end_dirty = endcol;
+                )
+            };
         }
+        clear_end = end_dirty;
+    } else if start_dirty == -1 {
+        // Clear only.
+        start_dirty = cleared.start;
+        end_dirty = cleared.start;
+    } else if clear_end < end_dirty {
+        // Put only.
+        clear_end = end_dirty;
+    } else {
+        end_dirty = endcol;
+    }
 
-        if clear_end > start_dirty {
-            if !grid.throttled {
+    if clear_end > start_dirty {
+        if !grid.throttled {
+            unsafe {
                 ui_line(
                     grid,
                     row,
@@ -813,13 +807,13 @@ pub unsafe fn grid_put_linebuf(
                     coloff + clear_end,
                     clear_attr,
                     flags & SLF_WRAP != 0,
-                );
-            } else if grid.tracks_dirty_cols() {
-                // TODO(bfredl): really get rid of the extra pseudo terminal
-                // in message.c by using a line-buffer copy for the
-                // "throttled message line".
-                grid.raise_dirty_col(row, clear_end);
-            }
+                )
+            };
+        } else if grid.tracks_dirty_cols() {
+            // TODO(bfredl): really get rid of the extra pseudo terminal
+            // in message.c by using a line-buffer copy for the
+            // "throttled message line".
+            grid.raise_dirty_col(row, clear_end);
         }
     }
 }
