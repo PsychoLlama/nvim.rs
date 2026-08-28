@@ -17,88 +17,86 @@ pub unsafe fn nvim_get_context(
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut types: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        if has_key((*opts).is_set__context_, KEYSET_OPTIDX_context__types) {
-            types = (*opts).types;
-        }
-        let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {
-            0 as ::core::ffi::c_int
-        } else {
-            kCtxAll.get()
-        };
-        if types.size > 0 as size_t {
-            let mut i: size_t = 0 as size_t;
-            while i < types.size {
-                if (*types.items.add(i)).type_0 as ::core::ffi::c_uint
-                    == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    let s: *const ::core::ffi::c_char = (*types.items.add(i)).data.string.data();
-                    if strequal(s, c"regs".as_ptr()) {
-                        int_types |= kCtxRegs as ::core::ffi::c_int;
-                    } else if strequal(s, c"jumps".as_ptr()) {
-                        int_types |= kCtxJumps as ::core::ffi::c_int;
-                    } else if strequal(s, c"bufs".as_ptr()) {
-                        int_types |= kCtxBufs as ::core::ffi::c_int;
-                    } else if strequal(s, c"gvars".as_ptr()) {
-                        int_types |= kCtxGVars as ::core::ffi::c_int;
-                    } else if strequal(s, c"sfuncs".as_ptr()) {
-                        int_types |= kCtxSFuncs as ::core::ffi::c_int;
-                    } else if strequal(s, c"funcs".as_ptr()) {
-                        int_types |= kCtxFuncs as ::core::ffi::c_int;
-                    } else if true {
-                        api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true);
-                        return Dict {
-                            size: 0 as size_t,
-                            capacity: 0 as size_t,
-                            items: ::core::ptr::null_mut::<KeyValuePair>(),
-                        }
-                        .reported(error);
-                    }
-                }
-                i = i.wrapping_add(1);
-            }
-        }
-        let mut ctx: Context = CONTEXT_INIT;
-        ctx_save(&raw mut ctx, int_types);
-        let mut dict: Dict = ctx_to_dict(&raw mut ctx, arena);
-        ctx_free(&raw mut ctx);
-        dict.reported(error)
+    let mut types: Array = Array {
+        size: 0 as size_t,
+        capacity: 0 as size_t,
+        items: ::core::ptr::null_mut::<Object>(),
+    };
+    if has_key(
+        unsafe { (*opts).is_set__context_ },
+        KEYSET_OPTIDX_context__types,
+    ) {
+        types = unsafe { (*opts).types };
     }
+    let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {
+        0 as ::core::ffi::c_int
+    } else {
+        kCtxAll.get()
+    };
+    if types.size > 0 as size_t {
+        let mut i: size_t = 0 as size_t;
+        while i < types.size {
+            if unsafe { (*types.items.add(i)).type_0 } as ::core::ffi::c_uint
+                == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+                let s: *const ::core::ffi::c_char =
+                    unsafe { (*types.items.add(i)).data.string }.data();
+                if unsafe { strequal(s, c"regs".as_ptr()) } {
+                    int_types |= kCtxRegs as ::core::ffi::c_int;
+                } else if unsafe { strequal(s, c"jumps".as_ptr()) } {
+                    int_types |= kCtxJumps as ::core::ffi::c_int;
+                } else if unsafe { strequal(s, c"bufs".as_ptr()) } {
+                    int_types |= kCtxBufs as ::core::ffi::c_int;
+                } else if unsafe { strequal(s, c"gvars".as_ptr()) } {
+                    int_types |= kCtxGVars as ::core::ffi::c_int;
+                } else if unsafe { strequal(s, c"sfuncs".as_ptr()) } {
+                    int_types |= kCtxSFuncs as ::core::ffi::c_int;
+                } else if unsafe { strequal(s, c"funcs".as_ptr()) } {
+                    int_types |= kCtxFuncs as ::core::ffi::c_int;
+                } else if true {
+                    unsafe { api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true) };
+                    return Dict {
+                        size: 0 as size_t,
+                        capacity: 0 as size_t,
+                        items: ::core::ptr::null_mut::<KeyValuePair>(),
+                    }
+                    .reported(error);
+                }
+            }
+            i = i.wrapping_add(1);
+        }
+    }
+    let mut ctx: Context = CONTEXT_INIT;
+    unsafe { ctx_save(&raw mut ctx, int_types) };
+    let mut dict: Dict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
+    unsafe { ctx_free(&raw mut ctx) };
+    dict.reported(error)
 }
 
 pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut ctx: Context = CONTEXT_INIT;
-        let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
-        did_emsg.set(0);
-        ctx_from_dict(dict, &raw mut ctx, err);
-        if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-            ctx_restore(&raw mut ctx, kCtxAll.get());
-        }
-        ctx_free(&raw mut ctx);
-        did_emsg.set(save_did_emsg);
-        NIL.reported(error)
+    let mut ctx: Context = CONTEXT_INIT;
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    did_emsg.set(0);
+    unsafe { ctx_from_dict(dict, &raw mut ctx, err) };
+    if !(unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+        unsafe { ctx_restore(&raw mut ctx, kCtxAll.get()) };
     }
+    unsafe { ctx_free(&raw mut ctx) };
+    did_emsg.set(save_did_emsg);
+    NIL.reported(error)
 }
 
 pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
-    unsafe {
-        let mut rv: Dict = arena_dict(arena, 2 as size_t);
-        let mut modestr: *mut ::core::ffi::c_char =
-            arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) as *mut ::core::ffi::c_char;
-        // The name is copied into the arena because the `Dict` borrows it;
-        // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
-        modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t);
-        let mut blocked: bool = input_blocking();
-        dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr)));
-        dict_put(&mut rv, c"blocking", Object::boolean(blocked));
-        rv
-    }
+    let mut rv: Dict = arena_dict(arena, 2 as size_t);
+    let mut modestr: *mut ::core::ffi::c_char =
+        unsafe { arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) } as *mut ::core::ffi::c_char;
+    // The name is copied into the arena because the `Dict` borrows it;
+    // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
+    unsafe { modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t) };
+    let mut blocked: bool = input_blocking();
+    unsafe { dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr))) };
+    unsafe { dict_put(&mut rv, c"blocking", Object::boolean(blocked)) };
+    rv
 }

@@ -18,53 +18,53 @@ use crate::keycodes::{
 };
 
 pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
-    unsafe {
-        let mut remap: bool = true;
-        let mut insert: bool = false;
-        let mut typed: bool = false;
-        let mut execute: bool = false;
-        let mut dangerous: bool = false;
-        let mut lowlevel: bool = false;
-        let mut i: size_t = 0 as size_t;
-        while i < mode.len() {
-            match *mode.data().add(i) as ::core::ffi::c_int {
-                110 => {
-                    remap = false;
-                }
-                109 => {
-                    remap = true;
-                }
-                116 => {
-                    typed = true;
-                }
-                105 => {
-                    insert = true;
-                }
-                120 => {
-                    execute = true;
-                }
-                33 => {
-                    dangerous = true;
-                }
-                76 => {
-                    lowlevel = true;
-                }
-                _ => {}
+    let mut remap: bool = true;
+    let mut insert: bool = false;
+    let mut typed: bool = false;
+    let mut execute: bool = false;
+    let mut dangerous: bool = false;
+    let mut lowlevel: bool = false;
+    let mut i: size_t = 0 as size_t;
+    while i < mode.len() {
+        match unsafe { *mode.data().add(i) } as ::core::ffi::c_int {
+            110 => {
+                remap = false;
             }
-            i = i.wrapping_add(1);
+            109 => {
+                remap = true;
+            }
+            116 => {
+                typed = true;
+            }
+            105 => {
+                insert = true;
+            }
+            120 => {
+                execute = true;
+            }
+            33 => {
+                dangerous = true;
+            }
+            76 => {
+                lowlevel = true;
+            }
+            _ => {}
         }
-        if keys.len() == 0 as size_t && !execute {
-            return;
-        }
-        let mut keys_esc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if escape_ks {
-            keys_esc = vim_strsave_escape_ks(keys.data());
-        } else {
-            keys_esc = keys.data();
-        }
-        if lowlevel {
-            input_enqueue_raw(keys_esc, strlen(keys_esc));
-        } else {
+        i = i.wrapping_add(1);
+    }
+    if keys.len() == 0 as size_t && !execute {
+        return;
+    }
+    let mut keys_esc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    if escape_ks {
+        keys_esc = unsafe { vim_strsave_escape_ks(keys.data()) };
+    } else {
+        keys_esc = keys.data();
+    }
+    if lowlevel {
+        unsafe { input_enqueue_raw(keys_esc, strlen(keys_esc)) };
+    } else {
+        unsafe {
             ins_typebuf(
                 keys_esc,
                 if remap as ::core::ffi::c_int != 0 {
@@ -79,34 +79,32 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
                 },
                 !typed,
                 false,
-            );
-            if vgetc_busy.get() != 0 {
-                typebuf_was_filled.set(true);
-            }
+            )
+        };
+        if vgetc_busy.get() != 0 {
+            typebuf_was_filled.set(true);
         }
-        if escape_ks {
-            xfree(keys_esc as *mut ::core::ffi::c_void);
+    }
+    if escape_ks {
+        unsafe { xfree(keys_esc as *mut ::core::ffi::c_void) };
+    }
+    if execute {
+        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
+        msg_scroll.set(0);
+        if !dangerous {
+            ex_normal_busy.set(ex_normal_busy.get() + 1);
         }
-        if execute {
-            let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-            msg_scroll.set(0);
-            if !dangerous {
-                ex_normal_busy.set(ex_normal_busy.get() + 1);
-            }
-            exec_normal(true, lowlevel);
-            if !dangerous {
-                ex_normal_busy.set(ex_normal_busy.get() - 1);
-            }
-            msg_scroll.set(msg_scroll.get() | save_msg_scroll);
+        unsafe { exec_normal(true, lowlevel) };
+        if !dangerous {
+            ex_normal_busy.set(ex_normal_busy.get() - 1);
         }
+        msg_scroll.set(msg_scroll.get() | save_msg_scroll);
     }
 }
 
 pub unsafe fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
-    unsafe {
-        may_trigger_vim_suspend_resume(false);
-        input_enqueue(channel_id, keys) as Integer
-    }
+    may_trigger_vim_suspend_resume(false);
+    unsafe { input_enqueue(channel_id, keys) as Integer }
 }
 
 pub unsafe fn nvim_input_mouse(
@@ -119,91 +117,92 @@ pub unsafe fn nvim_input_mouse(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut code: ::core::ffi::c_int = 0;
-        let mut modmask: ::core::ffi::c_int = 0;
-        may_trigger_vim_suspend_resume(false);
-        '_error: {
-            if !(button.data().is_null() || action.data().is_null()) {
-                code = 0 as ::core::ffi::c_int;
-                if strequal(button.data(), c"left".as_ptr()) {
-                    code = KE_LEFTMOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"middle".as_ptr()) {
-                    code = KE_MIDDLEMOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"right".as_ptr()) {
-                    code = KE_RIGHTMOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"wheel".as_ptr()) {
-                    code = KE_MOUSEDOWN as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"x1".as_ptr()) {
-                    code = KE_X1MOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"x2".as_ptr()) {
-                    code = KE_X2MOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data(), c"move".as_ptr()) {
-                    code = KE_MOUSEMOVE as ::core::ffi::c_int;
-                } else {
-                    break '_error;
-                }
-                if code == KE_MOUSEDOWN as ::core::ffi::c_int {
-                    if strequal(action.data(), c"down".as_ptr()) {
-                        code = KE_MOUSEUP as ::core::ffi::c_int;
-                    } else if !strequal(action.data(), c"up".as_ptr()) {
-                        if strequal(action.data(), c"left".as_ptr()) {
-                            code = KE_MOUSERIGHT as ::core::ffi::c_int;
-                        } else if strequal(action.data(), c"right".as_ptr()) {
-                            code = KE_MOUSELEFT as ::core::ffi::c_int;
-                        } else {
-                            break '_error;
-                        }
-                    }
-                } else if code != KE_MOUSEMOVE as ::core::ffi::c_int
-                    && !strequal(action.data(), c"press".as_ptr())
-                {
-                    if strequal(action.data(), c"drag".as_ptr()) {
-                        code +=
-                            KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
-                    } else if strequal(action.data(), c"release".as_ptr()) {
-                        code += KE_LEFTRELEASE as ::core::ffi::c_int
-                            - KE_LEFTMOUSE as ::core::ffi::c_int;
+    let mut code: ::core::ffi::c_int = 0;
+    let mut modmask: ::core::ffi::c_int = 0;
+    may_trigger_vim_suspend_resume(false);
+    '_error: {
+        if !(button.data().is_null() || action.data().is_null()) {
+            code = 0 as ::core::ffi::c_int;
+            if unsafe { strequal(button.data(), c"left".as_ptr()) } {
+                code = KE_LEFTMOUSE as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"middle".as_ptr()) } {
+                code = KE_MIDDLEMOUSE as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"right".as_ptr()) } {
+                code = KE_RIGHTMOUSE as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"wheel".as_ptr()) } {
+                code = KE_MOUSEDOWN as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"x1".as_ptr()) } {
+                code = KE_X1MOUSE as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"x2".as_ptr()) } {
+                code = KE_X2MOUSE as ::core::ffi::c_int;
+            } else if unsafe { strequal(button.data(), c"move".as_ptr()) } {
+                code = KE_MOUSEMOVE as ::core::ffi::c_int;
+            } else {
+                break '_error;
+            }
+            if code == KE_MOUSEDOWN as ::core::ffi::c_int {
+                if unsafe { strequal(action.data(), c"down".as_ptr()) } {
+                    code = KE_MOUSEUP as ::core::ffi::c_int;
+                } else if !unsafe { strequal(action.data(), c"up".as_ptr()) } {
+                    if unsafe { strequal(action.data(), c"left".as_ptr()) } {
+                        code = KE_MOUSERIGHT as ::core::ffi::c_int;
+                    } else if unsafe { strequal(action.data(), c"right".as_ptr()) } {
+                        code = KE_MOUSELEFT as ::core::ffi::c_int;
                     } else {
                         break '_error;
                     }
                 }
-                modmask = 0 as ::core::ffi::c_int;
-                let mut i: size_t = 0 as size_t;
-                while i < modifier.len() {
-                    let mut byte: ::core::ffi::c_char = *modifier.data().add(i);
-                    if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
-                        let mut mod_0: ::core::ffi::c_int =
-                            name_to_mod_mask(byte as ::core::ffi::c_int);
-                        if !(mod_0 != 0 as ::core::ffi::c_int) {
+            } else if code != KE_MOUSEMOVE as ::core::ffi::c_int
+                && !unsafe { strequal(action.data(), c"press".as_ptr()) }
+            {
+                if unsafe { strequal(action.data(), c"drag".as_ptr()) } {
+                    code += KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
+                } else if unsafe { strequal(action.data(), c"release".as_ptr()) } {
+                    code +=
+                        KE_LEFTRELEASE as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
+                } else {
+                    break '_error;
+                }
+            }
+            modmask = 0 as ::core::ffi::c_int;
+            let mut i: size_t = 0 as size_t;
+            while i < modifier.len() {
+                let mut byte: ::core::ffi::c_char = unsafe { *modifier.data().add(i) };
+                if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
+                    let mut mod_0: ::core::ffi::c_int =
+                        name_to_mod_mask(byte as ::core::ffi::c_int);
+                    if !(mod_0 != 0 as ::core::ffi::c_int) {
+                        unsafe {
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
                                 c"Invalid modifier: %c".as_ptr(),
                                 byte as ::core::ffi::c_int,
-                            );
-                            return ().reported(error);
-                        }
-                        modmask |= mod_0;
+                            )
+                        };
+                        return ().reported(error);
                     }
-                    i = i.wrapping_add(1);
+                    modmask |= mod_0;
                 }
-                input_enqueue_mouse(
-                    code,
-                    modmask as uint8_t,
-                    grid as ::core::ffi::c_int,
-                    row as ::core::ffi::c_int,
-                    col as ::core::ffi::c_int,
-                );
-                return ().reported(error);
+                i = i.wrapping_add(1);
             }
+            input_enqueue_mouse(
+                code,
+                modmask as uint8_t,
+                grid as ::core::ffi::c_int,
+                row as ::core::ffi::c_int,
+                col as ::core::ffi::c_int,
+            );
+            return ().reported(error);
         }
+    }
+    unsafe {
         api_set_error(
             err,
             kErrorTypeValidation,
             c"invalid button or action".as_ptr(),
-        );
-    }
+        )
+    };
     ().reported(error)
 }
 
@@ -213,24 +212,24 @@ pub unsafe fn nvim_replace_termcodes(
     do_lt: Boolean,
     special: Boolean,
 ) -> String_0 {
+    if str.len() == 0 as size_t {
+        return String_0::from_raw_parts(
+            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            0 as size_t,
+        );
+    }
+    let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    if from_part {
+        flags |= REPTERM_FROM_PART as ::core::ffi::c_int;
+    }
+    if do_lt {
+        flags |= REPTERM_DO_LT as ::core::ffi::c_int;
+    }
+    if !special {
+        flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
+    }
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     unsafe {
-        if str.len() == 0 as size_t {
-            return String_0::from_raw_parts(
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-        }
-        let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if from_part {
-            flags |= REPTERM_FROM_PART as ::core::ffi::c_int;
-        }
-        if do_lt {
-            flags |= REPTERM_DO_LT as ::core::ffi::c_int;
-        }
-        if !special {
-            flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
-        }
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         replace_termcodes(
             str.data(),
             str.len(),
@@ -239,9 +238,9 @@ pub unsafe fn nvim_replace_termcodes(
             flags,
             ::core::ptr::null_mut::<bool>(),
             p_cpo.get(),
-        );
-        cstr_as_string(ptr)
-    }
+        )
+    };
+    unsafe { cstr_as_string(ptr) }
 }
 
 pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
@@ -257,9 +256,7 @@ pub unsafe fn nvim_set_keymap(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, err);
-    }
+    unsafe { modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, err) };
     ().reported(error)
 }
 

@@ -6,8 +6,8 @@ use crate::api::private::converter::vim_to_object;
 use crate::api::private::helpers::{
     api_metadata, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
     arena_take_arraybuilder, copy_array, copy_dict, copy_object, copy_string, cstr_as_string,
-    dict_get_value, dict_set_var, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
-    get_default_stl_hl, parse_hl_msg, set_mark, string_to_array, try_enter, try_leave,
+    dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle, get_default_stl_hl,
+    parse_hl_msg, set_mark, string_to_array, try_enter, try_leave,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
 use crate::ascii::ascii_isdigit;
@@ -54,7 +54,7 @@ use crate::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
 use crate::main::{
-    Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, curtab, curwin, did_emsg, e_cmdwin,
+    Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, curwin, did_emsg, e_cmdwin,
     e_invchan, ex_normal_busy, g_stats, lines_left, msg_didany, msg_no_more, msg_scroll,
     must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz, redraw_tabline,
     tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
@@ -103,8 +103,8 @@ use crate::types::{
     kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T,
     mpack_token_type_t, msg_data, msglist_T, object, object_data, pos_T, ptrdiff_t, schar_T,
-    scid_T, size_t, statuscol_T, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T,
-    xfmark_T, yankreg_T,
+    scid_T, size_t, statuscol_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T,
+    yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

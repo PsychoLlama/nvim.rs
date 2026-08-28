@@ -34,48 +34,53 @@ pub unsafe fn nvim_set_hl(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut hl_id: ::core::ffi::c_int = syn_check_group(name.data(), name.len());
-        if !(hl_id != 0 as ::core::ffi::c_int) {
+    let mut hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
+    if !(hl_id != 0 as ::core::ffi::c_int) {
+        unsafe {
             api_err_invalid(
                 err,
                 c"highlight name".as_ptr(),
                 name.data(),
                 0 as int64_t,
                 true,
-            );
-            return ().reported(error);
-        }
-        let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        if has_key((*val).is_set__highlight_, KEYSET_OPTIDX_highlight__url) {
-            api_set_error(err, kErrorTypeValidation, c"Invalid key: 'url'".as_ptr());
-            return ().reported(error);
-        }
-        let mut update: bool = has_key((*val).is_set__highlight_, KEYSET_OPTIDX_highlight__update)
-            && (*val).update as ::core::ffi::c_int != 0;
-        let mut base: Option<&HlAttrs> = None;
-        let mut base_attrs: HlAttrs = HlAttrs {
-            rgb_ae_attr: HlAttrFlags::NONE,
-            cterm_ae_attr: HlAttrFlags::NONE,
-            rgb_fg_color: 0,
-            rgb_bg_color: 0,
-            rgb_sp_color: 0,
-            cterm_fg_color: 0,
-            cterm_bg_color: 0,
-            hl_blend: 0,
-            url: 0,
+            )
         };
-        if update as ::core::ffi::c_int != 0
-            && let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None)
-        {
-            base_attrs = attrs;
-            base = Some(&base_attrs);
-        }
-        let mut attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base, err);
-        if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-            let _sctx = api_set_sctx(channel_id);
-            ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
-        }
+        return ().reported(error);
+    }
+    let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+    if has_key(
+        unsafe { (*val).is_set__highlight_ },
+        KEYSET_OPTIDX_highlight__url,
+    ) {
+        unsafe { api_set_error(err, kErrorTypeValidation, c"Invalid key: 'url'".as_ptr()) };
+        return ().reported(error);
+    }
+    let mut update: bool = has_key(
+        unsafe { (*val).is_set__highlight_ },
+        KEYSET_OPTIDX_highlight__update,
+    ) && unsafe { (*val).update } as ::core::ffi::c_int != 0;
+    let mut base: Option<&HlAttrs> = None;
+    let mut base_attrs: HlAttrs = HlAttrs {
+        rgb_ae_attr: HlAttrFlags::NONE,
+        cterm_ae_attr: HlAttrFlags::NONE,
+        rgb_fg_color: 0,
+        rgb_bg_color: 0,
+        rgb_sp_color: 0,
+        cterm_fg_color: 0,
+        cterm_bg_color: 0,
+        hl_blend: 0,
+        url: 0,
+    };
+    if update as ::core::ffi::c_int != 0
+        && let Some(attrs) = unsafe { hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) }
+    {
+        base_attrs = attrs;
+        base = Some(&base_attrs);
+    }
+    let mut attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, err) };
+    if !(unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+        let _sctx = api_set_sctx(channel_id);
+        unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
     }
     ().reported(error)
 }
@@ -83,64 +88,61 @@ pub unsafe fn nvim_set_hl(
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        if has_key((*opts).is_set__get_ns_, KEYSET_OPTIDX_get_ns__winid) {
-            let mut win: *mut win_T = find_window_by_handle((*opts).winid, err);
-            if win.is_null() {
-                return (0 as Integer).reported(error);
-            }
-            ((*win).w_ns_hl as Integer).reported(error)
-        } else {
-            (ns_hl_global.get() as Integer).reported(error)
+    if has_key(
+        unsafe { (*opts).is_set__get_ns_ },
+        KEYSET_OPTIDX_get_ns__winid,
+    ) {
+        let mut win: *mut win_T = unsafe { find_window_by_handle((*opts).winid, err) };
+        if win.is_null() {
+            return (0 as Integer).reported(error);
         }
+        (unsafe { (*win).w_ns_hl } as Integer).reported(error)
+    } else {
+        (ns_hl_global.get() as Integer).reported(error)
     }
 }
 
 pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        if !(ns_id >= 0 as Integer) {
+    if !(ns_id >= 0 as Integer) {
+        unsafe {
             api_err_invalid(
                 err,
                 c"namespace".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 ns_id as int64_t,
                 false,
-            );
-            return ().reported(error);
-        }
-        ns_hl_global.set(ns_id as NS);
-        hl_check_ns();
-        redraw_all_later(UPD_NOT_VALID);
+            )
+        };
+        return ().reported(error);
     }
+    ns_hl_global.set(ns_id as NS);
+    unsafe { hl_check_ns() };
+    unsafe { redraw_all_later(UPD_NOT_VALID) };
     ().reported(error)
 }
 
 pub unsafe fn nvim_set_hl_ns_fast(ns_id: Integer) {
-    unsafe {
-        ns_hl_fast.set(ns_id as NS);
-        hl_check_ns();
-    }
+    ns_hl_fast.set(ns_id as NS);
+    unsafe { hl_check_ns() };
 }
 
 pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
-    unsafe {
-        // An API string is NUL-terminated.
-        name_to_color(::core::ffi::CStr::from_ptr(name.data())).0 as Integer
-    }
+    // An API string is NUL-terminated.
+    name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
 }
 
 pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> Dict {
-    unsafe {
-        let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
-        for entry in &COLOR_NAMES {
+    let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
+    for entry in &COLOR_NAMES {
+        unsafe {
             dict_put_str(
                 &mut colors,
                 cstr_as_string(entry.name.as_ptr()),
                 Object::integer(entry.color as Integer),
-            );
-        }
-        colors
+            )
+        };
     }
+    colors
 }

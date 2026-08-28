@@ -220,8 +220,8 @@ impl Context {
                         c"out of range".as_ptr(),
                         0,
                         false,
-                    );
-                }
+                    )
+                };
                 return None;
             }
             use_bools += 1;
@@ -302,8 +302,8 @@ unsafe fn statuscol_state(
             &raw mut line_id,
             &raw mut cul_id,
             &raw mut num_id,
-        );
-    }
+        )
+    };
     statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {
@@ -329,12 +329,10 @@ unsafe fn statuscol_state(
         HLF_N
     };
     // SAFETY: three plain number variables of the editor's own.
-    unsafe {
-        set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
-        let rel = labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long);
-        set_vim_var_nr(Vv::Relnum, rel as varnumber_T);
-        set_vim_var_nr(Vv::Virtnum, 0 as varnumber_T);
-    }
+    unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
+    let rel = unsafe { labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long) };
+    unsafe { set_vim_var_nr(Vv::Relnum, rel as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Virtnum, 0 as varnumber_T) };
     (stc_hl_id, if on_cursorline { HLF_CLS } else { HLF_SC })
 }
 
@@ -392,10 +390,8 @@ fn highlight_dicts(
             );
             // SAFETY: a local buffer with room for the widest `%d`, and an
             // arena copy of it that outlives the reply.
-            unsafe {
-                snprintf(out, room, fmt, run.userhl);
-                arena_strdup(arena, out)
-            }
+            unsafe { snprintf(out, room, fmt, run.userhl) };
+            unsafe { arena_strdup(arena, out) }
         };
         // The sign column's own group combines with the sign's highlight,
         // the fold column's with nothing, everything else with the default.
@@ -445,8 +441,8 @@ pub unsafe fn nvim__complete_set(
                 err,
                 kErrorTypeException,
                 c"completeopt option does not include popup".as_ptr(),
-            );
-        }
+            )
+        };
         return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {

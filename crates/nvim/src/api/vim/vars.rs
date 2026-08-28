@@ -44,35 +44,37 @@ pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
 pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut di: *mut dictitem_T =
-            tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t);
-        if di.is_null() {
-            let mut found: bool =
-                script_autoload(name.data(), name.len(), false) as ::core::ffi::c_int != 0
-                    && !aborting();
-            if !found {
+    let mut di: *mut dictitem_T =
+        unsafe { tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t) };
+    if di.is_null() {
+        let mut found: bool =
+            unsafe { script_autoload(name.data(), name.len(), false) } as ::core::ffi::c_int != 0
+                && !aborting();
+        if !found {
+            unsafe {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"Key not found: %s".as_ptr(),
                     name.data(),
-                );
-                return NIL.reported(error);
-            }
-            di = tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t);
+                )
+            };
+            return NIL.reported(error);
         }
-        if di.is_null() {
+        di = unsafe { tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t) };
+    }
+    if di.is_null() {
+        unsafe {
             api_set_error(
                 err,
                 kErrorTypeValidation,
                 c"Key not found: %s".as_ptr(),
                 name.data(),
-            );
-            return NIL.reported(error);
-        }
-        vim_to_object(&raw mut (*di).di_tv, arena, true).reported(error)
+            )
+        };
+        return NIL.reported(error);
     }
+    unsafe { vim_to_object(&raw mut (*di).di_tv, arena, true) }.reported(error)
 }
 
 pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
@@ -87,8 +89,8 @@ pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
             false,
             ::core::ptr::null_mut::<Arena>(),
             err,
-        );
-    }
+        )
+    };
     ().reported(error)
 }
 
@@ -104,8 +106,8 @@ pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
             false,
             ::core::ptr::null_mut::<Arena>(),
             err,
-        );
-    }
+        )
+    };
     ().reported(error)
 }
 
@@ -127,7 +129,7 @@ pub unsafe fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> 
             false,
             ::core::ptr::null_mut::<Arena>(),
             err,
-        );
-    }
+        )
+    };
     ().reported(error)
 }

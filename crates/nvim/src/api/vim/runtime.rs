@@ -28,8 +28,8 @@ pub unsafe fn nvim_exec_lua(
             arena,
             err,
         )
-        .reported(error)
     }
+    .reported(error)
 }
 
 pub unsafe fn nvim__exec_lua_fast(
@@ -43,19 +43,19 @@ pub unsafe fn nvim__exec_lua_fast(
 pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        if !(text.len() <= 2147483647 as ::core::ffi::c_int as size_t) {
+    if !(text.len() <= 2147483647 as ::core::ffi::c_int as size_t) {
+        unsafe {
             api_err_invalid(
                 err,
                 c"text length".as_ptr(),
                 c"(too long)".as_ptr(),
                 0 as int64_t,
                 true,
-            );
-            return (0 as Integer).reported(error);
-        }
-        (mb_string2cells(text.data()) as Integer).reported(error)
+            )
+        };
+        return (0 as Integer).reported(error);
     }
+    (unsafe { mb_string2cells(text.data()) } as Integer).reported(error)
 }
 
 pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error> {
@@ -73,36 +73,35 @@ pub unsafe fn nvim_get_runtime_file(
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
+    let mut cookie: RuntimeCookie = RuntimeCookie {
+        rv: ArrayBuilder {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<Object>(),
+            init_array: [NIL; 16],
+        },
+        arena,
+    };
+    cookie.rv.capacity = ::core::mem::size_of::<[Object; 16]>()
+        .wrapping_div(::core::mem::size_of::<Object>())
+        .wrapping_div(
+            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
+                == 0) as ::core::ffi::c_int as usize,
+        ) as size_t;
+    cookie.rv.size = 0 as size_t;
+    cookie.rv.items = &raw mut cookie.rv.init_array as *mut Object;
+    let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all as ::core::ffi::c_int != 0);
+    let mut tstate: TryState = TryState {
+        current_exception: ::core::ptr::null_mut::<except_T>(),
+        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+        msg_list: ::core::ptr::null::<*const msglist_T>(),
+        got_int: 0,
+        did_throw: false,
+        need_rethrow: 0,
+        did_emsg: 0,
+    };
+    unsafe { try_enter(&raw mut tstate) };
     unsafe {
-        let mut cookie: RuntimeCookie = RuntimeCookie {
-            rv: ArrayBuilder {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-                init_array: [NIL; 16],
-            },
-            arena,
-        };
-        cookie.rv.capacity = ::core::mem::size_of::<[Object; 16]>()
-            .wrapping_div(::core::mem::size_of::<Object>())
-            .wrapping_div(
-                (::core::mem::size_of::<[Object; 16]>()
-                    .wrapping_rem(::core::mem::size_of::<Object>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        cookie.rv.size = 0 as size_t;
-        cookie.rv.items = &raw mut cookie.rv.init_array as *mut Object;
-        let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all as ::core::ffi::c_int != 0);
-        let mut tstate: TryState = TryState {
-            current_exception: ::core::ptr::null_mut::<except_T>(),
-            private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-            msg_list: ::core::ptr::null::<*const msglist_T>(),
-            got_int: 0,
-            did_throw: false,
-            need_rethrow: 0,
-            did_emsg: 0,
-        };
-        try_enter(&raw mut tstate);
         do_in_runtimepath(
             (if !name.is_empty() {
                 name.data() as *const ::core::ffi::c_char
@@ -120,10 +119,10 @@ pub unsafe fn nvim_get_runtime_file(
                     ) -> bool,
             ),
             &raw mut cookie as *mut ::core::ffi::c_void,
-        );
-        try_leave(&raw mut tstate, err);
-        arena_take_arraybuilder(arena, &raw mut cookie.rv).reported(error)
-    }
+        )
+    };
+    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) }.reported(error)
 }
 
 unsafe fn find_runtime_cb(
@@ -132,28 +131,32 @@ unsafe fn find_runtime_cb(
     mut all: bool,
     mut c: *mut ::core::ffi::c_void,
 ) -> bool {
-    unsafe {
-        let mut cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < num_fnames {
-            // `kv_push`, whose growth step c2rust expanded inline.
-            InitVec::new(
-                &mut (*cookie).rv.size,
-                &mut (*cookie).rv.capacity,
-                &mut (*cookie).rv.items,
-                &mut (*cookie).rv.init_array,
-            )
-            .push(Object::string(arena_string(
-                (*cookie).arena,
-                cstr_as_string(*fnames.offset(i as isize)),
-            )));
-            if !all {
-                return true;
-            }
-            i += 1;
+    let mut cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
+    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    while i < num_fnames {
+        // SAFETY: `fnames` names `num_fnames` C strings, and `cookie` is the
+        // `RuntimeCookie` this walk was started with -- the copy the arena
+        // takes is what outlives it.
+        let name = unsafe {
+            let found = cstr_as_string(*fnames.offset(i as isize));
+            Object::string(arena_string((*cookie).arena, found))
+        };
+        // SAFETY: as above. The borrow ends with the push.
+        let rv = unsafe { &mut (*cookie).rv };
+        // `kv_push`, whose growth step c2rust expanded inline.
+        InitVec::new(
+            &mut rv.size,
+            &mut rv.capacity,
+            &mut rv.items,
+            &mut rv.init_array,
+        )
+        .push(name);
+        if !all {
+            return true;
         }
-        num_fnames > 0 as ::core::ffi::c_int
+        i += 1;
     }
+    num_fnames > 0 as ::core::ffi::c_int
 }
 
 pub unsafe fn nvim__get_lib_dir() -> String_0 {
@@ -168,74 +171,80 @@ pub unsafe fn nvim__get_runtime(
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        if !(!(*opts).do_source || nlua_is_deferred_safe() as ::core::ffi::c_int != 0) {
+    if !(!unsafe { (*opts).do_source }
+        || unsafe { nlua_is_deferred_safe() } as ::core::ffi::c_int != 0)
+    {
+        unsafe {
             api_set_error(
                 err,
                 kErrorTypeValidation,
                 c"%s".as_ptr(),
                 c"'do_source' used in fast callback".as_ptr(),
-            );
+            )
+        };
+    }
+    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        return Array {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<Object>(),
         }
-        if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            }
-            .reported(error);
-        }
-        let mut res: Array = runtime_get_named((*opts).is_lua, pat, all, arena);
-        if (*opts).do_source {
-            let mut i: size_t = 0 as size_t;
-            while i < res.size {
-                let mut name: String_0 = (*res.items.add(i)).data.string;
+        .reported(error);
+    }
+    let mut res: Array = unsafe { runtime_get_named((*opts).is_lua, pat, all, arena) };
+    if unsafe { (*opts).do_source } {
+        let mut i: size_t = 0 as size_t;
+        while i < res.size {
+            let mut name: String_0 = unsafe { (*res.items.add(i)).data.string };
+            unsafe {
                 do_source(
                     name.data(),
                     false,
                     DOSO_NONE as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                );
-                i = i.wrapping_add(1);
-            }
+                )
+            };
+            i = i.wrapping_add(1);
         }
-        res.reported(error)
     }
+    res.reported(error)
 }
 
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        if !(dir.len() < 4096 as size_t) {
+    if !(dir.len() < 4096 as size_t) {
+        unsafe {
             api_err_invalid(
                 err,
                 c"directory name".as_ptr(),
                 c"(too long)".as_ptr(),
                 0 as int64_t,
                 true,
-            );
-            return ().reported(error);
-        }
-        let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
+            )
+        };
+        return ().reported(error);
+    }
+    let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
+    unsafe {
         memcpy(
             &raw mut string as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             dir.data() as *const ::core::ffi::c_void,
             dir.len(),
-        );
-        string[dir.len()] = NUL as ::core::ffi::c_char;
-        let mut tstate: TryState = TryState {
-            current_exception: ::core::ptr::null_mut::<except_T>(),
-            private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-            msg_list: ::core::ptr::null::<*const msglist_T>(),
-            got_int: 0,
-            did_throw: false,
-            need_rethrow: 0,
-            did_emsg: 0,
-        };
-        try_enter(&raw mut tstate);
-        changedir_func(&raw mut string as *mut ::core::ffi::c_char, kCdScopeGlobal);
-        try_leave(&raw mut tstate, err);
-    }
+        )
+    };
+    string[dir.len()] = NUL as ::core::ffi::c_char;
+    let mut tstate: TryState = TryState {
+        current_exception: ::core::ptr::null_mut::<except_T>(),
+        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+        msg_list: ::core::ptr::null::<*const msglist_T>(),
+        got_int: 0,
+        did_throw: false,
+        need_rethrow: 0,
+        did_emsg: 0,
+    };
+    unsafe { try_enter(&raw mut tstate) };
+    unsafe { changedir_func(&raw mut string as *mut ::core::ffi::c_char, kCdScopeGlobal) };
+    unsafe { try_leave(&raw mut tstate, err) };
     ().reported(error)
 }
