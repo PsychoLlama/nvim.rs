@@ -48,6 +48,7 @@ use crate::types::{
     list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
     varnumber_T, win_T,
 };
+use crate::winlayer::{Live, Win};
 use ::libc::strlen;
 
 mod searchhl;
@@ -56,6 +57,18 @@ mod vimscript;
 pub(crate) use self::vimscript::*;
 
 use crate::regexp::re_multiline;
+
+/// The highlight state of one matcher — a window's `'hlsearch'` state or one
+/// match's — whose holder has promised it outlives the value.
+///
+/// The `'hlsearch'` one is a `static` in `drawscreen`; a match's is a field of
+/// the `matchitem_T` the window's list owns, so both live as long as the
+/// redraw that reads them.
+pub(crate) type Shl = Live<match_T>;
+
+/// One entry of a window's match list, on [`Shl`]'s terms: the window owns it
+/// until `:call matchdelete()` frees it.
+pub(crate) type Mi = Live<matchitem_T>;
 
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
@@ -79,6 +92,8 @@ unsafe fn match_add(
     pos_list: *mut list_T,
     conceal_char: *const c_char,
 ) -> c_int {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
@@ -96,10 +111,10 @@ unsafe fn match_add(
         return -1;
     }
     if id == -1 {
-        id = unsafe { (*wp).w_next_match_id };
-        unsafe { (*wp).w_next_match_id += 1 };
+        id = wp.w_next_match_id;
+        wp.w_next_match_id += 1;
     } else {
-        let mut cur = unsafe { (*wp).w_match_head };
+        let mut cur = wp.w_match_head;
         while !cur.is_null() {
             if unsafe { (*cur).mit_id } == id {
                 unsafe {
@@ -114,8 +129,8 @@ unsafe fn match_add(
         }
         // Keep the auto-allocated ids above every hand-picked one, with
         // room for a few more to be picked soon.
-        if unsafe { (*wp).w_next_match_id } < id + 100 {
-            unsafe { (*wp).w_next_match_id = id + 100 };
+        if wp.w_next_match_id < id + 100 {
+            wp.w_next_match_id = id + 100;
         }
     }
 
@@ -132,33 +147,35 @@ unsafe fn match_add(
         }
     }
 
-    let m: *mut matchitem_T =
-        unsafe { xcalloc(1, ::core::mem::size_of::<matchitem_T>()) }.cast::<matchitem_T>();
+    // SAFETY: a fresh allocation, live until this frame hands it to the
+    // window's match list.
+    let mut m =
+        unsafe { Mi::new(xcalloc(1, ::core::mem::size_of::<matchitem_T>()).cast::<matchitem_T>()) };
     if unsafe { tv_list_len(pos_list) } > 0 {
         unsafe {
-            (*m).mit_pos_array = xcalloc(
+            m.mit_pos_array = xcalloc(
                 tv_list_len(pos_list) as size_t,
                 ::core::mem::size_of::<llpos_T>(),
             )
             .cast::<llpos_T>()
         };
-        unsafe { (*m).mit_pos_count = tv_list_len(pos_list) };
+        unsafe { m.mit_pos_count = tv_list_len(pos_list) };
     }
-    unsafe { (*m).mit_id = id };
-    unsafe { (*m).mit_priority = prio };
+    m.mit_id = id;
+    m.mit_priority = prio;
     unsafe {
-        (*m).mit_pattern = if pat.is_null() {
+        m.mit_pattern = if pat.is_null() {
             ::core::ptr::null_mut()
         } else {
             xstrdup(pat)
         }
     };
-    unsafe { (*m).mit_hlg_id = hlg_id };
-    unsafe { (*m).mit_match.regprog = regprog };
-    unsafe { (*m).mit_match.rmm_ic = 0 };
-    unsafe { (*m).mit_match.rmm_maxcol = 0 };
+    m.mit_hlg_id = hlg_id;
+    m.mit_match.regprog = regprog;
+    m.mit_match.rmm_ic = 0;
+    m.mit_match.rmm_maxcol = 0;
     unsafe {
-        (*m).mit_conceal_char = if conceal_char.is_null() {
+        m.mit_conceal_char = if conceal_char.is_null() {
             0
         } else {
             utf_ptr2char(conceal_char)
@@ -166,19 +183,19 @@ unsafe fn match_add(
     };
 
     if !pos_list.is_null() {
-        match unsafe { fill_pos_array(m, pos_list) } {
+        match unsafe { fill_pos_array(m.raw(), pos_list) } {
             Some((toplnum, botlnum)) if toplnum != 0 => {
-                unsafe { redraw_win_range_later(wp, toplnum, botlnum) };
-                unsafe { (*m).mit_toplnum = toplnum };
-                unsafe { (*m).mit_botlnum = botlnum };
+                unsafe { redraw_win_range_later(wp.raw(), toplnum, botlnum) };
+                m.mit_toplnum = toplnum;
+                m.mit_botlnum = botlnum;
                 rtype = UPD_VALID;
             }
             Some(_) => {}
             None => {
                 unsafe { vim_regfree(regprog) };
-                unsafe { xfree((*m).mit_pattern.cast()) };
-                unsafe { xfree((*m).mit_pos_array.cast()) };
-                unsafe { xfree(m.cast()) };
+                unsafe { xfree(m.mit_pattern.cast()) };
+                unsafe { xfree(m.mit_pos_array.cast()) };
+                unsafe { xfree(m.raw().cast()) };
                 return -1;
             }
         }
@@ -186,20 +203,20 @@ unsafe fn match_add(
 
     // Insert into the list, which is in ascending priority order — so a
     // new match goes *after* every existing one of equal priority.
-    let mut cur = unsafe { (*wp).w_match_head };
+    let mut cur = wp.w_match_head;
     let mut prev = cur;
     while !cur.is_null() && prio >= unsafe { (*cur).mit_priority } {
         prev = cur;
         cur = unsafe { (*cur).mit_next };
     }
     if cur == prev {
-        unsafe { (*wp).w_match_head = m };
+        wp.w_match_head = m.raw();
     } else {
-        unsafe { (*prev).mit_next = m };
+        unsafe { (*prev).mit_next = m.raw() };
     }
-    unsafe { (*m).mit_next = cur };
+    m.mit_next = cur;
 
-    unsafe { redraw_later(wp, rtype) };
+    unsafe { redraw_later(wp.raw(), rtype) };
     id
 }
 
@@ -217,6 +234,8 @@ unsafe fn fill_pos_array(
     m: *mut matchitem_T,
     pos_list: *mut list_T,
 ) -> Option<(linenr_T, linenr_T)> {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut m = unsafe { Mi::new(m) };
     // SAFETY: the caller's match and list.
     let mut toplnum: linenr_T = 0;
     let mut botlnum: linenr_T = 0;
@@ -251,7 +270,7 @@ unsafe fn fill_pos_array(
             if lnum <= 0 {
                 skip = true;
             } else {
-                unsafe { (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum };
+                unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 subli = unsafe { (*subli).li_next };
                 if !subli.is_null() {
                     col = unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) }
@@ -278,8 +297,8 @@ unsafe fn fill_pos_array(
                     }
                 }
                 if !skip {
-                    unsafe { (*(*m).mit_pos_array.offset(i as isize)).col = col };
-                    unsafe { (*(*m).mit_pos_array.offset(i as isize)).len = len };
+                    unsafe { (*m.mit_pos_array.offset(i as isize)).col = col };
+                    unsafe { (*m.mit_pos_array.offset(i as isize)).len = len };
                 }
             }
         } else if unsafe { (*tv).v_type } == VAR_NUMBER {
@@ -287,9 +306,9 @@ unsafe fn fill_pos_array(
                 skip = true;
             } else {
                 lnum = unsafe { (*tv).vval.v_number } as linenr_T;
-                unsafe { (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum };
-                unsafe { (*(*m).mit_pos_array.offset(i as isize)).col = 0 };
-                unsafe { (*(*m).mit_pos_array.offset(i as isize)).len = 0 };
+                unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
+                unsafe { (*m.mit_pos_array.offset(i as isize)).col = 0 };
+                unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };
             }
         } else {
             unsafe {
@@ -320,6 +339,8 @@ unsafe fn fill_pos_array(
 /// # Safety
 /// `wp` must be live.
 unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
     let mut rtype = UPD_SOME_VALID;
 
@@ -335,7 +356,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
         return -1;
     }
 
-    let mut cur = unsafe { (*wp).w_match_head };
+    let mut cur = wp.w_match_head;
     let mut prev = cur;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
         prev = cur;
@@ -349,19 +370,19 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
     }
 
     if cur == prev {
-        unsafe { (*wp).w_match_head = (*cur).mit_next };
+        unsafe { wp.w_match_head = (*cur).mit_next };
     } else {
         unsafe { (*prev).mit_next = (*cur).mit_next };
     }
     unsafe { vim_regfree((*cur).mit_match.regprog) };
     unsafe { xfree((*cur).mit_pattern.cast()) };
     if unsafe { (*cur).mit_toplnum } != 0 {
-        unsafe { redraw_win_range_later(wp, (*cur).mit_toplnum, (*cur).mit_botlnum) };
+        unsafe { redraw_win_range_later(wp.raw(), (*cur).mit_toplnum, (*cur).mit_botlnum) };
         rtype = UPD_VALID;
     }
     unsafe { xfree((*cur).mit_pos_array.cast()) };
     unsafe { xfree(cur.cast()) };
-    unsafe { redraw_later(wp, rtype) };
+    unsafe { redraw_later(wp.raw(), rtype) };
     0
 }
 
@@ -370,16 +391,20 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 /// # Safety
 /// `wp` must be live.
 pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
-    while !unsafe { (*wp).w_match_head }.is_null() {
-        let m = unsafe { (*wp).w_match_head };
-        unsafe { (*wp).w_match_head = (*m).mit_next };
-        unsafe { vim_regfree((*m).mit_match.regprog) };
-        unsafe { xfree((*m).mit_pattern.cast()) };
-        unsafe { xfree((*m).mit_pos_array.cast()) };
-        unsafe { xfree(m.cast()) };
+    while !wp.w_match_head.is_null() {
+        // SAFETY: the window owns every entry of its list until it is
+        // unlinked, which is what the line below does.
+        let m = unsafe { Mi::new(wp.w_match_head) };
+        wp.w_match_head = m.mit_next;
+        unsafe { vim_regfree(m.mit_match.regprog) };
+        unsafe { xfree(m.mit_pattern.cast()) };
+        unsafe { xfree(m.mit_pos_array.cast()) };
+        unsafe { xfree(m.raw().cast()) };
     }
-    unsafe { redraw_later(wp, UPD_SOME_VALID) };
+    unsafe { redraw_later(wp.raw(), UPD_SOME_VALID) };
 }
 
 /// The match `id` in `wp`'s list, or null.
@@ -387,8 +412,10 @@ pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
 /// # Safety
 /// `wp` must be live.
 unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
-    let mut cur = unsafe { (*wp).w_match_head };
+    let mut cur = wp.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
         cur = unsafe { (*cur).mit_next };
     }

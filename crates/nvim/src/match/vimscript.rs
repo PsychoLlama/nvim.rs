@@ -193,7 +193,9 @@ pub(crate) unsafe fn f_setmatches(
         if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict }.is_null() {
             unsafe {
                 semsg_c!(
-                    gettext( c"E474: List item %d is either not a dictionary or an empty one".as_ptr(), ),
+                    gettext(
+                        c"E474: List item %d is either not a dictionary or an empty one".as_ptr(),
+                    ),
                     li_idx,
                 )
             };
