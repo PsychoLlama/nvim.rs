@@ -686,7 +686,28 @@ DEREF_FIELD_WRITE = re.compile(
 # -- `unsafe { (*cur).w_valid }.clear(VIRTCOL)` left the cached virtual
 # column marked valid, so `getcurpos()` published a stale 'curswant' and
 # never put the real one back.
-MUTATING_BY_NAME = frozenset({"retain", "release", "release_many", "clear"})
+# `set`, `insert`, `push` and `remove` are here for the same reason and were
+# added after `wipe_ft_buf` shipped `unsafe { (*buf).b_flags }.clear(DUMMY)`
+# and the fleet went looking for its siblings: `GlobalCell::set` takes `&self`,
+# so the exclusivity rule drops the *name* `set` and every `flags!`
+# `set(&mut self, ..)` on a temporary slipped through with it. The receiver's
+# type is not visible here, so the answer has to be by name; all six are zero
+# at `448061783a`, and a legitimate `&self`-with-interior-mutability receiver
+# reached through a raw dereference does not occur in this tree.
+MUTATING_BY_NAME = frozenset(
+    {
+        "retain",
+        "release",
+        "release_many",
+        "clear",
+        "set",
+        "insert",
+        "push",
+        "remove",
+        "toggle",
+        "reset",
+    }
+)
 
 # `*pp = *pp.add(3)` where the author meant `*pp = (*pp).add(3)`.
 #
