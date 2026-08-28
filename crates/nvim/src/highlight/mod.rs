@@ -154,13 +154,6 @@ static ATTRS: GlobalCell<AttrTable> = GlobalCell::new(AttrTable::new());
 /// Results of [`hl_combine_attr`], by the pair that produced them.
 static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
 
-/// The combine cache, by address: it is read and written once per cell on
-/// the draw path, so the lookup goes straight at it rather than through a
-/// borrow.
-fn combine_cache() -> *mut AttrCache {
-    COMBINE.ptr()
-}
-
 /// The built-in highlight table, by address: `hl_attr_active` and a window's
 /// `w_ns_hl_attr` both *hold* it, switching between this table and a
 /// namespace's own, so the address is what the family works from. This is
@@ -354,14 +347,12 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
 
     // A new id: tell the UIs what it looks like.
     // SAFETY: the arena is local and the event only borrows the array.
-    unsafe {
-        let mut arena = ARENA_EMPTY;
-        let inspect = hl_inspect(id, &raw mut arena);
-        // Internally there is one attribute set for cterm and rgb;
-        // `remote_ui_hl_attr_define` is where they part company.
-        ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
-        arena_mem_free(arena_finish(&raw mut arena));
-    }
+    let mut arena = ARENA_EMPTY;
+    let inspect = unsafe { hl_inspect(id, &raw mut arena) };
+    // Internally there is one attribute set for cterm and rgb;
+    // `remote_ui_hl_attr_define` is where they part company.
+    ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     id
 }
 
@@ -372,24 +363,22 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
 /// `ui` is a live remote UI; main thread only.
 pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
     // SAFETY: the caller's UI; each iteration's arena is local to it.
-    unsafe {
-        // The bound is re-read each time round, as upstream's `for` did:
-        // sending an event is not supposed to touch the table, and if one
-        // ever did this stops rather than reading past the end.
-        let mut i = 1;
-        while i < ATTRS.with(AttrTable::len) {
-            let mut arena = ARENA_EMPTY;
-            let inspect = hl_inspect(i as c_int, &raw mut arena);
-            let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
-            remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect);
-            arena_mem_free(arena_finish(&raw mut arena));
-            i += 1;
-        }
-        for hlf in 0..HLF_COUNT as usize {
-            let name = cstr_as_string(hlf_names[hlf]);
-            let attr = Integer::from(default_hl_attr(hlf));
-            remote_ui_hl_group_set(ui, name, attr);
-        }
+    // The bound is re-read each time round, as upstream's `for` did:
+    // sending an event is not supposed to touch the table, and if one
+    // ever did this stops rather than reading past the end.
+    let mut i = 1;
+    while i < ATTRS.with(AttrTable::len) {
+        let mut arena = ARENA_EMPTY;
+        let inspect = unsafe { hl_inspect(i as c_int, &raw mut arena) };
+        let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
+        unsafe { remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect) };
+        unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+        i += 1;
+    }
+    for hlf in 0..HLF_COUNT as usize {
+        let name = unsafe { cstr_as_string(hlf_names[hlf]) };
+        let attr = Integer::from(default_hl_attr(hlf));
+        unsafe { remote_ui_hl_group_set(ui, name, attr) };
     }
 }
 
@@ -472,15 +461,15 @@ pub unsafe fn hl_add_url(attr: c_int, url: *const c_char) -> c_int {
     let url = unsafe { CStr::from_ptr(url) };
     attrs.url = URLS.with_mut(|urls| urls.intern(url)) as i32;
     // SAFETY: the caller's editor state.
-    unsafe {
-        let with_url = get_attr_entry(HlEntry {
+    let with_url = unsafe {
+        get_attr_entry(HlEntry {
             attr: attrs,
             kind: kHlUI,
             id1: 0,
             id2: 0,
-        });
-        hl_combine_attr(attr, with_url)
-    }
+        })
+    };
+    unsafe { hl_combine_attr(attr, with_url) }
 }
 
 /// The URL at `index`. Panics on an index no entry ever stored (upstream
@@ -529,11 +518,9 @@ pub unsafe fn clear_hl_tables(reinit: bool) {
     // No group's attribute matches its remembered one any more.
     highlight_attr_last.set([-1; HLF_COUNT as usize]);
     // SAFETY: the editor's own tables.
-    unsafe {
-        highlight_attr_set_all();
-        highlight_changed();
-        screen_invalidate_highlights();
-    }
+    unsafe { highlight_attr_set_all() };
+    unsafe { highlight_changed() };
+    unsafe { screen_invalidate_highlights() };
 }
 
 /// Combines two attribute-bit masks, `prim_ae` winning.
@@ -565,75 +552,74 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
         return char_attr;
     }
 
-    // SAFETY: the caller's ids and the editor's own tables.
-    unsafe {
-        let cached = (*combine_cache()).get(char_attr, prim_attr);
-        if cached > 0 {
-            return cached;
-        }
+    let cached = COMBINE.with(|cache| cache.get(char_attr, prim_attr));
+    if cached > 0 {
+        return cached;
+    }
 
-        let char_aep = syn_attr2entry(char_attr);
-        let prim_aep = syn_attr2entry(prim_attr);
+    let char_aep = syn_attr2entry(char_attr);
+    let prim_aep = syn_attr2entry(prim_attr);
 
-        // Start from the low-priority set and override below.
-        let mut new_en = char_aep;
-        new_en.cterm_ae_attr = if prim_aep.cterm_ae_attr.has(HlAttrFlags::NOCOMBINE) {
-            prim_aep.cterm_ae_attr
-        } else {
-            hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr)
-        };
-        new_en.rgb_ae_attr = if prim_aep.rgb_ae_attr.has(HlAttrFlags::NOCOMBINE) {
-            prim_aep.rgb_ae_attr
-        } else {
-            hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr)
-        };
+    // Start from the low-priority set and override below.
+    let mut new_en = char_aep;
+    new_en.cterm_ae_attr = if prim_aep.cterm_ae_attr.has(HlAttrFlags::NOCOMBINE) {
+        prim_aep.cterm_ae_attr
+    } else {
+        hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr)
+    };
+    new_en.rgb_ae_attr = if prim_aep.rgb_ae_attr.has(HlAttrFlags::NOCOMBINE) {
+        prim_aep.rgb_ae_attr
+    } else {
+        hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr)
+    };
 
-        // Taking a colour from `prim_aep` takes its "this is a palette index"
-        // bit with it, which is why each of these clears the flag unless the
-        // overriding set had it too.
-        let inherit = |mask: &mut HlAttrFlags, flag: HlAttrFlags| {
-            if !prim_aep.rgb_ae_attr.has(flag) {
-                mask.clear(flag);
-            }
-        };
-        if prim_aep.cterm_fg_color > 0 {
-            new_en.cterm_fg_color = prim_aep.cterm_fg_color;
-            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
+    // Taking a colour from `prim_aep` takes its "this is a palette index"
+    // bit with it, which is why each of these clears the flag unless the
+    // overriding set had it too.
+    let inherit = |mask: &mut HlAttrFlags, flag: HlAttrFlags| {
+        if !prim_aep.rgb_ae_attr.has(flag) {
+            mask.clear(flag);
         }
-        if prim_aep.cterm_bg_color > 0 {
-            new_en.cterm_bg_color = prim_aep.cterm_bg_color;
-            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
-        }
-        if prim_aep.rgb_fg_color >= 0 {
-            new_en.rgb_fg_color = prim_aep.rgb_fg_color;
-            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
-        }
-        if prim_aep.rgb_bg_color >= 0 {
-            new_en.rgb_bg_color = prim_aep.rgb_bg_color;
-            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
-        }
-        if prim_aep.rgb_sp_color >= 0 {
-            new_en.rgb_sp_color = prim_aep.rgb_sp_color;
-        }
-        if prim_aep.hl_blend >= 0 {
-            new_en.hl_blend = prim_aep.hl_blend;
-        }
-        // A URL already on the cell is not replaced by the one overlaying it.
-        if new_en.url == -1 && prim_aep.url >= 0 {
-            new_en.url = prim_aep.url;
-        }
+    };
+    if prim_aep.cterm_fg_color > 0 {
+        new_en.cterm_fg_color = prim_aep.cterm_fg_color;
+        inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
+    }
+    if prim_aep.cterm_bg_color > 0 {
+        new_en.cterm_bg_color = prim_aep.cterm_bg_color;
+        inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
+    }
+    if prim_aep.rgb_fg_color >= 0 {
+        new_en.rgb_fg_color = prim_aep.rgb_fg_color;
+        inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
+    }
+    if prim_aep.rgb_bg_color >= 0 {
+        new_en.rgb_bg_color = prim_aep.rgb_bg_color;
+        inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
+    }
+    if prim_aep.rgb_sp_color >= 0 {
+        new_en.rgb_sp_color = prim_aep.rgb_sp_color;
+    }
+    if prim_aep.hl_blend >= 0 {
+        new_en.hl_blend = prim_aep.hl_blend;
+    }
+    // A URL already on the cell is not replaced by the one overlaying it.
+    if new_en.url == -1 && prim_aep.url >= 0 {
+        new_en.url = prim_aep.url;
+    }
 
-        let id = get_attr_entry(HlEntry {
+    let id = unsafe {
+        get_attr_entry(HlEntry {
             attr: new_en,
             kind: kHlCombine,
             id1: char_attr,
             id2: prim_attr,
-        });
-        if id > 0 {
-            (*combine_cache()).insert(char_attr, prim_attr, id);
-        }
-        id
+        })
+    };
+    if id > 0 {
+        COMBINE.with_mut(|cache| cache.insert(char_attr, prim_attr, id));
     }
+    id
 }
 
 /// The number of ids handed out so far, counting the id-0 sentinel. Every id
@@ -668,11 +654,9 @@ pub unsafe fn hl_inspect(attr: c_int, arena: *mut Arena) -> Array {
         };
     }
     // SAFETY: the caller's arena.
-    unsafe {
-        let mut ret = arena_array(arena, hl_inspect_size(attr));
-        hl_inspect_impl(&mut ret, attr, arena);
-        ret
-    }
+    let mut ret = arena_array(arena, hl_inspect_size(attr));
+    unsafe { hl_inspect_impl(&mut ret, attr, arena) };
+    ret
 }
 
 /// How many entries [`hl_inspect_impl`] will produce for `attr`. Combinations
@@ -699,45 +683,43 @@ unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int, arena: *mut Arena) {
         return;
     };
     // SAFETY: the caller's arena and array.
-    unsafe {
-        let mut item = match entry.kind {
-            kHlSyntax => {
-                let mut item = arena_dict(arena, 3);
-                put(&mut item, c"kind", Object::literal("syntax"));
-                put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1)));
-                item
-            }
-            kHlUI => {
-                let mut item = arena_dict(arena, 4);
-                put(&mut item, c"kind", Object::literal("ui"));
-                // -1 is `Normal`, which is not one of the `hlf_names`.
-                let ui_name = if entry.id1 == -1 {
-                    c"Normal".as_ptr()
-                } else {
-                    hlf_names[entry.id1 as usize]
-                };
-                put(&mut item, c"ui_name", name_object(ui_name));
-                put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));
-                item
-            }
-            kHlTerminal => {
-                let mut item = arena_dict(arena, 2);
-                put(&mut item, c"kind", Object::literal("term"));
-                item
-            }
-            kHlCombine | kHlBlend | kHlBlendThrough => {
-                // Combination is associative, so flatten it to an array.
-                hl_inspect_impl(arr, entry.id1, arena);
-                hl_inspect_impl(arr, entry.id2, arena);
-                return;
-            }
-            // kHlUnknown and kHlInvalid: nothing to say about the entry.
-            _ => return,
-        };
-        put(&mut item, c"id", Object::integer(Integer::from(attr)));
-        *arr.items.add(arr.size) = Object::dict(item);
-        arr.size += 1;
-    }
+    let mut item = match entry.kind {
+        kHlSyntax => {
+            let mut item = arena_dict(arena, 3);
+            unsafe { put(&mut item, c"kind", Object::literal("syntax")) };
+            unsafe { put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1))) };
+            item
+        }
+        kHlUI => {
+            let mut item = arena_dict(arena, 4);
+            unsafe { put(&mut item, c"kind", Object::literal("ui")) };
+            // -1 is `Normal`, which is not one of the `hlf_names`.
+            let ui_name = if entry.id1 == -1 {
+                c"Normal".as_ptr()
+            } else {
+                hlf_names[entry.id1 as usize]
+            };
+            unsafe { put(&mut item, c"ui_name", name_object(ui_name)) };
+            unsafe { put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2))) };
+            item
+        }
+        kHlTerminal => {
+            let mut item = arena_dict(arena, 2);
+            unsafe { put(&mut item, c"kind", Object::literal("term")) };
+            item
+        }
+        kHlCombine | kHlBlend | kHlBlendThrough => {
+            // Combination is associative, so flatten it to an array.
+            unsafe { hl_inspect_impl(arr, entry.id1, arena) };
+            unsafe { hl_inspect_impl(arr, entry.id2, arena) };
+            return;
+        }
+        // kHlUnknown and kHlInvalid: nothing to say about the entry.
+        _ => return,
+    };
+    unsafe { put(&mut item, c"id", Object::integer(Integer::from(attr))) };
+    unsafe { *arr.items.add(arr.size) = Object::dict(item) };
+    arr.size += 1;
 }
 
 /// A group name, borrowed rather than copied.
@@ -760,8 +742,8 @@ unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
         *dict.items.add(dict.size) = KeyValuePair {
             key: static_cstring(key),
             value,
-        };
-    }
+        }
+    };
     dict.size += 1;
 }
 

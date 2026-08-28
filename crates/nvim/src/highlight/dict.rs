@@ -94,8 +94,8 @@ pub(crate) unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
         *dict.items.add(dict.size) = KeyValuePair {
             key: static_cstring(key),
             value,
-        };
-    }
+        }
+    };
     dict.size += 1;
 }
 
@@ -122,17 +122,15 @@ pub unsafe fn hl_get_attr_by_id(
         return empty;
     }
     // SAFETY: the caller's arena and error slot.
-    unsafe {
-        if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
-            let fmt = c"Invalid attribute id: %ld".as_ptr();
-            api_set_error(err, kErrorTypeException, fmt, attr_id);
-            return empty;
-        }
-        let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
-        let attrs = syn_attr2entry(attr_id as c_int);
-        hlattrs2dict(&mut retval, None, attrs, rgb, false);
-        retval
+    if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
+        let fmt = c"Invalid attribute id: %ld".as_ptr();
+        unsafe { api_set_error(err, kErrorTypeException, fmt, attr_id) };
+        return empty;
     }
+    let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
+    let attrs = syn_attr2entry(attr_id as c_int);
+    unsafe { hlattrs2dict(&mut retval, None, attrs, rgb, false) };
+    retval
 }
 
 /// Writes `ae` out as a dict.
@@ -164,19 +162,17 @@ pub unsafe fn hlattrs2dict(
         ae.cterm_ae_attr
     };
     // SAFETY: both dicts have the capacity the caller promised.
-    unsafe {
-        match hl_attrs {
-            Some(attrs) => {
-                assert!(
-                    attrs.capacity >= HLATTRS_DICT_SIZE,
-                    "hlattrs2dict: hl_attrs too small"
-                );
-                put_flags(attrs, mask);
-            }
-            None => put_flags(hl, mask),
+    match hl_attrs {
+        Some(attrs) => {
+            assert!(
+                attrs.capacity >= HLATTRS_DICT_SIZE,
+                "hlattrs2dict: hl_attrs too small"
+            );
+            unsafe { put_flags(attrs, mask) };
         }
-        put_colors(hl, ae, mask, use_rgb, short_keys);
+        None => unsafe { put_flags(hl, mask) },
     }
+    unsafe { put_colors(hl, ae, mask, use_rgb, short_keys) };
 }
 
 /// The attribute bits of `mask`, one boolean key each.
@@ -185,50 +181,48 @@ pub unsafe fn hlattrs2dict(
 /// As [`put`].
 unsafe fn put_flags(hl: &mut Dict, mask: HlAttrFlags) {
     // SAFETY: the caller's storage, sized for every key below.
-    unsafe {
-        let flag = |bit: HlAttrFlags| mask.has(bit);
-        if flag(HlAttrFlags::INVERSE) {
-            put(hl, c"reverse", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::BOLD) {
-            put(hl, c"bold", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::ITALIC) {
-            put(hl, c"italic", Object::boolean(true));
-        }
-        // The underline styles share one field, so at most one is reported.
-        match mask.masked(HlAttrFlags::UNDERLINE_MASK) {
-            HlAttrFlags::UNDERLINE => put(hl, c"underline", Object::boolean(true)),
-            HlAttrFlags::UNDERCURL => put(hl, c"undercurl", Object::boolean(true)),
-            HlAttrFlags::UNDERDOUBLE => put(hl, c"underdouble", Object::boolean(true)),
-            HlAttrFlags::UNDERDOTTED => put(hl, c"underdotted", Object::boolean(true)),
-            HlAttrFlags::UNDERDASHED => put(hl, c"underdashed", Object::boolean(true)),
-            _ => {}
-        }
-        if flag(HlAttrFlags::STANDOUT) {
-            put(hl, c"standout", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::STRIKETHROUGH) {
-            put(hl, c"strikethrough", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::ALTFONT) {
-            put(hl, c"altfont", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::DIM) {
-            put(hl, c"dim", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::BLINK) {
-            put(hl, c"blink", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::CONCEALED) {
-            put(hl, c"conceal", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::OVERLINE) {
-            put(hl, c"overline", Object::boolean(true));
-        }
-        if flag(HlAttrFlags::NOCOMBINE) {
-            put(hl, c"nocombine", Object::boolean(true));
-        }
+    let flag = |bit: HlAttrFlags| mask.has(bit);
+    if flag(HlAttrFlags::INVERSE) {
+        unsafe { put(hl, c"reverse", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::BOLD) {
+        unsafe { put(hl, c"bold", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::ITALIC) {
+        unsafe { put(hl, c"italic", Object::boolean(true)) };
+    }
+    // The underline styles share one field, so at most one is reported.
+    match mask.masked(HlAttrFlags::UNDERLINE_MASK) {
+        HlAttrFlags::UNDERLINE => unsafe { put(hl, c"underline", Object::boolean(true)) },
+        HlAttrFlags::UNDERCURL => unsafe { put(hl, c"undercurl", Object::boolean(true)) },
+        HlAttrFlags::UNDERDOUBLE => unsafe { put(hl, c"underdouble", Object::boolean(true)) },
+        HlAttrFlags::UNDERDOTTED => unsafe { put(hl, c"underdotted", Object::boolean(true)) },
+        HlAttrFlags::UNDERDASHED => unsafe { put(hl, c"underdashed", Object::boolean(true)) },
+        _ => {}
+    }
+    if flag(HlAttrFlags::STANDOUT) {
+        unsafe { put(hl, c"standout", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::STRIKETHROUGH) {
+        unsafe { put(hl, c"strikethrough", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::ALTFONT) {
+        unsafe { put(hl, c"altfont", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::DIM) {
+        unsafe { put(hl, c"dim", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::BLINK) {
+        unsafe { put(hl, c"blink", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::CONCEALED) {
+        unsafe { put(hl, c"conceal", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::OVERLINE) {
+        unsafe { put(hl, c"overline", Object::boolean(true)) };
+    }
+    if flag(HlAttrFlags::NOCOMBINE) {
+        unsafe { put(hl, c"nocombine", Object::boolean(true)) };
     }
 }
 
@@ -244,57 +238,59 @@ unsafe fn put_colors(
     short_keys: bool,
 ) {
     // SAFETY: the caller's storage, sized for every key below.
-    unsafe {
-        if use_rgb {
-            if ae.rgb_fg_color != -1 {
-                let key = if short_keys { c"fg" } else { c"foreground" };
-                put(hl, key, Object::integer(Integer::from(ae.rgb_fg_color)));
-            }
-            if ae.rgb_bg_color != -1 {
-                let key = if short_keys { c"bg" } else { c"background" };
-                put(hl, key, Object::integer(Integer::from(ae.rgb_bg_color)));
-            }
-            if ae.rgb_sp_color != -1 {
-                let key = if short_keys { c"sp" } else { c"special" };
-                put(hl, key, Object::integer(Integer::from(ae.rgb_sp_color)));
-            }
-            if mask.has(HlAttrFlags::FG_INDEXED) {
-                put(hl, c"fg_indexed", Object::boolean(true));
-            }
-            if mask.has(HlAttrFlags::BG_INDEXED) {
-                put(hl, c"bg_indexed", Object::boolean(true));
-            }
-        } else {
-            // Cterm colours are stored biased by one so that 0 means unset.
-            if ae.cterm_fg_color != 0 {
-                let key = if short_keys {
-                    c"ctermfg"
-                } else {
-                    c"foreground"
-                };
+    if use_rgb {
+        if ae.rgb_fg_color != -1 {
+            let key = if short_keys { c"fg" } else { c"foreground" };
+            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_fg_color))) };
+        }
+        if ae.rgb_bg_color != -1 {
+            let key = if short_keys { c"bg" } else { c"background" };
+            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_bg_color))) };
+        }
+        if ae.rgb_sp_color != -1 {
+            let key = if short_keys { c"sp" } else { c"special" };
+            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_sp_color))) };
+        }
+        if mask.has(HlAttrFlags::FG_INDEXED) {
+            unsafe { put(hl, c"fg_indexed", Object::boolean(true)) };
+        }
+        if mask.has(HlAttrFlags::BG_INDEXED) {
+            unsafe { put(hl, c"bg_indexed", Object::boolean(true)) };
+        }
+    } else {
+        // Cterm colours are stored biased by one so that 0 means unset.
+        if ae.cterm_fg_color != 0 {
+            let key = if short_keys {
+                c"ctermfg"
+            } else {
+                c"foreground"
+            };
+            unsafe {
                 put(
                     hl,
                     key,
                     Object::integer(Integer::from(ae.cterm_fg_color - 1)),
-                );
-            }
-            if ae.cterm_bg_color != 0 {
-                let key = if short_keys {
-                    c"ctermbg"
-                } else {
-                    c"background"
-                };
+                )
+            };
+        }
+        if ae.cterm_bg_color != 0 {
+            let key = if short_keys {
+                c"ctermbg"
+            } else {
+                c"background"
+            };
+            unsafe {
                 put(
                     hl,
                     key,
                     Object::integer(Integer::from(ae.cterm_bg_color - 1)),
-                );
-            }
+                )
+            };
         }
-        // `nvim_get_hl` reports blend once, with the gui half.
-        if ae.hl_blend > -1 && (use_rgb || !short_keys) {
-            put(hl, c"blend", Object::integer(Integer::from(ae.hl_blend)));
-        }
+    }
+    // `nvim_get_hl` reports blend once, with the gui half.
+    if ae.hl_blend > -1 && (use_rgb || !short_keys) {
+        unsafe { put(hl, c"blend", Object::integer(Integer::from(ae.hl_blend))) };
     }
 }
 
@@ -460,104 +456,102 @@ pub unsafe fn dict2hlattrs(
     );
 
     // SAFETY: the caller's error slot; each `Object` carries its own tag.
-    unsafe {
-        // The long spelling is the fallback for the short one, never both.
-        if is_set(dict, key::FG) {
-            fg = object_to_color(dict.fg, c"fg", use_rgb, err);
-        } else if is_set(dict, key::FOREGROUND) {
-            fg = object_to_color(dict.foreground, c"foreground", use_rgb, err);
-        }
-        if error_set(err) {
+    // The long spelling is the fallback for the short one, never both.
+    if is_set(dict, key::FG) {
+        fg = unsafe { object_to_color(dict.fg, c"fg", use_rgb, err) };
+    } else if is_set(dict, key::FOREGROUND) {
+        fg = unsafe { object_to_color(dict.foreground, c"foreground", use_rgb, err) };
+    }
+    if unsafe { error_set(err) } {
+        return HLATTRS_INIT;
+    }
+    if is_set(dict, key::BG) {
+        bg = unsafe { object_to_color(dict.bg, c"bg", use_rgb, err) };
+    } else if is_set(dict, key::BACKGROUND) {
+        bg = unsafe { object_to_color(dict.background, c"background", use_rgb, err) };
+    }
+    if unsafe { error_set(err) } {
+        return HLATTRS_INIT;
+    }
+    // A special colour is always an RGB one: cterm has no such thing.
+    if is_set(dict, key::SP) {
+        sp = unsafe { object_to_color(dict.sp, c"sp", true, err) };
+    } else if is_set(dict, key::SPECIAL) {
+        sp = unsafe { object_to_color(dict.special, c"special", true, err) };
+    }
+    if unsafe { error_set(err) } {
+        return HLATTRS_INIT;
+    }
+
+    if is_set(dict, key::BLEND) {
+        let given = dict.blend;
+        if !(0..=100).contains(&given) {
+            unsafe { api_err_invalid(err, c"blend".as_ptr(), c"out of range".as_ptr(), 0, false) };
             return HLATTRS_INIT;
         }
-        if is_set(dict, key::BG) {
-            bg = object_to_color(dict.bg, c"bg", use_rgb, err);
-        } else if is_set(dict, key::BACKGROUND) {
-            bg = object_to_color(dict.background, c"background", use_rgb, err);
+        blend = given as int32_t;
+    }
+
+    if is_set(dict, key::LINK) || is_set(dict, key::LINK_GLOBAL) {
+        let global = is_set(dict, key::LINK_GLOBAL);
+        let Some(link_id) = link_id else {
+            let name = if global { c"link_global" } else { c"link" };
+            let fmt = c"Invalid Key: '%s'".as_ptr();
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt, name.as_ptr()) };
+            return HLATTRS_INIT;
+        };
+        if global {
+            *link_id = dict.link_global as c_int;
+            mask |= HlAttrFlags::GLOBAL;
+        } else {
+            *link_id = dict.link as c_int;
         }
-        if error_set(err) {
+    }
+
+    // A `cterm` sub-dict replaces the cterm bits outright rather than
+    // amending them: what it does not name is off.
+    if is_set(dict, key::CTERM) {
+        let mut cterm = KeyDict_highlight_cterm::default();
+        let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
+        let target = (&raw mut cterm).cast();
+        if !unsafe { api_dict_to_keydict(target, field, dict.cterm, err) } {
             return HLATTRS_INIT;
         }
-        // A special colour is always an RGB one: cterm has no such thing.
-        if is_set(dict, key::SP) {
-            sp = object_to_color(dict.sp, c"sp", true, err);
-        } else if is_set(dict, key::SPECIAL) {
-            sp = object_to_color(dict.special, c"special", true, err);
+        cterm_mask_provided = true;
+        cterm_mask = HlAttrFlags::NONE;
+        let bits = [
+            (cterm.reverse, HlAttrFlags::INVERSE),
+            (cterm.bold, HlAttrFlags::BOLD),
+            (cterm.italic, HlAttrFlags::ITALIC),
+            (cterm.underline, HlAttrFlags::UNDERLINE),
+            (cterm.undercurl, HlAttrFlags::UNDERCURL),
+            (cterm.underdouble, HlAttrFlags::UNDERDOUBLE),
+            (cterm.underdotted, HlAttrFlags::UNDERDOTTED),
+            (cterm.underdashed, HlAttrFlags::UNDERDASHED),
+            (cterm.standout, HlAttrFlags::STANDOUT),
+            (cterm.strikethrough, HlAttrFlags::STRIKETHROUGH),
+            (cterm.altfont, HlAttrFlags::ALTFONT),
+            (cterm.dim, HlAttrFlags::DIM),
+            (cterm.blink, HlAttrFlags::BLINK),
+            (cterm.conceal, HlAttrFlags::CONCEALED),
+            (cterm.overline, HlAttrFlags::OVERLINE),
+            (cterm.nocombine, HlAttrFlags::NOCOMBINE),
+        ];
+        for (on, bit) in bits {
+            set_flag(&mut cterm_mask, on, bit);
         }
-        if error_set(err) {
+    }
+
+    if is_set(dict, key::CTERMFG) {
+        ctermfg = unsafe { object_to_color(dict.ctermfg, c"ctermfg", false, err) };
+        if unsafe { error_set(err) } {
             return HLATTRS_INIT;
         }
-
-        if is_set(dict, key::BLEND) {
-            let given = dict.blend;
-            if !(0..=100).contains(&given) {
-                api_err_invalid(err, c"blend".as_ptr(), c"out of range".as_ptr(), 0, false);
-                return HLATTRS_INIT;
-            }
-            blend = given as int32_t;
-        }
-
-        if is_set(dict, key::LINK) || is_set(dict, key::LINK_GLOBAL) {
-            let global = is_set(dict, key::LINK_GLOBAL);
-            let Some(link_id) = link_id else {
-                let name = if global { c"link_global" } else { c"link" };
-                let fmt = c"Invalid Key: '%s'".as_ptr();
-                api_set_error(err, kErrorTypeValidation, fmt, name.as_ptr());
-                return HLATTRS_INIT;
-            };
-            if global {
-                *link_id = dict.link_global as c_int;
-                mask |= HlAttrFlags::GLOBAL;
-            } else {
-                *link_id = dict.link as c_int;
-            }
-        }
-
-        // A `cterm` sub-dict replaces the cterm bits outright rather than
-        // amending them: what it does not name is off.
-        if is_set(dict, key::CTERM) {
-            let mut cterm = KeyDict_highlight_cterm::default();
-            let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
-            let target = (&raw mut cterm).cast();
-            if !api_dict_to_keydict(target, field, dict.cterm, err) {
-                return HLATTRS_INIT;
-            }
-            cterm_mask_provided = true;
-            cterm_mask = HlAttrFlags::NONE;
-            let bits = [
-                (cterm.reverse, HlAttrFlags::INVERSE),
-                (cterm.bold, HlAttrFlags::BOLD),
-                (cterm.italic, HlAttrFlags::ITALIC),
-                (cterm.underline, HlAttrFlags::UNDERLINE),
-                (cterm.undercurl, HlAttrFlags::UNDERCURL),
-                (cterm.underdouble, HlAttrFlags::UNDERDOUBLE),
-                (cterm.underdotted, HlAttrFlags::UNDERDOTTED),
-                (cterm.underdashed, HlAttrFlags::UNDERDASHED),
-                (cterm.standout, HlAttrFlags::STANDOUT),
-                (cterm.strikethrough, HlAttrFlags::STRIKETHROUGH),
-                (cterm.altfont, HlAttrFlags::ALTFONT),
-                (cterm.dim, HlAttrFlags::DIM),
-                (cterm.blink, HlAttrFlags::BLINK),
-                (cterm.conceal, HlAttrFlags::CONCEALED),
-                (cterm.overline, HlAttrFlags::OVERLINE),
-                (cterm.nocombine, HlAttrFlags::NOCOMBINE),
-            ];
-            for (on, bit) in bits {
-                set_flag(&mut cterm_mask, on, bit);
-            }
-        }
-
-        if is_set(dict, key::CTERMFG) {
-            ctermfg = object_to_color(dict.ctermfg, c"ctermfg", false, err);
-            if error_set(err) {
-                return HLATTRS_INIT;
-            }
-        }
-        if is_set(dict, key::CTERMBG) {
-            ctermbg = object_to_color(dict.ctermbg, c"ctermbg", false, err);
-            if error_set(err) {
-                return HLATTRS_INIT;
-            }
+    }
+    if is_set(dict, key::CTERMBG) {
+        ctermbg = unsafe { object_to_color(dict.ctermbg, c"ctermbg", false, err) };
+        if unsafe { error_set(err) } {
+            return HLATTRS_INIT;
         }
     }
 
@@ -608,32 +602,32 @@ unsafe fn error_set(err: *mut Error) -> bool {
 /// NUL-terminated. `err` points at a live [`Error`].
 unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -> int32_t {
     // SAFETY: the tag says which union arm is live.
-    unsafe {
-        if val.type_0 == kObjectTypeInteger {
-            return val.data.integer as int32_t;
-        }
-        if val.type_0 != kObjectTypeString {
+    if val.type_0 == kObjectTypeInteger {
+        return unsafe { val.data.integer } as int32_t;
+    }
+    if val.type_0 != kObjectTypeString {
+        unsafe {
             api_err_exp(
                 err,
                 key.as_ptr(),
                 c"String or Integer".as_ptr(),
                 ::core::ptr::null(),
-            );
-            return 0;
-        }
-        let str = val.data.string;
-        if str.is_empty() || strcasecmp(str.data(), c"NONE".as_ptr()) == 0 {
-            return -1;
-        }
-        let name = CStr::from_ptr(str.data());
-        let color = if rgb {
-            name_to_color(name).0 as int32_t
-        } else {
-            name_to_ctermcolor(name)
+            )
         };
-        if color < 0 {
-            api_err_invalid(err, c"highlight color".as_ptr(), str.data(), 0, true);
-        }
-        color
+        return 0;
     }
+    let str = unsafe { val.data.string };
+    if str.is_empty() || unsafe { strcasecmp(str.data(), c"NONE".as_ptr()) } == 0 {
+        return -1;
+    }
+    let name = unsafe { CStr::from_ptr(str.data()) };
+    let color = if rgb {
+        name_to_color(name).0 as int32_t
+    } else {
+        name_to_ctermcolor(name)
+    };
+    if color < 0 {
+        unsafe { api_err_invalid(err, c"highlight color".as_ptr(), str.data(), 0, true) };
+    }
+    color
 }

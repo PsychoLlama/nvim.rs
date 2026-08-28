@@ -49,10 +49,8 @@ pub fn clear_caches() {
 pub unsafe fn hl_invalidate_blends() {
     clear_caches();
     // SAFETY: the editor's own globals.
-    unsafe {
-        highlight_changed();
-        update_window_hl(curwin.get(), true);
-    }
+    unsafe { highlight_changed() };
+    unsafe { update_window_hl(curwin.get(), true) };
 }
 
 /// The attribute set `front_attr` blended over `back_attr`.
@@ -70,53 +68,53 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
         return front_attr;
     }
     // SAFETY: the attribute table is the editor's own.
-    unsafe {
-        let front_raw = syn_attr2entry(front_attr);
-        let front = get_colors_force(front_raw);
-        let ratio = front.hl_blend;
-        if ratio <= 0 {
-            *through = false;
-            return front_attr;
-        }
+    let front_raw = syn_attr2entry(front_attr);
+    let front = unsafe { get_colors_force(front_raw) };
+    let ratio = front.hl_blend;
+    if ratio <= 0 {
+        *through = false;
+        return front_attr;
+    }
 
-        let cache = if *through { &BLEND_THROUGH } else { &BLEND };
-        let cached = cache.with(|c| c.get(back_attr, front_attr));
-        if cached > 0 {
-            return cached;
-        }
+    let cache = if *through { &BLEND_THROUGH } else { &BLEND };
+    let cached = cache.with(|c| c.get(back_attr, front_attr));
+    if cached > 0 {
+        return cached;
+    }
 
-        let back_raw = syn_attr2entry(back_attr);
-        let back = get_colors_force(back_raw);
-        let mut blended = if *through {
-            blend_through(ratio, back, back_raw, front)
+    let back_raw = syn_attr2entry(back_attr);
+    let back = unsafe { get_colors_force(back_raw) };
+    let mut blended = if *through {
+        blend_through(ratio, back, back_raw, front)
+    } else {
+        blend_over(ratio, back, front)
+    };
+
+    // A fully transparent background stays transparent, so that the
+    // terminal's own background keeps showing. At ratio 100 the front
+    // contributes nothing, so the back's transparency alone decides.
+    blended.rgb_bg_color =
+        if back_raw.rgb_bg_color == -1 && (ratio == 100 || front_raw.rgb_bg_color == -1) {
+            -1
         } else {
-            blend_over(ratio, back, front)
+            rgb_blend(ratio, back.rgb_bg_color, front.rgb_bg_color)
         };
+    // The blend property was consumed producing this set.
+    blended.hl_blend = -1;
 
-        // A fully transparent background stays transparent, so that the
-        // terminal's own background keeps showing. At ratio 100 the front
-        // contributes nothing, so the back's transparency alone decides.
-        blended.rgb_bg_color =
-            if back_raw.rgb_bg_color == -1 && (ratio == 100 || front_raw.rgb_bg_color == -1) {
-                -1
-            } else {
-                rgb_blend(ratio, back.rgb_bg_color, front.rgb_bg_color)
-            };
-        // The blend property was consumed producing this set.
-        blended.hl_blend = -1;
-
-        let kind = if *through { kHlBlendThrough } else { kHlBlend };
-        let id = get_attr_entry(HlEntry {
+    let kind = if *through { kHlBlendThrough } else { kHlBlend };
+    let id = unsafe {
+        get_attr_entry(HlEntry {
             attr: blended,
             kind,
             id1: back_attr,
             id2: front_attr,
-        });
-        if id > 0 {
-            cache.with_mut(|c| c.insert(back_attr, front_attr, id));
-        }
-        id
+        })
+    };
+    if id > 0 {
+        cache.with_mut(|c| c.insert(back_attr, front_attr, id));
     }
+    id
 }
 
 /// A blank front cell over `back`: the character below stays visible, so the

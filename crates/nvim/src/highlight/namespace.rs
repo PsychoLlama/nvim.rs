@@ -143,42 +143,40 @@ pub unsafe fn ns_hl_def(
     dict: Option<&KeyDict_highlight>,
 ) {
     // SAFETY: the editor's own tables.
-    unsafe {
-        if ns_id == 0 {
-            let dict = dict.expect("the global table needs the caller's dict");
-            set_hl_group(hl_id, attrs, dict, link_id);
-            return;
-        }
-        let key = ColorKey {
-            ns_id,
-            syn_id: hl_id,
-        };
-        let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
-        if is_default && NS_HLS.with(|hls| hls.contains_key(&key)) {
-            return;
-        }
-        // Registered before the lookup, as upstream does: a provider's
-        // position in the list is the order its callbacks run in.
-        provider_field(ns_id, |_| ());
-        // A link is resolved lazily, so it has no attribute set of its own.
-        let attr_id = if link_id > 0 {
-            -1
-        } else {
-            hl_get_syn_attr(ns_id, hl_id, attrs)
-        };
-        let item = ColorItem {
-            attr_id,
-            link_id,
-            // Re-resolved rather than held: `hl_get_syn_attr` can rebuild the
-            // attribute tables and reach a Lua callback, which can register
-            // another provider and move the list.
-            version: provider_field(ns_id, |p| p.hl_valid),
-            is_default,
-            link_global: attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL),
-        };
-        NS_HLS.with_mut(|hls| hls.insert(key, item));
-        provider_field(ns_id, |p| p.hl_cached = false);
+    if ns_id == 0 {
+        let dict = dict.expect("the global table needs the caller's dict");
+        unsafe { set_hl_group(hl_id, attrs, dict, link_id) };
+        return;
     }
+    let key = ColorKey {
+        ns_id,
+        syn_id: hl_id,
+    };
+    let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
+    if is_default && NS_HLS.with(|hls| hls.contains_key(&key)) {
+        return;
+    }
+    // Registered before the lookup, as upstream does: a provider's
+    // position in the list is the order its callbacks run in.
+    provider_field(ns_id, |_| ());
+    // A link is resolved lazily, so it has no attribute set of its own.
+    let attr_id = if link_id > 0 {
+        -1
+    } else {
+        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+    };
+    let item = ColorItem {
+        attr_id,
+        link_id,
+        // Re-resolved rather than held: `hl_get_syn_attr` can rebuild the
+        // attribute tables and reach a Lua callback, which can register
+        // another provider and move the list.
+        version: provider_field(ns_id, |p| p.hl_valid),
+        is_default,
+        link_global: attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL),
+    };
+    NS_HLS.with_mut(|hls| hls.insert(key, item));
+    provider_field(ns_id, |p| p.hl_cached = false);
 }
 
 /// Resolves highlight group `hl_id` in the namespace `*ns_hl` names.
@@ -216,86 +214,88 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
     };
 
     // SAFETY: the editor's own tables, plus a Lua callback that may re-enter.
-    unsafe {
-        let mut item = NS_HLS.with(|hls| hls.get(&key).copied()).unwrap_or(UNSET);
-        let hl_def = provider_field(ns_id, |p| p.hl_def);
-        let mut valid = item.version >= provider_field(ns_id, |p| p.hl_valid);
+    let mut item = NS_HLS.with(|hls| hls.get(&key).copied()).unwrap_or(UNSET);
+    let hl_def = provider_field(ns_id, |p| p.hl_def);
+    let mut valid = item.version >= provider_field(ns_id, |p| p.hl_valid);
 
-        if !valid && hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
-            let mut args = ArrayBuf::<3>::new();
-            args.push(Object::integer(ns_id.into()));
-            args.push(Object::string(cstr_as_string(syn_id2name(hl_id))));
-            args.push(Object::boolean(link));
+    if !valid && hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
+        let mut args = ArrayBuf::<3>::new();
+        args.push(Object::integer(ns_id.into()));
+        args.push(Object::string(unsafe {
+            cstr_as_string(syn_id2name(hl_id))
+        }));
+        args.push(Object::boolean(link));
 
-            let mut err = Error {
-                type_0: kErrorTypeNone,
-                msg: ::core::ptr::null_mut(),
-            };
-            RECURSIVE.set(RECURSIVE.get() + 1);
-            let name = c"hl_def".as_ptr();
-            let ret = nlua_call_ref(
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ::core::ptr::null_mut(),
+        };
+        RECURSIVE.set(RECURSIVE.get() + 1);
+        let name = c"hl_def".as_ptr();
+        let ret = unsafe {
+            nlua_call_ref(
                 hl_def,
                 name,
                 args.array(),
                 kRetObject,
                 ::core::ptr::null_mut(),
                 &raw mut err,
-            );
-            RECURSIVE.set(RECURSIVE.get() - 1);
+            )
+        };
+        RECURSIVE.set(RECURSIVE.get() - 1);
 
-            // Anything but a dict means the callback declined; fall back.
-            let mut fallback = true;
-            // A `fallback` key the callback set explicitly also means "this
-            // answer is provisional", recorded as a version one behind the
-            // provider's so the next lookup asks again.
-            let mut provisional = false;
-            let mut attrs = HLATTRS_INIT;
-            if ret.type_0 == kObjectTypeDict {
-                fallback = false;
-                let mut dict = KeyDict_highlight::default();
-                let field: FieldHashfn = Some(key_dict_highlight_get_field);
-                let target = (&raw mut dict).cast();
-                if api_dict_to_keydict(target, field, ret.data.dict, &raw mut err) {
-                    let link_id = &mut item.link_id;
-                    attrs = dict2hlattrs(&dict, true, Some(link_id), None, &raw mut err);
-                    let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;
-                    fallback = !asked || dict.fallback;
-                    provisional = dict.fallback;
-                    if item.link_id >= 0 {
-                        fallback = true;
-                    }
+        // Anything but a dict means the callback declined; fall back.
+        let mut fallback = true;
+        // A `fallback` key the callback set explicitly also means "this
+        // answer is provisional", recorded as a version one behind the
+        // provider's so the next lookup asks again.
+        let mut provisional = false;
+        let mut attrs = HLATTRS_INIT;
+        if ret.type_0 == kObjectTypeDict {
+            fallback = false;
+            let mut dict = KeyDict_highlight::default();
+            let field: FieldHashfn = Some(key_dict_highlight_get_field);
+            let target = (&raw mut dict).cast();
+            if unsafe { api_dict_to_keydict(target, field, ret.data.dict, &raw mut err) } {
+                let link_id = &mut item.link_id;
+                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &raw mut err) };
+                let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;
+                fallback = !asked || dict.fallback;
+                provisional = dict.fallback;
+                if item.link_id >= 0 {
+                    fallback = true;
                 }
             }
-
-            item.attr_id = if fallback {
-                -1
-            } else {
-                hl_get_syn_attr(ns_id, hl_id, attrs)
-            };
-            // The callback and `hl_get_syn_attr` both pump, so the provider
-            // is resolved again rather than read through a stale pointer.
-            item.version = provider_field(ns_id, |p| p.hl_valid) - c_int::from(provisional);
-            item.is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
-            item.link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
-            NS_HLS.with_mut(|hls| hls.insert(key, item));
-            valid = true;
         }
 
-        if (item.is_default && nodefault) || !valid {
-            return -1;
-        }
-        if !link {
-            return item.attr_id;
-        }
-        if item.attr_id >= 0 {
-            // Real attributes, so there is no link to follow.
-            return 0;
-        }
-        if item.link_global {
-            *ns_hl = 0;
-        }
-        item.link_id
+        item.attr_id = if fallback {
+            -1
+        } else {
+            unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+        };
+        // The callback and `hl_get_syn_attr` both pump, so the provider
+        // is resolved again rather than read through a stale pointer.
+        item.version = provider_field(ns_id, |p| p.hl_valid) - c_int::from(provisional);
+        item.is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
+        item.link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
+        NS_HLS.with_mut(|hls| hls.insert(key, item));
+        valid = true;
     }
+
+    if (item.is_default && nodefault) || !valid {
+        return -1;
+    }
+    if !link {
+        return item.attr_id;
+    }
+    if item.attr_id >= 0 {
+        // Real attributes, so there is no link to follow.
+        return 0;
+    }
+    if item.link_global {
+        *ns_hl = 0;
+    }
+    item.link_id
 }
 
 /// What a group the namespace has never been asked about reads as.
@@ -345,10 +345,12 @@ pub unsafe fn hl_check_ns() -> bool {
 /// `wp` is null or a live window; main thread only.
 pub unsafe fn win_check_ns_hl(wp: *mut win_T) -> bool {
     // SAFETY: the caller's window.
-    unsafe {
-        ns_hl_win.set(if wp.is_null() { -1 } else { (*wp).w_ns_hl });
-        hl_check_ns()
-    }
+    ns_hl_win.set(if wp.is_null() {
+        -1
+    } else {
+        unsafe { (*wp).w_ns_hl }
+    });
+    unsafe { hl_check_ns() }
 }
 
 /// The attributes of highlight group `hl_id` as namespace `ns_id` sees it,
@@ -392,28 +394,28 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
     let mut optional = optional;
     let mut available = false;
     // SAFETY: the editor's own tables.
+    if final_id > 0
+        && let Some(found) = unsafe { hl_ns_get_attrs(ns_id, final_id, Some(&mut optional)) }
+    {
+        attrs = found;
+        available = true;
+    }
+
+    // The popup menu's own groups pick up 'pumblend' unless the group
+    // set a blend itself.
+    if (HLF_PNI..=HLF_PST).contains(&idx) {
+        if attrs.hl_blend == -1 && p_pb.get() > 0 {
+            attrs.hl_blend = p_pb.get() as c_int;
+        }
+        if pum_drawn() {
+            must_redraw_pum.set(true);
+        }
+    }
+
+    if optional && !available {
+        return 0;
+    }
     unsafe {
-        if final_id > 0
-            && let Some(found) = hl_ns_get_attrs(ns_id, final_id, Some(&mut optional))
-        {
-            attrs = found;
-            available = true;
-        }
-
-        // The popup menu's own groups pick up 'pumblend' unless the group
-        // set a blend itself.
-        if (HLF_PNI..=HLF_PST).contains(&idx) {
-            if attrs.hl_blend == -1 && p_pb.get() > 0 {
-                attrs.hl_blend = p_pb.get() as c_int;
-            }
-            if pum_drawn() {
-                must_redraw_pum.set(true);
-            }
-        }
-
-        if optional && !available {
-            return 0;
-        }
         get_attr_entry(HlEntry {
             attr: attrs,
             kind: kHlUI,
@@ -432,25 +434,25 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 /// `wp` is a live window; main thread only.
 pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
     // SAFETY: the caller's window and the editor's own tables.
+    let ns_id = unsafe { (*wp).w_ns_hl };
+    unsafe { update_ns_hl(ns_id) };
+    if ns_id != unsafe { (*wp).w_ns_hl_active } || unsafe { (*wp).w_ns_hl_attr }.is_null() {
+        unsafe { (*wp).w_ns_hl_active = ns_id };
+        let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
+        // No namespace table: read the global one.
+        unsafe { (*wp).w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table) };
+    }
+    let hl_def = unsafe { (*wp).w_ns_hl_attr };
+
+    if !unsafe { (*wp).w_hl_needs_update } && !invalid {
+        return;
+    }
+    unsafe { (*wp).w_hl_needs_update = false };
+
+    // A blending float always has a *named* normal group, because
+    // `NormalFloat` always is one.
+    let float_win = unsafe { (*wp).w_floating } && !unsafe { (*wp).w_config.external };
     unsafe {
-        let ns_id = (*wp).w_ns_hl;
-        update_ns_hl(ns_id);
-        if ns_id != (*wp).w_ns_hl_active || (*wp).w_ns_hl_attr.is_null() {
-            (*wp).w_ns_hl_active = ns_id;
-            let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
-            // No namespace table: read the global one.
-            (*wp).w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table);
-        }
-        let hl_def = (*wp).w_ns_hl_attr;
-
-        if !(*wp).w_hl_needs_update && !invalid {
-            return;
-        }
-        (*wp).w_hl_needs_update = false;
-
-        // A blending float always has a *named* normal group, because
-        // `NormalFloat` always is one.
-        let float_win = (*wp).w_floating && !(*wp).w_config.external;
         (*wp).w_hl_attr_normal = if float_win && *hl_def.add(HLF_NFLOAT as usize) != 0 && ns_id > 0
         {
             *hl_def.add(HLF_NFLOAT as usize)
@@ -465,46 +467,48 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             }
         } else {
             0
-        };
-        if (*wp).w_floating {
-            let winbl = (*wp).w_onebuf_opt.wo_winbl as c_int;
-            (*wp).w_hl_attr_normal = hl_apply_winblend(winbl, (*wp).w_hl_attr_normal);
         }
+    };
+    if unsafe { (*wp).w_floating } {
+        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
+        unsafe { (*wp).w_hl_attr_normal = hl_apply_winblend(winbl, (*wp).w_hl_attr_normal) };
+    }
 
-        (*wp).w_config.shadow = false;
-        if (*wp).w_floating && (*wp).w_config.border {
-            let winbl = (*wp).w_onebuf_opt.wo_winbl as c_int;
-            for i in 0..8 {
-                let id = (*wp).w_config.border_hl_ids[i];
-                let mut attr = if id != 0 {
-                    hl_get_ui_attr(ns_id, HLF_BORDER, id, false)
-                } else {
-                    *hl_def.add(HLF_BORDER as usize)
-                };
-                attr = hl_apply_winblend(winbl, attr);
-                if syn_attr2entry(attr).hl_blend > 0 {
-                    (*wp).w_config.shadow = true;
-                }
-                (*wp).w_config.border_attr[i] = attr;
+    unsafe { (*wp).w_config.shadow = false };
+    if unsafe { (*wp).w_floating } && unsafe { (*wp).w_config.border } {
+        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
+        for i in 0..8 {
+            let id = unsafe { (*wp).w_config.border_hl_ids[i] };
+            let mut attr = if id != 0 {
+                unsafe { hl_get_ui_attr(ns_id, HLF_BORDER, id, false) }
+            } else {
+                unsafe { *hl_def.add(HLF_BORDER as usize) }
+            };
+            attr = unsafe { hl_apply_winblend(winbl, attr) };
+            if syn_attr2entry(attr).hl_blend > 0 {
+                unsafe { (*wp).w_config.shadow = true };
             }
+            unsafe { (*wp).w_config.border_attr[i] = attr };
         }
+    }
 
-        // A shadow is itself a reason to blend.
-        check_blending(wp);
+    // A shadow is itself a reason to blend.
+    unsafe { check_blending(wp) };
 
-        // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
-        // to 'winhl' implementation?
-        let inactive = *hl_def.add(HLF_INACTIVE as usize);
+    // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
+    // to 'winhl' implementation?
+    let inactive = unsafe { *hl_def.add(HLF_INACTIVE as usize) };
+    unsafe {
         (*wp).w_hl_attr_normalnc = if inactive == 0 {
             let global = *hl_attr_active.get().add(HLF_INACTIVE as usize);
             hl_combine_attr(global, (*wp).w_hl_attr_normal)
         } else {
             inactive
-        };
-        if (*wp).w_floating {
-            let winbl = (*wp).w_onebuf_opt.wo_winbl as c_int;
-            (*wp).w_hl_attr_normalnc = hl_apply_winblend(winbl, (*wp).w_hl_attr_normalnc);
         }
+    };
+    if unsafe { (*wp).w_floating } {
+        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
+        unsafe { (*wp).w_hl_attr_normalnc = hl_apply_winblend(winbl, (*wp).w_hl_attr_normalnc) };
     }
 }
 
@@ -519,32 +523,30 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
         return;
     }
     // SAFETY: the editor's own tables.
-    unsafe {
-        if provider_field(ns_id, |p| p.hl_cached) {
-            return;
-        }
-
-        // The pointer, not a borrow: resolving a group below can re-enter and
-        // insert into the map, and the table's own allocation does not move.
-        let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
-        for hlf in 1..HLF_COUNT {
-            let name = hlf_names[hlf as usize];
-            let id = syn_check_group(name, strlen(name));
-            // These two are the groups where "undefined" is meaningful.
-            let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
-            *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional);
-        }
-
-        // NOOOO! You cannot just pretend that "Normal" is just like any other
-        // syntax group! It needs at least 10 layers of special casing! Noooooo!
-        //
-        // haha, tema engine go brrr
-        let normality = syn_check_group(c"Normal".as_ptr(), 6);
-        *table.add(HLF_NONE as usize) = hl_get_ui_attr(ns_id, -1, normality, true);
-
-        // hl_get_ui_attr might have invalidated the decor provider.
-        provider_field(ns_id, |p| p.hl_cached = true);
+    if provider_field(ns_id, |p| p.hl_cached) {
+        return;
     }
+
+    // The pointer, not a borrow: resolving a group below can re-enter and
+    // insert into the map, and the table's own allocation does not move.
+    let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
+    for hlf in 1..HLF_COUNT {
+        let name = hlf_names[hlf as usize];
+        let id = unsafe { syn_check_group(name, strlen(name)) };
+        // These two are the groups where "undefined" is meaningful.
+        let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
+        unsafe { *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional) };
+    }
+
+    // NOOOO! You cannot just pretend that "Normal" is just like any other
+    // syntax group! It needs at least 10 layers of special casing! Noooooo!
+    //
+    // haha, tema engine go brrr
+    let normality = unsafe { syn_check_group(c"Normal".as_ptr(), 6) };
+    unsafe { *table.add(HLF_NONE as usize) = hl_get_ui_attr(ns_id, -1, normality, true) };
+
+    // hl_get_ui_attr might have invalidated the decor provider.
+    provider_field(ns_id, |p| p.hl_cached = true);
 }
 
 /// The attribute a window's background cells are drawn with.
@@ -553,24 +555,22 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 /// `wp` is a live window; main thread only.
 pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's window and the active namespace table.
-    unsafe {
-        // A fast callback's namespace overrides the window's own cache.
-        if ns_hl_fast.get() < 0 {
-            let local = if wp == curwin.get() {
-                (*wp).w_hl_attr_normal
-            } else {
-                (*wp).w_hl_attr_normalnc
-            };
-            if local != 0 {
-                return local;
-            }
-        }
-        let inactive = *hl_attr_active.get().add(HLF_INACTIVE as usize);
-        if wp == curwin.get() || inactive == 0 {
-            *hl_attr_active.get().add(HLF_NONE as usize)
+    // A fast callback's namespace overrides the window's own cache.
+    if ns_hl_fast.get() < 0 {
+        let local = if wp == curwin.get() {
+            unsafe { (*wp).w_hl_attr_normal }
         } else {
-            inactive
+            unsafe { (*wp).w_hl_attr_normalnc }
+        };
+        if local != 0 {
+            return local;
         }
+    }
+    let inactive = unsafe { *hl_attr_active.get().add(HLF_INACTIVE as usize) };
+    if wp == curwin.get() || inactive == 0 {
+        unsafe { *hl_attr_active.get().add(HLF_NONE as usize) }
+    } else {
+        inactive
     }
 }
 
@@ -583,12 +583,10 @@ pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
 pub unsafe fn win_hl_attr(wp: *mut win_T, hlf: c_int) -> c_int {
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.
-    unsafe {
-        let table = if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {
-            (*wp).w_ns_hl_attr
-        } else {
-            hl_attr_active.get()
-        };
-        *table.add(hlf as usize)
-    }
+    let table = if !unsafe { (*wp).w_ns_hl_attr }.is_null() && ns_hl_fast.get() < 0 {
+        unsafe { (*wp).w_ns_hl_attr }
+    } else {
+        hl_attr_active.get()
+    };
+    unsafe { *table.add(hlf as usize) }
 }
