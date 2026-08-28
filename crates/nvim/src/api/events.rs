@@ -32,16 +32,15 @@ pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: Stri
     } else {
         msg.data().cast_const()
     };
-    logmsg_c!(
-        LOGLVL_ERR,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        c"nvim_error_event".as_ptr(),
-        44 as ::core::ffi::c_int,
-        true,
-        c"async error on channel %ld: %s".as_ptr(),
-        channel_id,
-        text,
-    );
+    let fmt = c"async error on channel %ld: %s".as_ptr();
+    let (here, no_context) = (c"nvim_error_event".as_ptr(), ::core::ptr::null());
+    // SAFETY: the log macro's own operations; every argument outlives the
+    // call and matches its verb.
+    unsafe {
+        logmsg_c!(
+            LOGLVL_ERR, no_context, here, 44, true, fmt, channel_id, text
+        )
+    };
 }
 
 /// Take delivery of a terminal event the UI forwarded. Only `termresponse` is

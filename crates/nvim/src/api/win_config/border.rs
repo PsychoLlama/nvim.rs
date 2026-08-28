@@ -169,16 +169,11 @@ fn corner_gap(chars: &[BorderChar; 8], before: usize, after: usize, corner: usiz
 unsafe fn style_slots(style: &BorderStyle) -> Slots {
     let mut hl_ids = [0; 8];
     if style.shadow {
+        let (shadow, deep) = (c"FloatShadow", c"FloatShadowThrough");
         // SAFETY: two static group names, and the editor's highlight tables.
-        let (blend, through) = unsafe {
-            (
-                syn_check_group(c"FloatShadow".as_ptr(), c"FloatShadow".count_bytes()),
-                syn_check_group(
-                    c"FloatShadowThrough".as_ptr(),
-                    c"FloatShadowThrough".count_bytes(),
-                ),
-            )
-        };
+        let blend = unsafe { syn_check_group(shadow.as_ptr(), shadow.count_bytes()) };
+        // SAFETY: as above.
+        let through = unsafe { syn_check_group(deep.as_ptr(), deep.count_bytes()) };
         // The two cells the window's own corner shows through take the
         // "through" group; the four entirely outside it take "blend".
         hl_ids = [0, 0, through, blend, blend, blend, through, 0];
@@ -316,10 +311,13 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
 /// `fconfig` must be writable, `style` a live API object and `err` a
 /// writable error slot.
 pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *mut Error) {
-    // SAFETY: the caller's config. Written a field at a time rather than
-    // through one long-lived `&mut`: everything below can re-enter the
-    // editor, which owns this config.
-    unsafe { (*fconfig).border = true };
+    // The config is written a field at a time rather than through one
+    // long-lived `&mut`: everything below can re-enter the editor, which owns
+    // it. That is what `WinCfg` is -- a `Live<WinConfig>` reborrowing per
+    // access.
+    // SAFETY: the caller's config, live for the whole call.
+    let mut cfg = unsafe { WinCfg::new(fconfig) };
+    cfg.border = true;
 
     let slots = if style.type_0 == kObjectTypeArray {
         // SAFETY: the tag says the array arm is live; the caller's error slot.
@@ -329,12 +327,10 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *m
         let str = unsafe { style.data.string };
         // SAFETY: a live API string is NUL-terminated.
         if str.is_empty() || unsafe { strequal(str.data(), BORDER_NONE.as_ptr()) } {
-            // SAFETY: the caller's config.
-            unsafe {
-                (*fconfig).border = false;
-                (*fconfig).title = false;
-                (*fconfig).footer = false;
-            };
+            // Border text does not work without a border.
+            cfg.border = false;
+            cfg.title = false;
+            cfg.footer = false;
             return;
         }
         // SAFETY: as above.
@@ -355,11 +351,8 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *m
     };
 
     if let Some((chars, hl_ids)) = slots {
-        // SAFETY: the caller's config.
-        unsafe {
-            (*fconfig).border_chars = chars;
-            (*fconfig).border_hl_ids = hl_ids;
-        };
+        cfg.border_chars = chars;
+        cfg.border_hl_ids = hl_ids;
     }
 }
 
@@ -414,11 +407,12 @@ pub unsafe fn parse_winborder(
         Object::string(unsafe { cstr_to_string(border_opt) })
     };
     // SAFETY: the caller's config and error slot, and the object just built.
-    unsafe {
+    let slot = unsafe {
         parse_border_style(style, fconfig, err);
         api_free_object(style);
-        (*err).type_0 == kErrorTypeNone
-    }
+        ErrSlot::new(err)
+    };
+    slot.type_0 == kErrorTypeNone
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when
