@@ -13,6 +13,74 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
+use crate::winlayer::{Buf, Live};
+use core::ffi::{CStr, c_char};
+use core::ptr;
+
+/// The keyset this call was handed, with checked field access: the pointer the
+/// dispatcher passes stays live for the whole call, so one promise at the head
+/// buys every `opts.field` below.
+type Opts = Live<KeyDict_set_extmark>;
+
+/// "Invalid `name`: out of range", the answer every bounds check below gives.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_out_of_range(err: *mut Error, name: &CStr) {
+    let why = c"out of range".as_ptr();
+    // SAFETY: the caller's promise about `err`; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), why, 0, false) };
+}
+
+/// "Invalid `name`: '`val`'", for a value the caller spelled wrong.
+///
+/// # Safety
+/// `err` must be the caller's error slot and `val` a C string.
+unsafe fn err_bad_value(err: *mut Error, name: &CStr, val: *const c_char) {
+    // SAFETY: the caller's promise; `name` is a C string too.
+    unsafe { api_err_invalid(err, name.as_ptr(), val, 0, true) };
+}
+
+/// A validation failure whose whole message is `why`.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_validation(err: *mut Error, why: &CStr) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: the caller's promise; `%s` takes the one C string it is given,
+    // so nothing in `why` is read as a directive.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, why.as_ptr()) };
+}
+
+/// "Invalid `name`: `n`", for a handle or id that names nothing.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
+    let none = ptr::null();
+    // SAFETY: the caller's promise; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
+}
+
+/// An exception whose whole message is `why`.
+///
+/// # Safety
+/// `err` must be the caller's error slot, and `why` must hold no `%`
+/// directive: upstream passes it as the format itself.
+unsafe fn err_exception(err: *mut Error, why: &CStr) {
+    // SAFETY: the caller's promise.
+    unsafe { api_set_error(err, kErrorTypeException, why.as_ptr()) };
+}
+
+/// "Invalid `name`: expected `want`", naming `got` when it says.
+///
+/// # Safety
+/// `err` must be the caller's error slot, `want` a C string and `got` null
+/// or a C string.
+unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
+    // SAFETY: the caller's promise; `name` is a C string too.
+    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
+}
 
 pub unsafe fn nvim_buf_set_extmark(
     buf: Buffer,
@@ -23,6 +91,8 @@ pub unsafe fn nvim_buf_set_extmark(
 ) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
+    // SAFETY: the dispatcher's keyset outlives this call.
+    let mut opts = unsafe { Opts::new(opts) };
     let mut id: uint32_t = 0;
     let mut line2: ::core::ffi::c_int = 0;
     let mut did_end_line: bool = false;
@@ -68,109 +138,71 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut has_hl: bool = false;
     let mut has_hl_multiple: bool = false;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
     '_error: {
         if !b.is_null() {
+            // SAFETY: non-null, so the handle named a live buffer; nothing
+            // below frees it.
+            let b = unsafe { Buf::new(b) };
             if !ns_initialized(ns_id as uint32_t) {
-                unsafe {
-                    api_err_invalid(
-                        err,
-                        c"ns_id".as_ptr(),
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                        ns_id as int64_t,
-                        false,
-                    )
-                };
+                // SAFETY: `err` is this call's own error slot.
+                unsafe { err_bad_number(err, c"ns_id", ns_id) };
             } else {
                 id = 0 as uint32_t;
-                if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
-                    KEYSET_OPTIDX_set_extmark__id,
-                ) {
-                    if !(unsafe { (*opts).id } > 0 as Integer) {
-                        unsafe {
-                            api_err_exp(
-                                err,
-                                c"id".as_ptr(),
-                                c"positive Integer".as_ptr(),
-                                ::core::ptr::null::<::core::ffi::c_char>(),
-                            )
-                        };
+                if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__id) {
+                    if !(opts.id > 0 as Integer) {
+                        let want = c"positive Integer".as_ptr();
+                        let got = ::core::ptr::null::<::core::ffi::c_char>();
+                        // SAFETY: `err` is this call's own error slot.
+                        unsafe { err_expected(err, c"id", want, got) };
                         break '_error;
                     }
-                    id = unsafe { (*opts).id } as uint32_t;
+                    id = opts.id as uint32_t;
                 }
                 line2 = -1 as ::core::ffi::c_int;
                 did_end_line = false;
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__end_line,
                 ) {
-                    if has_key(
-                        unsafe { (*opts).is_set__set_extmark_ },
-                        10 as ::core::ffi::c_int,
-                    ) {
-                        unsafe {
-                            api_set_error(
-                                err,
-                                kErrorTypeValidation,
-                                c"%s".as_ptr(),
-                                c"cannot use both 'end_row' and 'end_line'".as_ptr(),
-                            )
-                        };
+                    if has_key(opts.is_set__set_extmark_, 10 as ::core::ffi::c_int) {
+                        let why = c"cannot use both 'end_row' and 'end_line'";
+                        // SAFETY: `err` is this call's own error slot.
+                        unsafe { err_validation(err, why) };
                         break '_error;
                     }
-                    unsafe { (*opts).end_row = (*opts).end_line };
+                    let end_line = opts.end_line;
+                    opts.end_row = end_line;
                     did_end_line = true;
                 }
-                strict = if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
-                    KEYSET_OPTIDX_set_extmark__strict,
-                ) {
-                    unsafe { (*opts).strict as ::core::ffi::c_int }
+                strict = if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__strict) {
+                    opts.strict as ::core::ffi::c_int
                 } else {
                     1
                 } != 0;
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__end_row,
                 ) || did_end_line as ::core::ffi::c_int != 0
                 {
-                    let mut val: Integer = unsafe { (*opts).end_row };
+                    let mut val: Integer = opts.end_row;
                     if !(val >= 0 as Integer
-                        && !(val > unsafe { (*b).b_ml.ml_line_count } as Integer
-                            && strict as ::core::ffi::c_int != 0))
+                        && !(val > b.line_count() as Integer && strict as ::core::ffi::c_int != 0))
                     {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"end_row".as_ptr(),
-                                c"out of range".as_ptr(),
-                                0 as int64_t,
-                                false,
-                            )
-                        };
+                        unsafe { err_out_of_range(err, c"end_row") };
                         break '_error;
                     }
                     line2 = val as ::core::ffi::c_int;
                 }
                 col2 = -1 as colnr_T;
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__end_col,
                 ) {
-                    let mut val_0: Integer = unsafe { (*opts).end_col };
+                    let mut val_0: Integer = opts.end_col;
                     if !(val_0 >= -1 as Integer && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
                     {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"end_col".as_ptr(),
-                                c"out of range".as_ptr(),
-                                0 as int64_t,
-                                false,
-                            )
-                        };
+                        unsafe { err_out_of_range(err, c"end_col") };
                         break '_error;
                     }
                     if val_0 == -1 as Integer {
@@ -179,14 +211,14 @@ pub unsafe fn nvim_buf_set_extmark(
                     col2 = val_0 as ::core::ffi::c_int as colnr_T;
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__hl_group,
                 ) {
                     's_293: {
-                        if unsafe { (*opts).hl_group.type_0 } as ::core::ffi::c_uint
+                        if opts.hl_group.type_0 as ::core::ffi::c_uint
                             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            let mut arr: Array = unsafe { (*opts).hl_group.data.array };
+                            let mut arr: Array = unsafe { opts.hl_group.data.array };
                             if arr.size >= 1 as size_t {
                                 hl.hl_id = unsafe {
                                     object_to_hl_id(
@@ -195,7 +227,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         err,
                                     )
                                 };
-                                if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                                if error.type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
                                     break '_error;
@@ -213,7 +245,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         err,
                                     )
                                 };
-                                if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                                if error.type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
                                     break '_error;
@@ -225,9 +257,9 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                         } else {
                             hl.hl_id = unsafe {
-                                object_to_hl_id((*opts).hl_group, c"hl_group".as_ptr(), err)
+                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr(), err)
                             };
-                            if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                            if error.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
                                 break '_error;
@@ -236,11 +268,10 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     has_hl = hl.hl_id > 0 as ::core::ffi::c_int;
                 }
-                sign.hl_id = unsafe { (*opts).sign_hl_group } as ::core::ffi::c_int;
-                sign.cursorline_hl_id =
-                    unsafe { (*opts).cursorline_hl_group } as ::core::ffi::c_int;
-                sign.number_hl_id = unsafe { (*opts).number_hl_group } as ::core::ffi::c_int;
-                sign.line_hl_id = unsafe { (*opts).line_hl_group } as ::core::ffi::c_int;
+                sign.hl_id = opts.sign_hl_group as ::core::ffi::c_int;
+                sign.cursorline_hl_id = opts.cursorline_hl_group as ::core::ffi::c_int;
+                sign.number_hl_id = opts.number_hl_group as ::core::ffi::c_int;
+                sign.line_hl_id = opts.line_hl_group as ::core::ffi::c_int;
                 if sign.hl_id != 0
                     || sign.cursorline_hl_id != 0
                     || sign.number_hl_id != 0
@@ -251,72 +282,59 @@ pub unsafe fn nvim_buf_set_extmark(
                         as uint16_t;
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__conceal,
                 ) {
                     hl.flags = (hl.flags as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
                         as uint16_t;
                     has_hl = true;
-                    if unsafe { (*opts).conceal }.len() > 0 as size_t {
+                    if opts.conceal.len() > 0 as size_t {
                         let mut ch: ::core::ffi::c_int = 0;
                         hl.conceal_char =
-                            unsafe { utfc_ptr2schar((*opts).conceal.data(), &raw mut ch) };
+                            unsafe { utfc_ptr2schar(opts.conceal.data(), &raw mut ch) };
                         if !(hl.conceal_char != 0
                             && unsafe { vim_isprintc(ch) } as ::core::ffi::c_int != 0)
                         {
-                            unsafe {
-                                api_set_error(
-                                    err,
-                                    kErrorTypeValidation,
-                                    c"%s".as_ptr(),
-                                    c"conceal char has to be printable".as_ptr(),
-                                )
-                            };
+                            let why = c"conceal char has to be printable";
+                            // SAFETY: `err` is this call's own error slot.
+                            unsafe { err_validation(err, why) };
                             break '_error;
                         }
                     }
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__conceal_lines,
                 ) {
                     hl.flags = (hl.flags as ::core::ffi::c_int
                         | kSHConcealLines as ::core::ffi::c_int)
                         as uint16_t;
                     has_hl = true;
-                    if unsafe { (*opts).conceal_lines }.len() > 0 as size_t
-                        && !(unsafe { *(*opts).conceal_lines.data() } as ::core::ffi::c_int
+                    if opts.conceal_lines.len() > 0 as size_t
+                        && !(unsafe { *opts.conceal_lines.data() } as ::core::ffi::c_int
                             == '\0' as ::core::ffi::c_int)
                     {
-                        unsafe {
-                            api_set_error(
-                                err,
-                                kErrorTypeValidation,
-                                c"%s".as_ptr(),
-                                c"conceal_lines has to be an empty string".as_ptr(),
-                            )
-                        };
+                        let why = c"conceal_lines has to be an empty string";
+                        // SAFETY: `err` is this call's own error slot.
+                        unsafe { err_validation(err, why) };
                         break '_error;
                     }
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text,
                 ) {
-                    virt_text.data.virt_text = unsafe {
-                        parse_virt_text((*opts).virt_text, err, &raw mut virt_text.width)
-                    };
-                    if unsafe { (*err).type_0 } as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    virt_text.data.virt_text =
+                        unsafe { parse_virt_text(opts.virt_text, err, &raw mut virt_text.width) };
+                    if error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_error;
                     }
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text_pos,
                 ) {
-                    let mut str: String_0 = unsafe { (*opts).virt_text_pos };
+                    let mut str: String_0 = opts.virt_text_pos;
                     if unsafe { strequal(c"eol".as_ptr(), str.data()) } {
                         virt_text.pos = kVPosEndOfLine;
                     } else if unsafe { strequal(c"overlay".as_ptr(), str.data()) } {
@@ -328,48 +346,38 @@ pub unsafe fn nvim_buf_set_extmark(
                     } else if unsafe { strequal(c"inline".as_ptr(), str.data()) } {
                         virt_text.pos = kVPosInline;
                     } else if true {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"virt_text_pos".as_ptr(),
-                                str.data(),
-                                0 as int64_t,
-                                true,
-                            )
-                        };
+                        unsafe { err_bad_value(err, c"virt_text_pos", str.data()) };
                         break '_error;
                     }
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text_win_col,
                 ) {
-                    virt_text.col = unsafe { (*opts).virt_text_win_col } as ::core::ffi::c_int;
+                    virt_text.col = opts.virt_text_win_col as ::core::ffi::c_int;
                     virt_text.pos = kVPosWinCol;
                 }
                 hl.flags = (hl.flags as ::core::ffi::c_int
-                    | if unsafe { (*opts).hl_eol } as ::core::ffi::c_int != 0 {
+                    | if opts.hl_eol as ::core::ffi::c_int != 0 {
                         kSHHlEol as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) as uint16_t;
                 virt_text.flags = (virt_text.flags as ::core::ffi::c_int
-                    | ((if unsafe { (*opts).virt_text_hide } as ::core::ffi::c_int != 0 {
+                    | ((if opts.virt_text_hide as ::core::ffi::c_int != 0 {
                         kVTHide as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
-                    }) | (if unsafe { (*opts).virt_text_repeat_linebreak } as ::core::ffi::c_int
-                        != 0
-                    {
+                    }) | (if opts.virt_text_repeat_linebreak as ::core::ffi::c_int != 0 {
                         kVTRepeatLinebreak as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }))) as uint8_t;
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__hl_mode,
                 ) {
-                    let mut str_0: String_0 = unsafe { (*opts).hl_mode };
+                    let mut str_0: String_0 = opts.hl_mode;
                     if unsafe { strequal(c"replace".as_ptr(), str_0.data()) } {
                         virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
                     } else if unsafe { strequal(c"combine".as_ptr(), str_0.data()) } {
@@ -379,62 +387,40 @@ pub unsafe fn nvim_buf_set_extmark(
                             == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                             && true
                         {
-                            unsafe {
-                                api_set_error(
-                                    err,
-                                    kErrorTypeValidation,
-                                    c"%s".as_ptr(),
-                                    c"cannot use 'blend' hl_mode with inline virtual text".as_ptr(),
-                                )
-                            };
+                            let why = c"cannot use 'blend' hl_mode with inline virtual text";
+                            // SAFETY: `err` is this call's own error slot.
+                            unsafe { err_validation(err, why) };
                             break '_error;
                         }
                         virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                     } else if true {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"hl_mode".as_ptr(),
-                                str_0.data(),
-                                0 as int64_t,
-                                true,
-                            )
-                        };
+                        unsafe { err_bad_value(err, c"hl_mode", str_0.data()) };
                         break '_error;
                     }
                 }
-                virt_lines_flags =
-                    if unsafe { (*opts).virt_lines_leftcol } as ::core::ffi::c_int != 0 {
-                        kVLLeftcol as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                virt_lines_flags = if opts.virt_lines_leftcol as ::core::ffi::c_int != 0 {
+                    kVLLeftcol as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                };
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
                 ) {
-                    let mut str_1: String_0 = unsafe { (*opts).virt_lines_overflow };
+                    let mut str_1: String_0 = opts.virt_lines_overflow;
                     if unsafe { strequal(c"scroll".as_ptr(), str_1.data()) } {
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
                     } else if !unsafe { strequal(c"trunc".as_ptr(), str_1.data()) } && true {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"virt_lines_overflow".as_ptr(),
-                                str_1.data(),
-                                0 as int64_t,
-                                true,
-                            )
-                        };
+                        unsafe { err_bad_value(err, c"virt_lines_overflow", str_1.data()) };
                         break '_error;
                     }
                 }
                 's_785: {
                     if has_key(
-                        unsafe { (*opts).is_set__set_extmark_ },
+                        opts.is_set__set_extmark_,
                         KEYSET_OPTIDX_set_extmark__virt_lines,
                     ) {
-                        let mut a: Array = unsafe { (*opts).virt_lines };
+                        let mut a: Array = opts.virt_lines;
                         let mut j: size_t = 0 as size_t;
                         loop {
                             if j >= a.size {
@@ -443,14 +429,11 @@ pub unsafe fn nvim_buf_set_extmark(
                             if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                                 != unsafe { (*a.items.add(j)).type_0 } as ::core::ffi::c_uint
                             {
-                                unsafe {
-                                    api_err_exp(
-                                        err,
-                                        c"virt_text_line".as_ptr(),
-                                        api_typename(kObjectTypeArray),
-                                        api_typename((*a.items.add(j)).type_0),
-                                    )
-                                };
+                                let want = api_typename(kObjectTypeArray);
+                                // SAFETY: the pointer the caller handed this call.
+                                let got = unsafe { api_typename((*a.items.add(j)).type_0) };
+                                // SAFETY: `err` is this call's own error slot.
+                                unsafe { err_expected(err, c"virt_text_line", want, got) };
                                 break '_error;
                             }
                             let mut dummig: ::core::ffi::c_int = 0;
@@ -458,18 +441,17 @@ pub unsafe fn nvim_buf_set_extmark(
                                 parse_virt_text((*a.items.add(j)).data.array, err, &raw mut dummig)
                             };
                             // `kv_push`, whose growth step c2rust expanded inline.
-                            unsafe {
-                                Kvec::new(
-                                    &mut virt_lines.data.virt_lines.size,
-                                    &mut virt_lines.data.virt_lines.capacity,
-                                    &mut virt_lines.data.virt_lines.items,
-                                )
-                                .push(virt_line {
-                                    line: jtem,
-                                    flags: virt_lines_flags,
-                                })
+                            // SAFETY: `virt_lines` was built with the lines arm.
+                            let lines = unsafe { &mut virt_lines.data.virt_lines };
+                            let mut vl =
+                                Kvec::new(&mut lines.size, &mut lines.capacity, &mut lines.items);
+                            let line = virt_line {
+                                line: jtem,
+                                flags: virt_lines_flags,
                             };
-                            if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                            // SAFETY: `items` is this vector's own allocation.
+                            unsafe { vl.push(line) };
+                            if error.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
                                 break '_error;
@@ -479,56 +461,38 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                 }
                 virt_lines.flags = (virt_lines.flags as ::core::ffi::c_int
-                    | if unsafe { (*opts).virt_lines_above } as ::core::ffi::c_int != 0 {
+                    | if opts.virt_lines_above as ::core::ffi::c_int != 0 {
                         kVTLinesAbove as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) as uint8_t;
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__priority,
                 ) {
-                    if !(unsafe { (*opts).priority } >= 0 as Integer
-                        && unsafe { (*opts).priority } <= 65535 as Integer)
-                    {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"priority".as_ptr(),
-                                c"out of range".as_ptr(),
-                                0 as int64_t,
-                                false,
-                            )
-                        };
+                    if !(opts.priority >= 0 as Integer && opts.priority <= 65535 as Integer) {
+                        unsafe { err_out_of_range(err, c"priority") };
                         break '_error;
                     }
-                    hl.priority = unsafe { (*opts).priority } as DecorPriority;
-                    sign.priority = unsafe { (*opts).priority } as DecorPriority;
-                    virt_text.priority = unsafe { (*opts).priority } as DecorPriority;
-                    virt_lines.priority = unsafe { (*opts).priority } as DecorPriority;
+                    hl.priority = opts.priority as DecorPriority;
+                    sign.priority = opts.priority as DecorPriority;
+                    virt_text.priority = opts.priority as DecorPriority;
+                    virt_lines.priority = opts.priority as DecorPriority;
                 }
                 if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__sign_text,
                 ) {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
                     if unsafe {
                         init_sign_text(
-                            (*opts).sign_text.data(),
+                            opts.sign_text.data(),
                             &raw mut sign.text as *mut schar_T,
                             false,
                         )
                     } == 0
                     {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"sign_text".as_ptr(),
-                                c"".as_ptr(),
-                                0 as int64_t,
-                                true,
-                            )
-                        };
+                        unsafe { err_bad_value(err, c"sign_text", c"".as_ptr()) };
                         break '_error;
                     }
                     sign.flags = (sign.flags as ::core::ffi::c_int
@@ -536,50 +500,36 @@ pub unsafe fn nvim_buf_set_extmark(
                         as uint16_t;
                 }
                 right_gravity = if has_key(
-                    unsafe { (*opts).is_set__set_extmark_ },
+                    opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__right_gravity,
                 ) {
-                    unsafe { (*opts).right_gravity as ::core::ffi::c_int }
+                    opts.right_gravity as ::core::ffi::c_int
                 } else {
                     1
                 } != 0;
                 if line2 == -1 as ::core::ffi::c_int
                     && col2 == -1 as ::core::ffi::c_int
-                    && has_key(
-                        unsafe { (*opts).is_set__set_extmark_ },
-                        30 as ::core::ffi::c_int,
-                    )
+                    && has_key(opts.is_set__set_extmark_, 30 as ::core::ffi::c_int)
                 {
-                    unsafe {
-                        api_set_error(
-                            err,
-                            kErrorTypeValidation,
-                            c"%s".as_ptr(),
-                            c"cannot set end_right_gravity without end_row or end_col".as_ptr(),
-                        )
-                    };
+                    let why = c"cannot set end_right_gravity without end_row or end_col";
+                    // SAFETY: `err` is this call's own error slot.
+                    unsafe { err_validation(err, why) };
                 } else {
                     len = 0 as colnr_T;
-                    if has_key(
-                        unsafe { (*opts).is_set__set_extmark_ },
-                        KEYSET_OPTIDX_set_extmark__spell,
-                    ) {
+                    if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__spell) {
                         hl.flags = (hl.flags as ::core::ffi::c_int
-                            | if unsafe { (*opts).spell } as ::core::ffi::c_int != 0 {
+                            | if opts.spell as ::core::ffi::c_int != 0 {
                                 kSHSpellOn as ::core::ffi::c_int
                             } else {
                                 kSHSpellOff as ::core::ffi::c_int
                             }) as uint16_t;
                         has_hl = true;
                     }
-                    if has_key(
-                        unsafe { (*opts).is_set__set_extmark_ },
-                        KEYSET_OPTIDX_set_extmark__url,
-                    ) {
-                        url = unsafe { string_to_cstr((*opts).url) };
+                    if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__url) {
+                        url = unsafe { string_to_cstr(opts.url) };
                         has_hl = true;
                     }
-                    if unsafe { (*opts).ui_watched } {
+                    if opts.ui_watched {
                         hl.flags = (hl.flags as ::core::ffi::c_int
                             | kSHUIWatched as ::core::ffi::c_int)
                             as uint16_t;
@@ -593,90 +543,50 @@ pub unsafe fn nvim_buf_set_extmark(
                         has_hl = true;
                     }
                     if !(line >= 0 as Integer) {
-                        unsafe {
-                            api_err_invalid(
-                                err,
-                                c"line".as_ptr(),
-                                c"out of range".as_ptr(),
-                                0 as int64_t,
-                                false,
-                            )
-                        };
+                        unsafe { err_out_of_range(err, c"line") };
                     } else {
-                        if line > unsafe { (*b).b_ml.ml_line_count } as Integer {
+                        if line > b.line_count() as Integer {
                             if strict {
-                                unsafe {
-                                    api_err_invalid(
-                                        err,
-                                        c"line".as_ptr(),
-                                        c"out of range".as_ptr(),
-                                        0 as int64_t,
-                                        false,
-                                    )
-                                };
+                                unsafe { err_out_of_range(err, c"line") };
                                 break '_error;
                             }
-                            line = unsafe { (*b).b_ml.ml_line_count } as Integer;
-                        } else if line < unsafe { (*b).b_ml.ml_line_count } as Integer {
-                            len = (if unsafe { (*opts).ephemeral } as ::core::ffi::c_int != 0 {
+                            line = b.line_count() as Integer;
+                        } else if line < b.line_count() as Integer {
+                            len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
                                 MAXCOL as ::core::ffi::c_int
                             } else {
-                                unsafe { ml_get_buf_len(b, line as linenr_T + 1 as linenr_T) }
+                                unsafe { b.line_len(line as linenr_T + 1) }
                             }) as colnr_T;
                         }
                         if col == -1 as Integer {
                             col = len as Integer;
                         } else if col > len as Integer {
                             if strict {
-                                unsafe {
-                                    api_err_invalid(
-                                        err,
-                                        c"col".as_ptr(),
-                                        c"out of range".as_ptr(),
-                                        0 as int64_t,
-                                        false,
-                                    )
-                                };
+                                unsafe { err_out_of_range(err, c"col") };
                                 break '_error;
                             }
                             col = len as Integer;
                         } else if col < -1 as Integer && true {
-                            unsafe {
-                                api_err_invalid(
-                                    err,
-                                    c"col".as_ptr(),
-                                    c"out of range".as_ptr(),
-                                    0 as int64_t,
-                                    false,
-                                )
-                            };
+                            unsafe { err_out_of_range(err, c"col") };
                             break '_error;
                         }
                         if col2 >= 0 as ::core::ffi::c_int {
                             if line2 >= 0 as ::core::ffi::c_int
-                                && (line2 as linenr_T) < unsafe { (*b).b_ml.ml_line_count }
+                                && (line2 as linenr_T) < b.line_count()
                             {
-                                len = (if unsafe { (*opts).ephemeral } as ::core::ffi::c_int != 0 {
+                                len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
                                     MAXCOL as ::core::ffi::c_int
                                 } else {
-                                    unsafe { ml_get_buf_len(b, line2 as linenr_T + 1 as linenr_T) }
+                                    unsafe { b.line_len(line2 as linenr_T + 1) }
                                 }) as colnr_T;
-                            } else if line2 as linenr_T == unsafe { (*b).b_ml.ml_line_count } {
+                            } else if line2 as linenr_T == b.line_count() {
                                 len = 0 as ::core::ffi::c_int as colnr_T;
                             } else {
                                 line2 = line as ::core::ffi::c_int;
                             }
                             if col2 > len {
                                 if strict {
-                                    unsafe {
-                                        api_err_invalid(
-                                            err,
-                                            c"end_col".as_ptr(),
-                                            c"out of range".as_ptr(),
-                                            0 as int64_t,
-                                            false,
-                                        )
-                                    };
+                                    unsafe { err_out_of_range(err, c"end_col") };
                                     break '_error;
                                 }
                                 col2 = len;
@@ -684,9 +594,9 @@ pub unsafe fn nvim_buf_set_extmark(
                         } else if line2 >= 0 as ::core::ffi::c_int {
                             col2 = 0 as ::core::ffi::c_int as colnr_T;
                         }
-                        if unsafe { (*opts).ephemeral } as ::core::ffi::c_int != 0
+                        if opts.ephemeral as ::core::ffi::c_int != 0
                             && !unsafe { DecorStateRef::current() }.win.is_null()
-                            && unsafe { (*DecorStateRef::current().win).w_buffer } == b
+                            && unsafe { (*DecorStateRef::current().win).w_buffer } == b.raw()
                         {
                             let mut r: ::core::ffi::c_int = line as ::core::ffi::c_int;
                             let mut c: ::core::ffi::c_int = col as ::core::ffi::c_int;
@@ -696,90 +606,73 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                             let mut subpriority: DecorPriority = 0 as DecorPriority;
                             if has_key(
-                                unsafe { (*opts).is_set__set_extmark_ },
+                                opts.is_set__set_extmark_,
                                 KEYSET_OPTIDX_set_extmark___subpriority,
                             ) {
-                                if !(unsafe { (*opts)._subpriority } >= 0 as Integer
-                                    && unsafe { (*opts)._subpriority } <= 65535 as Integer)
+                                if !(opts._subpriority >= 0 as Integer
+                                    && opts._subpriority <= 65535 as Integer)
                                 {
-                                    unsafe {
-                                        api_err_invalid(
-                                            err,
-                                            c"_subpriority".as_ptr(),
-                                            c"out of range".as_ptr(),
-                                            0 as int64_t,
-                                            false,
-                                        )
-                                    };
+                                    unsafe { err_out_of_range(err, c"_subpriority") };
                                     break '_error;
                                 }
-                                subpriority = unsafe { (*opts)._subpriority } as DecorPriority;
+                                subpriority = opts._subpriority as DecorPriority;
                             }
-                            if unsafe { virt_text.data.virt_text }.size != 0 {
-                                unsafe {
-                                    decor_range_add_virt(
-                                        DecorStateRef::current(),
-                                        r,
-                                        c,
-                                        line2,
-                                        col2 as ::core::ffi::c_int,
-                                        decor_put_vt(
-                                            virt_text,
-                                            ::core::ptr::null_mut::<DecorVirtText>(),
-                                        ),
-                                        true,
-                                    )
-                                };
+                            if unsafe { virt_text.data.virt_text.size } != 0 {
+                                // SAFETY: inside a decoration provider, so the
+                                // redraw's decor state is set.
+                                let state = unsafe { DecorStateRef::current() };
+                                let c2 = col2 as ::core::ffi::c_int;
+                                let vt = decor_put_vt(virt_text, ::core::ptr::null_mut());
+                                // SAFETY: `state` is the redraw's own decor state.
+                                unsafe { decor_range_add_virt(state, r, c, line2, c2, vt, true) };
                             }
-                            if unsafe { virt_lines.data.virt_lines }.size != 0 {
-                                unsafe {
-                                    decor_range_add_virt(
-                                        DecorStateRef::current(),
-                                        r,
-                                        c,
-                                        line2,
-                                        col2 as ::core::ffi::c_int,
-                                        decor_put_vt(
-                                            virt_lines,
-                                            ::core::ptr::null_mut::<DecorVirtText>(),
-                                        ),
-                                        true,
-                                    )
-                                };
+                            if unsafe { virt_lines.data.virt_lines.size } != 0 {
+                                // SAFETY: inside a decoration provider, so the
+                                // redraw's decor state is set.
+                                let state = unsafe { DecorStateRef::current() };
+                                let c2 = col2 as ::core::ffi::c_int;
+                                let vt = decor_put_vt(virt_lines, ::core::ptr::null_mut());
+                                // SAFETY: `state` is the redraw's own decor state.
+                                unsafe { decor_range_add_virt(state, r, c, line2, c2, vt, true) };
                             }
                             if has_hl {
                                 let mut sh: DecorSignHighlight = decor_sh_from_inline(hl);
                                 sh.url = url;
+                                // SAFETY: inside a decoration provider, so the
+                                // redraw's decor state is set.
+                                let state = unsafe { DecorStateRef::current() };
+                                let c2 = col2 as ::core::ffi::c_int;
+                                let shp = &raw mut sh;
+                                let ns = ns_id as uint32_t;
+                                // SAFETY: `state` is the redraw's own decor state
+                                // and `shp` this frame's highlight.
                                 unsafe {
                                     decor_range_add_sh(
-                                        DecorStateRef::current(),
+                                        state,
                                         r,
                                         c,
                                         line2,
-                                        col2 as ::core::ffi::c_int,
-                                        &raw mut sh,
+                                        c2,
+                                        shp,
                                         true,
-                                        ns_id as uint32_t,
+                                        ns,
                                         id,
                                         subpriority,
                                     )
                                 };
                             }
-                        } else if unsafe { (*opts).ephemeral } {
-                            unsafe {
-                                api_set_error(
-                                    err,
-                                    kErrorTypeException,
-                                    c"cannot set emphemeral mark outside of a decoration provider"
-                                        .as_ptr(),
-                                )
-                            };
+                        } else if opts.ephemeral {
+                            let why =
+                                c"cannot set emphemeral mark outside of a decoration provider";
+                            // SAFETY: `err` is this call's own error slot; the
+                            // message holds no `%` directive.
+                            unsafe { err_exception(err, why) };
                             break '_error;
                         } else {
                             let mut decor_flags: uint16_t = 0 as uint16_t;
                             let mut decor_alloc: *mut DecorVirtText =
                                 ::core::ptr::null_mut::<DecorVirtText>();
-                            if unsafe { virt_text.data.virt_text }.size != 0 {
+                            if unsafe { virt_text.data.virt_text.size } != 0 {
                                 decor_alloc = decor_put_vt(virt_text, decor_alloc);
                                 if virt_text.pos as ::core::ffi::c_uint
                                     == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -789,7 +682,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         as uint16_t;
                                 }
                             }
-                            if unsafe { virt_lines.data.virt_lines }.size != 0 {
+                            if unsafe { virt_lines.data.virt_lines.size } != 0 {
                                 decor_alloc = decor_put_vt(virt_lines, decor_alloc);
                                 decor_flags = (decor_flags as ::core::ffi::c_int
                                     | MT_FLAG_DECOR_VIRT_LINES)
@@ -816,7 +709,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                             }
                             if has_hl_multiple {
-                                let mut arr_0: Array = unsafe { (*opts).hl_group.data.array };
+                                let mut arr_0: Array = unsafe { opts.hl_group.data.array };
                                 let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
                                 while i_0 > 0 as size_t {
                                     let mut hl_id_0: ::core::ffi::c_int = unsafe {
@@ -830,10 +723,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         let mut sh_0: DecorSignHighlight =
                                             DECOR_SIGN_HIGHLIGHT_INIT;
                                         sh_0.hl_id = hl_id_0;
-                                        sh_0.flags = (if unsafe { (*opts).hl_eol }
-                                            as ::core::ffi::c_int
-                                            != 0
-                                        {
+                                        sh_0.flags = (if opts.hl_eol as ::core::ffi::c_int != 0 {
                                             kSHHlEol as ::core::ffi::c_int
                                         } else {
                                             0 as ::core::ffi::c_int
@@ -882,7 +772,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                             unsafe {
                                 extmark_set(
-                                    b,
+                                    b.raw(),
                                     ns_id as uint32_t,
                                     &raw mut id,
                                     line as ::core::ffi::c_int,
@@ -892,20 +782,20 @@ pub unsafe fn nvim_buf_set_extmark(
                                     decor,
                                     decor_flags,
                                     right_gravity,
-                                    (*opts).end_right_gravity,
+                                    opts.end_right_gravity,
                                     if has_key(
-                                        (*opts).is_set__set_extmark_,
+                                        opts.is_set__set_extmark_,
                                         KEYSET_OPTIDX_set_extmark__undo_restore,
                                     ) {
-                                        (*opts).undo_restore as ::core::ffi::c_int
+                                        opts.undo_restore as ::core::ffi::c_int
                                     } else {
                                         1
                                     } == 0,
-                                    (*opts).invalidate,
+                                    opts.invalidate,
                                     err,
                                 )
                             };
-                            if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                            if error.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
                                 unsafe { decor_free(decor) };

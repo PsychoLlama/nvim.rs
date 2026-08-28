@@ -30,7 +30,6 @@ use crate::marktree::key::{
 };
 use crate::marktree::mt_inspect;
 use crate::mbyte::{mb_string2cells, utfc_ptr2schar};
-use crate::memline::ml_get_buf_len;
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};

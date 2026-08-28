@@ -14,7 +14,9 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
 };
-use crate::winlayer::tab_windows;
+use crate::winlayer::{Win, tab_windows};
+use core::ffi::CStr;
+use core::ptr;
 
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -152,6 +154,50 @@ impl LocalScopes {
     }
 }
 
+/// "Invalid `name`: `n`", for a handle or id that names nothing.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
+    let none = ptr::null();
+    // SAFETY: the caller's promise; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
+}
+
+/// Whether `win`'s buffer holds any extmark in namespace `ns_id`.
+///
+/// `b_extmark_ns` is declared as the untyped map header, so upstream casts it
+/// to the `uint32_t -> uint32_t` instantiation before asking; the four call
+/// sites below did that inline.
+fn buffer_uses_ns(win: Win, ns_id: uint32_t) -> bool {
+    // SAFETY: a live window has a live buffer, and the map is that buffer's
+    // own field.
+    unsafe {
+        let map = &raw mut (*(*win.raw()).w_buffer).b_extmark_ns as *mut Map_uint32_t_uint32_t;
+        set_has_uint32_t(&raw mut (*map).set, ns_id)
+    }
+}
+
+/// Whether namespace `ns_id` is one of the ones `win` shows.
+fn window_shows_ns(win: Win, ns_id: uint32_t) -> bool {
+    // SAFETY: a live window, and the set is its own field.
+    unsafe { set_has_uint32_t(&raw mut (*win.raw()).w_ns_set, ns_id) }
+}
+
+/// Show namespace `ns_id` in `win`.
+fn show_ns_in_window(win: Win, ns_id: uint32_t) {
+    // SAFETY: `w_ns_set` is the live window's own field.
+    let set = unsafe { &raw mut (*win.raw()).w_ns_set };
+    // SAFETY: `set` is that live set.
+    unsafe { set_put_uint32_t(set, ns_id, ptr::null_mut()) };
+}
+
+/// Stop showing namespace `ns_id` in `win`.
+fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
+    // SAFETY: a live window, and the set is its own field.
+    unsafe { set_del_uint32_t(&raw mut (*win.raw()).w_ns_set, ns_id) };
+}
+
 pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     let mut id: handle_T = unsafe { map_get_string_int(namespace_id_map().raw(), name) };
     if id > 0 as ::core::ffi::c_int {
@@ -170,13 +216,11 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
     let mut retval: Dict = arena_dict(arena, namespace_id_map().len() as size_t);
     for (name, id) in namespace_id_map().entries() {
-        unsafe {
-            dict_put_str(
-                &mut retval,
-                cstr_as_string(name.data()),
-                Object::integer(id as Integer),
-            )
-        };
+        // SAFETY: the map's keys are C strings.
+        let key = unsafe { cstr_as_string(name.data()) };
+        let value = Object::integer(id as Integer);
+        // SAFETY: `retval` is this call's own dict.
+        unsafe { dict_put_str(&mut retval, key, value) };
     }
     retval
 }
@@ -201,15 +245,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     if !ns_initialized(ns_id as uint32_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"ns_id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_bad_number(err, c"ns_id", ns_id) };
         return ().reported(error);
     }
     let mut set_scoped: bool = true;
@@ -231,52 +268,26 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
             if wp.is_null() {
                 return ().reported(error);
             }
-            unsafe {
-                set_put_ptr_t(
-                    &raw mut windows,
-                    wp as ptr_t,
-                    ::core::ptr::null_mut::<*mut ptr_t>(),
-                )
-            };
+            let seen = &raw mut windows;
+            // SAFETY: `seen` is this call's own set, and `wp` a live window.
+            unsafe { set_put_ptr_t(seen, wp as ptr_t, ptr::null_mut()) };
             i = i.wrapping_add(1);
         }
         for win in tab_windows() {
             let wp_0 = win.raw();
             if unsafe { set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) } as ::core::ffi::c_int != 0
-                && !unsafe { set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) }
+                && !window_shows_ns(win, ns_id as uint32_t)
             {
-                unsafe {
-                    set_put_uint32_t(
-                        &raw mut (*wp_0).w_ns_set,
-                        ns_id as uint32_t,
-                        ::core::ptr::null_mut::<*mut uint32_t>(),
-                    )
-                };
-                if unsafe {
-                    set_has_uint32_t(
-                        &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
-                            as *mut Map_uint32_t_uint32_t))
-                            .set,
-                        ns_id as uint32_t,
-                    )
-                } {
+                show_ns_in_window(win, ns_id as uint32_t);
+                if buffer_uses_ns(win, ns_id as uint32_t) {
                     changed_window_setting(win);
                 }
             }
-            if unsafe { set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) }
-                as ::core::ffi::c_int
-                != 0
+            if window_shows_ns(win, ns_id as uint32_t) as ::core::ffi::c_int != 0
                 && !unsafe { set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) }
             {
-                unsafe { set_del_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) };
-                if unsafe {
-                    set_has_uint32_t(
-                        &raw mut (*(&raw mut (*(*wp_0).w_buffer).b_extmark_ns
-                            as *mut Map_uint32_t_uint32_t))
-                            .set,
-                        ns_id as uint32_t,
-                    )
-                } {
+                hide_ns_in_window(win, ns_id as uint32_t);
+                if buffer_uses_ns(win, ns_id as uint32_t) {
                     changed_window_setting(win);
                 }
             }
@@ -291,30 +302,14 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     if set_scoped && !local_scopes().contains(ns_id as uint32_t) {
         local_scopes().insert(ns_id as uint32_t);
         for win in tab_windows() {
-            let wp_1 = win.raw();
-            if unsafe {
-                set_has_uint32_t(
-                    &raw mut (*(&raw mut (*(*wp_1).w_buffer).b_extmark_ns
-                        as *mut Map_uint32_t_uint32_t))
-                        .set,
-                    ns_id as uint32_t,
-                )
-            } {
+            if buffer_uses_ns(win, ns_id as uint32_t) {
                 changed_window_setting(win);
             }
         }
     } else if !set_scoped && local_scopes().contains(ns_id as uint32_t) {
         local_scopes().remove(ns_id as uint32_t);
         for win in tab_windows() {
-            let wp_2 = win.raw();
-            if unsafe {
-                set_has_uint32_t(
-                    &raw mut (*(&raw mut (*(*wp_2).w_buffer).b_extmark_ns
-                        as *mut Map_uint32_t_uint32_t))
-                        .set,
-                    ns_id as uint32_t,
-                )
-            } {
+            if buffer_uses_ns(win, ns_id as uint32_t) {
                 changed_window_setting(win);
             }
         }
@@ -330,15 +325,8 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
     opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
     opts.wins = windows;
     if !ns_initialized(ns_id as uint32_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"ns_id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_bad_number(err, c"ns_id", ns_id) };
         return opts.reported(error);
     }
     if !local_scopes().contains(ns_id as uint32_t) {
@@ -346,29 +334,27 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
     }
     let mut count: size_t = 0 as size_t;
     for win in tab_windows() {
-        let wp = win.raw();
-        if unsafe { set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id as uint32_t) } {
+        if window_shows_ns(win, ns_id as uint32_t) {
             count = count.wrapping_add(1);
         }
     }
     windows = arena_array(arena, count);
     for win in tab_windows() {
-        let wp_0 = win.raw();
-        if unsafe { set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) } {
+        if window_shows_ns(win, ns_id as uint32_t) {
             if windows.size == windows.capacity {
                 windows.capacity = if windows.capacity != 0 {
                     windows.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
                 };
-                windows.items = unsafe {
-                    xrealloc(
-                        windows.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),
-                    )
-                } as *mut Object;
+                let old = windows.items as *mut ::core::ffi::c_void;
+                let bytes = ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity);
+                // SAFETY: `old` is null or this array's own allocation.
+                windows.items = unsafe { xrealloc(old, bytes) } as *mut Object;
             };
-            unsafe { array_add(&mut windows, Object::integer((*wp_0).handle as Integer)) };
+            let handle = Object::integer(win.handle() as Integer);
+            // SAFETY: `windows` is this call's own array.
+            unsafe { array_add(&mut windows, handle) };
         }
     }
     opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);

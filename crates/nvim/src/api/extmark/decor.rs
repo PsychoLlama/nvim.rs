@@ -12,6 +12,49 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::kvec::Kvec;
+use core::ffi::{CStr, c_char};
+use core::ptr;
+
+/// "Invalid `name`: `n`", for a handle or id that names nothing.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
+    let none = ptr::null();
+    // SAFETY: the caller's promise; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
+}
+
+/// "Invalid `name`: expected `want`", naming `got` when it says.
+///
+/// # Safety
+/// `err` must be the caller's error slot, `want` a C string and `got` null
+/// or a C string.
+unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
+    // SAFETY: the caller's promise; `name` is a C string too.
+    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
+}
+
+/// "Invalid `name`: out of range", what every bounds check here answers.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_out_of_range(err: *mut Error, name: &CStr) {
+    let why = c"out of range".as_ptr();
+    // SAFETY: the caller's promise about `err`; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), why, 0, false) };
+}
+
+/// A validation failure whose whole message is `why`.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_validation(err: *mut Error, why: &CStr) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: the caller's promise; `%s` takes the one C string it is given,
+    // so nothing in `why` is read as a directive.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, why.as_ptr()) };
+}
 
 pub unsafe fn nvim_buf_del_extmark(
     buf: Buffer,
@@ -25,15 +68,8 @@ pub unsafe fn nvim_buf_del_extmark(
         return false.reported(error);
     }
     if !ns_initialized(ns_id as uint32_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"ns_id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_bad_number(err, c"ns_id", ns_id) };
         return false.reported(error);
     }
     unsafe { extmark_del_id(b, ns_id as uint32_t, id as uint32_t) }.reported(error)
@@ -52,34 +88,23 @@ pub unsafe fn nvim_buf_clear_namespace(
         return ().reported(error);
     }
     if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"line number".as_ptr(),
-                c"out of range".as_ptr(),
-                0 as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_out_of_range(err, c"line number") };
         return ().reported(error);
     }
     if line_end < 0 as Integer || line_end > MAXLNUM as ::core::ffi::c_int as Integer {
         line_end = MAXLNUM as ::core::ffi::c_int as Integer;
     }
-    unsafe {
-        extmark_clear(
-            b,
-            if ns_id < 0 as Integer {
-                0 as uint32_t
-            } else {
-                ns_id as uint32_t
-            },
-            line_start as ::core::ffi::c_int,
-            0 as colnr_T,
-            line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            MAXCOL as ::core::ffi::c_int,
-        )
+    let ns = if ns_id < 0 as Integer {
+        0 as uint32_t
+    } else {
+        ns_id as uint32_t
     };
+    let start = line_start as ::core::ffi::c_int;
+    let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+    let maxcol = MAXCOL as ::core::ffi::c_int;
+    // SAFETY: `b` is the live buffer the handle named.
+    unsafe { extmark_clear(b, ns, start, 0 as colnr_T, end, maxcol) };
     ().reported(error)
 }
 
@@ -150,7 +175,7 @@ pub unsafe fn nvim_set_decoration_provider(
     {
         let mut v: *mut LuaRef = cbs[i as usize].source;
         if unsafe { *v } > 0 as ::core::ffi::c_int {
-            unsafe { *cbs[i as usize].dest = unsafe { *v } };
+            unsafe { *cbs[i as usize].dest = *v };
             unsafe { *v = LUA_NOREF as LuaRef };
         }
         i = i.wrapping_add(1);
@@ -177,14 +202,11 @@ pub unsafe fn parse_virt_text(
             if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                 != unsafe { (*chunks.items.add(i)).type_0 } as ::core::ffi::c_uint
             {
-                unsafe {
-                    api_err_exp(
-                        err,
-                        c"chunk".as_ptr(),
-                        api_typename(kObjectTypeArray),
-                        api_typename((*chunks.items.add(i)).type_0),
-                    )
-                };
+                let want = api_typename(kObjectTypeArray);
+                // SAFETY: `i` is below `chunks.size`.
+                let got = unsafe { api_typename((*chunks.items.add(i)).type_0) };
+                // SAFETY: `err` is this call's own error slot.
+                unsafe { err_expected(err, c"chunk", want, got) };
                 break '_free_exit;
             }
             let mut chunk: Array = unsafe { (*chunks.items.add(i)).data.array };
@@ -193,14 +215,9 @@ pub unsafe fn parse_virt_text(
                 && unsafe { (*chunk.items).type_0 } as ::core::ffi::c_uint
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
-                unsafe {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        c"%s".as_ptr(),
-                        c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr(),
-                    )
-                };
+                let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
+                // SAFETY: `err` is this call's own error slot.
+                unsafe { err_validation(err, why) };
                 break '_free_exit;
             }
             let mut str: String_0 = unsafe { (*chunk.items).data.string };
@@ -218,13 +235,11 @@ pub unsafe fn parse_virt_text(
                             if j >= arr.size {
                                 break 's_146;
                             }
-                            hl_id = unsafe {
-                                object_to_hl_id(
-                                    *arr.items.add(j),
-                                    c"virt_text highlight".as_ptr(),
-                                    err,
-                                )
-                            };
+                            // SAFETY: `j` is below `arr.size`.
+                            let item = unsafe { *arr.items.add(j) };
+                            let what = c"virt_text highlight".as_ptr();
+                            // SAFETY: `err` is the caller's error slot.
+                            hl_id = unsafe { object_to_hl_id(item, what, err) };
                             if unsafe { (*err).type_0 } as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
@@ -232,23 +247,21 @@ pub unsafe fn parse_virt_text(
                             }
                             if j < arr.size.wrapping_sub(1 as size_t) {
                                 // `kv_push`, whose growth step c2rust expanded inline.
-                                unsafe {
-                                    Kvec::new(
-                                        &mut virt_text.size,
-                                        &mut virt_text.capacity,
-                                        &mut virt_text.items,
-                                    )
-                                    .push(VirtTextChunk {
-                                        text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                        hl_id,
-                                    })
-                                };
+                                let mut vt = Kvec::new(
+                                    &mut virt_text.size,
+                                    &mut virt_text.capacity,
+                                    &mut virt_text.items,
+                                );
+                                let text = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                                // SAFETY: `items` is this vector's own allocation.
+                                unsafe { vt.push(VirtTextChunk { text, hl_id }) };
                             }
                             j = j.wrapping_add(1);
                         }
                     } else {
-                        hl_id =
-                            unsafe { object_to_hl_id(hl, c"virt_text highlight".as_ptr(), err) };
+                        let what = c"virt_text highlight".as_ptr();
+                        // SAFETY: `err` is the caller's error slot.
+                        hl_id = unsafe { object_to_hl_id(hl, what, err) };
                         if unsafe { (*err).type_0 } as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -257,26 +270,22 @@ pub unsafe fn parse_virt_text(
                     }
                 }
             }
-            let mut text: *mut ::core::ffi::c_char = unsafe {
-                transstr(
-                    if str.len() > 0 as size_t {
-                        str.data() as *const ::core::ffi::c_char
-                    } else {
-                        c"".as_ptr()
-                    },
-                    false,
-                )
+            let src = if str.len() > 0 as size_t {
+                str.data() as *const ::core::ffi::c_char
+            } else {
+                c"".as_ptr()
             };
+            // SAFETY: `src` is a C string -- the chunk's own bytes or a literal.
+            let text: *mut ::core::ffi::c_char = unsafe { transstr(src, false) };
             w += unsafe { mb_string2cells(text) } as ::core::ffi::c_int;
             // `kv_push`, whose growth step c2rust expanded inline.
-            unsafe {
-                Kvec::new(
-                    &mut virt_text.size,
-                    &mut virt_text.capacity,
-                    &mut virt_text.items,
-                )
-                .push(VirtTextChunk { text, hl_id })
-            };
+            let mut vt = Kvec::new(
+                &mut virt_text.size,
+                &mut virt_text.capacity,
+                &mut virt_text.items,
+            );
+            // SAFETY: `items` is this vector's own allocation.
+            unsafe { vt.push(VirtTextChunk { text, hl_id }) };
             i = i.wrapping_add(1);
         }
         if !width.is_null() {

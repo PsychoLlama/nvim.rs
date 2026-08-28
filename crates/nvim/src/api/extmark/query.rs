@@ -11,6 +11,29 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::winlayer::Live;
+use core::ffi::{CStr, c_char};
+use core::ptr;
+
+/// "Invalid `name`: `n`", for a handle or id that names nothing.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
+    let none = ptr::null();
+    // SAFETY: the caller's promise; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
+}
+
+/// "Invalid `name`: expected `want`", naming `got` when it says.
+///
+/// # Safety
+/// `err` must be the caller's error slot, `want` a C string and `got` null
+/// or a C string.
+unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
+    // SAFETY: the caller's promise; `name` is a C string too.
+    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
+}
 
 pub unsafe fn virt_text_to_array(
     mut vt: VirtText,
@@ -86,35 +109,19 @@ unsafe fn extmark_to_array(
                 ),
         );
         unsafe { dict_put(&mut dict, c"ns_id", Object::integer(start.ns as Integer)) };
-        unsafe {
-            dict_put(
-                &mut dict,
-                c"right_gravity",
-                Object::boolean(mt_right(start)),
-            )
-        };
+        let d_right_gravity = Object::boolean(mt_right(start));
+        // SAFETY: the collection is this call's own.
+        unsafe { dict_put(&mut dict, c"right_gravity", d_right_gravity) };
         if mt_paired(start) {
-            unsafe {
-                dict_put(
-                    &mut dict,
-                    c"end_row",
-                    Object::integer(extmark.end_pos.row as Integer),
-                )
-            };
-            unsafe {
-                dict_put(
-                    &mut dict,
-                    c"end_col",
-                    Object::integer(extmark.end_pos.col as Integer),
-                )
-            };
-            unsafe {
-                dict_put(
-                    &mut dict,
-                    c"end_right_gravity",
-                    Object::boolean(extmark.end_right_gravity),
-                )
-            };
+            let d_end_row = Object::integer(extmark.end_pos.row as Integer);
+            // SAFETY: the collection is this call's own.
+            unsafe { dict_put(&mut dict, c"end_row", d_end_row) };
+            let d_end_col = Object::integer(extmark.end_pos.col as Integer);
+            // SAFETY: the collection is this call's own.
+            unsafe { dict_put(&mut dict, c"end_col", d_end_col) };
+            let gravity = Object::boolean(extmark.end_right_gravity);
+            // SAFETY: `dict` is this call's own.
+            unsafe { dict_put(&mut dict, c"end_right_gravity", gravity) };
         }
         if mt_no_undo(start) {
             unsafe { dict_put(&mut dict, c"undo_restore", Object::boolean(false)) };
@@ -138,6 +145,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     opts: *mut KeyDict_get_extmark,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
+    // SAFETY: the dispatcher's keyset outlives this call.
+    let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
@@ -146,23 +155,16 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         return rv.reported(error);
     }
     if !ns_initialized(ns_id as uint32_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"ns_id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_bad_number(err, c"ns_id", ns_id) };
         return rv.reported(error);
     }
-    let mut details: bool = unsafe { (*opts).details };
+    let mut details: bool = opts.details;
     let mut hl_name: bool = if has_key(
-        unsafe { (*opts).is_set__get_extmark_ },
+        opts.is_set__get_extmark_,
         KEYSET_OPTIDX_get_extmark__hl_name,
     ) {
-        unsafe { (*opts).hl_name as ::core::ffi::c_int }
+        opts.hl_name as ::core::ffi::c_int
     } else {
         1
     } != 0;
@@ -181,6 +183,8 @@ pub unsafe fn nvim_buf_get_extmarks(
     opts: *mut KeyDict_get_extmarks,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
+    // SAFETY: the dispatcher's keyset outlives this call.
+    let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
@@ -189,56 +193,42 @@ pub unsafe fn nvim_buf_get_extmarks(
         return rv.reported(error);
     }
     if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"ns_id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ns_id as int64_t,
-                false,
-            )
-        };
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_bad_number(err, c"ns_id", ns_id) };
         return rv.reported(error);
     }
-    let mut details: bool = unsafe { (*opts).details };
+    let mut details: bool = opts.details;
     let mut hl_name: bool = if has_key(
-        unsafe { (*opts).is_set__get_extmarks_ },
+        opts.is_set__get_extmarks_,
         KEYSET_OPTIDX_get_extmarks__hl_name,
     ) {
-        unsafe { (*opts).hl_name as ::core::ffi::c_int }
+        opts.hl_name as ::core::ffi::c_int
     } else {
         1
     } != 0;
     let mut type_0: ExtmarkType = kExtmarkNone;
-    if has_key(
-        unsafe { (*opts).is_set__get_extmarks_ },
-        KEYSET_OPTIDX_get_extmarks__type,
-    ) {
-        if unsafe { strequal((*opts).type_0.data(), c"sign".as_ptr()) } {
+    if has_key(opts.is_set__get_extmarks_, KEYSET_OPTIDX_get_extmarks__type) {
+        if unsafe { strequal(opts.type_0.data(), c"sign".as_ptr()) } {
             type_0 = kExtmarkSign;
-        } else if unsafe { strequal((*opts).type_0.data(), c"virt_text".as_ptr()) } {
+        } else if unsafe { strequal(opts.type_0.data(), c"virt_text".as_ptr()) } {
             type_0 = kExtmarkVirtText;
-        } else if unsafe { strequal((*opts).type_0.data(), c"virt_lines".as_ptr()) } {
+        } else if unsafe { strequal(opts.type_0.data(), c"virt_lines".as_ptr()) } {
             type_0 = kExtmarkVirtLines;
-        } else if unsafe { strequal((*opts).type_0.data(), c"highlight".as_ptr()) } {
+        } else if unsafe { strequal(opts.type_0.data(), c"highlight".as_ptr()) } {
             type_0 = kExtmarkHighlight;
         } else if true {
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"type".as_ptr(),
-                    c"sign, virt_text, virt_lines or highlight".as_ptr(),
-                    (*opts).type_0.data(),
-                )
-            };
+            let want = c"sign, virt_text, virt_lines or highlight".as_ptr();
+            let got = opts.type_0.data();
+            // SAFETY: `err` is this call's own error slot.
+            unsafe { err_expected(err, c"type", want, got) };
             return rv.reported(error);
         }
     }
     let mut limit: Integer = if has_key(
-        unsafe { (*opts).is_set__get_extmarks_ },
+        opts.is_set__get_extmarks_,
         KEYSET_OPTIDX_get_extmarks__limit,
     ) {
-        unsafe { (*opts).limit }
+        opts.limit
     } else {
         -1 as Integer
     };
@@ -275,7 +265,7 @@ pub unsafe fn nvim_buf_get_extmarks(
             u_col,
             limit,
             type_0,
-            (*opts).overlap,
+            opts.overlap,
         )
     };
     rv = arena_array(
@@ -289,35 +279,25 @@ pub unsafe fn nvim_buf_get_extmarks(
     if reverse {
         let mut i: ::core::ffi::c_int = marks.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         while i >= 0 as ::core::ffi::c_int && rv.size < rv_limit {
-            unsafe {
-                array_add(
-                    &mut rv,
-                    Object::array(extmark_to_array(
-                        *marks.items.offset(i as isize),
-                        true,
-                        details,
-                        hl_name,
-                        arena,
-                    )),
-                )
-            };
+            // SAFETY: `i` indexes the array `extmark_get` filled.
+            let mark = unsafe { *marks.items.offset(i as isize) };
+            // SAFETY: `arena` is the caller's.
+            let put_value =
+                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
+            // SAFETY: the collection is this call's own.
+            unsafe { array_add(&mut rv, put_value) };
             i -= 1;
         }
     } else {
         let mut i_0: size_t = 0 as size_t;
         while i_0 < marks.size {
-            unsafe {
-                array_add(
-                    &mut rv,
-                    Object::array(extmark_to_array(
-                        *marks.items.add(i_0),
-                        true,
-                        details,
-                        hl_name,
-                        arena,
-                    )),
-                )
-            };
+            // SAFETY: `i_0` indexes the array `extmark_get` filled.
+            let mark = unsafe { *marks.items.add(i_0) };
+            // SAFETY: `arena` is the caller's.
+            let put_value =
+                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
+            // SAFETY: the collection is this call's own.
+            unsafe { array_add(&mut rv, put_value) };
             i_0 = i_0.wrapping_add(1);
         }
     }
@@ -349,29 +329,15 @@ unsafe fn extmark_get_index_from_obj(
             unsafe { *col = MAXCOL as ::core::ffi::c_int as colnr_T };
             return true;
         } else if id < 0 as Integer && true {
-            unsafe {
-                api_err_invalid(
-                    err,
-                    c"mark id".as_ptr(),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    id as int64_t,
-                    false,
-                )
-            };
+            // SAFETY: `err` is this call's own error slot.
+            unsafe { err_bad_number(err, c"mark id", id) };
             return false;
         }
         let mut extmark: MTPair =
             unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
         if !(extmark.start.pos.row >= 0 as int32_t) {
-            unsafe {
-                api_err_invalid(
-                    err,
-                    c"mark id (not found)".as_ptr(),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    id as int64_t,
-                    false,
-                )
-            };
+            // SAFETY: `err` is this call's own error slot.
+            unsafe { err_bad_number(err, c"mark id (not found)", id) };
             return false;
         }
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
@@ -387,42 +353,34 @@ unsafe fn extmark_get_index_from_obj(
             && unsafe { (*pos.items.add(1)).type_0 } as ::core::ffi::c_uint
                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"mark position".as_ptr(),
-                    c"2 Integer items".as_ptr(),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                )
-            };
+            let want = c"2 Integer items".as_ptr();
+            let got = ::core::ptr::null::<::core::ffi::c_char>();
+            // SAFETY: `err` is this call's own error slot.
+            unsafe { err_expected(err, c"mark position", want, got) };
             return false;
         }
         let mut pos_row: Integer = unsafe { (*pos.items).data.integer };
         let mut pos_col: Integer = unsafe { (*pos.items.add(1)).data.integer };
-        unsafe {
-            *row = (if pos_row >= 0 as Integer {
-                pos_row
-            } else {
-                MAXLNUM as ::core::ffi::c_int as Integer
-            }) as ::core::ffi::c_int
-        };
-        unsafe {
-            *col = (if pos_col >= 0 as Integer {
-                pos_col
-            } else {
-                MAXCOL as ::core::ffi::c_int as Integer
-            }) as colnr_T
-        };
+        let r = (if pos_row >= 0 as Integer {
+            pos_row
+        } else {
+            MAXLNUM as ::core::ffi::c_int as Integer
+        }) as ::core::ffi::c_int;
+        let c = (if pos_col >= 0 as Integer {
+            pos_col
+        } else {
+            MAXCOL as ::core::ffi::c_int as Integer
+        }) as colnr_T;
+        // SAFETY: the caller's own out-parameters.
+        unsafe { *row = r };
+        // SAFETY: as above.
+        unsafe { *col = c };
         return true;
     } else if true {
-        unsafe {
-            api_err_exp(
-                err,
-                c"mark position".as_ptr(),
-                c"mark id Integer or 2-item Array".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-            )
-        };
+        let want = c"mark id Integer or 2-item Array".as_ptr();
+        let got = ::core::ptr::null::<::core::ffi::c_char>();
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_expected(err, c"mark position", want, got) };
         return false;
     }
     panic!("Reached end of non-void function without returning");
