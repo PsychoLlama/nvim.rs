@@ -17,6 +17,8 @@ use core::ffi::{c_char, c_int};
 /// # Safety
 /// `at` must be a valid index into the stack.
 pub(crate) unsafe fn script_at(at: c_int) -> *mut FileDescriptor {
+    // SAFETY (this body): the caller's promise -- `at` is a valid index into
+    // the fifteen-entry stack.
     unsafe { scriptin.ptr().cast::<FileDescriptor>().offset(at as isize) }
 }
 
@@ -30,6 +32,9 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     // below reaches the message machinery through.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
     if curscript.get() + 1 == NSCRIPT as c_int {
+        // SAFETY (this body): `expanded` is this frame's own `MAXPATHL`
+        // buffer, and `curscript` was just checked to be in range of the
+        // stack.
         unsafe { emsg(gettext(&raw const e_nesting as *const c_char)) };
         return;
     }
@@ -106,6 +111,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
 /// A script must be open.
 pub(crate) unsafe fn closescript() {
     debug_assert!(curscript.get() >= 0);
+    // SAFETY (this body): `curscript` names an open entry of the stack.
     unsafe { free_typebuf() };
     restore_saved_typebuf(curscript.get());
 
@@ -124,6 +130,7 @@ pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
     debug_assert!(curscript.get() == -1);
     curscript.set(curscript.get() + 1);
 
+    // SAFETY (this body): as [`openscript`] -- the stack entry is in range.
     let error = if unsafe { strequal(scriptin_name, c"-".as_ptr()) } {
         unsafe { file_open_stdin(script_at(0)) }
     } else {
@@ -163,6 +170,8 @@ pub fn using_script() -> c_int {
 /// # Safety
 /// Callable at any time.
 pub unsafe fn before_blocking() {
+    // SAFETY (this body): reads the script stack and syncs the editor's own
+    // state.
     unsafe { updatescript(0) };
     if may_garbage_collect.get() {
         unsafe { garbage_collect(false) };
@@ -183,6 +192,8 @@ pub(crate) unsafe fn updatescript(c: c_int) {
     static count: GlobalCell<c_int> = GlobalCell::new(0);
 
     if c != 0 && !scriptout.get().is_null() {
+        // SAFETY (this body): `scriptout` is the open `'scriptout'` stream, or
+        // null, which `putc` is not reached with.
         unsafe { putc(c, scriptout.get()) };
     }
     let idle = c == 0;

@@ -31,6 +31,8 @@ pub unsafe fn reset_redobuff() {
     if block_redo.get() {
         return;
     }
+    // SAFETY (this body): the two redo buffers are statics, and nothing holds
+    // a pointer into the chain being freed.
     unsafe { old_redobuff().free() };
     old_redobuff().set(redobuff().take());
 }
@@ -43,6 +45,7 @@ pub unsafe fn cancel_redo() {
     if block_redo.get() {
         return;
     }
+    // SAFETY (this body): as [`reset_redobuff`].
     unsafe { redobuff().free() };
     redobuff().set(old_redobuff().take());
     start_stuff();
@@ -60,6 +63,8 @@ pub unsafe fn cancel_redo() {
 /// `save_redo` must point at writable storage that outlives the matching
 /// [`restore_redobuff`].
 pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
+    // SAFETY (this body): the caller's promise -- `save_redo` is writable
+    // storage that outlives the matching restore.
     unsafe { (*save_redo).sr_redobuff = redobuff().take() };
     unsafe { (*save_redo).sr_old_redobuff = old_redobuff().take() };
 
@@ -78,10 +83,14 @@ pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
 /// # Safety
 /// `save_redo` must be the one a matching [`save_redobuff`] filled.
 pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
+    // SAFETY (this body): as [`save_redobuff`] -- `save_redo` is the one a
+    // matching save filled.
     unsafe { redobuff().free() };
     redobuff().set(core::mem::take(unsafe { &mut (*save_redo).sr_redobuff }));
     unsafe { old_redobuff().free() };
-    old_redobuff().set(core::mem::take(unsafe { &mut (*save_redo).sr_old_redobuff }));
+    old_redobuff().set(core::mem::take(unsafe {
+        &mut (*save_redo).sr_old_redobuff
+    }));
 }
 
 /// Append `s` to the redo buffer. `K_SPECIAL` must already be escaped.
@@ -90,6 +99,7 @@ pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn append_to_redobuff(s: *const c_char) {
     if !block_redo.get() {
+        // SAFETY (this body): the caller's promise -- `s` is NUL-terminated.
         unsafe { redobuff().add(s, -1) };
     }
 }
@@ -111,6 +121,9 @@ pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
     // explicit length and the NUL terminator.
     let more = |s: *const c_char| {
         if len < 0 {
+            // SAFETY (this body): the caller's promise -- `str` is `len`
+            // readable bytes, or NUL-terminated when `len` is negative -- and
+            // both walks stop at whichever of the two ends first.
             c_int::from(unsafe { *s }) != NUL
         } else {
             (unsafe { s.offset_from(str) }) < len as isize
@@ -169,6 +182,8 @@ pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
     if block_redo.get() {
         return;
     }
+    // SAFETY (this body): `buf` is this frame's own array, sized for the
+    // longest key escape.
     while c_int::from(unsafe { *s }) != NUL {
         if c_int::from(unsafe { *s } as u8) == K_SPECIAL
             && c_int::from(unsafe { *s.add(1) }) != NUL
@@ -219,6 +234,9 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
             return FAIL;
         }
         redo_block.set(head);
+        // SAFETY (this body): `redo_block` and `redo_at` name a live block of
+        // the redo buffer and a byte inside it; the walk crosses to `next`
+        // only at that block's NUL.
         redo_at.set(unsafe { block_str(head) }.cast());
         return OK;
     }
@@ -292,6 +310,8 @@ pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
 /// As [`read_redo`] without `init`.
 unsafe fn copy_redo(old_redo: bool) {
     loop {
+        // SAFETY (this body): as [`read_redo`] -- the walk cursors are inside
+        // the redo buffer.
         let c = unsafe { read_redo(false, old_redo) };
         if c == NUL {
             break;
@@ -310,6 +330,8 @@ unsafe fn copy_redo(old_redo: bool) {
 /// Callable at any time.
 pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
     // Position the cursor; give up if there is nothing to redo.
+    // SAFETY (this body): the redo buffer's chain is live for the whole of
+    // this body, and `buf` is this frame's own array.
     if unsafe { read_redo(true, old_redo) } == FAIL {
         return FAIL;
     }
@@ -368,6 +390,7 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
 /// # Safety
 /// Callable at any time.
 pub unsafe fn start_redo_ins() -> c_int {
+    // SAFETY (this body): as [`start_redo`].
     if unsafe { read_redo(true, false) } == FAIL {
         return FAIL;
     }

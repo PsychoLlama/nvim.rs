@@ -73,6 +73,7 @@ pub fn get_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
 /// # Safety
 /// `curbuf` must be a live buffer.
 pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
+    // SAFETY (this body): the caller's promise -- `curbuf` is a live buffer.
     unsafe { (*curbuf.get()).b_maphash[map_hash(state, c)] }
 }
 

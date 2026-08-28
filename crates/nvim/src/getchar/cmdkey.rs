@@ -47,6 +47,9 @@ pub unsafe fn getcmdkeycmd(
     let unmapped = Keys::unmapped(); // no mapping for these characters
     got_int.set(false);
     while c1 != NUL && !aborted {
+        // SAFETY (this body): `line_ga` is this frame's own growarray, and
+        // every byte written into it comes from the typeahead, which
+        // `vgetorpeek` has already validated.
         unsafe { ga_grow(&raw mut line_ga, 32) };
 
         if unsafe { vgetorpeek(false) } == NUL {
@@ -128,6 +131,9 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
     let unmapped = Keys::unmapped();
     got_int.set(false);
     while c1 != NUL && !aborted {
+        // SAFETY (this body): the typeahead holds the `<Lua>` key's decimal
+        // reference, NUL-terminated by construction, and `err` is this frame's
+        // own slot.
         unsafe { ga_grow(&raw mut line_ga, 32) };
         c1 = unsafe { vgetorpeek(true) };
         if got_int.get() {

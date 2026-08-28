@@ -74,8 +74,8 @@ use crate::strings::vim_strchr;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, colnr_T, flush_buffers_T,
-    garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t,
-    uint64_t, varnumber_T,
+    garray_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t, uint64_t,
+    varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

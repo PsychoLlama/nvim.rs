@@ -227,7 +227,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
 ///
 /// # Safety
 /// `mp` must be a live mapblock, and `curwin` a live window.
-pub unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
+pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
     let luaref = mp.m_luaref;
     // Remove the escaping of K_SPECIAL: `m_str` is in the format used for
     // typeahead, not the one the expression is written in.

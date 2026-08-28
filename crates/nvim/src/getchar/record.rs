@@ -91,6 +91,8 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
     static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
 
     for i in 0..len {
+        // SAFETY (this body): the caller's promise -- `chars` is `len`
+        // readable bytes.
         if !state.with_mut(|st| gotchars_add_byte(st, unsafe { *chars.add(i) })) {
             continue;
         }
@@ -146,6 +148,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
 pub unsafe fn gotchars_ignore() {
     let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
     on_key_ignore_len.set(on_key_ignore_len.get() + 3);
+    // SAFETY (this body): a fixed three-byte `K_IGNORE` sequence.
     unsafe { gotchars(nop.as_ptr(), 3) };
 }
 
@@ -176,6 +179,8 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
     // Split the key into its modifier prefix and the key itself.
     let mut ptr: *const c_char = key.buf.as_ptr().cast();
     let mut modifiers = 0;
+    // SAFETY (this body): `showcmd_buf` is this module's own fixed-size array,
+    // and every write below is bounded by `SHOWCMD_COLS`.
     if c_int::from(unsafe { *ptr } as u8) == K_SPECIAL
         && c_int::from(unsafe { *ptr.add(1) } as u8) == KS_MODIFIER
         && c_int::from(unsafe { *ptr.add(2) } as u8) != NUL

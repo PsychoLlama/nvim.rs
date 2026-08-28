@@ -396,6 +396,8 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY (this body): the Vimscript call convention, passed straight
+    // through.
     unsafe { get_maparg(argvars, rettv, true) }
 }
 
@@ -404,6 +406,7 @@ pub unsafe fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY (this body): as [`f_maparg`].
     unsafe { get_maparg(argvars, rettv, false) }
 }
 

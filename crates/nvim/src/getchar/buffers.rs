@@ -114,6 +114,8 @@ impl Default for KeyBuffer {
 /// # Safety
 /// `block` must point at a live block allocated by [`KeyBuffer::add`].
 pub(crate) unsafe fn block_str(block: *mut KeyBlock) -> *mut c_char {
+    // SAFETY (this body): the caller's promise -- a live block, whose `bytes`
+    // is the flexible array member the allocation was sized for.
     unsafe { (&raw mut (*block).bytes).cast::<c_char>() }
 }
 
@@ -135,6 +137,9 @@ impl KeyBuffer {
     unsafe fn free(&mut self) {
         let mut block = self.first;
         while !block.is_null() {
+            // SAFETY (this body): the caller's promise -- nothing else points
+            // into this chain, so each block is ours to unlink and free
+            // exactly once.
             let next = unsafe { (*block).next };
             unsafe { xfree(block.cast()) };
             block = next;
@@ -154,6 +159,10 @@ impl KeyBuffer {
         let mut count = 0;
         let mut block = self.first;
         while !block.is_null() {
+            // SAFETY (this body): every block on the chain is live and its
+            // bytes are NUL-terminated, so the walk stops inside each one;
+            // `xmalloc` never returns null and `count + 1` is the total of
+            // every block's length plus the terminator.
             count += unsafe { (*block).len };
             block = unsafe { (*block).next };
         }
@@ -193,6 +202,10 @@ impl KeyBuffer {
     /// `s` must point at `slen` readable bytes.
     unsafe fn add(&mut self, s: *const c_char, slen: ptrdiff_t) -> bool {
         let slen = if slen < 0 {
+            // SAFETY (this body): `s` is `slen` readable bytes by the caller's
+            // promise, and every block reached here is one this buffer
+            // allocated -- sized `offset_of!(KeyBlock, bytes) + len + 1`,
+            // which is what makes the writes past `bytes` in range.
             unsafe { strlen(s) }
         } else {
             slen as usize
@@ -266,6 +279,8 @@ impl KeyBuffer {
             return; // the bytes are not all in the last block
         }
         unsafe { (*curr).len -= slen as usize };
+        // SAFETY (this body): `at` names a live block of this buffer's own
+        // chain, and the test above showed it holds at least `slen` bytes.
         unsafe { *block_str(curr).add((*curr).len) = 0 };
         self.space += slen as usize;
     }
@@ -280,6 +295,9 @@ impl KeyBuffer {
             return NUL; // buffer is empty
         }
 
+        // SAFETY (this body): `curr` is the live head block, whose bytes are
+        // NUL-terminated, and `index` is inside it; the block is only freed
+        // once its NUL is reached.
         let str = unsafe { block_str(curr) };
         let c = unsafe { *str.add(self.index) } as u8;
         if advance {
@@ -479,6 +497,8 @@ impl KeyBufferRef {
 /// # Safety
 /// Callable at any time; the answer must be freed with `xfree`.
 pub unsafe fn get_recorded() -> *mut c_char {
+    // SAFETY (this body): `contents` answers an `xmalloc`ed string of `len`
+    // bytes plus a NUL, which this frame owns and hands to the caller.
     let (recorded, mut len) = unsafe { recordbuff().contents(true) };
     if recorded.is_null() {
         return ptr::null_mut();
@@ -507,6 +527,7 @@ pub unsafe fn get_recorded() -> *mut c_char {
 /// # Safety
 /// Callable at any time; the answer owns its bytes.
 pub unsafe fn get_inserted() -> String_0 {
+    // SAFETY (this body): as [`get_recorded`] -- the answer owns its bytes.
     let (data, size) = unsafe { redobuff().contents(false) };
     String_0::from_raw_parts(data, size)
 }
@@ -543,6 +564,8 @@ fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
 /// # Safety
 /// Callable at any time.
 pub(crate) unsafe fn read_readbuffers(advance: bool) -> c_int {
+    // SAFETY (this body): the two read buffers are statics, and nothing holds
+    // a pointer into the block a read may free.
     let c = unsafe { readbuf1().read(advance) };
     if c == NUL {
         unsafe { readbuf2().read(advance) }
@@ -586,6 +609,8 @@ pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
     init_typebuf();
 
     start_stuff();
+    // SAFETY (this body): the typeahead is initialised just above, and
+    // `inchar` is given its own storage and the room left in it.
     while unsafe { read_readbuffers(true) } != NUL {}
 
     if flush_typeahead == FLUSH_INPUT {
@@ -602,6 +627,7 @@ pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
 /// Safe: the only promise is that the editor exists.
 pub fn beep_flush() {
     if emsg_silent.get() == 0 {
+        // SAFETY (this body): both callees only read the editor's own state.
         unsafe { flush_buffers(FLUSH_MINIMAL) };
         unsafe { vim_beep(kOptBoFlagError as c_uint) };
     }
@@ -612,6 +638,8 @@ pub fn beep_flush() {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_readbuf(s: *const c_char) {
+    // SAFETY (this body): the caller's promise -- a NUL-terminated string,
+    // which `add` copies.
     unsafe { readbuf1().add(s, -1) };
 }
 
@@ -620,6 +648,7 @@ pub unsafe fn stuff_readbuf(s: *const c_char) {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_redo_readbuf(s: *const c_char) {
+    // SAFETY (this body): as [`stuff_readbuf`].
     unsafe { readbuf2().add(s, -1) };
 }
 
@@ -628,6 +657,8 @@ pub unsafe fn stuff_redo_readbuf(s: *const c_char) {
 /// # Safety
 /// `s` must point at `len` readable bytes.
 pub unsafe fn stuff_readbuf_len(s: *const c_char, len: ptrdiff_t) {
+    // SAFETY (this body): the caller's promise -- `len` readable bytes, which
+    // `add` copies.
     unsafe { readbuf1().add(s, len) };
 }
 
@@ -640,6 +671,9 @@ pub unsafe fn stuff_readbuf_len(s: *const c_char, len: ptrdiff_t) {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_readbuf_one_line(mut s: *const c_char) {
+    // SAFETY (this body): the caller's promise -- `s` is NUL-terminated -- and
+    // the walk stops at its NUL, so the two bytes after a `K_SPECIAL` are only
+    // read once the one before them is known non-NUL.
     while c_int::from(unsafe { *s }) != NUL {
         if c_int::from(unsafe { *s } as u8) == K_SPECIAL
             && c_int::from(unsafe { *s.add(1) }) != NUL
@@ -678,6 +712,9 @@ pub fn stuff_readbuf_number(n: c_int) {
 /// # Safety
 /// `arg` must point at a NUL-terminated string.
 pub unsafe fn stuffescaped(mut arg: *const c_char, literally: bool) {
+    // SAFETY (this body): the caller's promise -- `arg` is NUL-terminated --
+    // and both walks stop at its NUL, so `start..arg` is always a run inside
+    // it.
     while c_int::from(unsafe { *arg }) != NUL {
         // Stuff a run of ordinary characters in one go.
         let start = arg;

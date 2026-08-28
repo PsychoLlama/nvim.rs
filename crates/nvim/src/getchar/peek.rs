@@ -33,6 +33,9 @@ use core::ptr;
 /// Longest partial mapping `'showcmd'` will display.
 const SHOWCMD_COLS: c_int = 10;
 
+/// `KS_EXTRA` as the byte it is compared against inside a key escape.
+const KS_EXTRA_U8: u8 = KS_EXTRA as u8;
+
 /// Where the cursor was left after the `<Esc>`-in-Insert peek, which is where
 /// `'showcmd'` has to draw the partially matched keys.
 #[derive(Clone, Copy)]
@@ -64,6 +67,9 @@ struct Partial {
 unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     let deleted = mode_displayed.get();
     if deleted {
+        // SAFETY (this body): `curwin` is set from startup to exit, and the
+        // cursor line pointer is valid for `w_cursor.col` bytes, which is
+        // where both walks stop.
         unsafe { unshowmode(true) };
     }
     validate_cursor(unsafe { Win::current() });
@@ -148,37 +154,48 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
     if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0 || State.get() == MODE_LANGMAP)
         && State.get() != MODE_HITRETURN
     {
-        let last = tb.at(tb.len() - 1);
-        if State.get() & MODE_INSERT != 0 && unsafe { ptr2cells(last.cast()) } == 1 {
+        let last = tb.byte(tb.len() - 1);
+        // SAFETY: the last valid byte of the typeahead is readable, and
+        // `edit_putchar` copies what it is given.
+        if State.get() & MODE_INSERT != 0 && unsafe { ptr2cells(tb.at(tb.len() - 1).cast()) } == 1 {
             // This looks nice when typing a dead-character mapping.
-            unsafe { edit_putchar(c_int::from(*last), false) };
-            unsafe { setcursor() }; // put the cursor back where it belongs
+            // SAFETY: draws `last` into the text; reads nothing of ours.
+            unsafe {
+                edit_putchar(last, false);
+                setcursor(); // put the cursor back where it belongs
+            }
             partial.showing = true;
         }
         // The showcmd area is drawn relative to the cursor position the
         // <Esc> peek above left, not the one the cursor is at now.
-        let win = curwin.get();
-        let old_wcol = unsafe { (*win).w_wcol };
-        let old_wrow = unsafe { (*win).w_wrow };
-        unsafe { (*win).w_wcol = at.wcol };
-        unsafe { (*win).w_wrow = at.wrow };
+        // SAFETY: `curwin` is set from startup to exit.
+        let mut win = unsafe { Win::current() };
+        let old_wcol = win.w_wcol;
+        let old_wrow = win.w_wrow;
+        win.w_wcol = at.wcol;
+        win.w_wrow = at.wrow;
         push_showcmd();
         if tb.len() > SHOWCMD_COLS {
             partial.showcmd_idx = tb.len() - SHOWCMD_COLS;
         }
         while partial.showcmd_idx < tb.len() {
-            unsafe { add_byte_to_showcmd(*tb.at(partial.showcmd_idx)) };
+            let byte = tb.byte(partial.showcmd_idx) as u8;
+            // SAFETY: appends one byte to the showcmd rendering.
+            unsafe { add_byte_to_showcmd(byte) };
             partial.showcmd_idx += 1;
         }
-        unsafe { (*win).w_wcol = old_wcol };
-        unsafe { (*win).w_wrow = old_wrow };
+        win.w_wcol = old_wcol;
+        win.w_wrow = old_wrow;
     }
 
     // The same on the command line, where `get_number()` has none.
     if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && cmdline_star.get() == 0 {
         let p = tb.at(tb.len() - 1);
-        if unsafe { ptr2cells(p.cast()) } == 1 && c_int::from(unsafe { *p }) < 128 {
-            unsafe { putcmdline(*p as c_char, false) };
+        let byte = tb.byte(tb.len() - 1);
+        // SAFETY: the last valid byte of the typeahead is readable.
+        if unsafe { ptr2cells(p.cast()) } == 1 && byte < 128 {
+            // SAFETY: draws one byte on the command line.
+            unsafe { putcmdline(byte as c_char, false) };
             partial.showing = true;
         }
     }
@@ -195,6 +212,8 @@ unsafe fn unshow_partial_key(partial: &Partial) {
     }
     if partial.showing {
         if State.get() & MODE_INSERT != 0 {
+            // SAFETY (this body): takes back what the matching
+            // `show_partial_key` drew; reads nothing of ours.
             unsafe { edit_unputchar() };
         }
         if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
@@ -228,6 +247,8 @@ fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
 unsafe fn interrupted(advance: bool) -> c_int {
     let tb = typeahead();
     // Flush all input.
+    // SAFETY (this body): the typeahead's own storage, and the room left in
+    // it.
     let got = unsafe { inchar(tb.storage(), tb.buflen() - 1, 0) };
 
     // If `inchar` answered true (a script file was active) or we are
@@ -273,6 +294,9 @@ unsafe fn read_from_typeahead(
             line_breakcheck();
         } else {
             // os_breakcheck() can call input_enqueue().
+            // SAFETY (this body): `curbuf` is set from startup to exit, and
+            // every typeahead access goes through the accessors, which
+            // bound-check against the buffer's own length.
             if (mapped_ctrl_c.get() | unsafe { (*curbuf.get()).b_mapped_ctrl_c }) & get_real_state()
                 != 0
             {
@@ -501,6 +525,8 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
             }
             c
         } else {
+            // SAFETY (this body): the input stack's own state; nothing here
+            // holds a pointer across a call that can re-enter it.
             unsafe { read_readbuffers(advance) }
         };
 
@@ -573,6 +599,8 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
     let tb_change_cnt = typeahead().change_cnt();
 
     if wait_time == -1 || wait_time > 100 {
+        // SAFETY (this body): `buf` is `maxlen` writable bytes by the caller's
+        // promise, and the script stack entry is one `curscript` names.
         unsafe { ui_flush() }; // flush output before waiting
     }
 
@@ -688,6 +716,8 @@ pub unsafe fn fix_input_buffer(buf: *mut u8, mut len: c_int) -> c_int {
     if using_script() == 0 {
         // K_SPECIAL should not be escaped for input from the user: the
         // key codes are processed in input.c/input_enqueue.
+        // SAFETY (this body): the caller's promise -- `buf` holds `len`
+        // readable bytes and `3 * len + 1` writable ones.
         unsafe { *buf.offset(len as isize) = 0 };
         return len;
     }
@@ -698,20 +728,29 @@ pub unsafe fn fix_input_buffer(buf: *mut u8, mut len: c_int) -> c_int {
     let mut i = len;
     while i > 0 {
         i -= 1;
-        if c_int::from(unsafe { *p }) == NUL
-            || (c_int::from(unsafe { *p }) == K_SPECIAL
-                && (i < 2 || c_int::from(unsafe { *p.add(1) }) != KS_EXTRA))
-        {
-            unsafe { ptr::copy(p.add(1), p.add(3), i as usize) };
-            let escape = key_escape(c_int::from(unsafe { *p }));
-            unsafe { *p = escape[0] };
-            unsafe { *p.add(1) = escape[1] };
-            unsafe { *p.add(2) = escape[2] };
-            p = unsafe { p.add(2) };
+        // SAFETY (this loop): the caller's promise — `buf` holds `len`
+        // readable bytes and `3 * len + 1` writable ones, so every byte a
+        // replacement pushes two further along still has room, and `p` never
+        // walks past what is left to scan.
+        let c = c_int::from(unsafe { *p });
+        let escaped =
+            c == NUL || (c == K_SPECIAL && (i < 2 || unsafe { *p.add(1) } != KS_EXTRA_U8));
+        if escaped {
+            let escape = key_escape(c);
+            // SAFETY: as above.
+            unsafe {
+                ptr::copy(p.add(1), p.add(3), i as usize);
+                *p = escape[0];
+                *p.add(1) = escape[1];
+                *p.add(2) = escape[2];
+                p = p.add(2);
+            }
             len += 2;
         }
+        // SAFETY: as above.
         p = unsafe { p.add(1) };
     }
+    // SAFETY: as above — the byte one past the last is writable.
     unsafe { *p = 0 }; // add the trailing NUL
     len
 }

@@ -55,6 +55,9 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
     };
     let called_emsg_start = called_emsg.get();
 
+    // SAFETY (this body): the Vimscript call convention -- `argvars` is a live
+    // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
+    // there, and `numbuf` outlives the strings it lends back.
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN
         && unsafe { tv_check_for_opt_dict_arg(argvars, 1) } == FAIL
     {
@@ -120,6 +123,8 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
             ui_cursor_goto(msg_row.get(), msg_col.get());
         }
 
+        // SAFETY (this body): reads one key through the ordinary input stack;
+        // the buffers it fills are this frame's own.
         let blocking = unsafe { (*argvars).v_type } == VAR_UNKNOWN
             || (unsafe { (*argvars).v_type } == VAR_NUMBER
                 && unsafe { (*argvars).vval.v_number } == -1);
@@ -186,6 +191,8 @@ unsafe fn set_mouse_vars() {
     // before it. `win` came out of a walk of the same list, so the "not
     // in it" arm upstream walks into a null pointer on is unreachable.
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
+    // SAFETY (this body): `curwin` is set from startup to exit, and the vim
+    // variables set here are the editor's own.
     unsafe { set_vim_var_nr(Vv::MouseWin, winnr as varnumber_T) };
     unsafe { set_vim_var_nr(Vv::MouseWinid, win.handle as varnumber_T) };
     unsafe { set_vim_var_nr(Vv::MouseLnum, lnum as varnumber_T) };
@@ -201,6 +208,8 @@ pub(crate) unsafe fn getchar_common(
     rettv: *mut typval_T,
     allow_number: bool,
 ) {
+    // SAFETY (this body): as [`getchar_opts`] -- a live argument vector and a
+    // writable `rettv`; the scratch buffers are this frame's own.
     let Some(opts) = (unsafe { getchar_opts(argvars, allow_number) }) else {
         return;
     };
@@ -270,6 +279,8 @@ pub(crate) unsafe fn getchar_common(
 /// # Safety
 /// As [`getchar_common`].
 pub unsafe fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY (this body): the Vimscript call convention, passed straight
+    // through.
     unsafe { getchar_common(argvars, rettv, true) };
 }
 
@@ -278,6 +289,7 @@ pub unsafe fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// # Safety
 /// As [`getchar_common`].
 pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY (this body): as [`f_getchar`].
     unsafe { getchar_common(argvars, rettv, false) };
 }
 
@@ -286,5 +298,6 @@ pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// `rettv` must be a valid return slot.
 pub unsafe fn f_getcharmod(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY (this body): as [`f_getchar`].
     unsafe { (*rettv).vval.v_number = mod_mask.get() as varnumber_T };
 }

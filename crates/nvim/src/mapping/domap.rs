@@ -319,6 +319,8 @@ pub(crate) unsafe fn buf_do_map(
                 && has_lhs
                 && has_rhs
                 && !is_unmap
+                // SAFETY (this body): the caller's promise -- `args` is a live
+                // `MapArguments` and `buf` a live buffer.
                 && unsafe { global_map_exists(mode, lhs, len, is_abbrev) };
             if clash {
                 retval = 6;
@@ -757,6 +759,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
 /// # Safety
 /// `eap` must be a live `exarg_T`.
 pub unsafe fn ex_abbreviate(eap: *mut exarg_T) {
+    // SAFETY (this body): the caller's promise -- `eap` is a live `exarg_T`.
     unsafe { do_exmap(eap, true) } // almost the same as mapping
 }
 
@@ -784,6 +787,7 @@ pub unsafe fn ex_map(eap: *mut exarg_T) {
 /// # Safety
 /// `eap` must be a live `exarg_T`.
 pub unsafe fn ex_unmap(eap: *mut exarg_T) {
+    // SAFETY (this body): as [`ex_abbreviate`].
     unsafe { do_exmap(eap, false) }
 }
 

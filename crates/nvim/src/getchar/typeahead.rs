@@ -240,12 +240,11 @@ impl TypeAheadRef {
         self.0.with(|tb| tb.buflen - tb.off - tb.len - 1)
     }
 
-    /// The remap flags of the valid byte at `offset`, as a pointer: the
-    /// mapping scan walks the run rather than indexing it.
-    pub(crate) fn noremap_at(self, offset: c_int) -> *mut u8 {
+    /// Say what the valid byte at `offset` is.
+    pub(crate) fn set_byte(self, offset: c_int, value: u8) {
         // SAFETY: as `at`.
         self.0
-            .with(|tb| unsafe { tb.noremap.offset((tb.off + offset) as isize) })
+            .with_mut(|tb| unsafe { *tb.buf.offset((tb.off + offset) as isize) = value });
     }
 
     /// How much remapping the valid byte at `offset` is still allowed.
@@ -315,27 +314,29 @@ impl TypeAhead {
         nottyped: bool,
         silent: bool,
     ) -> bool {
+        let src = str.cast::<u8>();
+        let head = offset as usize;
+        let added = addlen as usize;
         if offset == 0 && addlen <= self.off {
             // Easy case: there is room in front of the valid bytes.
             self.off -= addlen;
+            // SAFETY: `addlen <= off`, so the bytes fit in front of the valid
+            // ones, and `str` is `addlen` readable bytes by the caller's
+            // promise.
             unsafe {
-                ptr::copy_nonoverlapping(
-                    str.cast::<u8>(),
-                    self.buf.offset(self.off as isize),
-                    addlen as usize,
-                )
-            };
+                let dst = self.buf.offset(self.off as isize);
+                ptr::copy_nonoverlapping(src, dst, added);
+            }
         } else if self.len == 0 && self.buflen >= addlen + 3 * HEAD_ROOM {
             // Buffer is empty and the string fits: centre it, leaving
             // room before and after.
             self.off = (self.buflen - addlen - 3 * HEAD_ROOM) / 2;
+            // SAFETY: `off` was just placed so that `addlen` bytes fit after
+            // it, and `str` is that many readable bytes.
             unsafe {
-                ptr::copy_nonoverlapping(
-                    str.cast::<u8>(),
-                    self.buf.offset(self.off as isize),
-                    addlen as usize,
-                )
-            };
+                let dst = self.buf.offset(self.off as isize);
+                ptr::copy_nonoverlapping(src, dst, added);
+            }
         } else {
             // Reallocate. There must always be room for 3 * HEAD_ROOM
             // bytes, and some extra so this does not happen every time.
@@ -345,48 +346,51 @@ impl TypeAhead {
                 return false;
             }
             let newlen = self.len + extra;
-            let buf = unsafe { xmalloc(newlen as usize) }.cast::<u8>();
-            let noremaps = unsafe { xmalloc(newlen as usize) }.cast::<u8>();
+            let size = newlen as usize;
+            // SAFETY: `xmalloc` never returns null, and `newlen` covers
+            // `HEAD_ROOM` in front, the old bytes with the new ones spliced in
+            // at `offset`, and the room the next insert wants at the end.
+            let buf = unsafe { xmalloc(size) }.cast::<u8>();
+            // SAFETY: as above.
+            let noremaps = unsafe { xmalloc(size) }.cast::<u8>();
             self.buflen = newlen;
 
             // Old bytes before the insertion point, then the new ones,
             // then the old bytes after it -- including the NUL at the end.
-            let old = unsafe { self.buf.offset(self.off as isize) };
-            let at = unsafe { buf.offset(HEAD_ROOM as isize) };
-            unsafe { ptr::copy_nonoverlapping(old, at, offset as usize) };
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    str.cast::<u8>(),
-                    at.offset(offset as isize),
-                    addlen as usize,
-                )
-            };
             let tail = self.len - offset + 1;
             debug_assert!(tail > 0);
+            // SAFETY: `offset` is within the old typeahead by the caller's
+            // promise, so the three runs together are `len + addlen + 1`
+            // bytes, which `newlen` has room for after `HEAD_ROOM`; source and
+            // destination are separate allocations, so none of them overlap.
             unsafe {
-                ptr::copy_nonoverlapping(
-                    old.offset(offset as isize),
-                    at.offset(offset as isize).offset(addlen as isize),
-                    tail as usize,
-                )
-            };
+                let old = self.buf.offset(self.off as isize);
+                let at = buf.offset(HEAD_ROOM as isize);
+                ptr::copy_nonoverlapping(old, at, head);
+                ptr::copy_nonoverlapping(src, at.add(head), added);
+                let rest = at.add(head).add(added);
+                ptr::copy_nonoverlapping(old.add(head), rest, tail as usize);
+            }
             if self.buf != static_buf() {
+                // SAFETY: the previous storage, which the test just showed is
+                // not the static initial buffer.
                 unsafe { xfree(self.buf.cast()) };
             }
             self.buf = buf;
 
             // The same for `noremap`, which has no terminator to carry.
-            let old = unsafe { self.noremap.offset(self.off as isize) };
-            let at = unsafe { noremaps.offset(HEAD_ROOM as isize) };
-            unsafe { ptr::copy_nonoverlapping(old, at, offset as usize) };
+            let kept = (self.len - offset) as usize;
+            // SAFETY: as the copy above, one byte shorter for the missing
+            // terminator; the `addlen` flags in the gap are written below.
             unsafe {
-                ptr::copy_nonoverlapping(
-                    old.offset(offset as isize),
-                    at.offset(offset as isize).offset(addlen as isize),
-                    (self.len - offset) as usize,
-                )
-            };
+                let old = self.noremap.offset(self.off as isize);
+                let at = noremaps.offset(HEAD_ROOM as isize);
+                ptr::copy_nonoverlapping(old, at, head);
+                let rest = at.add(head).add(added);
+                ptr::copy_nonoverlapping(old.add(head), rest, kept);
+            }
             if self.noremap != static_noremap() {
+                // SAFETY: as the `xfree` above.
                 unsafe { xfree(self.noremap.cast()) };
             }
             self.noremap = noremaps;
@@ -413,6 +417,8 @@ impl TypeAhead {
         };
         for i in 0..addlen {
             let flags = if i < noremapped { val } else { RM_YES as c_int };
+            // SAFETY (this body): the two arrays were just sized for `off +
+            // len + addlen`, so every flag written below is in range.
             unsafe { *self.noremap.offset((self.off + i + offset) as isize) = flags as u8 };
         }
 
@@ -447,42 +453,33 @@ impl TypeAhead {
         } else {
             // Otherwise both arrays have to be moved down.
             let from = self.off + offset;
+            let head = offset as usize;
             if self.off > MAXMAPLEN as c_int {
                 // Leave some extra room at the end to avoid a
                 // reallocation.
+                // SAFETY: `off > MAXMAPLEN`, so the destination is below the
+                // source and both runs are inside the two arrays.
                 unsafe {
-                    ptr::copy(
-                        self.buf.offset(self.off as isize),
-                        self.buf.offset(MAXMAPLEN as isize),
-                        offset as usize,
-                    )
-                };
-                unsafe {
-                    ptr::copy(
-                        self.noremap.offset(self.off as isize),
-                        self.noremap.offset(MAXMAPLEN as isize),
-                        offset as usize,
-                    )
-                };
+                    let (buf, noremap) = (self.buf, self.noremap);
+                    let keep = MAXMAPLEN as usize;
+                    ptr::copy(buf.offset(self.off as isize), buf.add(keep), head);
+                    ptr::copy(noremap.offset(self.off as isize), noremap.add(keep), head);
+                }
                 self.off = MAXMAPLEN as c_int;
             }
             // Include the NUL at the end for `buf`; `noremap` has none.
             let tail = self.len - offset + 1;
             debug_assert!(tail > 0);
+            let kept = (self.len - offset) as usize;
+            let (src, dst) = ((from + len) as isize, (self.off + offset) as isize);
+            // SAFETY: the caller's promise — `offset + len` is within the
+            // typeahead, so both runs are inside the two arrays; the copies
+            // move bytes down, which `ptr::copy` allows to overlap.
             unsafe {
-                ptr::copy(
-                    self.buf.offset((from + len) as isize),
-                    self.buf.offset((self.off + offset) as isize),
-                    tail as usize,
-                )
-            };
-            unsafe {
-                ptr::copy(
-                    self.noremap.offset((from + len) as isize),
-                    self.noremap.offset((self.off + offset) as isize),
-                    (self.len - offset) as usize,
-                )
-            };
+                ptr::copy(self.buf.offset(src), self.buf.offset(dst), tail as usize);
+                let noremap = self.noremap;
+                ptr::copy(noremap.offset(src), noremap.offset(dst), kept);
+            }
         }
 
         // Each of the three run lengths shrinks only by the part of the
@@ -546,6 +543,8 @@ pub unsafe fn ins_typebuf(
 ) -> c_int {
     init_typebuf();
     typeahead().note_change();
+    // SAFETY (this body): the caller's promise -- `str` is NUL-terminated and
+    // `offset` within the current typeahead.
     unsafe { state_no_longer_safe(c"ins_typebuf()".as_ptr()) };
 
     let addlen = unsafe { strlen(str) } as c_int;
@@ -573,6 +572,8 @@ pub unsafe fn ins_typebuf(
 pub unsafe fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int {
     // Room for the modifier prefix plus a K_SPECIAL-escaped character.
     let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
+    // SAFETY (this body): `buf` is this frame's own array, sized for the
+    // longest key escape, which `special_to_buf` fills.
     let len = unsafe { special_to_buf(c, modifiers, true, buf.as_mut_ptr()) } as usize;
     debug_assert!(len < buf.len());
     buf[len] = 0;
@@ -766,6 +767,8 @@ pub(crate) fn can_get_old_char() -> bool {
 /// `tp` must point at writable storage that outlives the matching
 /// [`restore_typeahead`].
 pub unsafe fn save_typeahead(tp: *mut tasave_T) {
+    // SAFETY (this body): the caller's promise -- `tp` is writable storage
+    // that outlives the matching restore.
     unsafe { (*tp).save_typebuf = typeahead().take() };
     unsafe { alloc_typebuf((*tp).save_typebuf.change_cnt()) };
     unsafe { (*tp).typebuf_valid = true };
@@ -783,6 +786,8 @@ pub unsafe fn save_typeahead(tp: *mut tasave_T) {
 /// # Safety
 /// `tp` must be the one a matching [`save_typeahead`] filled.
 pub unsafe fn restore_typeahead(tp: *mut tasave_T) {
+    // SAFETY (this body): as [`save_typeahead`] -- `tp` is the one a matching
+    // save filled.
     if unsafe { (*tp).typebuf_valid } {
         unsafe { free_typebuf() };
         typeahead().set(core::mem::take(unsafe { &mut (*tp).save_typebuf }));

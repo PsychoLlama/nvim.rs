@@ -53,6 +53,9 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
         };
         if need_redo {
             if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
+                // SAFETY (this body): the arena and the array builder are this
+                // frame's own, and every string put in them is either a static
+                // or an allocation this frame owns.
                 unsafe { reset_redobuff() };
             }
             redobuff().add_char(c);
@@ -125,6 +128,8 @@ pub unsafe fn paste_repeat(count: c_int) {
     let unmapped = Keys::unmapped();
     got_int.set(false);
     while !aborted {
+        // SAFETY (this body): the stored paste is this module's own `Array`,
+        // and the arena is this frame's.
         unsafe { ga_grow(&raw mut ga, 32) };
         let first = unsafe { vgetorpeek(true) } as u8;
         if c_int::from(first) == K_SPECIAL {

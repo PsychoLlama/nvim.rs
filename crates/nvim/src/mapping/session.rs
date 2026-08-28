@@ -107,11 +107,6 @@ impl Out {
         Self(fd)
     }
 
-    /// The stream back, for the callees that still take one.
-    fn stream(self) -> *mut FILE {
-        self.0
-    }
-
     /// Write a NUL-terminated string.
     fn puts(self, s: &CStr) -> bool {
         // SAFETY: the constructor's promise — an open stream — and `s` is
