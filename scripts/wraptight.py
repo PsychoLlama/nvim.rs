@@ -291,6 +291,19 @@ def chain_end(raw: bytes, at: int) -> int:
 
 DEREF_WRAP = re.compile(rb"unsafe \{ (\(*\*[^{}]*?) \}(?=[.\[])")
 
+# `unsafe { &raw mut (*p) }.field`, which E0133's span produces whenever the
+# source said `&raw mut (*p).field`: the unsafe operation rustc names is the
+# dereference, and the `&raw` sits outside it. The brace has to travel past
+# the chain, exactly as for a bare deref -- `(*mut T).field` is E0609, so it
+# never ships, but it is the most common single residue in any family that
+# takes field addresses (32 sites in `shada/` + `regexp/` alone).
+#
+# The dereference must be *parenthesised*. `unsafe { &raw mut *p }.f` looks
+# the same and is not: moving the brace gives `&raw mut *(p.f)`, a different
+# program. And no `&`/`&mut` form is accepted at all, because a reference is
+# not a place the way a raw-ref is -- `unsafe { &mut *p }.f` is already right.
+RAWREF_WRAP = re.compile(rb"unsafe \{ (&raw (?:mut|const) \(\*[^{}]*?) \}(?=[.\[])")
+
 
 def ends_in_call(inner: bytes) -> bool:
     """Whether `inner` ends in a *call*, so it answers with a value.
@@ -361,6 +374,16 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
             continue
         close = match.end() - 1
         edits.add((close, chain_end(scan, close + 1), match.start(1)))
+    for match in RAWREF_WRAP.finditer(scan):
+        if b" as " in match.group(1):
+            continue
+        close = match.end() - 1
+        # `start` names the parenthesised deref, not the `&raw` in front of
+        # it: the group has to read as balanced so the brace simply moves,
+        # `&raw mut (*p).f`. Parenthesising the whole thing instead would
+        # give `(&raw mut (*p)).f`, which is the same E0609 in a wig.
+        start = match.start(1) + match.group(1).index(b"(*")
+        edits.add((close, chain_end(scan, close + 1), start))
     for span in spans or []:
         close = enclosing_unsafe(scan, span["byte_start"])
         if close is not None and scan[close + 1 : close + 2] in (b".", b"["):
@@ -547,6 +570,38 @@ def all_files(paths: list[str]) -> list[str]:
     return found
 
 
+def unparsed(paths: list[str]) -> int:
+    """Report any file in scope that does not parse, and say so loudly.
+
+    "Nothing left to do" is only ever true of a *parsed* tree. rustc aborts
+    before type-checking when any file in the crate fails to parse -- and it
+    then reports **zero** errors for every other file (p23-16 §4), so the
+    diagnostic-driven passes see nothing and this loop declares victory over
+    a family it has left uncompilable. That happened to three workers on one
+    fleet before this check existed.
+
+    `rustfmt` is the cheapest parser available: it needs no cargo, takes no
+    build lock, and one process per file is a fraction of a `cargo check`.
+    Its exit status does not separate the two answers -- "would reformat" and
+    "does not parse" are both 1 -- but its *stderr* does: a parse failure is
+    the only thing it writes there.
+    """
+    broken = [
+        path
+        for path in sorted(all_files(paths))
+        if subprocess.run(
+            ["rustfmt", "--edition", "2024", "--check", path],
+            capture_output=True,
+        ).stderr.strip()
+    ]
+    if not broken:
+        return 0
+    print("wraptight: THESE FILES DO NOT PARSE, so the run above proved nothing:")
+    for path in broken:
+        print(f"  {path}")
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+")
@@ -581,7 +636,7 @@ def main() -> int:
                 break
         if moved == 0:
             print(f"round {round_no}: nothing left to do")
-            return 0
+            return unparsed(args.paths)
     print("wraptight: did not reach a fixed point; look at the errors by hand")
     return 1
 
