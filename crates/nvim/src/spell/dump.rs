@@ -191,7 +191,7 @@ pub unsafe fn spell_dump_compl(
     let langp_len = unsafe { (*(*curwin.get()).w_s).b_langp.ga_len };
     for lpi in 0..langp_len {
         let lp = unsafe { langp_data.offset(lpi as isize) };
-        let p = unsafe { (*(*lp).lp_slang).sl_regions }.as_mut_ptr();
+        let p = unsafe { (*(*lp).lp_slang).sl_regions.as_mut_ptr() };
         if unsafe { *p } != 0 {
             if region_names.is_null() {
                 region_names = p;
