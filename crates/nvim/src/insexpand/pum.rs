@@ -101,14 +101,14 @@ impl ComplMatchArray {
 pub unsafe fn ins_compl_col_range_attr(lnum: linenr_T, col: c_int) -> c_int {
     // SAFETY: neither query has a precondition left; both are still
     // `unsafe fn`s for their call sites outside this family.
-    let longest = unsafe { ins_compl_preinsert_longest() };
-    // Either kind of preview takes `PreInsert`; only an accepted match that
-    // has not been confirmed takes `ComplMatchIns`.
-    let has_preinsert = unsafe { ins_compl_has_preinsert() } || longest;
+    let (preinsert, longest) =
+        unsafe { (ins_compl_has_preinsert(), ins_compl_preinsert_longest()) };
     if cot_fuzzy() || (!compl_hi_on_autocompl_longest.get() && longest) {
         return -1;
     }
-    let name = if has_preinsert {
+    // Either kind of preview takes `PreInsert`; only an accepted match that
+    // has not been confirmed yet takes `ComplMatchIns`.
+    let name = if preinsert || longest {
         c"PreInsert".as_ptr()
     } else {
         c"ComplMatchIns".as_ptr()
