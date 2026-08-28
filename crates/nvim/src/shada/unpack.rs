@@ -104,25 +104,23 @@ struct Body {
 impl Body {
     /// Read `len` bytes of entry payload.
     unsafe fn read(sd_reader: *mut FileDescriptor, len: size_t) -> Result<Self, ShaDaReadResult> {
-        unsafe {
-            let buffered = file_try_read_buffered(sd_reader, len);
-            if !buffered.is_null() {
-                return Ok(Body {
-                    ptr: buffered,
-                    len,
-                    owned: false,
-                });
-            }
-            let ptr = xmalloc(len).cast::<c_char>();
-            let body = Body {
-                ptr,
+        let buffered = unsafe { file_try_read_buffered(sd_reader, len) };
+        if !buffered.is_null() {
+            return Ok(Body {
+                ptr: buffered,
                 len,
-                owned: true,
-            };
-            match fread_len(sd_reader, ptr, len) {
-                kSDReadStatusSuccess => Ok(body),
-                other => Err(other),
-            }
+                owned: false,
+            });
+        }
+        let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
+        let body = Body {
+            ptr,
+            len,
+            owned: true,
+        };
+        match unsafe { fread_len(sd_reader, ptr, len) } {
+            kSDReadStatusSuccess => Ok(body),
+            other => Err(other),
         }
     }
 
@@ -161,27 +159,29 @@ pub(crate) unsafe fn fread_len(
     buffer: *mut c_char,
     length: size_t,
 ) -> ShaDaReadResult {
-    unsafe {
-        let read_bytes = file_read(sd_reader, buffer, length);
-        if read_bytes < 0 {
+    let read_bytes = unsafe { file_read(sd_reader, buffer, length) };
+    if read_bytes < 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E886: System error while reading ShaDa file: %s".as_ptr()),
                 uv_strerror(read_bytes as c_int),
-            );
-            return kSDReadStatusReadError;
-        }
-        if read_bytes != length as ptrdiff_t {
-            semsg_c!(
-                gettext(
-                    c"E576: Error while reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
-                        .as_ptr(),
-                ),
-                length as uint64_t,
-            );
-            return kSDReadStatusNotShaDa;
-        }
-        kSDReadStatusSuccess
+            )
+        };
+        return kSDReadStatusReadError;
     }
+    if read_bytes != length as ptrdiff_t {
+        unsafe {
+            semsg_c!(
+            gettext(
+                c"E576: Error while reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
+                    .as_ptr(),
+            ),
+            length as uint64_t,
+        )
+        };
+        return kSDReadStatusNotShaDa;
+    }
+    kSDReadStatusSuccess
 }
 
 /// Step over `offset` bytes, complaining if the file is shorter.
@@ -189,35 +189,39 @@ pub(crate) unsafe fn sd_reader_skip(
     sd_reader: *mut FileDescriptor,
     offset: size_t,
 ) -> ShaDaReadResult {
-    unsafe {
-        let skip_bytes = file_skip(sd_reader, offset);
-        if skip_bytes < 0 {
+    let skip_bytes = unsafe { file_skip(sd_reader, offset) };
+    if skip_bytes < 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E886: System error while skipping in ShaDa file: %s".as_ptr()),
                 uv_strerror(skip_bytes as c_int),
-            );
-            return kSDReadStatusReadError;
-        }
-        if skip_bytes != offset as ptrdiff_t {
-            assert!(skip_bytes < offset as ptrdiff_t, "skipped past end of file");
-            if file_eof(sd_reader) {
+            )
+        };
+        return kSDReadStatusReadError;
+    }
+    if skip_bytes != offset as ptrdiff_t {
+        assert!(skip_bytes < offset as ptrdiff_t, "skipped past end of file");
+        if unsafe { file_eof(sd_reader) } {
+            unsafe {
                 semsg_c!(
-                    gettext(
-                        c"E576: Reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
-                            .as_ptr(),
-                    ),
-                    offset as uint64_t,
-                );
-            } else {
+                gettext(
+                    c"E576: Reading ShaDa file: last entry specified that it occupies %lu bytes, but file ended earlier"
+                        .as_ptr(),
+                ),
+                offset as uint64_t,
+            )
+            };
+        } else {
+            unsafe {
                 semsg_c!(
                     gettext(c"E886: System error while skipping in ShaDa file: %s".as_ptr()),
                     gettext(c"too few bytes read".as_ptr()),
-                );
-            }
-            return kSDReadStatusNotShaDa;
+                )
+            };
         }
-        kSDReadStatusSuccess
+        return kSDReadStatusNotShaDa;
     }
+    kSDReadStatusSuccess
 }
 
 /// Read one unsigned integer, one byte at a time.
@@ -232,61 +236,67 @@ unsafe fn read_uint64(
     sd_reader: *mut FileDescriptor,
     allow_eof: bool,
 ) -> Result<uint64_t, ShaDaReadResult> {
-    unsafe {
-        let fpos = (*sd_reader).bytes_read;
-        let mut first: uint8_t = 0;
-        let read_bytes = file_read(sd_reader, (&raw mut first).cast::<c_char>(), 1);
-        if read_bytes < 0 {
+    let fpos = unsafe { (*sd_reader).bytes_read };
+    let mut first: uint8_t = 0;
+    let read_bytes = unsafe { file_read(sd_reader, (&raw mut first).cast::<c_char>(), 1) };
+    if read_bytes < 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E886: System error while reading integer from ShaDa file: %s".as_ptr()),
                 uv_strerror(read_bytes as c_int),
-            );
-            return Err(kSDReadStatusReadError);
+            )
+        };
+        return Err(kSDReadStatusReadError);
+    }
+    if read_bytes == 0 {
+        if allow_eof && unsafe { file_eof(sd_reader) } {
+            return Err(kSDReadStatusFinished);
         }
-        if read_bytes == 0 {
-            if allow_eof && file_eof(sd_reader) {
-                return Err(kSDReadStatusFinished);
-            }
+        unsafe {
             semsg_c!(
+            gettext(
+                c"E576: Error while reading ShaDa file: expected positive integer at position %lu, but got nothing"
+                    .as_ptr(),
+            ),
+            fpos,
+        )
+        };
+        return Err(kSDReadStatusNotShaDa);
+    }
+
+    // A positive fixint is its own value; the four uint formats say how
+    // many big-endian bytes follow.
+    if first & 0x80 == 0 {
+        return Ok(first as uint64_t);
+    }
+    let length: usize = match first {
+        0xcc => 1,
+        0xcd => 2,
+        0xce => 4,
+        0xcf => 8,
+        _ => {
+            unsafe {
+                semsg_c!(
                 gettext(
-                    c"E576: Error while reading ShaDa file: expected positive integer at position %lu, but got nothing"
+                    c"E576: Error while reading ShaDa file: expected positive integer at position %lu"
                         .as_ptr(),
                 ),
                 fpos,
-            );
+            )
+            };
             return Err(kSDReadStatusNotShaDa);
         }
-
-        // A positive fixint is its own value; the four uint formats say how
-        // many big-endian bytes follow.
-        if first & 0x80 == 0 {
-            return Ok(first as uint64_t);
-        }
-        let length: usize = match first {
-            0xcc => 1,
-            0xcd => 2,
-            0xce => 4,
-            0xcf => 8,
-            _ => {
-                semsg_c!(
-                    gettext(
-                        c"E576: Error while reading ShaDa file: expected positive integer at position %lu"
-                            .as_ptr(),
-                    ),
-                    fpos,
-                );
-                return Err(kSDReadStatusNotShaDa);
-            }
-        };
-        let mut bytes = [0u8; 8];
-        match fread_len(
+    };
+    let mut bytes = [0u8; 8];
+    match unsafe {
+        fread_len(
             sd_reader,
             (&raw mut bytes[8 - length]).cast::<c_char>(),
             length,
-        ) {
-            kSDReadStatusSuccess => Ok(uint64_t::from_be_bytes(bytes)),
-            other => Err(other),
-        }
+        )
+    } {
+        kSDReadStatusSuccess => Ok(uint64_t::from_be_bytes(bytes)),
+        other => Err(other),
     }
 }
 
@@ -296,20 +306,22 @@ pub(crate) unsafe fn shada_check_status(
     status: c_int,
     remaining: size_t,
 ) -> ShaDaReadResult {
-    unsafe {
-        if status == MPACK_OK {
-            if remaining != 0 {
+    if status == MPACK_OK {
+        if remaining != 0 {
+            unsafe {
                 semsg_c!(
-                    gettext(
-                        c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu"
-                            .as_ptr(),
-                    ),
-                    initial_fpos as uint64_t,
-                );
-                return kSDReadStatusNotShaDa;
-            }
-            return kSDReadStatusSuccess;
+                gettext(
+                    c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu"
+                        .as_ptr(),
+                ),
+                initial_fpos as uint64_t,
+            )
+            };
+            return kSDReadStatusNotShaDa;
         }
+        return kSDReadStatusSuccess;
+    }
+    unsafe {
         semsg_c!(
             gettext(if status == MPACK_EOF {
                 c"E576: Failed to parse ShaDa file: incomplete msgpack string at position %lu"
@@ -319,9 +331,9 @@ pub(crate) unsafe fn shada_check_status(
                     .as_ptr()
             }),
             initial_fpos as uint64_t,
-        );
-        kSDReadStatusNotShaDa
-    }
+        )
+    };
+    kSDReadStatusNotShaDa
 }
 
 /// The type, timestamp and length that head every entry.
@@ -335,43 +347,45 @@ pub(crate) struct Header {
 }
 
 unsafe fn read_header(sd_reader: *mut FileDescriptor) -> Result<Header, ShaDaReadResult> {
-    unsafe {
-        let fpos = (*sd_reader).bytes_read;
-        let type_u64 = read_uint64(sd_reader, true)?;
-        let timestamp = read_uint64(sd_reader, false)?;
-        let length_u64 = read_uint64(sd_reader, false)?;
+    let fpos = unsafe { (*sd_reader).bytes_read };
+    let type_u64 = unsafe { read_uint64(sd_reader, true) }?;
+    let timestamp = unsafe { read_uint64(sd_reader, false) }?;
+    let length_u64 = unsafe { read_uint64(sd_reader, false) }?;
 
-        if length_u64 > PTRDIFF_MAX as uint64_t {
+    if length_u64 > PTRDIFF_MAX as uint64_t {
+        unsafe {
             semsg_c!(
-                gettext(
-                    c"E576: Error while reading ShaDa file: there is an item at position %lu that is stated to be too long"
-                        .as_ptr(),
-                ),
-                fpos,
-            );
-            return Err(kSDReadStatusNotShaDa);
-        }
-        if type_u64 == 0 {
-            // `kSDItemUnknown` cannot get this far — it is −1, which
-            // `read_uint64` rejects — but `kSDItemMissing` can, and it would
-            // otherwise be skipped silently because `1 << 0` is never in the
-            // flags.
-            semsg_c!(
-                gettext(
-                    c"E576: Error while reading ShaDa file: there is an item at position %lu that must not be there: Missing items are for internal uses only"
-                        .as_ptr(),
-                ),
-                fpos,
-            );
-            return Err(kSDReadStatusNotShaDa);
-        }
-        Ok(Header {
-            type_u64,
-            timestamp,
-            length: length_u64 as size_t,
+            gettext(
+                c"E576: Error while reading ShaDa file: there is an item at position %lu that is stated to be too long"
+                    .as_ptr(),
+            ),
             fpos,
-        })
+        )
+        };
+        return Err(kSDReadStatusNotShaDa);
     }
+    if type_u64 == 0 {
+        // `kSDItemUnknown` cannot get this far — it is −1, which
+        // `read_uint64` rejects — but `kSDItemMissing` can, and it would
+        // otherwise be skipped silently because `1 << 0` is never in the
+        // flags.
+        unsafe {
+            semsg_c!(
+            gettext(
+                c"E576: Error while reading ShaDa file: there is an item at position %lu that must not be there: Missing items are for internal uses only"
+                    .as_ptr(),
+            ),
+            fpos,
+        )
+        };
+        return Err(kSDReadStatusNotShaDa);
+    }
+    Ok(Header {
+        type_u64,
+        timestamp,
+        length: length_u64 as size_t,
+        fpos,
+    })
 }
 
 /// Whether the caller asked for this entry type at this size.
@@ -424,58 +438,56 @@ pub(crate) unsafe fn shada_read_next_item(
     flags: c_uint,
     max_kbyte: size_t,
 ) -> ShaDaReadResult {
-    unsafe {
-        loop {
-            // Clear the entry — including every pointer in the union, so
-            // that an early failure still leaves it safe to free.
-            entry.write_bytes(0, 1);
-            if file_eof(sd_reader) {
-                return kSDReadStatusFinished;
+    loop {
+        // Clear the entry — including every pointer in the union, so
+        // that an early failure still leaves it safe to free.
+        unsafe { entry.write_bytes(0, 1) };
+        if unsafe { file_eof(sd_reader) } {
+            return kSDReadStatusFinished;
+        }
+
+        let header = match unsafe { read_header(sd_reader) } {
+            Ok(header) => header,
+            Err(status) => return status,
+        };
+        unsafe { (*entry).timestamp = header.timestamp };
+        // Everything the parsers allocate belongs to the entry.
+        unsafe { (*entry).can_free_entry = true };
+
+        let disposition = disposition(&header, flags, max_kbyte);
+        if let Disposition::Skip = disposition {
+            match unsafe { sd_reader_skip(sd_reader, header.length) } {
+                kSDReadStatusSuccess => continue,
+                status => return status,
             }
+        }
 
-            let header = match read_header(sd_reader) {
-                Ok(header) => header,
-                Err(status) => return status,
-            };
-            (*entry).timestamp = header.timestamp;
-            // Everything the parsers allocate belongs to the entry.
-            (*entry).can_free_entry = true;
+        let parse_pos = unsafe { (*sd_reader).bytes_read };
+        let body = match unsafe { Body::read(sd_reader, header.length) } {
+            Ok(body) => body,
+            Err(status) => return status,
+        };
+        let mut cursor = body.cursor();
 
-            let disposition = disposition(&header, flags, max_kbyte);
-            if let Disposition::Skip = disposition {
-                match sd_reader_skip(sd_reader, header.length) {
-                    kSDReadStatusSuccess => continue,
-                    status => return status,
-                }
+        if let Disposition::VerifyOnly = disposition {
+            let status = cursor.skip();
+            match unsafe { shada_check_status(parse_pos, status, cursor.left) } {
+                kSDReadStatusSuccess => continue,
+                status => return status,
             }
+        }
 
-            let parse_pos = (*sd_reader).bytes_read;
-            let body = match Body::read(sd_reader, header.length) {
-                Ok(body) => body,
-                Err(status) => return status,
-            };
-            let mut cursor = body.cursor();
+        if header.type_u64 > SHADA_LAST_ENTRY {
+            return unsafe { read_unknown(entry, &header, body, parse_pos, cursor) };
+        }
 
-            if let Disposition::VerifyOnly = disposition {
-                let status = cursor.skip();
-                match shada_check_status(parse_pos, status, cursor.left) {
-                    kSDReadStatusSuccess => continue,
-                    status => return status,
-                }
-            }
-
-            if header.type_u64 > SHADA_LAST_ENTRY {
-                return read_unknown(entry, &header, body, parse_pos, cursor);
-            }
-
-            match parse_known(entry, &header, &mut cursor) {
-                Ok(()) => return kSDReadStatusSuccess,
-                Err(Malformed) => {
-                    (*entry).type_0 = header.type_u64 as ShadaEntryType;
-                    shada_free_shada_entry(entry);
-                    (*entry).type_0 = kSDItemMissing;
-                    return kSDReadStatusMalformed;
-                }
+        match unsafe { parse_known(entry, &header, &mut cursor) } {
+            Ok(()) => return kSDReadStatusSuccess,
+            Err(Malformed) => {
+                unsafe { (*entry).type_0 = header.type_u64 as ShadaEntryType };
+                unsafe { shada_free_shada_entry(entry) };
+                unsafe { (*entry).type_0 = kSDItemMissing };
+                return kSDReadStatusMalformed;
             }
         }
     }
@@ -490,21 +502,19 @@ unsafe fn read_unknown(
     parse_pos: uint64_t,
     mut cursor: Cursor,
 ) -> ShaDaReadResult {
-    unsafe {
-        (*entry).type_0 = kSDItemUnknown;
-        (*entry).data.unknown_item.size = header.length;
-        (*entry).data.unknown_item.type_0 = header.type_u64;
-        // As above: a strange *first* entry has to be proved to be msgpack
-        // before the file is believed to be ShaDa at all.
-        if header.fpos == 0 {
-            let status = cursor.skip();
-            let checked = shada_check_status(parse_pos, status, cursor.left);
-            if checked != kSDReadStatusSuccess {
-                (*entry).type_0 = kSDItemMissing;
-                return checked;
-            }
+    unsafe { (*entry).type_0 = kSDItemUnknown };
+    unsafe { (*entry).data.unknown_item.size = header.length };
+    unsafe { (*entry).data.unknown_item.type_0 = header.type_u64 };
+    // As above: a strange *first* entry has to be proved to be msgpack
+    // before the file is believed to be ShaDa at all.
+    if header.fpos == 0 {
+        let status = cursor.skip();
+        let checked = unsafe { shada_check_status(parse_pos, status, cursor.left) };
+        if checked != kSDReadStatusSuccess {
+            unsafe { (*entry).type_0 = kSDItemMissing };
+            return checked;
         }
-        (*entry).data.unknown_item.contents = body.into_owned();
-        kSDReadStatusSuccess
     }
+    unsafe { (*entry).data.unknown_item.contents = body.into_owned() };
+    kSDReadStatusSuccess
 }

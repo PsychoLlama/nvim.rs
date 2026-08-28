@@ -48,10 +48,8 @@ pub(crate) unsafe fn find_removable_bufs(removable_bufs: *mut Set_ptr_t) {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, whose name is
         // only read, and the caller's set.
-        unsafe {
-            if !buf.b_ffname.is_null() && shada_removable(buf.b_ffname) {
-                set_put_ptr_t(removable_bufs, buf.raw() as ptr_t, core::ptr::null_mut());
-            }
+        if !buf.b_ffname.is_null() && unsafe { shada_removable(buf.b_ffname) } {
+            unsafe { set_put_ptr_t(removable_bufs, buf.raw() as ptr_t, core::ptr::null_mut()) };
         }
     }
 }
@@ -62,38 +60,36 @@ pub(crate) unsafe fn find_removable_bufs(removable_bufs: *mut Set_ptr_t) {
 /// `'shada'`'s `%` entry caps how many are kept; a negative cap means all
 /// of them.
 pub(crate) unsafe fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaEntry {
-    unsafe {
-        let max_bufs = get_shada_parameter('%' as c_int);
-        let mut wanted = Vec::new();
-        for buf in buffers() {
-            if !ignore_buf(buf.raw(), removable_bufs)
-                && buf.b_p_bl != 0
-                && (max_bufs < 0 || wanted.len() < max_bufs as usize)
-            {
-                wanted.push(buffer_list_buffer {
-                    pos: buf.b_last_cursor.mark,
-                    fname: buf.b_ffname,
-                    additional_data: buf.additional_data,
-                });
-            }
+    let max_bufs = unsafe { get_shada_parameter('%' as c_int) };
+    let mut wanted = Vec::new();
+    for buf in buffers() {
+        if !unsafe { ignore_buf(buf.raw(), removable_bufs) }
+            && buf.b_p_bl != 0
+            && (max_bufs < 0 || wanted.len() < max_bufs as usize)
+        {
+            wanted.push(buffer_list_buffer {
+                pos: buf.b_last_cursor.mark,
+                fname: buf.b_ffname,
+                additional_data: buf.additional_data,
+            });
         }
+    }
 
-        // The array is `xmalloc`ed because the caller releases it with
-        // `xfree`, as it does for a buffer list that came off the wire.
-        let buffers = xmalloc(size_of_val(&wanted[..])).cast::<buffer_list_buffer>();
-        buffers.copy_from_nonoverlapping(wanted.as_ptr(), wanted.len());
-        ShadaEntry {
-            type_0: kSDItemBufferList,
-            can_free_entry: false,
-            timestamp: os_time(),
-            data: ShadaEntryData {
-                buffer_list: buffer_list {
-                    size: wanted.len(),
-                    buffers,
-                },
+    // The array is `xmalloc`ed because the caller releases it with
+    // `xfree`, as it does for a buffer list that came off the wire.
+    let buffers = unsafe { xmalloc(size_of_val(&wanted[..])) }.cast::<buffer_list_buffer>();
+    unsafe { buffers.copy_from_nonoverlapping(wanted.as_ptr(), wanted.len()) };
+    ShadaEntry {
+        type_0: kSDItemBufferList,
+        can_free_entry: false,
+        timestamp: os_time(),
+        data: ShadaEntryData {
+            buffer_list: buffer_list {
+                size: wanted.len(),
+                buffers,
             },
-            additional_data: core::ptr::null_mut(),
-        }
+        },
+        additional_data: core::ptr::null_mut(),
     }
 }
 
@@ -113,16 +109,18 @@ pub(crate) unsafe fn add_search_pattern(
     search_last_used: bool,
     search_highlighted: bool,
 ) {
-    unsafe {
-        let defaults = sd_default_values[kSDItemSearchPattern as usize]
+    let defaults = unsafe {
+        sd_default_values[kSDItemSearchPattern as usize]
             .data
-            .search_pattern;
-        let mut pat: SearchPattern = core::mem::zeroed();
-        get_pattern.expect("non-null function pointer")(&raw mut pat);
-        if pat.pat.is_null() {
-            return;
-        }
-        let last_used = is_substitute_pattern != search_last_used;
+            .search_pattern
+    };
+    let mut pat: SearchPattern = unsafe { core::mem::zeroed() };
+    unsafe { get_pattern.expect("non-null function pointer")(&raw mut pat) };
+    if pat.pat.is_null() {
+        return;
+    }
+    let last_used = is_substitute_pattern != search_last_used;
+    unsafe {
         *ret_pse = ShadaEntry {
             type_0: kSDItemSearchPattern,
             can_free_entry: false,
@@ -147,15 +145,15 @@ pub(crate) unsafe fn add_search_pattern(
                 },
             },
             additional_data: pat.additional_data,
-        };
-        // The two substitute-pattern defaults are `false`, which is what the
-        // `!is_substitute_pattern &&` above produces; assert it rather than
-        // spelling the branch out twice.
-        debug_assert!(
-            !defaults.has_line_offset && !defaults.place_cursor_at_end,
-            "shada: a search pattern's offset defaults are not false"
-        );
-    }
+        }
+    };
+    // The two substitute-pattern defaults are `false`, which is what the
+    // `!is_substitute_pattern &&` above produces; assert it rather than
+    // spelling the branch out twice.
+    debug_assert!(
+        !defaults.has_line_offset && !defaults.place_cursor_at_end,
+        "shada: a search pattern's offset defaults are not false"
+    );
 }
 
 /// Every global register that has anything in it, as entries.
@@ -164,19 +162,20 @@ pub(crate) unsafe fn add_search_pattern(
 /// lines than that is not remembered at all. A negative value means no
 /// limit.
 pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_reg_lines: c_int) {
-    unsafe {
-        let mut reg_iter = core::ptr::null::<c_void>();
-        loop {
-            let mut reg: yankreg_T = core::mem::zeroed();
-            let mut name: c_char = NUL as c_char;
-            let mut is_unnamed = false;
-            reg_iter =
-                op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed);
-            if name as c_int == NUL {
-                return;
-            }
-            let too_long = max_reg_lines >= 0 && reg.y_size > max_reg_lines as size_t;
-            if !too_long {
+    let mut reg_iter = core::ptr::null::<c_void>();
+    loop {
+        let mut reg: yankreg_T = unsafe { core::mem::zeroed() };
+        let mut name: c_char = NUL as c_char;
+        let mut is_unnamed = false;
+        reg_iter = unsafe {
+            op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed)
+        };
+        if name as c_int == NUL {
+            return;
+        }
+        let too_long = max_reg_lines >= 0 && reg.y_size > max_reg_lines as size_t;
+        if !too_long {
+            unsafe {
                 (*wms).registers[op_reg_index(name as c_int) as usize] = ShadaEntry {
                     type_0: kSDItemRegister,
                     can_free_entry: false,
@@ -197,11 +196,11 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
                         },
                     },
                     additional_data: reg.additional_data,
-                };
-            }
-            if reg_iter.is_null() {
-                return;
-            }
+                }
+            };
+        }
+        if reg_iter.is_null() {
+            return;
         }
     }
 }
@@ -216,19 +215,17 @@ pub(crate) unsafe fn replace_numbered_mark(
     idx: size_t,
     entry: ShadaEntry,
 ) {
-    unsafe {
-        let marks = &mut (*wms).numbered_marks;
-        let last = marks.len() - 1;
-        shada_free_shada_entry(&raw mut marks[last]);
-        for (i, mark) in marks.iter_mut().enumerate().take(last).skip(idx) {
-            if mark.type_0 == kSDItemGlobalMark {
-                mark.data.filemark.name = (b'0' + i as u8 + 1) as c_char;
-            }
+    let marks = unsafe { &mut (*wms).numbered_marks };
+    let last = marks.len() - 1;
+    unsafe { shada_free_shada_entry(&raw mut marks[last]) };
+    for (i, mark) in marks.iter_mut().enumerate().take(last).skip(idx) {
+        if mark.type_0 == kSDItemGlobalMark {
+            mark.data.filemark.name = (b'0' + i as u8 + 1) as c_char;
         }
-        marks.copy_within(idx..last, idx + 1);
-        marks[idx] = entry;
-        marks[idx].data.filemark.name = (b'0' + idx as u8) as c_char;
     }
+    marks.copy_within(idx..last, idx + 1);
+    marks[idx] = entry;
+    marks[idx].data.filemark.name = (b'0' + idx as u8) as c_char;
 }
 
 /// The character `:history` names a history type by.
@@ -257,43 +254,41 @@ pub(crate) unsafe fn var_shada_iter(
     rettv: *mut typval_T,
     flavour: var_flavour_T,
 ) -> *const c_void {
-    unsafe {
-        let globvarht = get_globvar_ht();
-        let first = (*globvarht).ht_array;
-        let count = (*globvarht).ht_mask + 1;
-        let wanted = |hi: *const hashitem_T| {
-            !(*hi).hi_key.is_null()
-                && !core::ptr::eq((*hi).hi_key, &raw const hash_removed)
-                && var_flavour((*hi).hi_key) & flavour != 0
-        };
+    let globvarht = get_globvar_ht();
+    let first = unsafe { (*globvarht).ht_array };
+    let count = unsafe { (*globvarht).ht_mask } + 1;
+    let wanted = |hi: *const hashitem_T| {
+        !unsafe { (*hi).hi_key.is_null() }
+            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
+            && unsafe { var_flavour((*hi).hi_key) } & flavour != 0
+    };
 
-        *name = core::ptr::null();
-        let mut hi = if iter.is_null() {
-            let mut hi = first;
-            while hi.offset_from_unsigned(first) < count && !wanted(hi) {
-                hi = hi.add(1);
-            }
-            if hi.offset_from_unsigned(first) == count {
-                return core::ptr::null();
-            }
-            hi
-        } else {
-            iter.cast::<hashitem_T>()
-        };
+    unsafe { *name = core::ptr::null() };
+    let mut hi = if iter.is_null() {
+        let mut hi = first;
+        while unsafe { hi.offset_from_unsigned(first) } < count && !wanted(hi) {
+            hi = unsafe { hi.add(1) };
+        }
+        if unsafe { hi.offset_from_unsigned(first) } == count {
+            return core::ptr::null();
+        }
+        hi
+    } else {
+        iter.cast::<hashitem_T>()
+    };
 
-        let di = (*hi).hi_key.sub(offset_of!(dictitem_T, di_key)) as *mut dictitem_T;
-        *name = &raw mut (*di).di_key as *mut c_char;
-        tv_copy(&raw mut (*di).di_tv, rettv);
+    let di = unsafe { (*hi).hi_key.sub(offset_of!(dictitem_T, di_key)) } as *mut dictitem_T;
+    unsafe { *name = &raw mut (*di).di_key as *mut c_char };
+    unsafe { tv_copy(&raw mut (*di).di_tv, rettv) };
 
-        // Answer where the *next* one is, so the caller knows to stop.
-        loop {
-            hi = hi.add(1);
-            if hi.offset_from_unsigned(first) >= count {
-                return core::ptr::null();
-            }
-            if wanted(hi) {
-                return hi.cast::<c_void>();
-            }
+    // Answer where the *next* one is, so the caller knows to stop.
+    loop {
+        hi = unsafe { hi.add(1) };
+        if unsafe { hi.offset_from_unsigned(first) } >= count {
+            return core::ptr::null();
+        }
+        if wanted(hi) {
+            return hi.cast::<c_void>();
         }
     }
 }
@@ -306,16 +301,16 @@ pub(crate) unsafe fn shada_init_jumps(
     jumps: *mut ShadaEntry,
     removable_bufs: *mut Set_ptr_t,
 ) -> size_t {
-    unsafe {
-        let mut jumps_size: size_t = 0;
-        let mut jump_iter = core::ptr::null::<c_void>();
-        setpcmark();
-        cleanup_jumplist(curwin.get(), false);
-        loop {
-            let mut fm: xfmark_T = core::mem::zeroed();
-            jump_iter = mark_jumplist_iter(jump_iter, curwin.get(), &raw mut fm);
+    let mut jumps_size: size_t = 0;
+    let mut jump_iter = core::ptr::null::<c_void>();
+    setpcmark();
+    unsafe { cleanup_jumplist(curwin.get(), false) };
+    loop {
+        let mut fm: xfmark_T = unsafe { core::mem::zeroed() };
+        jump_iter = unsafe { mark_jumplist_iter(jump_iter, curwin.get(), &raw mut fm) };
 
-            if let Some(fname) = jump_target(&fm, jump_iter, removable_bufs) {
+        if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
+            unsafe {
                 *jumps.add(jumps_size) = ShadaEntry {
                     type_0: kSDItemJump,
                     can_free_entry: false,
@@ -328,12 +323,12 @@ pub(crate) unsafe fn shada_init_jumps(
                         },
                     },
                     additional_data: fm.fmark.additional_data,
-                };
-                jumps_size += 1;
-            }
-            if jump_iter.is_null() {
-                return jumps_size;
-            }
+                }
+            };
+            jumps_size += 1;
+        }
+        if jump_iter.is_null() {
+            return jumps_size;
         }
     }
 }
@@ -346,101 +341,101 @@ unsafe fn jump_target(
     jump_iter: *const c_void,
     removable_bufs: *mut Set_ptr_t,
 ) -> Option<*const c_char> {
-    unsafe {
-        if fm.fmark.mark.lnum == 0 {
+    if fm.fmark.mark.lnum == 0 {
+        unsafe {
             siemsg_c!(
                 c"ShaDa: mark lnum zero (ji:%p, js:%p, len:%i)".as_ptr(),
                 jump_iter,
                 (&raw const (*curwin.get()).w_jumplist).cast::<c_void>(),
                 (*curwin.get()).w_jumplistlen,
-            );
-            return None;
-        }
-        if fm.fmark.fnum == 0 {
-            // Not in a loaded buffer: the entry carries the name itself.
-            return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
-        }
-        let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
-        if buf.is_null() || ignore_buf(buf, removable_bufs) || (*buf).b_ffname.is_null() {
-            return None;
-        }
-        Some((*buf).b_ffname)
+            )
+        };
+        return None;
     }
+    if fm.fmark.fnum == 0 {
+        // Not in a loaded buffer: the entry carries the name itself.
+        return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
+    }
+    let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
+    if buf.is_null()
+        || unsafe { ignore_buf(buf, removable_bufs) }
+        || unsafe { (*buf).b_ffname.is_null() }
+    {
+        return None;
+    }
+    Some(unsafe { (*buf).b_ffname })
 }
 
 /// Every register, as msgpack.
 pub unsafe fn shada_encode_regs() -> String_0 {
-    unsafe {
-        let wms = xcalloc(1, size_of::<WriteMergerState>()).cast::<WriteMergerState>();
-        shada_initialize_registers(wms, -1);
-        let mut packer = packer_string_buffer();
-        for i in 0..(*wms).registers.len() {
-            if (*wms).registers[i].type_0 == kSDItemRegister {
-                let written = shada_pack_pfreed_entry(&raw mut packer, (*wms).registers[i], 0);
-                assert!(written != kSDWriteFailed, "shada: cannot pack a register");
-            }
+    let wms = unsafe { xcalloc(1, size_of::<WriteMergerState>()) }.cast::<WriteMergerState>();
+    unsafe { shada_initialize_registers(wms, -1) };
+    let mut packer = packer_string_buffer();
+    for i in 0..unsafe { (*wms).registers.len() } {
+        if unsafe { (*wms).registers[i].type_0 } == kSDItemRegister {
+            let written =
+                unsafe { shada_pack_pfreed_entry(&raw mut packer, (*wms).registers[i], 0) };
+            assert!(written != kSDWriteFailed, "shada: cannot pack a register");
         }
-        xfree(wms.cast::<c_void>());
-        packer_take_string(&packer)
     }
+    unsafe { xfree(wms.cast::<c_void>()) };
+    packer_take_string(&packer)
 }
 
 /// The jump list, as msgpack.
 pub unsafe fn shada_encode_jumps() -> String_0 {
-    unsafe {
-        let mut removable_bufs: Set_ptr_t = core::mem::zeroed();
-        find_removable_bufs(&raw mut removable_bufs);
-        let mut jumps: [ShadaEntry; JUMPLISTSIZE as usize] = core::mem::zeroed();
-        let jumps_size = shada_init_jumps(jumps.as_mut_ptr(), &raw mut removable_bufs);
-        let mut packer = packer_string_buffer();
-        for jump in &jumps[..jumps_size] {
-            let written = shada_pack_pfreed_entry(&raw mut packer, *jump, 0);
-            assert!(written != kSDWriteFailed, "shada: cannot pack a jump");
-        }
-        packer_take_string(&packer)
+    let mut removable_bufs: Set_ptr_t = unsafe { core::mem::zeroed() };
+    unsafe { find_removable_bufs(&raw mut removable_bufs) };
+    let mut jumps: [ShadaEntry; JUMPLISTSIZE as usize] = unsafe { core::mem::zeroed() };
+    let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &raw mut removable_bufs) };
+    let mut packer = packer_string_buffer();
+    for jump in &jumps[..jumps_size] {
+        let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, *jump, 0) };
+        assert!(written != kSDWriteFailed, "shada: cannot pack a jump");
     }
+    packer_take_string(&packer)
 }
 
 /// The buffer list, as msgpack.
 pub unsafe fn shada_encode_buflist() -> String_0 {
-    unsafe {
-        let mut removable_bufs: Set_ptr_t = core::mem::zeroed();
-        find_removable_bufs(&raw mut removable_bufs);
-        let buflist_entry = shada_get_buflist(&raw mut removable_bufs);
-        let mut packer = packer_string_buffer();
-        let written = shada_pack_entry(&raw mut packer, buflist_entry, 0);
-        assert!(
-            written != kSDWriteFailed,
-            "shada: cannot pack the buffer list"
-        );
-        xfree(buflist_entry.data.buffer_list.buffers.cast::<c_void>());
-        packer_take_string(&packer)
-    }
+    let mut removable_bufs: Set_ptr_t = unsafe { core::mem::zeroed() };
+    unsafe { find_removable_bufs(&raw mut removable_bufs) };
+    let buflist_entry = unsafe { shada_get_buflist(&raw mut removable_bufs) };
+    let mut packer = packer_string_buffer();
+    let written = unsafe { shada_pack_entry(&raw mut packer, buflist_entry, 0) };
+    assert!(
+        written != kSDWriteFailed,
+        "shada: cannot pack the buffer list"
+    );
+    unsafe { xfree(buflist_entry.data.buffer_list.buffers.cast::<c_void>()) };
+    packer_take_string(&packer)
 }
 
 /// Every global variable `'shada'` says to remember, as msgpack.
 pub unsafe fn shada_encode_gvars() -> String_0 {
-    unsafe {
-        let mut packer = packer_string_buffer();
-        let mut var_iter = core::ptr::null::<c_void>();
-        let cur_timestamp = os_time();
-        loop {
-            let mut vartv: typval_T = core::mem::zeroed();
-            let mut name = core::ptr::null::<c_char>();
-            var_iter = var_shada_iter(
+    let mut packer = packer_string_buffer();
+    let mut var_iter = core::ptr::null::<c_void>();
+    let cur_timestamp = os_time();
+    loop {
+        let mut vartv: typval_T = unsafe { core::mem::zeroed() };
+        let mut name = core::ptr::null::<c_char>();
+        var_iter = unsafe {
+            var_shada_iter(
                 var_iter,
                 &raw mut name,
                 &raw mut vartv,
                 VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA,
-            );
-            if name.is_null() {
-                return packer_take_string(&packer);
-            }
-            // A function reference cannot be written to a file.
-            if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
-                let mut tgttv: typval_T = core::mem::zeroed();
-                tv_copy(&raw mut vartv, &raw mut tgttv);
-                let written = shada_pack_entry(
+            )
+        };
+        if name.is_null() {
+            return packer_take_string(&packer);
+        }
+        // A function reference cannot be written to a file.
+        if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
+            let mut tgttv: typval_T = unsafe { core::mem::zeroed() };
+            unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
+            let written = unsafe {
+                shada_pack_entry(
                     &raw mut packer,
                     ShadaEntry {
                         type_0: kSDItemVariable,
@@ -455,14 +450,14 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
                         additional_data: core::ptr::null_mut(),
                     },
                     0,
-                );
-                assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
-                tv_clear(&raw mut tgttv);
-            }
-            tv_clear(&raw mut vartv);
-            if var_iter.is_null() {
-                return packer_take_string(&packer);
-            }
+                )
+            };
+            assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
+            unsafe { tv_clear(&raw mut tgttv) };
+        }
+        unsafe { tv_clear(&raw mut vartv) };
+        if var_iter.is_null() {
+            return packer_take_string(&packer);
         }
     }
 }

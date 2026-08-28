@@ -44,14 +44,14 @@ pub(crate) unsafe fn file_space(fp: *mut FileDescriptor) -> size_t {
 /// Close a ShaDa file, saying so if that fails. `'fsync'` decides whether
 /// the bytes are pushed to the platter first.
 pub(crate) unsafe fn close_file(cookie: *mut FileDescriptor) {
-    unsafe {
-        let error = file_close(cookie, p_fs.get() != 0);
-        if error != 0 {
+    let error = unsafe { file_close(cookie, p_fs.get() != 0) };
+    if error != 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E886: System error while closing ShaDa file: %s".as_ptr()),
                 uv_strerror(error),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -62,12 +62,10 @@ static default_shada_file: GlobalCell<Option<CString>> = GlobalCell::new(None);
 unsafe fn shada_get_default_file() -> *const c_char {
     if default_shada_file.with(Option::is_none) {
         // SAFETY: both helpers answer an owned NUL-terminated string.
-        unsafe {
-            let shada_dir = stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false);
-            let full = concat_fnames_realloc(shada_dir, c"main.shada".as_ptr(), true);
-            default_shada_file.set(Some(CStr::from_ptr(full).to_owned()));
-            xfree(full.cast::<c_void>());
-        }
+        let shada_dir = unsafe { stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false) };
+        let full = unsafe { concat_fnames_realloc(shada_dir, c"main.shada".as_ptr(), true) };
+        default_shada_file.set(Some(unsafe { CStr::from_ptr(full) }.to_owned()));
+        unsafe { xfree(full.cast::<c_void>()) };
     }
     // The cell is written once and never replaced, so the string it owns
     // stays where it is for as long as the editor runs.
@@ -86,52 +84,52 @@ unsafe fn shada_get_default_file() -> *const c_char {
 /// expanded already.
 unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
     let mut expansion = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        if !file.is_null() && *file != NUL as c_char {
-            return Some(CStr::from_ptr(file).to_owned());
-        }
-        if !p_shadafile.get().is_null() && *p_shadafile.get() != NUL as c_char {
-            if strequal(p_shadafile.get(), c"NONE".as_ptr()) {
-                return None; // "-i NONE" or "--clean"
-            }
-            return Some(CStr::from_ptr(p_shadafile.get()).to_owned());
-        }
-
-        let mut named = find_shada_parameter('n' as c_int);
-        if named.is_null() || *named == NUL as c_char {
-            named = shada_get_default_file().cast_mut();
-        }
-        let len = expand_env(named, expansion.as_mut_ptr(), MAXPATHL);
-        let expanded = core::slice::from_raw_parts(expansion.as_ptr().cast::<u8>(), len);
-        Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
+    if !file.is_null() && unsafe { *file } != NUL as c_char {
+        return Some(unsafe { CStr::from_ptr(file) }.to_owned());
     }
+    if !p_shadafile.get().is_null() && unsafe { *p_shadafile.get() } != NUL as c_char {
+        if unsafe { strequal(p_shadafile.get(), c"NONE".as_ptr()) } {
+            return None; // "-i NONE" or "--clean"
+        }
+        return Some(unsafe { CStr::from_ptr(p_shadafile.get()) }.to_owned());
+    }
+
+    let mut named = unsafe { find_shada_parameter('n' as c_int) };
+    if named.is_null() || unsafe { *named } == NUL as c_char {
+        named = unsafe { shada_get_default_file() }.cast_mut();
+    }
+    let len = unsafe { expand_env(named, expansion.as_mut_ptr(), MAXPATHL) };
+    let expanded = unsafe { core::slice::from_raw_parts(expansion.as_ptr().cast::<u8>(), len) };
+    Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
 }
 
 /// Read a ShaDa file into the running editor.
 ///
 /// `flags` says which parts of it are wanted; see the `kShaDa*` values.
 unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
-    unsafe {
-        let Some(fname) = shada_filename(file) else {
-            return FAIL;
-        };
-        let mut sd_reader: FileDescriptor = core::mem::zeroed();
-        let of_ret = file_open(
+    let Some(fname) = (unsafe { shada_filename(file) }) else {
+        return FAIL;
+    };
+    let mut sd_reader: FileDescriptor = unsafe { core::mem::zeroed() };
+    let of_ret = unsafe {
+        file_open(
             &raw mut sd_reader,
             fname.as_ptr(),
             kFileReadOnly as c_int,
             0,
-        );
+        )
+    };
 
-        if p_verbose.get() > 1 {
-            verbose_enter();
-            let note = |wanted: c_uint, text: &'static CStr| {
-                if flags as c_uint & wanted != 0 {
-                    gettext(text.as_ptr())
-                } else {
-                    c"".as_ptr()
-                }
-            };
+    if p_verbose.get() > 1 {
+        unsafe { verbose_enter() };
+        let note = |wanted: c_uint, text: &'static CStr| {
+            if flags as c_uint & wanted != 0 {
+                unsafe { gettext(text.as_ptr()) }
+            } else {
+                c"".as_ptr()
+            }
+        };
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Reading ShaDa file \"%s\"%s%s%s%s".as_ptr()),
@@ -144,29 +142,31 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
                 } else {
                     c"".as_ptr()
                 },
-            );
-            verbose_leave();
-        }
+            )
+        };
+        unsafe { verbose_leave() };
+    }
 
-        if of_ret != 0 {
-            // A missing file is only worth complaining about when the caller
-            // asked for one by name.
-            if of_ret != UV_ENOENT || flags & kShaDaMissingError as c_int != 0 {
+    if of_ret != 0 {
+        // A missing file is only worth complaining about when the caller
+        // asked for one by name.
+        if of_ret != UV_ENOENT || flags & kShaDaMissingError as c_int != 0 {
+            unsafe {
                 semsg_c!(
                     gettext(
                         c"E886: System error while opening ShaDa file %s for reading: %s".as_ptr(),
                     ),
                     fname.as_ptr(),
                     uv_strerror(of_ret),
-                );
-            }
-            return FAIL;
+                )
+            };
         }
-
-        shada_read(&raw mut sd_reader, flags);
-        close_file(&raw mut sd_reader);
-        OK
+        return FAIL;
     }
+
+    unsafe { shada_read(&raw mut sd_reader, flags) };
+    unsafe { close_file(&raw mut sd_reader) };
+    OK
 }
 
 /// Read the marks out of the default ShaDa file.
@@ -183,20 +183,18 @@ pub unsafe fn shada_read_everything(
     forceit: bool,
     missing_ok: bool,
 ) -> c_int {
-    unsafe {
-        let mut flags = kShaDaWantInfo as c_int
-            | kShaDaWantMarks as c_int
-            | kShaDaGetOldfiles as c_int
-            | if missing_ok {
-                0
-            } else {
-                kShaDaMissingError as c_int
-            };
-        if forceit {
-            flags |= kShaDaForceit as c_int;
-        }
-        shada_read_file(fname, flags)
+    let mut flags = kShaDaWantInfo as c_int
+        | kShaDaWantMarks as c_int
+        | kShaDaGetOldfiles as c_int
+        | if missing_ok {
+            0
+        } else {
+            kShaDaMissingError as c_int
+        };
+    if forceit {
+        flags |= kShaDaForceit as c_int;
     }
+    unsafe { shada_read_file(fname, flags) }
 }
 
 /// The temporary file a merged ShaDa file is built in, opened.
@@ -210,29 +208,31 @@ unsafe fn open_temp_writer(
     fname: &CStr,
     perm: c_int,
 ) -> Option<CString> {
-    unsafe {
-        let tempname = modname(fname.as_ptr(), c".tmp.a".as_ptr(), false);
-        if tempname.is_null() {
-            return None;
-        }
-        let mut tempname = {
-            let owned = CStr::from_ptr(tempname).to_owned();
-            xfree(tempname.cast::<c_void>());
-            owned.into_bytes_with_nul()
-        };
-        let last = tempname.len() - 2; // before the NUL
+    let tempname = unsafe { modname(fname.as_ptr(), c".tmp.a".as_ptr(), false) };
+    if tempname.is_null() {
+        return None;
+    }
+    let mut tempname = {
+        let owned = unsafe { CStr::from_ptr(tempname) }.to_owned();
+        unsafe { xfree(tempname.cast::<c_void>()) };
+        owned.into_bytes_with_nul()
+    };
+    let last = tempname.len() - 2; // before the NUL
 
-        loop {
-            let error = file_open(
+    loop {
+        let error = unsafe {
+            file_open(
                 sd_writer,
                 tempname.as_ptr().cast::<c_char>(),
                 kFileCreateOnly as c_int | kFileNoSymlink as c_int,
                 perm,
-            );
-            if error == 0 {
-                return Some(CString::from_vec_with_nul(tempname).expect("shada: a NUL crept in"));
-            }
-            if error != UV_EEXIST && error != UV_ELOOP {
+            )
+        };
+        if error == 0 {
+            return Some(CString::from_vec_with_nul(tempname).expect("shada: a NUL crept in"));
+        }
+        if error != UV_EEXIST && error != UV_ELOOP {
+            unsafe {
                 semsg_c!(
                     gettext(
                         c"E886: System error while opening temporary ShaDa file %s for writing: %s"
@@ -240,69 +240,75 @@ unsafe fn open_temp_writer(
                     ),
                     tempname.as_ptr(),
                     uv_strerror(error),
-                );
-                return None;
-            }
-            if tempname[last] == b'z' {
+                )
+            };
+            return None;
+        }
+        if tempname[last] == b'z' {
+            unsafe {
                 semsg_c!(
                     gettext(c"E138: All %s.tmp.X files exist, cannot write ShaDa file!".as_ptr()),
                     fname.as_ptr(),
-                );
-                return None;
-            }
-            tempname[last] += 1;
+                )
+            };
+            return None;
         }
+        tempname[last] += 1;
     }
 }
 
 /// Open the ShaDa file itself for writing, making the directory it lives in
 /// if it is not there yet. Answers whether it is open.
 unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Result<bool, ()> {
-    unsafe {
-        // `path_tail_with_sep` points at the file name; NUL it out to get the
-        // directory, then put the byte back.
-        let fname = fname.as_ptr().cast_mut();
-        let tail = path_tail_with_sep(fname);
-        if tail != fname {
-            let tail_save = *tail;
-            *tail = NUL as c_char;
-            let missing = !os_isdir(fname);
-            let mut failed_dir = core::ptr::null_mut::<c_char>();
-            let ret = if missing {
-                os_mkdir_recurse(fname, 0o700, &raw mut failed_dir, core::ptr::null_mut())
-            } else {
-                0
-            };
-            *tail = tail_save;
-            if ret != 0 {
+    // `path_tail_with_sep` points at the file name; NUL it out to get the
+    // directory, then put the byte back.
+    let fname = fname.as_ptr().cast_mut();
+    let tail = unsafe { path_tail_with_sep(fname) };
+    if tail != fname {
+        let tail_save = unsafe { *tail };
+        unsafe { *tail = NUL as c_char };
+        let missing = !unsafe { os_isdir(fname) };
+        let mut failed_dir = core::ptr::null_mut::<c_char>();
+        let ret = if missing {
+            unsafe { os_mkdir_recurse(fname, 0o700, &raw mut failed_dir, core::ptr::null_mut()) }
+        } else {
+            0
+        };
+        unsafe { *tail = tail_save };
+        if ret != 0 {
+            unsafe {
                 semsg_c!(
                     gettext(
                         c"E886: Failed to create directory %s for writing ShaDa file: %s".as_ptr(),
                     ),
                     failed_dir,
                     uv_strerror(ret),
-                );
-                xfree(failed_dir.cast::<c_void>());
-                return Err(());
-            }
+                )
+            };
+            unsafe { xfree(failed_dir.cast::<c_void>()) };
+            return Err(());
         }
+    }
 
-        let error = file_open(
+    let error = unsafe {
+        file_open(
             sd_writer,
             fname,
             kFileCreate as c_int | kFileTruncate as c_int,
             0o600,
-        );
-        if error != 0 {
+        )
+    };
+    if error != 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E886: System error while opening ShaDa file %s for writing: %s".as_ptr()),
                 fname,
                 uv_strerror(error),
-            );
-            return Ok(false);
-        }
-        Ok(true)
+            )
+        };
+        return Ok(false);
     }
+    Ok(true)
 }
 
 /// Write the ShaDa file.
@@ -311,99 +317,105 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
 /// is read and merged in first. Falling back to `nomerge` is normal — it is
 /// what happens when there is no file yet.
 pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
-    unsafe {
-        let Some(fname) = shada_filename(file) else {
-            return FAIL;
-        };
-        let mut sd_writer: FileDescriptor = core::mem::zeroed();
-        let mut sd_reader: FileDescriptor = core::mem::zeroed();
+    let Some(fname) = (unsafe { shada_filename(file) }) else {
+        return FAIL;
+    };
+    let mut sd_writer: FileDescriptor = unsafe { core::mem::zeroed() };
+    let mut sd_reader: FileDescriptor = unsafe { core::mem::zeroed() };
 
-        // The merge half: open the old file, then a temporary next to it.
-        let mut merge = None;
-        if !nomerge {
-            let error = file_open(
+    // The merge half: open the old file, then a temporary next to it.
+    let mut merge = None;
+    if !nomerge {
+        let error = unsafe {
+            file_open(
                 &raw mut sd_reader,
                 fname.as_ptr(),
                 kFileReadOnly as c_int,
                 0,
-            );
-            if error != 0 {
-                if error != UV_ENOENT {
-                    // Something other than "no file yet" — say so, but still
-                    // try to write: that may work regardless.
+            )
+        };
+        if error != 0 {
+            if error != UV_ENOENT {
+                // Something other than "no file yet" — say so, but still
+                // try to write: that may work regardless.
+                unsafe {
                     semsg_c!(
-                        gettext(
-                            c"E886: System error while opening ShaDa file %s for reading to merge before writing it: %s"
-                                .as_ptr(),
-                        ),
-                        fname.as_ptr(),
-                        uv_strerror(error),
-                    );
-                }
-            } else {
-                // The old file's permissions, less the setuid bit and with
-                // read and write for its owner, so that the result is always
-                // readable by whoever wrote it. If the file went away between
-                // the open and here, start from u=rw.
-                let perm = os_getperm(fname.as_ptr()) as c_int;
-                let perm = if perm >= 0 {
-                    (perm & 0o777) | 0o600
-                } else {
-                    0o600
+                    gettext(
+                        c"E886: System error while opening ShaDa file %s for reading to merge before writing it: %s"
+                            .as_ptr(),
+                    ),
+                    fname.as_ptr(),
+                    uv_strerror(error),
+                )
                 };
-                match open_temp_writer(&raw mut sd_writer, &fname, perm) {
-                    Some(tempname) => merge = Some(tempname),
-                    None => {
-                        close_file(&raw mut sd_reader);
-                        return FAIL;
-                    }
+            }
+        } else {
+            // The old file's permissions, less the setuid bit and with
+            // read and write for its owner, so that the result is always
+            // readable by whoever wrote it. If the file went away between
+            // the open and here, start from u=rw.
+            let perm = unsafe { os_getperm(fname.as_ptr()) } as c_int;
+            let perm = if perm >= 0 {
+                (perm & 0o777) | 0o600
+            } else {
+                0o600
+            };
+            match unsafe { open_temp_writer(&raw mut sd_writer, &fname, perm) } {
+                Some(tempname) => merge = Some(tempname),
+                None => {
+                    unsafe { close_file(&raw mut sd_reader) };
+                    return FAIL;
                 }
             }
         }
+    }
 
-        let reader = if merge.is_some() {
-            &raw mut sd_reader
-        } else {
-            // No merge: the file itself is what gets written.
-            match open_direct_writer(&raw mut sd_writer, &fname) {
-                Err(()) => return FAIL,
-                Ok(false) => return FAIL,
-                Ok(true) => {}
-            }
-            core::ptr::null_mut()
-        };
+    let reader = if merge.is_some() {
+        &raw mut sd_reader
+    } else {
+        // No merge: the file itself is what gets written.
+        match unsafe { open_direct_writer(&raw mut sd_writer, &fname) } {
+            Err(()) => return FAIL,
+            Ok(false) => return FAIL,
+            Ok(true) => {}
+        }
+        core::ptr::null_mut()
+    };
 
-        if p_verbose.get() > 1 {
-            verbose_enter();
+    if p_verbose.get() > 1 {
+        unsafe { verbose_enter() };
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Writing ShaDa file \"%s\"".as_ptr()),
                 fname.as_ptr(),
-            );
-            verbose_leave();
-        }
+            )
+        };
+        unsafe { verbose_leave() };
+    }
 
-        let sw_ret = shada_write(&raw mut sd_writer, reader);
-        debug_assert!(
-            sw_ret != kSDWriteIgnError,
-            "shada: an ignorable error reached the top of the write"
-        );
+    let sw_ret = unsafe { shada_write(&raw mut sd_writer, reader) };
+    debug_assert!(
+        sw_ret != kSDWriteIgnError,
+        "shada: an ignorable error reached the top of the write"
+    );
 
-        if let Some(tempname) = merge {
-            close_file(&raw mut sd_reader);
-            if !replace_original(&raw mut sd_writer, &fname, &tempname, sw_ret) {
+    if let Some(tempname) = merge {
+        unsafe { close_file(&raw mut sd_reader) };
+        if !unsafe { replace_original(&raw mut sd_writer, &fname, &tempname, sw_ret) } {
+            unsafe {
                 semsg_c!(
                     gettext(
                         c"E136: Do not forget to remove %s or rename it manually to %s.".as_ptr(),
                     ),
                     tempname.as_ptr(),
                     fname.as_ptr(),
-                );
-            }
+                )
+            };
         }
-        close_file(&raw mut sd_writer);
-        OK
     }
+    unsafe { close_file(&raw mut sd_writer) };
+    OK
 }
 
 /// Move the finished temporary file over the real one. Answers whether the
@@ -414,8 +426,8 @@ unsafe fn replace_original(
     tempname: &CStr,
     sw_ret: ShaDaWriteResult,
 ) -> bool {
-    unsafe {
-        if sw_ret != kSDWriteSuccessful {
+    if sw_ret != kSDWriteSuccessful {
+        unsafe {
             semsg_c!(
                 gettext(if sw_ret == kSDWriteReadNotShada {
                     c"E136: Did not rename %s because %s does not look like a ShaDa file".as_ptr()
@@ -425,52 +437,60 @@ unsafe fn replace_original(
                 }),
                 tempname.as_ptr(),
                 fname.as_ptr(),
-            );
-            return false;
-        }
+            )
+        };
+        return false;
+    }
 
-        let mut old_info = FileInfo::default();
-        if !os_fileinfo(fname.as_ptr(), &raw mut old_info) || !writable_by_us(&old_info) {
+    let mut old_info = FileInfo::default();
+    if !unsafe { os_fileinfo(fname.as_ptr(), &raw mut old_info) } || !writable_by_us(&old_info) {
+        unsafe {
             semsg_c!(
                 gettext(c"E137: ShaDa file is not writable: %s".as_ptr()),
                 fname.as_ptr(),
-            );
-            return false;
-        }
+            )
+        };
+        return false;
+    }
 
-        // Running as root, the new file is given the old one's owner: it is
-        // not friendly to leave a user with a ShaDa file they cannot read
-        // after a `su root`.
-        if getuid() == ROOT_UID as uid_t
-            && (old_info.stat.st_uid != ROOT_UID as uint64_t
-                || old_info.stat.st_gid != getgid() as uint64_t)
-        {
-            let fchown_ret = os_fchown(
+    // Running as root, the new file is given the old one's owner: it is
+    // not friendly to leave a user with a ShaDa file they cannot read
+    // after a `su root`.
+    if unsafe { getuid() } == ROOT_UID as uid_t
+        && (old_info.stat.st_uid != ROOT_UID as uint64_t
+            || old_info.stat.st_gid != unsafe { getgid() } as uint64_t)
+    {
+        let fchown_ret = unsafe {
+            os_fchown(
                 file_fd(sd_writer),
                 old_info.stat.st_uid as uv_uid_t,
                 old_info.stat.st_gid as uv_gid_t,
-            );
-            if fchown_ret != 0 {
+            )
+        };
+        if fchown_ret != 0 {
+            unsafe {
                 semsg_c!(
                     gettext(c"E136: Failed setting uid and gid for file %s: %s".as_ptr()),
                     tempname.as_ptr(),
                     uv_strerror(fchown_ret),
-                );
-                return false;
-            }
+                )
+            };
+            return false;
         }
+    }
 
-        if vim_rename(tempname.as_ptr(), fname.as_ptr()) == -1 {
+    if unsafe { vim_rename(tempname.as_ptr(), fname.as_ptr()) } == -1 {
+        unsafe {
             semsg_c!(
                 gettext(c"E136: Can't rename ShaDa file from %s to %s!".as_ptr()),
                 tempname.as_ptr(),
                 fname.as_ptr(),
-            );
-            return false;
-        }
-        os_remove(tempname.as_ptr());
-        true
+            )
+        };
+        return false;
     }
+    unsafe { os_remove(tempname.as_ptr()) };
+    true
 }
 
 /// Whether the existing ShaDa file is one this process may overwrite: a
@@ -500,86 +520,82 @@ fn writable_by_us(info: &FileInfo) -> bool {
 /// marks are then not remembered at all.
 pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
     let mut folded = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        let mut part = [0 as c_char; MAXPATHL as usize + 1];
-        let new_name = home_replace_save(core::ptr::null_mut(), name);
-        let mut retval = false;
-        let mut p = p_shada.get();
-        while *p != 0 {
+    let mut part = [0 as c_char; MAXPATHL as usize + 1];
+    let new_name = unsafe { home_replace_save(core::ptr::null_mut(), name) };
+    let mut retval = false;
+    let mut p = p_shada.get();
+    while unsafe { *p } != 0 {
+        unsafe {
             copy_option_part(
                 &raw mut p,
                 part.as_mut_ptr(),
                 part.len(),
                 c", ".as_ptr().cast_mut(),
-            );
-            if part[0] != b'r' as c_char {
-                continue;
-            }
+            )
+        };
+        if part[0] != b'r' as c_char {
+            continue;
+        }
+        unsafe {
             home_replace(
                 core::ptr::null(),
                 part.as_ptr().add(1),
                 folded.as_mut_ptr(),
                 MAXPATHL as size_t,
                 true,
-            );
-            let n = strlen(folded.as_ptr());
-            if mb_strnicmp(folded.as_ptr(), new_name, n) == 0 {
-                retval = true;
-                break;
-            }
+            )
+        };
+        let n = unsafe { strlen(folded.as_ptr()) };
+        if unsafe { mb_strnicmp(folded.as_ptr(), new_name, n) } == 0 {
+            retval = true;
+            break;
         }
-        xfree(new_name.cast::<c_void>());
-        retval
     }
+    unsafe { xfree(new_name.cast::<c_void>()) };
+    retval
 }
 
 /// The number `'shada'` gives for a parameter, or −1 if it has none.
 ///
 /// Only works for the number parameters, not for `r` or `n`.
 pub unsafe fn get_shada_parameter(type_0: c_int) -> c_int {
-    unsafe {
-        let p = find_shada_parameter(type_0);
-        if !p.is_null() && ascii_isdigit(*p as c_int) {
-            atoi(p)
-        } else {
-            -1
-        }
+    let p = unsafe { find_shada_parameter(type_0) };
+    if !p.is_null() && ascii_isdigit(unsafe { *p } as c_int) {
+        unsafe { atoi(p) }
+    } else {
+        -1
     }
 }
 
 /// What follows a parameter's letter in `'shada'`, or null if it has none.
 pub unsafe fn find_shada_parameter(type_0: c_int) -> *mut c_char {
-    unsafe {
-        let mut p = p_shada.get();
-        while *p != 0 {
-            if *p as c_int == type_0 {
-                return p.add(1);
-            }
-            if *p as c_int == 'n' as c_int {
-                break; // 'n' is always last, and takes the rest
-            }
-            p = vim_strchr(p, ',' as c_int);
-            if p.is_null() {
-                break;
-            }
-            p = p.add(1);
+    let mut p = p_shada.get();
+    while unsafe { *p } != 0 {
+        if unsafe { *p } as c_int == type_0 {
+            return unsafe { p.add(1) };
         }
-        core::ptr::null_mut()
+        if unsafe { *p } as c_int == 'n' as c_int {
+            break; // 'n' is always last, and takes the rest
+        }
+        p = unsafe { vim_strchr(p, ',' as c_int) };
+        if p.is_null() {
+            break;
+        }
+        p = unsafe { p.add(1) };
     }
+    core::ptr::null_mut()
 }
 
 /// Read the current buffer's marks, the first time it is looked at.
 pub unsafe fn check_marks_read() {
-    unsafe {
-        let buf = curbuf.get();
-        if !(*buf).b_marks_read
-            && get_shada_parameter('\'' as c_int) > 0
-            && !(*buf).b_ffname.is_null()
-        {
-            shada_read_marks();
-        }
-        // Set unconditionally: it is what stops this running again after
-        // `'shada'` gains its `'` parameter with the buffer already open.
-        (*buf).b_marks_read = true;
+    let buf = curbuf.get();
+    if !unsafe { (*buf).b_marks_read }
+        && unsafe { get_shada_parameter('\'' as c_int) } > 0
+        && !unsafe { (*buf).b_ffname.is_null() }
+    {
+        unsafe { shada_read_marks() };
     }
+    // Set unconditionally: it is what stops this running again after
+    // `'shada'` gains its `'` parameter with the buffer already open.
+    unsafe { (*buf).b_marks_read = true };
 }

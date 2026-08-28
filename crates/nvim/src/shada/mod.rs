@@ -318,14 +318,12 @@ pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
 /// `key_alloc` is given it is pointed at the set's own copy of the key,
 /// which the caller may then replace with an owned one.
 unsafe fn set_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, key_alloc: *mut *mut cstr_t) -> bool {
-    unsafe {
-        let mut status: MHPutStatus = kMHExisting;
-        let k = mh_put_cstr_t(set, key, &raw mut status);
-        if !key_alloc.is_null() {
-            *key_alloc = (*set).keys.add(k as usize);
-        }
-        status != kMHExisting
+    let mut status: MHPutStatus = kMHExisting;
+    let k = unsafe { mh_put_cstr_t(set, key, &raw mut status) };
+    if !key_alloc.is_null() {
+        unsafe { *key_alloc = (*set).keys.add(k as usize) };
     }
+    status != kMHExisting
 }
 
 /// Whether a set holds a key.
@@ -335,14 +333,12 @@ unsafe fn set_has_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> bool {
 
 /// [`set_put_cstr_t`] for a set of pointers.
 unsafe fn set_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, key_alloc: *mut *mut ptr_t) -> bool {
-    unsafe {
-        let mut status: MHPutStatus = kMHExisting;
-        let k = mh_put_ptr_t(set, key, &raw mut status);
-        if !key_alloc.is_null() {
-            *key_alloc = (*set).keys.add(k as usize);
-        }
-        status != kMHExisting
+    let mut status: MHPutStatus = kMHExisting;
+    let k = unsafe { mh_put_ptr_t(set, key, &raw mut status) };
+    if !key_alloc.is_null() {
+        unsafe { *key_alloc = (*set).keys.add(k as usize) };
     }
+    status != kMHExisting
 }
 
 /// [`set_has_cstr_t`] for a set of pointers.
@@ -353,36 +349,34 @@ unsafe fn set_has_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> bool {
 /// Free a set's own allocations, leaving it empty. What the keys point at
 /// is the caller's business.
 unsafe fn set_destroy_cstr_t(set: *mut Set_cstr_t) {
+    unsafe { xfree((*set).keys.cast()) };
+    unsafe { xfree((*set).h.hash.cast()) };
     unsafe {
-        xfree((*set).keys.cast());
-        xfree((*set).h.hash.cast());
         *set = Set_cstr_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut(),
-        };
-    }
+        }
+    };
 }
 
 /// [`set_destroy_cstr_t`] for a set of pointers.
 unsafe fn set_destroy_ptr_t(set: *mut Set_ptr_t) {
+    unsafe { xfree((*set).keys.cast()) };
+    unsafe { xfree((*set).h.hash.cast()) };
     unsafe {
-        xfree((*set).keys.cast());
-        xfree((*set).h.hash.cast());
         *set = Set_ptr_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut(),
-        };
-    }
+        }
+    };
 }
 
 /// [`set_destroy_cstr_t`] for a map. Neither the keys nor the values are
 /// freed; both belong to whoever put them in.
 unsafe fn map_destroy_cstr_t_ptr_t(map: *mut Map_cstr_t_ptr_t) {
-    unsafe {
-        set_destroy_cstr_t(&raw mut (*map).set);
-        xfree((*map).values.cast());
-        (*map).values = ::core::ptr::null_mut();
-    }
+    unsafe { set_destroy_cstr_t(&raw mut (*map).set) };
+    unsafe { xfree((*map).values.cast()) };
+    unsafe { (*map).values = ::core::ptr::null_mut() };
 }
 
 pub const NMARKS: ::core::ffi::c_int =
