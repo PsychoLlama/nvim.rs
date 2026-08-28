@@ -14,6 +14,9 @@ use crate::grid::default_grid_ref;
 use crate::log::logmsg_c;
 use crate::popupmenu::pum_grid_ref;
 
+/// `NULL` where a message names no offending string value.
+const NULL_STR: *const ::core::ffi::c_char = ::core::ptr::null();
+
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
 }
@@ -30,38 +33,34 @@ pub unsafe fn nvim__id_float(flt: Float) -> Float {
     flt
 }
 
+/// The counters the test suite asserts on: syncs, skipped log lines, live
+/// Lua references, redraws and arena allocations.
+///
+/// # Safety
+/// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
-    let mut rv: Dict = arena_dict(arena, 6 as size_t);
-    unsafe { dict_put(&mut rv, c"fsync", Object::integer(g_stats.get().fsync)) };
-    unsafe {
-        dict_put(
-            &mut rv,
-            c"log_skip",
-            Object::integer(g_stats.get().log_skip as Integer),
-        )
-    };
-    unsafe {
-        dict_put(
-            &mut rv,
-            c"lua_refcount",
-            Object::integer(nlua_get_global_ref_count() as Integer),
-        )
-    };
-    unsafe { dict_put(&mut rv, c"redraw", Object::integer(g_stats.get().redraw)) };
-    unsafe {
-        dict_put(
-            &mut rv,
+    let stats = g_stats.get();
+    // SAFETY: the Lua state exists from startup to exit.
+    let lua_refcount = unsafe { nlua_get_global_ref_count() };
+    let entries = [
+        (c"fsync", Object::integer(stats.fsync)),
+        (c"log_skip", Object::integer(stats.log_skip as Integer)),
+        (c"lua_refcount", Object::integer(lua_refcount as Integer)),
+        (c"redraw", Object::integer(stats.redraw)),
+        (
             c"arena_alloc_count",
             Object::integer(arena_alloc_count.get() as Integer),
-        )
-    };
-    unsafe {
-        dict_put(
-            &mut rv,
+        ),
+        (
             c"ts_query_parse_count",
             Object::integer(tslua_query_parse_count.get() as Integer),
-        )
-    };
+        ),
+    ];
+    let mut rv: Dict = arena_dict(arena, entries.len());
+    for (key, value) in entries {
+        // SAFETY: `rv` is the dict the arena just sized for these six keys.
+        unsafe { dict_put(&mut rv, key, value) };
+    }
     rv
 }
 
@@ -76,15 +75,9 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     };
     let mut children: Vec<::core::ffi::c_int> = Vec::new();
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"pid".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                pid as int64_t,
-                false,
-            )
-        };
+        let name = c"pid".as_ptr();
+        // SAFETY: `err` is this frame's own slot and `name` a literal.
+        unsafe { api_err_invalid(err, name, NULL_STR, pid, false) };
     } else {
         match os_proc_children(pid as ::core::ffi::c_int) {
             Some(pids) => children = pids,
@@ -92,16 +85,14 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             None => rv = 2 as ::core::ffi::c_int,
         }
         if rv == 2 as ::core::ffi::c_int {
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_DBG,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    c"nvim_get_proc_children".as_ptr(),
-                    1924 as ::core::ffi::c_int,
-                    true,
-                    c"fallback to vim._os_proc_children()".as_ptr(),
-                )
-            };
+            logmsg_c!(
+                LOGLVL_DBG,
+                ::core::ptr::null::<::core::ffi::c_char>(),
+                c"nvim_get_proc_children".as_ptr(),
+                1924 as ::core::ffi::c_int,
+                true,
+                c"fallback to vim._os_proc_children()".as_ptr(),
+            );
             let mut a: Array = Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -132,15 +123,10 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             } else if !(unsafe { (*err).type_0 } as ::core::ffi::c_int
                 != kErrorTypeNone as ::core::ffi::c_int)
             {
-                unsafe {
-                    api_set_error(
-                        err,
-                        kErrorTypeException,
-                        c"Failed to get process children. pid=%ld error=%d".as_ptr(),
-                        pid,
-                        rv,
-                    )
-                };
+                let fmt = c"Failed to get process children. pid=%ld error=%d";
+                // SAFETY: `err` is this frame's own slot, and the format takes
+                // the `long` and the `int` it is given.
+                unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), pid, rv) };
             }
         } else {
             rvobj = arena_array(arena, children.len() as size_t);
@@ -157,15 +143,9 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     let err = &raw mut error;
     let mut rvobj: Object = NIL;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"pid".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                pid as int64_t,
-                false,
-            )
-        };
+        let name = c"pid".as_ptr();
+        // SAFETY: `err` is this frame's own slot and `name` a literal.
+        unsafe { api_err_invalid(err, name, NULL_STR, pid, false) };
         return NIL.reported(error);
     }
     let mut a: Array = Array {
@@ -215,14 +195,10 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     } else if !(unsafe { (*err).type_0 } as ::core::ffi::c_int
         != kErrorTypeNone as ::core::ffi::c_int)
     {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"Failed to get process info. pid=%ld".as_ptr(),
-                pid,
-            )
-        };
+        let fmt = c"Failed to get process info. pid=%ld";
+        // SAFETY: `err` is this frame's own slot, and the format takes the
+        // one `long` it is given.
+        unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), pid) };
     }
     rvobj.reported(error)
 }
@@ -246,15 +222,9 @@ pub unsafe fn nvim__inspect_cell(
     } else if grid > 1 as Integer {
         let mut wp: *mut win_T = unsafe { get_win_by_grid_handle(grid as handle_T) };
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
-            unsafe {
-                api_err_invalid(
-                    err,
-                    c"grid handle".as_ptr(),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    grid as int64_t,
-                    false,
-                )
-            };
+            let name = c"grid handle".as_ptr();
+            // SAFETY: `err` is this frame's own slot and `name` a literal.
+            unsafe { api_err_invalid(err, name, NULL_STR, grid, false) };
             return ret.reported(error);
         }
         g = unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) };
@@ -273,12 +243,10 @@ pub unsafe fn nvim__inspect_cell(
     unsafe { schar_get(sc_buf, g.char_at(off)) };
     unsafe { array_add(&mut ret, Object::string(cstr_as_string(sc_buf))) };
     let mut attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
-    unsafe {
-        array_add(
-            &mut ret,
-            Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, err)),
-        )
-    };
+    // SAFETY: `arena` and `err` are this frame's own.
+    let hl = unsafe { Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, err)) };
+    // SAFETY: `ret` has room for the three items the arena sized it for.
+    unsafe { array_add(&mut ret, hl) };
     if !unsafe { highlight_use_hlstate() } {
         unsafe { array_add(&mut ret, Object::array(hl_inspect(attr, arena))) };
     }

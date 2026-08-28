@@ -8,9 +8,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try};
 use crate::kvec::InitVec;
 use crate::types::NUL;
+use crate::winlayer::Live;
+use core::ffi::CStr;
 
 pub unsafe fn nvim_exec_lua(
     code: String_0,
@@ -19,17 +21,10 @@ pub unsafe fn nvim_exec_lua(
 ) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        nlua_exec(
-            code,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            args,
-            kRetObject,
-            arena,
-            err,
-        )
-    }
-    .reported(error)
+    let name = ::core::ptr::null::<::core::ffi::c_char>();
+    // SAFETY: `code` and `args` are the caller's, `arena` is the caller's
+    // own and `err` is this frame's slot.
+    unsafe { nlua_exec(code, name, args, kRetObject, arena, err) }.reported(error)
 }
 
 pub unsafe fn nvim__exec_lua_fast(
@@ -42,17 +37,8 @@ pub unsafe fn nvim__exec_lua_fast(
 
 pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    if !(text.len() <= 2147483647 as ::core::ffi::c_int as size_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"text length".as_ptr(),
-                c"(too long)".as_ptr(),
-                0 as int64_t,
-                true,
-            )
-        };
+    if text.len() > ::core::ffi::c_int::MAX as size_t {
+        too_long(&mut error, c"text length");
         return (0 as Integer).reported(error);
     }
     (unsafe { mb_string2cells(text.data()) } as Integer).reported(error)
@@ -72,7 +58,6 @@ pub unsafe fn nvim_get_runtime_file(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut cookie: RuntimeCookie = RuntimeCookie {
         rv: ArrayBuilder {
             size: 0 as size_t,
@@ -90,38 +75,28 @@ pub unsafe fn nvim_get_runtime_file(
         ) as size_t;
     cookie.rv.size = 0 as size_t;
     cookie.rv.items = &raw mut cookie.rv.init_array as *mut Object;
-    let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all as ::core::ffi::c_int != 0);
-    let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<except_T>(),
-        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: ::core::ptr::null::<*const msglist_T>(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
+    let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
+    let pat = if name.is_empty() {
+        c"".as_ptr().cast_mut()
+    } else {
+        name.data()
     };
-    unsafe { try_enter(&raw mut tstate) };
-    unsafe {
-        do_in_runtimepath(
-            (if !name.is_empty() {
-                name.data() as *const ::core::ffi::c_char
-            } else {
-                c"".as_ptr()
-            }) as *mut ::core::ffi::c_char,
-            flags,
-            Some(
-                find_runtime_cb
-                    as unsafe fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
-            &raw mut cookie as *mut ::core::ffi::c_void,
-        )
-    };
-    unsafe { try_leave(&raw mut tstate, err) };
+    let found = Some(
+        find_runtime_cb
+            as unsafe fn(
+                ::core::ffi::c_int,
+                *mut *mut ::core::ffi::c_char,
+                bool,
+                *mut ::core::ffi::c_void,
+            ) -> bool,
+    );
+    api_try(&mut error, |_| {
+        let cookie = (&raw mut cookie).cast::<::core::ffi::c_void>();
+        // SAFETY: `pat` is NUL-terminated and `cookie` is this frame's own,
+        // live for the whole walk.
+        unsafe { do_in_runtimepath(pat, flags, found, cookie) };
+    });
+    // SAFETY: `arena` is the caller's and `cookie.rv` this frame's own.
     unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) }.reported(error)
 }
 
@@ -171,58 +146,44 @@ pub unsafe fn nvim__get_runtime(
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    if !(!unsafe { (*opts).do_source }
-        || unsafe { nlua_is_deferred_safe() } as ::core::ffi::c_int != 0)
-    {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"'do_source' used in fast callback".as_ptr(),
-            )
-        };
+    // SAFETY: the caller's keyset, live for the whole call.
+    let opts = unsafe { Live::new(opts) };
+    // SAFETY: the Lua state exists from startup to exit.
+    let deferred_safe = unsafe { nlua_is_deferred_safe() };
+    if opts.do_source && !deferred_safe {
+        let msg = c"'do_source' used in fast callback".as_ptr();
+        // SAFETY: `err` is this frame's own slot, and the format takes the
+        // one C string given.
+        unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+        return Array::EMPTY.reported(error);
     }
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        }
-        .reported(error);
-    }
-    let mut res: Array = unsafe { runtime_get_named((*opts).is_lua, pat, all, arena) };
-    if unsafe { (*opts).do_source } {
-        let mut i: size_t = 0 as size_t;
-        while i < res.size {
-            let mut name: String_0 = unsafe { (*res.items.add(i)).data.string };
+    // SAFETY: `pat` is the caller's array and `arena` its own.
+    let res: Array = unsafe { runtime_get_named(opts.is_lua, pat, all, arena) };
+    if opts.do_source {
+        for i in 0..res.size {
+            // SAFETY: `res` is the array `runtime_get_named` just built, of
+            // `size` Strings; sourcing one may free nothing it holds.
             unsafe {
-                do_source(
-                    name.data(),
-                    false,
-                    DOSO_NONE as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                )
-            };
-            i = i.wrapping_add(1);
+                let name = (*res.items.add(i)).data.string;
+                let none = DOSO_NONE as ::core::ffi::c_int;
+                do_source(name.data(), false, none, ::core::ptr::null_mut());
+            }
         }
     }
     res.reported(error)
 }
 
+/// "Invalid `name`: '(too long)'", the one message this file shares.
+fn too_long(err: &mut Error, name: &CStr) {
+    let too_long = c"(too long)".as_ptr();
+    // SAFETY: `err` is the caller's own slot, and both strings are literals.
+    unsafe { api_err_invalid(err, name.as_ptr(), too_long, 0, true) };
+}
+
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    if !(dir.len() < 4096 as size_t) {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"directory name".as_ptr(),
-                c"(too long)".as_ptr(),
-                0 as int64_t,
-                true,
-            )
-        };
+    if dir.len() >= 4096 as size_t {
+        too_long(&mut error, c"directory name");
         return ().reported(error);
     }
     let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
@@ -234,17 +195,10 @@ pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
         )
     };
     string[dir.len()] = NUL as ::core::ffi::c_char;
-    let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<except_T>(),
-        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: ::core::ptr::null::<*const msglist_T>(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
-    };
-    unsafe { try_enter(&raw mut tstate) };
-    unsafe { changedir_func(&raw mut string as *mut ::core::ffi::c_char, kCdScopeGlobal) };
-    unsafe { try_leave(&raw mut tstate, err) };
+    api_try(&mut error, |_| {
+        let dir = (&raw mut string).cast::<::core::ffi::c_char>();
+        // SAFETY: `dir` is this frame's own NUL-terminated copy.
+        unsafe { changedir_func(dir, kCdScopeGlobal) };
+    });
     ().reported(error)
 }

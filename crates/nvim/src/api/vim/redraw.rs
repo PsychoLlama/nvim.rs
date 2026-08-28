@@ -11,118 +11,103 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::guard::Allow;
 use crate::types::NUL;
-use crate::winlayer::{Win, first_window, windows};
+use crate::winlayer::{Live, Win, first_window, windows};
+use core::ffi::CStr;
 
-unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
-    if unsafe { (*opts).statuscolumn } as ::core::ffi::c_int != 0
-        && unsafe { *(*wp).w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL
-    {
-        unsafe { (*wp).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T };
-        changed_window_setting(unsafe { Win::new(wp) });
+/// The decoded keyset, whose caller has promised it outlives the value.
+type Redraw = Live<KeyDict_redraw>;
+
+/// One window's share of the redraw -- its status column, winbar and status
+/// line -- answering what `flush` becomes.
+fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
+    // SAFETY: a window's `'statuscolumn'` is a live NUL-terminated string.
+    let has_statuscolumn = unsafe { *wp.w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL;
+    if opts.statuscolumn && has_statuscolumn {
+        wp.w_nrwidth_line_count = 0 as linenr_T;
+        changed_window_setting(wp);
     }
-    let mut old_row_offset: ::core::ffi::c_int = unsafe { (*wp).w_grid.row_offset };
-    unsafe { win_grid_alloc(wp) };
-    if unsafe { (*wp).w_lines_valid } == 0 as ::core::ffi::c_int
-        || unsafe { (*wp).w_grid.row_offset } != old_row_offset
-    {
-        unsafe { *flush = true };
-    }
-    if unsafe { *flush } as ::core::ffi::c_int != 0
-        && (unsafe { (*opts).statusline } as ::core::ffi::c_int != 0
-            || unsafe { (*opts).winbar } as ::core::ffi::c_int != 0)
-    {
-        unsafe { (*wp).w_redr_status = true };
-    } else if unsafe { (*opts).statusline } as ::core::ffi::c_int != 0
-        || unsafe { (*opts).winbar } as ::core::ffi::c_int != 0
-    {
-        unsafe { win_check_ns_hl(wp) };
-        if unsafe { (*opts).winbar } {
-            unsafe { win_redr_winbar(wp) };
+    let old_row_offset = wp.w_grid.row_offset;
+    // SAFETY: `wp` is a live window.
+    unsafe { win_grid_alloc(wp.raw()) };
+    let flush = flush || wp.w_lines_valid == 0 || wp.w_grid.row_offset != old_row_offset;
+    let status = opts.statusline || opts.winbar;
+    if flush && status {
+        wp.w_redr_status = true;
+    } else if status {
+        // SAFETY: `wp` is a live window, and the last call puts back the
+        // namespace the first one set.
+        unsafe {
+            win_check_ns_hl(wp.raw());
+            if opts.winbar {
+                win_redr_winbar(wp.raw());
+            }
+            if opts.statusline {
+                win_redr_status(wp.raw());
+            }
+            win_check_ns_hl(::core::ptr::null_mut::<win_T>());
         }
-        if unsafe { (*opts).statusline } {
-            unsafe { win_redr_status(wp) };
-        }
-        unsafe { win_check_ns_hl(::core::ptr::null_mut::<win_T>()) };
     }
+    flush
 }
 
+/// Mark stale whatever `opts` names, and flush the UI if it asks.
+///
+/// # Safety
+/// `opts` must be the caller's decoded keyset, whose `range` array names its
+/// own items.
 pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
+    // SAFETY: the caller's keyset, live for the whole call.
+    let mut opts = unsafe { Redraw::new(opts) };
+    let keys = opts.is_set__redraw_;
+    let set = |key| has_key(keys, key);
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    if has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__win,
-    ) {
-        win = unsafe { find_window_by_handle((*opts).win, err) };
-        if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if set(KEYSET_OPTIDX_redraw__win) {
+        // SAFETY: `err` is this frame's own slot.
+        win = unsafe { find_window_by_handle(opts.win, err) };
+        if error.type_0 != kErrorTypeNone {
             return ().reported(error);
         }
     }
-    if has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__buf,
-    ) {
+    if set(KEYSET_OPTIDX_redraw__buf) {
         if !win.is_null() {
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"%s".as_ptr(),
-                    c"cannot use both 'buf' and 'win'".as_ptr(),
-                )
-            };
+            report(&mut error, c"cannot use both 'buf' and 'win'");
             return ().reported(error);
         }
-        buf = unsafe { find_buffer_by_handle((*opts).buf, err) };
-        if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        // SAFETY: `err` is this frame's own slot.
+        buf = unsafe { find_buffer_by_handle(opts.buf, err) };
+        if error.type_0 != kErrorTypeNone {
             return ().reported(error);
         }
     }
-    let mut count: ::core::ffi::c_uint = (!win.is_null() as ::core::ffi::c_int
-        + !buf.is_null() as ::core::ffi::c_int)
-        as ::core::ffi::c_uint;
-    if !((unsafe { (*opts).is_set__redraw_ } as uint64_t).count_ones() > count) {
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"at least one action required".as_ptr(),
-            )
-        };
+    // `win` and `buf` say *where*; at least one other key has to say *what*.
+    let named = u32::from(!win.is_null()) + u32::from(!buf.is_null());
+    if keys.count_ones() <= named {
+        report(&mut error, c"at least one action required");
         return ().reported(error);
     }
-    if has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__valid,
-    ) {
-        let mut type_0: ::core::ffi::c_int = if unsafe { (*opts).valid } as ::core::ffi::c_int != 0
-        {
-            UPD_VALID
-        } else {
-            UPD_NOT_VALID
-        };
-        if !win.is_null() {
-            unsafe { redraw_later(win, type_0) };
-        } else if !buf.is_null() {
-            unsafe { redraw_buf_later(buf, type_0) };
-        } else {
-            unsafe { redraw_all_later(type_0) };
+    if set(KEYSET_OPTIDX_redraw__valid) {
+        let type_0 = if opts.valid { UPD_VALID } else { UPD_NOT_VALID };
+        // SAFETY: `win` and `buf` are the live objects the lookups answered.
+        unsafe {
+            if !win.is_null() {
+                redraw_later(win, type_0);
+            } else if !buf.is_null() {
+                redraw_buf_later(buf, type_0);
+            } else {
+                redraw_all_later(type_0);
+            }
         }
     }
-    if has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__range,
-    ) {
-        // SAFETY: the caller's keyset -- `range` names its own items -- and
-        // the tags below say the integer arm of each is the live one.
+    if set(KEYSET_OPTIDX_redraw__range) {
+        // SAFETY: the caller's keyset -- `range` names its own items.
         let pair = unsafe {
-            let range = (*opts).range;
+            let range = opts.range;
             (range.size == 2).then(|| (*range.items, *range.items.add(1)))
         };
-        // SAFETY: as above.
+        // SAFETY: the tags say which arm of each union is the live one.
         let range = pair.filter(|(begin, end)| unsafe {
             begin.type_0 == kObjectTypeInteger
                 && end.type_0 == kObjectTypeInteger
@@ -130,120 +115,102 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
                 && end.data.integer >= -1
         });
         let Some((begin_obj, end_obj)) = range else {
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"%s".as_ptr(),
-                    c"Invalid 'range': Expected 2-tuple of Integers".as_ptr(),
-                )
-            };
+            report(&mut error, c"Invalid 'range': Expected 2-tuple of Integers");
             return ().reported(error);
         };
-        // SAFETY: the tags above say the integer arm of each is the live one.
+        // SAFETY: as above -- both are Integers.
         let (begin_raw, end_raw) = unsafe { (begin_obj.data.integer, end_obj.data.integer) };
-        let mut rbuf: *mut buf_T = if !win.is_null() {
+        let rbuf: *mut buf_T = if !win.is_null() {
+            // SAFETY: `win` is the live window the lookup answered.
             unsafe { (*win).w_buffer }
         } else if !buf.is_null() {
             buf
         } else {
             curbuf.get()
         };
-        let mut line_count: linenr_T = unsafe { (*rbuf).b_ml.ml_line_count };
-        let mut begin: ::core::ffi::c_int = (if begin_raw < line_count as int64_t {
-            begin_raw
+        // SAFETY: `rbuf` is a live buffer.
+        let line_count = int64_t::from(unsafe { (*rbuf).b_ml.ml_line_count });
+        // The range is clamped to the buffer, and `-1` means "to the end".
+        let begin = begin_raw.min(line_count);
+        let end = if end_raw == -1 {
+            line_count
         } else {
-            line_count as int64_t
-        }) as ::core::ffi::c_int;
-        let mut end: ::core::ffi::c_int = 0;
-        if end_raw == -1 as int64_t {
-            end = line_count as ::core::ffi::c_int;
-        } else {
-            end = (if (if begin as int64_t > end_raw {
-                begin as int64_t
-            } else {
-                end_raw
-            }) < line_count as int64_t
-            {
-                if begin as int64_t > end_raw {
-                    begin as int64_t
-                } else {
-                    end_raw
-                }
-            } else {
-                line_count as int64_t
-            }) as ::core::ffi::c_int;
-        }
+            end_raw.max(begin).min(line_count)
+        };
         if begin < end {
-            unsafe {
-                redraw_buf_range_later(rbuf, 1 as linenr_T + begin as linenr_T, end as linenr_T)
-            };
+            let (first, last) = (1 + begin as linenr_T, end as linenr_T);
+            // SAFETY: as above.
+            unsafe { redraw_buf_range_later(rbuf, first, last) };
         }
     }
-    if has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__valid,
-    ) || has_key(
-        unsafe { (*opts).is_set__redraw_ },
-        KEYSET_OPTIDX_redraw__range,
-    ) {
-        unsafe {
-            (*opts).flush = if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__flush) {
-                (*opts).flush as ::core::ffi::c_int
-            } else {
-                1
-            } != 0;
-        }
+    // Marking lines stale flushes by default; every other key does not.
+    if set(KEYSET_OPTIDX_redraw__valid) || set(KEYSET_OPTIDX_redraw__range) {
+        opts.flush = !set(KEYSET_OPTIDX_redraw__flush) || opts.flush;
     }
-    let mut flush_ui: bool = unsafe { (*opts).flush };
-    if unsafe { (*opts).tabline } {
-        if redraw_tabline.get() as ::core::ffi::c_int != 0
-            && first_window().is_some_and(|wp| wp.w_lines_valid == 0)
-        {
-            unsafe { (*opts).flush = true };
+    let mut flush_ui = opts.flush;
+    if opts.tabline {
+        // A window that has never been drawn cannot have its tabline drawn
+        // on its own; the whole screen has to go first.
+        if redraw_tabline.get() && first_window().is_some_and(|wp| wp.w_lines_valid == 0) {
+            opts.flush = true;
         } else {
+            // SAFETY: the tab line is the editor's own grid.
             unsafe { draw_tabline() };
         }
         flush_ui = true;
     }
-    let mut save_lz: bool = p_lz.get() != 0;
+    let save_lz = p_lz.get() != 0;
     let redraw = Allow::redraw();
     p_lz.set(0);
-    if unsafe { (*opts).statuscolumn } as ::core::ffi::c_int != 0
-        || unsafe { (*opts).statusline } as ::core::ffi::c_int != 0
-        || unsafe { (*opts).winbar } as ::core::ffi::c_int != 0
-    {
+    if opts.statuscolumn || opts.statusline || opts.winbar {
         if win.is_null() {
-            for wp in windows().map(Win::raw) {
-                if buf.is_null() || unsafe { (*wp).w_buffer } == buf {
-                    unsafe { redraw_status(wp, opts, &raw mut (*opts).flush) };
+            for wp in windows() {
+                if buf.is_null() || wp.w_buffer == buf {
+                    opts.flush = redraw_status(wp, opts, opts.flush);
                 }
             }
         } else {
-            unsafe { redraw_status(win, opts, &raw mut (*opts).flush) };
+            // SAFETY: `win` is the live window the lookup answered.
+            let wp = unsafe { Win::new(win) };
+            opts.flush = redraw_status(wp, opts, opts.flush);
         }
         flush_ui = true;
     }
-    let mut cwin: *mut win_T = if !win.is_null() { win } else { curwin.get() };
-    if unsafe { (*opts).cursor } as ::core::ffi::c_int != 0
-        && (unsafe { (*cwin).w_grid.target }.is_null()
-            || !unsafe { (*(*cwin).w_grid.target).valid })
-    {
-        unsafe { (*opts).flush = true };
+    let cwin: *mut win_T = if win.is_null() { curwin.get() } else { win };
+    // SAFETY: `cwin` is a live window, and its grid's target is a live grid
+    // or null.
+    let stale_grid = unsafe {
+        let target = (*cwin).w_grid.target;
+        target.is_null() || !(*target).valid
+    };
+    if opts.cursor && stale_grid {
+        opts.flush = true;
     }
-    if unsafe { (*opts).flush } as ::core::ffi::c_int != 0 && !cmdpreview.get() {
-        validate_cursor(unsafe { Win::current() });
-        update_topline(unsafe { Win::current() });
+    if opts.flush && !cmdpreview.get() {
+        // SAFETY: `curwin` names a live window for the editor's whole run.
+        let cur = unsafe { Win::current() };
+        validate_cursor(cur);
+        update_topline(cur);
+        // SAFETY: the editor's own screen.
         unsafe { update_screen() };
     }
-    if unsafe { (*opts).cursor } {
+    if opts.cursor {
+        // SAFETY: `cwin` is a live window.
         unsafe { setcursor_mayforce(cwin, true) };
         flush_ui = true;
     }
     if flush_ui {
+        // SAFETY: the editor's own UI.
         unsafe { ui_flush() };
     }
     drop(redraw);
     p_lz.set(save_lz as ::core::ffi::c_int);
     ().reported(error)
+}
+
+/// One of this file's three validation messages.
+fn report(err: &mut Error, msg: &CStr) {
+    // SAFETY: `err` is the caller's own slot, and the format takes the one C
+    // string it is given.
+    unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg.as_ptr()) };
 }

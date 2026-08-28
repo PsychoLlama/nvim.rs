@@ -48,14 +48,7 @@ pub(crate) type ErrSlot = Live<Error>;
 // Every name they are handed here is a literal and the slot is always the
 // caller's own, so the promise is discharged once, here.
 
-/// "Invalid `name`", naming the offending value when `val` says.
-pub(crate) fn err_invalid(err: ErrSlot, name: &CStr, val: Option<&CStr>, quote_val: bool) {
-    let val = val.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: `err` names a live error slot, and both strings are C strings.
-    unsafe { api_err_invalid(err.raw(), name.as_ptr(), val, 0, quote_val) };
-}
-
-/// [`err_invalid`] naming a keyset string as the offending value.
+/// "Invalid `name`: '`val`'", naming the keyset string that was wrong.
 ///
 /// # Safety
 /// `val`'s bytes must be NUL-terminated.
@@ -68,20 +61,20 @@ pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: String_0, q
 /// says.
 pub(crate) fn err_exp(err: ErrSlot, name: &CStr, expected: &CStr, actual: Option<&CStr>) {
     let actual = actual.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: as [`err_invalid`].
+    // SAFETY: as [`err_invalid_str`].
     unsafe { api_err_exp(err.raw(), name.as_ptr(), expected.as_ptr(), actual) };
 }
 
 /// "Required: `name`", for a key the caller left out.
 pub(crate) fn err_required(err: ErrSlot, name: &CStr) {
-    // SAFETY: as [`err_invalid`].
+    // SAFETY: as [`err_invalid_str`].
     unsafe { api_err_required(err.raw(), name.as_ptr()) };
 }
 
 /// "Conflict: `name` not allowed with `name2`", for two keys that exclude
 /// each other.
 pub(crate) fn err_conflict(err: ErrSlot, name: &CStr, name2: &CStr) {
-    // SAFETY: as [`err_invalid`].
+    // SAFETY: as [`err_invalid_str`].
     unsafe { api_err_conflict(err.raw(), name.as_ptr(), name2.as_ptr()) };
 }
 
@@ -91,7 +84,7 @@ pub(crate) fn err_conflict(err: ErrSlot, name: &CStr, name2: &CStr) {
 /// is the same text for every literal in this family and cannot become
 /// anything else.
 pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
-    // SAFETY: as [`err_invalid`]; the format takes the one string given.
+    // SAFETY: as [`err_invalid_str`]; the format takes the one string given.
     unsafe { api_set_error(err.raw(), kind, c"%s".as_ptr(), msg.as_ptr()) };
 }
 
@@ -100,13 +93,13 @@ pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
 /// # Safety
 /// `msg` must be NUL-terminated.
 pub(crate) unsafe fn err_msg_raw(err: ErrSlot, kind: ErrorType, msg: *const c_char) {
-    // SAFETY: as [`err_invalid`]; the format takes the one string given.
+    // SAFETY: as [`err_invalid_str`]; the format takes the one string given.
     unsafe { api_set_error(err.raw(), kind, c"%s".as_ptr(), msg) };
 }
 
 /// [`err_msg`] for the messages that name a window handle with a `%d`.
 pub(crate) fn err_msg_handle(err: ErrSlot, kind: ErrorType, fmt: &CStr, handle: handle_T) {
-    // SAFETY: as [`err_invalid`]; the format takes the one `int` given.
+    // SAFETY: as [`err_invalid_str`]; the format takes the one `int` given.
     unsafe { api_set_error(err.raw(), kind, fmt.as_ptr(), handle) };
 }
 
