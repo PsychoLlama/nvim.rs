@@ -74,6 +74,110 @@ const fn is_ascii_alpha(key: c_int) -> bool {
     (key >= 'A' as c_int && key <= 'Z' as c_int) || (key >= 'a' as c_int && key <= 'z' as c_int)
 }
 
+/// A read cursor over the text a `<>` name is being parsed out of.
+///
+/// [`find_special_key`] and [`replace_termcodes`] walk a `*const c_char` byte
+/// by byte and peek a handful of bytes ahead of it; every one of those reads
+/// was its own `unsafe` before. Capturing the pointer in a newtype moves the
+/// promise to where the cursor is *built*, once per entry point, and leaves
+/// the walk itself ordinary checked code — p23's shape 3.
+///
+/// Ordered by address, so `bp <= end` keeps reading the way the C does.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Cursor(*const c_char);
+
+impl Cursor {
+    /// # Safety
+    /// `p` must stay readable at every offset the walk reaches. In practice
+    /// that is a NUL-terminated string: the NUL is what stops the walk, and
+    /// the few bytes peeked past the cursor are guarded by the caller's own
+    /// length checks.
+    const unsafe fn new(p: *const c_char) -> Self {
+        Self(p)
+    }
+
+    /// The byte under the cursor.
+    fn byte(self) -> c_char {
+        self.at(0)
+    }
+
+    /// The byte `n` further on — the C's `bp[n]`.
+    fn at(self, n: isize) -> c_char {
+        // SAFETY: the constructor's promise.
+        unsafe { *self.0.offset(n) }
+    }
+
+    /// The byte `n` further on, unsigned — C's `(uint8_t)p[n]`. A `c_char` is
+    /// signed here, so which of the two a comparison uses is load-bearing
+    /// once the byte is above 0x7f: `K_SPECIAL` is 0x80.
+    fn u8_at(self, n: isize) -> u8 {
+        self.at(n) as u8
+    }
+
+    /// The cursor `n` bytes further on.
+    fn skip(self, n: isize) -> Self {
+        Self(self.0.wrapping_offset(n))
+    }
+
+    /// How many bytes this cursor is ahead of `other` — the C's `end - bp`.
+    fn gap(self, other: Self) -> isize {
+        self.0.addr().wrapping_sub(other.0.addr()) as isize
+    }
+
+    /// The pointer back, for the callees that still take one.
+    fn raw(self) -> *const c_char {
+        self.0
+    }
+
+    /// The cursor's own storage, for the callees that advance it in place —
+    /// C's `const char **`. Taking the address of a field is not a read, so
+    /// this is safe; what the callee then writes through it is its own
+    /// contract.
+    fn slot(&mut self) -> *mut *const c_char {
+        &raw mut self.0
+    }
+}
+
+/// C's `STRNICMP(p, lit, strlen(lit)) == 0`: does the text at `p` open with
+/// `lit`, ASCII case ignored?
+fn starts_with_ignoring_case(p: Cursor, lit: &CStr) -> bool {
+    let n = lit.to_bytes().len();
+    // SAFETY: `p` is a cursor into a NUL-terminated string and `lit` is one
+    // too, so the comparison stops at the shorter of the two.
+    unsafe { strncasecmp(p.raw(), lit.as_ptr(), n) == 0 }
+}
+
+/// C's `strncmp(p, lit, strlen(lit)) == 0`: the case-sensitive half.
+fn starts_with(p: Cursor, lit: &CStr) -> bool {
+    let n = lit.to_bytes().len();
+    // SAFETY: as [`starts_with_ignoring_case`].
+    unsafe { strncmp(p.raw(), lit.as_ptr(), n) == 0 }
+}
+
+/// [`vim_str2nr`] as the `<>` parsers ask for it: the unsigned value at `p`
+/// and the number of bytes it spans, zero when there is no number there.
+///
+/// # Safety
+/// `p` must point at a NUL-terminated string.
+unsafe fn number_at(p: Cursor) -> (uvarnumber_T, c_int) {
+    let mut number: uvarnumber_T = 0;
+    let mut len: c_int = 0;
+    // Bound out here so the call itself fits on one line; nine arguments
+    // spread over nine lines would be nine unchecked lines.
+    let (start, prep, lenp) = (p.raw(), ptr::null_mut(), &raw mut len);
+    let (nptr, unptr) = (ptr::null_mut::<varnumber_T>(), &raw mut number);
+    let overflow = ptr::null_mut();
+    // SAFETY: the caller's promise, and every out-parameter is a live local
+    // or null. Upstream passes null for `unptr` at the one call site that
+    // does not want the value; writing a local it then ignores is the same.
+    unsafe {
+        vim_str2nr(
+            start, prep, lenp, STR2NR_ALL, nptr, unptr, 0, true, overflow,
+        )
+    };
+    (number, len)
+}
+
 /// Fold `modifiers` into `key` where the terminal has a code for the
 /// combination: `<S-Up>` is a key of its own, not `Up` plus a shift bit.
 /// `modifiers` is left holding whatever could not be folded in.
@@ -136,85 +240,83 @@ pub(crate) type SpecialKeyName = [c_char; MAX_KEY_NAME_LEN as usize + 1];
 pub fn get_special_key_name(key: c_int, modifiers: c_int) -> SpecialKeyName {
     let mut key = key;
     let mut modifiers = modifiers;
-    unsafe {
-        // A key that stands for a normal character.
-        if key < 0 && c_int::from(termcap_name(key)[0]) == KS_KEY {
-            key = c_int::from(termcap_name(key)[1]);
-        }
-        // A shifted or ctrl'ed special key becomes the plain key and a bit.
-        if key < 0
-            && let Some((plain, bit)) = unshift(key)
-        {
-            modifiers |= bit;
-            key = plain;
-        }
-
-        let mut name = name_of_code(key);
-        // Not a known key and not printable: try to read modifiers off the byte.
-        if key > 0 && utf_char2len(key) == 1 {
-            if name.is_none()
-                && (!vim_isprintc(key) || key & 0x7f == ' ' as c_int)
-                && key & 0x80 != 0
-            {
-                key &= 0x7f;
-                modifiers |= MOD_MASK_ALT;
-                name = name_of_code(key);
-            }
-            if name.is_none() && !vim_isprintc(key) && key < ' ' as c_int {
-                key += '@' as c_int;
-                modifiers |= MOD_MASK_CTRL;
-            }
-        }
-
-        let mut out = [0u8; MAX_KEY_NAME_LEN as usize + 1];
-        out[0] = b'<';
-        let mut at = 1;
-        for letter in printed_modifiers(modifiers) {
-            out[at] = letter;
-            out[at + 1] = b'-';
-            at += 2;
-        }
-        match name {
-            // An unnamed special key prints as its termcap name.
-            None if key < 0 => {
-                let code = termcap_name(key);
-                out[at..at + 4].copy_from_slice(&[b't', b'_', code[0], code[1]]);
-                at += 4;
-            }
-            // Not a special key at all: only modifiers, printed directly.
-            None => {
-                let len = utf_char2len(key);
-                if len == 1 && vim_isprintc(key) {
-                    out[at] = key as u8;
-                    at += 1;
-                } else if len > 1 {
-                    let mut wide = [0u8; MB_MAXBYTES + 1];
-                    let len = utf_char2bytes(key, wide.as_mut_ptr().cast()) as usize;
-                    out[at..at + len].copy_from_slice(&wide[..len]);
-                    at += len;
-                } else {
-                    let display = transchar(key);
-                    let shown = CStr::from_ptr(display.as_ptr()).to_bytes();
-                    out[at..at + shown.len()].copy_from_slice(shown);
-                    at += shown.len();
-                }
-            }
-            // A named key, as long as the name fits.
-            Some(name) => {
-                if (name.len() + at + 2) as c_int <= MAX_KEY_NAME_LEN {
-                    out[at..at + name.len()].copy_from_slice(name.as_bytes());
-                    at += name.len();
-                }
-            }
-        }
-        out[at] = b'>';
-
-        let mut name: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-        for (slot, byte) in name.iter_mut().zip(out) {
-            *slot = byte as c_char;
-        }
-        name
+    // A key that stands for a normal character.
+    if key < 0 && c_int::from(termcap_name(key)[0]) == KS_KEY {
+        key = c_int::from(termcap_name(key)[1]);
     }
+    // A shifted or ctrl'ed special key becomes the plain key and a bit.
+    if key < 0
+        && let Some((plain, bit)) = unshift(key)
+    {
+        modifiers |= bit;
+        key = plain;
+    }
+
+    let mut name = name_of_code(key);
+    // Not a known key and not printable: try to read modifiers off the byte.
+    if key > 0 && utf_char2len(key) == 1 {
+        if name.is_none()
+            && (!unsafe { vim_isprintc(key) } || key & 0x7f == ' ' as c_int)
+            && key & 0x80 != 0
+        {
+            key &= 0x7f;
+            modifiers |= MOD_MASK_ALT;
+            name = name_of_code(key);
+        }
+        if name.is_none() && !unsafe { vim_isprintc(key) } && key < ' ' as c_int {
+            key += '@' as c_int;
+            modifiers |= MOD_MASK_CTRL;
+        }
+    }
+
+    let mut out = [0u8; MAX_KEY_NAME_LEN as usize + 1];
+    out[0] = b'<';
+    let mut at = 1;
+    for letter in printed_modifiers(modifiers) {
+        out[at] = letter;
+        out[at + 1] = b'-';
+        at += 2;
+    }
+    match name {
+        // An unnamed special key prints as its termcap name.
+        None if key < 0 => {
+            let code = termcap_name(key);
+            out[at..at + 4].copy_from_slice(&[b't', b'_', code[0], code[1]]);
+            at += 4;
+        }
+        // Not a special key at all: only modifiers, printed directly.
+        None => {
+            let len = utf_char2len(key);
+            if len == 1 && unsafe { vim_isprintc(key) } {
+                out[at] = key as u8;
+                at += 1;
+            } else if len > 1 {
+                let mut wide = [0u8; MB_MAXBYTES + 1];
+                let len = unsafe { utf_char2bytes(key, wide.as_mut_ptr().cast()) } as usize;
+                out[at..at + len].copy_from_slice(&wide[..len]);
+                at += len;
+            } else {
+                let display = unsafe { transchar(key) };
+                let shown = unsafe { CStr::from_ptr(display.as_ptr()) }.to_bytes();
+                out[at..at + shown.len()].copy_from_slice(shown);
+                at += shown.len();
+            }
+        }
+        // A named key, as long as the name fits.
+        Some(name) => {
+            if (name.len() + at + 2) as c_int <= MAX_KEY_NAME_LEN {
+                out[at..at + name.len()].copy_from_slice(name.as_bytes());
+                at += name.len();
+            }
+        }
+    }
+    out[at] = b'>';
+
+    let mut name: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
+    for (slot, byte) in name.iter_mut().zip(out) {
+        *slot = byte as c_char;
+    }
+    name
 }
 
 /// Translate one `<>` name at `*srcp` into `dst`, advancing `*srcp` past it.
@@ -233,14 +335,12 @@ pub unsafe fn trans_special(
     escape_ks: bool,
     did_simplify: *mut bool,
 ) -> c_uint {
-    unsafe {
-        let mut modifiers = 0;
-        let key = find_special_key(srcp, src_len, &raw mut modifiers, flags, did_simplify);
-        if key == 0 {
-            return 0;
-        }
-        special_to_buf(key, modifiers, escape_ks, dst)
+    let mut modifiers = 0;
+    let key = unsafe { find_special_key(srcp, src_len, &raw mut modifiers, flags, did_simplify) };
+    if key == 0 {
+        return 0;
     }
+    unsafe { special_to_buf(key, modifiers, escape_ks, dst) }
 }
 
 /// Write the byte sequence for `key` with `modifiers` into `dst` and answer
@@ -258,28 +358,29 @@ pub unsafe fn special_to_buf(
     escape_ks: bool,
     dst: *mut c_char,
 ) -> c_uint {
-    unsafe {
-        let mut dlen = 0;
-        if modifiers != 0 {
-            dlen = put_bytes(
-                dst,
-                dlen,
-                &[K_SPECIAL as u8, KS_MODIFIER as u8, modifiers as u8],
-            );
-        }
-        if key < 0 {
-            let code = termcap_name(key);
-            dlen = put_bytes(dst, dlen, &[K_SPECIAL as u8, code[0], code[1]]);
-        } else if escape_ks {
-            let after = add_char2buf(key, dst.add(dlen));
-            let written = after.offset_from(dst);
-            debug_assert!(written >= 0 && written as usize <= c_uint::MAX as usize);
-            dlen = written as usize;
-        } else {
-            dlen += utf_char2bytes(key, dst.add(dlen)) as usize;
-        }
-        dlen as c_uint
+    let mut dlen = 0;
+    if modifiers != 0 {
+        let prefix = [K_SPECIAL as u8, KS_MODIFIER as u8, modifiers as u8];
+        // SAFETY: the caller's promise -- room for the modifier prefix.
+        dlen = unsafe { put_bytes(dst, dlen, &prefix) };
     }
+    if key < 0 {
+        let code = termcap_name(key);
+        let name = [K_SPECIAL as u8, code[0], code[1]];
+        // SAFETY: as above -- three bytes into the caller's buffer.
+        dlen = unsafe { put_bytes(dst, dlen, &name) };
+    } else if escape_ks {
+        // SAFETY: as above; `dst + dlen` is what is left of the buffer, and
+        // the caller promised three times `MB_MAXBYTES` for this case.
+        let after = unsafe { add_char2buf(key, dst.add(dlen)) };
+        // SAFETY: `after` came out of `dst`, so both name the same object.
+        let written = unsafe { after.offset_from(dst) };
+        debug_assert!(written >= 0 && written as usize <= c_uint::MAX as usize);
+        dlen = written as usize;
+    } else {
+        dlen += unsafe { utf_char2bytes(key, dst.add(dlen)) } as usize;
+    }
+    dlen as c_uint
 }
 
 /// Copy `bytes` to `dst[at..]` and answer the offset past them.
@@ -307,163 +408,154 @@ pub unsafe fn find_special_key(
     flags: c_int,
     did_simplify: *mut bool,
 ) -> c_int {
-    unsafe {
-        if src_len == 0 {
-            return 0;
-        }
-        let in_string = flags & FSK_IN_STRING != 0;
-        let end = (*srcp).add(src_len).sub(1);
-        let mut src = *srcp;
-        if *src != b'<' as c_char {
-            return 0;
-        }
-        if *src.add(1) == b'*' as c_char {
-            src = src.add(1); // <*xxx>: do not simplify
-        }
+    if src_len == 0 {
+        return 0;
+    }
+    let in_string = flags & FSK_IN_STRING != 0;
+    // SAFETY: the caller's promise -- `*srcp` names a readable buffer of
+    // `src_len` bytes, NUL-terminated, which is what bounds the walk below.
+    let mut src = unsafe { Cursor::new(*srcp) };
+    let end = src.skip(src_len as isize - 1);
+    if src.byte() != b'<' as c_char {
+        return 0;
+    }
+    if src.at(1) == b'*' as c_char {
+        src = src.skip(1); // <*xxx>: do not simplify
+    }
 
-        // Find the end of the modifier list.
-        let mut last_dash = src;
-        let mut bp = src.add(1);
-        let mut len: c_int = 0;
-        while bp <= end && (*bp == b'-' as c_char || ascii_isident(c_int::from(*bp))) {
-            if *bp == b'-' as c_char {
-                last_dash = bp;
-                if bp.add(1) <= end {
-                    len = utfc_ptr2len_len(bp.add(1), end.offset_from(bp) as c_int + 1);
-                    // Anything is accepted, as in <C-?>. In a string <C-"> and
-                    // <M-"> are not, because " ends the string; <M-\"> works.
-                    if end.offset_from(bp) > len as isize
-                        && !(in_string && *bp.add(1) == b'"' as c_char)
-                        && *bp.offset((len + 1) as isize) == b'>' as c_char
-                    {
-                        bp = bp.offset(len as isize);
-                    } else if end.offset_from(bp) > 2
-                        && in_string
-                        && *bp.add(1) == b'\\' as c_char
-                        && *bp.add(2) == b'"' as c_char
-                        && *bp.add(3) == b'>' as c_char
-                    {
-                        bp = bp.add(2);
-                    }
+    // Find the end of the modifier list.
+    let mut last_dash = src;
+    let mut bp = src.skip(1);
+    let mut len: c_int = 0;
+    while bp <= end && (bp.byte() == b'-' as c_char || ascii_isident(c_int::from(bp.byte()))) {
+        if bp.byte() == b'-' as c_char {
+            last_dash = bp;
+            if bp.skip(1) <= end {
+                let (after_dash, left) = (bp.skip(1).raw(), end.gap(bp) as c_int + 1);
+                // SAFETY: `after_dash` is inside the caller's buffer and
+                // `left` is what is left of it from there.
+                len = unsafe { utfc_ptr2len_len(after_dash, left) };
+                // Anything is accepted, as in <C-?>. In a string <C-"> and
+                // <M-"> are not, because " ends the string; <M-\"> works.
+                if end.gap(bp) > len as isize
+                    && !(in_string && bp.at(1) == b'"' as c_char)
+                    && bp.at((len + 1) as isize) == b'>' as c_char
+                {
+                    bp = bp.skip(len as isize);
+                } else if end.gap(bp) > 2
+                    && in_string
+                    && bp.at(1) == b'\\' as c_char
+                    && bp.at(2) == b'"' as c_char
+                    && bp.at(3) == b'>' as c_char
+                {
+                    bp = bp.skip(2);
                 }
             }
-            if end.offset_from(bp) > 3 && *bp == b't' as c_char && *bp.add(1) == b'_' as c_char {
-                bp = bp.add(3); // skip t_xx; xx may be '-' or '>'
-            } else if end.offset_from(bp) > 4 && strncasecmp(bp, c"char-".as_ptr(), 5) == 0 {
-                vim_str2nr(
-                    bp.add(5),
-                    ptr::null_mut(),
-                    &raw mut len,
-                    STR2NR_ALL,
-                    ptr::null_mut::<varnumber_T>(),
-                    ptr::null_mut::<uvarnumber_T>(),
-                    0,
-                    true,
-                    ptr::null_mut(),
-                );
-                if len == 0 {
-                    emsg(gettext(&raw const e_invarg as *const c_char));
-                    return 0;
-                }
-                bp = bp.offset((len + 5) as isize);
-                break;
-            }
-            bp = bp.add(1);
         }
-
-        if bp > end || *bp != b'>' as c_char {
-            return 0;
-        }
-        let end_of_name = bp.add(1);
-
-        // Which modifiers are given?
-        let mut modifiers = 0;
-        bp = src.add(1);
-        while bp < last_dash {
-            if *bp != b'-' as c_char {
-                let bit = name_to_mod_mask(c_int::from(*bp as u8));
-                if bit == 0 {
-                    return 0; // illegal modifier name
-                }
-                modifiers |= bit;
-            }
-            bp = bp.add(1);
-        }
-
-        let mut key = if strncasecmp(last_dash.add(1), c"char-".as_ptr(), 5) == 0
-            && ascii_isdigit(c_int::from(*last_dash.add(6)))
-        {
-            // <Char-123>, <Char-033> or <Char-0x33>.
-            let mut number: uvarnumber_T = 0;
-            vim_str2nr(
-                last_dash.add(6),
-                ptr::null_mut(),
-                &raw mut len,
-                STR2NR_ALL,
-                ptr::null_mut::<varnumber_T>(),
-                &raw mut number,
-                0,
-                true,
-                ptr::null_mut(),
-            );
+        if end.gap(bp) > 3 && bp.byte() == b't' as c_char && bp.at(1) == b'_' as c_char {
+            bp = bp.skip(3); // skip t_xx; xx may be '-' or '>'
+        } else if end.gap(bp) > 4 && starts_with_ignoring_case(bp, c"char-") {
+            // SAFETY: `bp + 5` is inside the caller's NUL-terminated buffer.
+            len = unsafe { number_at(bp.skip(5)) }.1;
             if len == 0 {
-                emsg(gettext(&raw const e_invarg as *const c_char));
+                // SAFETY: a static message and the editor's own message path.
+                unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
                 return 0;
             }
-            number as c_int
-        } else {
-            // A single-letter modifier, or a special key name.
-            let mut off = 1;
-            if in_string
-                && *last_dash.add(1) == b'\\' as c_char
-                && *last_dash.add(2) == b'"' as c_char
-            {
-                // In a double-quoted string, `"` is written `\"`.
-                len = 2;
-                off = 2;
-            } else {
-                len = utfc_ptr2len(last_dash.add(1));
-            }
-            if modifiers != 0 && *last_dash.offset((len + 1) as isize) == b'>' as c_char {
-                utf_ptr2char(last_dash.offset(off as isize))
-            } else {
-                let code = get_special_key_code(last_dash.offset(off as isize));
-                if flags & FSK_KEEP_X_KEY == 0 {
-                    handle_x_keys(code)
-                } else {
-                    code
-                }
-            }
-        };
+            bp = bp.skip((len + 5) as isize);
+            break;
+        }
+        bp = bp.skip(1);
+    }
 
-        // get_special_key_code() answers NUL for a name it does not know.
-        if key == NUL {
+    if bp > end || bp.byte() != b'>' as c_char {
+        return 0;
+    }
+    let end_of_name = bp.skip(1);
+
+    // Which modifiers are given?
+    let mut modifiers = 0;
+    bp = src.skip(1);
+    while bp < last_dash {
+        if bp.byte() != b'-' as c_char {
+            let bit = name_to_mod_mask(c_int::from(bp.byte() as u8));
+            if bit == 0 {
+                return 0; // illegal modifier name
+            }
+            modifiers |= bit;
+        }
+        bp = bp.skip(1);
+    }
+
+    let mut key = if starts_with_ignoring_case(last_dash.skip(1), c"char-")
+        && ascii_isdigit(c_int::from(last_dash.at(6)))
+    {
+        // <Char-123>, <Char-033> or <Char-0x33>.
+        // SAFETY: `last_dash + 6` is inside the caller's NUL-terminated
+        // buffer -- the five bytes of "char-" and a digit precede it.
+        let (number, digits) = unsafe { number_at(last_dash.skip(6)) };
+        len = digits;
+        if len == 0 {
+            // SAFETY: a static message and the editor's own message path.
+            unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
             return 0;
         }
-        // Only keep a modifier that no key code already includes.
-        key = simplify_key(key, &mut modifiers);
-        if flags & FSK_KEYCODE == 0 {
-            // No key code wanted: answer with the single-byte code.
-            if key == K_BS {
-                key = BS;
-            } else if key == K_DEL || key == K_KDEL {
-                key = DEL;
+        number as c_int
+    } else {
+        // A single-letter modifier, or a special key name.
+        let mut off = 1;
+        if in_string && last_dash.at(1) == b'\\' as c_char && last_dash.at(2) == b'"' as c_char {
+            // In a double-quoted string, `"` is written `\"`.
+            len = 2;
+            off = 2;
+        } else {
+            // SAFETY: `last_dash + 1` is inside the caller's buffer, whose
+            // NUL bounds the character `utfc_ptr2len` measures.
+            len = unsafe { utfc_ptr2len(last_dash.skip(1).raw()) };
+        }
+        if modifiers != 0 && last_dash.at((len + 1) as isize) == b'>' as c_char {
+            // SAFETY: as above -- a character inside the caller's buffer.
+            unsafe { utf_ptr2char(last_dash.skip(off).raw()) }
+        } else {
+            // SAFETY: as above; `get_special_key_code` stops at the first
+            // byte that cannot be part of a name.
+            let code = unsafe { get_special_key_code(last_dash.skip(off).raw()) };
+            if flags & FSK_KEEP_X_KEY == 0 {
+                handle_x_keys(code)
+            } else {
+                code
             }
         }
-        // A normal character with a modifier: try to make one byte of the two,
-        // Alt and Meta excepted.
-        if key >= 0 {
-            key = extract_modifiers(
-                key,
-                &raw mut modifiers,
-                flags & FSK_SIMPLIFY != 0,
-                did_simplify,
-            );
-        }
-        *modp = modifiers;
-        *srcp = end_of_name;
-        key
+    };
+
+    // get_special_key_code() answers NUL for a name it does not know.
+    if key == NUL {
+        return 0;
     }
+    // Only keep a modifier that no key code already includes.
+    key = simplify_key(key, &mut modifiers);
+    if flags & FSK_KEYCODE == 0 {
+        // No key code wanted: answer with the single-byte code.
+        if key == K_BS {
+            key = BS;
+        } else if key == K_DEL || key == K_KDEL {
+            key = DEL;
+        }
+    }
+    // A normal character with a modifier: try to make one byte of the two,
+    // Alt and Meta excepted.
+    if key >= 0 {
+        let (modp_local, simplify) = (&raw mut modifiers, flags & FSK_SIMPLIFY != 0);
+        // SAFETY: `modp_local` is a live local and `did_simplify` is the
+        // caller's, which they promised is writable or null.
+        key = unsafe { extract_modifiers(key, modp_local, simplify, did_simplify) };
+    }
+    // SAFETY: the caller's promise -- both out-parameters are writable.
+    unsafe {
+        *modp = modifiers;
+        *srcp = end_of_name.raw();
+    }
+    key
 }
 
 /// Fold the modifiers a single byte can carry into `key`: `Shift-a` becomes
@@ -481,38 +573,36 @@ unsafe fn extract_modifiers(
     simplify: bool,
     did_simplify: *mut bool,
 ) -> c_int {
-    unsafe {
-        let mut key = key;
-        let mut modifiers = *modp;
+    let mut key = key;
+    let mut modifiers = unsafe { *modp };
 
-        if modifiers & MOD_MASK_SHIFT != 0 && is_ascii_alpha(key) {
-            key = to_upper_ascii(key);
-            // <C-S-a> keeps the shift; <S-a>, <A-S-a> and <S-A> do not.
-            if modifiers & MOD_MASK_CTRL == 0 {
-                modifiers &= !MOD_MASK_SHIFT;
-            }
+    if modifiers & MOD_MASK_SHIFT != 0 && is_ascii_alpha(key) {
+        key = to_upper_ascii(key);
+        // <C-S-a> keeps the shift; <S-a>, <A-S-a> and <S-A> do not.
+        if modifiers & MOD_MASK_CTRL == 0 {
+            modifiers &= !MOD_MASK_SHIFT;
         }
-        // <C-H> and <C-h> mean the same thing; always use "H".
-        if modifiers & MOD_MASK_CTRL != 0 && is_ascii_alpha(key) {
-            key = to_upper_ascii(key);
-        }
-        if simplify
-            && modifiers & MOD_MASK_CTRL != 0
-            && ((key >= '?' as c_int && key <= '_' as c_int) || is_ascii_alpha(key))
-        {
-            key = to_upper_ascii(key) ^ 0x40;
-            modifiers &= !MOD_MASK_CTRL;
-            if key == NUL {
-                key = K_ZERO; // <C-@> is <Nul>
-            }
-            if !did_simplify.is_null() {
-                *did_simplify = true;
-            }
-        }
-
-        *modp = modifiers;
-        key
     }
+    // <C-H> and <C-h> mean the same thing; always use "H".
+    if modifiers & MOD_MASK_CTRL != 0 && is_ascii_alpha(key) {
+        key = to_upper_ascii(key);
+    }
+    if simplify
+        && modifiers & MOD_MASK_CTRL != 0
+        && ((key >= '?' as c_int && key <= '_' as c_int) || is_ascii_alpha(key))
+    {
+        key = to_upper_ascii(key) ^ 0x40;
+        modifiers &= !MOD_MASK_CTRL;
+        if key == NUL {
+            key = K_ZERO; // <C-@> is <Nul>
+        }
+        if !did_simplify.is_null() {
+            unsafe { *did_simplify = true };
+        }
+    }
+
+    unsafe { *modp = modifiers };
+    key
 }
 
 /// The code of the special key called `name`, or 0 when there is no such key.
@@ -524,20 +614,22 @@ unsafe fn extract_modifiers(
 /// # Safety
 /// `name` must point at a NUL-terminated string.
 pub unsafe fn get_special_key_code(name: *const c_char) -> c_int {
-    unsafe {
-        if *name == b't' as c_char
-            && *name.add(1) == b'_' as c_char
-            && *name.add(2) != 0
-            && *name.add(3) != 0
-        {
-            return termcap_key([*name.add(2) as u8, *name.add(3) as u8]);
-        }
-        let mut len = 0;
-        while ascii_isident(c_int::from(*name.add(len))) {
-            len += 1;
-        }
-        code_for_name(slice::from_raw_parts(name.cast::<u8>(), len))
+    // SAFETY: the caller's promise -- a NUL-terminated string, whose NUL
+    // stops both the `t_xx` peek and the identifier walk below.
+    let name = unsafe { Cursor::new(name) };
+    if name.byte() == b't' as c_char
+        && name.at(1) == b'_' as c_char
+        && name.at(2) != 0
+        && name.at(3) != 0
+    {
+        return termcap_key([name.at(2) as u8, name.at(3) as u8]);
     }
+    let mut len = 0;
+    while ascii_isident(c_int::from(name.at(len))) {
+        len += 1;
+    }
+    // SAFETY: `len` bytes of identifier were just read one at a time.
+    code_for_name(unsafe { slice::from_raw_parts(name.raw().cast::<u8>(), len as usize) })
 }
 
 /// Which button a mouse pseudo-code is about, and whether it was a click or a
@@ -549,10 +641,8 @@ pub unsafe fn get_special_key_code(name: *const c_char) -> c_int {
 pub unsafe fn get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut bool) -> c_int {
     match mouse_event(code) {
         Some(event) => {
-            unsafe {
-                *is_click = event.is_click;
-                *is_drag = event.is_drag;
-            }
+            unsafe { *is_click = event.is_click };
+            unsafe { *is_drag = event.is_drag };
             event.button
         }
         None => 0,
@@ -590,145 +680,168 @@ pub unsafe fn replace_termcodes(
     cpo_val: *const c_char,
 ) -> *mut c_char {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        let end = from.add(from_len).sub(1);
-        // A backslash is a special character unless 'cpoptions' contains B.
-        let do_backslash = vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()).is_null();
-        let do_special = flags & REPTERM_NO_SPECIAL == 0;
-        let allocated = (*bufp).is_null();
-        // Worst case one character becomes six bytes (a shifted special key),
-        // plus a NUL at the end.
-        let buf_len = if allocated { from_len * 6 + 1 } else { 128 };
-        let result = if allocated {
-            xmalloc(buf_len).cast::<c_char>()
-        } else {
-            *bufp
-        };
+    // SAFETY: the caller's promise -- `from` is readable for `from_len`
+    // bytes, and every read below stays at or before `end`.
+    let mut src = unsafe { Cursor::new(from) };
+    let end = src.skip(from_len as isize - 1);
+    // A backslash is a special character unless 'cpoptions' contains B.
+    // SAFETY: `cpo_val` is the caller's NUL-terminated option string.
+    let do_backslash = unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
+    let do_special = flags & REPTERM_NO_SPECIAL == 0;
+    // SAFETY: the caller's promise -- `bufp` is readable and writable.
+    let given = unsafe { *bufp };
+    let allocated = given.is_null();
+    // Worst case one character becomes six bytes (a shifted special key),
+    // plus a NUL at the end.
+    let buf_len = if allocated { from_len * 6 + 1 } else { 128 };
+    let result = if allocated {
+        // SAFETY: `xmalloc` either answers `buf_len` writable bytes or dies.
+        unsafe { xmalloc(buf_len) }.cast::<c_char>()
+    } else {
+        given
+    };
 
-        let mut dlen: usize = 0;
-        let mut src = from;
-        while src <= end {
-            if !allocated && dlen + 64 > buf_len {
-                return ptr::null_mut();
-            }
-            // Check for special <> keycodes, like "<C-S-LeftMouse>".
-            if do_special
-                && (flags & REPTERM_DO_LT != 0
-                    || (end.offset_from(src) >= 3 && strncmp(src, c"<lt>".as_ptr(), 4) != 0))
-            {
-                // <SID>Func becomes K_SNR <script-nr> _Func, which is how a
-                // script-local function's name is spelled.
-                // (Room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14.)
-                if end.offset_from(src) >= 4 && strncasecmp(src, c"<SID>".as_ptr(), 5) == 0 {
-                    if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
-                        emsg(gettext(&raw const e_usingsid as *const c_char));
-                    } else {
-                        let sid = if sid_arg != 0 {
-                            sid_arg
-                        } else {
-                            current_sctx.get().sc_sid
-                        };
-                        src = src.add(5);
-                        dlen = put_bytes(
-                            result,
-                            dlen,
-                            &[K_SPECIAL as u8, KS_EXTRA as u8, KE_SNR as u8],
-                        );
-                        snprintf(result.add(dlen), buf_len - dlen, c"%d".as_ptr(), sid);
-                        dlen += strlen(result.add(dlen));
-                        dlen = put_bytes(result, dlen, b"_");
-                        continue;
-                    }
-                }
-
-                let written = trans_special(
-                    &raw mut src,
-                    end.offset_from(src) as size_t + 1,
-                    result.add(dlen),
-                    FSK_KEYCODE
-                        | if flags & REPTERM_NO_SIMPLIFY != 0 {
-                            0
-                        } else {
-                            FSK_SIMPLIFY
-                        },
-                    true,
-                    did_simplify,
-                ) as usize;
-                if written != 0 {
-                    dlen += written;
-                    continue;
-                }
-            }
-
-            if do_special {
-                // <Leader> and <LocalLeader> take the value of "mapleader" and
-                // "maplocalleader"; a backslash stands in when either is unset.
-                let (len, value) = if end.offset_from(src) >= 7
-                    && strncasecmp(src, c"<Leader>".as_ptr(), 8) == 0
-                {
-                    (8, get_var_value(c"g:mapleader".as_ptr(), &mut numbuf))
-                } else if end.offset_from(src) >= 12
-                    && strncasecmp(src, c"<LocalLeader>".as_ptr(), 13) == 0
-                {
-                    (13, get_var_value(c"g:maplocalleader".as_ptr(), &mut numbuf))
+    let mut dlen: usize = 0;
+    while src <= end {
+        if !allocated && dlen + 64 > buf_len {
+            return ptr::null_mut();
+        }
+        // Check for special <> keycodes, like "<C-S-LeftMouse>".
+        if do_special
+            && (flags & REPTERM_DO_LT != 0 || (end.gap(src) >= 3 && !starts_with(src, c"<lt>")))
+        {
+            // <SID>Func becomes K_SNR <script-nr> _Func, which is how a
+            // script-local function's name is spelled.
+            // (Room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14.)
+            if end.gap(src) >= 4 && starts_with_ignoring_case(src, c"<SID>") {
+                if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
+                    // SAFETY: a static message and the editor's message path.
+                    unsafe { emsg(gettext(&raw const e_usingsid as *const c_char)) };
                 } else {
-                    (0, ptr::null_mut())
-                };
-                if len != 0 {
-                    // Up to 8 * 6 characters of "mapleader" are allowed.
-                    let mut leader = if value.is_null() || *value == 0 || strlen(value) > 8 * 6 {
-                        c"\\".as_ptr()
+                    let sid = if sid_arg != 0 {
+                        sid_arg
                     } else {
-                        value.cast_const()
+                        current_sctx.get().sc_sid
                     };
-                    while *leader != 0 {
-                        *result.add(dlen) = *leader;
-                        dlen += 1;
-                        leader = leader.add(1);
-                    }
-                    src = src.add(len);
+                    src = src.skip(5);
+                    let snr = [K_SPECIAL as u8, KS_EXTRA as u8, KE_SNR as u8];
+                    // SAFETY: `result` has `buf_len` bytes and the comment
+                    // above accounts for the 14 this branch writes.
+                    dlen = unsafe { put_bytes(result, dlen, &snr) };
+                    let (at, room) = (result.wrapping_add(dlen), buf_len - dlen);
+                    // SAFETY: `at` has `room` writable bytes, and the format
+                    // takes exactly the one `c_int` argument given.
+                    unsafe { snprintf(at, room, c"%d".as_ptr(), sid) };
+                    // SAFETY: `snprintf` NUL-terminated what it wrote.
+                    dlen += unsafe { strlen(at) };
+                    // SAFETY: as above -- one byte, still inside `buf_len`.
+                    dlen = unsafe { put_bytes(result, dlen, b"_") };
                     continue;
                 }
             }
 
-            // Remove CTRL-V and take the next character literally. On the "from"
-            // side a trailing CTRL-V is kept, on the "to" side it is dropped, so
-            // that ":map xx ^V" maps xx to nothing. Without 'B' in 'cpoptions' a
-            // backslash does the same job.
-            let quoted = *src;
-            if c_int::from(quoted) == Ctrl_V || (do_backslash && quoted == b'\\' as c_char) {
-                src = src.add(1);
-                if src > end {
-                    if flags & REPTERM_FROM_PART != 0 {
-                        *result.add(dlen) = quoted;
-                        dlen += 1;
-                    }
-                    break;
-                }
+            let left = end.gap(src) as size_t + 1;
+            let simplify = if flags & REPTERM_NO_SIMPLIFY != 0 {
+                0
+            } else {
+                FSK_SIMPLIFY
+            };
+            let (slot, at) = (src.slot(), result.wrapping_add(dlen));
+            // SAFETY: `slot` is this frame's cursor, `left` the bytes left of
+            // the caller's buffer, and `at` has at least the 64 bytes the
+            // guard above kept free.
+            let written = unsafe {
+                trans_special(slot, left, at, FSK_KEYCODE | simplify, true, did_simplify)
+            };
+            if written != 0 {
+                dlen += written as usize;
+                continue;
             }
+        }
 
-            // Copy one whole character, hiding a literal K_SPECIAL byte.
-            for _ in 0..utfc_ptr2len_len(src, end.offset_from(src) as c_int + 1) {
-                if *src == K_SPECIAL as u8 as c_char {
-                    dlen = put_bytes(
-                        result,
-                        dlen,
-                        &[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8],
-                    );
-                } else {
-                    *result.add(dlen) = *src;
+        if do_special {
+            // <Leader> and <LocalLeader> take the value of "mapleader" and
+            // "maplocalleader"; a backslash stands in when either is unset.
+            // SAFETY: both names are static, and `numbuf` is a live local.
+            let (len, value) = if end.gap(src) >= 7 && starts_with_ignoring_case(src, c"<Leader>") {
+                (8, unsafe {
+                    get_var_value(c"g:mapleader".as_ptr(), &mut numbuf)
+                })
+            } else if end.gap(src) >= 12 && starts_with_ignoring_case(src, c"<LocalLeader>") {
+                (13, unsafe {
+                    get_var_value(c"g:maplocalleader".as_ptr(), &mut numbuf)
+                })
+            } else {
+                (0, ptr::null_mut())
+            };
+            if len != 0 {
+                // Up to 8 * 6 characters of "mapleader" are allowed.
+                // SAFETY: `get_var_value` answers null or a NUL-terminated
+                // string that outlives this loop.
+                let too_long = !value.is_null() && unsafe { strlen(value) } > 8 * 6;
+                // SAFETY: the option's value, or the static backslash.
+                let mut leader = unsafe { Cursor::new(value.cast_const()) };
+                if value.is_null() || leader.byte() == 0 || too_long {
+                    // SAFETY: a static NUL-terminated string.
+                    leader = unsafe { Cursor::new(c"\\".as_ptr()) };
+                }
+                while leader.byte() != 0 {
+                    // SAFETY: the 64-byte guard above; the leader is capped
+                    // at 48 bytes by `too_long`.
+                    unsafe { *result.add(dlen) = leader.byte() };
+                    dlen += 1;
+                    leader = leader.skip(1);
+                }
+                src = src.skip(len);
+                continue;
+            }
+        }
+
+        // Remove CTRL-V and take the next character literally. On the "from"
+        // side a trailing CTRL-V is kept, on the "to" side it is dropped, so
+        // that ":map xx ^V" maps xx to nothing. Without 'B' in 'cpoptions' a
+        // backslash does the same job.
+        let quoted = src.byte();
+        if c_int::from(quoted) == Ctrl_V || (do_backslash && quoted == b'\\' as c_char) {
+            src = src.skip(1);
+            if src > end {
+                if flags & REPTERM_FROM_PART != 0 {
+                    // SAFETY: the 64-byte guard above.
+                    unsafe { *result.add(dlen) = quoted };
                     dlen += 1;
                 }
-                src = src.add(1);
+                break;
             }
         }
-        *result.add(dlen) = 0;
 
-        if allocated {
-            *bufp = xrealloc(result.cast(), dlen + 1).cast();
+        // Copy one whole character, hiding a literal K_SPECIAL byte.
+        let (at, left) = (src.raw(), end.gap(src) as c_int + 1);
+        // SAFETY: `at` is inside the caller's buffer with `left` bytes left.
+        let char_len = unsafe { utfc_ptr2len_len(at, left) };
+        for _ in 0..char_len {
+            if src.byte() == K_SPECIAL as u8 as c_char {
+                let escaped = [K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8];
+                // SAFETY: the 64-byte guard above.
+                dlen = unsafe { put_bytes(result, dlen, &escaped) };
+            } else {
+                // SAFETY: as above.
+                unsafe { *result.add(dlen) = src.byte() };
+                dlen += 1;
+            }
+            src = src.skip(1);
         }
-        *bufp
     }
+    // SAFETY: `dlen` never passed `buf_len - 1`; see the guard above and the
+    // six-bytes-per-character sizing of an allocated buffer.
+    unsafe { *result.add(dlen) = 0 };
+
+    if allocated {
+        // SAFETY: `result` is this function's own allocation, and `bufp` is
+        // the caller's writable out-parameter.
+        unsafe { *bufp = xrealloc(result.cast(), dlen + 1).cast() };
+    }
+    // SAFETY: as above -- `bufp` is readable.
+    unsafe { *bufp }
 }
 
 /// Append `c` to `s`, escaping a literal `K_SPECIAL` byte the way the
@@ -737,19 +850,23 @@ pub unsafe fn replace_termcodes(
 /// # Safety
 /// `s` must have room for `MB_MAXBYTES + 1` bytes.
 pub unsafe fn add_char2buf(c: c_int, s: *mut c_char) -> *mut c_char {
-    unsafe {
-        let mut encoded = [0u8; MB_MAXBYTES + 1];
-        let len = utf_char2bytes(c, encoded.as_mut_ptr().cast()) as usize;
-        let mut at = 0;
-        for &byte in &encoded[..len] {
-            at = if c_int::from(byte) == K_SPECIAL {
-                put_bytes(s, at, &[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8])
-            } else {
-                put_bytes(s, at, &[byte])
-            };
-        }
-        s.add(at)
+    let mut encoded = [0u8; MB_MAXBYTES + 1];
+    let dst = encoded.as_mut_ptr().cast();
+    // SAFETY: `encoded` is a live local with room for any one character.
+    let len = unsafe { utf_char2bytes(c, dst) } as usize;
+    let escaped = [K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8];
+    let mut at = 0;
+    for &byte in &encoded[..len] {
+        let written: &[u8] = if c_int::from(byte) == K_SPECIAL {
+            &escaped
+        } else {
+            slice::from_ref(&byte)
+        };
+        // SAFETY: the caller's promise -- room for the escaped character.
+        at = unsafe { put_bytes(s, at, written) };
     }
+    // SAFETY: as above -- `at` is what was just written into `s`.
+    unsafe { s.add(at) }
 }
 
 /// A copy of `p` with every literal `K_SPECIAL` byte escaped, so the result
@@ -758,28 +875,36 @@ pub unsafe fn add_char2buf(c: c_int, s: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn vim_strsave_escape_ks(p: *mut c_char) -> *mut c_char {
-    unsafe {
-        // Room for three times as much, four in case of an illegal utf-8 byte:
-        // 0xc0 -> 0xc3 - 0x80 -> 0xc3 K_SPECIAL KS_SPECIAL KE_FILLER.
-        let res = xmalloc(strlen(p) * 4 + 1).cast::<c_char>();
-        let mut dst = res;
-        let mut src = p;
-        while *src != 0 {
-            if c_int::from(*src as u8) == K_SPECIAL && *src.add(1) != 0 && *src.add(2) != 0 {
-                // Copy a special key unchanged.
-                ptr::copy_nonoverlapping(src, dst, 3);
-                src = src.add(3);
-                dst = dst.add(3);
-            } else {
-                // Add the character, possibly multi-byte, escaping K_SPECIAL.
-                // Careful: it can be an illegal byte.
-                dst = add_char2buf(utf_ptr2char(src), dst);
-                src = src.offset(utf_ptr2len(src) as isize);
-            }
+    // Room for three times as much, four in case of an illegal utf-8 byte:
+    // 0xc0 -> 0xc3 - 0x80 -> 0xc3 K_SPECIAL KS_SPECIAL KE_FILLER.
+    // SAFETY: the caller's promise -- `p` is NUL-terminated, so `strlen`
+    // measures it and the NUL stops the walk below.
+    let res = unsafe { xmalloc(strlen(p) * 4 + 1) }.cast::<c_char>();
+    let mut dst = res;
+    // SAFETY: as above.
+    let mut src = unsafe { Cursor::new(p) };
+    while src.byte() != 0 {
+        if c_int::from(src.byte() as u8) == K_SPECIAL && src.at(1) != 0 && src.at(2) != 0 {
+            // Copy a special key unchanged.
+            // SAFETY: the three bytes were just read, and `res` was sized at
+            // four times the input.
+            unsafe { ptr::copy_nonoverlapping(src.raw(), dst, 3) };
+            src = src.skip(3);
+            dst = dst.wrapping_add(3);
+        } else {
+            // Add the character, possibly multi-byte, escaping K_SPECIAL.
+            // Careful: it can be an illegal byte.
+            // SAFETY: as above -- a character inside the caller's string,
+            // and `res` has room for its escaped form.
+            let (decoded, len) = unsafe { (utf_ptr2char(src.raw()), utf_ptr2len(src.raw())) };
+            // SAFETY: as above.
+            dst = unsafe { add_char2buf(decoded, dst) };
+            src = src.skip(len as isize);
         }
-        *dst = 0;
-        res
     }
+    // SAFETY: `res` was sized to hold the NUL as well.
+    unsafe { *dst = 0 };
+    res
 }
 
 /// Undo [`vim_strsave_escape_ks`], in place.
@@ -787,23 +912,27 @@ pub unsafe fn vim_strsave_escape_ks(p: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `p` must point at a NUL-terminated, writable string.
 pub unsafe fn vim_unescape_ks(p: *mut c_char) {
-    unsafe {
-        let mut src = p.cast::<u8>();
-        let mut dst = p.cast::<u8>();
-        while *src != 0 {
-            if c_int::from(*src) == K_SPECIAL
-                && c_int::from(*src.add(1)) == KS_SPECIAL
-                && c_int::from(*src.add(2)) == KE_FILLER
-            {
-                *dst = K_SPECIAL as u8;
-                dst = dst.add(1);
-                src = src.add(3);
-            } else {
-                *dst = *src;
-                dst = dst.add(1);
-                src = src.add(1);
-            }
+    // SAFETY: the caller's promise -- `p` is NUL-terminated. `src[1]` is
+    // read only when `src[0]` is not the NUL and `src[2]` only when `src[1]`
+    // is not either, so the walk never passes the terminator.
+    let mut src = unsafe { Cursor::new(p) };
+    let mut dst = p.cast::<u8>();
+    while src.byte() != 0 {
+        if c_int::from(src.u8_at(0)) == K_SPECIAL
+            && c_int::from(src.u8_at(1)) == KS_SPECIAL
+            && c_int::from(src.u8_at(2)) == KE_FILLER
+        {
+            // SAFETY: `dst` never passes `src`, so it stays inside `p`.
+            unsafe { *dst = K_SPECIAL as u8 };
+            dst = dst.wrapping_add(1);
+            src = src.skip(3);
+        } else {
+            // SAFETY: as above.
+            unsafe { *dst = src.u8_at(0) };
+            dst = dst.wrapping_add(1);
+            src = src.skip(1);
         }
-        *dst = 0;
     }
+    // SAFETY: as above -- the result is never longer than the input.
+    unsafe { *dst = 0 };
 }
