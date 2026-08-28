@@ -66,83 +66,85 @@ pub(crate) unsafe fn put_view(
 
     // SAFETY: caller contract; a window always has a buffer and an argument
     // list.
-    unsafe {
-        // The argument list: the global one, or a local copy written out.
-        if (*wp).w_alist == global_arglist() {
-            if !out.line(c"argglobal") {
-                return false;
-            }
-        } else {
-            // Full paths unless the session knows where it will be sourced
-            // and no directory below it overrides that.
-            let fullname = !opts.is_session()
-                || !opts.has(kOptSsopFlagCurdir)
-                || !(*tp).tp_localdir.is_null()
-                || !(*wp).w_localdir.is_null();
-            if !ses_arglist(out, c"arglocal", &raw mut (*(*wp).w_alist).al_ga, fullname) {
-                return false;
-            }
-        }
-
-        // Restore the argument index, but only as part of a session and only
-        // when it still points at something: arguments may have been deleted.
-        let mut did_next = false;
-        if (*wp).w_arg_idx != current_arg_idx
-            && (*wp).w_arg_idx < (*(*wp).w_alist).al_ga.ga_len
-            && opts.is_session()
-        {
-            if !out.write(format_args!("{}argu\n", (*wp).w_arg_idx as int64_t + 1)) {
-                return false;
-            }
-            did_next = true;
-        }
-
-        // Edit the file, unless the `:next` above already did.
-        if add_edit && (!did_next || (*wp).w_arg_idx_invalid) {
-            match put_edit(out, wp, opts) {
-                Some(keep_cursor) => do_cursor &= keep_cursor,
-                None => return false,
-            }
-        }
-
-        if (*wp).w_alt_fnum != 0 && !put_alternate(out, wp, opts) {
+    // The argument list: the global one, or a local copy written out.
+    if unsafe { (*wp).w_alist } == global_arglist() {
+        if !out.line(c"argglobal") {
             return false;
         }
-
-        // Local mappings and abbreviations.
-        if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-            && makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) == FAIL
-        {
+    } else {
+        // Full paths unless the session knows where it will be sourced
+        // and no directory below it overrides that.
+        let fullname = !opts.is_session()
+            || !opts.has(kOptSsopFlagCurdir)
+            || !unsafe { (*tp).tp_localdir }.is_null()
+            || !unsafe { (*wp).w_localdir }.is_null();
+        if !unsafe { ses_arglist(out, c"arglocal", &raw mut (*(*wp).w_alist).al_ga, fullname) } {
             return false;
         }
+    }
 
-        if !put_local_options(out, wp, opts) {
+    // Restore the argument index, but only as part of a session and only
+    // when it still points at something: arguments may have been deleted.
+    let mut did_next = false;
+    if unsafe { (*wp).w_arg_idx } != current_arg_idx
+        && unsafe { (*wp).w_arg_idx } < unsafe { (*(*wp).w_alist).al_ga.ga_len }
+        && opts.is_session()
+    {
+        if !out.write(format_args!(
+            "{}argu\n",
+            unsafe { (*wp).w_arg_idx } as int64_t + 1
+        )) {
             return false;
         }
+        did_next = true;
+    }
 
-        // Folds, when 'buftype' is empty and for help files.
-        let buf = Win::new(wp).buffer();
-        if opts.has(kOptSsopFlagFolds)
-            && !buf.b_ffname.is_null()
-            && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
-            && put_folds(out.raw(), Win::new(wp)) == FAIL
-        {
+    // Edit the file, unless the `:next` above already did.
+    if add_edit && (!did_next || unsafe { (*wp).w_arg_idx_invalid }) {
+        match unsafe { put_edit(out, wp, opts) } {
+            Some(keep_cursor) => do_cursor &= keep_cursor,
+            None => return false,
+        }
+    }
+
+    if unsafe { (*wp).w_alt_fnum } != 0 && !unsafe { put_alternate(out, wp, opts) } {
+        return false;
+    }
+
+    // Local mappings and abbreviations.
+    if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
+        && unsafe { makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) } == FAIL
+    {
+        return false;
+    }
+
+    if !unsafe { put_local_options(out, wp, opts) } {
+        return false;
+    }
+
+    // Folds, when 'buftype' is empty and for help files.
+    let buf = unsafe { Win::new(wp) }.buffer();
+    if opts.has(kOptSsopFlagFolds)
+        && !buf.b_ffname.is_null()
+        && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
+        && unsafe { put_folds(out.raw(), Win::new(wp)) } == FAIL
+    {
+        return false;
+    }
+
+    // The cursor goes last: creating folds moves it.
+    if do_cursor && !unsafe { put_cursor(out, wp) } {
+        return false;
+    }
+
+    // The window-local directory, unless this is a view that was not
+    // asked for directories.
+    if !unsafe { (*wp).w_localdir }.is_null() && (opts.is_session() || opts.has(kOptSsopFlagCurdir))
+    {
+        if !out.puts(c"lcd ") || !unsafe { ses_put_fname(out, (*wp).w_localdir) } || !out.eol() {
             return false;
         }
-
-        // The cursor goes last: creating folds moves it.
-        if do_cursor && !put_cursor(out, wp) {
-            return false;
-        }
-
-        // The window-local directory, unless this is a view that was not
-        // asked for directories.
-        if !(*wp).w_localdir.is_null() && (opts.is_session() || opts.has(kOptSsopFlagCurdir)) {
-            if !out.puts(c"lcd ") || !ses_put_fname(out, (*wp).w_localdir) || !out.eol() {
-                return false;
-            }
-            did_lcd.set(true);
-        }
+        did_lcd.set(true);
     }
     true
 }
@@ -155,39 +157,40 @@ pub(crate) unsafe fn put_view(
 /// `wp` is live.
 unsafe fn put_edit(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> Option<bool> {
     // SAFETY: caller contract; `fname_esc` is owned and freed on every path.
-    unsafe {
-        let buf = (*wp).w_buffer;
-        let fname_esc = ses_escape_fname(ses_get_fname(buf, opts));
-        let outcome = if buf_is_help(Buf::from_raw(buf)) {
-            put_help_edit(out, wp).then_some(true)
-        } else if !(*buf).b_ffname.is_null()
-            && (!buf_is_nofilename(Buf::from_raw(buf)) || !(*buf).terminal.is_null())
-        {
-            // Editing a file. This may have side effects -- a compressed or
-            // network file -- and if a buffer for it already exists we
-            // `:buffer` it instead, because `:edit` resets the folds of
-            // other buffers.
-            let ok = fprintf(
-                out.raw(),
-                c"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\nif &buftype ==# 'terminal'\n  silent file %s\nendif\n"
-                    .as_ptr(),
-                fname_esc,
-                fname_esc,
-                fname_esc,
-                fname_esc,
-            ) >= 0;
-            ok.then_some(true)
-        } else {
-            // No file in this buffer: make it empty. It may still have a
-            // name that is not a file name.
-            let named = !(*buf).b_ffname.is_null();
-            let ok = out.line(c"enew")
-                && (!named || (out.puts(c"file ") && out.bytes(fname_esc) && out.eol()));
-            ok.then_some(false)
-        };
-        xfree(fname_esc.cast::<c_void>());
-        outcome
-    }
+    let buf = unsafe { (*wp).w_buffer };
+    let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buf, opts)) };
+    let outcome = if buf_is_help(unsafe { Buf::from_raw(buf) }) {
+        unsafe { put_help_edit(out, wp) }.then_some(true)
+    } else if !unsafe { (*buf).b_ffname }.is_null()
+        && (!buf_is_nofilename(unsafe { Buf::from_raw(buf) })
+            || !unsafe { (*buf).terminal }.is_null())
+    {
+        // Editing a file. This may have side effects -- a compressed or
+        // network file -- and if a buffer for it already exists we
+        // `:buffer` it instead, because `:edit` resets the folds of
+        // other buffers.
+        let ok = unsafe {
+            fprintf(
+            out.raw(),
+            c"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\nif &buftype ==# 'terminal'\n  silent file %s\nendif\n"
+                .as_ptr(),
+            fname_esc,
+            fname_esc,
+            fname_esc,
+            fname_esc,
+        )
+        } >= 0;
+        ok.then_some(true)
+    } else {
+        // No file in this buffer: make it empty. It may still have a
+        // name that is not a file name.
+        let named = !unsafe { (*buf).b_ffname }.is_null();
+        let ok = out.line(c"enew")
+            && (!named || (out.puts(c"file ") && unsafe { out.bytes(fname_esc) } && out.eol()));
+        ok.then_some(false)
+    };
+    unsafe { xfree(fname_esc.cast::<c_void>()) };
+    outcome
 }
 
 /// A help window: create an empty `'buftype'=help` buffer and let `:help`
@@ -198,14 +201,17 @@ unsafe fn put_edit(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> Optio
 /// `wp` is live.
 unsafe fn put_help_edit(out: SessionFile, wp: *mut win_T) -> bool {
     // SAFETY: caller contract; a tag stack entry's name is NUL-terminated.
-    unsafe {
-        let curtag = if 0 < (*wp).w_tagstackidx && (*wp).w_tagstackidx <= (*wp).w_tagstacklen {
-            (*wp).w_tagstack[((*wp).w_tagstackidx - 1) as usize].tagname
-        } else {
-            c"".as_ptr().cast_mut()
-        };
-        out.line(c"enew | setl bt=help") && out.puts(c"help ") && out.bytes(curtag) && out.eol()
-    }
+    let curtag = if 0 < unsafe { (*wp).w_tagstackidx }
+        && unsafe { (*wp).w_tagstackidx } <= unsafe { (*wp).w_tagstacklen }
+    {
+        unsafe { (*wp).w_tagstack[((*wp).w_tagstackidx - 1) as usize].tagname }
+    } else {
+        c"".as_ptr().cast_mut()
+    };
+    out.line(c"enew | setl bt=help")
+        && out.puts(c"help ")
+        && unsafe { out.bytes(curtag) }
+        && out.eol()
 }
 
 /// Write `balt` for the window's alternate file, when a session is being
@@ -240,24 +246,22 @@ unsafe fn put_alternate(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> 
 unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
-    unsafe {
-        let save_curwin = curwin.get();
-        curwin.set(wp);
-        curbuf.set((*curwin.get()).w_buffer);
-        let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
-            // Store only the local values for a view, and for a session
-            // whose 'sessionoptions' has no "options".
-            let local_only = !opts.is_session() || !opts.has(kOptSsopFlagOptions);
-            makeset(out.raw(), OptionSetFlags::LOCAL, local_only as c_int)
-        } else if opts.has(kOptSsopFlagFolds) {
-            makefoldset(out.raw())
-        } else {
-            OK
-        };
-        curwin.set(save_curwin);
-        curbuf.set((*curwin.get()).w_buffer);
-        f != FAIL
-    }
+    let save_curwin = curwin.get();
+    curwin.set(wp);
+    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
+        // Store only the local values for a view, and for a session
+        // whose 'sessionoptions' has no "options".
+        let local_only = !opts.is_session() || !opts.has(kOptSsopFlagOptions);
+        unsafe { makeset(out.raw(), OptionSetFlags::LOCAL, local_only as c_int) }
+    } else if opts.has(kOptSsopFlagFolds) {
+        unsafe { makefoldset(out.raw()) }
+    } else {
+        OK
+    };
+    curwin.set(save_curwin);
+    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    f != FAIL
 }
 
 /// Restore the cursor line -- both in the file and relative to the top of
@@ -268,45 +272,43 @@ unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts)
 /// `wp` is live.
 unsafe fn put_cursor(out: SessionFile, wp: *mut win_T) -> bool {
     // SAFETY: caller contract.
-    unsafe {
-        let height = (*wp).w_view_height;
-        let lnum = (*wp).w_cursor.lnum;
-        let placed = if height <= 0 {
-            out.write(format_args!("let s:l = {lnum}\n"))
-        } else {
-            out.write(format_args!(
-                "let s:l = {lnum} - (({} * winheight(0) + {}) / {height})\n",
-                lnum - (*wp).w_topline,
-                height / 2,
-            ))
-        };
-        if !placed
-            || !out.write(format_args!(
-                "if s:l < 1 | let s:l = 1 | endif\nkeepjumps exe s:l\nnormal! zt\nkeepjumps {lnum}\n"
-            ))
-        {
-            return false;
-        }
-
-        // The column, and the left offset when not wrapping.
-        if (*wp).w_cursor.col == 0 {
-            return out.line(c"normal! 0");
-        }
-        let width = (*wp).w_width;
-        if (*wp).w_onebuf_opt.wo_wrap == 0 && (*wp).w_leftcol > 0 && width > 0 {
-            let virtcol = (*wp).w_virtcol as int64_t;
-            return out.write(format_args!(
-                "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
-                virtcol + 1,
-                ((*wp).w_virtcol - (*wp).w_leftcol) as int64_t,
-                (width / 2) as int64_t,
-                width as int64_t,
-                virtcol + 1,
-            )) && put_view_curpos(out, wp, "  ")
-                && out.line(c"endif");
-        }
-        put_view_curpos(out, wp, "")
+    let height = unsafe { (*wp).w_view_height };
+    let lnum = unsafe { (*wp).w_cursor.lnum };
+    let placed = if height <= 0 {
+        out.write(format_args!("let s:l = {lnum}\n"))
+    } else {
+        out.write(format_args!(
+            "let s:l = {lnum} - (({} * winheight(0) + {}) / {height})\n",
+            lnum - unsafe { (*wp).w_topline },
+            height / 2,
+        ))
+    };
+    if !placed
+        || !out.write(format_args!(
+            "if s:l < 1 | let s:l = 1 | endif\nkeepjumps exe s:l\nnormal! zt\nkeepjumps {lnum}\n"
+        ))
+    {
+        return false;
     }
+
+    // The column, and the left offset when not wrapping.
+    if unsafe { (*wp).w_cursor.col } == 0 {
+        return out.line(c"normal! 0");
+    }
+    let width = unsafe { (*wp).w_width };
+    if unsafe { (*wp).w_onebuf_opt.wo_wrap } == 0 && unsafe { (*wp).w_leftcol } > 0 && width > 0 {
+        let virtcol = unsafe { (*wp).w_virtcol } as int64_t;
+        return out.write(format_args!(
+            "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
+            virtcol + 1,
+            (unsafe { (*wp) .w_virtcol } - unsafe { (*wp) .w_leftcol }) as int64_t,
+            (width / 2) as int64_t,
+            width as int64_t,
+            virtcol + 1,
+        )) && unsafe { put_view_curpos(out, wp, "  ") }
+            && out.line(c"endif");
+    }
+    unsafe { put_view_curpos(out, wp, "") }
 }
 
 /// The `normal!` command that puts the cursor on its column. `$` when the
@@ -317,11 +319,12 @@ unsafe fn put_cursor(out: SessionFile, wp: *mut win_T) -> bool {
 /// `wp` is live.
 unsafe fn put_view_curpos(out: SessionFile, wp: *const win_T, spaces: &str) -> bool {
     // SAFETY: caller contract.
-    unsafe {
-        if (*wp).w_curswant == MAXCOL {
-            out.write(format_args!("{spaces}normal! $\n"))
-        } else {
-            out.write(format_args!("{spaces}normal! 0{}|\n", (*wp).w_virtcol + 1))
-        }
+    if unsafe { (*wp).w_curswant } == MAXCOL {
+        out.write(format_args!("{spaces}normal! $\n"))
+    } else {
+        out.write(format_args!(
+            "{spaces}normal! 0{}|\n",
+            unsafe { (*wp).w_virtcol } + 1
+        ))
     }
 }

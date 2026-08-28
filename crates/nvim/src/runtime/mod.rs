@@ -261,14 +261,12 @@ unsafe fn set_put_string(
     mut key: String_0,
     mut key_alloc: *mut *mut String_0,
 ) -> bool {
-    unsafe {
-        let mut status: MHPutStatus = kMHExisting;
-        let mut k: uint32_t = mh_put_string(set, key, &raw mut status);
-        if !key_alloc.is_null() {
-            *key_alloc = (*set).keys.offset(k as isize);
-        }
-        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
+    let mut status: MHPutStatus = kMHExisting;
+    let mut k: uint32_t = unsafe { mh_put_string(set, key, &raw mut status) };
+    if !key_alloc.is_null() {
+        unsafe { *key_alloc = (*set).keys.offset(k as isize) };
     }
+    status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
 }
 #[inline]
 unsafe fn map_put_string_int(
@@ -276,30 +274,28 @@ unsafe fn map_put_string_int(
     mut key: String_0,
     mut value: ::core::ffi::c_int,
 ) {
-    unsafe {
-        let mut val: *mut ::core::ffi::c_int = map_put_ref_string_int(
+    let mut val: *mut ::core::ffi::c_int = unsafe {
+        map_put_ref_string_int(
             map,
             key,
             ::core::ptr::null_mut::<*mut String_0>(),
             ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
+        )
+    };
+    unsafe { *val = value };
 }
 #[inline]
 unsafe fn map_get_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        // The absent value is `value_init_int`, a `static int` upstream never
-        // writes: zero.
-        let mut k: uint32_t = mh_get_string(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE as uint32_t {
-            0
-        } else {
-            *(*map).values.offset(k as isize)
-        }
+    // The absent value is `value_init_int`, a `static int` upstream never
+    // writes: zero.
+    let mut k: uint32_t = unsafe { mh_get_string(&raw mut (*map).set, key) };
+    if k == MH_TOMBSTONE as uint32_t {
+        0
+    } else {
+        unsafe { *(*map).values.offset(k as isize) }
     }
 }
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;

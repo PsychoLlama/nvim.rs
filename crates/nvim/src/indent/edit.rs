@@ -50,15 +50,13 @@ use ::libc::memset;
 pub unsafe fn inindent(extra: c_int) -> bool {
     // SAFETY: the caller's contract; the walk is stopped by the NUL, which
     // is not white space.
-    unsafe {
-        let mut ptr = get_cursor_line_ptr();
-        let mut col = 0;
-        while ascii_iswhite(*ptr as c_int) {
-            ptr = ptr.add(1);
-            col += 1;
-        }
-        col >= (*curwin.get()).w_cursor.col as c_int + extra
+    let mut ptr = get_cursor_line_ptr();
+    let mut col = 0;
+    while ascii_iswhite(unsafe { *ptr } as c_int) {
+        ptr = unsafe { ptr.add(1) };
+        col += 1;
     }
+    col >= unsafe { (*curwin.get()).w_cursor.col } as c_int + extra
 }
 
 /// Writes `fmt` with `n` into a buffer of its own and shows it as
@@ -71,8 +69,8 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
     let mut line = [0 as c_char; IOSIZE as usize];
     // SAFETY: `line` is `IOSIZE` bytes, which is what bounds the format, and
     // the two labels are NUL-terminated constants.
+    unsafe { snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, n) };
     unsafe {
-        snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, n);
         msg_progress(
             line.as_mut_ptr(),
             c"indent".as_ptr().cast_mut(),
@@ -80,8 +78,8 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
             0,
             true,
             false,
-        );
-    }
+        )
+    };
 }
 
 /// Reindents `oap`'s lines with `how`, one of the three indent engines.
@@ -91,91 +89,91 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
 pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
     // SAFETY: the caller's operator argument, and the buffer it names is
     // the current one.
-    unsafe {
-        let win = curwin.get();
-        let buf = curbuf.get();
-        let start_lnum = (*win).w_cursor.lnum;
-        let line_count = (*oap).line_count;
-        if (*buf).b_p_ma == 0 {
-            emsg(gettext((&raw const e_modifiable).cast()));
-            return;
-        }
-        let mut first_changed: linenr_T = 0;
-        let mut last_changed: linenr_T = 0;
-        // Undo once for all the lines: much faster than per line, especially
-        // when undoing.
-        let mut i = 0;
-        if u_savecommon(
-            Buf::new(buf),
-            start_lnum - 1,
-            start_lnum + line_count,
-            start_lnum + line_count,
-            false,
-        ) == OK
-        {
-            i = (line_count - 1) as c_int;
-            while i >= 0 && !got_int.get() {
-                // A slow thing to do, so say so — otherwise it looks hung.
-                if i > 1
-                    && (i % 50 == 0 || i as linenr_T == line_count - 1)
-                    && line_count as OptInt > p_report.get()
-                {
-                    // Restore the cursor first, so the `msg_show` callback
-                    // does not redraw `curwin`.
-                    let save_lnum = (*win).w_cursor.lnum;
-                    (*win).w_cursor.lnum = start_lnum;
+    let win = curwin.get();
+    let buf = curbuf.get();
+    let start_lnum = unsafe { (*win).w_cursor.lnum };
+    let line_count = unsafe { (*oap).line_count };
+    if unsafe { (*buf).b_p_ma } == 0 {
+        unsafe { emsg(gettext((&raw const e_modifiable).cast())) };
+        return;
+    }
+    let mut first_changed: linenr_T = 0;
+    let mut last_changed: linenr_T = 0;
+    // Undo once for all the lines: much faster than per line, especially
+    // when undoing.
+    let mut i = 0;
+    if u_savecommon(
+        unsafe { Buf::new(buf) },
+        start_lnum - 1,
+        start_lnum + line_count,
+        start_lnum + line_count,
+        false,
+    ) == OK
+    {
+        i = (line_count - 1) as c_int;
+        while i >= 0 && !got_int.get() {
+            // A slow thing to do, so say so — otherwise it looks hung.
+            if i > 1
+                && (i % 50 == 0 || i as linenr_T == line_count - 1)
+                && line_count as OptInt > p_report.get()
+            {
+                // Restore the cursor first, so the `msg_show` callback
+                // does not redraw `curwin`.
+                let save_lnum = unsafe { (*win).w_cursor.lnum };
+                unsafe { (*win).w_cursor.lnum = start_lnum };
+                unsafe {
                     indent_progress(
                         gettext(c"%ld lines to indent... ".as_ptr()),
                         i as int64_t,
                         c"running",
-                    );
-                    (*win).w_cursor.lnum = save_lnum;
-                }
-                // Vi-compatible: with Lisp indenting the first line is not
-                // indented, unless it is the only line.
-                let lisp_first = i as linenr_T == line_count - 1
-                    && line_count != 1
-                    && how.is_some_and(|f| {
-                        ptr::fn_addr_eq(f, get_lisp_indent as unsafe fn() -> c_int)
-                    });
-                if !lisp_first {
-                    // A blank line gets no indent rather than the engine's.
-                    let blank = *skipwhite(get_cursor_line_ptr()) == 0;
-                    let amount = if blank {
-                        0
-                    } else {
-                        how.expect("non-null function pointer")()
-                    };
-                    if amount >= 0 && set_indent(amount, 0) {
-                        if first_changed == 0 {
-                            first_changed = (*win).w_cursor.lnum;
-                        }
-                        last_changed = (*win).w_cursor.lnum;
-                    }
-                }
-                (*win).w_cursor.lnum += 1;
-                (*win).w_cursor.col = 0; // keep it valid
-                i -= 1;
+                    )
+                };
+                unsafe { (*win).w_cursor.lnum = save_lnum };
             }
+            // Vi-compatible: with Lisp indenting the first line is not
+            // indented, unless it is the only line.
+            let lisp_first = i as linenr_T == line_count - 1
+                && line_count != 1
+                && how.is_some_and(|f| ptr::fn_addr_eq(f, get_lisp_indent as unsafe fn() -> c_int));
+            if !lisp_first {
+                // A blank line gets no indent rather than the engine's.
+                let blank = unsafe { *skipwhite(get_cursor_line_ptr()) } == 0;
+                let amount = if blank {
+                    0
+                } else {
+                    unsafe { how.expect("non-null function pointer")() }
+                };
+                if amount >= 0 && unsafe { set_indent(amount, 0) } {
+                    if first_changed == 0 {
+                        first_changed = unsafe { (*win).w_cursor.lnum };
+                    }
+                    last_changed = unsafe { (*win).w_cursor.lnum };
+                }
+            }
+            unsafe { (*win).w_cursor.lnum += 1 };
+            unsafe { (*win).w_cursor.col = 0 }; // keep it valid
+            i -= 1;
         }
-        // Put the cursor on the first non-blank of the indented line.
-        (*win).w_cursor.lnum = start_lnum;
-        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-        // Mark the changed lines for redraw. Under Visual highlighting that
-        // has to reach the last line even when nothing changed, so that the
-        // highlight goes away.
-        if last_changed != 0 {
-            let end = if (*oap).is_VIsual {
-                start_lnum + line_count
-            } else {
-                last_changed + 1
-            };
-            changed_lines(Buf::new(buf), first_changed, 0, end, 0, true);
-        } else if (*oap).is_VIsual {
-            redraw_curbuf_later(UPD_INVERTED);
-        }
-        if line_count as OptInt > p_report.get() {
-            let done = (line_count - (i as linenr_T + 1)) as c_int;
+    }
+    // Put the cursor on the first non-blank of the indented line.
+    unsafe { (*win).w_cursor.lnum = start_lnum };
+    beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
+    // Mark the changed lines for redraw. Under Visual highlighting that
+    // has to reach the last line even when nothing changed, so that the
+    // highlight goes away.
+    if last_changed != 0 {
+        let end = if unsafe { (*oap).is_VIsual } {
+            start_lnum + line_count
+        } else {
+            last_changed + 1
+        };
+        changed_lines(unsafe { Buf::new(buf) }, first_changed, 0, end, 0, true);
+    } else if unsafe { (*oap).is_VIsual } {
+        redraw_curbuf_later(UPD_INVERTED);
+    }
+    if line_count as OptInt > p_report.get() {
+        let done = (line_count - (i as linenr_T + 1)) as c_int;
+        unsafe {
             indent_progress(
                 ngettext(
                     c"%ld line indented ".as_ptr(),
@@ -184,13 +182,13 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
                 ),
                 done as int64_t,
                 c"success",
-            );
-        }
-        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            // Set the '[ and '] marks.
-            (*buf).b_op_start = (*oap).start;
-            (*buf).b_op_end = (*oap).end;
-        }
+            )
+        };
+    }
+    if !cmdmod_has(CmdModFlags::LOCKMARKS) {
+        // Set the '[ and '] marks.
+        unsafe { (*buf).b_op_start = (*oap).start };
+        unsafe { (*buf).b_op_end = (*oap).end };
     }
 }
 
@@ -200,8 +198,8 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
 /// There must be a current buffer.
 pub unsafe fn preprocs_left() -> bool {
     // SAFETY: the caller's contract.
+    let buf = curbuf.get();
     unsafe {
-        let buf = curbuf.get();
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0
             || (*buf).b_p_cin != 0
                 && in_cinkeys('#' as c_int, ' ' as c_int, true)
@@ -215,8 +213,8 @@ pub unsafe fn preprocs_left() -> bool {
 /// There must be a current buffer.
 pub unsafe fn may_do_si() -> bool {
     // SAFETY: the caller's contract.
+    let buf = curbuf.get();
     unsafe {
-        let buf = curbuf.get();
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0 && *(*buf).b_p_inde == 0 && p_paste.get() == 0
     }
 }
@@ -231,32 +229,30 @@ pub unsafe fn may_do_si() -> bool {
 unsafe fn si_indent_like_open_brace(pos: pos_T) {
     // SAFETY: the caller's position, and the cursor is put back before the
     // indent is applied.
-    unsafe {
-        let win = curwin.get();
-        let old_pos = (*win).w_cursor;
-        let ptr = ml_get(pos.lnum);
-        let mut i = pos.col as c_int;
-        if i > 0 {
-            // Skip the blanks before the '{'.
-            while {
-                i -= 1;
-                i > 0 && ascii_iswhite(*ptr.offset(i as isize) as c_int)
-            } {}
-        }
-        (*win).w_cursor.lnum = pos.lnum;
-        (*win).w_cursor.col = i as colnr_T;
-        if *ptr.offset(i as isize) == b')' as c_char
-            && let Some(open) = findmatch(ptr::null_mut(), '(' as c_int)
-        {
-            (*win).w_cursor = open;
-        }
-        let indent = get_indent();
-        (*win).w_cursor = old_pos;
-        if State.get() & VREPLACE_FLAG != 0 {
-            change_indent(INDENT_SET as c_int, indent, 0, true);
-        } else {
-            set_indent(indent, SIN_CHANGED as c_int);
-        }
+    let win = curwin.get();
+    let old_pos = unsafe { (*win).w_cursor };
+    let ptr = ml_get(pos.lnum);
+    let mut i = pos.col as c_int;
+    if i > 0 {
+        // Skip the blanks before the '{'.
+        while {
+            i -= 1;
+            i > 0 && ascii_iswhite(unsafe { *ptr.offset(i as isize) } as c_int)
+        } {}
+    }
+    unsafe { (*win).w_cursor.lnum = pos.lnum };
+    unsafe { (*win).w_cursor.col = i as colnr_T };
+    if unsafe { *ptr.offset(i as isize) } == b')' as c_char
+        && let Some(open) = unsafe { findmatch(ptr::null_mut(), '(' as c_int) }
+    {
+        unsafe { (*win).w_cursor = open };
+    }
+    let indent = get_indent();
+    unsafe { (*win).w_cursor = old_pos };
+    if State.get() & VREPLACE_FLAG != 0 {
+        unsafe { change_indent(INDENT_SET as c_int, indent, 0, true) };
+    } else {
+        unsafe { set_indent(indent, SIN_CHANGED as c_int) };
     }
 }
 
@@ -268,22 +264,20 @@ unsafe fn si_indent_like_open_brace(pos: pos_T) {
 unsafe fn si_should_shift_back() -> bool {
     // SAFETY: the caller's contract; the walk stops at line 1 and the cursor
     // is put back before answering.
-    unsafe {
-        let win = curwin.get();
-        let old_pos = (*win).w_cursor;
-        let here = get_indent();
-        while (*win).w_cursor.lnum > 1 {
-            (*win).w_cursor.lnum -= 1;
-            let ptr = skipwhite(ml_get((*win).w_cursor.lnum));
-            // Ignore empty lines and lines starting with '#'.
-            if *ptr != b'#' as c_char && *ptr != 0 {
-                break;
-            }
+    let win = curwin.get();
+    let old_pos = unsafe { (*win).w_cursor };
+    let here = get_indent();
+    while unsafe { (*win).w_cursor.lnum } > 1 {
+        unsafe { (*win).w_cursor.lnum -= 1 };
+        let ptr = unsafe { skipwhite(ml_get((*win).w_cursor.lnum)) };
+        // Ignore empty lines and lines starting with '#'.
+        if unsafe { *ptr } != b'#' as c_char && unsafe { *ptr } != 0 {
+            break;
         }
-        let above = get_indent();
-        (*win).w_cursor = old_pos;
-        above < here
     }
+    let above = get_indent();
+    unsafe { (*win).w_cursor = old_pos };
+    above < here
 }
 
 /// Very smart auto-indenting for a "normal" character typed in Insert mode:
@@ -294,37 +288,39 @@ unsafe fn si_should_shift_back() -> bool {
 pub unsafe fn ins_try_si(c: c_int) {
     // SAFETY: the caller's contract; every helper below reads and restores
     // the cursor itself.
-    unsafe {
-        let win = curwin.get();
-        if (did_si.get() || can_si_back.get()) && c == '{' as c_int
-            || can_si.get() && c == '}' as c_int && inindent(0)
-        {
-            let matching = if c == '}' as c_int {
-                findmatch(ptr::null_mut(), '{' as c_int)
-            } else {
-                None
-            };
-            if let Some(matching) = matching {
-                si_indent_like_open_brace(matching);
-            } else if (*win).w_cursor.col > 0 {
-                let shift = !(c == '{' as c_int
-                    && can_si_back.get()
-                    && (*win).w_cursor.lnum > 1
-                    && !si_should_shift_back());
-                if shift {
-                    shift_line(true, false, 1, true);
-                }
+    let win = curwin.get();
+    if (did_si.get() || can_si_back.get()) && c == '{' as c_int
+        || can_si.get() && c == '}' as c_int && unsafe { inindent(0) }
+    {
+        let matching = if c == '}' as c_int {
+            unsafe { findmatch(ptr::null_mut(), '{' as c_int) }
+        } else {
+            None
+        };
+        if let Some(matching) = matching {
+            unsafe { si_indent_like_open_brace(matching) };
+        } else if unsafe { (*win).w_cursor.col } > 0 {
+            let shift = !(c == '{' as c_int
+                && can_si_back.get()
+                && unsafe { (*win).w_cursor.lnum } > 1
+                && !unsafe { si_should_shift_back() });
+            if shift {
+                unsafe { shift_line(true, false, 1, true) };
             }
         }
-        // The indent of a '#' is always zero.
-        if (*win).w_cursor.col > 0 && can_si.get() && c == '#' as c_int && inindent(0) {
-            // Remember the current indent for the next line.
-            old_indent.set(get_indent());
-            set_indent(0, SIN_CHANGED as c_int);
-        }
-        // Adjust `ai_col`: the character at this position can be deleted.
-        ai_col.set(ai_col.get().min((*win).w_cursor.col));
     }
+    // The indent of a '#' is always zero.
+    if unsafe { (*win).w_cursor.col } > 0
+        && can_si.get()
+        && c == '#' as c_int
+        && unsafe { inindent(0) }
+    {
+        // Remember the current indent for the next line.
+        old_indent.set(get_indent());
+        unsafe { set_indent(0, SIN_CHANGED as c_int) };
+    }
+    // Adjust `ai_col`: the character at this position can be deleted.
+    ai_col.set(ai_col.get().min(unsafe { (*win).w_cursor.col }));
 }
 
 /// Applies the indent [`change_indent`] was asked for, leaving the cursor on
@@ -334,8 +330,8 @@ pub unsafe fn ins_try_si(c: c_int) {
 /// There must be a modifiable current line.
 unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     // SAFETY: the caller's contract.
-    unsafe {
-        if type_0 == INDENT_SET as c_int {
+    if type_0 == INDENT_SET as c_int {
+        unsafe {
             set_indent(
                 amount,
                 if call_changed_bytes {
@@ -343,22 +339,24 @@ unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_
                 } else {
                     0
                 },
-            );
-            return;
-        }
-        let save_state = State.get();
-        // Avoid being called recursively.
-        if State.get() & VREPLACE_FLAG != 0 {
-            State.set(MODE_INSERT);
-        }
+            )
+        };
+        return;
+    }
+    let save_state = State.get();
+    // Avoid being called recursively.
+    if State.get() & VREPLACE_FLAG != 0 {
+        State.set(MODE_INSERT);
+    }
+    unsafe {
         shift_line(
             type_0 == INDENT_DEC as c_int,
             round != 0,
             1,
             call_changed_bytes,
-        );
-        State.set(save_state);
-    }
+        )
+    };
+    State.set(save_state);
 }
 
 /// Puts the cursor `end_vcol` screen columns into the new indent, padding
@@ -370,43 +368,41 @@ unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_
 unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // SAFETY: the caller's contract; the walk is over the cursor line and
     // stopped by its NUL.
-    unsafe {
-        let win = curwin.get();
-        (*win).w_virtcol = end_vcol as colnr_T;
-        let line = get_cursor_line_ptr();
-        let mut new_cursor_col = 0;
-        let mut vcol = 0;
-        if *line != 0 {
-            let mut csarg = CharsizeArg::default();
-            let cstype = init_charsize_arg(&mut csarg, Win::new(win), 0, line);
-            let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
-            loop {
-                let next_vcol =
-                    vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
-                if next_vcol > end_vcol {
-                    break;
-                }
-                vcol = next_vcol;
-                ci = utfc_next(ci);
-                if *ci.ptr == 0 {
-                    break;
-                }
+    let win = curwin.get();
+    unsafe { (*win).w_virtcol = end_vcol as colnr_T };
+    let line = get_cursor_line_ptr();
+    let mut new_cursor_col = 0;
+    let mut vcol = 0;
+    if unsafe { *line } != 0 {
+        let mut csarg = CharsizeArg::default();
+        let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(win), 0, line) };
+        let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+        loop {
+            let next_vcol = vcol
+                + unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+            if next_vcol > end_vcol {
+                break;
             }
-            new_cursor_col = ci.ptr.offset_from(line) as c_int;
+            vcol = next_vcol;
+            ci = unsafe { utfc_next(ci) };
+            if unsafe { *ci.ptr } == 0 {
+                break;
+            }
         }
-        if vcol == (*win).w_virtcol as c_int {
-            return new_cursor_col;
-        }
-        // No character starts at that column, so make one: insert the spaces
-        // the cursor needs to sit where it was asked to.
-        (*win).w_cursor.col = new_cursor_col as colnr_T;
-        let ptrlen = ((*win).w_virtcol as c_int - vcol) as size_t;
-        let spaces: *mut c_char = xmallocz(ptrlen).cast();
-        memset(spaces.cast(), ' ' as c_int, ptrlen);
-        ins_str(spaces, ptrlen);
-        xfree(spaces.cast());
-        new_cursor_col + ptrlen as c_int
+        new_cursor_col = unsafe { ci.ptr.offset_from(line) } as c_int;
     }
+    if vcol == unsafe { (*win).w_virtcol } as c_int {
+        return new_cursor_col;
+    }
+    // No character starts at that column, so make one: insert the spaces
+    // the cursor needs to sit where it was asked to.
+    unsafe { (*win).w_cursor.col = new_cursor_col as colnr_T };
+    let ptrlen = (unsafe { (*win).w_virtcol } as c_int - vcol) as size_t;
+    let spaces: *mut c_char = unsafe { xmallocz(ptrlen) }.cast();
+    unsafe { memset(spaces.cast(), ' ' as c_int, ptrlen) };
+    unsafe { ins_str(spaces, ptrlen) };
+    unsafe { xfree(spaces.cast()) };
+    new_cursor_col + ptrlen as c_int
 }
 
 /// Moves `Insstart` and `ai_col` back by what the indent lost, so that the
@@ -440,16 +436,14 @@ unsafe fn adjust_insert_start(insstart_less: c_int) {
 /// There must be an open replace stack.
 unsafe fn fix_replace_stack(mut start_col: c_int) {
     // SAFETY: the caller's contract.
-    unsafe {
-        let win = curwin.get();
-        while start_col > (*win).w_cursor.col as c_int {
-            replace_join(0); // remove a NUL from the replace stack
-            start_col -= 1;
-        }
-        while start_col < (*win).w_cursor.col as c_int {
-            replace_push_nul();
-            start_col += 1;
-        }
+    let win = curwin.get();
+    while start_col > unsafe { (*win).w_cursor.col } as c_int {
+        unsafe { replace_join(0) }; // remove a NUL from the replace stack
+        start_col -= 1;
+    }
+    while start_col < unsafe { (*win).w_cursor.col } as c_int {
+        unsafe { replace_push_nul() };
+        start_col += 1;
     }
 }
 
@@ -461,20 +455,20 @@ unsafe fn fix_replace_stack(mut start_col: c_int) {
 /// `orig_line`/`orig_col` must be what [`change_indent`] saved.
 unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
     // SAFETY: the caller's saved line, which `ml_replace` takes over.
+    let win = curwin.get();
+    // The new line, but only up to the cursor.
+    let new_line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) };
+    let new_col = unsafe { (*win).w_cursor.col };
+    unsafe { *new_line.offset(new_col as isize) = 0 };
+    unsafe { ml_replace((*win).w_cursor.lnum, orig_line, false) };
+    unsafe { (*win).w_cursor.col = orig_col };
+    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    unsafe { backspace_until_column(0) };
+    unsafe { ins_bytes(new_line) };
+    unsafe { xfree(new_line.cast()) };
+    curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+    let delta = orig_col as c_int - new_col as c_int;
     unsafe {
-        let win = curwin.get();
-        // The new line, but only up to the cursor.
-        let new_line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-        let new_col = (*win).w_cursor.col;
-        *new_line.offset(new_col as isize) = 0;
-        ml_replace((*win).w_cursor.lnum, orig_line, false);
-        (*win).w_cursor.col = orig_col;
-        curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
-        backspace_until_column(0);
-        ins_bytes(new_line);
-        xfree(new_line.cast());
-        curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
-        let delta = orig_col as c_int - new_col as c_int;
         extmark_splice_cols(
             curbuf.get(),
             (*win).w_cursor.lnum as c_int - 1,
@@ -482,8 +476,8 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
             if delta < 0 { -delta as colnr_T } else { 0 },
             if delta > 0 { delta as colnr_T } else { 0 },
             kExtmarkUndo,
-        );
-    }
+        )
+    };
 }
 
 /// Inserts an indent (`<Tab>`/`<C-t>`), deletes one (`<C-d>`) or sets one,
@@ -495,68 +489,66 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
 /// There must be a current window and a modifiable line.
 pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     // SAFETY: the caller's contract; every deref is the current window.
-    unsafe {
-        let win = curwin.get();
-        // Virtual Replace needs to know what the line looked like before.
-        let orig = (State.get() & VREPLACE_FLAG != 0).then(|| {
-            (
-                xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t),
-                (*win).w_cursor.col,
-            )
-        });
-        // The tricks below do not want 'list' mode.
-        let save_p_list = (*win).w_onebuf_opt.wo_list;
-        (*win).w_onebuf_opt.wo_list = 0;
-        let mut vcol = getvcol_nolist(&raw mut (*win).w_cursor) as c_int;
-        // Replace mode fixes its stack below, which is only possible when the
-        // cursor is in the indent; this is how many characters precede it.
-        let mut start_col = (*win).w_cursor.col as c_int;
-        // Offset of the cursor from the first non-blank.
-        let mut new_cursor_col = (*win).w_cursor.col as c_int;
-        beginline(BeginlineOpts::WHITE);
-        new_cursor_col -= (*win).w_cursor.col as c_int;
-        let mut insstart_less = (*win).w_cursor.col as c_int;
-        if new_cursor_col < 0 {
-            // The cursor is inside the indent: how many screen columns it
-            // sits left of the first non-blank.
-            vcol = get_indent() - vcol;
-        }
-        if new_cursor_col > 0 {
-            start_col = -1; // the replace stack cannot be fixed
-        }
-        apply_indent(type_0, amount, round, call_changed_bytes);
-        insstart_less -= (*win).w_cursor.col as c_int;
+    let win = curwin.get();
+    // Virtual Replace needs to know what the line looked like before.
+    let orig = (State.get() & VREPLACE_FLAG != 0).then(|| {
+        (
+            unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) },
+            unsafe { (*win).w_cursor.col },
+        )
+    });
+    // The tricks below do not want 'list' mode.
+    let save_p_list = unsafe { (*win).w_onebuf_opt.wo_list };
+    unsafe { (*win).w_onebuf_opt.wo_list = 0 };
+    let mut vcol = unsafe { getvcol_nolist(&raw mut (*win).w_cursor) } as c_int;
+    // Replace mode fixes its stack below, which is only possible when the
+    // cursor is in the indent; this is how many characters precede it.
+    let mut start_col = unsafe { (*win).w_cursor.col } as c_int;
+    // Offset of the cursor from the first non-blank.
+    let mut new_cursor_col = unsafe { (*win).w_cursor.col } as c_int;
+    beginline(BeginlineOpts::WHITE);
+    new_cursor_col -= unsafe { (*win).w_cursor.col } as c_int;
+    let mut insstart_less = unsafe { (*win).w_cursor.col } as c_int;
+    if new_cursor_col < 0 {
+        // The cursor is inside the indent: how many screen columns it
+        // sits left of the first non-blank.
+        vcol = get_indent() - vcol;
+    }
+    if new_cursor_col > 0 {
+        start_col = -1; // the replace stack cannot be fixed
+    }
+    unsafe { apply_indent(type_0, amount, round, call_changed_bytes) };
+    insstart_less -= unsafe { (*win).w_cursor.col } as c_int;
 
-        // Try to keep the cursor on the same character: at or after the first
-        // non-blank that is a byte offset from it, outside Insert mode it just
-        // stays on the first non-blank, and inside the indent it is a screen
-        // column, which may need spaces inserted to reach.
-        if new_cursor_col >= 0 {
-            if new_cursor_col == 0 {
-                // The cursor is touching the indent, so `Insstart.col` resets.
-                insstart_less = MAXCOL as c_int;
-            }
-            new_cursor_col += (*win).w_cursor.col as c_int;
-        } else if State.get() & MODE_INSERT == 0 {
-            new_cursor_col = (*win).w_cursor.col as c_int;
-        } else {
-            new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
+    // Try to keep the cursor on the same character: at or after the first
+    // non-blank that is a byte offset from it, outside Insert mode it just
+    // stays on the first non-blank, and inside the indent it is a screen
+    // column, which may need spaces inserted to reach.
+    if new_cursor_col >= 0 {
+        if new_cursor_col == 0 {
+            // The cursor is touching the indent, so `Insstart.col` resets.
             insstart_less = MAXCOL as c_int;
         }
+        new_cursor_col += unsafe { (*win).w_cursor.col } as c_int;
+    } else if State.get() & MODE_INSERT == 0 {
+        new_cursor_col = unsafe { (*win).w_cursor.col } as c_int;
+    } else {
+        new_cursor_col = unsafe { place_cursor_in_indent((get_indent() - vcol).max(0)) };
+        insstart_less = MAXCOL as c_int;
+    }
 
-        (*win).w_onebuf_opt.wo_list = save_p_list;
-        (*win).w_cursor.col = new_cursor_col.max(0) as colnr_T;
-        (*win).w_set_curswant = true;
-        changed_cline_bef_curs(Win::new(win));
-        if State.get() & MODE_INSERT != 0 {
-            adjust_insert_start(insstart_less);
-        }
-        if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
-            fix_replace_stack(start_col);
-        }
-        if let Some((orig_line, orig_col)) = orig {
-            vreplace_restore(orig_line, orig_col);
-        }
+    unsafe { (*win).w_onebuf_opt.wo_list = save_p_list };
+    unsafe { (*win).w_cursor.col = new_cursor_col.max(0) as colnr_T };
+    unsafe { (*win).w_set_curswant = true };
+    changed_cline_bef_curs(unsafe { Win::new(win) });
+    if State.get() & MODE_INSERT != 0 {
+        unsafe { adjust_insert_start(insstart_less) };
+    }
+    if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
+        unsafe { fix_replace_stack(start_col) };
+    }
+    if let Some((orig_line, orig_col)) = orig {
+        unsafe { vreplace_restore(orig_line, orig_col) };
     }
 }
 
@@ -632,22 +624,22 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
 
     // SAFETY: the allocation is sized from what was just built plus the
     // line it is prefixed to, and `ml_replace` takes it over.
+    // The rest of the line, including its NUL.
+    let line_len = get_cursor_line_len() + 1;
+    // Both operands are non-negative `int`s, so the only way the
+    // narrowing to `size_t` the C guarded could fail is a negative sum.
+    debug_assert!(ind_len + line_len >= 0, "STRICT_ADD overflow");
+    let line: *mut c_char = unsafe { xmalloc((ind_len + line_len) as size_t) }.cast();
+    unsafe { ptr::copy_nonoverlapping(indent.as_ptr(), line.cast::<u8>(), indent.len()) };
     unsafe {
-        // The rest of the line, including its NUL.
-        let line_len = get_cursor_line_len() + 1;
-        // Both operands are non-negative `int`s, so the only way the
-        // narrowing to `size_t` the C guarded could fail is a negative sum.
-        debug_assert!(ind_len + line_len >= 0, "STRICT_ADD overflow");
-        let line: *mut c_char = xmalloc((ind_len + line_len) as size_t).cast();
-        ptr::copy_nonoverlapping(indent.as_ptr(), line.cast::<u8>(), indent.len());
         memmove(
             line.add(indent.len()).cast(),
             get_cursor_line_ptr().cast(),
             line_len as size_t,
-        );
-        ml_replace((*curwin.get()).w_cursor.lnum, line, false);
-        (*curwin.get()).w_cursor.col = ind_len as colnr_T;
-    }
+        )
+    };
+    unsafe { ml_replace((*curwin.get()).w_cursor.lnum, line, false) };
+    unsafe { (*curwin.get()).w_cursor.col = ind_len as colnr_T };
     true
 }
 
@@ -683,36 +675,35 @@ struct RetabTabs {
 /// `arg` must be a NUL-terminated string.
 unsafe fn parse_retab_arg(arg: *mut c_char) -> Option<RetabTabs> {
     // SAFETY: the caller's argument, walked to its NUL.
-    unsafe {
-        let mut ptr = arg;
-        let indent_only = strncmp(ptr, c"-indentonly".as_ptr(), 11) == 0
-            && ascii_iswhite_or_nul(*ptr.offset(11) as c_int);
-        if indent_only {
-            ptr = skipwhite(ptr.offset(11));
-        }
-        let ts_start = ptr;
-        let mut vts: *mut colnr_T = ptr::null_mut();
-        if !tabstop_set(ptr, &raw mut vts) {
-            return None;
-        }
-        while ascii_isdigit(*ptr as c_int) || *ptr == b',' as c_char {
-            ptr = ptr.add(1);
-        }
-        // Either both are freshly allocated, or `vts` is the buffer's own
-        // array and `ts_str` is null.
-        if vts.is_null() {
-            Some(RetabTabs {
-                vts: (*curbuf.get()).b_p_vts_array,
-                ts_str: ptr::null_mut(),
-                indent_only,
-            })
-        } else {
-            Some(RetabTabs {
-                vts,
-                ts_str: xmemdupz(ts_start.cast(), ptr.offset_from(ts_start) as size_t).cast(),
-                indent_only,
-            })
-        }
+    let mut ptr = arg;
+    let indent_only = unsafe { strncmp(ptr, c"-indentonly".as_ptr(), 11) } == 0
+        && ascii_iswhite_or_nul(unsafe { *ptr.offset(11) } as c_int);
+    if indent_only {
+        ptr = unsafe { skipwhite(ptr.offset(11)) };
+    }
+    let ts_start = ptr;
+    let mut vts: *mut colnr_T = ptr::null_mut();
+    if !unsafe { tabstop_set(ptr, &raw mut vts) } {
+        return None;
+    }
+    while ascii_isdigit(unsafe { *ptr } as c_int) || unsafe { *ptr } == b',' as c_char {
+        ptr = unsafe { ptr.add(1) };
+    }
+    // Either both are freshly allocated, or `vts` is the buffer's own
+    // array and `ts_str` is null.
+    if vts.is_null() {
+        Some(RetabTabs {
+            vts: unsafe { (*curbuf.get()).b_p_vts_array },
+            ts_str: ptr::null_mut(),
+            indent_only,
+        })
+    } else {
+        Some(RetabTabs {
+            vts,
+            ts_str: unsafe { xmemdupz(ts_start.cast(), ptr.offset_from(ts_start) as size_t) }
+                .cast(),
+            indent_only,
+        })
     }
 }
 
@@ -764,14 +755,14 @@ impl Retab {
     unsafe fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
         // SAFETY: the caller's line; the replacement is sized from its
         // length and handed to `ml_replace`, which takes it over.
-        unsafe {
-            let buf = curbuf.get();
-            // The run's width on screen.
-            let width = (scan.vcol - self.start_vcol) as c_int;
-            self.num_spaces = width;
-            let mut num_tabs = 0;
-            if (*buf).b_p_et == 0 {
-                let (mut t, mut s) = (0, 0);
+        let buf = curbuf.get();
+        // The run's width on screen.
+        let width = (scan.vcol - self.start_vcol) as c_int;
+        self.num_spaces = width;
+        let mut num_tabs = 0;
+        if unsafe { (*buf).b_p_et } == 0 {
+            let (mut t, mut s) = (0, 0);
+            unsafe {
                 tabstop_fromto(
                     self.start_vcol as colnr_T,
                     scan.vcol as colnr_T,
@@ -779,55 +770,57 @@ impl Retab {
                     tabs.vts,
                     &raw mut t,
                     &raw mut s,
-                );
-                num_tabs = t;
-                self.num_spaces = s;
+                )
+            };
+            num_tabs = t;
+            self.num_spaces = s;
+        }
+        if !(unsafe { (*buf).b_p_et } != 0 || self.got_tab || self.num_spaces + num_tabs < width) {
+            return Retabulated::Done;
+        }
+        if !scan.did_undo {
+            scan.did_undo = true;
+            if u_save(scan.lnum - 1, scan.lnum + 1) == FAIL {
+                return Retabulated::OutOfMemory;
             }
-            if !((*buf).b_p_et != 0 || self.got_tab || self.num_spaces + num_tabs < width) {
-                return Retabulated::Done;
-            }
-            if !scan.did_undo {
-                scan.did_undo = true;
-                if u_save(scan.lnum - 1, scan.lnum + 1) == FAIL {
-                    return Retabulated::OutOfMemory;
-                }
-            }
-            // How many characters the run will actually take.
-            let len = self.num_spaces + num_tabs;
-            let new_len = scan.old_len - scan.col + self.start_col + len + 1;
-            if new_len <= 0 || new_len >= MAXCOL as c_int {
-                emsg_text_too_long();
-                return Retabulated::TooLong;
-            }
-            let new_line: *mut c_char = xmalloc(new_len as size_t).cast();
-            if self.start_col > 0 {
-                memmove(new_line.cast(), scan.ptr.cast(), self.start_col as size_t);
-            }
+        }
+        // How many characters the run will actually take.
+        let len = self.num_spaces + num_tabs;
+        let new_len = scan.old_len - scan.col + self.start_col + len + 1;
+        if new_len <= 0 || new_len >= MAXCOL as c_int {
+            unsafe { emsg_text_too_long() };
+            return Retabulated::TooLong;
+        }
+        let new_line: *mut c_char = unsafe { xmalloc(new_len as size_t) }.cast();
+        if self.start_col > 0 {
+            unsafe { memmove(new_line.cast(), scan.ptr.cast(), self.start_col as size_t) };
+        }
+        unsafe {
             memmove(
                 new_line.offset((self.start_col + len) as isize).cast(),
                 scan.ptr.offset(scan.col as isize).cast(),
                 (scan.old_len - scan.col + 1) as size_t,
-            );
-            let run = new_line.offset(self.start_col as isize);
-            for i in 0..len {
-                *run.offset(i as isize) = if i < num_tabs { b'\t' } else { b' ' } as c_char;
-            }
-            let mut line = new_line;
-            if ml_replace(scan.lnum, new_line, false) == OK {
-                // `new_line` may have been copied.
-                line = (*buf).b_ml.cached_text();
-                let lnum = scan.lnum as c_int - 1;
-                extmark_splice_cols(buf, lnum, 0, scan.old_len, new_len - 1, kExtmarkUndo);
-            }
-            if self.first_line == 0 {
-                self.first_line = scan.lnum;
-            }
-            self.last_line = scan.lnum;
-            scan.ptr = line;
-            scan.old_len = new_len - 1;
-            scan.col = self.start_col + len;
-            Retabulated::Done
+            )
+        };
+        let run = unsafe { new_line.offset(self.start_col as isize) };
+        for i in 0..len {
+            unsafe { *run.offset(i as isize) = if i < num_tabs { b'\t' } else { b' ' } as c_char };
         }
+        let mut line = new_line;
+        if unsafe { ml_replace(scan.lnum, new_line, false) } == OK {
+            // `new_line` may have been copied.
+            line = unsafe { (*buf).b_ml.cached_text() };
+            let lnum = scan.lnum as c_int - 1;
+            unsafe { extmark_splice_cols(buf, lnum, 0, scan.old_len, new_len - 1, kExtmarkUndo) };
+        }
+        if self.first_line == 0 {
+            self.first_line = scan.lnum;
+        }
+        self.last_line = scan.lnum;
+        scan.ptr = line;
+        scan.old_len = new_len - 1;
+        scan.col = self.start_col + len;
+        Retabulated::Done
     }
 
     /// Retabulates one line. Answers false when the command has to stop.
@@ -903,31 +896,29 @@ impl Retab {
 unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
     // SAFETY: the caller's contract; the buffer takes over `tabs.vts` on the
     // 'vartabstop' path and the old array is freed instead.
-    unsafe {
-        let buf = curbuf.get();
-        let old_vts_ary = (*buf).b_p_vts_array;
-        if tabstop_count(old_vts_ary) > 0 || tabstop_count(tabs.vts) > 1 {
-            // 'vartabstop' is in use, or more than one stop was given.
-            set_option_direct(
-                kOptVartabstop,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string(tabs.ts_str),
-                    },
+    let buf = curbuf.get();
+    let old_vts_ary = unsafe { (*buf).b_p_vts_array };
+    if unsafe { tabstop_count(old_vts_ary) } > 0 || unsafe { tabstop_count(tabs.vts) } > 1 {
+        // 'vartabstop' is in use, or more than one stop was given.
+        set_option_direct(
+            kOptVartabstop,
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: unsafe { cstr_as_string(tabs.ts_str) },
                 },
-                OptionSetFlags::LOCAL,
-                0,
-            );
-            (*buf).b_p_vts_array = tabs.vts;
-            xfree(old_vts_ary.cast());
-        } else {
-            // A single stop with 'vartabstop' unused is 'tabstop'.
-            (*buf).b_p_ts = tabstop_first(tabs.vts) as OptInt;
-            xfree(tabs.vts.cast());
-        }
-        xfree(tabs.ts_str.cast());
+            },
+            OptionSetFlags::LOCAL,
+            0,
+        );
+        unsafe { (*buf).b_p_vts_array = tabs.vts };
+        unsafe { xfree(old_vts_ary.cast()) };
+    } else {
+        // A single stop with 'vartabstop' unused is 'tabstop'.
+        unsafe { (*buf).b_p_ts = tabstop_first(tabs.vts) as OptInt };
+        unsafe { xfree(tabs.vts.cast()) };
     }
+    unsafe { xfree(tabs.ts_str.cast()) };
 }
 
 /// `:retab`.
@@ -937,57 +928,56 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
 pub unsafe fn ex_retab(eap: *mut exarg_T) {
     // SAFETY: the caller's Ex-command argument; the line range it names is
     // the current buffer's.
-    unsafe {
-        let win = curwin.get();
-        let buf = curbuf.get();
-        let b = Buf::new(buf);
-        let save_list = (*win).w_onebuf_opt.wo_list;
-        (*win).w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
-        let Some(tabs) = parse_retab_arg((*eap).arg) else {
-            // Upstream returns here without restoring 'list', which it has
-            // already cleared. Kept: a `:retab` with a malformed tabstop
-            // list leaves 'list' off, and that is observable.
-            return;
-        };
-        let mut retab = Retab {
-            got_tab: false,
-            num_spaces: 0,
-            start_col: 0,
-            start_vcol: 0,
-            first_line: 0,
-            last_line: 0,
-        };
-        let mut lnum = (*eap).line1;
-        while !got_int.get() && lnum <= (*eap).line2 {
-            if !retab.line(lnum, &tabs, (*eap).forceit != 0) {
-                break;
-            }
-            line_breakcheck();
-            lnum += 1;
+    let win = curwin.get();
+    let buf = curbuf.get();
+    let b = unsafe { Buf::new(buf) };
+    let save_list = unsafe { (*win).w_onebuf_opt.wo_list };
+    unsafe { (*win).w_onebuf_opt.wo_list = 0 }; // 'list' mode is not wanted here
+    let __v = unsafe { parse_retab_arg((*eap).arg) };
+    let Some(tabs) = __v else {
+        // Upstream returns here without restoring 'list', which it has
+        // already cleared. Kept: a `:retab` with a malformed tabstop
+        // list leaves 'list' off, and that is observable.
+        return;
+    };
+    let mut retab = Retab {
+        got_tab: false,
+        num_spaces: 0,
+        start_col: 0,
+        start_vcol: 0,
+        first_line: 0,
+        last_line: 0,
+    };
+    let mut lnum = unsafe { (*eap).line1 };
+    while !got_int.get() && lnum <= unsafe { (*eap).line2 } {
+        if !unsafe { retab.line(lnum, &tabs, (*eap).forceit != 0) } {
+            break;
         }
-        if got_int.get() {
-            emsg(gettext((&raw const e_interr).cast()));
-        }
-        // A single value given is equal to either 'tabstop' or 'vartabstop',
-        // and then nothing on screen changed.
-        let unchanged = tabstop_count((*buf).b_p_vts_array) == 0
-            && tabstop_count(tabs.vts) == 1
-            && (*buf).b_p_ts == tabstop_first(tabs.vts) as OptInt
-            || tabstop_count((*buf).b_p_vts_array) > 0
-                && tabstop_eq((*buf).b_p_vts_array, tabs.vts);
-        if !unchanged {
-            redraw_curbuf_later(UPD_NOT_VALID);
-        }
-        if retab.first_line != 0 {
-            changed_lines(b, retab.first_line, 0, retab.last_line + 1, 0, true);
-        }
-        (*win).w_onebuf_opt.wo_list = save_list; // restore 'list'
-        if !tabs.ts_str.is_null() {
-            set_retab_tabstop(&tabs);
-        }
-        coladvance(Win::new(win), (*win).w_curswant);
-        u_clearline(b);
+        line_breakcheck();
+        lnum += 1;
     }
+    if got_int.get() {
+        unsafe { emsg(gettext((&raw const e_interr).cast())) };
+    }
+    // A single value given is equal to either 'tabstop' or 'vartabstop',
+    // and then nothing on screen changed.
+    let unchanged = unsafe { tabstop_count((*buf).b_p_vts_array) } == 0
+        && unsafe { tabstop_count(tabs.vts) } == 1
+        && unsafe { (*buf).b_p_ts } == unsafe { tabstop_first(tabs.vts) } as OptInt
+        || unsafe { tabstop_count((*buf).b_p_vts_array) } > 0
+            && unsafe { tabstop_eq((*buf).b_p_vts_array, tabs.vts) };
+    if !unchanged {
+        redraw_curbuf_later(UPD_NOT_VALID);
+    }
+    if retab.first_line != 0 {
+        changed_lines(b, retab.first_line, 0, retab.last_line + 1, 0, true);
+    }
+    unsafe { (*win).w_onebuf_opt.wo_list = save_list }; // restore 'list'
+    if !tabs.ts_str.is_null() {
+        unsafe { set_retab_tabstop(&tabs) };
+    }
+    coladvance(unsafe { Win::new(win) }, unsafe { (*win).w_curswant });
+    u_clearline(b);
 }
 
 /// The window the editor is working in.

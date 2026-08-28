@@ -57,11 +57,9 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
     for (keyword, flags) in WHERE_FLAGS {
         // SAFETY: both strings are NUL-terminated and `arg` has `where_len`
         // bytes; `skipwhite` stops at the terminator.
-        unsafe {
-            if strncmp(arg, keyword.as_ptr(), where_len) == 0 {
-                *argp = skipwhite(arg.add(where_len));
-                return flags;
-            }
+        if unsafe { strncmp(arg, keyword.as_ptr(), where_len) } == 0 {
+            unsafe { *argp = skipwhite(arg.add(where_len)) };
+            return flags;
         }
     }
     RuntimeOpts::NONE
@@ -71,18 +69,17 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
 pub unsafe fn ex_runtime(eap: *mut exarg_T) {
     // SAFETY: `eap` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
-    unsafe {
-        let mut arg = (*eap).arg;
-        let mut flags = if (*eap).forceit != 0 {
-            RuntimeOpts::ALL
-        } else {
-            RuntimeOpts::NONE
-        };
-        let where_len = skiptowhite(arg).offset_from(arg) as size_t;
-        flags |= get_runtime_cmd_flags(&raw mut arg, where_len);
-        debug_assert!(!arg.is_null(), "arg != NULL");
-        source_runtime(arg, flags);
-    }
+    let mut arg = unsafe { (*eap).arg };
+    let mut flags = if unsafe { (*eap).forceit } != 0 {
+        RuntimeOpts::ALL
+    } else {
+        RuntimeOpts::NONE
+    };
+    // SAFETY: `skiptowhite` answers a pointer into `arg` itself.
+    let where_len = unsafe { skiptowhite(arg).offset_from(arg) } as size_t;
+    flags |= unsafe { get_runtime_cmd_flags(&raw mut arg, where_len) };
+    debug_assert!(!arg.is_null(), "arg != NULL");
+    unsafe { source_runtime(arg, flags) };
 }
 
 /// Set the completion context for the `:runtime` command.
@@ -93,30 +90,28 @@ pub unsafe fn ex_runtime(eap: *mut exarg_T) {
 pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) {
     // SAFETY: `arg` is the NUL-terminated command line tail and `xp` is the
     // live expansion context.
-    unsafe {
-        let mut arg = arg.cast_mut();
-        let mut p = skiptowhite(arg);
-        runtime_expand_flags.set(if *p != 0 {
-            get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t)
-        } else {
-            RuntimeOpts::NONE
-        });
-        // Skip to the last argument.
-        loop {
-            p = skiptowhite_esc(arg);
-            if *p == 0 {
-                break;
-            }
-            if runtime_expand_flags.get() == RuntimeOpts::NONE {
-                // With multiple arguments and no [where], an unrelated
-                // non-zero flag keeps [where] out of the completion.
-                runtime_expand_flags.set(RuntimeOpts::ALL);
-            }
-            arg = skipwhite(p);
+    let mut arg = arg.cast_mut();
+    let mut p = unsafe { skiptowhite(arg) };
+    runtime_expand_flags.set(if unsafe { *p } != 0 {
+        unsafe { get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t) }
+    } else {
+        RuntimeOpts::NONE
+    });
+    // Skip to the last argument.
+    loop {
+        p = unsafe { skiptowhite_esc(arg) };
+        if unsafe { *p } == 0 {
+            break;
         }
-        (*xp).xp_context = ExpandContext::Runtime;
-        (*xp).xp_pattern = arg;
+        if runtime_expand_flags.get() == RuntimeOpts::NONE {
+            // With multiple arguments and no [where], an unrelated
+            // non-zero flag keeps [where] out of the completion.
+            runtime_expand_flags.set(RuntimeOpts::ALL);
+        }
+        arg = unsafe { skipwhite(p) };
     }
+    unsafe { (*xp).xp_context = ExpandContext::Runtime };
+    unsafe { (*xp).xp_pattern = arg };
 }
 
 /// Source every name `accept` picks out, stopping after the first unless
@@ -304,15 +299,13 @@ pub(crate) unsafe fn expand_name_patterns(
                 tail,
                 (MAXPATHL as isize - used) as size_t,
                 c"\t ".as_ptr().cast_mut(),
-            );
-        }
+            )
+        };
         if p_verbose.get() > 10 {
             // SAFETY: `buf` now holds the NUL-terminated candidate.
-            unsafe {
-                verbose_enter();
-                smsg_c!(0, gettext(c"Searching for \"%s\"".as_ptr()), buf);
-                verbose_leave();
-            }
+            unsafe { verbose_enter() };
+            unsafe { smsg_c!(0, gettext(c"Searching for \"%s\"".as_ptr()), buf) };
+            unsafe { verbose_leave() };
         }
         let mut pats = [buf];
         // SAFETY: a one-element pattern array; `gen_expand_wildcards` only
@@ -329,26 +322,28 @@ pub(crate) unsafe fn expand_name_patterns(
 /// All three must be NUL-terminated; `prefix` may be empty but not null.
 unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const c_char) {
     // SAFETY: the caller's NUL-terminated strings, formatted by `vim_snprintf`.
-    unsafe {
-        verbose_enter();
-        if *prefix != 0 {
+    unsafe { verbose_enter() };
+    if unsafe { *prefix } != 0 {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Searching for \"%s\" under \"%s\" in \"%s\"".as_ptr()),
                 name,
                 prefix,
                 path,
-            );
-        } else {
+            )
+        };
+    } else {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Searching for \"%s\" in \"%s\"".as_ptr()),
                 name,
                 path
-            );
-        }
-        verbose_leave();
+            )
+        };
     }
+    unsafe { verbose_leave() };
 }
 
 /// Find the patterns in `name` in all directories in `path` and invoke
@@ -430,15 +425,13 @@ pub unsafe fn do_in_path(
                 do_all,
                 &mut did_one,
                 visitor,
-            );
-        }
+            )
+        };
     }
 
     // SAFETY: both were allocated above and are no longer referenced.
-    unsafe {
-        xfree(buf.cast());
-        xfree(rtp_copy.cast());
-    }
+    unsafe { xfree(buf.cast()) };
+    unsafe { xfree(rtp_copy.cast()) };
 
     if !did_one && !name.is_null() {
         let basepath = if path == p_rtp.get().cast_const() {
@@ -447,23 +440,25 @@ pub unsafe fn do_in_path(
             c"packpath"
         };
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
-        unsafe {
-            if flags.has(RuntimeOpts::ERR) {
+        if flags.has(RuntimeOpts::ERR) {
+            unsafe {
                 semsg_c!(
                     gettext(&raw const e_dirnotf as *const c_char),
                     basepath.as_ptr(),
                     name,
-                );
-            } else if p_verbose.get() > 1 {
-                verbose_enter();
+                )
+            };
+        } else if p_verbose.get() > 1 {
+            unsafe { verbose_enter() };
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"not found in '%s': \"%s\"".as_ptr()),
                     basepath.as_ptr(),
                     name,
-                );
-                verbose_leave();
-            }
+                )
+            };
+            unsafe { verbose_leave() };
         }
     }
 
@@ -515,24 +510,24 @@ pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
         let mut entry = arena_dict(arena, 5);
         // SAFETY: `entry` was sized for the five keys below, `item.path` is
         // the entry's own NUL-terminated directory, and `rv` for `size` items.
+        unsafe { dict_put(&mut entry, c"path", string_obj(cstr_as_string(item.path))) };
+        if item.after {
+            unsafe { dict_put(&mut entry, c"after", boolean_obj(true)) };
+        }
+        if item.pack_inserted {
+            unsafe { dict_put(&mut entry, c"pack_inserted", boolean_obj(true)) };
+        }
+        if let Some(has_lua) = item.has_lua {
+            unsafe { dict_put(&mut entry, c"has_lua", boolean_obj(has_lua)) };
+        }
         unsafe {
-            dict_put(&mut entry, c"path", string_obj(cstr_as_string(item.path)));
-            if item.after {
-                dict_put(&mut entry, c"after", boolean_obj(true));
-            }
-            if item.pack_inserted {
-                dict_put(&mut entry, c"pack_inserted", boolean_obj(true));
-            }
-            if let Some(has_lua) = item.has_lua {
-                dict_put(&mut entry, c"has_lua", boolean_obj(has_lua));
-            }
             dict_put(
                 &mut entry,
                 c"pos_in_rtp",
                 integer_obj(item.pos_in_rtp as Integer),
-            );
-            array_add(&mut rv, dict_obj(entry));
-        }
+            )
+        };
+        unsafe { array_add(&mut rv, dict_obj(entry)) };
     }
     rv
 }
@@ -545,13 +540,11 @@ pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
 pub unsafe fn runtime_get_named(lua: bool, pat: Array, all: bool, arena: *mut Arena) -> Array {
     let mut ref_0: c_int = 0;
     // SAFETY: the reference is released below, before this frame ends.
-    unsafe {
-        let path = runtime_search_path_get_cached(&raw mut ref_0);
-        let mut buf = [0 as c_char; MAXPATHL as usize];
-        let rv = runtime_get_named_common(lua, pat, all, path, &mut buf, arena);
-        runtime_search_path_unref(path, &raw const ref_0);
-        rv
-    }
+    let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
+    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let rv = unsafe { runtime_get_named_common(lua, pat, all, path, &mut buf, arena) };
+    unsafe { runtime_search_path_unref(path, &raw const ref_0) };
+    rv
 }
 
 /// [`runtime_get_named`] for a worker thread, against the snapshot
@@ -564,20 +557,20 @@ pub unsafe fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Arra
     // TODO(bfredl): avoid contention between multiple worker threads?
     // SAFETY: the mutex is initialised by `runtime_init` before any thread
     // exists, and guards every access to the snapshot on both sides.
-    unsafe {
-        uv_mutex_lock(search_path_mutex());
-        let mut buf = [0 as c_char; MAXPATHL as usize];
-        let rv = runtime_get_named_common(
+    unsafe { uv_mutex_lock(search_path_mutex()) };
+    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let rv = unsafe {
+        runtime_get_named_common(
             lua,
             pat,
             all,
             runtime_search_path_thread.get(),
             &mut buf,
             ptr::null_mut(),
-        );
-        uv_mutex_unlock(search_path_mutex());
-        rv
-    }
+        )
+    };
+    unsafe { uv_mutex_unlock(search_path_mutex()) };
+    rv
 }
 
 /// Whether this search-path entry has a `lua/` subdirectory.
@@ -590,18 +583,18 @@ pub unsafe fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Arra
 /// `item` must be a live entry of one of those arrays, and `buf` is scratch.
 unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
     // SAFETY: the caller's live entry; `snprintf` NUL-terminates within `buf`.
-    unsafe {
-        if (*item).has_lua.is_none() {
-            let size = snprintf(
+    if unsafe { (*item).has_lua }.is_none() {
+        let size = unsafe {
+            snprintf(
                 buf.as_mut_ptr(),
                 buf.len(),
                 c"%s/lua/".as_ptr(),
                 (*item).path,
-            ) as size_t;
-            (*item).has_lua = Some(size < buf.len() && os_isdir(buf.as_mut_ptr()));
-        }
-        (*item).has_lua != Some(false)
+            )
+        } as size_t;
+        unsafe { (*item).has_lua = Some(size < buf.len() && os_isdir(buf.as_mut_ptr())) };
     }
+    unsafe { (*item).has_lua != Some(false) }
 }
 
 /// The shared body of [`runtime_get_named`] and its thread variant.
@@ -633,22 +626,24 @@ unsafe fn runtime_get_named_common(
             }
             // SAFETY: the object is a string, so its union holds one; `buf`
             // is NUL-terminated by `snprintf` within its length.
-            unsafe {
-                let size = snprintf(
+            let size = unsafe {
+                snprintf(
                     buf.as_mut_ptr(),
                     buf.len(),
                     c"%s/%s".as_ptr(),
                     (*item).path,
                     pat_item.data.string.data(),
-                ) as size_t;
-                if size >= buf.len() || !os_file_is_readable(buf.as_mut_ptr()) {
-                    continue;
-                }
+                )
+            } as size_t;
+            if size >= buf.len() || !unsafe { os_file_is_readable(buf.as_mut_ptr()) } {
+                continue;
+            }
+            unsafe {
                 array_add(
                     &mut rv,
                     string_obj(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-                );
-            }
+                )
+            };
             if !all {
                 return rv;
             }
@@ -856,12 +851,12 @@ pub(crate) unsafe fn gen_expand_wildcards_and_cb(
     let mut num_files: c_int = 0;
     let mut files: *mut *mut c_char = ptr::null_mut();
     // SAFETY: the caller's patterns; the two out-parameters are ours.
-    unsafe {
-        if gen_expand_wildcards(num_pat, pats, &raw mut num_files, &raw mut files, flags) != OK {
-            return FAIL;
-        }
-        visitor.invoke(num_files, files, all);
-        free_wild(num_files, files);
+    if unsafe { gen_expand_wildcards(num_pat, pats, &raw mut num_files, &raw mut files, flags) }
+        != OK
+    {
+        return FAIL;
     }
+    unsafe { visitor.invoke(num_files, files, all) };
+    unsafe { free_wild(num_files, files) };
     OK
 }

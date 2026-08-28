@@ -49,65 +49,66 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 pub unsafe fn did_set_complete(args: *mut optset_T) -> *const c_char {
     let (buf, buflen) = unsafe { errbuf(args) };
     // SAFETY: the frame's C string value, walked to its terminator.
-    unsafe {
-        let mut p = *varp(args);
-        while *p != 0 {
-            let mut part = [0u8; LSIZE as usize];
-            let mut into = 0;
-            let mut escaped = false;
-            while *p != 0 && (*p != b',' as c_char || escaped) && into < part.len() - 1 {
-                if *p == b'\\' as c_char && *p.add(1) == b',' as c_char {
-                    escaped = true;
-                    p = p.add(1);
-                } else {
-                    escaped = false;
-                    part[into] = *p as u8;
-                    into += 1;
-                }
-                p = p.add(1);
-            }
-            let part = &part[..into];
-
-            let source = part.first().copied().unwrap_or(0);
-            if vim_strchr(CPT_SOURCES.as_ptr(), c_int::from(source)).is_null() {
-                return illegal_char(buf, buflen, c_int::from(source));
-            }
-
-            // Anything after the source letter is either that source's
-            // argument or a `^<count>`; anything else names a character the
-            // source does not take.
-            let takes_argument =
-                !vim_strchr(CPT_WITH_ARGUMENT.as_ptr(), c_int::from(source)).is_null();
-            let char_before = if !takes_argument && part.len() > 1 && part[1] != b'^' {
-                Some(source)
+    let mut p = unsafe { *varp(args) };
+    while unsafe { *p } != 0 {
+        let mut part = [0u8; LSIZE as usize];
+        let mut into = 0;
+        let mut escaped = false;
+        while unsafe { *p } != 0
+            && (unsafe { *p } != b',' as c_char || escaped)
+            && into < part.len() - 1
+        {
+            if unsafe { *p } == b'\\' as c_char && unsafe { *p.add(1) } == b',' as c_char {
+                escaped = true;
+                p = unsafe { p.add(1) };
             } else {
-                match part.iter().position(|&b| b == b'^') {
-                    // A `^` has to be followed by a count, and by nothing
-                    // else.
-                    Some(at) => {
-                        let count = &part[at + 1..];
-                        (count.is_empty() || !count.iter().all(u8::is_ascii_digit)).then_some(b'^')
-                    }
-                    None => None,
-                }
-            };
-            if let Some(char_before) = char_before {
-                if buf.is_null() {
-                    return ptr::null();
-                }
-                return illegal_char_after_chr(buf, buflen, c_int::from(char_before));
+                escaped = false;
+                part[into] = unsafe { *p } as u8;
+                into += 1;
             }
+            p = unsafe { p.add(1) };
+        }
+        let part = &part[..into];
 
-            while *p == b',' as c_char || *p == b' ' as c_char {
-                p = p.add(1);
-            }
+        let source = part.first().copied().unwrap_or(0);
+        if unsafe { vim_strchr(CPT_SOURCES.as_ptr(), c_int::from(source)) }.is_null() {
+            return unsafe { illegal_char(buf, buflen, c_int::from(source)) };
         }
 
-        // The "F" source names a function, which is resolved last because
-        // it can fail for a reason the letter walk cannot see.
-        if set_cpt_callbacks(args) != OK {
-            return illegal_char_after_chr(buf, buflen, c_int::from(b'F'));
+        // Anything after the source letter is either that source's
+        // argument or a `^<count>`; anything else names a character the
+        // source does not take.
+        let takes_argument =
+            !unsafe { vim_strchr(CPT_WITH_ARGUMENT.as_ptr(), c_int::from(source)) }.is_null();
+        let char_before = if !takes_argument && part.len() > 1 && part[1] != b'^' {
+            Some(source)
+        } else {
+            match part.iter().position(|&b| b == b'^') {
+                // A `^` has to be followed by a count, and by nothing
+                // else.
+                Some(at) => {
+                    let count = &part[at + 1..];
+                    (count.is_empty() || !count.iter().all(u8::is_ascii_digit)).then_some(b'^')
+                }
+                None => None,
+            }
+        };
+        if let Some(char_before) = char_before {
+            if buf.is_null() {
+                return ptr::null();
+            }
+            return unsafe { illegal_char_after_chr(buf, buflen, c_int::from(char_before)) };
         }
+
+        while unsafe { *p } == b',' as c_char || unsafe { *p } == b' ' as c_char {
+            p = unsafe { p.add(1) };
+        }
+    }
+
+    // The "F" source names a function, which is resolved last because
+    // it can fail for a reason the letter walk cannot see.
+    if unsafe { set_cpt_callbacks(args) } != OK {
+        return unsafe { illegal_char_after_chr(buf, buflen, c_int::from(b'F')) };
     }
     ptr::null()
 }
@@ -133,29 +134,29 @@ pub unsafe fn did_set_completeitemalign(_args: *mut optset_T) -> *const c_char {
 
     // SAFETY: the option's own C string value, and a scratch buffer of the
     // size given.
-    unsafe {
-        let mut p = p_cia.get();
-        while *p != 0 {
+    let mut p = p_cia.get();
+    while unsafe { *p } != 0 {
+        unsafe {
             copy_option_part(
                 &raw mut p,
                 buf.as_mut_ptr(),
                 buf.len(),
                 c",".as_ptr().cast_mut(),
-            );
-            if count >= COLUMNS.len() {
-                return invalid();
-            }
-            let column = CStr::from_ptr(buf.as_ptr());
-            let Some((_, which)) = COLUMNS.iter().find(|(name, _)| *name == column) else {
-                return invalid();
-            };
-            if seen[*which as usize] {
-                return invalid();
-            }
-            seen[*which as usize] = true;
-            order = order * 10 + *which as c_uint;
-            count += 1;
+            )
+        };
+        if count >= COLUMNS.len() {
+            return invalid();
         }
+        let column = unsafe { CStr::from_ptr(buf.as_ptr()) };
+        let Some((_, which)) = COLUMNS.iter().find(|(name, _)| *name == column) else {
+            return invalid();
+        };
+        if seen[*which as usize] {
+            return invalid();
+        }
+        seen[*which as usize] = true;
+        order = order * 10 + *which as c_uint;
+        count += 1;
     }
     // "abbr" alone would leave the order at 0, which is also "nothing was
     // named"; the count is what rules that out.
@@ -204,13 +205,11 @@ pub unsafe fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_helpfile(_args: *mut optset_T) -> *const c_char {
     // SAFETY: unsets this process's own environment variables.
-    unsafe {
-        if didset_vim.get() {
-            vim_unsetenv_ext(c"VIM".as_ptr());
-        }
-        if didset_vimruntime.get() {
-            vim_unsetenv_ext(c"VIMRUNTIME".as_ptr());
-        }
+    if didset_vim.get() {
+        unsafe { vim_unsetenv_ext(c"VIM".as_ptr()) };
+    }
+    if didset_vimruntime.get() {
+        unsafe { vim_unsetenv_ext(c"VIMRUNTIME".as_ptr()) };
     }
     ptr::null()
 }
@@ -223,20 +222,19 @@ pub unsafe fn did_set_helpfile(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_helplang(_args: *mut optset_T) -> *const c_char {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
-    unsafe {
-        let mut s = p_hlg.get();
-        while c_int::from(*s) != NUL {
-            if c_int::from(*s.add(1)) == NUL
-                || ((*s.add(2) != b',' as c_char || c_int::from(*s.add(3)) == NUL)
-                    && c_int::from(*s.add(2)) != NUL)
-            {
-                return invalid();
-            }
-            if c_int::from(*s.add(2)) == NUL {
-                break;
-            }
-            s = s.add(3);
+    let mut s = p_hlg.get();
+    while c_int::from(unsafe { *s }) != NUL {
+        if c_int::from(unsafe { *s.add(1) }) == NUL
+            || ((unsafe { *s.add(2) } != b',' as c_char
+                || c_int::from(unsafe { *s.add(3) }) == NUL)
+                && c_int::from(unsafe { *s.add(2) }) != NUL)
+        {
+            return invalid();
         }
+        if c_int::from(unsafe { *s.add(2) }) == NUL {
+            break;
+        }
+        s = unsafe { s.add(3) };
     }
     ptr::null()
 }
@@ -262,13 +260,11 @@ pub unsafe fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_optexpr(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
-    unsafe {
-        let varp = varp(args);
-        let resolved = get_scriptlocal_funcname(*varp);
-        if !resolved.is_null() {
-            free_string_option(*varp);
-            *varp = resolved;
-        }
+    let varp = unsafe { varp(args) };
+    let resolved = unsafe { get_scriptlocal_funcname(*varp) };
+    if !resolved.is_null() {
+        unsafe { free_string_option(*varp) };
+        unsafe { *varp = resolved };
     }
     ptr::null()
 }

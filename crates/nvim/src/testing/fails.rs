@@ -73,20 +73,18 @@ struct FailsMismatch {
 /// `argvars` has five slots.
 unsafe fn assert_fails_args_ok(argvars: *mut typval_T) -> bool {
     // SAFETY: the caller's arguments.
-    unsafe {
-        if tv_check_for_string_or_number_arg(argvars, 0) == FAIL
-            || tv_check_for_opt_string_or_list_arg(argvars, 1) == FAIL
-        {
-            return false;
-        }
-        if !arg_given(argvars, 1) || !arg_given(argvars, 2) {
-            return true;
-        }
-        if tv_check_for_opt_number_arg(argvars, 3) == FAIL {
-            return false;
-        }
-        !arg_given(argvars, 3) || tv_check_for_opt_string_arg(argvars, 4) != FAIL
+    if unsafe { tv_check_for_string_or_number_arg(argvars, 0) } == FAIL
+        || unsafe { tv_check_for_opt_string_or_list_arg(argvars, 1) } == FAIL
+    {
+        return false;
     }
+    if !unsafe { arg_given(argvars, 1) } || !unsafe { arg_given(argvars, 2) } {
+        return true;
+    }
+    if unsafe { tv_check_for_opt_number_arg(argvars, 3) } == FAIL {
+        return false;
+    }
+    !unsafe { arg_given(argvars, 3) } || unsafe { tv_check_for_opt_string_arg(argvars, 4) } != FAIL
 }
 
 /// Match the error the command reported against the caller's second argument.
@@ -100,66 +98,64 @@ unsafe fn assert_fails_args_ok(argvars: *mut typval_T) -> bool {
 unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char) -> FailsCheck {
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the caller's arguments and out-parameter.
-    unsafe {
-        let unknown = c"[unknown]".as_ptr().cast_mut();
-        let reported = emsg_assert_fails_msg.get();
-        let mut actual = if reported.is_null() {
-            unknown
-        } else {
-            reported
-        };
+    let unknown = c"[unknown]".as_ptr().cast_mut();
+    let reported = emsg_assert_fails_msg.get();
+    let mut actual = if reported.is_null() {
+        unknown
+    } else {
+        reported
+    };
 
-        match arg_type(argvars, 1) {
-            VAR_STRING => {
-                let expected = tv_get_string_buf_chk(arg(argvars, 1), buf.as_mut_ptr());
-                if !expected.is_null() && !strstr(actual, expected).is_null() {
-                    return FailsCheck::Matched;
-                }
-                FailsCheck::Mismatch(FailsMismatch {
-                    expected_str: ptr::null(),
-                    index: 1,
-                    actual,
-                })
+    match unsafe { arg_type(argvars, 1) } {
+        VAR_STRING => {
+            let expected = unsafe { tv_get_string_buf_chk(arg(argvars, 1), buf.as_mut_ptr()) };
+            if !expected.is_null() && !unsafe { strstr(actual, expected) }.is_null() {
+                return FailsCheck::Matched;
             }
-            VAR_LIST => {
-                let list: *const list_T = (*arg(argvars, 1)).vval.v_list;
-                if list.is_null() || !(1..=2).contains(&tv_list_len(list)) {
-                    return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
-                }
-                let mut tv: *const typval_T = &raw mut (*tv_list_first(list)).li_tv;
-                let mut expected = tv_get_string_buf_chk(tv, buf.as_mut_ptr());
-                if expected.is_null() {
-                    return FailsCheck::Abandon;
-                }
-                if !pattern_match(expected, actual, false) {
-                    return FailsCheck::Mismatch(FailsMismatch {
-                        expected_str: expected,
-                        index: 1,
-                        actual,
-                    });
-                }
-                if tv_list_len(list) != 2 {
-                    return FailsCheck::Matched;
-                }
-                // Take a copy: an error inside pattern_match() may free it.
-                actual = xstrdup(get_vim_var_str(Vv::Errmsg));
-                *tofree = actual;
-                tv = &raw mut (*tv_list_last(list)).li_tv;
-                expected = tv_get_string_buf_chk(tv, buf.as_mut_ptr());
-                if expected.is_null() {
-                    return FailsCheck::Abandon;
-                }
-                if pattern_match(expected, actual, false) {
-                    return FailsCheck::Matched;
-                }
-                FailsCheck::Mismatch(FailsMismatch {
+            FailsCheck::Mismatch(FailsMismatch {
+                expected_str: ptr::null(),
+                index: 1,
+                actual,
+            })
+        }
+        VAR_LIST => {
+            let list: *const list_T = unsafe { (*arg(argvars, 1)).vval.v_list };
+            if list.is_null() || !(1..=2).contains(&unsafe { tv_list_len(list) }) {
+                return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
+            }
+            let mut tv: *const typval_T = unsafe { &raw mut (*tv_list_first(list)).li_tv };
+            let mut expected = unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) };
+            if expected.is_null() {
+                return FailsCheck::Abandon;
+            }
+            if !unsafe { pattern_match(expected, actual, false) } {
+                return FailsCheck::Mismatch(FailsMismatch {
                     expected_str: expected,
                     index: 1,
                     actual,
-                })
+                });
             }
-            _ => FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG),
+            if unsafe { tv_list_len(list) } != 2 {
+                return FailsCheck::Matched;
+            }
+            // Take a copy: an error inside pattern_match() may free it.
+            actual = unsafe { xstrdup(get_vim_var_str(Vv::Errmsg)) };
+            *tofree = actual;
+            tv = unsafe { &raw mut (*tv_list_last(list)).li_tv };
+            expected = unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) };
+            if expected.is_null() {
+                return FailsCheck::Abandon;
+            }
+            if unsafe { pattern_match(expected, actual, false) } {
+                return FailsCheck::Matched;
+            }
+            FailsCheck::Mismatch(FailsMismatch {
+                expected_str: expected,
+                index: 1,
+                actual,
+            })
         }
+        _ => FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG),
     }
 }
 
@@ -173,39 +169,37 @@ unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char)
 /// `argvars` has five slots.
 unsafe fn check_error_position(argvars: *mut typval_T) -> FailsCheck {
     // SAFETY: the caller's arguments.
-    unsafe {
-        if !arg_given(argvars, 2) || !arg_given(argvars, 3) {
-            return FailsCheck::Matched;
-        }
-        if arg_type(argvars, 3) != VAR_NUMBER {
-            return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
-        }
-        let want_lnum = (*arg(argvars, 3)).vval.v_number;
-        if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as varnumber_T {
-            return FailsCheck::Mismatch(FailsMismatch {
-                expected_str: ptr::null(),
-                index: 3,
-                actual: ptr::null_mut(),
-            });
-        }
-        if !arg_given(argvars, 4) {
-            return FailsCheck::Matched;
-        }
-        if arg_type(argvars, 4) != VAR_STRING {
-            return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
-        }
-        let want_context = (*arg(argvars, 4)).vval.v_string;
-        if want_context.is_null()
-            || pattern_match(want_context, emsg_assert_fails_context.get(), false)
-        {
-            return FailsCheck::Matched;
-        }
-        FailsCheck::Mismatch(FailsMismatch {
-            expected_str: ptr::null(),
-            index: 4,
-            actual: ptr::null_mut(),
-        })
+    if !unsafe { arg_given(argvars, 2) } || !unsafe { arg_given(argvars, 3) } {
+        return FailsCheck::Matched;
     }
+    if unsafe { arg_type(argvars, 3) } != VAR_NUMBER {
+        return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
+    }
+    let want_lnum = unsafe { (*arg(argvars, 3)).vval.v_number };
+    if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as varnumber_T {
+        return FailsCheck::Mismatch(FailsMismatch {
+            expected_str: ptr::null(),
+            index: 3,
+            actual: ptr::null_mut(),
+        });
+    }
+    if !unsafe { arg_given(argvars, 4) } {
+        return FailsCheck::Matched;
+    }
+    if unsafe { arg_type(argvars, 4) } != VAR_STRING {
+        return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
+    }
+    let want_context = unsafe { (*arg(argvars, 4)).vval.v_string };
+    if want_context.is_null()
+        || unsafe { pattern_match(want_context, emsg_assert_fails_context.get(), false) }
+    {
+        return FailsCheck::Matched;
+    }
+    FailsCheck::Mismatch(FailsMismatch {
+        expected_str: ptr::null(),
+        index: 4,
+        actual: ptr::null_mut(),
+    })
 }
 
 /// Append a failed `assert_fails()`'s report to `v:errors`.
@@ -218,32 +212,32 @@ unsafe fn report_fails_mismatch(
     mismatch: &FailsMismatch,
 ) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
+    let mut actual_tv = match mismatch.index {
+        3 => typval_T {
+            v_type: VAR_NUMBER,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union {
+                v_number: emsg_assert_fails_lnum.get() as varnumber_T,
+            },
+        },
+        4 => typval_T {
+            v_type: VAR_STRING,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union {
+                v_string: emsg_assert_fails_context.get(),
+            },
+        },
+        _ => typval_T {
+            v_type: VAR_STRING,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union {
+                v_string: mismatch.actual,
+            },
+        },
+    };
+    let mut ga = unsafe { prepare_assert_error() };
+    let gap = &raw mut ga;
     unsafe {
-        let mut actual_tv = match mismatch.index {
-            3 => typval_T {
-                v_type: VAR_NUMBER,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union {
-                    v_number: emsg_assert_fails_lnum.get() as varnumber_T,
-                },
-            },
-            4 => typval_T {
-                v_type: VAR_STRING,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union {
-                    v_string: emsg_assert_fails_context.get(),
-                },
-            },
-            _ => typval_T {
-                v_type: VAR_STRING,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union {
-                    v_string: mismatch.actual,
-                },
-            },
-        };
-        let mut ga = prepare_assert_error();
-        let gap = &raw mut ga;
         fill_assert_error(
             gap,
             arg(argvars, 2),
@@ -251,11 +245,11 @@ unsafe fn report_fails_mismatch(
             arg(argvars, mismatch.index),
             &raw mut actual_tv,
             AssertType::Fails,
-        );
-        ga_concat_lit(gap, c": ");
-        assert_append_cmd_or_arg(gap, argvars, cmd);
-        report_assert_error(gap);
-    }
+        )
+    };
+    unsafe { ga_concat_lit(gap, c": ") };
+    unsafe { assert_append_cmd_or_arg(gap, argvars, cmd) };
+    unsafe { report_assert_error(gap) };
 }
 
 /// Put the message and screen state back the way `assert_fails()` found it.
@@ -277,14 +271,12 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
     need_wait_return.set(false);
     emsg_on_display.set(false);
     // SAFETY: the two allocations belong to this call.
-    unsafe {
-        msg_reset_scroll();
-        lines_left.set(Rows.get());
-        xfree(emsg_assert_fails_msg.get().cast());
-        emsg_assert_fails_msg.set(ptr::null_mut());
-        xfree(tofree.cast());
-        set_vim_var_string(Vv::Errmsg, ptr::null(), 0);
-    }
+    unsafe { msg_reset_scroll() };
+    lines_left.set(Rows.get());
+    unsafe { xfree(emsg_assert_fails_msg.get().cast()) };
+    emsg_assert_fails_msg.set(ptr::null_mut());
+    unsafe { xfree(tofree.cast()) };
+    unsafe { set_vim_var_string(Vv::Errmsg, ptr::null(), 0) };
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
@@ -297,56 +289,54 @@ pub(crate) unsafe fn f_assert_fails(
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is
     // restored by `finish_assert_fails`.
-    unsafe {
-        if !assert_fails_args_ok(argvars) {
-            return;
+    if !unsafe { assert_fails_args_ok(argvars) } {
+        return;
+    }
+
+    let save_trylevel = trylevel.get();
+    let called_emsg_before = called_emsg.get();
+    let mut tofree: *mut c_char = ptr::null_mut();
+    let mut wrong_arg_msg: Option<&'static CStr> = None;
+
+    // trylevel must be zero for a ":throw" command to be considered failed.
+    trylevel.set(0);
+    suppress_errthrow.set(true);
+    in_assert_fails.set(true);
+    // Threaded into `finish_assert_fails`, which is where the C released
+    // it — before the wrong-argument message below, which *does* want the
+    // hit-enter prompt.
+    let no_prompt = Suppress::wait_return();
+
+    let cmd = unsafe { numbuf.string_chk(arg(argvars, 0)) };
+    unsafe { do_cmdline_cmd(cmd) };
+
+    // Reset here for any errors reported below.
+    trylevel.set(save_trylevel);
+    suppress_errthrow.set(false);
+
+    if called_emsg.get() == called_emsg_before {
+        let mut ga = unsafe { prepare_assert_error() };
+        unsafe { ga_concat_lit(&raw mut ga, c"command did not fail: ") };
+        unsafe { assert_append_cmd_or_arg(&raw mut ga, argvars, cmd) };
+        unsafe { report_assert_error(&raw mut ga) };
+        unsafe { (*rettv).vval.v_number = 1 };
+    } else if unsafe { arg_given(argvars, 1) } {
+        let mut check = unsafe { check_reported_error(argvars, &mut tofree) };
+        if matches!(check, FailsCheck::Matched) {
+            check = unsafe { check_error_position(argvars) };
         }
-
-        let save_trylevel = trylevel.get();
-        let called_emsg_before = called_emsg.get();
-        let mut tofree: *mut c_char = ptr::null_mut();
-        let mut wrong_arg_msg: Option<&'static CStr> = None;
-
-        // trylevel must be zero for a ":throw" command to be considered failed.
-        trylevel.set(0);
-        suppress_errthrow.set(true);
-        in_assert_fails.set(true);
-        // Threaded into `finish_assert_fails`, which is where the C released
-        // it — before the wrong-argument message below, which *does* want the
-        // hit-enter prompt.
-        let no_prompt = Suppress::wait_return();
-
-        let cmd = numbuf.string_chk(arg(argvars, 0));
-        do_cmdline_cmd(cmd);
-
-        // Reset here for any errors reported below.
-        trylevel.set(save_trylevel);
-        suppress_errthrow.set(false);
-
-        if called_emsg.get() == called_emsg_before {
-            let mut ga = prepare_assert_error();
-            ga_concat_lit(&raw mut ga, c"command did not fail: ");
-            assert_append_cmd_or_arg(&raw mut ga, argvars, cmd);
-            report_assert_error(&raw mut ga);
-            (*rettv).vval.v_number = 1;
-        } else if arg_given(argvars, 1) {
-            let mut check = check_reported_error(argvars, &mut tofree);
-            if matches!(check, FailsCheck::Matched) {
-                check = check_error_position(argvars);
-            }
-            match check {
-                FailsCheck::Matched | FailsCheck::Abandon => {}
-                FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
-                FailsCheck::Mismatch(mismatch) => {
-                    report_fails_mismatch(argvars, cmd, &mismatch);
-                    (*rettv).vval.v_number = 1;
-                }
+        match check {
+            FailsCheck::Matched | FailsCheck::Abandon => {}
+            FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
+            FailsCheck::Mismatch(mismatch) => {
+                unsafe { report_fails_mismatch(argvars, cmd, &mismatch) };
+                unsafe { (*rettv).vval.v_number = 1 };
             }
         }
+    }
 
-        finish_assert_fails(save_trylevel, tofree, no_prompt);
-        if let Some(msg) = wrong_arg_msg {
-            emsg(gettext(msg.as_ptr()));
-        }
+    unsafe { finish_assert_fails(save_trylevel, tofree, no_prompt) };
+    if let Some(msg) = wrong_arg_msg {
+        unsafe { emsg(gettext(msg.as_ptr())) };
     }
 }

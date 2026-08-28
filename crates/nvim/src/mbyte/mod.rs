@@ -117,29 +117,29 @@ pub const KS_SPECIAL: c_int = 254;
 pub unsafe fn show_utf8() {
     // The hex dump. Upstream shares `IObuff`, which `msg` writes again.
     let mut hex = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        // The whole grapheme cluster, composing characters included.
-        let line = get_cursor_pos_ptr();
-        let len = utfc_ptr2len(line);
-        if len == 0 {
-            msg(c"NUL".as_ptr(), 0);
-            return;
-        }
+    // The whole grapheme cluster, composing characters included.
+    let line = get_cursor_pos_ptr();
+    let len = unsafe { utfc_ptr2len(line) };
+    if len == 0 {
+        unsafe { msg(c"NUL".as_ptr(), 0) };
+        return;
+    }
 
-        let out = hex.as_mut_ptr();
-        let mut rlen: size_t = 0;
-        let mut clen = 0;
-        for i in 0..len {
-            if clen == 0 {
-                // The start of another character in the cluster.
-                if i > 0 {
-                    strcpy(out.add(rlen), c"+ ".as_ptr().cast_mut());
-                    rlen += 2;
-                }
-                clen = utf_ptr2len(line.offset(i as isize));
+    let out = hex.as_mut_ptr();
+    let mut rlen: size_t = 0;
+    let mut clen = 0;
+    for i in 0..len {
+        if clen == 0 {
+            // The start of another character in the cluster.
+            if i > 0 {
+                unsafe { strcpy(out.add(rlen), c"+ ".as_ptr().cast_mut()) };
+                rlen += 2;
             }
-            debug_assert!(IOSIZE as size_t > rlen, "IOSIZE > rlen");
-            let byte = *line.offset(i as isize);
+            clen = unsafe { utf_ptr2len(line.offset(i as isize)) };
+        }
+        debug_assert!(IOSIZE as size_t > rlen, "IOSIZE > rlen");
+        let byte = unsafe { *line.offset(i as isize) };
+        unsafe {
             snprintf(
                 out.add(rlen),
                 IOSIZE as size_t - rlen,
@@ -150,15 +150,15 @@ pub unsafe fn show_utf8() {
                 } else {
                     byte as u8 as c_int
                 },
-            );
-            clen -= 1;
-            rlen += strlen(out.add(rlen));
-            if rlen > (IOSIZE - 20) as size_t {
-                break;
-            }
+            )
+        };
+        clen -= 1;
+        rlen += unsafe { strlen(out.add(rlen)) };
+        if rlen > (IOSIZE - 20) as size_t {
+            break;
         }
-        msg(out, 0);
     }
+    unsafe { msg(out, 0) };
 }
 
 /// `8g8`: move the cursor to the next byte that is not valid UTF-8.
@@ -175,71 +175,76 @@ pub unsafe fn show_utf8() {
 ///
 /// The editor's globals must be live.
 pub unsafe fn utf_find_illegal() {
-    unsafe {
-        let start = (*curwin.get()).w_cursor;
-        let mut vimconv = CONV_NONE_INIT;
-        let mut tofree: *mut c_char = core::ptr::null_mut();
+    let start = unsafe { (*curwin.get()).w_cursor };
+    let mut vimconv = CONV_NONE_INIT;
+    let mut tofree: *mut c_char = core::ptr::null_mut();
 
-        if enc_canon_props((*curbuf.get()).b_p_fenc) & ENC_8BIT != 0 {
-            // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
-            // decided after converting back to the file's encoding.
-            convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc);
-        }
+    if unsafe { enc_canon_props((*curbuf.get()).b_p_fenc) } & ENC_8BIT != 0 {
+        // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
+        // decided after converting back to the file's encoding.
+        unsafe { convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc) };
+    }
 
-        (*curwin.get()).w_cursor.coladd = 0;
-        let found = 'search: loop {
-            let mut p = get_cursor_pos_ptr();
-            if vimconv.vc_type != CONV_NONE {
-                xfree(tofree as *mut c_void);
-                tofree = string_convert(&raw mut vimconv, p, core::ptr::null_mut());
-                if tofree.is_null() {
-                    break false;
-                }
-                p = tofree;
-            }
-
-            while *p != NUL as c_char {
-                let len = utf_ptr2len(p);
-                if *p as u8 >= 0x80 && (len == 1 || utf_char2len(utf_ptr2char(p)) != len) {
-                    if vimconv.vc_type == CONV_NONE {
-                        (*curwin.get()).w_cursor.col +=
-                            p.offset_from(get_cursor_pos_ptr()) as colnr_T;
-                    } else {
-                        // `p` is an offset into the *converted* line; step the
-                        // real line forward by that many bytes' worth of
-                        // characters to find the matching column.
-                        let mut left = p.offset_from(tofree) as c_int;
-                        let mut q = get_cursor_pos_ptr();
-                        while *q != NUL as c_char && left > 0 {
-                            left -= 1;
-                            let l = utf_ptr2len(q);
-                            (*curwin.get()).w_cursor.col += l;
-                            q = q.offset(l as isize);
-                        }
-                    }
-                    break 'search true;
-                }
-                p = p.offset(len as isize);
-            }
-
-            if (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count {
+    unsafe { (*curwin.get()).w_cursor.coladd = 0 };
+    let found = 'search: loop {
+        let mut p = get_cursor_pos_ptr();
+        if vimconv.vc_type != CONV_NONE {
+            unsafe { xfree(tofree as *mut c_void) };
+            tofree = unsafe { string_convert(&raw mut vimconv, p, core::ptr::null_mut()) };
+            if tofree.is_null() {
                 break false;
             }
-            (*curwin.get()).w_cursor.lnum += 1;
-            (*curwin.get()).w_cursor.col = 0;
-        };
-
-        if !found {
-            (*curwin.get()).w_cursor = start;
-            beep_flush();
+            p = tofree;
         }
-        xfree(tofree as *mut c_void);
+
+        while unsafe { *p } != NUL as c_char {
+            let len = unsafe { utf_ptr2len(p) };
+            if unsafe { *p } as u8 >= 0x80
+                && (len == 1 || utf_char2len(unsafe { utf_ptr2char(p) }) != len)
+            {
+                if vimconv.vc_type == CONV_NONE {
+                    unsafe {
+                        (*curwin.get()).w_cursor.col +=
+                            p.offset_from(get_cursor_pos_ptr()) as colnr_T
+                    };
+                } else {
+                    // `p` is an offset into the *converted* line; step the
+                    // real line forward by that many bytes' worth of
+                    // characters to find the matching column.
+                    let mut left = unsafe { p.offset_from(tofree) } as c_int;
+                    let mut q = get_cursor_pos_ptr();
+                    while unsafe { *q } != NUL as c_char && left > 0 {
+                        left -= 1;
+                        let l = unsafe { utf_ptr2len(q) };
+                        unsafe { (*curwin.get()).w_cursor.col += l };
+                        q = unsafe { q.offset(l as isize) };
+                    }
+                }
+                break 'search true;
+            }
+            p = unsafe { p.offset(len as isize) };
+        }
+
+        if unsafe { (*curwin.get()).w_cursor.lnum } == unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        {
+            break false;
+        }
+        unsafe { (*curwin.get()).w_cursor.lnum += 1 };
+        unsafe { (*curwin.get()).w_cursor.col = 0 };
+    };
+
+    if !found {
+        unsafe { (*curwin.get()).w_cursor = start };
+        beep_flush();
+    }
+    unsafe { xfree(tofree as *mut c_void) };
+    unsafe {
         convert_setup(
             &raw mut vimconv,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
-        );
-    }
+        )
+    };
 }
 
 /// Is every byte of `s` part of a well-formed UTF-8 sequence?
@@ -252,29 +257,31 @@ pub unsafe fn utf_find_illegal() {
 ///
 /// `s` must be NUL-terminated when `end` is null, and reach `end` otherwise.
 pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
-    unsafe {
-        let mut p = s as *const u8;
-        let end = end as *const u8;
-        while if end.is_null() { *p != 0 } else { p < end } {
-            let mut l = utf8len_tab_zero[*p as usize] as c_int;
-            if l == 0 {
-                return false; // not a lead byte
-            }
-            if !end.is_null() && p.offset(l as isize) > end {
-                return false; // the sequence runs past the end
-            }
-            p = p.offset(1);
-            l -= 1;
-            while l > 0 {
-                if !utf_is_trail_byte(*p) {
-                    return false;
-                }
-                p = p.offset(1);
-                l -= 1;
-            }
+    let mut p = s as *const u8;
+    let end = end as *const u8;
+    while if end.is_null() {
+        unsafe { *p != 0 }
+    } else {
+        p < end
+    } {
+        let mut l = utf8len_tab_zero[unsafe { *p } as usize] as c_int;
+        if l == 0 {
+            return false; // not a lead byte
         }
-        true
+        if !end.is_null() && unsafe { p.offset(l as isize) } > end {
+            return false; // the sequence runs past the end
+        }
+        p = unsafe { p.offset(1) };
+        l -= 1;
+        while l > 0 {
+            if !utf_is_trail_byte(unsafe { *p }) {
+                return false;
+            }
+            p = unsafe { p.offset(1) };
+            l -= 1;
+        }
     }
+    true
 }
 
 /// Decode one character out of a key-encoded string, advancing `*pp` past it.
@@ -300,37 +307,35 @@ pub(crate) unsafe fn mb_unescape(
     pp: *mut *const c_char,
     into: &mut [c_char; MB_MAXCHAR],
 ) -> *const c_char {
-    unsafe {
-        let out = into.as_mut_ptr();
-        let str = *pp as *const u8;
-        let mut buf_idx = 0;
-        let mut str_idx = 0;
-        while *str.add(str_idx) != 0 && buf_idx < 4 {
-            if *str.add(str_idx) as c_int == K_SPECIAL {
-                if *str.add(str_idx + 1) as c_int != KS_SPECIAL
-                    || *str.add(str_idx + 2) as c_int != KE_FILLER
-                {
-                    break; // a real special key, which is never multibyte
-                }
-                *out.add(buf_idx) = K_SPECIAL as c_char;
-                str_idx += 2;
-            } else {
-                *out.add(buf_idx) = *str.add(str_idx) as c_char;
+    let out = into.as_mut_ptr();
+    let str = unsafe { *pp } as *const u8;
+    let mut buf_idx = 0;
+    let mut str_idx = 0;
+    while unsafe { *str.add(str_idx) } != 0 && buf_idx < 4 {
+        if unsafe { *str.add(str_idx) } as c_int == K_SPECIAL {
+            if unsafe { *str.add(str_idx + 1) } as c_int != KS_SPECIAL
+                || unsafe { *str.add(str_idx + 2) } as c_int != KE_FILLER
+            {
+                break; // a real special key, which is never multibyte
             }
-            buf_idx += 1;
-            *out.add(buf_idx) = NUL as c_char;
-
-            // An illegal sequence answers 1 here, so this only fires on a
-            // character that is really multibyte.
-            if utf_ptr2len(out) > 1 {
-                *pp = (str as *const c_char).add(str_idx + 1);
-                return out;
-            }
-            if (*out as u8) < 128 {
-                break; // ASCII: nothing more can make it multibyte
-            }
-            str_idx += 1;
+            unsafe { *out.add(buf_idx) = K_SPECIAL as c_char };
+            str_idx += 2;
+        } else {
+            unsafe { *out.add(buf_idx) = *str.add(str_idx) as c_char };
         }
-        core::ptr::null()
+        buf_idx += 1;
+        unsafe { *out.add(buf_idx) = NUL as c_char };
+
+        // An illegal sequence answers 1 here, so this only fires on a
+        // character that is really multibyte.
+        if unsafe { utf_ptr2len(out) } > 1 {
+            unsafe { *pp = (str as *const c_char).add(str_idx + 1) };
+            return out;
+        }
+        if (unsafe { *out } as u8) < 128 {
+            break; // ASCII: nothing more can make it multibyte
+        }
+        str_idx += 1;
     }
+    core::ptr::null()
 }

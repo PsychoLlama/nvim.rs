@@ -301,42 +301,40 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> schar_T {
     // terminator at the latest; `at` never passes it, because the hex
     // reader gives up at the first byte that is not a hex digit and the
     // character reader steps by the length of the character it just read.
-    unsafe {
-        let start = value.as_ptr().add(*at);
-        let pairs = match (bytes.get(*at), bytes.get(*at + 1)) {
-            (Some(b'\\'), Some(b'x')) => 1,
-            (Some(b'\\'), Some(b'u')) => 2,
-            (Some(b'\\'), Some(b'U')) => 4,
-            _ => 0,
-        };
-        if pairs > 0 {
-            let mut num: int64_t = 0;
-            for _ in 0..pairs {
-                *at += 2;
-                let digits = hexhex2nr(value.as_ptr().add(*at));
-                if digits < 0 {
-                    return 0;
-                }
-                num = num * 256 + int64_t::from(digits);
-            }
+    let start = unsafe { value.as_ptr().add(*at) };
+    let pairs = match (bytes.get(*at), bytes.get(*at + 1)) {
+        (Some(b'\\'), Some(b'x')) => 1,
+        (Some(b'\\'), Some(b'u')) => 2,
+        (Some(b'\\'), Some(b'U')) => 4,
+        _ => 0,
+    };
+    if pairs > 0 {
+        let mut num: int64_t = 0;
+        for _ in 0..pairs {
             *at += 2;
-            return if char2cells(num as c_int) > 1 {
-                0
-            } else {
-                schar_from_char(num as c_int)
-            };
+            let digits = unsafe { hexhex2nr(value.as_ptr().add(*at)) };
+            if digits < 0 {
+                return 0;
+            }
+            num = num * 256 + int64_t::from(digits);
         }
-
-        let clen = utfc_ptr2len(start);
-        let mut firstc: c_int = 0;
-        let c = utfc_ptr2schar(start, &raw mut firstc);
-        *at += clen as usize;
-        // An invalid UTF-8 byte, or a double-width character.
-        if (clen == 1 && firstc > 127) || char2cells(firstc) > 1 {
+        *at += 2;
+        return if unsafe { char2cells(num as c_int) } > 1 {
             0
         } else {
-            c
-        }
+            schar_from_char(num as c_int)
+        };
+    }
+
+    let clen = unsafe { utfc_ptr2len(start) };
+    let mut firstc: c_int = 0;
+    let c = unsafe { utfc_ptr2schar(start, &raw mut firstc) };
+    *at += clen as usize;
+    // An invalid UTF-8 byte, or a double-width character.
+    if (clen == 1 && firstc > 127) || unsafe { char2cells(firstc) } > 1 {
+        0
+    } else {
+        c
     }
 }
 
@@ -443,10 +441,8 @@ pub unsafe fn set_chars_option(
                 lcs.leadtab1 = NUL as schar_T;
                 lcs.leadtab3 = NUL as schar_T;
                 // SAFETY: both runs are handed to the window with the struct.
-                unsafe {
-                    lcs.multispace = alloc_run(multispace_len);
-                    lcs.leadmultispace = alloc_run(lead_multispace_len);
-                }
+                lcs.multispace = unsafe { alloc_run(multispace_len) };
+                lcs.leadmultispace = unsafe { alloc_run(lead_multispace_len) };
             } else {
                 install_defaults(chars_bytes(&mut fcs), tab);
             }
@@ -599,14 +595,12 @@ pub unsafe fn set_chars_option(
     if apply {
         // SAFETY: the caller's window; the two runs it held are this
         // module's to free, and the new ones move into the struct with it.
-        unsafe {
-            if listchars {
-                xfree((*wp).w_p_lcs_chars.multispace.cast::<c_void>());
-                xfree((*wp).w_p_lcs_chars.leadmultispace.cast::<c_void>());
-                (*wp).w_p_lcs_chars = lcs;
-            } else {
-                (*wp).w_p_fcs_chars = fcs;
-            }
+        if listchars {
+            unsafe { xfree((*wp).w_p_lcs_chars.multispace.cast::<c_void>()) };
+            unsafe { xfree((*wp).w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
+            unsafe { (*wp).w_p_lcs_chars = lcs };
+        } else {
+            unsafe { (*wp).w_p_fcs_chars = fcs };
         }
     }
     ptr::null()
@@ -758,16 +752,14 @@ pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
     };
     // SAFETY: the caller's frame and window; the comparisons are of
     // addresses only.
-    unsafe {
-        if varp == option_var(idx).string_var() {
-            did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen)
-        } else if varp == &raw mut (*win).w_onebuf_opt.wo_lcs
-            || varp == &raw mut (*win).w_onebuf_opt.wo_fcs
-        {
-            set_chars_option(win, *varp, which, true, errbuf, errbuflen)
-        } else {
-            ptr::null()
-        }
+    if varp == option_var(idx).string_var() {
+        unsafe { did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen) }
+    } else if varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_lcs }
+        || varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_fcs }
+    {
+        unsafe { set_chars_option(win, *varp, which, true, errbuf, errbuflen) }
+    } else {
+        ptr::null()
     }
 }
 
@@ -819,15 +811,13 @@ pub unsafe fn check_chars_options() -> *const c_char {
         return global;
     }
     // SAFETY: `for_each_window` only visits live windows.
-    unsafe {
-        for_each_window(|wp| {
-            let errmsg = check(wp, (*wp).w_onebuf_opt.wo_lcs, kListchars, true);
-            if !errmsg.is_null() {
-                return errmsg;
-            }
-            check(wp, (*wp).w_onebuf_opt.wo_fcs, kFillchars, true)
-        })
-    }
+    for_each_window(|wp| {
+        let errmsg = check(wp, unsafe { (*wp).w_onebuf_opt.wo_lcs }, kListchars, true);
+        if !errmsg.is_null() {
+            return errmsg;
+        }
+        check(wp, unsafe { (*wp).w_onebuf_opt.wo_fcs }, kFillchars, true)
+    })
 }
 
 /// Walk every window of every tab page, stopping at the first message a

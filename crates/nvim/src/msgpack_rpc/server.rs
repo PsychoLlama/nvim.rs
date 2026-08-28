@@ -106,10 +106,8 @@ pub unsafe fn server_init(
     let rv = unsafe { server_start(listen_addr) };
 
     // SAFETY: a static name, and a message with no arguments.
-    unsafe {
-        if os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) {
-            logmsg!(LOGLVL_ERR, c"server_init", 58, c"test log message");
-        }
+    if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) } {
+        unsafe { logmsg!(LOGLVL_ERR, c"server_init", 58, c"test log message") };
     }
 
     let mut ok = true;
@@ -121,17 +119,15 @@ pub unsafe fn server_init(
         };
         // SAFETY: `uv_strerror` answers a static string for any code, and
         // `reason` is `IOSIZE` writable bytes; both verbs take a string.
-        unsafe {
-            let text = if rv < 0 {
-                uv_strerror(rv)
-            } else if rv == 1 {
-                c"empty address".as_ptr()
-            } else {
-                c"?".as_ptr()
-            };
-            let out = reason.as_mut_ptr();
-            snprintf(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr);
-        }
+        let text = if rv < 0 {
+            unsafe { uv_strerror(rv) }
+        } else if rv == 1 {
+            c"empty address".as_ptr()
+        } else {
+            c"?".as_ptr()
+        };
+        let out = reason.as_mut_ptr();
+        unsafe { snprintf(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr) };
         ok = false;
     }
 
@@ -139,13 +135,11 @@ pub unsafe fn server_init(
     // processes must not inherit it.
     // SAFETY: a static name, and an address this function owns when
     // `must_free` says so.
-    unsafe {
-        if os_env_exists(ENV_LISTEN.as_ptr(), false) {
-            os_unsetenv(ENV_LISTEN.as_ptr());
-        }
-        if must_free {
-            xfree(listen_addr.cast_mut().cast::<c_void>());
-        }
+    if unsafe { os_env_exists(ENV_LISTEN.as_ptr(), false) } {
+        unsafe { os_unsetenv(ENV_LISTEN.as_ptr()) };
+    }
+    if must_free {
+        unsafe { xfree(listen_addr.cast_mut().cast::<c_void>()) };
     }
     ok
 }
@@ -232,8 +226,8 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
                 133,
                 c"truncated server address: %.40s...",
                 address.as_mut_ptr(),
-            );
-        }
+            )
+        };
     }
     // SAFETY: `address` is NUL-terminated.
     unsafe { xstrdup(address.as_ptr()) }
@@ -252,12 +246,10 @@ pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
     let owned = WATCHERS.with(|watchers| {
         watchers.iter().any(|&watcher| {
             // SAFETY: a live watcher, and two owned strings.
-            unsafe {
-                let addr = fix_fname(watcher_addr(watcher));
-                let same = strequal(path, addr);
-                xfree(addr.cast::<c_void>());
-                same
-            }
+            let addr = unsafe { fix_fname(watcher_addr(watcher)) };
+            let same = unsafe { strequal(path, addr) };
+            unsafe { xfree(addr.cast::<c_void>()) };
+            same
         })
     });
     // SAFETY: the string `fix_fname` handed over.
@@ -276,9 +268,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     // SAFETY: the caller's address.
     if addr.is_null() || unsafe { *addr == 0 } {
         // SAFETY: a message with no arguments.
-        unsafe {
-            logmsg!(LOGLVL_WRN, c"server_start", 169, c"Empty or NULL address");
-        }
+        unsafe { logmsg!(LOGLVL_WRN, c"server_start", 169, c"Empty or NULL address") };
         return 1;
     }
 
@@ -330,12 +320,12 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
                 186,
                 c"Already listening on %s",
                 watcher_addr(watcher),
-            );
-            if (*(*watcher).stream).type_0 == UV_TCP {
-                uv_freeaddrinfo((*watcher).uv.tcp.addrinfo);
-            }
-            socket_watcher_close(watcher, Some(free_server));
+            )
+        };
+        if unsafe { (*(*watcher).stream).type_0 } == UV_TCP {
+            unsafe { uv_freeaddrinfo((*watcher).uv.tcp.addrinfo) };
         }
+        unsafe { socket_watcher_close(watcher, Some(free_server)) };
         return 2;
     }
 
@@ -352,9 +342,9 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
                 c"Failed to start server: %s: %s",
                 uv_strerror(result),
                 watcher_addr(watcher),
-            );
-            socket_watcher_close(watcher, Some(free_server));
-        }
+            )
+        };
+        unsafe { socket_watcher_close(watcher, Some(free_server)) };
         return result;
     }
 
@@ -379,14 +369,14 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
     let mut addr = [0 as c_char; SOCKET_ADDR_LEN];
     // SAFETY: the caller's endpoint, copied into a buffer that is one byte
     // longer than the copy so the terminator the zero-fill left survives.
+    let endpoint_len = unsafe { CStr::from_ptr(endpoint) }
+        .to_bytes()
+        .len()
+        .min(SOCKET_ADDR_LEN - 1);
     unsafe {
-        let endpoint_len = CStr::from_ptr(endpoint)
-            .to_bytes()
-            .len()
-            .min(SOCKET_ADDR_LEN - 1);
         addr.as_mut_ptr()
-            .copy_from_nonoverlapping(endpoint, endpoint_len);
-    }
+            .copy_from_nonoverlapping(endpoint, endpoint_len)
+    };
 
     let found = WATCHERS.with_mut(|watchers| {
         let index = watchers.iter().position(|&watcher| {
@@ -406,8 +396,8 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
                 236,
                 c"Not listening on %s",
                 addr.as_mut_ptr(),
-            );
-        }
+            )
+        };
         return false;
     };
 
@@ -437,13 +427,12 @@ pub unsafe fn server_address_list(size: *mut size_t) -> *mut *mut c_char {
         }
         // SAFETY: `xcalloc` hands back one writable slot per watcher, and
         // every watcher's address is NUL-terminated.
-        unsafe {
-            let addrs = xcalloc(watchers.len(), size_of::<*const c_char>()).cast::<*mut c_char>();
-            for (i, &watcher) in watchers.iter().enumerate() {
-                *addrs.add(i) = xstrdup(watcher_addr(watcher));
-            }
-            addrs
+        let addrs =
+            unsafe { xcalloc(watchers.len(), size_of::<*const c_char>()) }.cast::<*mut c_char>();
+        for (i, &watcher) in watchers.iter().enumerate() {
+            unsafe { *addrs.add(i) = xstrdup(watcher_addr(watcher)) };
         }
+        addrs
     })
 }
 
@@ -461,8 +450,8 @@ unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut 
                 276,
                 c"Failed to accept connection: %s",
                 uv_strerror(result),
-            );
-        }
+            )
+        };
         return;
     }
     // SAFETY: the caller's watcher, which has a pending connection.

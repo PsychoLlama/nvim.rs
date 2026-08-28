@@ -270,10 +270,10 @@ unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
             ga_grow(
                 &raw mut ga,
                 (name_len + type_name.count_bytes() + SFILE_ENTRY_SLACK) as c_int,
-            );
-            ga_concat_len(&raw mut ga, type_name.as_ptr(), type_name.count_bytes());
-            ga_concat_len(&raw mut ga, entry.es_name, name_len);
-        }
+            )
+        };
+        unsafe { ga_concat_len(&raw mut ga, type_name.as_ptr(), type_name.count_bytes()) };
+        unsafe { ga_concat_len(&raw mut ga, entry.es_name, name_len) };
         if lnum != 0 {
             // SAFETY: the grow above left `ga_maxlen - ga_len` writable bytes.
             ga.ga_len += unsafe {
@@ -323,23 +323,21 @@ unsafe fn stacktrace_push_item(
     // SAFETY: `l` is the caller's list, and the dict below is freshly
     // allocated, so every `tv_dict_add_*` writes into memory we own until the
     // final append hands the dict to the list.
-    unsafe {
-        let d = tv_dict_alloc_lock(VarLock::Fixed);
-        let mut tv = typval_T {
-            v_type: VAR_DICT,
-            v_lock: VarLock::Locked,
-            vval: typval_vval_union { v_dict: d },
-        };
-        if !fp.is_null() {
-            tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp);
-        }
-        if !event.is_null() {
-            dict_add_str(d, c"event", event);
-        }
-        dict_add_nr(d, c"lnum", lnum as varnumber_T);
-        dict_add_str(d, c"filepath", filepath);
-        tv_list_append_tv(l, &raw mut tv);
+    let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
+    let mut tv = typval_T {
+        v_type: VAR_DICT,
+        v_lock: VarLock::Locked,
+        vval: typval_vval_union { v_dict: d },
+    };
+    if !fp.is_null() {
+        unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp) };
     }
+    if !event.is_null() {
+        unsafe { dict_add_str(d, c"event", event) };
+    }
+    unsafe { dict_add_nr(d, c"lnum", lnum as varnumber_T) };
+    unsafe { dict_add_str(d, c"filepath", filepath) };
+    unsafe { tv_list_append_tv(l, &raw mut tv) };
 }
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
@@ -375,8 +373,8 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                         ptr::null(),
                         entry.es_lnum + sctx.sc_lnum,
                         script_path(sctx).as_ptr().cast_mut(),
-                    );
-                }
+                    )
+                };
             }
             ETYPE_AUCMD => {
                 // SAFETY: the frame's `AutoPatCmd` outlives the frame.
@@ -389,8 +387,8 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                         entry.es_name,
                         entry.es_lnum + sctx.sc_lnum,
                         script_path(sctx).as_ptr().cast_mut(),
-                    );
-                }
+                    )
+                };
             }
             _ => {}
         }

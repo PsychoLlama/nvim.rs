@@ -113,21 +113,21 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
         let name = c"g:colors_name";
         // SAFETY: the name is a C string of the length given, and `p_bg` is
         // this process's own option variable.
-        unsafe {
-            do_unlet(name.as_ptr(), name.to_bytes().len(), true);
-            free_string_option(p_bg.get());
-            p_bg.set(xstrdup(if dark {
+        unsafe { do_unlet(name.as_ptr(), name.to_bytes().len(), true) };
+        unsafe { free_string_option(p_bg.get()) };
+        p_bg.set(unsafe {
+            xstrdup(if dark {
                 c"dark".as_ptr()
             } else {
                 c"light".as_ptr()
-            }));
-            // `check_string_option` for a cell: `xstrdup` never answers
-            // null, but upstream guards anyway.
-            if p_bg.get().is_null() {
-                p_bg.set(empty_option());
-            }
-            init_highlight(false, false);
+            })
+        });
+        // `check_string_option` for a cell: `xstrdup` never answers
+        // null, but upstream guards anyway.
+        if p_bg.get().is_null() {
+            p_bg.set(empty_option());
         }
+        unsafe { init_highlight(false, false) };
     }
 
     // Terminal buffers pick their palette from the background.
@@ -183,20 +183,16 @@ pub unsafe fn did_set_breakindentopt(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_colorcolumn(args: *mut optset_T) -> *const c_char {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     // SAFETY: the frame's window, and the option's C string value.
-    unsafe {
-        let local = &raw mut (*wp).w_onebuf_opt.wo_cc;
-        check_colorcolumn(*varp, local_window(varp, wp, local))
-    }
+    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_cc };
+    unsafe { check_colorcolumn(*varp, local_window(varp, wp, local)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_concealcursor(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), COCU_ALL.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), COCU_ALL.as_ptr(), buf, len) }
 }
 
 /// # Safety
@@ -224,10 +220,8 @@ pub unsafe fn did_set_display(args: *mut optset_T) -> *const c_char {
     // "uhex" changes how an unprintable character is drawn, and "msgsep"
     // changes whether the message area is its own grid.
     // SAFETY: both read the editor's own state.
-    unsafe {
-        init_chartab();
-        msg_grid_validate();
-    }
+    unsafe { init_chartab() };
+    unsafe { msg_grid_validate() };
     ptr::null()
 }
 
@@ -280,10 +274,8 @@ pub unsafe fn did_set_keymodel(args: *mut optset_T) -> *const c_char {
         return errmsg;
     }
     // SAFETY: the option's C string value; `vim_strchr` only reads it.
-    unsafe {
-        km_stopsel.set(!vim_strchr(p_km.get(), c_int::from(b'o')).is_null());
-        km_startsel.set(!vim_strchr(p_km.get(), c_int::from(b'a')).is_null());
-    }
+    km_stopsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'o')) }.is_null());
+    km_startsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'a')) }.is_null());
     ptr::null()
 }
 
@@ -301,10 +293,8 @@ pub unsafe fn did_set_messagesopt(_args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_mouse(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), super::MOUSE_ALL.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), super::MOUSE_ALL.as_ptr(), buf, len) }
 }
 
 /// 'mousescroll' is `ver:<n>` and/or `hor:<n>`, each at most once. A
@@ -380,14 +370,12 @@ pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_showbreak(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's value is a C string, and the walk steps by the
     // length of the character it just measured.
-    unsafe {
-        let mut s = *varp(args);
-        while *s != 0 {
-            if ptr2cells(s) != 1 {
-                return e_showbreak_contains_unprintable_or_wide_character.as_ptr();
-            }
-            s = s.add(utfc_ptr2len(s) as usize);
+    let mut s = unsafe { *varp(args) };
+    while unsafe { *s } != 0 {
+        if unsafe { ptr2cells(s) } != 1 {
+            return e_showbreak_contains_unprintable_or_wide_character.as_ptr();
         }
+        s = unsafe { s.add(utfc_ptr2len(s) as usize) };
     }
     ptr::null()
 }
@@ -409,19 +397,17 @@ pub unsafe fn did_set_showcmdloc(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     // SAFETY: the frame's window and value.
-    unsafe {
-        let local = &raw mut (*wp).w_onebuf_opt.wo_scl;
-        if check_signcolumn(*varp, local_window(varp, wp, local)) != OK {
-            return invalid();
-        }
-        // "number" shares the sign column with the number column, so
-        // leaving or entering it invalidates the cached number width.
-        let old = old_value(args);
-        if (*old == b'n' as c_char && *old.add(1) == b'u' as c_char)
-            || (*wp).w_minscwidth == SCL_NUM
-        {
-            (*wp).w_nrwidth_line_count = 0 as linenr_T;
-        }
+    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_scl };
+    if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) } != OK {
+        return invalid();
+    }
+    // "number" shares the sign column with the number column, so
+    // leaving or entering it invalidates the cached number width.
+    let old = unsafe { old_value(args) };
+    if (unsafe { *old } == b'n' as c_char && unsafe { *old.add(1) } == b'u' as c_char)
+        || unsafe { (*wp).w_minscwidth } == SCL_NUM
+    {
+        unsafe { (*wp).w_nrwidth_line_count = 0 as linenr_T };
     }
     ptr::null()
 }
@@ -462,12 +448,10 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     };
     store(mask);
     // SAFETY: the frame's old value and window.
-    unsafe {
-        if strcmp(value, old_value(args)) != 0 {
-            // What column the cursor may sit in just changed.
-            validate_virtcol(Win::new(wp));
-            coladvance(Win::new(wp), (*wp).w_virtcol);
-        }
+    if unsafe { strcmp(value, old_value(args)) } != 0 {
+        // What column the cursor may sit in just changed.
+        validate_virtcol(unsafe { Win::new(wp) });
+        coladvance(unsafe { Win::new(wp) }, unsafe { (*wp).w_virtcol });
     }
     ptr::null()
 }
@@ -480,10 +464,8 @@ pub unsafe fn did_set_whichwrap(args: *mut optset_T) -> *const c_char {
     const WW_AND_COMMA: &CStr = c"bshl<>[]~,";
     debug_assert!(WW_AND_COMMA.to_bytes().starts_with(WW_ALL.to_bytes()));
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), WW_AND_COMMA.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), WW_AND_COMMA.as_ptr(), buf, len) }
 }
 
 /// # Safety
@@ -590,11 +572,9 @@ pub unsafe fn did_set_pumborder(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_winhighlight(args: *mut optset_T) -> *const c_char {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     // SAFETY: the frame's window and C string value.
-    unsafe {
-        let local = &raw mut (*wp).w_onebuf_opt.wo_winhl;
-        if !parse_winhl_opt(*varp, local_window(varp, wp, local)) {
-            return invalid();
-        }
+    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_winhl };
+    if !unsafe { parse_winhl_opt(*varp, local_window(varp, wp, local)) } {
+        return invalid();
     }
     ptr::null()
 }

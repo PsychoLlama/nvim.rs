@@ -90,8 +90,8 @@ pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> 
             errbuflen,
             gettext(c"E539: Illegal character <%s>".as_ptr()),
             transchar(c).as_ptr(),
-        );
-    }
+        )
+    };
     errbuf
 }
 
@@ -115,8 +115,8 @@ pub(crate) unsafe fn illegal_char_after_chr(
             errbuflen,
             gettext(e_illegal_character_after_chr.as_ptr()),
             c,
-        );
-    }
+        )
+    };
     errbuf
 }
 
@@ -128,73 +128,71 @@ pub unsafe fn check_buf_options(buf: *mut buf_T) {
     // SAFETY: the caller's buffer; each field is one of its `char *`
     // options, and `parse_cino` re-derives the 'cinoptions' cache from the
     // string this just made non-null.
-    unsafe {
-        for field in [
-            &raw mut (*buf).b_p_bh,
-            &raw mut (*buf).b_p_bt,
-            &raw mut (*buf).b_p_fenc,
-            &raw mut (*buf).b_p_ff,
-            &raw mut (*buf).b_p_def,
-            &raw mut (*buf).b_p_inc,
-            &raw mut (*buf).b_p_inex,
-            &raw mut (*buf).b_p_inde,
-            &raw mut (*buf).b_p_indk,
-            &raw mut (*buf).b_p_fp,
-            &raw mut (*buf).b_p_fex,
-            &raw mut (*buf).b_p_kp,
-            &raw mut (*buf).b_p_mps,
-            &raw mut (*buf).b_p_fo,
-            &raw mut (*buf).b_p_flp,
-            &raw mut (*buf).b_p_isk,
-            &raw mut (*buf).b_p_com,
-            &raw mut (*buf).b_p_cms,
-            &raw mut (*buf).b_p_nf,
-            &raw mut (*buf).b_p_qe,
-            &raw mut (*buf).b_p_syn,
-            &raw mut (*buf).b_s.b_syn_isk,
-            &raw mut (*buf).b_s.b_p_spc,
-            &raw mut (*buf).b_s.b_p_spf,
-            &raw mut (*buf).b_s.b_p_spl,
-            &raw mut (*buf).b_s.b_p_spo,
-            &raw mut (*buf).b_p_sua,
-            &raw mut (*buf).b_p_cink,
-            &raw mut (*buf).b_p_cino,
-        ] {
-            check_string_option(field);
-        }
-        parse_cino(Buf::new(buf));
-        for field in [
-            &raw mut (*buf).b_p_lop,
-            &raw mut (*buf).b_p_ft,
-            &raw mut (*buf).b_p_cinw,
-            &raw mut (*buf).b_p_cinsd,
-            &raw mut (*buf).b_p_cot,
-            &raw mut (*buf).b_p_cpt,
-            &raw mut (*buf).b_p_cfu,
-            &raw mut (*buf).b_p_ofu,
-            &raw mut (*buf).b_p_keymap,
-            &raw mut (*buf).b_p_gefm,
-            &raw mut (*buf).b_p_gp,
-            &raw mut (*buf).b_p_mp,
-            &raw mut (*buf).b_p_efm,
-            &raw mut (*buf).b_p_ep,
-            &raw mut (*buf).b_p_path,
-            &raw mut (*buf).b_p_tags,
-            &raw mut (*buf).b_p_ffu,
-            &raw mut (*buf).b_p_tfu,
-            &raw mut (*buf).b_p_tc,
-            &raw mut (*buf).b_p_dict,
-            &raw mut (*buf).b_p_dia,
-            &raw mut (*buf).b_p_tsr,
-            &raw mut (*buf).b_p_tsrfu,
-            &raw mut (*buf).b_p_lw,
-            &raw mut (*buf).b_p_bkc,
-            &raw mut (*buf).b_p_menc,
-            &raw mut (*buf).b_p_vsts,
-            &raw mut (*buf).b_p_vts,
-        ] {
-            check_string_option(field);
-        }
+    for field in [
+        unsafe { &raw mut (*buf).b_p_bh },
+        unsafe { &raw mut (*buf).b_p_bt },
+        unsafe { &raw mut (*buf).b_p_fenc },
+        unsafe { &raw mut (*buf).b_p_ff },
+        unsafe { &raw mut (*buf).b_p_def },
+        unsafe { &raw mut (*buf).b_p_inc },
+        unsafe { &raw mut (*buf).b_p_inex },
+        unsafe { &raw mut (*buf).b_p_inde },
+        unsafe { &raw mut (*buf).b_p_indk },
+        unsafe { &raw mut (*buf).b_p_fp },
+        unsafe { &raw mut (*buf).b_p_fex },
+        unsafe { &raw mut (*buf).b_p_kp },
+        unsafe { &raw mut (*buf).b_p_mps },
+        unsafe { &raw mut (*buf).b_p_fo },
+        unsafe { &raw mut (*buf).b_p_flp },
+        unsafe { &raw mut (*buf).b_p_isk },
+        unsafe { &raw mut (*buf).b_p_com },
+        unsafe { &raw mut (*buf).b_p_cms },
+        unsafe { &raw mut (*buf).b_p_nf },
+        unsafe { &raw mut (*buf).b_p_qe },
+        unsafe { &raw mut (*buf).b_p_syn },
+        unsafe { &raw mut (*buf).b_s.b_syn_isk },
+        unsafe { &raw mut (*buf).b_s.b_p_spc },
+        unsafe { &raw mut (*buf).b_s.b_p_spf },
+        unsafe { &raw mut (*buf).b_s.b_p_spl },
+        unsafe { &raw mut (*buf).b_s.b_p_spo },
+        unsafe { &raw mut (*buf).b_p_sua },
+        unsafe { &raw mut (*buf).b_p_cink },
+        unsafe { &raw mut (*buf).b_p_cino },
+    ] {
+        unsafe { check_string_option(field) };
+    }
+    unsafe { parse_cino(Buf::new(buf)) };
+    for field in [
+        unsafe { &raw mut (*buf).b_p_lop },
+        unsafe { &raw mut (*buf).b_p_ft },
+        unsafe { &raw mut (*buf).b_p_cinw },
+        unsafe { &raw mut (*buf).b_p_cinsd },
+        unsafe { &raw mut (*buf).b_p_cot },
+        unsafe { &raw mut (*buf).b_p_cpt },
+        unsafe { &raw mut (*buf).b_p_cfu },
+        unsafe { &raw mut (*buf).b_p_ofu },
+        unsafe { &raw mut (*buf).b_p_keymap },
+        unsafe { &raw mut (*buf).b_p_gefm },
+        unsafe { &raw mut (*buf).b_p_gp },
+        unsafe { &raw mut (*buf).b_p_mp },
+        unsafe { &raw mut (*buf).b_p_efm },
+        unsafe { &raw mut (*buf).b_p_ep },
+        unsafe { &raw mut (*buf).b_p_path },
+        unsafe { &raw mut (*buf).b_p_tags },
+        unsafe { &raw mut (*buf).b_p_ffu },
+        unsafe { &raw mut (*buf).b_p_tfu },
+        unsafe { &raw mut (*buf).b_p_tc },
+        unsafe { &raw mut (*buf).b_p_dict },
+        unsafe { &raw mut (*buf).b_p_dia },
+        unsafe { &raw mut (*buf).b_p_tsr },
+        unsafe { &raw mut (*buf).b_p_tsrfu },
+        unsafe { &raw mut (*buf).b_p_lw },
+        unsafe { &raw mut (*buf).b_p_bkc },
+        unsafe { &raw mut (*buf).b_p_menc },
+        unsafe { &raw mut (*buf).b_p_vsts },
+        unsafe { &raw mut (*buf).b_p_vts },
+    ] {
+        unsafe { check_string_option(field) };
     }
 }
 
@@ -244,10 +242,8 @@ pub unsafe fn free_string_option(p: *mut c_char) {
 pub unsafe fn clear_string_option(pp: *mut *mut c_char) {
     // SAFETY: the caller's variable, holding a value `free_string_option`
     // accepts.
-    unsafe {
-        free_string_option(*pp);
-        *pp = empty_option();
-    }
+    unsafe { free_string_option(*pp) };
+    unsafe { *pp = empty_option() };
 }
 
 /// Replace a null option value with the shared empty string, so that
@@ -257,10 +253,8 @@ pub unsafe fn clear_string_option(pp: *mut *mut c_char) {
 /// `pp` points at a string option's variable.
 pub unsafe fn check_string_option(pp: *mut *mut c_char) {
     // SAFETY: the caller's variable.
-    unsafe {
-        if (*pp).is_null() {
-            *pp = empty_option();
-        }
+    if unsafe { *pp }.is_null() {
+        unsafe { *pp = empty_option() };
     }
 }
 
@@ -332,18 +326,16 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     };
 
     // SAFETY: the caller's window, which the null tests above ruled out.
-    unsafe {
-        (*wp).w_minscwidth = min;
-        (*wp).w_maxscwidth = max;
-        // Keep the width the window is currently drawing inside the new
-        // range, without widening it on its own.
-        let held = if min <= 0 {
-            0
-        } else {
-            max.min((*wp).w_scwidth)
-        };
-        (*wp).w_scwidth = min.max(held);
-    }
+    unsafe { (*wp).w_minscwidth = min };
+    unsafe { (*wp).w_maxscwidth = max };
+    // Keep the width the window is currently drawing inside the new
+    // range, without widening it on its own.
+    let held = if min <= 0 {
+        0
+    } else {
+        max.min(unsafe { (*wp).w_scwidth })
+    };
+    unsafe { (*wp).w_scwidth = min.max(held) };
     OK
 }
 

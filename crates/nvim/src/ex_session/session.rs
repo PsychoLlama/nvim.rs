@@ -217,19 +217,17 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
         return true;
     }
     // SAFETY: caller contract; both copies are owned and freed here.
-    unsafe {
-        let dir = if globaldir.get().is_null() {
-            dirnow
-        } else {
-            globaldir.get()
-        };
-        let sname = home_replace_save(ptr::null_mut::<buf_T>(), dir);
-        let fname_esc = ses_escape_fname(sname);
-        let ok = out.puts(c"cd ") && out.bytes(fname_esc) && out.eol();
-        xfree(fname_esc.cast::<c_void>());
-        xfree(sname.cast::<c_void>());
-        ok
-    }
+    let dir = if globaldir.get().is_null() {
+        dirnow
+    } else {
+        globaldir.get()
+    };
+    let sname = unsafe { home_replace_save(ptr::null_mut::<buf_T>(), dir) };
+    let fname_esc = unsafe { ses_escape_fname(sname) };
+    let ok = out.puts(c"cd ") && unsafe { out.bytes(fname_esc) } && out.eol();
+    unsafe { xfree(fname_esc.cast::<c_void>()) };
+    unsafe { xfree(sname.cast::<c_void>()) };
+    ok
 }
 
 /// One `badd +<lnum> <name>` per buffer worth restoring.
@@ -239,22 +237,22 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
 unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
     let opts = SessionOpts::Session;
     // SAFETY: caller contract; each buffer's window info is its own kvec.
-    unsafe {
-        for buf in buffers().map(Buf::raw) {
-            let wanted = !(only_save_windows && (*buf).b_nwindows == 0)
-                && !((*buf).b_help && !opts.has(kOptSsopFlagHelp))
-                && !(buf_is_terminal(Buf::from_raw(buf)) && !opts.has(kOptSsopFlagTerminal))
-                && !(*buf).b_fname.is_null()
-                && (*buf).b_p_bl != 0;
-            if wanted {
-                let lnum = if (*buf).b_wininfo.size == 0 {
-                    1 as int64_t
-                } else {
-                    (**(*buf).b_wininfo.items).wi_mark.mark.lnum as int64_t
-                };
-                if !out.write(format_args!("badd +{lnum} ")) || !ses_fname(out, buf, opts, true) {
-                    return false;
-                }
+    for buf in buffers().map(Buf::raw) {
+        let wanted = !(only_save_windows && unsafe { (*buf).b_nwindows } == 0)
+            && !(unsafe { (*buf).b_help } && !opts.has(kOptSsopFlagHelp))
+            && !(buf_is_terminal(unsafe { Buf::from_raw(buf) }) && !opts.has(kOptSsopFlagTerminal))
+            && !unsafe { (*buf).b_fname }.is_null()
+            && unsafe { (*buf).b_p_bl } != 0;
+        if wanted {
+            let lnum = if unsafe { (*buf).b_wininfo.size } == 0 {
+                1 as int64_t
+            } else {
+                unsafe { (**(*buf).b_wininfo.items).wi_mark.mark.lnum as int64_t }
+            };
+            if !out.write(format_args!("badd +{lnum} "))
+                || !unsafe { ses_fname(out, buf, opts, true) }
+            {
+                return false;
             }
         }
     }
@@ -295,147 +293,144 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 
     // SAFETY: caller contract; nothing here runs Vimscript, so the lists
     // cannot change under the walk.
-    unsafe {
-        let mut next = first_tab();
-        while let Some(mut tab) = next {
-            let mut need_tabnext = false;
-            let (tab_firstwin, tab_topframe) = if with_tabs {
-                need_tabnext = Some(tab) != first_tab();
-                if tab.is_current() {
-                    (firstwin.get(), topframe.get())
-                } else {
-                    (tab.tp_firstwin, tab.tp_topframe)
-                }
-            } else {
-                tab = TabPage::current();
+    let mut next = first_tab();
+    while let Some(mut tab) = next {
+        let mut need_tabnext = false;
+        let (tab_firstwin, tab_topframe) = if with_tabs {
+            need_tabnext = Some(tab) != first_tab();
+            if tab.is_current() {
                 (firstwin.get(), topframe.get())
-            };
-
-            // Before creating the layout, try loading one file: if that is
-            // aborted we do not end up with a pile of useless windows. This
-            // may have side effects (a compressed or network file).
-            for wp in windows_in_tab(tab).map(Win::raw) {
-                if ses_do_win(wp)
-                    && !(*(*wp).w_buffer).b_ffname.is_null()
-                    && !buf_is_help(Buf::from_raw((*wp).w_buffer))
-                    && !buf_is_nofilename(Buf::from_raw((*wp).w_buffer))
-                {
-                    if need_tabnext && !out.line(c"tabnext") {
-                        return false;
-                    }
-                    need_tabnext = false;
-                    if !out.puts(c"edit ") || !ses_fname(out, (*wp).w_buffer, opts, true) {
-                        return false;
-                    }
-                    if !(*wp).w_arg_idx_invalid {
-                        edited_win = wp;
-                    }
-                    break;
-                }
+            } else {
+                (tab.tp_firstwin, tab.tp_topframe)
             }
-            // No file got edited: create an empty tab page.
-            if need_tabnext && !out.line(c"tabnext") {
-                return false;
-            }
+        } else {
+            tab = unsafe { TabPage::current() };
+            (firstwin.get(), topframe.get())
+        };
 
-            if (*tab_topframe).fr_layout != FR_LEAF
-                && (!out.line(c"let s:save_splitbelow = &splitbelow")
-                    || !out.line(c"let s:save_splitright = &splitright")
-                    || !out.line(c"set splitbelow splitright")
-                    || !ses_win_rec(out, tab_topframe)
-                    || !out.line(c"let &splitbelow = s:save_splitbelow")
-                    || !out.line(c"let &splitright = s:save_splitright"))
+        // Before creating the layout, try loading one file: if that is
+        // aborted we do not end up with a pile of useless windows. This
+        // may have side effects (a compressed or network file).
+        for wp in windows_in_tab(tab).map(Win::raw) {
+            if unsafe { ses_do_win(wp) }
+                && !unsafe { (*(*wp).w_buffer).b_ffname }.is_null()
+                && !buf_is_help(unsafe { Buf::from_raw((*wp).w_buffer) })
+                && !buf_is_nofilename(unsafe { Buf::from_raw((*wp).w_buffer) })
             {
-                return false;
-            }
-
-            // Can the window sizes be restored -- that is, was no window
-            // omitted? And which window number is the current one?
-            let mut nr = 0;
-            let mut cnr = 1;
-            for wp in windows_in_tab(tab).map(Win::raw) {
-                if ses_do_win(wp) {
-                    nr += 1;
-                } else if !(*wp).w_floating {
-                    restore_size = false;
-                }
-                if curwin.get() == wp {
-                    cnr = nr;
-                }
-            }
-
-            if tab_firstwin
-                .and_then(WinId::get)
-                .is_some_and(|w| w.next().is_some())
-            {
-                // Go to the first window, then pin 'winheight'/'winwidth' to
-                // 1 so that moving between windows does not resize them --
-                // before restoring the views, so that the topline and the
-                // cursor can be set. Done again at the end.
-                // 'winminheight'/'winminwidth' go to 0 as well, or a user
-                // 'winheight' would make this an error.
-                if !out.line(c"wincmd t") {
+                if need_tabnext && !out.line(c"tabnext") {
                     return false;
                 }
-                if !*restore_height_width
-                    && (!out.line(c"let s:save_winminheight = &winminheight")
-                        || !out.line(c"let s:save_winminwidth = &winminwidth"))
-                {
+                need_tabnext = false;
+                if !out.puts(c"edit ") || !unsafe { ses_fname(out, (*wp).w_buffer, opts, true) } {
                     return false;
                 }
-                if !out
-                    .line(c"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1")
-                {
-                    return false;
+                if !unsafe { (*wp).w_arg_idx_invalid } {
+                    edited_win = wp;
                 }
-                *restore_height_width = true;
-            }
-            if nr > 1 && !ses_winsizes(out, restore_size, tab) {
-                return false;
-            }
-
-            // The tab-local working directory goes before the windows, so a
-            // window-local one can override it.
-            if opts.has(kOptSsopFlagCurdir) && !tab.tp_localdir.is_null() {
-                if !out.puts(c"tcd ") || !ses_put_fname(out, tab.tp_localdir) || !out.eol() {
-                    return false;
-                }
-                did_lcd.set(true);
-            }
-
-            // Each window's view.
-            for wp in windows_in_tab(tab).map(Win::raw) {
-                if ses_do_win(wp) {
-                    if !put_view(out, wp, tab.raw(), wp != edited_win, opts, cur_arg_idx) {
-                        return false;
-                    }
-                    if nr > 1 && !out.line(c"wincmd w") {
-                        return false;
-                    }
-                    next_arg_idx = (*wp).w_arg_idx;
-                }
-            }
-            // The argument index is zero in the first tab page and has to be
-            // set per window; for later tab pages it is the window the
-            // `:tabedit` happened in.
-            cur_arg_idx = next_arg_idx;
-
-            // Put the cursor back in the current window when it is not the
-            // first.
-            if cnr > 1 && !out.write(format_args!("{cnr}wincmd w\n")) {
-                return false;
-            }
-            // And restore the sizes again: jumping around gives the current
-            // window a minimum size the others may not have.
-            if nr > 1 && !ses_winsizes(out, restore_size, tab) {
-                return false;
-            }
-
-            if !with_tabs {
                 break;
             }
-            next = tab.next();
         }
+        // No file got edited: create an empty tab page.
+        if need_tabnext && !out.line(c"tabnext") {
+            return false;
+        }
+
+        if unsafe { (*tab_topframe).fr_layout } != FR_LEAF
+            && (!out.line(c"let s:save_splitbelow = &splitbelow")
+                || !out.line(c"let s:save_splitright = &splitright")
+                || !out.line(c"set splitbelow splitright")
+                || !unsafe { ses_win_rec(out, tab_topframe) }
+                || !out.line(c"let &splitbelow = s:save_splitbelow")
+                || !out.line(c"let &splitright = s:save_splitright"))
+        {
+            return false;
+        }
+
+        // Can the window sizes be restored -- that is, was no window
+        // omitted? And which window number is the current one?
+        let mut nr = 0;
+        let mut cnr = 1;
+        for wp in windows_in_tab(tab).map(Win::raw) {
+            if unsafe { ses_do_win(wp) } {
+                nr += 1;
+            } else if !unsafe { (*wp).w_floating } {
+                restore_size = false;
+            }
+            if curwin.get() == wp {
+                cnr = nr;
+            }
+        }
+
+        if tab_firstwin
+            .and_then(WinId::get)
+            .is_some_and(|w| w.next().is_some())
+        {
+            // Go to the first window, then pin 'winheight'/'winwidth' to
+            // 1 so that moving between windows does not resize them --
+            // before restoring the views, so that the topline and the
+            // cursor can be set. Done again at the end.
+            // 'winminheight'/'winminwidth' go to 0 as well, or a user
+            // 'winheight' would make this an error.
+            if !out.line(c"wincmd t") {
+                return false;
+            }
+            if !*restore_height_width
+                && (!out.line(c"let s:save_winminheight = &winminheight")
+                    || !out.line(c"let s:save_winminwidth = &winminwidth"))
+            {
+                return false;
+            }
+            if !out.line(c"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1")
+            {
+                return false;
+            }
+            *restore_height_width = true;
+        }
+        if nr > 1 && !unsafe { ses_winsizes(out, restore_size, tab) } {
+            return false;
+        }
+
+        // The tab-local working directory goes before the windows, so a
+        // window-local one can override it.
+        if opts.has(kOptSsopFlagCurdir) && !tab.tp_localdir.is_null() {
+            if !out.puts(c"tcd ") || !unsafe { ses_put_fname(out, tab.tp_localdir) } || !out.eol() {
+                return false;
+            }
+            did_lcd.set(true);
+        }
+
+        // Each window's view.
+        for wp in windows_in_tab(tab).map(Win::raw) {
+            if unsafe { ses_do_win(wp) } {
+                if !unsafe { put_view(out, wp, tab.raw(), wp != edited_win, opts, cur_arg_idx) } {
+                    return false;
+                }
+                if nr > 1 && !out.line(c"wincmd w") {
+                    return false;
+                }
+                next_arg_idx = unsafe { (*wp).w_arg_idx };
+            }
+        }
+        // The argument index is zero in the first tab page and has to be
+        // set per window; for later tab pages it is the window the
+        // `:tabedit` happened in.
+        cur_arg_idx = next_arg_idx;
+
+        // Put the cursor back in the current window when it is not the
+        // first.
+        if cnr > 1 && !out.write(format_args!("{cnr}wincmd w\n")) {
+            return false;
+        }
+        // And restore the sizes again: jumping around gives the current
+        // window a minimum size the others may not have.
+        if nr > 1 && !unsafe { ses_winsizes(out, restore_size, tab) } {
+            return false;
+        }
+
+        if !with_tabs {
+            break;
+        }
+        next = tab.next();
     }
     true
 }
@@ -451,34 +446,34 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
         return out.line(c"wincmd =");
     }
     // SAFETY: caller contract; `topframe` is the current tab's frame tree.
-    unsafe {
-        let mut n = 0;
-        for wp in windows_in_tab(tab).map(Win::raw) {
-            if ses_do_win(wp) {
-                n += 1;
-                // Restore the height when the window is not full height.
-                if (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height
-                    < (*topframe.get()).fr_height
-                    && !out.write(format_args!(
-                        "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
-                        (*wp).w_height as int64_t,
-                        Rows.get() as int64_t / 2,
-                        Rows.get() as int64_t,
-                    ))
-                {
-                    return false;
-                }
-                // And the width when it is not full width.
-                if (*wp).w_width < Columns.get()
-                    && !out.write(format_args!(
-                        "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
-                        (*wp).w_width as int64_t,
-                        Columns.get() as int64_t / 2,
-                        Columns.get() as int64_t,
-                    ))
-                {
-                    return false;
-                }
+    let mut n = 0;
+    for wp in windows_in_tab(tab).map(Win::raw) {
+        if unsafe { ses_do_win(wp) } {
+            n += 1;
+            // Restore the height when the window is not full height.
+            if unsafe { (*wp).w_height }
+                + unsafe { (*wp).w_hsep_height }
+                + unsafe { (*wp).w_status_height }
+                < unsafe { (*topframe.get()).fr_height }
+                && !out.write(format_args!(
+                    "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
+                    unsafe { (*wp).w_height } as int64_t,
+                    Rows.get() as int64_t / 2,
+                    Rows.get() as int64_t,
+                ))
+            {
+                return false;
+            }
+            // And the width when it is not full width.
+            if unsafe { (*wp).w_width } < Columns.get()
+                && !out.write(format_args!(
+                    "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
+                    unsafe { (*wp).w_width } as int64_t,
+                    Columns.get() as int64_t / 2,
+                    Columns.get() as int64_t,
+                ))
+            {
+                return false;
             }
         }
     }
@@ -492,49 +487,47 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
 /// `fr` is a live frame.
 unsafe fn ses_win_rec(out: SessionFile, fr: *mut frame_T) -> bool {
     // SAFETY: caller contract; the frame tree is live.
-    unsafe {
-        if (*fr).fr_layout == FR_LEAF {
-            return true;
-        }
-        let column = (*fr).fr_layout == FR_COL;
+    if unsafe { (*fr).fr_layout } == FR_LEAF {
+        return true;
+    }
+    let column = unsafe { (*fr).fr_layout } == FR_COL;
 
-        // Find the first frame that is not skipped, then create a window for
-        // each one after it -- the first window is already there.
-        let mut count = 0;
-        let mut frc = ses_skipframe((*fr).fr_child);
-        if !frc.is_null() {
-            loop {
-                frc = ses_skipframe((*frc).fr_next);
-                if frc.is_null() {
-                    break;
-                }
-                // Make the window as big as possible, for room to split.
-                if !out.puts(c"wincmd _ | wincmd |")
-                    || !out.eol()
-                    || !out.line(if column { c"split" } else { c"vsplit" })
-                {
-                    return false;
-                }
-                count += 1;
+    // Find the first frame that is not skipped, then create a window for
+    // each one after it -- the first window is already there.
+    let mut count = 0;
+    let mut frc = unsafe { ses_skipframe((*fr).fr_child) };
+    if !frc.is_null() {
+        loop {
+            frc = unsafe { ses_skipframe((*frc).fr_next) };
+            if frc.is_null() {
+                break;
             }
-        }
-
-        // Go back to the first window.
-        if count > 0 {
-            let direction = if column { 'k' } else { 'h' };
-            if !out.write(format_args!("{count}wincmd {direction}\n")) {
+            // Make the window as big as possible, for room to split.
+            if !out.puts(c"wincmd _ | wincmd |")
+                || !out.eol()
+                || !out.line(if column { c"split" } else { c"vsplit" })
+            {
                 return false;
             }
+            count += 1;
         }
+    }
 
-        // Then recurse into each window of this column or row.
-        frc = ses_skipframe((*fr).fr_child);
-        while !frc.is_null() {
-            ses_win_rec(out, frc);
-            frc = ses_skipframe((*frc).fr_next);
-            if !frc.is_null() && !out.line(c"wincmd w") {
-                return false;
-            }
+    // Go back to the first window.
+    if count > 0 {
+        let direction = if column { 'k' } else { 'h' };
+        if !out.write(format_args!("{count}wincmd {direction}\n")) {
+            return false;
+        }
+    }
+
+    // Then recurse into each window of this column or row.
+    frc = unsafe { ses_skipframe((*fr).fr_child) };
+    while !frc.is_null() {
+        unsafe { ses_win_rec(out, frc) };
+        frc = unsafe { ses_skipframe((*frc).fr_next) };
+        if !frc.is_null() && !out.line(c"wincmd w") {
+            return false;
         }
     }
     true
@@ -546,13 +539,11 @@ unsafe fn ses_win_rec(out: SessionFile, fr: *mut frame_T) -> bool {
 /// `fr` is null or a live frame.
 unsafe fn ses_skipframe(fr: *mut frame_T) -> *mut frame_T {
     // SAFETY: caller contract.
-    unsafe {
-        let mut frc = fr;
-        while !frc.is_null() && !ses_do_frame(frc) {
-            frc = (*frc).fr_next;
-        }
-        frc
+    let mut frc = fr;
+    while !frc.is_null() && !unsafe { ses_do_frame(frc) } {
+        frc = unsafe { (*frc).fr_next };
     }
+    frc
 }
 
 /// Whether frame `fr` holds a window worth saving anywhere below it.
@@ -561,19 +552,17 @@ unsafe fn ses_skipframe(fr: *mut frame_T) -> *mut frame_T {
 /// `fr` is a live frame.
 unsafe fn ses_do_frame(fr: *const frame_T) -> bool {
     // SAFETY: caller contract.
-    unsafe {
-        if (*fr).fr_layout == FR_LEAF {
-            return ses_do_win((*fr).fr_win);
-        }
-        let mut frc = (*fr).fr_child;
-        while !frc.is_null() {
-            if ses_do_frame(frc) {
-                return true;
-            }
-            frc = (*frc).fr_next;
-        }
-        false
+    if unsafe { (*fr).fr_layout } == FR_LEAF {
+        return unsafe { ses_do_win((*fr).fr_win) };
     }
+    let mut frc = unsafe { (*fr).fr_child };
+    while !frc.is_null() {
+        if unsafe { ses_do_frame(frc) } {
+            return true;
+        }
+        frc = unsafe { (*frc).fr_next };
+    }
+    false
 }
 
 /// Write the `g:` variables 'sessionoptions' calls sessionable: the Number,
@@ -586,43 +575,43 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     // SAFETY: caller contract. The hashtab walk is upstream's: skip the
     // empty and the tombstone slots, and step back from the key to the item
     // it is embedded in.
-    unsafe {
-        let ht = &raw mut (*get_globvar_dict()).dv_hashtab;
-        let mut todo = (*ht).ht_used;
-        let mut hi: *mut hashitem_T = (*ht).ht_array;
-        while todo != 0 {
-            let key_ptr = (*hi).hi_key;
-            let live = !key_ptr.is_null() && key_ptr != (&raw const hash_removed).cast_mut().cast();
-            if !live {
-                hi = hi.offset(1);
-                continue;
+    let ht = unsafe { &raw mut (*get_globvar_dict()).dv_hashtab };
+    let mut todo = unsafe { (*ht).ht_used };
+    let mut hi: *mut hashitem_T = unsafe { (*ht).ht_array };
+    while todo != 0 {
+        let key_ptr = unsafe { (*hi).hi_key };
+        let live = !key_ptr.is_null() && key_ptr != (&raw const hash_removed).cast_mut().cast();
+        if !live {
+            hi = unsafe { hi.offset(1) };
+            continue;
+        }
+        todo -= 1;
+        let item = unsafe { key_ptr.byte_sub(DI_KEY_OFFSET) }.cast::<dictitem_T>();
+        let key = (unsafe { &raw mut (*item).di_key }).cast::<c_char>();
+        let kind = unsafe { (*item).di_tv.v_type };
+        let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
+        if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
+            if !unsafe { put_session_global(out, key, kind, &raw mut (*item).di_tv) } {
+                return false;
             }
-            todo -= 1;
-            let item = key_ptr.byte_sub(DI_KEY_OFFSET).cast::<dictitem_T>();
-            let key = (&raw mut (*item).di_key).cast::<c_char>();
-            let kind = (*item).di_tv.v_type;
-            let sessionable = var_flavour(key) == VAR_FLAVOUR_SESSION;
-            if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
-                if !put_session_global(out, key, kind, &raw mut (*item).di_tv) {
-                    return false;
-                }
-            } else if kind == VAR_FLOAT && sessionable {
-                let f = (*item).di_tv.vval.v_float;
-                let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
-                if fprintf(
+        } else if kind == VAR_FLOAT && sessionable {
+            let f = unsafe { (*item).di_tv.vval.v_float };
+            let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
+            if unsafe {
+                fprintf(
                     out.raw(),
                     c"let %s = %c%f".as_ptr(),
                     key,
                     sign,
                     if f < 0.0 { -f } else { f },
-                ) < 0
-                    || !out.eol()
-                {
-                    return false;
-                }
+                )
+            } < 0
+                || !out.eol()
+            {
+                return false;
             }
-            hi = hi.offset(1);
         }
+        hi = unsafe { hi.offset(1) };
     }
     true
 }
@@ -645,27 +634,25 @@ unsafe fn put_session_global(
 ) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; `escaped` is owned and freed here.
-    unsafe {
-        let escaped = vim_strsave_escaped(numbuf.string(tv), c"\\\"\n\r".as_ptr());
-        let mut t = escaped;
-        while *t != NUL as c_char {
-            if *t == b'\n' as c_char {
-                *t = b'n' as c_char;
-            } else if *t == b'\r' as c_char {
-                *t = b'r' as c_char;
-            }
-            t = t.offset(1);
+    let escaped = unsafe { vim_strsave_escaped(numbuf.string(tv), c"\\\"\n\r".as_ptr()) };
+    let mut t = escaped;
+    while unsafe { *t } != NUL as c_char {
+        if unsafe { *t } == b'\n' as c_char {
+            unsafe { *t = b'n' as c_char };
+        } else if unsafe { *t } == b'\r' as c_char {
+            unsafe { *t = b'r' as c_char };
         }
-        // A String is quoted; a Number is surrounded by spaces instead.
-        let quote = if kind == VAR_STRING { c"\"" } else { c" " };
-        let ok = out.puts(c"let ")
-            && out.bytes(key)
-            && out.puts(c" = ")
-            && out.puts(quote)
-            && out.bytes(escaped)
-            && out.puts(quote)
-            && out.eol();
-        xfree(escaped.cast::<c_void>());
-        ok
+        t = unsafe { t.offset(1) };
     }
+    // A String is quoted; a Number is surrounded by spaces instead.
+    let quote = if kind == VAR_STRING { c"\"" } else { c" " };
+    let ok = out.puts(c"let ")
+        && unsafe { out.bytes(key) }
+        && out.puts(c" = ")
+        && out.puts(quote)
+        && unsafe { out.bytes(escaped) }
+        && out.puts(quote)
+        && out.eol();
+    unsafe { xfree(escaped.cast::<c_void>()) };
+    ok
 }

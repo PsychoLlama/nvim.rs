@@ -63,31 +63,31 @@ pub(super) unsafe fn prepare_assert_error() -> garray_T {
     let mut ga = empty_garray();
     let gap = &raw mut ga;
     // SAFETY: the local garray, and the `estack_sfile` allocation freed here.
-    unsafe {
-        let sname = estack_sfile(ESTACK_NONE);
-        ga_init(gap, 1, 100);
-        let lnum = sourcing_lnum();
-        if !sname.is_null() {
-            ga_concat(gap, sname);
-            if lnum > 0 {
-                ga_concat(gap, c" ".as_ptr());
-            }
-        }
+    let sname = unsafe { estack_sfile(ESTACK_NONE) };
+    unsafe { ga_init(gap, 1, 100) };
+    let lnum = sourcing_lnum();
+    if !sname.is_null() {
+        unsafe { ga_concat(gap, sname) };
         if lnum > 0 {
-            let mut buf = [0 as c_char; NUMBUFLEN];
-            let buflen = vim_snprintf_safelen(
+            unsafe { ga_concat(gap, c" ".as_ptr()) };
+        }
+    }
+    if lnum > 0 {
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let buflen = unsafe {
+            vim_snprintf_safelen(
                 buf.as_mut_ptr(),
                 NUMBUFLEN,
                 c"line %ld".as_ptr(),
                 lnum as int64_t,
-            );
-            ga_concat_len(gap, buf.as_ptr(), buflen);
-        }
-        if !sname.is_null() || lnum > 0 {
-            ga_concat_lit(gap, c": ");
-        }
-        xfree(sname.cast());
+            )
+        };
+        unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
     }
+    if !sname.is_null() || lnum > 0 {
+        unsafe { ga_concat_lit(gap, c": ") };
+    }
+    unsafe { xfree(sname.cast()) };
     ga
 }
 
@@ -97,10 +97,8 @@ pub(super) unsafe fn prepare_assert_error() -> garray_T {
 /// `gap` is an open byte garray this call takes over.
 pub(super) unsafe fn report_assert_error(gap: *mut garray_T) {
     // SAFETY: the caller's garray.
-    unsafe {
-        assert_error(gap);
-        ga_clear(gap);
-    }
+    unsafe { assert_error(gap) };
+    unsafe { ga_clear(gap) };
 }
 
 // ---------------------------------------------------------------------------
@@ -116,36 +114,36 @@ pub(super) unsafe fn report_assert_error(gap: *mut garray_T) {
 /// `gap` is open and `p` has at least `clen` readable bytes.
 unsafe fn ga_concat_esc(gap: *mut garray_T, p: *const c_char, clen: c_int) {
     // SAFETY: the caller's garray and buffer.
-    unsafe {
-        if clen > 1 {
-            ga_concat_len(gap, p, clen as size_t);
-            return;
-        }
-        let byte = *p;
-        let escaped = match byte as u8 {
-            b'\x08' => Some(c"\\b"),
-            b'\x1b' => Some(c"\\e"),
-            b'\x0c' => Some(c"\\f"),
-            b'\n' => Some(c"\\n"),
-            b'\t' => Some(c"\\t"),
-            b'\r' => Some(c"\\r"),
-            b'\\' => Some(c"\\\\"),
-            _ => None,
-        };
-        if let Some(text) = escaped {
-            ga_concat_lit(gap, text);
-        } else if (byte as u8) < b' ' || byte as u8 == 0x7f {
-            let mut buf = [0 as c_char; NUMBUFLEN];
-            let buflen = vim_snprintf_safelen(
+    if clen > 1 {
+        unsafe { ga_concat_len(gap, p, clen as size_t) };
+        return;
+    }
+    let byte = unsafe { *p };
+    let escaped = match byte as u8 {
+        b'\x08' => Some(c"\\b"),
+        b'\x1b' => Some(c"\\e"),
+        b'\x0c' => Some(c"\\f"),
+        b'\n' => Some(c"\\n"),
+        b'\t' => Some(c"\\t"),
+        b'\r' => Some(c"\\r"),
+        b'\\' => Some(c"\\\\"),
+        _ => None,
+    };
+    if let Some(text) = escaped {
+        unsafe { ga_concat_lit(gap, text) };
+    } else if (byte as u8) < b' ' || byte as u8 == 0x7f {
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let buflen = unsafe {
+            vim_snprintf_safelen(
                 buf.as_mut_ptr(),
                 NUMBUFLEN,
                 c"\\x%02x".as_ptr(),
                 byte as c_int,
-            );
-            ga_concat_len(gap, buf.as_ptr(), buflen);
-        } else {
-            ga_append(gap, byte as u8);
-        }
+            )
+        };
+        unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
+    } else {
+        unsafe { ga_append(gap, byte as u8) };
     }
 }
 
@@ -156,35 +154,34 @@ unsafe fn ga_concat_esc(gap: *mut garray_T, p: *const c_char, clen: c_int) {
 /// `gap` is open; `str` is null or a C string.
 unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
     // SAFETY: the caller's garray and string; the walk stops at the NUL.
-    unsafe {
-        if str.is_null() {
-            ga_concat_lit(gap, c"NULL");
-            return;
+    if str.is_null() {
+        unsafe { ga_concat_lit(gap, c"NULL") };
+        return;
+    }
+    let mut p = str;
+    while unsafe { *p } != 0 {
+        let mut s = p;
+        let c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let clen = unsafe { s.offset_from(p) } as c_int;
+        let mut same_len = 1;
+        while unsafe { *s } != 0 && c == unsafe { utf_ptr2char(s) } {
+            same_len += 1;
+            s = unsafe { s.offset(clen as isize) };
         }
-        let mut p = str;
-        while *p != 0 {
-            let mut s = p;
-            let c = mb_cptr2char_adv(&raw mut s);
-            let clen = s.offset_from(p) as c_int;
-            let mut same_len = 1;
-            while *s != 0 && c == utf_ptr2char(s) {
-                same_len += 1;
-                s = s.offset(clen as isize);
-            }
-            if same_len > 20 {
-                ga_concat_lit(gap, c"\\[");
-                ga_concat_esc(gap, p, clen);
-                ga_concat_lit(gap, c" occurs ");
-                let mut buf = [0 as c_char; NUMBUFLEN];
-                let buflen =
-                    vim_snprintf_safelen(buf.as_mut_ptr(), NUMBUFLEN, c"%d".as_ptr(), same_len);
-                ga_concat_len(gap, buf.as_ptr(), buflen);
-                ga_concat_lit(gap, c" times]");
-                p = s;
-            } else {
-                ga_concat_esc(gap, p, clen);
-                p = p.offset(clen as isize);
-            }
+        if same_len > 20 {
+            unsafe { ga_concat_lit(gap, c"\\[") };
+            unsafe { ga_concat_esc(gap, p, clen) };
+            unsafe { ga_concat_lit(gap, c" occurs ") };
+            let mut buf = [0 as c_char; NUMBUFLEN];
+            let buflen = unsafe {
+                vim_snprintf_safelen(buf.as_mut_ptr(), NUMBUFLEN, c"%d".as_ptr(), same_len)
+            };
+            unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
+            unsafe { ga_concat_lit(gap, c" times]") };
+            p = s;
+        } else {
+            unsafe { ga_concat_esc(gap, p, clen) };
+            p = unsafe { p.offset(clen as isize) };
         }
     }
 }
@@ -202,18 +199,16 @@ unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
 /// `gap` is open and `opt_msg_tv` is a live typval.
 unsafe fn append_opt_msg(gap: *mut garray_T, opt_msg_tv: *mut typval_T) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    unsafe {
-        let msg = &*opt_msg_tv;
-        let blank =
-            msg.v_type == VAR_STRING && (msg.vval.v_string.is_null() || *msg.vval.v_string == 0);
-        if msg.v_type == VAR_UNKNOWN || blank {
-            return;
-        }
-        let tofree = encode_tv2echo(opt_msg_tv, ptr::null_mut());
-        ga_concat(gap, tofree);
-        xfree(tofree.cast());
-        ga_concat_lit(gap, c": ");
+    let msg = &unsafe { *opt_msg_tv };
+    let blank = msg.v_type == VAR_STRING
+        && (unsafe { msg.vval.v_string }.is_null() || unsafe { *msg.vval.v_string } == 0);
+    if msg.v_type == VAR_UNKNOWN || blank {
+        return;
     }
+    let tofree = unsafe { encode_tv2echo(opt_msg_tv, ptr::null_mut()) };
+    unsafe { ga_concat(gap, tofree) };
+    unsafe { xfree(tofree.cast()) };
+    unsafe { ga_concat_lit(gap, c": ") };
 }
 
 /// Whether `tv` holds a non-null dictionary.
@@ -236,39 +231,37 @@ unsafe fn is_dict(tv: *mut typval_T) -> bool {
 unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -> c_int {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
-    unsafe {
-        let exp_d = (*exp_tv).vval.v_dict;
-        let got_d = (*got_tv).vval.v_dict;
-        (*exp_tv).vval.v_dict = tv_dict_alloc();
-        (*got_tv).vval.v_dict = tv_dict_alloc();
+    let exp_d = unsafe { (*exp_tv).vval.v_dict };
+    let got_d = unsafe { (*got_tv).vval.v_dict };
+    unsafe { (*exp_tv).vval.v_dict = tv_dict_alloc() };
+    unsafe { (*got_tv).vval.v_dict = tv_dict_alloc() };
 
-        let mut omitted = 0;
-        for hi in tv_dict_iter(&*exp_d) {
-            let key = (*hi).hi_key;
-            let expected = &raw mut (*tv_dict_hi2di(hi)).di_tv;
-            let item2 = tv_dict_find(got_d, key, -1);
-            if !item2.is_null() && tv_equal(expected, &raw mut (*item2).di_tv, false) {
-                omitted += 1;
-                continue;
-            }
-            // Absent from the actual value, or present with a different one.
-            let key_len = strlen(key);
-            tv_dict_add_tv((*exp_tv).vval.v_dict, key, key_len, expected);
-            if !item2.is_null() {
-                tv_dict_add_tv((*got_tv).vval.v_dict, key, key_len, &raw mut (*item2).di_tv);
-            }
+    let mut omitted = 0;
+    for hi in tv_dict_iter(unsafe { &*exp_d }) {
+        let key = unsafe { (*hi).hi_key };
+        let expected = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
+        let item2 = unsafe { tv_dict_find(got_d, key, -1) };
+        if !item2.is_null() && unsafe { tv_equal(expected, &raw mut (*item2).di_tv, false) } {
+            omitted += 1;
+            continue;
         }
-
-        // Entries only the actual value has.
-        for hi in tv_dict_iter(&*got_d) {
-            let key = (*hi).hi_key;
-            if tv_dict_find(exp_d, key, -1).is_null() {
-                let got = &raw mut (*tv_dict_hi2di(hi)).di_tv;
-                tv_dict_add_tv((*got_tv).vval.v_dict, key, strlen(key), got);
-            }
+        // Absent from the actual value, or present with a different one.
+        let key_len = unsafe { strlen(key) };
+        unsafe { tv_dict_add_tv((*exp_tv).vval.v_dict, key, key_len, expected) };
+        if !item2.is_null() {
+            unsafe { tv_dict_add_tv((*got_tv).vval.v_dict, key, key_len, &raw mut (*item2).di_tv) };
         }
-        omitted
     }
+
+    // Entries only the actual value has.
+    for hi in tv_dict_iter(unsafe { &*got_d }) {
+        let key = unsafe { (*hi).hi_key };
+        if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
+            let got = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
+            unsafe { tv_dict_add_tv((*got_tv).vval.v_dict, key, strlen(key), got) };
+        }
+    }
+    omitted
 }
 
 /// Fill `gap` with what was expected and what arrived.
@@ -293,8 +286,8 @@ pub(super) unsafe fn fill_assert_error(
 
     // SAFETY: the caller's garray and typvals; each `encode_tv2*` allocation
     // is freed where it is made.
+    unsafe { append_opt_msg(gap, opt_msg_tv) };
     unsafe {
-        append_opt_msg(gap, opt_msg_tv);
         ga_concat_lit(
             gap,
             match atype {
@@ -302,28 +295,31 @@ pub(super) unsafe fn fill_assert_error(
                 AssertType::NotEqual => c"Expected not equal to ",
                 _ => c"Expected ",
             },
-        );
+        )
+    };
 
-        if exp_str.is_null() {
-            if atype != AssertType::NotEqual && is_dict(exp_tv) && is_dict(got_tv) {
-                did_copy = true;
-                omitted = prune_equal_dict_items(exp_tv, got_tv);
-            }
-            let tofree = encode_tv2string(exp_tv, ptr::null_mut());
-            ga_concat_shorten_esc(gap, tofree);
-            xfree(tofree.cast());
-        } else {
-            let quoted = atype == AssertType::Fails;
-            if quoted {
-                ga_concat_lit(gap, c"'");
-            }
-            ga_concat_shorten_esc(gap, exp_str);
-            if quoted {
-                ga_concat_lit(gap, c"'");
-            }
+    if exp_str.is_null() {
+        if atype != AssertType::NotEqual && unsafe { is_dict(exp_tv) } && unsafe { is_dict(got_tv) }
+        {
+            did_copy = true;
+            omitted = unsafe { prune_equal_dict_items(exp_tv, got_tv) };
         }
+        let tofree = unsafe { encode_tv2string(exp_tv, ptr::null_mut()) };
+        unsafe { ga_concat_shorten_esc(gap, tofree) };
+        unsafe { xfree(tofree.cast()) };
+    } else {
+        let quoted = atype == AssertType::Fails;
+        if quoted {
+            unsafe { ga_concat_lit(gap, c"'") };
+        }
+        unsafe { ga_concat_shorten_esc(gap, exp_str) };
+        if quoted {
+            unsafe { ga_concat_lit(gap, c"'") };
+        }
+    }
 
-        if atype != AssertType::NotEqual {
+    if atype != AssertType::NotEqual {
+        unsafe {
             ga_concat_lit(
                 gap,
                 match atype {
@@ -331,14 +327,16 @@ pub(super) unsafe fn fill_assert_error(
                     AssertType::NotMatch => c" does match ",
                     _ => c" but got ",
                 },
-            );
-            let tofree = encode_tv2string(got_tv, ptr::null_mut());
-            ga_concat_shorten_esc(gap, tofree);
-            xfree(tofree.cast());
+            )
+        };
+        let tofree = unsafe { encode_tv2string(got_tv, ptr::null_mut()) };
+        unsafe { ga_concat_shorten_esc(gap, tofree) };
+        unsafe { xfree(tofree.cast()) };
 
-            if omitted != 0 {
-                let mut buf = [0 as c_char; 100];
-                let buflen = vim_snprintf_safelen(
+        if omitted != 0 {
+            let mut buf = [0 as c_char; 100];
+            let buflen = unsafe {
+                vim_snprintf_safelen(
                     buf.as_mut_ptr(),
                     buf.len(),
                     c" - %d equal item%s omitted".as_ptr(),
@@ -348,14 +346,14 @@ pub(super) unsafe fn fill_assert_error(
                     } else {
                         c"s".as_ptr()
                     },
-                );
-                ga_concat_len(gap, buf.as_ptr(), buflen);
-            }
+                )
+            };
+            unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
         }
+    }
 
-        if did_copy {
-            tv_clear(exp_tv);
-            tv_clear(got_tv);
-        }
+    if did_copy {
+        unsafe { tv_clear(exp_tv) };
+        unsafe { tv_clear(got_tv) };
     }
 }

@@ -38,21 +38,19 @@ pub unsafe fn mb_utflen(
     codepoints: *mut size_t,
     codeunits: *mut size_t,
 ) {
-    unsafe {
-        let mut count: size_t = 0;
-        let mut surrogate_pairs: size_t = 0;
-        let mut i: size_t = 0;
-        while i < len {
-            let (c, clen) = char_at(s, i, len);
-            count += 1;
-            if c > 0xffff {
-                surrogate_pairs += 1;
-            }
-            i += clen;
+    let mut count: size_t = 0;
+    let mut surrogate_pairs: size_t = 0;
+    let mut i: size_t = 0;
+    while i < len {
+        let (c, clen) = unsafe { char_at(s, i, len) };
+        count += 1;
+        if c > 0xffff {
+            surrogate_pairs += 1;
         }
-        *codepoints += count;
-        *codeunits += count + surrogate_pairs;
+        i += clen;
     }
+    unsafe { *codepoints += count };
+    unsafe { *codeunits += count + surrogate_pairs };
 }
 
 /// The byte offset just past the character at index `index`, counted in
@@ -67,25 +65,23 @@ pub unsafe fn mb_utf_index_to_bytes(
     index: size_t,
     use_utf16_units: bool,
 ) -> ssize_t {
-    unsafe {
-        if index == 0 {
-            return 0;
-        }
-        let mut count: size_t = 0;
-        let mut i: size_t = 0;
-        while i < len {
-            let (c, clen) = char_at(s, i, len);
-            count += 1;
-            if use_utf16_units && c > 0xffff {
-                count += 1;
-            }
-            if count >= index {
-                return (i + clen) as ssize_t;
-            }
-            i += clen;
-        }
-        -1
+    if index == 0 {
+        return 0;
     }
+    let mut count: size_t = 0;
+    let mut i: size_t = 0;
+    while i < len {
+        let (c, clen) = unsafe { char_at(s, i, len) };
+        count += 1;
+        if use_utf16_units && c > 0xffff {
+            count += 1;
+        }
+        if count >= index {
+            return (i + clen) as ssize_t;
+        }
+        i += clen;
+    }
+    -1
 }
 
 /// The codepoint at byte `i` of `s[..len]`, and how many bytes it occupies.
@@ -97,16 +93,14 @@ pub unsafe fn mb_utf_index_to_bytes(
 ///
 /// `s` must point at `len` readable bytes and `i` must be less than `len`.
 unsafe fn char_at(s: *const c_char, i: size_t, len: size_t) -> (c_int, size_t) {
-    unsafe {
-        let p = s.add(i);
-        let clen = utf_ptr2len_len(p, (len - i) as c_int) as size_t;
-        let c = if clen > 1 {
-            utf_ptr2char(p)
-        } else {
-            *p as u8 as c_int
-        };
-        (c, clen)
-    }
+    let p = unsafe { s.add(i) };
+    let clen = unsafe { utf_ptr2len_len(p, (len - i) as c_int) } as size_t;
+    let c = if clen > 1 {
+        unsafe { utf_ptr2char(p) }
+    } else {
+        unsafe { *p as u8 as c_int }
+    };
+    (c, clen)
 }
 
 /// Does a cluster always end at this character, whatever precedes it?
@@ -146,92 +140,89 @@ fn boundclass(code: int32_t) -> c_int {
 ///
 /// `base` must point at the start of a NUL-terminated string and `p` into it.
 pub unsafe fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int {
-    unsafe {
-        if (*p_in as u8) < 0x80 {
-            return 0;
-        }
-        let base = base_in as *const u8;
-        let p = p_in as *const u8;
-
-        // Walk back over continuation bytes to the lead byte of a sequence,
-        // stopping at `base` or after a sequence's worth. It may stop *on* a
-        // continuation byte when the sequence is overlong; the caller finds
-        // that out by decoding. A closure, because it inherits this block.
-        let step_back_to_lead = |mut from: *const u8, measure_from: *const u8| {
-            while from > base
-                && utf_is_trail_byte(*from)
-                && measure_from.offset_from(from) < MAX_SEQUENCE
-            {
-                from = from.offset(-1);
-            }
-            from
-        };
-
-        let mut start = step_back_to_lead(p, p);
-        let last_len = utf8len_tab[*start as usize];
-        let mut cur_code = utf_ptr2char_info_impl(start, last_len as uintptr_t);
-        if cur_code < 0 || p.offset_from(start) >= last_len as isize {
-            return 0; // `p` is part of an illegal sequence
-        }
-        // Nothing past the character `p` sits in may be read while scanning
-        // forwards: beyond it the bytes have not been validated.
-        let safe_end = start.offset(last_len as isize);
-
-        let mut cur_bc = boundclass(cur_code);
-        if always_break(cur_bc) || start == base {
-            return p.offset_from(start) as c_int;
-        }
-
-        // Backtrack over the cluster. This can go too far -- the backwards
-        // walk cannot see where a cluster *ends* -- which the forwards scan
-        // below corrects.
-        let p_start = start;
-        let mut cur_pos = start;
-        while *start.offset(-1) != 0 {
-            start = start.offset(-1);
-            if *start < 0x80 {
-                break; // ASCII never combines: done
-            }
-            start = step_back_to_lead(start, cur_pos);
-
-            let prev_len = utf8len_tab[*start as usize] as c_int;
-            let prev_code = utf_ptr2char_info_impl(start, prev_len as uintptr_t);
-            if prev_code < 0 || (prev_len as isize) < cur_pos.offset_from(start) {
-                start = cur_pos; // resume at the valid sequence after the junk
-                break;
-            }
-            let prev_bc = boundclass(prev_code);
-            if always_break_two(prev_bc, cur_bc)
-                && !crate::arabic::arabic_combine(prev_code, cur_code)
-            {
-                start = cur_pos; // the previous character is not in this cluster
-                break;
-            }
-            if start == base {
-                break;
-            }
-            cur_pos = start;
-            cur_bc = prev_bc;
-            cur_code = prev_code;
-        }
-
-        // Never moved: `p` is inside the first character looked at.
-        if start == p_start && last_len as isize > p.offset_from(start) {
-            return p.offset_from(start) as c_int;
-        }
-
-        let mut q = start;
-        while q < p {
-            // Where the cluster *ends* does not matter; reaching `p`'s
-            // codepoint is enough.
-            let len = utfc_ptr2len_len(q as *const c_char, safe_end.offset_from(q) as c_int);
-            if q.offset(len as isize) > p {
-                return p.offset_from(q) as c_int;
-            }
-            q = q.offset(len as isize);
-        }
-        0
+    if (unsafe { *p_in } as u8) < 0x80 {
+        return 0;
     }
+    let base = base_in as *const u8;
+    let p = p_in as *const u8;
+
+    // Walk back over continuation bytes to the lead byte of a sequence,
+    // stopping at `base` or after a sequence's worth. It may stop *on* a
+    // continuation byte when the sequence is overlong; the caller finds
+    // that out by decoding. A closure, because it inherits this block.
+    let step_back_to_lead = |mut from: *const u8, measure_from: *const u8| {
+        while from > base
+            && utf_is_trail_byte(unsafe { *from })
+            && unsafe { measure_from.offset_from(from) } < MAX_SEQUENCE
+        {
+            from = unsafe { from.offset(-1) };
+        }
+        from
+    };
+
+    let mut start = step_back_to_lead(p, p);
+    let last_len = utf8len_tab[unsafe { *start } as usize];
+    let mut cur_code = unsafe { utf_ptr2char_info_impl(start, last_len as uintptr_t) };
+    if cur_code < 0 || unsafe { p.offset_from(start) } >= last_len as isize {
+        return 0; // `p` is part of an illegal sequence
+    }
+    // Nothing past the character `p` sits in may be read while scanning
+    // forwards: beyond it the bytes have not been validated.
+    let safe_end = unsafe { start.offset(last_len as isize) };
+
+    let mut cur_bc = boundclass(cur_code);
+    if always_break(cur_bc) || start == base {
+        return unsafe { p.offset_from(start) } as c_int;
+    }
+
+    // Backtrack over the cluster. This can go too far -- the backwards
+    // walk cannot see where a cluster *ends* -- which the forwards scan
+    // below corrects.
+    let p_start = start;
+    let mut cur_pos = start;
+    while unsafe { *start.offset(-1) } != 0 {
+        start = unsafe { start.offset(-1) };
+        if unsafe { *start } < 0x80 {
+            break; // ASCII never combines: done
+        }
+        start = step_back_to_lead(start, cur_pos);
+
+        let prev_len = utf8len_tab[unsafe { *start } as usize] as c_int;
+        let prev_code = unsafe { utf_ptr2char_info_impl(start, prev_len as uintptr_t) };
+        if prev_code < 0 || (prev_len as isize) < unsafe { cur_pos.offset_from(start) } {
+            start = cur_pos; // resume at the valid sequence after the junk
+            break;
+        }
+        let prev_bc = boundclass(prev_code);
+        if always_break_two(prev_bc, cur_bc) && !crate::arabic::arabic_combine(prev_code, cur_code)
+        {
+            start = cur_pos; // the previous character is not in this cluster
+            break;
+        }
+        if start == base {
+            break;
+        }
+        cur_pos = start;
+        cur_bc = prev_bc;
+        cur_code = prev_code;
+    }
+
+    // Never moved: `p` is inside the first character looked at.
+    if start == p_start && last_len as isize > unsafe { p.offset_from(start) } {
+        return unsafe { p.offset_from(start) } as c_int;
+    }
+
+    let mut q = start;
+    while q < p {
+        // Where the cluster *ends* does not matter; reaching `p`'s
+        // codepoint is enough.
+        let len = unsafe { utfc_ptr2len_len(q as *const c_char, safe_end.offset_from(q) as c_int) };
+        if unsafe { q.offset(len as isize) } > p {
+            return unsafe { p.offset_from(q) } as c_int;
+        }
+        q = unsafe { q.offset(len as isize) };
+    }
+    0
 }
 
 /// The character after `cur`, when the byte after it is not ASCII.
@@ -244,34 +235,32 @@ pub unsafe fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int
 /// `cur` must describe a character in a NUL-terminated string, and the byte
 /// after it must be `>= 0x80` — [`utfc_next`] guarantees both.
 pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
-    unsafe {
-        let mut prev_code = cur.chr.value;
-        let mut next = cur.ptr.offset(cur.chr.len as isize) as *mut u8;
-        let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-        debug_assert!(*next >= 0x80, "*next >= 0x80");
-        loop {
-            let next_len = utf8len_tab[*next as usize];
-            let next_code = utf_ptr2char_info_impl(next, next_len as uintptr_t);
-            if !utf_iscomposing(prev_code, next_code, &raw mut state) {
-                return StrCharInfo {
-                    ptr: next as *mut c_char,
-                    chr: CharInfo {
-                        value: next_code,
-                        len: if next_code < 0 { 1 } else { next_len as c_int },
-                    },
-                };
-            }
-            prev_code = next_code;
-            next = next.offset(next_len as isize);
-            if *next < 0x80 {
-                return StrCharInfo {
-                    ptr: next as *mut c_char,
-                    chr: CharInfo {
-                        value: *next as int32_t,
-                        len: 1,
-                    },
-                };
-            }
+    let mut prev_code = cur.chr.value;
+    let mut next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    debug_assert!(unsafe { *next } >= 0x80, "*next >= 0x80");
+    loop {
+        let next_len = utf8len_tab[unsafe { *next } as usize];
+        let next_code = unsafe { utf_ptr2char_info_impl(next, next_len as uintptr_t) };
+        if !unsafe { utf_iscomposing(prev_code, next_code, &raw mut state) } {
+            return StrCharInfo {
+                ptr: next as *mut c_char,
+                chr: CharInfo {
+                    value: next_code,
+                    len: if next_code < 0 { 1 } else { next_len as c_int },
+                },
+            };
+        }
+        prev_code = next_code;
+        next = unsafe { next.offset(next_len as isize) };
+        if unsafe { *next } < 0x80 {
+            return StrCharInfo {
+                ptr: next as *mut c_char,
+                chr: CharInfo {
+                    value: unsafe { *next } as int32_t,
+                    len: 1,
+                },
+            };
         }
     }
 }
@@ -284,12 +273,10 @@ pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
 /// `*fp` must point at a NUL-terminated string and `*tp` must have room for
 /// the character.
 pub unsafe fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char) {
-    unsafe {
-        let l = utfc_ptr2len(*fp) as size_t;
-        memmove(*tp as *mut c_void, *fp as *const c_void, l);
-        *tp = (*tp).add(l);
-        *fp = (*fp).add(l);
-    }
+    let l = unsafe { utfc_ptr2len(*fp) } as size_t;
+    unsafe { memmove(*tp as *mut c_void, *fp as *const c_void, l) };
+    unsafe { *tp = (*tp).add(l) };
+    unsafe { *fp = (*fp).add(l) };
 }
 
 /// How many bytes forward from `p` the next character starts, when `p` is in
@@ -299,13 +286,11 @@ pub unsafe fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char) {
 ///
 /// `base` must point at the start of a NUL-terminated string and `p` into it.
 pub unsafe fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
-    unsafe {
-        let head_off = utf_head_off(base, p);
-        if head_off == 0 {
-            return 0;
-        }
-        utfc_ptr2len(p.offset(-(head_off as isize))) - head_off
+    let head_off = unsafe { utf_head_off(base, p) };
+    if head_off == 0 {
+        return 0;
     }
+    unsafe { utfc_ptr2len(p.offset(-(head_off as isize))) - head_off }
 }
 
 /// Both ends of the codepoint covering `p`, as offsets from it.
@@ -328,39 +313,38 @@ pub unsafe fn utf_cp_bounds_len(
         begin_off: 0,
         end_off: 1,
     };
-    unsafe {
-        debug_assert!(base <= p_in && p_len > 0, "base <= p_in && p_len > 0");
-        let b = base as *const u8;
-        let p = p_in as *const u8;
-        if *p < 0x80 {
+    debug_assert!(base <= p_in && p_len > 0, "base <= p_in && p_len > 0");
+    let b = base as *const u8;
+    let p = p_in as *const u8;
+    if unsafe { *p } < 0x80 {
+        return JUST_THIS_BYTE;
+    }
+
+    // How far back the lead byte may be: never before `base`, and never
+    // more than a sequence's worth.
+    let max_first_off = -unsafe { p.offset_from(b) }.min(MB_MAXCHAR as isize - 1) as c_int;
+    let mut first_off: c_int = 0;
+    while utf_is_trail_byte(unsafe { *p.offset(first_off as isize) }) {
+        if first_off == max_first_off {
             return JUST_THIS_BYTE;
         }
+        first_off -= 1;
+    }
 
-        // How far back the lead byte may be: never before `base`, and never
-        // more than a sequence's worth.
-        let max_first_off = -p.offset_from(b).min(MB_MAXCHAR as isize - 1) as c_int;
-        let mut first_off: c_int = 0;
-        while utf_is_trail_byte(*p.offset(first_off as isize)) {
-            if first_off == max_first_off {
-                return JUST_THIS_BYTE;
-            }
-            first_off -= 1;
-        }
-
-        // The sequence has to be complete *and* within `p_len`.
-        let max_end_off = utf8len_tab[*p.offset(first_off as isize) as usize] as c_int + first_off;
-        if max_end_off <= 0 || max_end_off > p_len {
+    // The sequence has to be complete *and* within `p_len`.
+    let max_end_off =
+        utf8len_tab[unsafe { *p.offset(first_off as isize) } as usize] as c_int + first_off;
+    if max_end_off <= 0 || max_end_off > p_len {
+        return JUST_THIS_BYTE;
+    }
+    for end_off in 1..max_end_off {
+        if !utf_is_trail_byte(unsafe { *p.offset(end_off as isize) }) {
             return JUST_THIS_BYTE;
         }
-        for end_off in 1..max_end_off {
-            if !utf_is_trail_byte(*p.offset(end_off as isize)) {
-                return JUST_THIS_BYTE;
-            }
-        }
-        CharBoundsOff {
-            begin_off: -first_off as int8_t,
-            end_off: max_end_off as int8_t,
-        }
+    }
+    CharBoundsOff {
+        begin_off: -first_off as int8_t,
+        end_off: max_end_off as int8_t,
     }
 }
 
@@ -396,30 +380,28 @@ pub unsafe fn mb_adjust_cursor() {
 ///
 /// `win_` must be a live `win_T`.
 pub unsafe fn mb_check_adjust_col(win_: *mut c_void) {
-    unsafe {
-        let win = win_ as *mut win_T;
-        let oldcol = (*win).w_cursor.col;
-        if oldcol == 0 {
-            return;
+    let win = win_ as *mut win_T;
+    let oldcol = unsafe { (*win).w_cursor.col };
+    if oldcol == 0 {
+        return;
+    }
+    let p = unsafe { ml_get_buf((*win).w_buffer, (*win).w_cursor.lnum) };
+    let len = unsafe { strlen(p) } as colnr_T;
+    if len == 0 || oldcol < 0 {
+        unsafe { (*win).w_cursor.col = 0 };
+    } else {
+        if oldcol > len {
+            unsafe { (*win).w_cursor.col = len - 1 };
         }
-        let p = ml_get_buf((*win).w_buffer, (*win).w_cursor.lnum);
-        let len = strlen(p) as colnr_T;
-        if len == 0 || oldcol < 0 {
-            (*win).w_cursor.col = 0;
-        } else {
-            if oldcol > len {
-                (*win).w_cursor.col = len - 1;
-            }
-            (*win).w_cursor.col -= utf_head_off(p, p.offset((*win).w_cursor.col as isize));
-        }
-        let at_cursor = p.offset((*win).w_cursor.col as isize);
-        if (*win).w_cursor.coladd == 1
-            && *at_cursor as c_int != TAB
-            && vim_isprintc(utf_ptr2char(at_cursor))
-            && ptr2cells(at_cursor) > 1
-        {
-            (*win).w_cursor.coladd = 0;
-        }
+        unsafe { (*win).w_cursor.col -= utf_head_off(p, p.offset((*win).w_cursor.col as isize)) };
+    }
+    let at_cursor = unsafe { p.offset((*win).w_cursor.col as isize) };
+    if unsafe { (*win).w_cursor.coladd } == 1
+        && unsafe { *at_cursor } as c_int != TAB
+        && unsafe { vim_isprintc(utf_ptr2char(at_cursor)) }
+        && unsafe { ptr2cells(at_cursor) } > 1
+    {
+        unsafe { (*win).w_cursor.coladd = 0 };
     }
 }
 
@@ -430,12 +412,10 @@ pub unsafe fn mb_check_adjust_col(win_: *mut c_void) {
 ///
 /// `line` must point at the start of a NUL-terminated string and `p` into it.
 pub unsafe fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char {
-    unsafe {
-        if p <= line {
-            return p;
-        }
-        p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1))
+    if p <= line {
+        return p;
     }
+    unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) }
 }
 
 /// How many characters a NUL-terminated string holds. A null pointer is zero.
@@ -444,18 +424,16 @@ pub unsafe fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char {
 ///
 /// `str` must be null or point at a NUL-terminated string.
 pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
-    unsafe {
-        if str.is_null() {
-            return 0;
-        }
-        let mut p = str;
-        let mut count = 0;
-        while *p != NUL as c_char {
-            p = p.offset(utfc_ptr2len(p) as isize);
-            count += 1;
-        }
-        count
+    if str.is_null() {
+        return 0;
     }
+    let mut p = str;
+    let mut count = 0;
+    while unsafe { *p } != NUL as c_char {
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        count += 1;
+    }
+    count
 }
 
 /// [`mb_charlen`] over at most `len` bytes.
@@ -464,15 +442,13 @@ pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
 ///
 /// `str` must point at `len` readable bytes.
 pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
-    unsafe {
-        let mut p = str;
-        let mut count = 0;
-        while *p != NUL as c_char && p < str.offset(len as isize) {
-            p = p.offset(utfc_ptr2len(p) as isize);
-            count += 1;
-        }
-        count
+    let mut p = str;
+    let mut count = 0;
+    while unsafe { *p } != NUL as c_char && p < unsafe { str.offset(len as isize) } {
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        count += 1;
     }
+    count
 }
 
 /// `ptr` paired with its codepoint: the start of a character and the
@@ -483,11 +459,9 @@ pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
 /// `ptr` must point into a NUL-terminated string.
 #[inline(always)]
 pub unsafe fn utf_ptr2str_char_info(ptr: *mut c_char) -> StrCharInfo {
-    unsafe {
-        StrCharInfo {
-            ptr,
-            chr: utf_ptr2char_info(ptr),
-        }
+    StrCharInfo {
+        ptr,
+        chr: unsafe { utf_ptr2char_info(ptr) },
     }
 }
 
@@ -502,17 +476,15 @@ pub unsafe fn utf_ptr2str_char_info(ptr: *mut c_char) -> StrCharInfo {
 /// `cur.ptr` must point into a NUL-terminated string, at a character start.
 #[inline(always)]
 pub unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
-    unsafe {
-        let next = cur.ptr.offset(cur.chr.len as isize) as *mut u8;
-        if *next < 0x80 {
-            return StrCharInfo {
-                ptr: next as *mut c_char,
-                chr: CharInfo {
-                    value: *next as int32_t,
-                    len: 1,
-                },
-            };
-        }
-        utfc_next_impl(cur)
+    let next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
+    if unsafe { *next } < 0x80 {
+        return StrCharInfo {
+            ptr: next as *mut c_char,
+            chr: CharInfo {
+                value: unsafe { *next } as int32_t,
+                len: 1,
+            },
+        };
     }
+    unsafe { utfc_next_impl(cur) }
 }

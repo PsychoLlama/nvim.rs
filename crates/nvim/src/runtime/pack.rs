@@ -82,28 +82,26 @@ impl PackWork {
 /// `fname` must be a writable NUL-terminated path.
 unsafe fn package_root(fname: *mut c_char) -> *mut c_char {
     // SAFETY: `fname` is a NUL-terminated path this walk stays inside.
-    unsafe {
-        let mut p1 = get_past_head(fname);
-        let (mut p2, mut p3, mut p4) = (p1, p1, p1);
-        let mut p = p1;
-        while *p != 0 {
-            if vim_ispathsep_nocolon(*p as c_int) {
-                p4 = p3;
-                p3 = p2;
-                p2 = p1;
-                p1 = p;
-            }
-            p = p.add(utfc_ptr2len(p) as usize);
+    let mut p1 = unsafe { get_past_head(fname) };
+    let (mut p2, mut p3, mut p4) = (p1, p1, p1);
+    let mut p = p1;
+    while unsafe { *p } != 0 {
+        if vim_ispathsep_nocolon(unsafe { *p } as c_int) {
+            p4 = p3;
+            p3 = p2;
+            p2 = p1;
+            p1 = p;
         }
-        // Cut *after* the separator, so `fix_fname` is asked about a directory
-        // and expands its symlink.
-        let cut = p4.add(1);
-        let c = *cut;
-        *cut = 0;
-        let ffname = fix_fname(fname);
-        *cut = c;
-        ffname
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
+    // Cut *after* the separator, so `fix_fname` is asked about a directory
+    // and expands its symlink.
+    let cut = unsafe { p4.add(1) };
+    let c = unsafe { *cut };
+    unsafe { *cut = 0 };
+    let ffname = unsafe { fix_fname(fname) };
+    unsafe { *cut = c };
+    ffname
 }
 
 /// Where in 'runtimepath' a package and its `after/` directory belong.
@@ -142,8 +140,8 @@ unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option
                 buf.as_mut_ptr(),
                 MAXPATHL as size_t,
                 c",".as_ptr().cast_mut(),
-            );
-        }
+            )
+        };
         // SAFETY: `buf` is NUL-terminated; the `p[5]` reads are inside it
         // because `strstr` found five bytes of "after" there.
         let is_after = unsafe {
@@ -169,18 +167,16 @@ unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option
         }
         // SAFETY: `buf` has room for the separator (`copy_option_part` stopped
         // short of `MAXPATHL`), and `fix_fname` answers an owned string.
-        unsafe {
-            add_pathsep(buf.as_mut_ptr());
-            let rtp_ffname = fix_fname(buf.as_mut_ptr());
-            if rtp_ffname.is_null() {
-                return None;
-            }
-            if path_fnamencmp(rtp_ffname, ffname, fname_len) == 0 {
-                // Insert after this entry, and its comma.
-                insp = entry;
-            }
-            xfree(rtp_ffname.cast());
+        unsafe { add_pathsep(buf.as_mut_ptr()) };
+        let rtp_ffname = unsafe { fix_fname(buf.as_mut_ptr()) };
+        if rtp_ffname.is_null() {
+            return None;
         }
+        if unsafe { path_fnamencmp(rtp_ffname, ffname, fname_len) } == 0 {
+            // Insert after this entry, and its comma.
+            insp = entry;
+        }
+        unsafe { xfree(rtp_ffname.cast()) };
     }
 
     if insp.is_null() {
@@ -232,63 +228,65 @@ unsafe fn splice_rtp(
 
     // SAFETY: every write below stays inside `capacity`, which was sized from
     // the same three lengths. `insp` points into 'runtimepath'.
-    unsafe {
-        let mut keep = points.insp.offset_from(p_rtp.get()) as size_t;
-        let mut first_pos = keep;
-        memmove(new_rtp.cast(), p_rtp.get().cast(), keep);
-        let mut len = keep;
-        if *points.insp == 0 {
-            // Appending at the end: the comma goes before.
-            *new_rtp.add(len) = b',' as c_char;
-            len += 1;
-            first_pos += 1;
-        }
-        memmove(new_rtp.add(len).cast(), fname.cast(), addlen - 1);
-        len += addlen - 1;
-        if *points.insp != 0 {
-            *new_rtp.add(len) = b',' as c_char;
-            len += 1;
-        }
+    let mut keep = unsafe { points.insp.offset_from(p_rtp.get()) } as size_t;
+    let mut first_pos = keep;
+    unsafe { memmove(new_rtp.cast(), p_rtp.get().cast(), keep) };
+    let mut len = keep;
+    if unsafe { *points.insp } == 0 {
+        // Appending at the end: the comma goes before.
+        unsafe { *new_rtp.add(len) = b',' as c_char };
+        len += 1;
+        first_pos += 1;
+    }
+    unsafe { memmove(new_rtp.add(len).cast(), fname.cast(), addlen - 1) };
+    len += addlen - 1;
+    if unsafe { *points.insp } != 0 {
+        unsafe { *new_rtp.add(len) = b',' as c_char };
+        len += 1;
+    }
 
-        let mut after_pos = 0;
-        if afterlen > 0 && !points.after_insp.is_null() {
-            let keep_after = points.after_insp.offset_from(p_rtp.get()) as size_t;
+    let mut after_pos = 0;
+    if afterlen > 0 && !points.after_insp.is_null() {
+        let keep_after = unsafe { points.after_insp.offset_from(p_rtp.get()) } as size_t;
+        unsafe {
             memmove(
                 new_rtp.add(len).cast(),
                 p_rtp.get().add(keep).cast(),
                 keep_after - keep,
-            );
-            len += keep_after - keep;
-            memmove(new_rtp.add(len).cast(), afterdir.cast(), afterlen - 1);
-            len += afterlen - 1;
-            *new_rtp.add(len) = b',' as c_char;
-            len += 1;
-            keep = keep_after;
-            after_pos = keep_after;
-        }
+            )
+        };
+        len += keep_after - keep;
+        unsafe { memmove(new_rtp.add(len).cast(), afterdir.cast(), afterlen - 1) };
+        len += afterlen - 1;
+        unsafe { *new_rtp.add(len) = b',' as c_char };
+        len += 1;
+        keep = keep_after;
+        after_pos = keep_after;
+    }
 
-        if *p_rtp.get().add(keep) != 0 {
+    if unsafe { *p_rtp.get().add(keep) } != 0 {
+        unsafe {
             memmove(
                 new_rtp.add(len).cast(),
                 p_rtp.get().add(keep).cast(),
                 oldlen - keep + 1,
-            );
-        } else {
-            *new_rtp.add(len) = 0;
-        }
-
-        if afterlen > 0 && points.after_insp.is_null() {
-            // No `after/` entry to sit in front of: append it at the end.
-            after_pos = xstrlcat(new_rtp, c",".as_ptr(), capacity);
-            xstrlcat(new_rtp, afterdir, capacity);
-        }
-
-        Some(Spliced {
-            rtp: new_rtp,
-            first_pos,
-            after_pos,
-        })
+            )
+        };
+    } else {
+        unsafe { *new_rtp.add(len) = 0 };
     }
+
+    if afterlen > 0 && points.after_insp.is_null() {
+        // No `after/` entry to sit in front of: append it at the end.
+        after_pos = unsafe { xstrlcat(new_rtp, c",".as_ptr(), capacity) };
+        unsafe { xstrlcat(new_rtp, afterdir, capacity) };
+    }
+
+    Some(Spliced {
+        rtp: new_rtp,
+        first_pos,
+        after_pos,
+    })
 }
 
 /// Shift the tail of the cached search path up to make room for one entry
@@ -312,21 +310,21 @@ unsafe fn shift_up_and_insert(
     item: SearchPathItem,
 ) -> ssize_t {
     // SAFETY: every index touched is below `size`, which the caller grew.
-    unsafe {
-        while i >= gap - 1 {
-            let prev = i - gap;
-            if i > gap - 1 && (*path.items.offset(prev)).pos_in_rtp >= pos {
-                let moved = *path.items.offset(prev);
+    while i >= gap - 1 {
+        let prev = i - gap;
+        if i > gap - 1 && unsafe { (*path.items.offset(prev)).pos_in_rtp } >= pos {
+            let moved = unsafe { *path.items.offset(prev) };
+            unsafe {
                 *path.items.offset(i) = SearchPathItem {
                     pos_in_rtp: moved.pos_in_rtp + shift,
                     ..moved
-                };
-                i -= 1;
-                continue;
-            }
-            *path.items.offset(i) = item;
-            return i - 1;
+                }
+            };
+            i -= 1;
+            continue;
         }
+        unsafe { *path.items.offset(i) = item };
+        return i - 1;
     }
     i
 }
@@ -354,13 +352,13 @@ unsafe fn splice_cached_path(
     runtime_search_path.with_mut(|path| {
         // SAFETY: the two `kv_pushp`s below make the slots the shifting needs,
         // and nothing here reenters the cell.
-        unsafe {
-            kv_pushp(&mut path.size, &mut path.capacity, &mut path.items);
-            let mut i = path.size as ssize_t - 1;
-            if afterlen > 0 {
-                kv_pushp(&mut path.size, &mut path.capacity, &mut path.items);
-                i += 1;
-                i = shift_up_and_insert(
+        unsafe { kv_pushp(&mut path.size, &mut path.capacity, &mut path.items) };
+        let mut i = path.size as ssize_t - 1;
+        if afterlen > 0 {
+            unsafe { kv_pushp(&mut path.size, &mut path.capacity, &mut path.items) };
+            i += 1;
+            i = unsafe {
+                shift_up_and_insert(
                     path,
                     i,
                     2,
@@ -373,8 +371,10 @@ unsafe fn splice_cached_path(
                         has_lua: None,
                         pos_in_rtp: after_pos + addlen,
                     },
-                );
-            }
+                )
+            };
+        }
+        unsafe {
             shift_up_and_insert(
                 path,
                 i,
@@ -388,8 +388,8 @@ unsafe fn splice_cached_path(
                     has_lua: None,
                     pos_in_rtp: first_pos,
                 },
-            );
-        }
+            )
+        };
     });
 }
 
@@ -416,34 +416,38 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
     if let Some(points) = points {
         // SAFETY: `fname` is NUL-terminated; `afterdir` is owned and freed
         // below.
-        unsafe {
-            afterdir = concat_fnames(fname, c"after".as_ptr(), true);
-            // Does `{fname}/after` exist — and, for a bundle, hold anything?
-            let has_after = if is_pack {
-                pack_has_entries(afterdir)
-            } else {
-                os_isdir(afterdir)
-            };
-            let afterlen = if has_after { strlen(afterdir) + 1 } else { 0 };
-            let addlen = strlen(fname) + 1; // +1 for the comma
+        afterdir = unsafe { concat_fnames(fname, c"after".as_ptr(), true) };
+        // Does `{fname}/after` exist — and, for a bundle, hold anything?
+        let has_after = if is_pack {
+            unsafe { pack_has_entries(afterdir) }
+        } else {
+            unsafe { os_isdir(afterdir) }
+        };
+        let afterlen = if has_after {
+            unsafe { strlen(afterdir) + 1 }
+        } else {
+            0
+        };
+        let addlen = unsafe { strlen(fname) } + 1; // +1 for the comma
 
-            if let Some(spliced) = splice_rtp(fname, afterdir, addlen, afterlen, &points) {
-                let was_valid = runtime_search_path_valid.get();
-                set_option_value_give_err(
-                    kOptRuntimepath,
-                    OptVal {
-                        type_0: kOptValTypeString,
-                        data: OptValData {
-                            string: cstr_as_string(spliced.rtp),
-                        },
+        if let Some(spliced) = unsafe { splice_rtp(fname, afterdir, addlen, afterlen, &points) } {
+            let was_valid = runtime_search_path_valid.get();
+            set_option_value_give_err(
+                kOptRuntimepath,
+                OptVal {
+                    type_0: kOptValTypeString,
+                    data: OptValData {
+                        string: unsafe { cstr_as_string(spliced.rtp) },
                     },
-                    OptionSetFlags::NONE,
-                );
-                debug_assert!(
-                    !runtime_search_path_valid.get(),
-                    "!runtime_search_path_valid"
-                );
-                if was_valid && !is_pack && runtime_search_path_ref.get().is_null() {
+                },
+                OptionSetFlags::NONE,
+            );
+            debug_assert!(
+                !runtime_search_path_valid.get(),
+                "!runtime_search_path_valid"
+            );
+            if was_valid && !is_pack && runtime_search_path_ref.get().is_null() {
+                unsafe {
                     splice_cached_path(
                         fname,
                         afterdir,
@@ -451,19 +455,17 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
                         afterlen,
                         spliced.first_pos,
                         spliced.after_pos,
-                    );
-                }
-                xfree(spliced.rtp.cast());
-                retval = OK;
+                    )
+                };
             }
+            unsafe { xfree(spliced.rtp.cast()) };
+            retval = OK;
         }
     }
 
     // SAFETY: both are this frame's own allocations.
-    unsafe {
-        xfree(ffname.cast());
-        xfree(afterdir.cast());
-    }
+    unsafe { xfree(ffname.cast()) };
+    unsafe { xfree(afterdir.cast()) };
     retval
 }
 
@@ -483,31 +485,29 @@ const FTDETECT_PATTERN: &CStr = c"%s/ftdetect/*";
 unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
     // SAFETY: `fname` is the caller's path; `ffname` and `pat` are owned and
     // freed below.
-    unsafe {
-        let ffname = fix_fname(fname);
-        let len = strlen(ffname) + PLUGIN_PATTERN.count_bytes() + 1;
-        let mut pat = xmallocz(len).cast::<c_char>();
-        let visitor = Visitor {
-            callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
-            cookie: ptr::null_mut(),
-        };
+    let ffname = unsafe { fix_fname(fname) };
+    let len = unsafe { strlen(ffname) } + PLUGIN_PATTERN.count_bytes() + 1;
+    let mut pat = unsafe { xmallocz(len) }.cast::<c_char>();
+    let visitor = Visitor {
+        callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
+        cookie: ptr::null_mut(),
+    };
 
-        vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname);
-        gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor);
+    unsafe { vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname) };
+    unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
 
-        // When runtime/filetype.lua has not been loaded yet, these scripts
-        // are found when it is.
-        let cmd = xstrdup(c"g:did_load_filetypes".as_ptr());
-        if opt && eval_to_number(cmd, false) > 0 {
-            do_cmdline_cmd(c"augroup filetypedetect".as_ptr());
-            vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname);
-            gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor);
-            do_cmdline_cmd(c"augroup END".as_ptr());
-        }
-        xfree(cmd.cast());
-        xfree(pat.cast());
-        xfree(ffname.cast());
+    // When runtime/filetype.lua has not been loaded yet, these scripts
+    // are found when it is.
+    let cmd = unsafe { xstrdup(c"g:did_load_filetypes".as_ptr()) };
+    if opt && unsafe { eval_to_number(cmd, false) } > 0 {
+        unsafe { do_cmdline_cmd(c"augroup filetypedetect".as_ptr()) };
+        unsafe { vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname) };
+        unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
+        unsafe { do_cmdline_cmd(c"augroup END".as_ptr()) };
     }
+    unsafe { xfree(cmd.cast()) };
+    unsafe { xfree(pat.cast()) };
+    unsafe { xfree(ffname.cast()) };
     OK
 }
 
@@ -527,10 +527,10 @@ unsafe fn rtp_has_entry(fname: *mut c_char) -> bool {
                 buf.as_mut_ptr(),
                 MAXPATHL as size_t,
                 c",".as_ptr().cast_mut(),
-            );
-            if path_fnamecmp(buf.as_mut_ptr(), fname) == 0 {
-                return true;
-            }
+            )
+        };
+        if unsafe { path_fnamecmp(buf.as_mut_ptr(), fname) } == 0 {
+            return true;
         }
     }
     false
@@ -622,8 +622,8 @@ pub unsafe fn add_pack_start_dirs() {
             RuntimeOpts::ALL | RuntimeOpts::DIR,
             Some(add_pack_start_dir as DoInRuntimepathCBFn),
             ptr::null_mut(),
-        );
-    }
+        )
+    };
 }
 
 /// Whether the wildcard pattern `buf` matches any directory at all.
@@ -635,17 +635,17 @@ unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
     let mut files: *mut *mut c_char = ptr::null_mut();
     let mut pat = [buf];
     // SAFETY: a one-element pattern array; the matches are ours to free.
-    unsafe {
-        if gen_expand_wildcards(
+    if unsafe {
+        gen_expand_wildcards(
             1,
             pat.as_mut_ptr(),
             &raw mut num_files,
             &raw mut files,
             ExpandFlags::DIR,
-        ) == OK
-        {
-            free_wild(num_files, files);
-        }
+        )
+    } == OK
+    {
+        unsafe { free_wild(num_files, files) };
     }
     num_files > 0
 }
@@ -670,15 +670,13 @@ unsafe fn add_pack_start_dir(
         for start_pat in START_PATTERNS {
             // SAFETY: the length test keeps both halves inside `buf`, and
             // `xstrlcpy`/`xstrlcat` NUL-terminate within the size given.
-            unsafe {
-                if strlen(fname) + start_pat.count_bytes() + 1 > MAXPATHL as size_t {
-                    continue;
-                }
-                xstrlcpy(buf.as_mut_ptr(), fname, MAXPATHL as size_t);
-                xstrlcat(buf.as_mut_ptr(), start_pat.as_ptr(), buf.len());
-                if pack_has_entries(buf.as_mut_ptr()) {
-                    add_pack_dir_to_rtp(buf.as_mut_ptr(), true);
-                }
+            if unsafe { strlen(fname) } + start_pat.count_bytes() + 1 > MAXPATHL as size_t {
+                continue;
+            }
+            unsafe { xstrlcpy(buf.as_mut_ptr(), fname, MAXPATHL as size_t) };
+            unsafe { xstrlcat(buf.as_mut_ptr(), start_pat.as_ptr(), buf.len()) };
+            if unsafe { pack_has_entries(buf.as_mut_ptr()) } {
+                unsafe { add_pack_dir_to_rtp(buf.as_mut_ptr(), true) };
             }
         }
         if !all {
@@ -692,8 +690,8 @@ unsafe fn add_pack_start_dir(
 pub unsafe fn load_start_packages() {
     did_source_packages.set(true);
     // SAFETY: `add_start_pack_plugins` takes a `PackWork` cookie.
-    unsafe {
-        for name in [c"pack/*/start/*", c"start/*"] {
+    for name in [c"pack/*/start/*", c"start/*"] {
+        unsafe {
             do_in_path(
                 p_pp.get(),
                 c"".as_ptr(),
@@ -701,10 +699,10 @@ pub unsafe fn load_start_packages() {
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 PackWork::Load.cookie(),
-            );
-        }
-        update_runtime_search_path_thread(false);
+            )
+        };
     }
+    unsafe { update_runtime_search_path_thread(false) };
 }
 
 /// `:packloadall[!]`.
@@ -717,10 +715,8 @@ pub unsafe fn ex_packloadall(eap: *mut exarg_T) {
     // load the plugins, so a plugin may use another plugin's autoload
     // directory.
     // SAFETY: neither reads the command.
-    unsafe {
-        add_pack_start_dirs();
-        load_start_packages();
-    }
+    unsafe { add_pack_start_dirs() };
+    unsafe { load_start_packages() };
 }
 
 /// Read all the plugin files at startup.
@@ -731,33 +727,33 @@ pub unsafe fn load_plugins() {
     let plugin_pattern = c"plugin/**/*".as_ptr().cast_mut();
     // SAFETY: the whole body is startup sequencing over NUL-terminated
     // patterns; `rtp_copy` is owned only when it was copied.
-    unsafe {
-        let mut rtp_copy = p_rtp.get();
-        if !did_source_packages.get() {
-            rtp_copy = xstrdup(p_rtp.get());
-            add_pack_start_dirs();
-        }
+    let mut rtp_copy = p_rtp.get();
+    if !did_source_packages.get() {
+        rtp_copy = unsafe { xstrdup(p_rtp.get()) };
+        unsafe { add_pack_start_dirs() };
+    }
 
-        // Not `source_runtime_vim_lua` yet, so `:packloadall` can be checked
-        // for below. NB: after this call "rtp_copy" may have been freed, if it
-        // was not copied.
+    // Not `source_runtime_vim_lua` yet, so `:packloadall` can be checked
+    // for below. NB: after this call "rtp_copy" may have been freed, if it
+    // was not copied.
+    unsafe {
         source_in_path_vim_lua(
             rtp_copy,
             plugin_pattern,
             RuntimeOpts::ALL | RuntimeOpts::NOAFTER,
-        );
-        time_msg_now(c"loading rtp plugins");
+        )
+    };
+    unsafe { time_msg_now(c"loading rtp plugins") };
 
-        // Only source "start" packages when a `:packloadall` has not already.
-        if !did_source_packages.get() {
-            xfree(rtp_copy.cast());
-            load_start_packages();
-        }
-        time_msg_now(c"loading packages");
-
-        source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER);
-        time_msg_now(c"loading after plugins");
+    // Only source "start" packages when a `:packloadall` has not already.
+    if !did_source_packages.get() {
+        unsafe { xfree(rtp_copy.cast()) };
+        unsafe { load_start_packages() };
     }
+    unsafe { time_msg_now(c"loading packages") };
+
+    unsafe { source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER) };
+    unsafe { time_msg_now(c"loading after plugins") };
 }
 
 /// `TIME_MSG()`: note a startup milestone, when `--startuptime` asked for one.
@@ -778,33 +774,35 @@ const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 /// `:packadd[!] {name}`.
 pub unsafe fn ex_packadd(eap: *mut exarg_T) {
     // SAFETY: `eap` is the live command; `pat` is owned and freed below.
-    unsafe {
-        let arg = (*eap).arg;
-        let len = PACKADD_PATTERN.count_bytes() + 1 + strlen(arg) + 5;
-        let pat = xmallocz(len).cast::<c_char>();
-        let cookie = if (*eap).forceit != 0 {
-            PackWork::AddDir
-        } else {
-            PackWork::Both
-        }
-        .cookie();
+    let arg = unsafe { (*eap).arg };
+    let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { strlen(arg) } + 5;
+    let pat = unsafe { xmallocz(len) }.cast::<c_char>();
+    let cookie = if unsafe { (*eap).forceit } != 0 {
+        PackWork::AddDir
+    } else {
+        PackWork::Both
+    }
+    .cookie();
 
-        // Only look under "start" when loading packages was not done yet.
-        let mut res = OK;
-        if !did_source_packages.get() {
-            vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"start".as_ptr(), arg);
-            res = do_in_path(
+    // Only look under "start" when loading packages was not done yet.
+    let mut res = OK;
+    if !did_source_packages.get() {
+        unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"start".as_ptr(), arg) };
+        res = unsafe {
+            do_in_path(
                 p_pp.get(),
                 c"".as_ptr(),
                 pat,
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 cookie,
-            );
-        }
+            )
+        };
+    }
 
-        // Give a "not found" error when nothing was found in 'start' or 'opt'.
-        vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"opt".as_ptr(), arg);
+    // Give a "not found" error when nothing was found in 'start' or 'opt'.
+    unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"opt".as_ptr(), arg) };
+    unsafe {
         do_in_path(
             p_pp.get(),
             c"".as_ptr(),
@@ -812,9 +810,9 @@ pub unsafe fn ex_packadd(eap: *mut exarg_T) {
             RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(res == FAIL),
             Some(add_opt_pack_plugins as DoInRuntimepathCBFn),
             cookie,
-        );
+        )
+    };
 
-        update_runtime_search_path_thread(false);
-        xfree(pat.cast());
-    }
+    unsafe { update_runtime_search_path_thread(false) };
+    unsafe { xfree(pat.cast()) };
 }

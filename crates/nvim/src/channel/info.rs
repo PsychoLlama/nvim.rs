@@ -113,10 +113,8 @@ unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> typval_T {
     let mut tv = unknown_tv();
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.
-    unsafe {
-        let info = channel_info(id, arena);
-        object_to_vim(dict_obj(info), &raw mut tv, ptr::null_mut());
-    }
+    let info = unsafe { channel_info(id, arena) };
+    unsafe { object_to_vim(dict_obj(info), &raw mut tv, ptr::null_mut()) };
     debug_assert!(tv.v_type == VAR_DICT);
     tv
 }
@@ -145,11 +143,11 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
 
     // SAFETY: the caller's live channel; the arena owns everything the dict
     // points at until it is finished below.
+    debug_assert!(unsafe { (*chan).id } <= i64::MAX as uint64_t);
+    let mut arena: Arena = ARENA_EMPTY;
+    let mut tv = unsafe { info_tv((*chan).id, &raw mut arena) };
+    let str = unsafe { encode_tv2json(&raw mut tv, ptr::null_mut()) };
     unsafe {
-        debug_assert!((*chan).id <= i64::MAX as uint64_t);
-        let mut arena: Arena = ARENA_EMPTY;
-        let mut tv = info_tv((*chan).id, &raw mut arena);
-        let str = encode_tv2json(&raw mut tv, ptr::null_mut());
         logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
@@ -160,11 +158,11 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
             (*chan).id,
             source,
             str,
-        );
-        xfree(str.cast());
-        arena_mem_free(arena_finish(&raw mut arena));
-        channel_info_changed(chan, true);
-    }
+        )
+    };
+    unsafe { xfree(str.cast()) };
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { channel_info_changed(chan, true) };
 }
 
 /// `"script:line"` for whatever is executing, as an owned copy.
@@ -172,10 +170,8 @@ fn source_name_line() -> CString {
     let mut buf = [0 as c_char; IOSIZE as usize];
     // SAFETY: `eval_fmt_source_name_line` only `snprintf`s into the buffer
     // it is handed, so the result is NUL-terminated within `IOSIZE`.
-    unsafe {
-        eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize);
-        CStr::from_ptr(buf.as_ptr()).to_owned()
-    }
+    unsafe { eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize) };
+    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_owned()
 }
 
 /// Queues the `ChanOpen`/`ChanInfo` autocommand, if anything is listening.
@@ -193,38 +189,34 @@ pub unsafe fn channel_info_changed(chan: *mut Channel, new_chan: bool) {
     } as event_T;
     // SAFETY: the caller's live channel. The event carries the reference
     // taken here and `set_info_event` drops it.
-    unsafe {
-        if !has_event(event) {
-            return;
-        }
-        channel_incref(chan);
-        let mut ev = one_arg_event(Some(set_info_event), chan.cast());
-        ev.argv[1] = ptr::with_exposed_provenance_mut::<c_void>(event as usize);
-        multiqueue_put_event(main_loop_events(), ev);
+    if !has_event(event) {
+        return;
     }
+    unsafe { channel_incref(chan) };
+    let mut ev = one_arg_event(Some(set_info_event), chan.cast());
+    ev.argv[1] = ptr::with_exposed_provenance_mut::<c_void>(event as usize);
+    unsafe { multiqueue_put_event(main_loop_events(), ev) };
 }
 
 unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the channel and the event id
     // `channel_info_changed` queued it with, plus one reference to drop.
-    unsafe {
-        let chan = (*argv).cast::<Channel>();
-        let event = (*argv.add(1)).expose_provenance() as event_T;
+    let chan = unsafe { *argv }.cast::<Channel>();
+    let event = unsafe { *argv.add(1) }.expose_provenance() as event_T;
 
-        let mut save_v_event = save_v_event_T {
-            sve_did_save: false,
-            sve_hashtab: mem::zeroed::<hashtab_T>(),
-        };
-        let dict = get_v_event(&raw mut save_v_event);
-        let mut arena: Arena = ARENA_EMPTY;
-        let retval = info_tv((*chan).id, &raw mut arena);
-        tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict);
-        tv_dict_set_keys_readonly(dict);
-        apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, curbuf.get());
-        restore_v_event(dict, &raw mut save_v_event);
-        arena_mem_free(arena_finish(&raw mut arena));
-        channel_decref(chan);
-    }
+    let mut save_v_event = save_v_event_T {
+        sve_did_save: false,
+        sve_hashtab: unsafe { mem::zeroed::<hashtab_T>() },
+    };
+    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    let mut arena: Arena = ARENA_EMPTY;
+    let retval = unsafe { info_tv((*chan).id, &raw mut arena) };
+    unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict) };
+    unsafe { tv_dict_set_keys_readonly(dict) };
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, curbuf.get()) };
+    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { channel_decref(chan) };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,12 +229,10 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
 /// Called from the main thread with the registry live.
 pub unsafe fn channel_job_running(id: uint64_t) -> bool {
     // SAFETY: the caller's promise; the channel is only read.
-    unsafe {
-        let chan = find_channel(id);
-        !chan.is_null()
-            && (*chan).streamtype == kChannelStreamProc
-            && !proc_is_stopped(&*channel_proc(chan))
-    }
+    let chan = find_channel(id);
+    !chan.is_null()
+        && unsafe { (*chan).streamtype } == kChannelStreamProc
+        && !proc_is_stopped(&unsafe { *channel_proc(chan) })
 }
 
 /// What `nvim_get_chan_info()` reports. An unknown id answers with an empty
@@ -265,53 +255,57 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict {
             *info.items.add(info.size) = key_value_pair {
                 key: cstr_as_string(key.as_ptr()),
                 value,
-            };
-        }
+            }
+        };
         info.size += 1;
     };
 
     // SAFETY: `chan` is a live channel; the transport reads below are guarded
     // by its `streamtype`.
-    unsafe {
-        push(c"id", integer_obj((*chan).id as Integer));
+    push(c"id", integer_obj(unsafe { (*chan).id } as Integer));
 
-        let stream_desc = match (*chan).streamtype {
-            kChannelStreamProc => {
-                let proc = channel_proc(chan);
-                if (*proc).type_0 as c_int == kProcTypePty {
-                    let name = cstr_as_string(pty_proc_tty_name(channel_pty(chan)));
-                    push(c"pty", string_obj(arena_string(arena, name)));
-                }
-                push(c"argv", array_obj(argv_array((*proc).argv, arena)));
-                c"job"
+    let stream_desc = match unsafe { (*chan).streamtype } {
+        kChannelStreamProc => {
+            let proc = unsafe { channel_proc(chan) };
+            if unsafe { (*proc).type_0 } as c_int == kProcTypePty {
+                let name = unsafe { cstr_as_string(pty_proc_tty_name(channel_pty(chan))) };
+                push(c"pty", string_obj(unsafe { arena_string(arena, name) }));
             }
-            kChannelStreamStdio => c"stdio",
-            kChannelStreamStderr => c"stderr",
-            kChannelStreamInternal => {
-                push(c"internal", boolean_obj(true));
-                // An internal channel reports itself as a socket, because that
-                // is what it stands in for.
-                c"socket"
-            }
-            _ => c"socket",
-        };
-        push(c"stream", literal_obj(stream_desc));
+            push(
+                c"argv",
+                array_obj(unsafe { argv_array((*proc).argv, arena) }),
+            );
+            c"job"
+        }
+        kChannelStreamStdio => c"stdio",
+        kChannelStreamStderr => c"stderr",
+        kChannelStreamInternal => {
+            push(c"internal", boolean_obj(true));
+            // An internal channel reports itself as a socket, because that
+            // is what it stands in for.
+            c"socket"
+        }
+        _ => c"socket",
+    };
+    push(c"stream", literal_obj(stream_desc));
 
-        let mode_desc = if (*chan).is_rpc {
-            push(c"client", dict_obj((*chan).rpc.info));
-            c"rpc"
-        } else if (*chan).term.is_null() {
-            c"bytes"
-        } else {
-            let buf = buffer_obj(terminal_buf((*chan).term) as Integer);
-            // `buf` is the documented key; `buffer` is kept for older plugins.
-            push(c"buf", buf);
-            push(c"buffer", buf);
-            push(c"exitcode", integer_obj((*chan).exit_status as Integer));
-            c"terminal"
-        };
-        push(c"mode", literal_obj(mode_desc));
-    }
+    let mode_desc = if unsafe { (*chan).is_rpc } {
+        push(c"client", dict_obj(unsafe { (*chan).rpc.info }));
+        c"rpc"
+    } else if unsafe { (*chan).term }.is_null() {
+        c"bytes"
+    } else {
+        let buf = buffer_obj(unsafe { terminal_buf((*chan).term) } as Integer);
+        // `buf` is the documented key; `buffer` is kept for older plugins.
+        push(c"buf", buf);
+        push(c"buffer", buf);
+        push(
+            c"exitcode",
+            integer_obj(unsafe { (*chan).exit_status } as Integer),
+        );
+        c"terminal"
+    };
+    push(c"mode", literal_obj(mode_desc));
     info
 }
 
@@ -329,18 +323,16 @@ unsafe fn argv_array(args: *mut *mut c_char, arena: *mut Arena) -> Array {
     }
     // SAFETY: the caller's NULL-terminated vector, and an arena array sized
     // for exactly the arguments counted out of it.
-    unsafe {
-        let mut n = 0;
-        while !(*args.add(n)).is_null() {
-            n += 1;
-        }
-        let mut argv = arena_array(arena, n);
-        for i in 0..n {
-            *argv.items.add(i) = string_obj(cstr_as_string(*args.add(i)));
-        }
-        argv.size = n;
-        argv
+    let mut n = 0;
+    while !unsafe { *args.add(n) }.is_null() {
+        n += 1;
     }
+    let mut argv = arena_array(arena, n);
+    for i in 0..n {
+        unsafe { *argv.items.add(i) = string_obj(cstr_as_string(*args.add(i))) };
+    }
+    argv.size = n;
+    argv
 }
 
 /// Every channel's info, ordered by id.
@@ -355,12 +347,10 @@ pub unsafe fn channel_all_info(arena: *mut Arena) -> Array {
     // SAFETY: the arena array is sized for exactly as many entries as there
     // are ids, and the arena is a bump allocator, so building the dicts
     // leaves the array where it is.
-    unsafe {
-        let mut ret = arena_array(arena, ids.len());
-        for (i, id) in ids.iter().enumerate() {
-            *ret.items.add(i) = dict_obj(channel_info(*id, arena));
-        }
-        ret.size = ids.len();
-        ret
+    let mut ret = arena_array(arena, ids.len());
+    for (i, id) in ids.iter().enumerate() {
+        unsafe { *ret.items.add(i) = dict_obj(channel_info(*id, arena)) };
     }
+    ret.size = ids.len();
+    ret
 }

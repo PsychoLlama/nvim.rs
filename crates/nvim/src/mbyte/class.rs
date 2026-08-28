@@ -264,20 +264,18 @@ pub unsafe fn utf_class(c: c_int) -> c_int {
 /// `p` must point at a NUL-terminated string, and `chartab` is
 /// [`utf_class_tab`]'s.
 pub unsafe fn mb_get_class_tab(p: *const c_char, chartab: *const uint64_t) -> c_int {
-    unsafe {
-        let first = *p as u8;
-        if utf8len_tab[first as usize] == 1 {
-            if first == 0 || ascii_iswhite(first as c_int) {
-                return CLASS_BLANK;
-            }
-            return if vim_iswordc_tab(first as c_int, chartab) {
-                CLASS_WORD
-            } else {
-                CLASS_PUNCT
-            };
+    let first = unsafe { *p } as u8;
+    if utf8len_tab[first as usize] == 1 {
+        if first == 0 || ascii_iswhite(first as c_int) {
+            return CLASS_BLANK;
         }
-        utf_class_tab(utf_ptr2char(p), chartab)
+        return if unsafe { vim_iswordc_tab(first as c_int, chartab) } {
+            CLASS_WORD
+        } else {
+            CLASS_PUNCT
+        };
     }
+    unsafe { utf_class_tab(utf_ptr2char(p), chartab) }
 }
 
 /// [`mb_get_class_tab`] against the current buffer's `'iskeyword'`.
@@ -291,12 +289,12 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 
 /// `charclass({string})` — the class of the string's first character.
 pub unsafe fn f_charclass(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        if tv_check_for_string_arg(argvars, 0) == FAIL || (*argvars).vval.v_string.is_null() {
-            return;
-        }
-        (*rettv).vval.v_number = mb_get_class((*argvars).vval.v_string) as varnumber_T;
+    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
+        || unsafe { (*argvars).vval.v_string }.is_null()
+    {
+        return;
     }
+    unsafe { (*rettv).vval.v_number = mb_get_class((*argvars).vval.v_string) as varnumber_T };
 }
 
 #[cfg(test)]

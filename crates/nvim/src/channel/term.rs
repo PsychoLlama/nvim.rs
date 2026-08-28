@@ -28,38 +28,34 @@ use super::{channel_decref, channel_incref, channel_proc, channel_pty};
 /// `buf` is a live buffer and `chan` a live pty job channel.
 pub unsafe fn channel_terminal_alloc(buf: *mut buf_T, chan: *mut Channel) {
     // SAFETY: the caller's live buffer and pty job.
-    unsafe {
-        let pty = channel_pty(chan);
-        let topts = TerminalOptions {
-            data: chan.cast(),
-            width: (*pty).width,
-            height: (*pty).height,
-            read_pause_cb: Some(term_read_pause),
-            write_cb: Some(term_write),
-            resize_cb: Some(term_resize),
-            resume_cb: Some(term_resume),
-            close_cb: Some(term_close),
-            force_crlf: false,
-        };
-        (*buf).b_p_channel = (*chan).id as OptInt;
-        channel_incref(chan);
-        (*chan).term = terminal_alloc(buf, topts);
-    }
+    let pty = unsafe { channel_pty(chan) };
+    let topts = TerminalOptions {
+        data: chan.cast(),
+        width: unsafe { (*pty).width },
+        height: unsafe { (*pty).height },
+        read_pause_cb: Some(term_read_pause),
+        write_cb: Some(term_write),
+        resize_cb: Some(term_resize),
+        resume_cb: Some(term_resume),
+        close_cb: Some(term_close),
+        force_crlf: false,
+    };
+    unsafe { (*buf).b_p_channel = (*chan).id as OptInt };
+    unsafe { channel_incref(chan) };
+    unsafe { (*chan).term = terminal_alloc(buf, topts) };
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.
 unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
-    unsafe {
-        let out = &raw mut (*data.cast::<Channel>()).stream.proc.out;
-        if (*out).s.closed {
-            return;
-        }
-        if pause {
-            rstream_stop_inner(out);
-        } else {
-            rstream_start_inner(out);
-        }
+    let out = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.out };
+    if unsafe { (*out).s.closed } {
+        return;
+    }
+    if pause {
+        unsafe { rstream_stop_inner(out) };
+    } else {
+        unsafe { rstream_start_inner(out) };
     }
 }
 
@@ -67,9 +63,9 @@ unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
 unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on, and
     // `buf` is `size` readable bytes for the duration of the call.
-    unsafe {
-        let in_0 = &raw mut (*data.cast::<Channel>()).stream.proc.in_0;
-        if (*in_0).closed {
+    let in_0 = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.in_0 };
+    if unsafe { (*in_0).closed } {
+        unsafe {
             logmsg_c!(
                 LOGLVL_INF,
                 ptr::null(),
@@ -77,12 +73,17 @@ unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
                 918,
                 true,
                 c"write failed: stream is closed".as_ptr(),
-            );
-            return;
-        }
-        let wbuf = wstream_new_buffer(xmemdup(buf.cast(), size).cast(), size, 1, Some(xfree));
-        wstream_write(in_0, wbuf);
+            )
+        };
+        return;
     }
+    let wbuf = wstream_new_buffer(
+        unsafe { xmemdup(buf.cast(), size) }.cast(),
+        size,
+        1,
+        Some(xfree),
+    );
+    unsafe { wstream_write(in_0, wbuf) };
 }
 
 unsafe fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
@@ -99,11 +100,9 @@ unsafe fn term_resume(data: *mut c_void) {
 unsafe fn term_close(data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on; its
     // queue outlives the event this puts on it.
-    unsafe {
-        let chan = data.cast::<Channel>();
-        proc_stop(channel_proc(chan));
-        multiqueue_put_event((*chan).events, one_arg_event(Some(term_delayed_free), data));
-    }
+    let chan = data.cast::<Channel>();
+    unsafe { proc_stop(channel_proc(chan)) };
+    unsafe { multiqueue_put_event((*chan).events, one_arg_event(Some(term_delayed_free), data)) };
 }
 
 /// Frees the terminal once nothing is still writing through it.
@@ -113,19 +112,19 @@ unsafe fn term_close(data: *mut c_void) {
 unsafe extern "C" fn term_delayed_free(argv: *mut *mut c_void) {
     // SAFETY: the event carries the channel `term_close` queued it for, which
     // holds a reference for exactly this.
-    unsafe {
-        let chan = (*argv).cast::<Channel>();
-        let proc = &raw mut (*chan).stream.proc;
-        if (*proc).in_0.pending_reqs != 0 || (*proc).out.s.pending_reqs != 0 {
+    let chan = unsafe { *argv }.cast::<Channel>();
+    let proc = unsafe { &raw mut (*chan).stream.proc };
+    if unsafe { (*proc).in_0.pending_reqs } != 0 || unsafe { (*proc).out.s.pending_reqs } != 0 {
+        unsafe {
             multiqueue_put_event(
                 (*chan).events,
                 one_arg_event(Some(term_delayed_free), chan.cast()),
-            );
-            return;
-        }
-        if !(*chan).term.is_null() {
-            terminal_destroy(&raw mut (*chan).term);
-        }
-        channel_decref(chan);
+            )
+        };
+        return;
     }
+    if !unsafe { (*chan).term }.is_null() {
+        unsafe { terminal_destroy(&raw mut (*chan).term) };
+    }
+    unsafe { channel_decref(chan) };
 }

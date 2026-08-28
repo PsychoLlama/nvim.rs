@@ -178,24 +178,24 @@ unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
 pub unsafe fn get_lib_dir() -> *mut c_char {
     // SAFETY: `default_lib_dir` is a NUL-terminated build-time constant, and
     // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
-    unsafe {
-        // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
-        // empty in an appimage build.
-        if strlen(default_lib_dir.get()) != 0 && os_isdir(default_lib_dir.get()) {
-            return xstrdup(default_lib_dir.get());
-        }
-        let mut exe_name = [0 as c_char; MAXPATHL as usize];
-        vim_get_prefix_from_exepath(exe_name.as_mut_ptr());
-        if append_path(
+    // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
+    // empty in an appimage build.
+    if unsafe { strlen(default_lib_dir.get()) } != 0 && unsafe { os_isdir(default_lib_dir.get()) } {
+        return unsafe { xstrdup(default_lib_dir.get()) };
+    }
+    let mut exe_name = [0 as c_char; MAXPATHL as usize];
+    unsafe { vim_get_prefix_from_exepath(exe_name.as_mut_ptr()) };
+    if unsafe {
+        append_path(
             exe_name.as_mut_ptr(),
             c"lib/nvim".as_ptr(),
             MAXPATHL as size_t,
-        ) == OK
-        {
-            return xstrdup(exe_name.as_ptr());
-        }
-        ptr::null_mut()
+        )
+    } == OK
+    {
+        return unsafe { xstrdup(exe_name.as_ptr()) };
     }
+    ptr::null_mut()
 }
 
 /// The startup value of 'runtimepath'.
@@ -211,49 +211,47 @@ pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
     let appname = get_appname(false);
     // SAFETY: every pointer below is either null or an owned NUL-terminated
     // string, freed once at the end and not borrowed past that point.
-    unsafe {
-        // `--clean` starts from the packaged runtime only: no user config,
-        // no user data.
-        let data_home = if clean_arg {
-            ptr::null_mut()
-        } else {
-            stdpaths_get_xdg_var(kXDGDataHome)
-        };
-        let config_home = if clean_arg {
-            ptr::null_mut()
-        } else {
-            stdpaths_get_xdg_var(kXDGConfigHome)
-        };
-        let vimruntime = vim_getenv(c"VIMRUNTIME".as_ptr());
-        let libdir = get_lib_dir();
-        let data_dirs = stdpaths_get_xdg_var(kXDGDataDirs);
-        let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
+    // `--clean` starts from the packaged runtime only: no user config,
+    // no user data.
+    let data_home = if clean_arg {
+        ptr::null_mut()
+    } else {
+        stdpaths_get_xdg_var(kXDGDataHome)
+    };
+    let config_home = if clean_arg {
+        ptr::null_mut()
+    } else {
+        stdpaths_get_xdg_var(kXDGConfigHome)
+    };
+    let vimruntime = unsafe { vim_getenv(c"VIMRUNTIME".as_ptr()) };
+    let libdir = unsafe { get_lib_dir() };
+    let data_dirs = stdpaths_get_xdg_var(kXDGDataDirs);
+    let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
 
-        let rtp = RtpParts {
-            appname: appname.to_bytes(),
-            config_home: bytes_of(config_home),
-            config_dirs: bytes_of(config_dirs),
-            data_home: bytes_of(data_home),
-            data_dirs: bytes_of(data_dirs),
-            vimruntime: bytes_of(vimruntime),
-            libdir: bytes_of(libdir),
-        }
-        .build();
-
-        xfree(data_dirs.cast());
-        xfree(config_dirs.cast());
-        xfree(data_home.cast());
-        xfree(config_home.cast());
-        xfree(vimruntime.cast());
-        xfree(libdir.cast());
-
-        if rtp.is_empty() {
-            return ptr::null_mut();
-        }
-        let out = xmalloc(rtp.len()) as *mut c_char;
-        ptr::copy_nonoverlapping(rtp.as_ptr(), out.cast(), rtp.len());
-        out
+    let rtp = RtpParts {
+        appname: appname.to_bytes(),
+        config_home: unsafe { bytes_of(config_home) },
+        config_dirs: unsafe { bytes_of(config_dirs) },
+        data_home: unsafe { bytes_of(data_home) },
+        data_dirs: unsafe { bytes_of(data_dirs) },
+        vimruntime: unsafe { bytes_of(vimruntime) },
+        libdir: unsafe { bytes_of(libdir) },
     }
+    .build();
+
+    unsafe { xfree(data_dirs.cast()) };
+    unsafe { xfree(config_dirs.cast()) };
+    unsafe { xfree(data_home.cast()) };
+    unsafe { xfree(config_home.cast()) };
+    unsafe { xfree(vimruntime.cast()) };
+    unsafe { xfree(libdir.cast()) };
+
+    if rtp.is_empty() {
+        return ptr::null_mut();
+    }
+    let out = unsafe { xmalloc(rtp.len()) } as *mut c_char;
+    unsafe { ptr::copy_nonoverlapping(rtp.as_ptr(), out.cast(), rtp.len()) };
+    out
 }
 
 #[cfg(test)]

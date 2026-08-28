@@ -129,28 +129,26 @@ unsafe fn widened_by_vs16(cells: c_int, c: c_int, next: *const c_char) -> bool {
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
-    unsafe {
-        let p = p_in as *const u8;
-        if *p < 0x80 {
-            return 1;
-        }
-        let len = utf8len_tab[*p as usize] as c_int;
-        let c = utf_ptr2char_info_impl(p, len as uintptr_t);
-        // An illegal byte is displayed as <xx>.
-        if c <= 0 {
-            return 4;
-        }
-        // An ASCII answer from a multibyte lead byte means an overlong
-        // sequence, which is displayed the way that ASCII character is.
-        if c < 0x80 {
-            return char2cells(c);
-        }
-        let cells = utf_char2cells(c);
-        if widened_by_vs16(cells, c, p_in.offset(len as isize)) {
-            return 2;
-        }
-        cells
+    let p = p_in as *const u8;
+    if unsafe { *p } < 0x80 {
+        return 1;
     }
+    let len = utf8len_tab[unsafe { *p } as usize] as c_int;
+    let c = unsafe { utf_ptr2char_info_impl(p, len as uintptr_t) };
+    // An illegal byte is displayed as <xx>.
+    if c <= 0 {
+        return 4;
+    }
+    // An ASCII answer from a multibyte lead byte means an overlong
+    // sequence, which is displayed the way that ASCII character is.
+    if c < 0x80 {
+        return unsafe { char2cells(c) };
+    }
+    let cells = unsafe { utf_char2cells(c) };
+    if unsafe { widened_by_vs16(cells, c, p_in.offset(len as isize)) } {
+        return 2;
+    }
+    cells
 }
 
 /// [`utf_ptr2cells`] over a string that is `size` bytes long rather than
@@ -163,34 +161,33 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
 ///
 /// `p` must point at `size` readable bytes.
 pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
-    unsafe {
-        if size <= 0 || (*p as u8) < 0x80 {
-            return 1;
-        }
-        let len = utf_ptr2len_len(p, size);
-        if len < utf8len_tab[*p as u8 as usize] as c_int {
-            return 1; // truncated
-        }
-        let c = utf_ptr2char(p);
-        // An illegal byte is displayed as <xx>.
-        if utf_ptr2len(p) == 1 || c == NUL {
-            return 4;
-        }
-        if c < 0x80 {
-            return char2cells(c);
-        }
-        let cells = utf_char2cells(c);
-        // The VS-16 has to be *complete* within `size`; a truncated one does
-        // not widen anything.
-        let next = p.offset(len as isize);
-        if size > len
-            && utf_ptr2len_len(next, size - len) == utf8len_tab[*next as u8 as usize] as c_int
-            && widened_by_vs16(cells, c, next)
-        {
-            return 2;
-        }
-        cells
+    if size <= 0 || (unsafe { *p } as u8) < 0x80 {
+        return 1;
     }
+    let len = unsafe { utf_ptr2len_len(p, size) };
+    if len < utf8len_tab[unsafe { *p } as u8 as usize] as c_int {
+        return 1; // truncated
+    }
+    let c = unsafe { utf_ptr2char(p) };
+    // An illegal byte is displayed as <xx>.
+    if unsafe { utf_ptr2len(p) } == 1 || c == NUL {
+        return 4;
+    }
+    if c < 0x80 {
+        return unsafe { char2cells(c) };
+    }
+    let cells = unsafe { utf_char2cells(c) };
+    // The VS-16 has to be *complete* within `size`; a truncated one does
+    // not widen anything.
+    let next = unsafe { p.offset(len as isize) };
+    if size > len
+        && unsafe { utf_ptr2len_len(next, size - len) }
+            == utf8len_tab[unsafe { *next } as u8 as usize] as c_int
+        && unsafe { widened_by_vs16(cells, c, next) }
+    {
+        return 2;
+    }
+    cells
 }
 
 /// The total width of a NUL-terminated string.
@@ -199,15 +196,13 @@ pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
 ///
 /// `str` must point at a NUL-terminated string.
 pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
-    unsafe {
-        let mut cells: size_t = 0;
-        let mut p = str;
-        while *p != NUL as c_char {
-            cells += utf_ptr2cells(p) as size_t;
-            p = p.offset(utfc_ptr2len(p) as isize);
-        }
-        cells
+    let mut cells: size_t = 0;
+    let mut p = str;
+    while unsafe { *p } != NUL as c_char {
+        cells += unsafe { utf_ptr2cells(p) } as size_t;
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
     }
+    cells
 }
 
 /// The total width of at most `size` bytes, stopping early at a NUL.
@@ -216,16 +211,14 @@ pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
 ///
 /// `str` must point at `size` readable bytes.
 pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
-    unsafe {
-        let mut cells: size_t = 0;
-        let mut p = str;
-        while *p != NUL as c_char && p < str.add(size) {
-            let left = size as c_int - p.offset_from(str) as c_int;
-            cells += utf_ptr2cells_len(p, left) as size_t;
-            p = p.offset(utfc_ptr2len_len(p, left) as isize);
-        }
-        cells
+    let mut cells: size_t = 0;
+    let mut p = str;
+    while unsafe { *p } != NUL as c_char && p < unsafe { str.add(size) } {
+        let left = size as c_int - unsafe { p.offset_from(str) } as c_int;
+        cells += unsafe { utf_ptr2cells_len(p, left) } as size_t;
+        p = unsafe { p.offset(utfc_ptr2len_len(p, left) as isize) };
     }
+    cells
 }
 
 /// Might the character at `p` be drawn at a width the grid did not predict?
@@ -239,20 +232,20 @@ pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
+    // Nothing to print, or a lone ASCII character: neither can move.
+    if unsafe { *p } == NUL as c_char || unsafe { *p.offset(1) } == NUL as c_char {
+        return false;
+    }
+    let info = unsafe { utf_ptr2char_info(p) };
+    if info.value >= 0x80 {
+        let prop = utf8proc_get_property(info.value);
+        if prop.ambiguous_width || prop_is_emojilike(prop) {
+            return true;
+        }
+    }
+    // Safe against a NUL: `memcmp` stops at the first difference, and the
+    // NUL differs from VS-16's first byte.
     unsafe {
-        // Nothing to print, or a lone ASCII character: neither can move.
-        if *p == NUL as c_char || *p.offset(1) == NUL as c_char {
-            return false;
-        }
-        let info = utf_ptr2char_info(p);
-        if info.value >= 0x80 {
-            let prop = utf8proc_get_property(info.value);
-            if prop.ambiguous_width || prop_is_emojilike(prop) {
-                return true;
-            }
-        }
-        // Safe against a NUL: `memcmp` stops at the first difference, and the
-        // NUL differs from VS-16's first byte.
         memcmp(
             p.offset(info.len as isize) as *const c_void,
             c"\xef\xb8\x8f".as_ptr() as *const c_void,
@@ -269,28 +262,29 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// still agree with the new widths, and the old table comes back if they do
 /// not.
 pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        if (*argvars).v_type as c_uint != VAR_LIST as c_uint || (*argvars).vval.v_list.is_null() {
-            emsg(gettext(&raw const e_listreq as *const c_char));
-            return;
-        }
-        let Some(table) = parse_cell_widths((*argvars).vval.v_list) else {
-            return;
-        };
-
-        let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
-
-        // The new widths must not conflict with 'listchars' or 'fillchars'.
-        let error = check_chars_options();
-        if !error.is_null() {
-            emsg(gettext(error));
-            CELL_WIDTHS.with_mut(|t| *t = saved);
-            return;
-        }
-
-        changed_window_setting_all();
-        redraw_all_later(UPD_NOT_VALID);
+    if unsafe { (*argvars).v_type } as c_uint != VAR_LIST as c_uint
+        || unsafe { (*argvars).vval.v_list }.is_null()
+    {
+        unsafe { emsg(gettext(&raw const e_listreq as *const c_char)) };
+        return;
     }
+    let __v = unsafe { parse_cell_widths((*argvars).vval.v_list) };
+    let Some(table) = __v else {
+        return;
+    };
+
+    let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
+
+    // The new widths must not conflict with 'listchars' or 'fillchars'.
+    let error = unsafe { check_chars_options() };
+    if !error.is_null() {
+        unsafe { emsg(gettext(error)) };
+        CELL_WIDTHS.with_mut(|t| *t = saved);
+        return;
+    }
+
+    changed_window_setting_all();
+    unsafe { redraw_all_later(UPD_NOT_VALID) };
 }
 
 /// Validate `setcellwidths()`'s argument into the sorted, disjoint table
@@ -303,36 +297,38 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
 ///
 /// `l` must be a live list.
 unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
-    unsafe {
-        let mut rows: Vec<CellWidthRange> = Vec::with_capacity(tv_list_len(l) as usize);
-        let mut li = (*l).lv_first;
-        let mut item: c_int = 0;
-        while !li.is_null() {
-            let li_tv = &raw const (*li).li_tv;
-            if (*li_tv).v_type as c_uint != VAR_LIST as c_uint || (*li_tv).vval.v_list.is_null() {
-                semsg_c!(gettext(c"E1109: List item %d is not a List".as_ptr()), item);
-                return None;
-            }
-            rows.push(parse_cell_width_row((*li_tv).vval.v_list, item)?);
-            li = (*li).li_next;
-            item += 1;
+    let mut rows: Vec<CellWidthRange> = Vec::with_capacity(unsafe { tv_list_len(l) } as usize);
+    let mut li = unsafe { (*l).lv_first };
+    let mut item: c_int = 0;
+    while !li.is_null() {
+        let li_tv = unsafe { &raw const (*li).li_tv };
+        if unsafe { (*li_tv).v_type } as c_uint != VAR_LIST as c_uint
+            || unsafe { (*li_tv).vval.v_list }.is_null()
+        {
+            unsafe { semsg_c!(gettext(c"E1109: List item %d is not a List".as_ptr()), item) };
+            return None;
         }
+        rows.push(unsafe { parse_cell_width_row((*li_tv).vval.v_list, item) }?);
+        li = unsafe { (*li).li_next };
+        item += 1;
+    }
 
-        // Upstream sorts with qsort, which is unstable; two rows sharing a
-        // `first` overlap either way round and are rejected below with the
-        // same number, so a stable sort answers identically.
-        rows.sort_by_key(|r| r.first);
-        for i in 1..rows.len() {
-            if rows[i].first <= rows[i - 1].last {
+    // Upstream sorts with qsort, which is unstable; two rows sharing a
+    // `first` overlap either way round and are rejected below with the
+    // same number, so a stable sort answers identically.
+    rows.sort_by_key(|r| r.first);
+    for i in 1..rows.len() {
+        if rows[i].first <= rows[i - 1].last {
+            unsafe {
                 semsg_c!(
                     gettext(c"E1113: Overlapping ranges for 0x%lx".as_ptr()),
                     rows[i].first as size_t,
-                );
-                return None;
-            }
+                )
+            };
+            return None;
         }
-        Some(rows)
     }
+    Some(rows)
 }
 
 /// One `[first, last, width]` entry, or `None` having reported the fault.
@@ -344,71 +340,73 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
 ///
 /// `li_l` must be a live list.
 unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellWidthRange> {
-    unsafe {
-        let mut numbers = [0 as varnumber_T; 3];
-        let mut seen = 0;
-        let mut lili = tv_list_first(li_l);
-        while !lili.is_null() {
-            let tv = &raw const (*lili).li_tv;
-            if (*tv).v_type as c_uint != VAR_NUMBER as c_uint {
-                break;
-            }
-            let n = (*tv).vval.v_number;
-            match seen {
-                0 if n < 0x80 => {
+    let mut numbers = [0 as varnumber_T; 3];
+    let mut seen = 0;
+    let mut lili = unsafe { tv_list_first(li_l) };
+    while !lili.is_null() {
+        let tv = unsafe { &raw const (*lili).li_tv };
+        if unsafe { (*tv).v_type } as c_uint != VAR_NUMBER as c_uint {
+            break;
+        }
+        let n = unsafe { (*tv).vval.v_number };
+        match seen {
+            0 if n < 0x80 => {
+                unsafe {
                     emsg(gettext(
                         c"E1114: Only values of 0x80 and higher supported".as_ptr(),
-                    ));
-                    return None;
-                }
-                1 if n < numbers[0] => {
-                    semsg_c!(gettext(c"E1111: List item %d range invalid".as_ptr()), item);
-                    return None;
-                }
-                2 if !(1..=2).contains(&n) => {
+                    ))
+                };
+                return None;
+            }
+            1 if n < numbers[0] => {
+                unsafe { semsg_c!(gettext(c"E1111: List item %d range invalid".as_ptr()), item) };
+                return None;
+            }
+            2 if !(1..=2).contains(&n) => {
+                unsafe {
                     semsg_c!(
                         gettext(c"E1112: List item %d cell width invalid".as_ptr()),
                         item,
-                    );
-                    return None;
-                }
-                _ => {}
+                    )
+                };
+                return None;
             }
-            if seen < numbers.len() {
-                numbers[seen] = n;
-            }
-            seen += 1;
-            lili = (*lili).li_next;
+            _ => {}
         }
+        if seen < numbers.len() {
+            numbers[seen] = n;
+        }
+        seen += 1;
+        lili = unsafe { (*lili).li_next };
+    }
 
-        // A fourth number, a non-number, or too few: all "not three numbers".
-        if seen != 3 {
+    // A fourth number, a non-number, or too few: all "not three numbers".
+    if seen != 3 {
+        unsafe {
             semsg_c!(
                 gettext(c"E1110: List item %d does not contain 3 numbers".as_ptr()),
                 item,
-            );
-            return None;
-        }
-        Some(CellWidthRange {
-            first: numbers[0],
-            last: numbers[1],
-            width: numbers[2] as c_int,
-        })
+            )
+        };
+        return None;
     }
+    Some(CellWidthRange {
+        first: numbers[0],
+        last: numbers[1],
+        width: numbers[2] as c_int,
+    })
 }
 
 /// `getcellwidths()` — the table `setcellwidths()` installed, as a List of
 /// `[first, last, width]`.
 pub unsafe fn f_getcellwidths(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        let rows = CELL_WIDTHS.with(|t| t.clone());
-        tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t);
-        for row in &rows {
-            let entry = tv_list_alloc(3);
-            tv_list_append_number(entry, row.first);
-            tv_list_append_number(entry, row.last);
-            tv_list_append_number(entry, row.width as varnumber_T);
-            tv_list_append_list((*rettv).vval.v_list, entry);
-        }
+    let rows = CELL_WIDTHS.with(|t| t.clone());
+    unsafe { tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t) };
+    for row in &rows {
+        let entry = unsafe { tv_list_alloc(3) };
+        unsafe { tv_list_append_number(entry, row.first) };
+        unsafe { tv_list_append_number(entry, row.last) };
+        unsafe { tv_list_append_number(entry, row.width as varnumber_T) };
+        unsafe { tv_list_append_list((*rettv).vval.v_list, entry) };
     }
 }

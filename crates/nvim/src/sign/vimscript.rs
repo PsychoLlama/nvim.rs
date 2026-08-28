@@ -35,9 +35,7 @@ const HL_KEYS: [&str; 4] = ["linehl", "texthl", "culhl", "numhl"];
 /// `d` must be a live dictionary and `val` a NUL-terminated string.
 unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
     // SAFETY: the caller's dictionary and value.
-    unsafe {
-        tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val);
-    }
+    unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -46,9 +44,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
 /// `d` must be a live dictionary.
 unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
     // SAFETY: the caller's dictionary.
-    unsafe {
-        tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr);
-    }
+    unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
 
 /// `NULL`, for the many optional pointers in this file.
@@ -113,10 +109,8 @@ unsafe fn group_arg(tv: *mut typval_T, numbuf: &mut NumBuf) -> Option<*mut c_cha
 /// None beyond `get_highlight_name_ext`'s.
 unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
     // SAFETY: the null `expand_T` is the "no completion context" argument.
-    unsafe {
-        let p = get_highlight_name_ext(::core::ptr::null_mut(), id - 1, false);
-        if p.is_null() { c"NONE".as_ptr() } else { p }
-    }
+    let p = unsafe { get_highlight_name_ext(::core::ptr::null_mut(), id - 1, false) };
+    if p.is_null() { c"NONE".as_ptr() } else { p }
 }
 
 /// Walks a `list_T`, yielding each item's value in order.
@@ -193,28 +187,26 @@ unsafe fn each_dict_arg(
 /// `sp` must be a live sign definition.
 pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
     // SAFETY: a definition's name, icon and cells are its own.
-    unsafe {
-        let d = tv_dict_alloc();
-        put_str(d, "name", sp.sn_name);
-        if !sp.sn_icon.is_null() {
-            put_str(d, "icon", sp.sn_icon);
-        }
-        if sp.sn_text[0] != 0 {
-            let mut buf = [0 as ::core::ffi::c_char; SIGN_TEXT_BUF];
-            describe_sign_text(buf.as_mut_ptr(), sp.cells());
-            put_str(d, "text", buf.as_ptr());
-        }
-        if sp.sn_priority > 0 {
-            put_nr(d, "priority", varnumber_T::from(sp.sn_priority));
-        }
-        let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
-        for (key, id) in HL_KEYS.iter().zip(ids) {
-            if id > 0 {
-                put_str(d, key, hl_name(id));
-            }
-        }
-        d
+    let d = unsafe { tv_dict_alloc() };
+    unsafe { put_str(d, "name", sp.sn_name) };
+    if !sp.sn_icon.is_null() {
+        unsafe { put_str(d, "icon", sp.sn_icon) };
     }
+    if sp.sn_text[0] != 0 {
+        let mut buf = [0 as ::core::ffi::c_char; SIGN_TEXT_BUF];
+        unsafe { describe_sign_text(buf.as_mut_ptr(), sp.cells()) };
+        unsafe { put_str(d, "text", buf.as_ptr()) };
+    }
+    if sp.sn_priority > 0 {
+        unsafe { put_nr(d, "priority", varnumber_T::from(sp.sn_priority)) };
+    }
+    let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
+    for (key, id) in HL_KEYS.iter().zip(ids) {
+        if id > 0 {
+            unsafe { put_str(d, key, hl_name(id)) };
+        }
+    }
+    d
 }
 
 /// `sign_getplaced()`'s dictionary for one placed sign.
@@ -223,16 +215,14 @@ pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
 /// `mark` must carry a live sign decoration.
 pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
     // SAFETY: the caller's mark, and the decoration the store names for it.
-    unsafe {
-        let d = tv_dict_alloc();
-        let sh = Sh::new(decor_find_sign(mt_decor(mark)));
-        put_str(d, "name", sign_get_name(sh.raw()));
-        put_nr(d, "id", varnumber_T::from(mark.id.cast_signed()));
-        put_str(d, "group", describe_ns(mark.ns.cast_signed(), c"".as_ptr()));
-        put_nr(d, "lnum", varnumber_T::from(mark.pos.row + 1));
-        put_nr(d, "priority", varnumber_T::from(sh.priority));
-        d
-    }
+    let d = unsafe { tv_dict_alloc() };
+    let sh = unsafe { Sh::new(decor_find_sign(mt_decor(mark))) };
+    unsafe { put_str(d, "name", sign_get_name(sh.raw())) };
+    unsafe { put_nr(d, "id", varnumber_T::from(mark.id.cast_signed())) };
+    unsafe { put_str(d, "group", describe_ns(mark.ns.cast_signed(), c"".as_ptr())) };
+    unsafe { put_nr(d, "lnum", varnumber_T::from(mark.pos.row + 1)) };
+    unsafe { put_nr(d, "priority", varnumber_T::from(sh.priority)) };
+    d
 }
 
 /// Every sign placed in `buf`, in marktree order — `getbufinfo()`'s `signs`.
@@ -243,13 +233,11 @@ pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
     // SAFETY: the caller's buffer.
     let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
-    unsafe {
-        let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        for mark in signs {
-            tv_list_append_dict(l, sign_get_placed_info_dict(mark));
-        }
-        l
+    let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    for mark in signs {
+        unsafe { tv_list_append_dict(l, sign_get_placed_info_dict(mark)) };
     }
+    l
 }
 
 /// Appends `buf`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
@@ -330,12 +318,10 @@ unsafe fn sign_get_placed(
     for cbuf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and the caller's
         // list.
-        unsafe {
-            if buf_has_signs(cbuf.raw()) {
-                // `lnum` is deliberately dropped: an all-buffers query
-                // reports every line whatever line was asked for.
-                sign_get_placed_in_buf(cbuf.raw(), 0, id, group, retlist);
-            }
+        if unsafe { buf_has_signs(cbuf.raw()) } {
+            // `lnum` is deliberately dropped: an all-buffers query
+            // reports every line whatever line was asked for.
+            unsafe { sign_get_placed_in_buf(cbuf.raw(), 0, id, group, retlist) };
         }
     }
 }
@@ -359,32 +345,30 @@ unsafe fn sign_define_from_dict(
     let mut numbuf6 = NumBuf::new();
     let mut numbuf7 = NumBuf::new();
     // SAFETY: the caller's name and dictionary.
-    unsafe {
-        let mut name = name;
-        if name.is_null() {
-            name = numbuf.dict_string(dict, c"name".as_ptr()).cast_mut();
-            if name.is_null() || *name == 0 {
-                return -1;
-            }
+    let mut name = name;
+    if name.is_null() {
+        name = unsafe { numbuf.dict_string(dict, c"name".as_ptr()) }.cast_mut();
+        if name.is_null() || unsafe { *name } == 0 {
+            return -1;
         }
-        let null = ::core::ptr::null_mut();
-        let (mut icon, mut text) = (null, null);
-        let (mut linehl, mut texthl, mut culhl, mut numhl) = (null, null, null, null);
-        let mut prio = -1;
-        if !dict.is_null() {
-            // `tv_dict_get_string(.., false)` hands back the dictionary's own
-            // buffer, which `init_sign_text` then unescapes IN PLACE — see
-            // the note on `sign_define_by_name`.
-            icon = numbuf2.dict_string(dict, c"icon".as_ptr()).cast_mut();
-            linehl = numbuf3.dict_string(dict, c"linehl".as_ptr()).cast_mut();
-            text = numbuf4.dict_string(dict, c"text".as_ptr()).cast_mut();
-            texthl = numbuf5.dict_string(dict, c"texthl".as_ptr()).cast_mut();
-            culhl = numbuf6.dict_string(dict, c"culhl".as_ptr()).cast_mut();
-            numhl = numbuf7.dict_string(dict, c"numhl".as_ptr()).cast_mut();
-            prio = number_as_int(tv_dict_get_number_def(dict, c"priority".as_ptr(), -1));
-        }
-        sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1
     }
+    let null = ::core::ptr::null_mut();
+    let (mut icon, mut text) = (null, null);
+    let (mut linehl, mut texthl, mut culhl, mut numhl) = (null, null, null, null);
+    let mut prio = -1;
+    if !dict.is_null() {
+        // `tv_dict_get_string(.., false)` hands back the dictionary's own
+        // buffer, which `init_sign_text` then unescapes IN PLACE — see
+        // the note on `sign_define_by_name`.
+        icon = unsafe { numbuf2.dict_string(dict, c"icon".as_ptr()) }.cast_mut();
+        linehl = unsafe { numbuf3.dict_string(dict, c"linehl".as_ptr()) }.cast_mut();
+        text = unsafe { numbuf4.dict_string(dict, c"text".as_ptr()) }.cast_mut();
+        texthl = unsafe { numbuf5.dict_string(dict, c"texthl".as_ptr()) }.cast_mut();
+        culhl = unsafe { numbuf6.dict_string(dict, c"culhl".as_ptr()) }.cast_mut();
+        numhl = unsafe { numbuf7.dict_string(dict, c"numhl".as_ptr()) }.cast_mut();
+        prio = number_as_int(unsafe { tv_dict_get_number_def(dict, c"priority".as_ptr(), -1) });
+    }
+    unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1 }
 }
 
 /// `sign_define()`.
@@ -575,69 +559,71 @@ unsafe fn sign_place_from_dict(
 ) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's typvals and dictionary.
-    unsafe {
-        let mut notanum = false;
+    let mut notanum = false;
 
-        let mut id = 0;
-        if let Some(tv) = slot(id_tv, dict, "id") {
-            id = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
-            if notanum {
-                return -1;
-            }
-            if id < 0 {
-                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
-                return -1;
-            }
-        }
-
-        let mut group: *mut c_char = null();
-        if let Some(tv) = slot(group_tv, dict, "group") {
-            match group_arg(tv, &mut numbuf) {
-                Some(named) => group = named,
-                None => return -1,
-            }
-        }
-
-        let Some(name_tv) = slot(name_tv, dict, "name") else {
-            return -1;
-        };
-        let name = numbuf.string_chk(name_tv).cast_mut();
-        if name.is_null() {
+    let mut id = 0;
+    if let Some(tv) = unsafe { slot(id_tv, dict, "id") } {
+        id = number_as_int(unsafe { tv_get_number_chk(tv, &raw mut notanum) });
+        if notanum {
             return -1;
         }
-
-        let Some(buf_tv) = slot(buf_tv, dict, "buffer") else {
-            return -1;
-        };
-        let buf = get_buf_arg(buf_tv);
-        if buf.is_null() {
+        if id < 0 {
+            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
             return -1;
         }
+    }
 
-        let mut lnum: linenr_T = 0;
-        if let Some(tv) = key(dict, "lnum") {
-            lnum = tv_get_lnum(tv);
-            if lnum <= 0 {
-                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
-                return -1;
-            }
+    let mut group: *mut c_char = null();
+    if let Some(tv) = unsafe { slot(group_tv, dict, "group") } {
+        match unsafe { group_arg(tv, &mut numbuf) } {
+            Some(named) => group = named,
+            None => return -1,
         }
+    }
 
-        let mut prio = -1;
-        if let Some(tv) = key(dict, "priority") {
-            prio = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
-            if notanum {
-                return -1;
-            }
-        }
+    let __v = unsafe { slot(name_tv, dict, "name") };
 
-        // `sign_place` writes the id back when it was zero (auto-allocate).
-        let mut uid = id.cast_unsigned();
-        if sign_place(&raw mut uid, group, name, buf, lnum, prio) == OK {
-            uid.cast_signed()
-        } else {
-            -1
+    let Some(name_tv) = __v else {
+        return -1;
+    };
+    let name = unsafe { numbuf.string_chk(name_tv) }.cast_mut();
+    if name.is_null() {
+        return -1;
+    }
+
+    let __v = unsafe { slot(buf_tv, dict, "buffer") };
+
+    let Some(buf_tv) = __v else {
+        return -1;
+    };
+    let buf = unsafe { get_buf_arg(buf_tv) };
+    if buf.is_null() {
+        return -1;
+    }
+
+    let mut lnum: linenr_T = 0;
+    if let Some(tv) = unsafe { key(dict, "lnum") } {
+        lnum = unsafe { tv_get_lnum(tv) };
+        if lnum <= 0 {
+            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+            return -1;
         }
+    }
+
+    let mut prio = -1;
+    if let Some(tv) = unsafe { key(dict, "priority") } {
+        prio = number_as_int(unsafe { tv_get_number_chk(tv, &raw mut notanum) });
+        if notanum {
+            return -1;
+        }
+    }
+
+    // `sign_place` writes the id back when it was zero (auto-allocate).
+    let mut uid = id.cast_unsigned();
+    if unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) } == OK {
+        uid.cast_signed()
+    } else {
+        -1
     }
 }
 
@@ -735,36 +721,34 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's typval and dictionary.
-    unsafe {
-        let mut id = 0;
-        let mut buf = ::core::ptr::null_mut();
-        let mut group = if !group_tv.is_null() {
-            numbuf.string(group_tv)
-        } else {
-            numbuf2.dict_string(dict, c"group".as_ptr())
-        };
-        if !group.is_null() && *group == 0 {
-            group = ::core::ptr::null();
-        }
-
-        if !dict.is_null() {
-            if let Some(tv) = key(dict, "buffer") {
-                buf = get_buf_arg(tv);
-                if buf.is_null() {
-                    return -1;
-                }
-            }
-            if key(dict, "id").is_some() {
-                id = number_as_int(tv_dict_get_number(dict, c"id".as_ptr()));
-                if id <= 0 {
-                    emsg(gettext((&raw const e_invarg).cast::<c_char>()));
-                    return -1;
-                }
-            }
-        }
-
-        sign_unplace(buf, id, group, 0) - 1
+    let mut id = 0;
+    let mut buf = ::core::ptr::null_mut();
+    let mut group = if !group_tv.is_null() {
+        unsafe { numbuf.string(group_tv) }
+    } else {
+        unsafe { numbuf2.dict_string(dict, c"group".as_ptr()) }
+    };
+    if !group.is_null() && unsafe { *group } == 0 {
+        group = ::core::ptr::null();
     }
+
+    if !dict.is_null() {
+        if let Some(tv) = unsafe { key(dict, "buffer") } {
+            buf = unsafe { get_buf_arg(tv) };
+            if buf.is_null() {
+                return -1;
+            }
+        }
+        if unsafe { key(dict, "id") }.is_some() {
+            id = number_as_int(unsafe { tv_dict_get_number(dict, c"id".as_ptr()) });
+            if id <= 0 {
+                unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+                return -1;
+            }
+        }
+    }
+
+    unsafe { sign_unplace(buf, id, group, 0) - 1 }
 }
 
 /// `sign_unplace()`.

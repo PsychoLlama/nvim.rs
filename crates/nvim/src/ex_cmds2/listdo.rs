@@ -146,30 +146,28 @@ pub(crate) unsafe fn ex_listdo(eap: *mut exarg_T) {
 unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
     // SAFETY: module contract.
-    unsafe {
-        if (*curwin.get()).w_onebuf_opt.wo_wfb == 0 {
-            return true;
-        }
-        if list == (ListDo::Quickfix { location: true }) && !forceit {
-            // ":ldo" would have to leave the location list's own window.
-            emsg(E_WINFIXBUF.as_ptr());
+    if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } == 0 {
+        return true;
+    }
+    if list == (ListDo::Quickfix { location: true }) && !forceit {
+        // ":ldo" would have to leave the location list's own window.
+        unsafe { emsg(E_WINFIXBUF.as_ptr()) };
+        return false;
+    }
+    if win_valid(prevwin.get()) && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0 {
+        unsafe { win_goto(prevwin.get()) };
+    }
+    if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
+        // The new window is 'nowinfixbuf' and becomes the current one.
+        win_split(0, 0);
+        if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
+            // Autocommands set 'winfixbuf', or sent us to another window
+            // that has it set, or the split failed. Give up.
+            unsafe { emsg(E_WINFIXBUF.as_ptr()) };
             return false;
         }
-        if win_valid(prevwin.get()) && (*prevwin.get()).w_onebuf_opt.wo_wfb == 0 {
-            win_goto(prevwin.get());
-        }
-        if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-            // The new window is 'nowinfixbuf' and becomes the current one.
-            win_split(0, 0);
-            if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-                // Autocommands set 'winfixbuf', or sent us to another window
-                // that has it set, or the split failed. Give up.
-                emsg(E_WINFIXBUF.as_ptr());
-                return false;
-            }
-        }
-        true
     }
+    true
 }
 
 /// Position the walk at `eap->line1`, then run `eap->arg` once per item
@@ -180,197 +178,202 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
 unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
     // SAFETY: module contract. The command being run can do anything at all,
     // which is why every step re-validates what it is about to touch.
-    unsafe {
-        let mut i: c_int = 0;
-        // Start at the eap->line1'th argument/window/tab page.
-        let mut wp = first_window();
-        let mut tp = first_tab();
-        match list {
-            ListDo::Windows => {
-                while let Some(cur) = wp.filter(|_| (i as linenr_T + 1) < (*eap).line1) {
-                    i += 1;
-                    wp = cur.next();
-                }
+    let mut i: c_int = 0;
+    // Start at the eap->line1'th argument/window/tab page.
+    let mut wp = first_window();
+    let mut tp = first_tab();
+    match list {
+        ListDo::Windows => {
+            while let Some(cur) = wp.filter(|_| (i as linenr_T + 1) < unsafe { (*eap).line1 }) {
+                i += 1;
+                wp = cur.next();
             }
-            ListDo::Tabs => {
-                while let Some(cur) = tp.filter(|_| (i as linenr_T + 1) < (*eap).line1) {
-                    i += 1;
-                    tp = cur.next();
-                }
-            }
-            ListDo::Args => i = (*eap).line1 as c_int - 1,
-            _ => {}
         }
+        ListDo::Tabs => {
+            while let Some(cur) = tp.filter(|_| (i as linenr_T + 1) < unsafe { (*eap).line1 }) {
+                i += 1;
+                tp = cur.next();
+            }
+        }
+        ListDo::Args => i = unsafe { (*eap).line1 } as c_int - 1,
+        _ => {}
+    }
 
-        let mut buf = curbuf.get();
-        let mut qf_size: size_t = 0;
-        match list {
-            ListDo::Buffers => {
-                // Advance to the first listed buffer after "eap->line1".
-                let mut cur = first_buffer();
-                let unlisted = |b: &Buf| (b.handle as linenr_T) < (*eap).line1 || b.b_p_bl == 0;
-                while let Some(b) = cur.filter(unlisted) {
-                    if b.handle as linenr_T > (*eap).line2 {
-                        cur = None;
-                        break;
-                    }
-                    cur = b.next();
+    let mut buf = curbuf.get();
+    let mut qf_size: size_t = 0;
+    match list {
+        ListDo::Buffers => {
+            // Advance to the first listed buffer after "eap->line1".
+            let mut cur = first_buffer();
+            let unlisted =
+                |b: &Buf| (b.handle as linenr_T) < unsafe { (*eap).line1 } || b.b_p_bl == 0;
+            while let Some(b) = cur.filter(unlisted) {
+                if b.handle as linenr_T > unsafe { (*eap).line2 } {
+                    cur = None;
+                    break;
                 }
-                buf = cur.map_or(ptr::null_mut(), Buf::raw);
-                if !buf.is_null() {
+                cur = b.next();
+            }
+            buf = cur.map_or(ptr::null_mut(), Buf::raw);
+            if !buf.is_null() {
+                unsafe {
                     goto_buffer(
                         eap,
                         DOBUF_FIRST as c_int,
                         FORWARD as c_int,
                         (*buf).handle as c_int,
-                    );
+                    )
+                };
+            }
+        }
+        ListDo::Quickfix { .. } => {
+            qf_size = unsafe { qf_get_valid_size(eap) };
+            debug_assert!(unsafe { (*eap).line1 } >= 0 as linenr_T, "eap->line1 >= 0");
+            if qf_size == 0 || unsafe { (*eap).line1 } as size_t > qf_size {
+                buf = ptr::null_mut();
+            } else {
+                unsafe { ex_cc(eap) };
+                buf = curbuf.get();
+                i = unsafe { (*eap).line1 } as c_int - 1;
+                if unsafe { (*eap).addr_count } <= 0 {
+                    // Default to every quickfix/location list entry.
+                    debug_assert!(qf_size < MAXLNUM as c_int as size_t, "qf_size < MAXLNUM");
+                    unsafe { (*eap).line2 = qf_size as linenr_T };
                 }
             }
-            ListDo::Quickfix { .. } => {
-                qf_size = qf_get_valid_size(eap);
-                debug_assert!((*eap).line1 >= 0 as linenr_T, "eap->line1 >= 0");
-                if qf_size == 0 || (*eap).line1 as size_t > qf_size {
-                    buf = ptr::null_mut();
-                } else {
-                    ex_cc(eap);
-                    buf = curbuf.get();
-                    i = (*eap).line1 as c_int - 1;
-                    if (*eap).addr_count <= 0 {
-                        // Default to every quickfix/location list entry.
-                        debug_assert!(qf_size < MAXLNUM as c_int as size_t, "qf_size < MAXLNUM");
-                        (*eap).line2 = qf_size as linenr_T;
+        }
+        // `:argdo`, `:windo` and `:tabdo` set the previous-context mark
+        // instead: they are not going anywhere on their own.
+        _ => setpcmark(),
+    }
+
+    // Avoids setting the previous-context mark for every step below.
+    listcmd_busy.set(true);
+    let mut next_fnum: c_int = 0;
+    while !got_int.get() && !buf.is_null() {
+        let mut execute = true;
+        match list {
+            ListDo::Args => {
+                // Go to argument "i".
+                if i == unsafe { (*(*curwin.get()).w_alist).al_ga.ga_len } {
+                    break;
+                }
+                // Don't call `do_argfile` when already there, it would
+                // try reloading the file.
+                if unsafe { (*curwin.get()).w_arg_idx } != i
+                    || !editing_arg_idx(unsafe { Win::current() })
+                {
+                    unsafe { do_argfile(eap, i) };
+                }
+                if unsafe { (*curwin.get()).w_arg_idx } != i {
+                    break;
+                }
+            }
+            ListDo::Windows => {
+                // Go to window "wp".
+                let Some(cur) = wp.filter(|wp| win_valid(wp.raw())) else {
+                    break;
+                };
+                execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
+                if execute {
+                    unsafe { win_goto(cur.raw()) };
+                    if curwin.get() != cur.raw() {
+                        // Something must be wrong.
+                        break;
                     }
                 }
+                wp = cur.next();
             }
-            // `:argdo`, `:windo` and `:tabdo` set the previous-context mark
-            // instead: they are not going anywhere on their own.
-            _ => setpcmark(),
+            ListDo::Tabs => {
+                // Go to tab page "tp".
+                let Some(cur) = tp.filter(|tp| valid_tabpage(tp.raw())) else {
+                    break;
+                };
+                goto_tab(cur, true, true);
+                tp = cur.next();
+            }
+            ListDo::Buffers => {
+                // Remember the number of the next listed buffer, in case
+                // ":bwipe" is used or autocommands do something strange.
+                next_fnum = -1;
+                let mut bp = unsafe { Buf::current() }.next();
+                while let Some(b) = bp {
+                    if b.b_p_bl != 0 {
+                        next_fnum = b.handle as c_int;
+                        break;
+                    }
+                    bp = b.next();
+                }
+            }
+            ListDo::Quickfix { .. } => {}
         }
 
-        // Avoids setting the previous-context mark for every step below.
-        listcmd_busy.set(true);
-        let mut next_fnum: c_int = 0;
-        while !got_int.get() && !buf.is_null() {
-            let mut execute = true;
-            match list {
-                ListDo::Args => {
-                    // Go to argument "i".
-                    if i == (*(*curwin.get()).w_alist).al_ga.ga_len {
-                        break;
-                    }
-                    // Don't call `do_argfile` when already there, it would
-                    // try reloading the file.
-                    if (*curwin.get()).w_arg_idx != i || !editing_arg_idx(Win::current()) {
-                        do_argfile(eap, i);
-                    }
-                    if (*curwin.get()).w_arg_idx != i {
-                        break;
-                    }
-                }
-                ListDo::Windows => {
-                    // Go to window "wp".
-                    let Some(cur) = wp.filter(|wp| win_valid(wp.raw())) else {
-                        break;
-                    };
-                    execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
-                    if execute {
-                        win_goto(cur.raw());
-                        if curwin.get() != cur.raw() {
-                            // Something must be wrong.
-                            break;
-                        }
-                    }
-                    wp = cur.next();
-                }
-                ListDo::Tabs => {
-                    // Go to tab page "tp".
-                    let Some(cur) = tp.filter(|tp| valid_tabpage(tp.raw())) else {
-                        break;
-                    };
-                    goto_tab(cur, true, true);
-                    tp = cur.next();
-                }
-                ListDo::Buffers => {
-                    // Remember the number of the next listed buffer, in case
-                    // ":bwipe" is used or autocommands do something strange.
-                    next_fnum = -1;
-                    let mut bp = Buf::current().next();
-                    while let Some(b) = bp {
-                        if b.b_p_bl != 0 {
-                            next_fnum = b.handle as c_int;
-                            break;
-                        }
-                        bp = b.next();
-                    }
-                }
-                ListDo::Quickfix { .. } => {}
-            }
-
-            i += 1;
-            if execute {
+        i += 1;
+        if execute {
+            unsafe {
                 do_cmdline(
                     (*eap).arg,
                     (*eap).ea_getline,
                     (*eap).cookie,
                     DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT,
-                );
-            }
+                )
+            };
+        }
 
-            match list {
-                ListDo::Buffers => {
-                    // Done?
-                    if next_fnum < 0 || next_fnum as linenr_T > (*eap).line2 {
-                        break;
-                    }
-                    // Does the buffer still exist?
-                    if !buffers().any(|bp| (*bp).handle == next_fnum) {
-                        break;
-                    }
-                    goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum);
-                    // If autocommands took us elsewhere, quit here.
-                    if (*curbuf.get()).handle != next_fnum {
-                        break;
+        match list {
+            ListDo::Buffers => {
+                // Done?
+                if next_fnum < 0 || next_fnum as linenr_T > unsafe { (*eap).line2 } {
+                    break;
+                }
+                // Does the buffer still exist?
+                if !buffers().any(|bp| unsafe { (*bp).handle } == next_fnum) {
+                    break;
+                }
+                unsafe { goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum) };
+                // If autocommands took us elsewhere, quit here.
+                if unsafe { (*curbuf.get()).handle } != next_fnum {
+                    break;
+                }
+            }
+            ListDo::Quickfix { .. } => {
+                debug_assert!(i >= 0, "i >= 0");
+                if i as size_t >= qf_size || i as linenr_T >= unsafe { (*eap).line2 } {
+                    break;
+                }
+                let qf_idx = unsafe { qf_get_cur_idx(eap) };
+                unsafe { ex_cnext(eap) };
+                // If jumping to the next quickfix entry fails, quit here.
+                if unsafe { qf_get_cur_idx(eap) } == qf_idx {
+                    break;
+                }
+            }
+            ListDo::Windows => {
+                if execute {
+                    // The cursor may have moved.
+                    validate_cursor(unsafe { Win::current() });
+                    // Required when 'scrollbind' has been set.
+                    if unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0 {
+                        unsafe { do_check_scrollbind(true) };
                     }
                 }
-                ListDo::Quickfix { .. } => {
-                    debug_assert!(i >= 0, "i >= 0");
-                    if i as size_t >= qf_size || i as linenr_T >= (*eap).line2 {
-                        break;
-                    }
-                    let qf_idx = qf_get_cur_idx(eap);
-                    ex_cnext(eap);
-                    // If jumping to the next quickfix entry fails, quit here.
-                    if qf_get_cur_idx(eap) == qf_idx {
-                        break;
-                    }
+                if i as linenr_T + 1 > unsafe { (*eap).line2 } {
+                    break;
                 }
-                ListDo::Windows => {
-                    if execute {
-                        // The cursor may have moved.
-                        validate_cursor(Win::current());
-                        // Required when 'scrollbind' has been set.
-                        if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-                            do_check_scrollbind(true);
-                        }
-                    }
-                    if i as linenr_T + 1 > (*eap).line2 {
-                        break;
-                    }
+            }
+            ListDo::Tabs => {
+                if i as linenr_T + 1 > unsafe { (*eap).line2 } {
+                    break;
                 }
-                ListDo::Tabs => {
-                    if i as linenr_T + 1 > (*eap).line2 {
-                        break;
-                    }
-                }
-                ListDo::Args => {
-                    if i as linenr_T >= (*eap).line2 {
-                        break;
-                    }
+            }
+            ListDo::Args => {
+                if i as linenr_T >= unsafe { (*eap).line2 } {
+                    break;
                 }
             }
         }
-        listcmd_busy.set(false);
     }
+    listcmd_busy.set(false);
 }
 
 /// Put the Syntax event back and fire it for the buffers that were opened
@@ -381,33 +384,33 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
 unsafe fn restore_syntax_events(save_ei: *mut c_char) {
     // SAFETY: caller contract. `apply_autocmds` can do anything to the
     // buffer list, so the walk starts over whenever it has run.
-    unsafe {
-        let mut aco = aco_save_T::default();
-        au_event_restore(save_ei);
+    let mut aco = aco_save_T::default();
+    unsafe { au_event_restore(save_ei) };
 
-        let mut cur = first_buffer();
-        while let Some(mut buf) = cur {
-            let mut bnext = buf.next();
-            if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
-                buf.b_flags.clear(BufFlags::SYN_SET);
-                if buf.raw() == curbuf.get() {
+    let mut cur = first_buffer();
+    while let Some(mut buf) = cur {
+        let mut bnext = buf.next();
+        if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
+            buf.b_flags.clear(BufFlags::SYN_SET);
+            if buf.raw() == curbuf.get() {
+                unsafe {
                     apply_autocmds(
                         EVENT_SYNTAX,
                         (*curbuf.get()).b_p_syn,
                         (*curbuf.get()).b_fname,
                         true,
                         curbuf.get(),
-                    );
-                } else {
-                    let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
-                    aucmd_prepbuf(&raw mut aco, raw);
-                    apply_autocmds(EVENT_SYNTAX, syn, name, true, raw);
-                    aucmd_restbuf(&raw mut aco);
-                }
-                // Start over, in case autocommands messed things up.
-                bnext = first_buffer();
+                    )
+                };
+            } else {
+                let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
+                unsafe { aucmd_prepbuf(&raw mut aco, raw) };
+                unsafe { apply_autocmds(EVENT_SYNTAX, syn, name, true, raw) };
+                unsafe { aucmd_restbuf(&raw mut aco) };
             }
-            cur = bnext;
+            // Start over, in case autocommands messed things up.
+            bnext = first_buffer();
         }
+        cur = bnext;
     }
 }

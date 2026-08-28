@@ -202,13 +202,11 @@ pub unsafe fn channel_internal(chan: *mut Channel) -> *mut InternalState {
 pub unsafe fn channel_instream(chan: *mut Channel) -> *mut Stream {
     // SAFETY: the caller's live channel, projected to the member its
     // `streamtype` says is active.
-    unsafe {
-        match (*chan).streamtype {
-            kChannelStreamProc => &raw mut (*chan).stream.proc.in_0,
-            kChannelStreamSocket => &raw mut (*chan).stream.socket.s,
-            kChannelStreamStdio => &raw mut (*chan).stream.stdio.out,
-            other => unreachable!("channel stream type {other} has no write stream"),
-        }
+    match unsafe { (*chan).streamtype } {
+        kChannelStreamProc => unsafe { &raw mut (*chan).stream.proc.in_0 },
+        kChannelStreamSocket => unsafe { &raw mut (*chan).stream.socket.s },
+        kChannelStreamStdio => unsafe { &raw mut (*chan).stream.stdio.out },
+        other => unreachable!("channel stream type {other} has no write stream"),
     }
 }
 
@@ -218,13 +216,11 @@ pub unsafe fn channel_instream(chan: *mut Channel) -> *mut Stream {
 /// `chan` points at a live channel with a read stream.
 pub unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
     // SAFETY: as `channel_instream`.
-    unsafe {
-        match (*chan).streamtype {
-            kChannelStreamProc => &raw mut (*chan).stream.proc.out,
-            kChannelStreamSocket => &raw mut (*chan).stream.socket,
-            kChannelStreamStdio => &raw mut (*chan).stream.stdio.in_0,
-            other => unreachable!("channel stream type {other} has no read stream"),
-        }
+    match unsafe { (*chan).streamtype } {
+        kChannelStreamProc => unsafe { &raw mut (*chan).stream.proc.out },
+        kChannelStreamSocket => unsafe { &raw mut (*chan).stream.socket },
+        kChannelStreamStdio => unsafe { &raw mut (*chan).stream.stdio.in_0 },
+        other => unreachable!("channel stream type {other} has no read stream"),
     }
 }
 
@@ -248,10 +244,8 @@ pub fn find_channel(id: uint64_t) -> *mut Channel {
 /// Called once, from startup, after the event loop exists.
 pub unsafe fn channel_init() {
     // SAFETY: the caller's promise.
-    unsafe {
-        channel_alloc(kChannelStreamStderr);
-        rpc_init();
-    }
+    unsafe { channel_alloc(kChannelStreamStderr) };
+    unsafe { rpc_init() };
 }
 
 /// A channel with no transport and no callbacks yet.
@@ -364,11 +358,9 @@ pub unsafe fn channel_decref(chan: *mut Channel) {
 unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the one remaining reference to a channel that
     // `channel_decref` dropped to zero.
-    unsafe {
-        let chan = (*argv).cast::<Channel>();
-        let _ = channels.with_mut(|chans| chans.remove((*chan).id));
-        channel_destroy(chan);
-    }
+    let chan = unsafe { *argv }.cast::<Channel>();
+    let _ = channels.with_mut(|chans| chans.remove(unsafe { (*chan).id }));
+    unsafe { channel_destroy(chan) };
 }
 
 /// Frees a channel and everything hanging off it.
@@ -378,19 +370,17 @@ unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
 unsafe fn channel_destroy(chan: *mut Channel) {
     // SAFETY: the caller's unreferenced channel; each `free` below matches the
     // setup that ran when the corresponding feature was turned on.
-    unsafe {
-        if (*chan).is_rpc {
-            rpc_free(chan);
-        }
-        if (*chan).streamtype == kChannelStreamProc {
-            proc_free(channel_proc(chan));
-        }
-        callback_reader_free(&raw mut (*chan).on_data);
-        callback_reader_free(&raw mut (*chan).on_stderr);
-        callback_free(&raw mut (*chan).on_exit);
-        multiqueue_free((*chan).events);
-        drop(Box::from_raw(chan));
+    if unsafe { (*chan).is_rpc } {
+        unsafe { rpc_free(chan) };
     }
+    if unsafe { (*chan).streamtype } == kChannelStreamProc {
+        unsafe { proc_free(channel_proc(chan)) };
+    }
+    unsafe { callback_reader_free(&raw mut (*chan).on_data) };
+    unsafe { callback_reader_free(&raw mut (*chan).on_stderr) };
+    unsafe { callback_free(&raw mut (*chan).on_exit) };
+    unsafe { multiqueue_free((*chan).events) };
+    drop(unsafe { Box::from_raw(chan) });
 }
 
 /// Unwinds a channel that never got off the ground.
@@ -404,20 +394,20 @@ unsafe fn channel_destroy(chan: *mut Channel) {
 pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
     next_chan_id.set(next_chan_id.get().wrapping_sub(1));
     // SAFETY: the caller's channel, still registered and still theirs alone.
+    assert!(
+        unsafe { (*chan).id } == next_chan_id.get(),
+        "channel id was not the last"
+    );
+    let _ = channels.with_mut(|chans| chans.remove(unsafe { (*chan).id }));
+    unsafe { (*chan).id = 0 };
+    let left = unsafe { (*chan).refcount.release() };
+    assert!(left == 0, "channel was already referenced");
     unsafe {
-        assert!(
-            (*chan).id == next_chan_id.get(),
-            "channel id was not the last"
-        );
-        let _ = channels.with_mut(|chans| chans.remove((*chan).id));
-        (*chan).id = 0;
-        let left = (*chan).refcount.release();
-        assert!(left == 0, "channel was already referenced");
         multiqueue_put_event(
             main_loop_events(),
             one_arg_event(Some(free_channel_event), chan.cast()),
-        );
-    }
+        )
+    };
 }
 
 /// The empty `Dict`, which is what a channel starts with and what
@@ -526,25 +516,23 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), Clos
 
     // SAFETY: `chan` is live and each arm touches only the transport its
     // `streamtype` selected.
-    unsafe {
-        match streamtype {
-            kChannelStreamSocket => {
-                if !close_main {
-                    return Err(CloseError::NoSuchStream);
-                }
-                rstream_may_close(&raw mut (*chan).stream.socket);
+    match streamtype {
+        kChannelStreamSocket => {
+            if !close_main {
+                return Err(CloseError::NoSuchStream);
             }
-            kChannelStreamProc => close_job_parts(chan, part, close_main),
-            kChannelStreamStdio => close_stdio_parts(chan, part, close_main)?,
-            kChannelStreamStderr => close_stderr(chan, part)?,
-            kChannelStreamInternal => {
-                if !close_main {
-                    return Err(CloseError::NoSuchStream);
-                }
-                close_internal(chan);
-            }
-            _ => {}
+            unsafe { rstream_may_close(&raw mut (*chan).stream.socket) };
         }
+        kChannelStreamProc => unsafe { close_job_parts(chan, part, close_main) },
+        kChannelStreamStdio => unsafe { close_stdio_parts(chan, part, close_main) }?,
+        kChannelStreamStderr => unsafe { close_stderr(chan, part) }?,
+        kChannelStreamInternal => {
+            if !close_main {
+                return Err(CloseError::NoSuchStream);
+            }
+            unsafe { close_internal(chan) };
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -555,20 +543,18 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), Clos
 /// `chan` is a live job channel.
 unsafe fn close_job_parts(chan: *mut Channel, part: ChannelPart, close_main: bool) {
     // SAFETY: the caller's live job channel.
-    unsafe {
-        let proc = channel_proc(chan);
-        if part == kChannelPartStdin || close_main {
-            stream_may_close(&raw mut (*proc).in_0);
-        }
-        if part == kChannelPartStdout || close_main {
-            rstream_may_close(&raw mut (*proc).out);
-        }
-        if part == kChannelPartStderr || part == kChannelPartAll {
-            rstream_may_close(&raw mut (*proc).err);
-        }
-        if (*proc).type_0 as c_int == kProcTypePty && part == kChannelPartAll {
-            pty_proc_close_master(channel_pty(chan));
-        }
+    let proc = unsafe { channel_proc(chan) };
+    if part == kChannelPartStdin || close_main {
+        unsafe { stream_may_close(&raw mut (*proc).in_0) };
+    }
+    if part == kChannelPartStdout || close_main {
+        unsafe { rstream_may_close(&raw mut (*proc).out) };
+    }
+    if part == kChannelPartStderr || part == kChannelPartAll {
+        unsafe { rstream_may_close(&raw mut (*proc).err) };
+    }
+    if unsafe { (*proc).type_0 } as c_int == kProcTypePty && part == kChannelPartAll {
+        unsafe { pty_proc_close_master(channel_pty(chan)) };
     }
 }
 
@@ -586,13 +572,11 @@ unsafe fn close_stdio_parts(
         return Err(CloseError::NoSuchStream);
     }
     // SAFETY: the caller's live stdio channel.
-    unsafe {
-        if part == kChannelPartStdin || close_main {
-            rstream_may_close(&raw mut (*chan).stream.stdio.in_0);
-        }
-        if part == kChannelPartStdout || close_main {
-            stream_may_close(&raw mut (*chan).stream.stdio.out);
-        }
+    if part == kChannelPartStdin || close_main {
+        unsafe { rstream_may_close(&raw mut (*chan).stream.stdio.in_0) };
+    }
+    if part == kChannelPartStdout || close_main {
+        unsafe { stream_may_close(&raw mut (*chan).stream.stdio.out) };
     }
     Ok(())
 }
@@ -606,18 +590,16 @@ unsafe fn close_stderr(chan: *mut Channel, part: ChannelPart) -> Result<(), Clos
         return Err(CloseError::NoSuchStream);
     }
     // SAFETY: the caller's live stderr channel, whose transport is one flag.
-    unsafe {
-        if (*chan).stream.err.closed {
-            return Ok(());
-        }
-        (*chan).stream.err.closed = true;
-        // On the way out the descriptor is about to go anyway, and reopening
-        // it would swallow anything still being written.
-        if !exiting.get() {
-            freopen(c"/dev/null".as_ptr(), c"w".as_ptr(), stderr);
-        }
-        channel_decref(chan);
+    if unsafe { (*chan).stream.err.closed } {
+        return Ok(());
     }
+    unsafe { (*chan).stream.err.closed = true };
+    // On the way out the descriptor is about to go anyway, and reopening
+    // it would swallow anything still being written.
+    if !exiting.get() {
+        unsafe { freopen(c"/dev/null".as_ptr(), c"w".as_ptr(), stderr) };
+    }
+    unsafe { channel_decref(chan) };
     Ok(())
 }
 
@@ -630,18 +612,16 @@ unsafe fn close_stderr(chan: *mut Channel, part: ChannelPart) -> Result<(), Clos
 /// `chan` is a live internal channel.
 unsafe fn close_internal(chan: *mut Channel) {
     // SAFETY: the caller's live internal channel.
-    unsafe {
-        if (*chan).term.is_null() {
-            channel_decref(chan);
-            return;
-        }
-        let internal = channel_internal(chan);
-        api_free_luaref((*internal).cb);
-        (*internal).cb = LUA_NOREF as LuaRef;
-        (*internal).closed = true;
-        terminal_close(&raw mut (*chan).term, 0);
-        (*chan).exit_status = 0;
+    if unsafe { (*chan).term }.is_null() {
+        unsafe { channel_decref(chan) };
+        return;
     }
+    let internal = unsafe { channel_internal(chan) };
+    unsafe { api_free_luaref((*internal).cb) };
+    unsafe { (*internal).cb = LUA_NOREF as LuaRef };
+    unsafe { (*internal).closed = true };
+    unsafe { terminal_close(&raw mut (*chan).term, 0) };
+    unsafe { (*chan).exit_status = 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -665,27 +645,25 @@ pub unsafe fn channel_send(
 ) -> size_t {
     // SAFETY: the caller's promise. Every arm either hands `data` to the write
     // queue and returns, or falls through to the free below.
-    unsafe {
-        let chan = find_channel(id);
-        if chan.is_null() {
-            *error = translated(&e_invchan);
-        } else {
-            match send_to_channel(chan, data, len, data_owned) {
-                Ok(Sent::Bytes(n)) => {
-                    if data_owned {
-                        xfree(data.cast());
-                    }
-                    return n;
+    let chan = find_channel(id);
+    if chan.is_null() {
+        unsafe { *error = translated(&e_invchan) };
+    } else {
+        match unsafe { send_to_channel(chan, data, len, data_owned) } {
+            Ok(Sent::Bytes(n)) => {
+                if data_owned {
+                    unsafe { xfree(data.cast()) };
                 }
-                Ok(Sent::Queued(n)) => return n,
-                Err(msg) => *error = gettext(msg.as_ptr()),
+                return n;
             }
+            Ok(Sent::Queued(n)) => return n,
+            Err(msg) => unsafe { *error = gettext(msg.as_ptr()) },
         }
-        if data_owned {
-            xfree(data.cast());
-        }
-        0
     }
+    if data_owned {
+        unsafe { xfree(data.cast()) };
+    }
+    0
 }
 
 /// How much of a [`channel_send`] got through, and who owns the buffer now.
@@ -710,48 +688,46 @@ unsafe fn send_to_channel(
     const RAW_TO_RPC: &CStr = c"Can't send raw data to rpc channel";
 
     // SAFETY: the caller's live channel and readable buffer.
-    unsafe {
-        match (*chan).streamtype {
-            kChannelStreamStderr => {
-                if (*chan).stream.err.closed {
-                    return Err(CLOSED);
-                }
-                // stderr is not on the event loop; it is written synchronously
-                // and a short write is reported as such.
-                let wres = os_write(STDERR_FILENO, data, len, false);
-                Ok(Sent::Bytes(if wres >= 0 { wres as size_t } else { 0 }))
+    match unsafe { (*chan).streamtype } {
+        kChannelStreamStderr => {
+            if unsafe { (*chan).stream.err.closed } {
+                return Err(CLOSED);
             }
-            kChannelStreamInternal => {
-                if (*chan).is_rpc {
-                    return Err(RAW_TO_RPC);
-                }
-                if (*chan).term.is_null() || (*channel_internal(chan)).closed {
-                    return Err(CLOSED);
-                }
-                terminal_receive((*chan).term, data, len);
-                Ok(Sent::Bytes(len))
+            // stderr is not on the event loop; it is written synchronously
+            // and a short write is reported as such.
+            let wres = unsafe { os_write(STDERR_FILENO, data, len, false) };
+            Ok(Sent::Bytes(if wres >= 0 { wres as size_t } else { 0 }))
+        }
+        kChannelStreamInternal => {
+            if unsafe { (*chan).is_rpc } {
+                return Err(RAW_TO_RPC);
             }
-            _ => {
-                let in_0 = channel_instream(chan);
-                if (*in_0).closed {
-                    return Err(CLOSED);
-                }
-                if (*chan).is_rpc {
-                    return Err(RAW_TO_RPC);
-                }
-                let owned = if data_owned {
-                    data.cast::<c_void>()
-                } else {
-                    xmemdup(data.cast(), len)
-                };
-                let buf = wstream_new_buffer(owned.cast(), len, 1, Some(xfree));
-                // The write queue owns the buffer from here either way.
-                Ok(Sent::Queued(if wstream_write(in_0, buf) == 0 {
-                    len
-                } else {
-                    0
-                }))
+            if unsafe { (*chan).term }.is_null() || unsafe { (*channel_internal(chan)).closed } {
+                return Err(CLOSED);
             }
+            unsafe { terminal_receive((*chan).term, data, len) };
+            Ok(Sent::Bytes(len))
+        }
+        _ => {
+            let in_0 = unsafe { channel_instream(chan) };
+            if unsafe { (*in_0).closed } {
+                return Err(CLOSED);
+            }
+            if unsafe { (*chan).is_rpc } {
+                return Err(RAW_TO_RPC);
+            }
+            let owned = if data_owned {
+                data.cast::<c_void>()
+            } else {
+                unsafe { xmemdup(data.cast(), len) }
+            };
+            let buf = wstream_new_buffer(owned.cast(), len, 1, Some(xfree));
+            // The write queue owns the buffer from here either way.
+            Ok(Sent::Queued(if unsafe { wstream_write(in_0, buf) } == 0 {
+                len
+            } else {
+                0
+            }))
         }
     }
 }

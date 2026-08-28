@@ -66,36 +66,36 @@ fn iconv_failed() -> iconv_t {
 ///
 /// Both names must be NUL-terminated strings.
 pub unsafe fn my_iconv_open(to: *mut c_char, from: *mut c_char) -> iconv_t {
+    static iconv_working: GlobalCell<WorkingStatus> = GlobalCell::new(kUnknown);
+    if iconv_working.get() == kBroken {
+        return iconv_failed();
+    }
+
+    let mut fd = unsafe { iconv_open(enc_skip(to), enc_skip(from)) };
+    if fd == iconv_failed() || iconv_working.get() != kUnknown {
+        return fd;
+    }
+
+    let mut tobuf = [0 as c_char; ICONV_TESTLEN];
+    let mut p = tobuf.as_mut_ptr();
+    let mut tolen: size_t = ICONV_TESTLEN;
     unsafe {
-        static iconv_working: GlobalCell<WorkingStatus> = GlobalCell::new(kUnknown);
-        if iconv_working.get() == kBroken {
-            return iconv_failed();
-        }
-
-        let mut fd = iconv_open(enc_skip(to), enc_skip(from));
-        if fd == iconv_failed() || iconv_working.get() != kUnknown {
-            return fd;
-        }
-
-        let mut tobuf = [0 as c_char; ICONV_TESTLEN];
-        let mut p = tobuf.as_mut_ptr();
-        let mut tolen: size_t = ICONV_TESTLEN;
         iconv(
             fd,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
             &raw mut p,
             &raw mut tolen,
-        );
-        if p.is_null() {
-            iconv_working.set(kBroken);
-            iconv_close(fd);
-            fd = iconv_failed();
-        } else {
-            iconv_working.set(kWorking);
-        }
-        fd
+        )
+    };
+    if p.is_null() {
+        iconv_working.set(kBroken);
+        unsafe { iconv_close(fd) };
+        fd = iconv_failed();
+    } else {
+        iconv_working.set(kWorking);
     }
+    fd
 }
 
 /// Convert `str[..slen]` through `vcp`'s open iconv descriptor.
@@ -116,119 +116,125 @@ unsafe fn iconv_string(
     unconvlenp: *mut size_t,
     resultlenp: *mut size_t,
 ) -> *mut c_char {
-    unsafe {
-        // iconv reports every outcome through `errno`, read straight after
-        // the call that set it. A closure, so it inherits this block.
-        let errno = || *__errno_location();
+    // iconv reports every outcome through `errno`, read straight after
+    // the call that set it. A closure, so it inherits this block.
+    let errno = || unsafe { *__errno_location() };
 
-        let fail = (*vcp).vc_fail;
-        let mut result: *mut c_char = core::ptr::null_mut();
-        let mut to: *mut c_char = core::ptr::null_mut();
-        let mut len: size_t = 0;
-        let mut done: size_t = 0;
-        let mut from = str;
-        let mut fromlen = slen;
+    let fail = unsafe { (*vcp).vc_fail };
+    let mut result: *mut c_char = core::ptr::null_mut();
+    let mut to: *mut c_char = core::ptr::null_mut();
+    let mut len: size_t = 0;
+    let mut done: size_t = 0;
+    let mut from = str;
+    let mut fromlen = slen;
 
-        loop {
-            if len == 0 || errno() == ICONV_E2BIG {
-                // Enough for most conversions; on a retry, more than last time.
-                len = len + fromlen * 2 + 40;
-                let p = xmalloc(len) as *mut c_char;
-                if done > 0 {
-                    memmove(p as *mut c_void, result as *const c_void, done);
-                }
-                xfree(result as *mut c_void);
-                result = p;
+    loop {
+        if len == 0 || errno() == ICONV_E2BIG {
+            // Enough for most conversions; on a retry, more than last time.
+            len = len + fromlen * 2 + 40;
+            let p = unsafe { xmalloc(len) } as *mut c_char;
+            if done > 0 {
+                unsafe { memmove(p as *mut c_void, result as *const c_void, done) };
             }
+            unsafe { xfree(result as *mut c_void) };
+            result = p;
+        }
 
-            to = result.add(done);
-            // Two bytes held back: the NUL, and the second `?` an
-            // unconvertible wide character can need.
-            let mut tolen = len - done - 2;
-            if iconv(
+        to = unsafe { result.add(done) };
+        // Two bytes held back: the NUL, and the second `?` an
+        // unconvertible wide character can need.
+        let mut tolen = len - done - 2;
+        if unsafe {
+            iconv(
                 (*vcp).vc_fd,
                 &raw mut from as *mut c_void as *mut *mut c_char,
                 &raw mut fromlen,
                 &raw mut to,
                 &raw mut tolen,
-            ) != SIZE_MAX as size_t
-            {
-                *to = 0; // finished
-                break;
-            }
-
-            let e = errno();
-            let incomplete = e == ICONV_EINVAL || e == EINVAL;
-            let illegal = e == ICONV_EILSEQ || e == EILSEQ;
-            if !fail && incomplete && !unconvlenp.is_null() {
-                // A sequence cut off at the end: hand back how much is left
-                // rather than treating it as bad input.
-                *to = 0;
-                *unconvlenp = fromlen;
-                break;
-            } else if !fail && (illegal || incomplete) {
-                // Cannot convert: emit `?` and skip one character. This
-                // assumes the input is 'encoding'; nothing else would tell us
-                // how much to skip.
-                *to = b'?' as c_char;
-                to = to.offset(1);
-                if utf_ptr2cells(from) > 1 {
-                    *to = b'?' as c_char;
-                    to = to.offset(1);
-                }
-                let l = utfc_ptr2len_len(from, fromlen as c_int);
-                from = from.add(l as usize);
-                fromlen -= l as size_t;
-            } else if e != ICONV_E2BIG {
-                xfree(result as *mut c_void);
-                result = core::ptr::null_mut();
-                break;
-            }
-            done = to.offset_from(result) as size_t;
+            )
+        } != SIZE_MAX as size_t
+        {
+            unsafe { *to = 0 }; // finished
+            break;
         }
 
-        if !resultlenp.is_null() && !result.is_null() {
-            *resultlenp = to.offset_from(result) as size_t;
+        let e = errno();
+        let incomplete = e == ICONV_EINVAL || e == EINVAL;
+        let illegal = e == ICONV_EILSEQ || e == EILSEQ;
+        if !fail && incomplete && !unconvlenp.is_null() {
+            // A sequence cut off at the end: hand back how much is left
+            // rather than treating it as bad input.
+            unsafe { *to = 0 };
+            unsafe { *unconvlenp = fromlen };
+            break;
+        } else if !fail && (illegal || incomplete) {
+            // Cannot convert: emit `?` and skip one character. This
+            // assumes the input is 'encoding'; nothing else would tell us
+            // how much to skip.
+            unsafe { *to = b'?' as c_char };
+            to = unsafe { to.offset(1) };
+            if unsafe { utf_ptr2cells(from) } > 1 {
+                unsafe { *to = b'?' as c_char };
+                to = unsafe { to.offset(1) };
+            }
+            let l = unsafe { utfc_ptr2len_len(from, fromlen as c_int) };
+            from = unsafe { from.add(l as usize) };
+            fromlen -= l as size_t;
+        } else if e != ICONV_E2BIG {
+            unsafe { xfree(result as *mut c_void) };
+            result = core::ptr::null_mut();
+            break;
         }
-        result
+        done = unsafe { to.offset_from(result) } as size_t;
     }
+
+    if !resultlenp.is_null() && !result.is_null() {
+        unsafe { *resultlenp = to.offset_from(result) as size_t };
+    }
+    result
 }
 
 /// `iconv({string}, {from}, {to})`.
 pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = core::ptr::null_mut();
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = core::ptr::null_mut() };
 
-        let str = numbuf.string(argvars);
-        let mut buf1 = [0 as c_char; NUMBUFLEN];
-        let from = enc_canonize(enc_skip(
+    let str = unsafe { numbuf.string(argvars) };
+    let mut buf1 = [0 as c_char; NUMBUFLEN];
+    let from = unsafe {
+        enc_canonize(enc_skip(
             tv_get_string_buf(argvars.add(1), buf1.as_mut_ptr()).cast_mut(),
-        ));
-        let mut buf2 = [0 as c_char; NUMBUFLEN];
-        let to = enc_canonize(enc_skip(
+        ))
+    };
+    let mut buf2 = [0 as c_char; NUMBUFLEN];
+    let to = unsafe {
+        enc_canonize(enc_skip(
             tv_get_string_buf(argvars.add(2), buf2.as_mut_ptr()).cast_mut(),
-        ));
+        ))
+    };
 
-        let mut vimconv = CONV_NONE_INIT;
-        convert_setup(&raw mut vimconv, from, to);
+    let mut vimconv = CONV_NONE_INIT;
+    unsafe { convert_setup(&raw mut vimconv, from, to) };
+    unsafe {
         (*rettv).vval.v_string = if vimconv.vc_type == CONV_NONE {
             // Same encoding both ways: hand back a copy unchanged.
             xstrdup(str)
         } else {
             string_convert(&raw mut vimconv, str.cast_mut(), core::ptr::null_mut())
-        };
+        }
+    };
 
-        // Closes the descriptor.
+    // Closes the descriptor.
+    unsafe {
         convert_setup(
             &raw mut vimconv,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
-        );
-        xfree(from as *mut c_void);
-        xfree(to as *mut c_void);
-    }
+        )
+    };
+    unsafe { xfree(from as *mut c_void) };
+    unsafe { xfree(to as *mut c_void) };
 }
 
 /// Plan a conversion from `from` to `to`, replacing whatever `vcp` held.
@@ -259,63 +265,66 @@ pub unsafe fn convert_setup_ext(
     to: *mut c_char,
     to_unicode_is_utf8: bool,
 ) -> c_int {
-    unsafe {
-        if (*vcp).vc_type == CONV_ICONV && (*vcp).vc_fd != iconv_failed() {
-            iconv_close((*vcp).vc_fd);
-        }
-        *vcp = CONV_NONE_INIT;
+    if unsafe { (*vcp).vc_type } == CONV_ICONV && unsafe { (*vcp).vc_fd } != iconv_failed() {
+        unsafe { iconv_close((*vcp).vc_fd) };
+    }
+    unsafe { *vcp = CONV_NONE_INIT };
 
-        // Nothing to do: an unnamed side, or the same encoding twice.
-        if from.is_null() || *from == 0 || to.is_null() || *to == 0 || strcmp(from, to) == 0 {
-            return OK;
-        }
+    // Nothing to do: an unnamed side, or the same encoding twice.
+    if from.is_null()
+        || unsafe { *from } == 0
+        || to.is_null()
+        || unsafe { *to } == 0
+        || unsafe { strcmp(from, to) } == 0
+    {
+        return OK;
+    }
 
-        let from_prop = enc_canon_props(from);
-        let to_prop = enc_canon_props(to);
-        let is_utf8 = |prop: EncProps, loose: bool| {
-            if loose {
-                prop & ENC_UNICODE != 0
+    let from_prop = unsafe { enc_canon_props(from) };
+    let to_prop = unsafe { enc_canon_props(to) };
+    let is_utf8 = |prop: EncProps, loose: bool| {
+        if loose {
+            prop & ENC_UNICODE != 0
+        } else {
+            prop == ENC_UNICODE
+        }
+    };
+    let from_is_utf8 = is_utf8(from_prop, from_unicode_is_utf8);
+    let to_is_utf8 = is_utf8(to_prop, to_unicode_is_utf8);
+
+    // `vc_factor` is how much the output can grow: a Latin-1 byte becomes
+    // at most two UTF-8 bytes, a Latin-9 one at most three, and iconv's
+    // worst case is budgeted at four.
+    if from_prop & ENC_LATIN1 != 0 && to_is_utf8 {
+        unsafe { (*vcp).vc_type = CONV_TO_UTF8 };
+        unsafe { (*vcp).vc_factor = 2 };
+    } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 {
+        unsafe { (*vcp).vc_type = CONV_9_TO_UTF8 };
+        unsafe { (*vcp).vc_factor = 3 };
+    } else if from_is_utf8 && to_prop & ENC_LATIN1 != 0 {
+        unsafe { (*vcp).vc_type = CONV_TO_LATIN1 };
+    } else if from_is_utf8 && to_prop & ENC_LATIN9 != 0 {
+        unsafe { (*vcp).vc_type = CONV_TO_LATIN9 };
+    } else {
+        // A side already known to be UTF-8 is named as such, whatever
+        // Unicode spelling it arrived under.
+        let named = |is_utf8: bool, name: *mut c_char| {
+            if is_utf8 {
+                c"utf-8".as_ptr().cast_mut()
             } else {
-                prop == ENC_UNICODE
+                name
             }
         };
-        let from_is_utf8 = is_utf8(from_prop, from_unicode_is_utf8);
-        let to_is_utf8 = is_utf8(to_prop, to_unicode_is_utf8);
-
-        // `vc_factor` is how much the output can grow: a Latin-1 byte becomes
-        // at most two UTF-8 bytes, a Latin-9 one at most three, and iconv's
-        // worst case is budgeted at four.
-        if from_prop & ENC_LATIN1 != 0 && to_is_utf8 {
-            (*vcp).vc_type = CONV_TO_UTF8;
-            (*vcp).vc_factor = 2;
-        } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 {
-            (*vcp).vc_type = CONV_9_TO_UTF8;
-            (*vcp).vc_factor = 3;
-        } else if from_is_utf8 && to_prop & ENC_LATIN1 != 0 {
-            (*vcp).vc_type = CONV_TO_LATIN1;
-        } else if from_is_utf8 && to_prop & ENC_LATIN9 != 0 {
-            (*vcp).vc_type = CONV_TO_LATIN9;
-        } else {
-            // A side already known to be UTF-8 is named as such, whatever
-            // Unicode spelling it arrived under.
-            let named = |is_utf8: bool, name: *mut c_char| {
-                if is_utf8 {
-                    c"utf-8".as_ptr().cast_mut()
-                } else {
-                    name
-                }
-            };
-            (*vcp).vc_fd = my_iconv_open(named(to_is_utf8, to), named(from_is_utf8, from));
-            if (*vcp).vc_fd != iconv_failed() {
-                (*vcp).vc_type = CONV_ICONV;
-                (*vcp).vc_factor = 4;
-            }
+        unsafe { (*vcp).vc_fd = my_iconv_open(named(to_is_utf8, to), named(from_is_utf8, from)) };
+        if unsafe { (*vcp).vc_fd } != iconv_failed() {
+            unsafe { (*vcp).vc_type = CONV_ICONV };
+            unsafe { (*vcp).vc_factor = 4 };
         }
-        if (*vcp).vc_type == CONV_NONE {
-            FAIL
-        } else {
-            OK
-        }
+    }
+    if unsafe { (*vcp).vc_type } == CONV_NONE {
+        FAIL
+    } else {
+        OK
     }
 }
 
@@ -352,56 +361,60 @@ pub unsafe fn string_convert_ext(
     lenp: *mut size_t,
     unconvlenp: *mut size_t,
 ) -> *mut c_char {
-    unsafe {
-        let len = if lenp.is_null() { strlen(ptr) } else { *lenp };
-        if len == 0 {
-            return xstrdup(c"".as_ptr());
-        }
-        let src = core::slice::from_raw_parts(ptr as *const u8, len);
+    let len = if lenp.is_null() {
+        unsafe { strlen(ptr) }
+    } else {
+        unsafe { *lenp }
+    };
+    if len == 0 {
+        return unsafe { xstrdup(c"".as_ptr()) };
+    }
+    let src = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
 
-        // iconv manages its own buffer and reports its own length.
-        if (*vcp).vc_type == CONV_ICONV {
-            return iconv_string(vcp, ptr, len, unconvlenp, lenp);
-        }
+    // iconv manages its own buffer and reports its own length.
+    if unsafe { (*vcp).vc_type } == CONV_ICONV {
+        return unsafe { iconv_string(vcp, ptr, len, unconvlenp, lenp) };
+    }
 
-        // The worst-case growth of each conversion, which is what upstream
-        // allocates: it converts *in place* into this buffer. Building the
-        // answer first and copying it in would be tighter, but the allocation
-        // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
-        // exact malloc sizes a converting `tv_list_copy` makes -- and it is
-        // the same bound `vimconv_T::vc_factor` promises callers.
-        let factor: size_t = match (*vcp).vc_type {
-            CONV_TO_UTF8 => 2,
-            CONV_9_TO_UTF8 => 3,
-            CONV_TO_LATIN1 | CONV_TO_LATIN9 => 1,
-            // CONV_NONE, and anything else: nothing was planned.
-            _ => return core::ptr::null_mut(),
-        };
-        let room = len * factor + 1;
-        let result = xmalloc(room) as *mut u8;
+    // The worst-case growth of each conversion, which is what upstream
+    // allocates: it converts *in place* into this buffer. Building the
+    // answer first and copying it in would be tighter, but the allocation
+    // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
+    // exact malloc sizes a converting `tv_list_copy` makes -- and it is
+    // the same bound `vimconv_T::vc_factor` promises callers.
+    let factor: size_t = match unsafe { (*vcp).vc_type } {
+        CONV_TO_UTF8 => 2,
+        CONV_9_TO_UTF8 => 3,
+        CONV_TO_LATIN1 | CONV_TO_LATIN9 => 1,
+        // CONV_NONE, and anything else: nothing was planned.
+        _ => return core::ptr::null_mut(),
+    };
+    let room = len * factor + 1;
+    let result = unsafe { xmalloc(room) } as *mut u8;
 
-        let out = match (*vcp).vc_type {
-            CONV_TO_UTF8 => Some(latin1_to_utf8(src)),
-            CONV_9_TO_UTF8 => Some(latin9_to_utf8(src)),
-            _ => utf8_to_latin(
+    let out = match unsafe { (*vcp).vc_type } {
+        CONV_TO_UTF8 => Some(latin1_to_utf8(src)),
+        CONV_9_TO_UTF8 => Some(latin9_to_utf8(src)),
+        _ => unsafe {
+            utf8_to_latin(
                 src,
                 (*vcp).vc_type == CONV_TO_LATIN9,
                 (*vcp).vc_fail,
                 unconvlenp,
-            ),
-        };
-        let Some(out) = out else {
-            xfree(result as *mut c_void);
-            return core::ptr::null_mut();
-        };
-        debug_assert!(out.len() < room, "conversion overran vc_factor");
-        core::ptr::copy_nonoverlapping(out.as_ptr(), result, out.len());
-        *result.add(out.len()) = 0;
-        if !lenp.is_null() {
-            *lenp = out.len();
-        }
-        result as *mut c_char
+            )
+        },
+    };
+    let Some(out) = out else {
+        unsafe { xfree(result as *mut c_void) };
+        return core::ptr::null_mut();
+    };
+    debug_assert!(out.len() < room, "conversion overran vc_factor");
+    unsafe { core::ptr::copy_nonoverlapping(out.as_ptr(), result, out.len()) };
+    unsafe { *result.add(out.len()) = 0 };
+    if !lenp.is_null() {
+        unsafe { *lenp = out.len() };
     }
+    result as *mut c_char
 }
 
 /// Latin-1 to UTF-8: every byte is the codepoint of the same number.
@@ -470,54 +483,50 @@ unsafe fn utf8_to_latin(
     fail: bool,
     unconvlenp: *mut size_t,
 ) -> Option<Vec<u8>> {
-    unsafe {
-        let mut out = Vec::with_capacity(src.len());
-        let mut i = 0;
-        while i < src.len() {
-            let p = src.as_ptr().add(i) as *const c_char;
-            let l = utf_ptr2len_len(p, (src.len() - i) as c_int);
-            if l == 0 {
-                // An embedded NUL, which `len` says is part of the string.
-                out.push(0);
-                i += 1;
-                continue;
-            }
-            if l == 1 {
-                if utf8len_tab_zero[src[i] as usize] == 0 {
-                    return None; // not a lead byte: the input is not UTF-8
-                }
-                if !unconvlenp.is_null()
-                    && utf8len_tab_zero[src[i] as usize] as usize > src.len() - i
-                {
-                    // A sequence cut off by the end of the input.
-                    *unconvlenp = src.len() - i;
-                    break;
-                }
-                out.push(src[i]);
-                i += 1;
-                continue;
-            }
-
-            let mut c = utf_ptr2char(p);
-            if to_latin9 {
-                c = to_latin9_byte(c);
-            }
-            if !utf_iscomposing_legacy(c) {
-                if c < 0x100 {
-                    out.push(c as u8);
-                } else if fail {
-                    return None;
-                } else {
-                    out.push(0xbf); // ¿
-                    if utf_char2cells(c) > 1 {
-                        out.push(b'?');
-                    }
-                }
-            }
-            i += l as usize;
+    let mut out = Vec::with_capacity(src.len());
+    let mut i = 0;
+    while i < src.len() {
+        let p = unsafe { src.as_ptr().add(i) } as *const c_char;
+        let l = unsafe { utf_ptr2len_len(p, (src.len() - i) as c_int) };
+        if l == 0 {
+            // An embedded NUL, which `len` says is part of the string.
+            out.push(0);
+            i += 1;
+            continue;
         }
-        Some(out)
+        if l == 1 {
+            if utf8len_tab_zero[src[i] as usize] == 0 {
+                return None; // not a lead byte: the input is not UTF-8
+            }
+            if !unconvlenp.is_null() && utf8len_tab_zero[src[i] as usize] as usize > src.len() - i {
+                // A sequence cut off by the end of the input.
+                unsafe { *unconvlenp = src.len() - i };
+                break;
+            }
+            out.push(src[i]);
+            i += 1;
+            continue;
+        }
+
+        let mut c = unsafe { utf_ptr2char(p) };
+        if to_latin9 {
+            c = to_latin9_byte(c);
+        }
+        if !utf_iscomposing_legacy(c) {
+            if c < 0x100 {
+                out.push(c as u8);
+            } else if fail {
+                return None;
+            } else {
+                out.push(0xbf); // ¿
+                if unsafe { utf_char2cells(c) } > 1 {
+                    out.push(b'?');
+                }
+            }
+        }
+        i += l as usize;
     }
+    Some(out)
 }
 
 /// The Latin-9 byte for a codepoint, or a value no byte can hold.

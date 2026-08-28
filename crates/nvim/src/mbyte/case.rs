@@ -134,69 +134,67 @@ pub unsafe fn utf_strnicmp(
     mut n1: size_t,
     mut n2: size_t,
 ) -> c_int {
-    unsafe {
-        // `utf_safe_read_char_adv` answers 0 at the end of its span and -1 for
-        // a sequence it could not decode.
-        let (c1, c2) = loop {
-            let c1 = utf_safe_read_char_adv(&raw mut s1, &raw mut n1);
-            let c2 = utf_safe_read_char_adv(&raw mut s2, &raw mut n2);
-            if c1 <= 0 || c2 <= 0 {
-                break (c1, c2);
-            }
-            if c1 == c2 {
-                continue;
-            }
-            let cdiff = utf_fold(c1) - utf_fold(c2);
-            if cdiff != 0 {
-                return cdiff;
-            }
-        };
+    // `utf_safe_read_char_adv` answers 0 at the end of its span and -1 for
+    // a sequence it could not decode.
+    let (c1, c2) = loop {
+        let c1 = unsafe { utf_safe_read_char_adv(&raw mut s1, &raw mut n1) };
+        let c2 = unsafe { utf_safe_read_char_adv(&raw mut s2, &raw mut n2) };
+        if c1 <= 0 || c2 <= 0 {
+            break (c1, c2);
+        }
+        if c1 == c2 {
+            continue;
+        }
+        let cdiff = utf_fold(c1) - utf_fold(c2);
+        if cdiff != 0 {
+            return cdiff;
+        }
+    };
 
-        // A string ended. The shorter one sorts first; both ended, equal.
-        if c1 == 0 || c2 == 0 {
-            return match (c1 == 0, c2 == 0) {
-                (true, true) => 0,
-                (true, false) => -1,
-                _ => 1,
-            };
-        }
-
-        // Exactly one side failed to decode. Compare the *folded* form of the
-        // good side against the bad side's raw bytes, so the answer does not
-        // depend on which case the good side was written in. Folding one
-        // character is enough: the first byte comparison decides it.
-        let mut folded = [0 as c_char; MB_MAXCHAR];
-        if c1 != -1 && c2 == -1 {
-            n1 = utf_char2bytes(utf_fold(c1), folded.as_mut_ptr()) as size_t;
-            s1 = folded.as_ptr();
-        } else if c2 != -1 && c1 == -1 {
-            n2 = utf_char2bytes(utf_fold(c2), folded.as_mut_ptr()) as size_t;
-            s2 = folded.as_ptr();
-        }
-
-        while n1 > 0 && n2 > 0 && *s1 != NUL as c_char && *s2 != NUL as c_char {
-            let cdiff = *s1 as u8 as c_int - *s2 as u8 as c_int;
-            if cdiff != 0 {
-                return cdiff;
-            }
-            s1 = s1.offset(1);
-            s2 = s2.offset(1);
-            n1 -= 1;
-            n2 -= 1;
-        }
-
-        // A NUL ends a side early, however many bytes were allowed.
-        if n1 > 0 && *s1 == NUL as c_char {
-            n1 = 0;
-        }
-        if n2 > 0 && *s2 == NUL as c_char {
-            n2 = 0;
-        }
-        match (n1 == 0, n2 == 0) {
+    // A string ended. The shorter one sorts first; both ended, equal.
+    if c1 == 0 || c2 == 0 {
+        return match (c1 == 0, c2 == 0) {
             (true, true) => 0,
             (true, false) => -1,
             _ => 1,
+        };
+    }
+
+    // Exactly one side failed to decode. Compare the *folded* form of the
+    // good side against the bad side's raw bytes, so the answer does not
+    // depend on which case the good side was written in. Folding one
+    // character is enough: the first byte comparison decides it.
+    let mut folded = [0 as c_char; MB_MAXCHAR];
+    if c1 != -1 && c2 == -1 {
+        n1 = unsafe { utf_char2bytes(utf_fold(c1), folded.as_mut_ptr()) } as size_t;
+        s1 = folded.as_ptr();
+    } else if c2 != -1 && c1 == -1 {
+        n2 = unsafe { utf_char2bytes(utf_fold(c2), folded.as_mut_ptr()) } as size_t;
+        s2 = folded.as_ptr();
+    }
+
+    while n1 > 0 && n2 > 0 && unsafe { *s1 } != NUL as c_char && unsafe { *s2 } != NUL as c_char {
+        let cdiff = unsafe { *s1 } as u8 as c_int - unsafe { *s2 } as u8 as c_int;
+        if cdiff != 0 {
+            return cdiff;
         }
+        s1 = unsafe { s1.offset(1) };
+        s2 = unsafe { s2.offset(1) };
+        n1 -= 1;
+        n2 -= 1;
+    }
+
+    // A NUL ends a side early, however many bytes were allowed.
+    if n1 > 0 && unsafe { *s1 } == NUL as c_char {
+        n1 = 0;
+    }
+    if n2 > 0 && unsafe { *s2 } == NUL as c_char {
+        n2 = 0;
+    }
+    match (n1 == 0, n2 == 0) {
+        (true, true) => 0,
+        (true, false) => -1,
+        _ => 1,
     }
 }
 
@@ -224,12 +222,10 @@ pub unsafe fn mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int {
 ///
 /// Both strings must be NUL-terminated.
 pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int {
-    unsafe {
-        if ic {
-            mb_stricmp(s1, s2)
-        } else {
-            strcmp(s1, s2)
-        }
+    if ic {
+        unsafe { mb_stricmp(s1, s2) }
+    } else {
+        unsafe { strcmp(s1, s2) }
     }
 }
 

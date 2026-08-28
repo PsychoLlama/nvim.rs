@@ -126,24 +126,24 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
         }
         // SAFETY: both buffers are sized as the calls below are told, and
         // outlive every one of them.
+        let namebuff = shortname.as_mut_ptr();
+        unsafe { home_replace(ptr::null(), name, namebuff, MAXPATHL as size_t, true) };
+        let iobuff = row.as_mut_ptr();
         unsafe {
-            let namebuff = shortname.as_mut_ptr();
-            home_replace(ptr::null(), name, namebuff, MAXPATHL as size_t, true);
-            let iobuff = row.as_mut_ptr();
             vim_snprintf(
                 iobuff,
                 IOSIZE as size_t,
                 c"%3d: %s".as_ptr(),
                 listed,
                 namebuff,
-            );
-            if !message_filtered(iobuff) {
-                if msg_col.get() > 0 {
-                    msg_putchar('\n' as c_int);
-                }
-                msg_outtrans(iobuff, 0, false);
-                line_breakcheck();
+            )
+        };
+        if !unsafe { message_filtered(iobuff) } {
+            if msg_col.get() > 0 {
+                unsafe { msg_putchar('\n' as c_int) };
             }
+            unsafe { msg_outtrans(iobuff, 0, false) };
+            line_breakcheck();
         }
     }
 }
@@ -155,20 +155,18 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
 /// `eap` must be the live `:script` command block.
 unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
     let mut path = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        if by_number {
-            if !script_id_valid((*eap).line2 as c_int) {
-                emsg(gettext(&raw const e_invarg as *const c_char));
-                return;
-            }
-            (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name;
-        } else {
-            let namebuff = path.as_mut_ptr();
-            expand_env((*eap).arg, namebuff, MAXPATHL);
-            (*eap).arg = namebuff;
+    if by_number {
+        if !script_id_valid(unsafe { (*eap).line2 } as c_int) {
+            unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+            return;
         }
-        do_exedit(eap, ptr::null_mut());
+        unsafe { (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name };
+    } else {
+        let namebuff = path.as_mut_ptr();
+        unsafe { expand_env((*eap).arg, namebuff, MAXPATHL) };
+        unsafe { (*eap).arg = namebuff };
     }
+    unsafe { do_exedit(eap, ptr::null_mut()) };
 }
 
 /// A script's name, for `":verbose set"` -- the text appended to "Last set
@@ -201,8 +199,8 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
                     IOSIZE as size_t,
                     gettext(c"API client (channel id %lu)".as_ptr()),
                     script_ctx.sc_chan,
-                );
-            }
+                )
+            };
             return cstr::in_chars(&named).to_owned();
         }
         _ => {
@@ -216,8 +214,8 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
                         IOSIZE as size_t,
                         gettext(c"anonymous :source (script id %d)".as_ptr()),
                         script_ctx.sc_sid,
-                    );
-                }
+                    )
+                };
                 return cstr::in_chars(&named).to_owned();
             }
             if !fold_home {
@@ -302,11 +300,9 @@ enum ScriptQuery {
 /// `"getscriptinfo()"` function
 pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
-    unsafe {
-        tv_list_alloc_ret(rettv, script_count() as ptrdiff_t);
-        if tv_check_for_opt_dict_arg(argvars, 0) == FAIL {
-            return;
-        }
+    unsafe { tv_list_alloc_ret(rettv, script_count() as ptrdiff_t) };
+    if unsafe { tv_check_for_opt_dict_arg(argvars, 0) } == FAIL {
+        return;
     }
     // The pattern's source string is freed on the way out, as upstream does,
     // even when it did not compile.
@@ -327,10 +323,8 @@ pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 
     // SAFETY: both were allocated by the call that produced `query`; either
     // may be null, which both frees accept.
-    unsafe {
-        vim_regfree(regmatch.regprog);
-        xfree(pat.cast::<c_void>());
-    }
+    unsafe { vim_regfree(regmatch.regprog) };
+    unsafe { xfree(pat.cast::<c_void>()) };
 }
 
 /// Read `getscriptinfo()`'s optional dict argument.
@@ -372,19 +366,17 @@ unsafe fn script_query(
                     gettext(&raw const e_invargNval as *const c_char),
                     c"sid".as_ptr(),
                     numbuf.string(&raw mut (*sid_di).di_tv),
-                );
-            }
+                )
+            };
             return ScriptQuery::Rejected;
         }
         return ScriptQuery::Sid(sid);
     }
 
     // SAFETY: the string is allocated for us and handed straight to the caller.
-    unsafe {
-        *pat = tv_dict_get_string_alloc(dict, c"name".as_ptr());
-        if !(*pat).is_null() {
-            regmatch.regprog = vim_regcomp(*pat, RE_MAGIC + RE_STRING);
-        }
+    unsafe { *pat = tv_dict_get_string_alloc(dict, c"name".as_ptr()) };
+    if !unsafe { *pat }.is_null() {
+        regmatch.regprog = unsafe { vim_regcomp(*pat, RE_MAGIC + RE_STRING) };
     }
     if regmatch.regprog.is_null() {
         ScriptQuery::All
@@ -421,23 +413,23 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
         }
 
         // SAFETY: a fresh dict, handed to the list before anything else sees it.
-        unsafe {
-            let d = tv_dict_alloc();
-            tv_list_append_dict(l, d);
-            dict_add_str(d, c"name", name);
-            dict_add_nr(d, c"sid", sid);
-            dict_add_nr(d, c"version", 1);
-            // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
-            dict_add_bool(d, c"autoload", kBoolVarFalse);
+        let d = unsafe { tv_dict_alloc() };
+        unsafe { tv_list_append_dict(l, d) };
+        unsafe { dict_add_str(d, c"name", name) };
+        unsafe { dict_add_nr(d, c"sid", sid) };
+        unsafe { dict_add_nr(d, c"version", 1) };
+        // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
+        unsafe { dict_add_bool(d, c"autoload", kBoolVarFalse) };
 
-            // A script ID was specified, so report that script in full.
-            if let ScriptQuery::Sid(_) = *query {
-                let sv_dict = &raw mut (*(*si).sn_vars).sv_dict;
-                let vars = tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id());
-                tv_dict_add_dict(d, c"variables".as_ptr(), c"variables".count_bytes(), vars);
-                let funcs = get_script_local_funcs(sid as scid_T);
-                tv_dict_add_list(d, c"functions".as_ptr(), c"functions".count_bytes(), funcs);
-            }
+        // A script ID was specified, so report that script in full.
+        if let ScriptQuery::Sid(_) = *query {
+            let sv_dict = unsafe { &raw mut (*(*si).sn_vars).sv_dict };
+            let vars = unsafe { tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
+            unsafe { tv_dict_add_dict(d, c"variables".as_ptr(), c"variables".count_bytes(), vars) };
+            let funcs = unsafe { get_script_local_funcs(sid as scid_T) };
+            unsafe {
+                tv_dict_add_list(d, c"functions".as_ptr(), c"functions".count_bytes(), funcs)
+            };
         }
     }
 }
@@ -528,10 +520,8 @@ pub unsafe fn getsourceline(
     let breakpoint = unsafe { (*sp).breakpoint };
     if !from_buf_or_str && breakpoint != 0 && breakpoint <= sourcing_lnum() {
         // SAFETY: as above; `fname` is the script's path.
-        unsafe {
-            dbg_breakpoint((*sp).fname, sourcing_lnum());
-            refresh_breakpoint(sp);
-        }
+        dbg_breakpoint(unsafe { (*sp).fname }, sourcing_lnum());
+        unsafe { refresh_breakpoint(sp) };
     }
 
     line
@@ -544,10 +534,8 @@ pub unsafe fn getsourceline(
 ///
 /// `sp` must be a file-backed source cookie.
 unsafe fn refresh_breakpoint(sp: *mut source_cookie_T) {
-    unsafe {
-        (*sp).breakpoint = dbg_find_breakpoint(true, (*sp).fname, sourcing_lnum());
-        (*sp).dbg_tick = debug_tick.get();
-    }
+    unsafe { (*sp).breakpoint = dbg_find_breakpoint(true, (*sp).fname, sourcing_lnum()) };
+    unsafe { (*sp).dbg_tick = debug_tick.get() };
 }
 
 /// The next line of the script, using the one `getsourceline` read ahead if
@@ -557,18 +545,18 @@ unsafe fn refresh_breakpoint(sp: *mut source_cookie_T) {
 ///
 /// `sp` must be the live source cookie.
 unsafe fn next_line(sp: *mut source_cookie_T) -> *mut c_char {
-    unsafe {
-        if (*sp).finished || (!(*sp).source_from_buf_or_str && (*sp).fp.is_null()) {
-            return ptr::null_mut();
-        }
-        if (*sp).nextline.is_null() {
-            return get_one_sourceline(sp);
-        }
-        let line = (*sp).nextline;
-        (*sp).nextline = ptr::null_mut();
-        (*sp).sourcing_lnum += 1;
-        line
+    if unsafe { (*sp).finished }
+        || (!unsafe { (*sp).source_from_buf_or_str } && unsafe { (*sp).fp }.is_null())
+    {
+        return ptr::null_mut();
     }
+    if unsafe { (*sp).nextline }.is_null() {
+        return unsafe { get_one_sourceline(sp) };
+    }
+    let line = unsafe { (*sp).nextline };
+    unsafe { (*sp).nextline = ptr::null_mut() };
+    unsafe { (*sp).sourcing_lnum += 1 };
+    line
 }
 
 /// Join the `\`-continuation lines that follow `line` onto it.
@@ -580,27 +568,29 @@ unsafe fn next_line(sp: *mut source_cookie_T) -> *mut c_char {
 ///
 /// `sp` must be the live source cookie and `line` its freshly read line.
 unsafe fn concat_continuations(sp: *mut source_cookie_T, line: *mut c_char) -> *mut c_char {
-    unsafe {
-        // Compensate for the one line read-ahead.
-        (*sp).sourcing_lnum -= 1;
-        (*sp).nextline = get_one_sourceline(sp);
-        if (*sp).nextline.is_null() || !starts_continuation(skipwhite((*sp).nextline)) {
-            return line;
-        }
-
-        let mut ga = GA_EMPTY_INIT_VALUE;
-        ga_init(&raw mut ga, size_of::<c_char>() as c_int, 400);
-        ga_concat(&raw mut ga, line);
-        while !(*sp).nextline.is_null()
-            && concat_continued_line(&raw mut ga, 400, (*sp).nextline, strlen((*sp).nextline))
-        {
-            xfree((*sp).nextline.cast::<c_void>());
-            (*sp).nextline = get_one_sourceline(sp);
-        }
-        ga_append(&raw mut ga, NUL as uint8_t);
-        xfree(line.cast::<c_void>());
-        ga.ga_data.cast::<c_char>()
+    // Compensate for the one line read-ahead.
+    unsafe { (*sp).sourcing_lnum -= 1 };
+    unsafe { (*sp).nextline = get_one_sourceline(sp) };
+    if unsafe { (*sp).nextline }.is_null()
+        || !unsafe { starts_continuation(skipwhite((*sp).nextline)) }
+    {
+        return line;
     }
+
+    let mut ga = GA_EMPTY_INIT_VALUE;
+    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 400) };
+    unsafe { ga_concat(&raw mut ga, line) };
+    while !unsafe { (*sp).nextline }.is_null()
+        && unsafe {
+            concat_continued_line(&raw mut ga, 400, (*sp).nextline, strlen((*sp).nextline))
+        }
+    {
+        unsafe { xfree((*sp).nextline.cast::<c_void>()) };
+        unsafe { (*sp).nextline = get_one_sourceline(sp) };
+    }
+    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    unsafe { xfree(line.cast::<c_void>()) };
+    ga.ga_data.cast::<c_char>()
 }
 
 /// Does `p` begin a continuation -- a `\`, or the `"\ ` that comments one out?
@@ -627,10 +617,8 @@ unsafe fn get_one_sourceline(sp: *mut source_cookie_T) -> *mut c_char {
     // Use a growarray to store the sourced line.
     let mut ga = GA_EMPTY_INIT_VALUE;
     // SAFETY: `ga` is a local garray, and `sp` is the caller's cookie.
-    unsafe {
-        ga_init(&raw mut ga, 1, 250);
-        (*sp).sourcing_lnum += 1;
-    }
+    unsafe { ga_init(&raw mut ga, 1, 250) };
+    unsafe { (*sp).sourcing_lnum += 1 };
 
     // Loop until there is a finished line (or end-of-file).
     let mut have_read = false;
@@ -699,18 +687,16 @@ unsafe fn get_one_sourceline(sp: *mut source_cookie_T) -> *mut c_char {
 /// `sp` must be a buffer- or string-backed source cookie, and `ga` the line
 /// being built.
 unsafe fn next_buffered_line(sp: *mut source_cookie_T, ga: *mut garray_T) -> Option<c_int> {
-    unsafe {
-        if (*sp).buf_lnum >= (*sp).buflines.ga_len {
-            return None;
-        }
-        let lines = (*sp).buflines.ga_data.cast::<*mut c_char>();
-        ga_concat(ga, *lines.add((*sp).buf_lnum as usize));
-        (*sp).buf_lnum += 1;
-        ga_grow(ga, 1);
-        *(*ga).ga_data.cast::<c_char>().add((*ga).ga_len as usize) = NUL as c_char;
-        (*ga).ga_len += 1;
-        Some((*ga).ga_len)
+    if unsafe { (*sp).buf_lnum } >= unsafe { (*sp).buflines.ga_len } {
+        return None;
     }
+    let lines = unsafe { (*sp).buflines.ga_data }.cast::<*mut c_char>();
+    unsafe { ga_concat(ga, *lines.add((*sp).buf_lnum as usize)) };
+    unsafe { (*sp).buf_lnum += 1 };
+    unsafe { ga_grow(ga, 1) };
+    unsafe { *(*ga).ga_data.cast::<c_char>().add((*ga).ga_len as usize) = NUL as c_char };
+    unsafe { (*ga).ga_len += 1 };
+    Some(unsafe { (*ga).ga_len })
 }
 
 /// `fgets` one chunk onto the end of `ga`, retrying when a signal interrupts.
@@ -721,17 +707,16 @@ unsafe fn next_buffered_line(sp: *mut source_cookie_T, ga: *mut garray_T) -> Opt
 ///
 /// `sp` must be a file-backed source cookie, and `ga` the line being built.
 unsafe fn read_file_chunk(sp: *mut source_cookie_T, ga: *mut garray_T) -> Option<c_int> {
-    unsafe {
-        let filled = (*ga).ga_len;
-        let buf = (*ga).ga_data.cast::<c_char>();
-        loop {
-            *__errno_location() = 0;
-            if !fgets(buf.add(filled as usize), (*ga).ga_maxlen - filled, (*sp).fp).is_null() {
-                return Some(filled + strlen(buf.add(filled as usize)) as c_int);
-            }
-            if *__errno_location() != EINTR {
-                return None;
-            }
+    let filled = unsafe { (*ga).ga_len };
+    let buf = unsafe { (*ga).ga_data }.cast::<c_char>();
+    loop {
+        unsafe { *__errno_location() = 0 };
+        if !unsafe { fgets(buf.add(filled as usize), (*ga).ga_maxlen - filled, (*sp).fp) }.is_null()
+        {
+            return Some(filled + unsafe { strlen(buf.add(filled as usize)) } as c_int);
+        }
+        if unsafe { *__errno_location() } != EINTR {
+            return None;
         }
     }
 }
@@ -773,38 +758,38 @@ pub unsafe fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
 /// `":scriptencoding"`: set encoding conversion for a sourced script.
 pub unsafe fn ex_scriptencoding(eap: *mut exarg_T) {
     // SAFETY: `eap` is the running command's block.
-    unsafe {
-        if sourcing_a_script(eap) == 0 {
+    if unsafe { sourcing_a_script(eap) } == 0 {
+        unsafe {
             emsg(gettext(
                 c"E167: :scriptencoding used outside of a sourced file".as_ptr(),
-            ));
-            return;
-        }
-        let name = if *(*eap).arg != NUL as c_char {
-            enc_canonize((*eap).arg)
-        } else {
-            (*eap).arg
+            ))
         };
-        // Set up for conversion from the specified encoding to 'encoding'.
-        let sp = getline_cookie((*eap).ea_getline, (*eap).cookie).cast::<source_cookie_T>();
-        convert_setup(&raw mut (*sp).conv, name, p_enc.get());
-        if name != (*eap).arg {
-            xfree(name.cast::<c_void>());
-        }
+        return;
+    }
+    let name = if unsafe { *(*eap).arg } != NUL as c_char {
+        unsafe { enc_canonize((*eap).arg) }
+    } else {
+        unsafe { (*eap).arg }
+    };
+    // Set up for conversion from the specified encoding to 'encoding'.
+    let sp = unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie) }.cast::<source_cookie_T>();
+    unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc.get()) };
+    if name != unsafe { (*eap).arg } {
+        unsafe { xfree(name.cast::<c_void>()) };
     }
 }
 
 /// `":finish"`: mark a sourced file as finished.
 pub unsafe fn ex_finish(eap: *mut exarg_T) {
     // SAFETY: `eap` is the running command's block.
-    unsafe {
-        if sourcing_a_script(eap) != 0 {
-            do_finish(eap, false);
-        } else {
+    if unsafe { sourcing_a_script(eap) } != 0 {
+        unsafe { do_finish(eap, false) };
+    } else {
+        unsafe {
             emsg(gettext(
                 c"E168: :finish used outside of a sourced file".as_ptr(),
-            ));
-        }
+            ))
+        };
     }
 }
 
@@ -815,21 +800,19 @@ pub unsafe fn ex_finish(eap: *mut exarg_T) {
 pub unsafe fn do_finish(eap: *mut exarg_T, reanimate: bool) {
     // SAFETY: `eap` is the running command's block, and its cookie is a
     // `source_cookie_T` because `ex_finish` checked before calling.
-    unsafe {
-        if reanimate {
-            (*source_cookie(eap)).finished = false;
-        }
-        // Clean up (and deactivate) conditionals, but stop when a try
-        // conditional not in its finally clause -- which then is to be executed
-        // next -- is found.  In that case make the `":finish"` pending for
-        // execution at the `":endtry"`.  Otherwise, finish normally.
-        let idx = cleanup_conditionals((*eap).cstack, 0, true);
-        if idx >= 0 {
-            (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char;
-            report_make_pending(CSTP_FINISH, NULL_0);
-        } else {
-            (*source_cookie(eap)).finished = true;
-        }
+    if reanimate {
+        unsafe { (*source_cookie(eap)).finished = false };
+    }
+    // Clean up (and deactivate) conditionals, but stop when a try
+    // conditional not in its finally clause -- which then is to be executed
+    // next -- is found.  In that case make the `":finish"` pending for
+    // execution at the `":endtry"`.  Otherwise, finish normally.
+    let idx = unsafe { cleanup_conditionals((*eap).cstack, 0, true) };
+    if idx >= 0 {
+        unsafe { (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
+        unsafe { report_make_pending(CSTP_FINISH, NULL_0) };
+    } else {
+        unsafe { (*source_cookie(eap)).finished = true };
     }
 }
 
@@ -847,10 +830,8 @@ unsafe fn source_cookie(eap: *mut exarg_T) -> *mut source_cookie_T {
 pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: `getline_equal` reads the reader's own bookkeeping; the cookie is
     // only dereferenced once that says it is a sourced script's.
-    unsafe {
-        getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn))
-            && (*getline_cookie(fgetline, cookie).cast::<source_cookie_T>()).finished
-    }
+    let sourced = unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) };
+    sourced && unsafe { (*getline_cookie(fgetline, cookie).cast::<source_cookie_T>()).finished }
 }
 
 // ---------------------------------------------------------------------------
@@ -884,11 +865,9 @@ pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_cha
 
     // The callers free this with `xfree`, so it has to come from `xmalloc`.
     // SAFETY: `xmalloc` returns `out.len()` writable bytes or does not return.
-    unsafe {
-        let scriptname = xmalloc(out.len()).cast::<u8>();
-        ptr::copy_nonoverlapping(out.as_ptr(), scriptname, out.len());
-        scriptname.cast::<c_char>()
-    }
+    let scriptname = unsafe { xmalloc(out.len()) }.cast::<u8>();
+    unsafe { ptr::copy_nonoverlapping(out.as_ptr(), scriptname, out.len()) };
+    scriptname.cast::<c_char>()
 }
 
 /// If `name` has a package name, try autoloading the script for it.

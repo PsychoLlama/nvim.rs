@@ -143,11 +143,9 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         let default = get_option_default(idx, flags, &mut expansion);
         // SAFETY: the option's own variable, and the table's default for
         // it, which is a string.
-        unsafe {
-            xfree((*varp).cast::<c_void>());
-            *varp = xstrdup(default.data.string.data());
-            s = *varp;
-        }
+        unsafe { xfree((*varp).cast::<c_void>()) };
+        unsafe { *varp = xstrdup(default.data.string.data()) };
+        s = unsafe { *varp };
     }
     // A floating window's status line is part of its frame.
     if is_stl && !wp.is_null() && unsafe { (*wp).w_floating } {
@@ -267,10 +265,8 @@ pub unsafe fn did_set_shada(args: *mut optset_T) -> *const c_char {
                 // SAFETY: the frame's error buffer, with its own length,
                 // and a one-string format.
                 let byte = c_int::from(at(i - 1));
-                unsafe {
-                    let fmt = gettext(c"E526: Missing number after <%s>".as_ptr());
-                    vim_snprintf(buf, buflen, fmt, transchar_byte(byte).as_ptr());
-                }
+                let fmt = unsafe { gettext(c"E526: Missing number after <%s>".as_ptr()) };
+                unsafe { vim_snprintf(buf, buflen, fmt, transchar_byte(byte).as_ptr()) };
                 return buf;
             }
         }
@@ -326,21 +322,17 @@ pub unsafe fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_shortmess(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), SHM_ALL.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), SHM_ALL.as_ptr(), buf, len) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_verbosefile(_args: *mut optset_T) -> *const c_char {
     // SAFETY: closes and reopens this process's own log file.
-    unsafe {
-        verbose_stop();
-        if c_int::from(*p_vfile.get()) != NUL && verbose_open() == FAIL {
-            return invalid();
-        }
+    unsafe { verbose_stop() };
+    if c_int::from(unsafe { *p_vfile.get() }) != NUL && unsafe { verbose_open() } == FAIL {
+        return invalid();
     }
     ptr::null()
 }

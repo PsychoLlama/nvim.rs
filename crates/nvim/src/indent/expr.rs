@@ -55,12 +55,10 @@ pub unsafe fn get_expr_indent() -> c_int {
         current_sctx.set(unsafe { (*buf).b_p_script_ctx[kBufOptIndentexpr as usize] });
         // SAFETY: as above. The expression is evaluated from a copy, because
         // 'indentexpr' can be changed while it is running.
-        unsafe {
-            let inde_copy = xstrdup((*buf).b_p_inde);
-            let answer = eval_to_number(inde_copy, true) as c_int;
-            xfree(inde_copy.cast());
-            answer
-        }
+        let inde_copy = unsafe { xstrdup((*buf).b_p_inde) };
+        let answer = unsafe { eval_to_number(inde_copy, true) } as c_int;
+        unsafe { xfree(inde_copy.cast()) };
+        answer
     };
     current_sctx.set(save_sctx);
 
@@ -70,12 +68,10 @@ pub unsafe fn get_expr_indent() -> c_int {
     let save_state = State.get();
     State.set(MODE_INSERT);
     // SAFETY: as above.
-    unsafe {
-        (*win).w_cursor = save_pos;
-        (*win).w_curswant = save_curswant;
-        (*win).w_set_curswant = save_set_curswant;
-        check_cursor(Win::new(win));
-    }
+    unsafe { (*win).w_cursor = save_pos };
+    unsafe { (*win).w_curswant = save_curswant };
+    unsafe { (*win).w_set_curswant = save_set_curswant };
+    check_cursor(unsafe { Win::new(win) });
     State.set(save_state);
 
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
@@ -148,14 +144,13 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 unsafe fn enclosing_open() -> Option<pos_T> {
     // SAFETY: the caller's contract; `findmatch` answers a pointer into
     // static storage that stays valid until the next call.
-    unsafe {
-        let Some(paren) = findmatch(::core::ptr::null_mut(), '(' as c_int) else {
-            return findmatch(::core::ptr::null_mut(), '[' as c_int);
-        };
-        match findmatch(::core::ptr::null_mut(), '[' as c_int) {
-            Some(square) if !lt(square, paren) => Some(square),
-            _ => Some(paren),
-        }
+    let __v = unsafe { findmatch(::core::ptr::null_mut(), '(' as c_int) };
+    let Some(paren) = __v else {
+        return unsafe { findmatch(::core::ptr::null_mut(), '[' as c_int) };
+    };
+    match unsafe { findmatch(::core::ptr::null_mut(), '[' as c_int) } {
+        Some(square) if !lt(square, paren) => Some(square),
+        _ => Some(paren),
     }
 }
 
@@ -170,24 +165,22 @@ unsafe fn enclosing_open() -> Option<pos_T> {
 unsafe fn same_level_indent(open: &pos_T) -> Option<c_int> {
     // SAFETY: the caller's contract; the cursor stays on a real line because
     // the walk stops at `open`, which `findmatch` answered.
-    unsafe {
-        let win = curwin.get();
-        let mut parencount = 0;
-        loop {
-            (*win).w_cursor.lnum -= 1;
-            if (*win).w_cursor.lnum < open.lnum {
-                return None;
-            }
-            if linewhite((*win).w_cursor.lnum) {
-                continue;
-            }
-            count_parens(
-                CStr::from_ptr(get_cursor_line_ptr()).to_bytes(),
-                &mut parencount,
-            );
-            if parencount == 0 {
-                return Some(get_indent());
-            }
+    let win = curwin.get();
+    let mut parencount = 0;
+    loop {
+        unsafe { (*win).w_cursor.lnum -= 1 };
+        if unsafe { (*win).w_cursor.lnum } < open.lnum {
+            return None;
+        }
+        if unsafe { linewhite((*win).w_cursor.lnum) } {
+            continue;
+        }
+        count_parens(
+            unsafe { CStr::from_ptr(get_cursor_line_ptr()) }.to_bytes(),
+            &mut parencount,
+        );
+        if parencount == 0 {
+            return Some(get_indent());
         }
     }
 }
@@ -206,12 +199,11 @@ unsafe fn skip_white_measuring(
 ) {
     // SAFETY: the caller's line, walked one byte at a time and stopped by
     // the NUL, which is not white space.
-    unsafe {
-        while ascii_iswhite(**that as c_int) {
-            *amount +=
-                win_charsize(cstype, *amount, *that, **that as uint8_t as int32_t, csarg).width;
-            *that = that.add(1);
-        }
+    while ascii_iswhite(unsafe { **that } as c_int) {
+        *amount +=
+            unsafe { win_charsize(cstype, *amount, *that, **that as uint8_t as int32_t, csarg) }
+                .width;
+        *that = unsafe { that.add(1) };
     }
 }
 
@@ -223,56 +215,56 @@ unsafe fn skip_white_measuring(
 unsafe fn indent_after_open(open: &pos_T) -> c_int {
     // SAFETY: the caller's position; the cursor is moved onto it first, so
     // `get_cursor_line_ptr` is the line `open.col` indexes into.
-    unsafe {
-        let win = curwin.get();
-        (*win).w_cursor.lnum = open.lnum;
-        (*win).w_cursor.col = open.col;
-        let line = get_cursor_line_ptr();
-        let mut csarg = CharsizeArg::default();
-        let cstype = init_charsize_arg(&mut csarg, Win::new(win), open.lnum, line);
+    let win = curwin.get();
+    unsafe { (*win).w_cursor.lnum = open.lnum };
+    unsafe { (*win).w_cursor.col = open.col };
+    let line = get_cursor_line_ptr();
+    let mut csarg = CharsizeArg::default();
+    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(win), open.lnum, line) };
 
-        // Walk to `open`'s column, measuring what is before it.
-        let mut sci: StrCharInfo = utf_ptr2str_char_info(line);
-        let mut amount = 0;
-        let mut col = open.col;
-        while *sci.ptr != 0 && col > 0 {
-            amount += win_charsize(cstype, amount, sci.ptr, sci.chr.value, &mut csarg).width;
-            sci = utfc_next(sci);
-            col -= 1;
-        }
-        let mut that = sci.ptr;
+    // Walk to `open`'s column, measuring what is before it.
+    let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut amount = 0;
+    let mut col = open.col;
+    while unsafe { *sci.ptr } != 0 && col > 0 {
+        amount += unsafe { win_charsize(cstype, amount, sci.ptr, sci.chr.value, &mut csarg) }.width;
+        sci = unsafe { utfc_next(sci) };
+        col -= 1;
+    }
+    let mut that = sci.ptr;
 
-        // Some keywords indent their body rather than their arguments (the
-        // non-standard-Lisp ones are Scheme special forms):
-        //     (let ((a 1))       instead of    (let ((a 1))
-        //       (...))                              (...))
-        if (*that == b'(' as c_char || *that == b'[' as c_char) && lisp_match(that.add(1)) {
-            return amount + 2;
-        }
-        if *that != 0 {
-            that = that.add(1);
-            amount += 1;
-        }
-        let mut firsttry = amount;
-        skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg);
-        if *that == 0 || *that == b';' as c_char {
-            // A comment line, or nothing after the bracket at all.
-            return amount;
-        }
-        // Not a comment. `(` is tested for so that the first argument of a
-        // `let`/`do` can span more than one line.
-        if *that != b'(' as c_char && *that != b'[' as c_char {
-            firsttry += 1;
-        }
-        amount = measure_first_argument(&mut that, amount, cstype, &mut csarg);
-        skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg);
-        if *that == 0 || *that == b';' as c_char {
-            // Nothing followed the first argument on this line, so line the
-            // continuation up with the argument instead of past it.
-            firsttry
-        } else {
-            amount
-        }
+    // Some keywords indent their body rather than their arguments (the
+    // non-standard-Lisp ones are Scheme special forms):
+    //     (let ((a 1))       instead of    (let ((a 1))
+    //       (...))                              (...))
+    if (unsafe { *that } == b'(' as c_char || unsafe { *that } == b'[' as c_char)
+        && unsafe { lisp_match(that.add(1)) }
+    {
+        return amount + 2;
+    }
+    if unsafe { *that } != 0 {
+        that = unsafe { that.add(1) };
+        amount += 1;
+    }
+    let mut firsttry = amount;
+    unsafe { skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg) };
+    if unsafe { *that } == 0 || unsafe { *that } == b';' as c_char {
+        // A comment line, or nothing after the bracket at all.
+        return amount;
+    }
+    // Not a comment. `(` is tested for so that the first argument of a
+    // `let`/`do` can span more than one line.
+    if unsafe { *that } != b'(' as c_char && unsafe { *that } != b'[' as c_char {
+        firsttry += 1;
+    }
+    amount = unsafe { measure_first_argument(&mut that, amount, cstype, &mut csarg) };
+    unsafe { skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg) };
+    if unsafe { *that } == 0 || unsafe { *that } == b';' as c_char {
+        // Nothing followed the first argument on this line, so line the
+        // continuation up with the argument instead of past it.
+        firsttry
+    } else {
+        amount
     }
 }
 
@@ -294,50 +286,52 @@ unsafe fn measure_first_argument(
 ) -> c_int {
     // SAFETY: the caller's line, walked one character at a time by
     // `utfc_next` and stopped by the NUL.
-    unsafe {
-        let mut ci: CharInfo = utf_ptr2char_info(*that);
-        if ci.value == '"' as int32_t
-            || ci.value == '\'' as int32_t
-            || ci.value == '#' as int32_t
-            || ('0' as int32_t..='9' as int32_t).contains(&ci.value)
-        {
-            return amount;
+    let mut ci: CharInfo = unsafe { utf_ptr2char_info(*that) };
+    if ci.value == '"' as int32_t
+        || ci.value == '\'' as int32_t
+        || ci.value == '#' as int32_t
+        || ('0' as int32_t..='9' as int32_t).contains(&ci.value)
+    {
+        return amount;
+    }
+    let mut parencount = 0;
+    let mut quotecount = 0;
+    while unsafe { **that } != 0
+        && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
+    {
+        if ci.value == '"' as int32_t {
+            quotecount = (quotecount == 0) as c_int;
         }
-        let mut parencount = 0;
-        let mut quotecount = 0;
-        while **that != 0
-            && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
-        {
-            if ci.value == '"' as int32_t {
-                quotecount = (quotecount == 0) as c_int;
+        if quotecount == 0 {
+            if ci.value == '(' as int32_t || ci.value == '[' as int32_t {
+                parencount += 1;
+            } else if ci.value == ')' as int32_t || ci.value == ']' as int32_t {
+                parencount -= 1;
             }
-            if quotecount == 0 {
-                if ci.value == '(' as int32_t || ci.value == '[' as int32_t {
-                    parencount += 1;
-                } else if ci.value == ')' as int32_t || ci.value == ']' as int32_t {
-                    parencount -= 1;
-                }
-            }
-            // A backslash and the character it escapes are one step.
-            if ci.value == '\\' as int32_t && *that.add(1) != 0 {
-                amount += win_charsize(cstype, amount, *that, ci.value, csarg).width;
-                let next = utfc_next(StrCharInfo {
+        }
+        // A backslash and the character it escapes are one step.
+        if ci.value == '\\' as int32_t && unsafe { *that.add(1) } != 0 {
+            amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+            let next = unsafe {
+                utfc_next(StrCharInfo {
                     ptr: *that,
                     chr: ci,
-                });
-                *that = next.ptr;
-                ci = next.chr;
-            }
-            amount += win_charsize(cstype, amount, *that, ci.value, csarg).width;
-            let next = utfc_next(StrCharInfo {
-                ptr: *that,
-                chr: ci,
-            });
+                })
+            };
             *that = next.ptr;
             ci = next.chr;
         }
-        amount
+        amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+        let next = unsafe {
+            utfc_next(StrCharInfo {
+                ptr: *that,
+                chr: ci,
+            })
+        };
+        *that = next.ptr;
+        ci = next.chr;
     }
+    amount
 }
 
 /// The indent the built-in Lisp indenter answers for the cursor line.
@@ -351,21 +345,19 @@ unsafe fn measure_first_argument(
 pub unsafe fn get_lisp_indent() -> c_int {
     // SAFETY: the caller's contract; the cursor is put back before returning
     // whichever path answers.
-    unsafe {
-        let win = curwin.get();
-        let realpos = (*win).w_cursor;
-        (*win).w_cursor.col = 0;
-        let amount = match enclosing_open() {
-            // No enclosing '(' or '[': no indent.
-            None => 0,
-            Some(open) => match same_level_indent(&open) {
-                Some(amount) => amount,
-                None => indent_after_open(&open),
-            },
-        };
-        (*win).w_cursor = realpos;
-        amount
-    }
+    let win = curwin.get();
+    let realpos = unsafe { (*win).w_cursor };
+    unsafe { (*win).w_cursor.col = 0 };
+    let amount = match unsafe { enclosing_open() } {
+        // No enclosing '(' or '[': no indent.
+        None => 0,
+        Some(open) => match unsafe { same_level_indent(&open) } {
+            Some(amount) => amount,
+            None => unsafe { indent_after_open(&open) },
+        },
+    };
+    unsafe { (*win).w_cursor = realpos };
+    amount
 }
 
 /// Whether `p` begins with one of 'lispwords', followed by white space or
@@ -376,26 +368,28 @@ pub unsafe fn get_lisp_indent() -> c_int {
 unsafe fn lisp_match(p: *mut c_char) -> bool {
     // SAFETY: the caller's string, and `buf` is this frame's;
     // `copy_option_part` bounds its copy by the size it is given.
-    unsafe {
-        let mut buf: [c_char; 512] = [0; 512];
-        let mut word = if *(*curbuf.get()).b_p_lw != 0 {
-            (*curbuf.get()).b_p_lw
-        } else {
-            p_lispwords.get()
-        };
-        while *word != 0 {
-            let len = copy_option_part(
+    let mut buf: [c_char; 512] = [0; 512];
+    let mut word = if unsafe { *(*curbuf.get()).b_p_lw } != 0 {
+        unsafe { (*curbuf.get()).b_p_lw }
+    } else {
+        p_lispwords.get()
+    };
+    while unsafe { *word } != 0 {
+        let len = unsafe {
+            copy_option_part(
                 &raw mut word,
                 buf.as_mut_ptr(),
                 buf.len(),
                 c",".as_ptr().cast_mut(),
-            );
-            if strncmp(buf.as_ptr(), p, len) == 0 && ascii_iswhite_or_nul(*p.add(len) as c_int) {
-                return true;
-            }
+            )
+        };
+        if unsafe { strncmp(buf.as_ptr(), p, len) } == 0
+            && ascii_iswhite_or_nul(unsafe { *p.add(len) } as c_int)
+        {
+            return true;
         }
-        false
     }
+    false
 }
 
 /// Re-indents the cursor line to whatever `get_the_indent` says, which is
@@ -407,16 +401,14 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
 pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
     // SAFETY: the caller's contract; `get_the_indent` is one of the three
     // indent engines, all of which read the current buffer.
-    unsafe {
-        let amount = get_the_indent.expect("non-null function pointer")();
-        if amount < 0 {
-            return;
-        }
-        change_indent(INDENT_SET as c_int, amount, 0, true);
-        if linewhite((*curwin.get()).w_cursor.lnum) {
-            // Delete the indent again if the line stays empty.
-            did_ai.set(true);
-        }
+    let amount = unsafe { get_the_indent.expect("non-null function pointer")() };
+    if amount < 0 {
+        return;
+    }
+    unsafe { change_indent(INDENT_SET as c_int, amount, 0, true) };
+    if unsafe { linewhite((*curwin.get()).w_cursor.lnum) } {
+        // Delete the indent again if the line stays empty.
+        did_ai.set(true);
     }
 }
 
@@ -427,8 +419,8 @@ pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
 /// There must be a current buffer.
 pub unsafe fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
+    let buf = curbuf.get();
     unsafe {
-        let buf = curbuf.get();
         (*buf).b_p_lisp != 0
             && *(*buf).b_p_inde != 0
             && strcmp((*buf).b_p_lop, c"expr:1".as_ptr()) == 0
@@ -444,17 +436,15 @@ pub unsafe fn fix_indent() {
         return; // no auto-indenting when 'paste' is set
     }
     // SAFETY: the caller's contract.
-    unsafe {
-        let buf = curbuf.get();
-        if (*buf).b_p_lisp != 0 && (*buf).b_p_ai != 0 {
-            if use_indentexpr_for_lisp() {
-                do_c_expr_indent();
-            } else {
-                fixthisline(Some(get_lisp_indent));
-            }
-        } else if cindent_on() {
-            do_c_expr_indent();
+    let buf = curbuf.get();
+    if unsafe { (*buf).b_p_lisp } != 0 && unsafe { (*buf).b_p_ai } != 0 {
+        if unsafe { use_indentexpr_for_lisp() } {
+            unsafe { do_c_expr_indent() };
+        } else {
+            unsafe { fixthisline(Some(get_lisp_indent)) };
         }
+    } else if unsafe { cindent_on() } {
+        unsafe { do_c_expr_indent() };
     }
 }
 
@@ -464,8 +454,8 @@ pub unsafe fn fix_indent() {
 /// The evaluator's contract: `argvars` and `rettv` are live typvals.
 pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals, and there is a current buffer.
+    let lnum = unsafe { tv_get_lnum(argvars) };
     unsafe {
-        let lnum = tv_get_lnum(argvars);
         (*rettv).vval.v_number = if (1..=(*curbuf.get()).b_ml.ml_line_count).contains(&lnum) {
             get_indent_lnum(lnum) as varnumber_T
         } else {
@@ -473,7 +463,6 @@ pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         };
     }
 }
-
 /// `lispindent(lnum)`.
 ///
 /// # Safety
@@ -481,10 +470,10 @@ pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 pub unsafe fn f_lispindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals; the cursor is moved onto the asked-for
     // line and put back.
+    let win = curwin.get();
+    let pos = unsafe { (*win).w_cursor };
+    let lnum = unsafe { tv_get_lnum(argvars) };
     unsafe {
-        let win = curwin.get();
-        let pos = (*win).w_cursor;
-        let lnum = tv_get_lnum(argvars);
         (*rettv).vval.v_number = if (1..=(*curbuf.get()).b_ml.ml_line_count).contains(&lnum) {
             (*win).w_cursor.lnum = lnum;
             let amount = get_lisp_indent() as varnumber_T;
@@ -492,8 +481,8 @@ pub unsafe fn f_lispindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             amount
         } else {
             -1
-        };
-    }
+        }
+    };
 }
 
 #[cfg(test)]

@@ -136,17 +136,15 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_char {
     // SAFETY: both are the process's own C string option values.
-    unsafe {
-        let undotted = |value: *mut c_char| {
-            if *value == b'.' as c_char {
-                value.add(1)
-            } else {
-                value
-            }
-        };
-        if strcmp(undotted(p_bex.get()), undotted(p_pm.get())) == 0 {
-            return e_backupext_and_patchmode_are_equal.as_ptr();
+    let undotted = |value: *mut c_char| {
+        if unsafe { *value } == b'.' as c_char {
+            unsafe { value.add(1) }
+        } else {
+            value
         }
+    };
+    if unsafe { strcmp(undotted(p_bex.get()), undotted(p_pm.get())) } == 0 {
+        return e_backupext_and_patchmode_are_equal.as_ptr();
     }
     ptr::null()
 }
@@ -155,10 +153,8 @@ pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_c
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer, and the table's own word list.
-    unsafe {
-        let buf = (*args).os_buf.cast::<buf_T>();
-        did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, false)
-    }
+    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    unsafe { did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, false) }
 }
 
 /// 'buftype' cannot be changed into or out of "terminal": that is decided
@@ -184,44 +180,44 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
         // the end of what is there now.
         // SAFETY: sets this buffer's own option, and replaces its prompt
         // mark (freeing what the old one held).
-        unsafe {
-            set_option_direct(
-                kOptComments,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0),
-                    },
+        set_option_direct(
+            kOptComments,
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0),
                 },
-                OptionSetFlags::LOCAL,
-                SID_NONE,
-            );
-            let prompt: *mut fmark_T = &raw mut (*buf).b_prompt_start;
-            free_fmark((*prompt).clone());
+            },
+            OptionSetFlags::LOCAL,
+            SID_NONE,
+        );
+        let prompt: *mut fmark_T = unsafe { &raw mut (*buf).b_prompt_start };
+        unsafe { free_fmark((*prompt).clone()) };
+        unsafe {
             (*prompt).mark = pos_T {
                 lnum: (*buf).b_ml.ml_line_count,
                 col: (*buf).b_prompt_start.mark.col,
                 coladd: 0 as colnr_T,
-            };
-            (*prompt).fnum = 0;
-            (*prompt).timestamp = os_time();
+            }
+        };
+        unsafe { (*prompt).fnum = 0 };
+        unsafe { (*prompt).timestamp = os_time() };
+        unsafe {
             (*prompt).view = fmarkv_T {
                 topline_offset: MAXLNUM as c_int as linenr_T,
                 skipcol: 0 as colnr_T,
-            };
-            (*prompt).additional_data = ptr::null_mut::<AdditionalData>();
-        }
+            }
+        };
+        unsafe { (*prompt).additional_data = ptr::null_mut::<AdditionalData>() };
     }
 
     // SAFETY: the frame's window and buffer.
-    unsafe {
-        if (*wp).w_status_height != 0 || global_stl_height() != 0 {
-            (*wp).w_redr_status = true;
-            redraw_later(wp, UPD_VALID);
-        }
-        (*buf).b_help = first == b'h' as c_char;
-        redraw_titles();
+    if unsafe { (*wp).w_status_height } != 0 || global_stl_height() != 0 {
+        unsafe { (*wp).w_redr_status = true };
+        unsafe { redraw_later(wp, UPD_VALID) };
     }
+    unsafe { (*buf).b_help = first == b'h' as c_char };
+    redraw_titles();
     ptr::null()
 }
 
@@ -246,39 +242,37 @@ pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
     let (buf, buflen) = unsafe { errbuf(args) };
     let mut errmsg: *const c_char = ptr::null();
     // SAFETY: the frame's C string value, walked to its terminator.
-    unsafe {
-        let mut s = *varp(args);
-        while *s != 0 {
-            // The flag letters, up to the colon.
-            while *s != 0 && *s != b':' as c_char {
-                if vim_strchr(COM_ALL.as_ptr(), c_int::from(*s as u8)).is_null()
-                    && !ascii_isdigit(c_int::from(*s))
-                    && *s != b'-' as c_char
-                {
-                    errmsg = illegal_char(buf, buflen, c_int::from(*s as u8));
-                    break;
-                }
-                s = s.add(1);
-            }
-            let at_colon = *s;
-            s = s.add(1);
-            if c_int::from(at_colon) == NUL {
-                errmsg = c"E524: Missing colon".as_ptr();
-            } else if *s == b',' as c_char || c_int::from(*s) == NUL {
-                errmsg = c"E525: Zero length string".as_ptr();
-            }
-            if !errmsg.is_null() {
+    let mut s = unsafe { *varp(args) };
+    while unsafe { *s } != 0 {
+        // The flag letters, up to the colon.
+        while unsafe { *s } != 0 && unsafe { *s } != b':' as c_char {
+            if unsafe { vim_strchr(COM_ALL.as_ptr(), c_int::from(*s as u8)) }.is_null()
+                && !ascii_isdigit(c_int::from(unsafe { *s }))
+                && unsafe { *s } != b'-' as c_char
+            {
+                errmsg = unsafe { illegal_char(buf, buflen, c_int::from(*s as u8)) };
                 break;
             }
-            // The leader, in which a backslash escapes the next byte.
-            while *s != 0 && *s != b',' as c_char {
-                if *s == b'\\' as c_char && c_int::from(*s.add(1)) != NUL {
-                    s = s.add(1);
-                }
-                s = s.add(1);
-            }
-            s = skip_to_option_part(s);
+            s = unsafe { s.add(1) };
         }
+        let at_colon = unsafe { *s };
+        s = unsafe { s.add(1) };
+        if c_int::from(at_colon) == NUL {
+            errmsg = c"E524: Missing colon".as_ptr();
+        } else if unsafe { *s } == b',' as c_char || c_int::from(unsafe { *s }) == NUL {
+            errmsg = c"E525: Zero length string".as_ptr();
+        }
+        if !errmsg.is_null() {
+            break;
+        }
+        // The leader, in which a backslash escapes the next byte.
+        while unsafe { *s } != 0 && unsafe { *s } != b',' as c_char {
+            if unsafe { *s } == b'\\' as c_char && c_int::from(unsafe { *s.add(1) }) != NUL {
+                s = unsafe { s.add(1) };
+            }
+            s = unsafe { s.add(1) };
+        }
+        s = unsafe { skip_to_option_part(s) };
     }
     errmsg
 }
@@ -287,11 +281,9 @@ pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_commentstring(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
-    unsafe {
-        let value = *varp(args);
-        if c_int::from(*value) != NUL && strstr(value, c"%s".as_ptr()).is_null() {
-            return c"E537: 'commentstring' must be empty or contain %s".as_ptr();
-        }
+    let value = unsafe { *varp(args) };
+    if c_int::from(unsafe { *value }) != NUL && unsafe { strstr(value, c"%s".as_ptr()) }.is_null() {
+        return c"E537: 'commentstring' must be empty or contain %s".as_ptr();
     }
     ptr::null()
 }
@@ -300,10 +292,8 @@ pub unsafe fn did_set_commentstring(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_cpoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), CPO_VI.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), CPO_VI.as_ptr(), buf, len) }
 }
 
 /// # Safety
@@ -348,31 +338,27 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     // ('encoding' and 'makeencoding') are global and skip this block.
     if idx == kOptFileencoding {
         // SAFETY: the frame's buffer and C string value.
-        unsafe {
-            if (*buf).b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
-                return e_modifiable.as_ptr();
-            }
-            // 'fileencoding' is one encoding, not a list.
-            if !vim_strchr(*varp, c_int::from(b',')).is_null() {
-                return invalid();
-            }
-            redraw_titles();
-            ml_setflags(buf);
+        if unsafe { (*buf).b_p_ma } == 0 && opt_flags != OptionSetFlags::GLOBAL {
+            return e_modifiable.as_ptr();
         }
+        // 'fileencoding' is one encoding, not a list.
+        if !unsafe { vim_strchr(*varp, c_int::from(b',')) }.is_null() {
+            return invalid();
+        }
+        redraw_titles();
+        unsafe { ml_setflags(buf) };
     }
 
     // SAFETY: the option's own variable; `enc_canonize` allocates the
     // replacement and the old value is freed here.
-    unsafe {
-        let canonical = enc_canonize(*varp);
-        xfree((*varp).cast::<c_void>());
-        *varp = canonical;
-        if idx == kOptEncoding {
-            if strcmp(p_enc.get(), c"utf-8".as_ptr()) != 0 {
-                return e_unsupportedoption.as_ptr();
-            }
-            spell_reload();
+    let canonical = unsafe { enc_canonize(*varp) };
+    unsafe { xfree((*varp).cast::<c_void>()) };
+    unsafe { *varp = canonical };
+    if idx == kOptEncoding {
+        if unsafe { strcmp(p_enc.get(), c"utf-8".as_ptr()) } != 0 {
+            return e_unsupportedoption.as_ptr();
         }
+        unsafe { spell_reload() };
     }
     ptr::null()
 }
@@ -401,14 +387,12 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
         return errmsg;
     }
     // SAFETY: the frame's buffer and old value.
-    unsafe {
-        redraw_titles();
-        ml_setflags(buf);
-        // Only "mac" is drawn differently, so a redraw is needed when
-        // entering or leaving it.
-        if get_fileformat(buf) == EOL_MAC || *old_value(args) == b'm' as c_char {
-            redraw_buf_later(buf, UPD_NOT_VALID);
-        }
+    redraw_titles();
+    unsafe { ml_setflags(buf) };
+    // Only "mac" is drawn differently, so a redraw is needed when
+    // entering or leaving it.
+    if unsafe { get_fileformat(buf) } == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {
+        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
     }
     ptr::null()
 }
@@ -420,14 +404,12 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value and its old one.
-    unsafe {
-        let value = *varp(args);
-        if !valid_filetype(CStr::from_ptr(value)) {
-            return invalid();
-        }
-        (*args).os_value_changed = strcmp(old_value(args), value) != 0;
-        (*args).os_value_checked = true;
+    let value = unsafe { *varp(args) };
+    if !valid_filetype(unsafe { CStr::from_ptr(value) }) {
+        return invalid();
     }
+    unsafe { (*args).os_value_changed = strcmp(old_value(args), value) != 0 };
+    unsafe { (*args).os_value_checked = true };
     ptr::null()
 }
 
@@ -435,12 +417,10 @@ pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and window.
-    unsafe {
-        did_set_optexpr(args);
-        let wp = win(args);
-        if foldmethod_is_expr(Win::new(wp)) {
-            fold_update_all(Win::new(wp));
-        }
+    unsafe { did_set_optexpr(args) };
+    let wp = unsafe { win(args) };
+    if foldmethod_is_expr(unsafe { Win::new(wp) }) {
+        fold_update_all(unsafe { Win::new(wp) });
     }
     ptr::null()
 }
@@ -449,11 +429,9 @@ pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
-    unsafe {
-        let wp = win(args);
-        if foldmethod_is_indent(Win::new(wp)) {
-            fold_update_all(Win::new(wp));
-        }
+    let wp = unsafe { win(args) };
+    if foldmethod_is_indent(unsafe { Win::new(wp) }) {
+        fold_update_all(unsafe { Win::new(wp) });
     }
     ptr::null()
 }
@@ -462,20 +440,18 @@ pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value and window.
-    unsafe {
-        let value = *varp(args);
-        // Two markers separated by a comma, neither of them empty.
-        let comma = vim_strchr(value, c_int::from(b','));
-        if comma.is_null() {
-            return e_comma_required.as_ptr();
-        }
-        if comma == value || c_int::from(*comma.add(1)) == NUL {
-            return invalid();
-        }
-        let wp = win(args);
-        if foldmethod_is_marker(Win::new(wp)) {
-            fold_update_all(Win::new(wp));
-        }
+    let value = unsafe { *varp(args) };
+    // Two markers separated by a comma, neither of them empty.
+    let comma = unsafe { vim_strchr(value, c_int::from(b',')) };
+    if comma.is_null() {
+        return e_comma_required.as_ptr();
+    }
+    if comma == value || c_int::from(unsafe { *comma.add(1) }) == NUL {
+        return invalid();
+    }
+    let wp = unsafe { win(args) };
+    if foldmethod_is_marker(unsafe { Win::new(wp) }) {
+        fold_update_all(unsafe { Win::new(wp) });
     }
     ptr::null()
 }
@@ -488,14 +464,12 @@ pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
         return errmsg;
     }
     // SAFETY: the frame's window.
-    unsafe {
-        let wp = win(args);
-        fold_update_all(Win::new(wp));
-        // Diff folds are closed to whatever 'foldlevel' says as soon as
-        // they exist.
-        if foldmethod_is_diff(Win::new(wp)) {
-            new_fold_level();
-        }
+    let wp = unsafe { win(args) };
+    fold_update_all(unsafe { Win::new(wp) });
+    // Diff folds are closed to whatever 'foldlevel' says as soon as
+    // they exist.
+    if foldmethod_is_diff(unsafe { Win::new(wp) }) {
+        unsafe { new_fold_level() };
     }
     ptr::null()
 }
@@ -504,10 +478,8 @@ pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
-    unsafe {
-        let (buf, len) = errbuf(args);
-        did_set_option_listflag(*varp(args), FO_ALL.as_ptr(), buf, len)
-    }
+    let (buf, len) = unsafe { errbuf(args) };
+    unsafe { did_set_option_listflag(*varp(args), FO_ALL.as_ptr(), buf, len) }
 }
 
 /// 'iskeyword' is one of the character-class options, except that the
@@ -536,11 +508,9 @@ pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_isopt(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer.
-    unsafe {
-        if !buf_init_chartab((*args).os_buf.cast::<buf_T>(), true) {
-            (*args).os_restore_chartab = true;
-            return invalid();
-        }
+    if !unsafe { buf_init_chartab((*args).os_buf.cast::<buf_T>(), true) } {
+        unsafe { (*args).os_restore_chartab = true };
+        return invalid();
     }
     ptr::null()
 }
@@ -573,28 +543,26 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
     }
 
     // SAFETY: the frame's buffer.
-    unsafe {
-        if c_int::from(*(*buf).b_p_keymap) != NUL {
-            (*buf).b_p_iminsert = B_IMODE_LMAP as OptInt;
-            // 'imsearch' at -1 means "follow 'iminsert'", and stays that
-            // way.
-            if (*buf).b_p_imsearch != B_IMODE_USE_INSERT as OptInt {
-                (*buf).b_p_imsearch = B_IMODE_LMAP as OptInt;
-            }
-        } else {
-            if (*buf).b_p_iminsert == B_IMODE_LMAP as OptInt {
-                (*buf).b_p_iminsert = B_IMODE_NONE as OptInt;
-            }
-            if (*buf).b_p_imsearch == B_IMODE_LMAP as OptInt {
-                (*buf).b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
-            }
+    if c_int::from(unsafe { *(*buf).b_p_keymap }) != NUL {
+        unsafe { (*buf).b_p_iminsert = B_IMODE_LMAP as OptInt };
+        // 'imsearch' at -1 means "follow 'iminsert'", and stays that
+        // way.
+        if unsafe { (*buf).b_p_imsearch } != B_IMODE_USE_INSERT as OptInt {
+            unsafe { (*buf).b_p_imsearch = B_IMODE_LMAP as OptInt };
         }
-        if !opt_flags.has(OptionSetFlags::LOCAL) {
-            set_iminsert_global(buf);
-            set_imsearch_global(buf);
+    } else {
+        if unsafe { (*buf).b_p_iminsert } == B_IMODE_LMAP as OptInt {
+            unsafe { (*buf).b_p_iminsert = B_IMODE_NONE as OptInt };
         }
-        status_redraw_buf(buf);
+        if unsafe { (*buf).b_p_imsearch } == B_IMODE_LMAP as OptInt {
+            unsafe { (*buf).b_p_imsearch = B_IMODE_USE_INSERT as OptInt };
+        }
     }
+    if !opt_flags.has(OptionSetFlags::LOCAL) {
+        unsafe { set_iminsert_global(buf) };
+        unsafe { set_imsearch_global(buf) };
+    }
+    unsafe { status_redraw_buf(buf) };
     ptr::null()
 }
 
@@ -602,14 +570,12 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
-    unsafe {
-        let value = *varp(args);
-        if c_int::from(*value) != NUL
-            && strcmp(value, c"expr:0".as_ptr()) != 0
-            && strcmp(value, c"expr:1".as_ptr()) != 0
-        {
-            return invalid();
-        }
+    let value = unsafe { *varp(args) };
+    if c_int::from(unsafe { *value }) != NUL
+        && unsafe { strcmp(value, c"expr:0".as_ptr()) } != 0
+        && unsafe { strcmp(value, c"expr:1".as_ptr()) } != 0
+    {
+        return invalid();
     }
     ptr::null()
 }
@@ -622,31 +588,29 @@ pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value, walked by character length.
-    unsafe {
-        let mut p = *varp(args);
-        while c_int::from(*p) != NUL {
-            let mut separator = -1;
-            let mut close = -1;
-            p = p.add(utfc_ptr2len(p) as usize);
-            if c_int::from(*p) != NUL {
-                separator = c_int::from(*p as c_uchar);
-                p = p.add(1);
-            }
-            if c_int::from(*p) != NUL {
-                close = utf_ptr2char(p);
-                p = p.add(utfc_ptr2len(p) as usize);
-            }
-            if separator != c_int::from(b':')
-                || close == -1
-                || (c_int::from(*p) != NUL && *p != b',' as c_char)
-            {
-                return invalid();
-            }
-            if c_int::from(*p) == NUL {
-                break;
-            }
-            p = p.add(1);
+    let mut p = unsafe { *varp(args) };
+    while c_int::from(unsafe { *p }) != NUL {
+        let mut separator = -1;
+        let mut close = -1;
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        if c_int::from(unsafe { *p }) != NUL {
+            separator = c_int::from(unsafe { *p } as c_uchar);
+            p = unsafe { p.add(1) };
         }
+        if c_int::from(unsafe { *p }) != NUL {
+            close = unsafe { utf_ptr2char(p) };
+            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        }
+        if separator != c_int::from(b':')
+            || close == -1
+            || (c_int::from(unsafe { *p }) != NUL && unsafe { *p } != b',' as c_char)
+        {
+            return invalid();
+        }
+        if c_int::from(unsafe { *p }) == NUL {
+            break;
+        }
+        p = unsafe { p.add(1) };
     }
     ptr::null()
 }
@@ -655,28 +619,24 @@ pub unsafe fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_varsofttabstop(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
-    unsafe {
-        let buf = (*args).os_buf.cast::<buf_T>();
-        did_set_vartabs(args, &raw mut (*buf).b_p_vsts_array)
-    }
+    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vsts_array) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, buffer and window.
-    unsafe {
-        let buf = (*args).os_buf.cast::<buf_T>();
-        let errmsg = did_set_vartabs(args, &raw mut (*buf).b_p_vts_array);
-        if errmsg.is_null() {
-            // Indent folds are computed from the tab stops.
-            let wp = win(args);
-            if foldmethod_is_indent(Win::new(wp)) {
-                fold_update_all(Win::new(wp));
-            }
+    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    let errmsg = unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vts_array) };
+    if errmsg.is_null() {
+        // Indent folds are computed from the tab stops.
+        let wp = unsafe { win(args) };
+        if foldmethod_is_indent(unsafe { Win::new(wp) }) {
+            fold_update_all(unsafe { Win::new(wp) });
         }
-        errmsg
     }
+    errmsg
 }
 
 /// The shared check for 'varsofttabstop' and 'vartabstop': a comma-
@@ -693,10 +653,8 @@ unsafe fn did_set_vartabs(args: *mut optset_T, into: *mut *mut colnr_T) -> *cons
     let value = unsafe { CStr::from_ptr(*varp(args)) }.to_bytes();
     if value.is_empty() || value == b"0" {
         // SAFETY: the buffer's own array.
-        unsafe {
-            xfree((*into).cast::<c_void>());
-            *into = ptr::null_mut();
-        }
+        unsafe { xfree((*into).cast::<c_void>()) };
+        unsafe { *into = ptr::null_mut() };
         return ptr::null();
     }
     // Digits and separating commas only; no empty item, and no leading
@@ -710,12 +668,10 @@ unsafe fn did_set_vartabs(args: *mut optset_T, into: *mut *mut colnr_T) -> *cons
     }
     // SAFETY: the frame's value and the buffer's own array; `tabstop_set`
     // replaces it only on success, so the old one is freed only then.
-    unsafe {
-        let old = *into;
-        if !tabstop_set(*varp(args), into) {
-            return invalid();
-        }
-        xfree(old.cast::<c_void>());
+    let old = unsafe { *into };
+    if !unsafe { tabstop_set(*varp(args), into) } {
+        return invalid();
     }
+    unsafe { xfree(old.cast::<c_void>()) };
     ptr::null()
 }

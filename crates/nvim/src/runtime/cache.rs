@@ -105,14 +105,14 @@ unsafe fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath 
     };
     for j in 0..src.size {
         // SAFETY: `src` holds `size` live items, each with its own string.
+        let item = unsafe { *src.items.add(j) };
+        let slot = unsafe { kv_pushp(&mut dst.size, &mut dst.capacity, &mut dst.items) };
         unsafe {
-            let item = *src.items.add(j);
-            let slot = kv_pushp(&mut dst.size, &mut dst.capacity, &mut dst.items);
             slot.write(SearchPathItem {
                 path: xstrdup(item.path),
                 ..item
-            });
-        }
+            })
+        };
     }
     dst
 }
@@ -155,15 +155,15 @@ pub(crate) unsafe fn do_in_cached_path(
 ) -> c_int {
     if p_verbose.get() > 10 && !name.is_null() {
         // SAFETY: `name` is NUL-terminated.
+        unsafe { verbose_enter() };
         unsafe {
-            verbose_enter();
             smsg_c!(
                 0,
                 gettext(c"Searching for \"%s\" in runtime path".as_ptr()),
                 name,
-            );
-            verbose_leave();
-        }
+            )
+        };
+        unsafe { verbose_leave() };
     }
 
     let visitor = Visitor { callback, cookie };
@@ -208,28 +208,30 @@ pub(crate) unsafe fn do_in_cached_path(
                 do_all,
                 &mut did_one,
                 visitor,
-            );
-        }
+            )
+        };
     }
 
     if !did_one && !name.is_null() {
         // SAFETY: `name` is the caller's NUL-terminated pattern.
-        unsafe {
-            if flags.has(RuntimeOpts::ERR) {
+        if flags.has(RuntimeOpts::ERR) {
+            unsafe {
                 semsg_c!(
                     gettext(&raw const e_dirnotf as *const c_char),
                     c"runtime path".as_ptr(),
                     name,
-                );
-            } else if p_verbose.get() > 1 {
-                verbose_enter();
+                )
+            };
+        } else if p_verbose.get() > 1 {
+            unsafe { verbose_enter() };
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"not found in runtime path: \"%s\"".as_ptr()),
                     name,
-                );
-                verbose_leave();
-            }
+                )
+            };
+            unsafe { verbose_leave() };
         }
     }
 
@@ -256,24 +258,26 @@ unsafe fn push_path(
     let mut key_alloc: *mut String_0 = ptr::null_mut();
     // SAFETY: the caller's live set and vector; `set_put_string` fills
     // `key_alloc` in with the slot it claimed.
-    unsafe {
-        if !set_put_string(rtp_used, cstr_as_string(entry), &raw mut key_alloc) {
-            return false;
-        }
-        *key_alloc = cstr_to_string(entry);
-        let slot = kv_pushp(
+    if !unsafe { set_put_string(rtp_used, cstr_as_string(entry), &raw mut key_alloc) } {
+        return false;
+    }
+    unsafe { *key_alloc = cstr_to_string(entry) };
+    let slot = unsafe {
+        kv_pushp(
             &mut (*search_path).size,
             &mut (*search_path).capacity,
             &mut (*search_path).items,
-        );
+        )
+    };
+    unsafe {
         slot.write(SearchPathItem {
             path: (*key_alloc).data(),
             after,
             pack_inserted: false,
             has_lua: None,
             pos_in_rtp,
-        });
-    }
+        })
+    };
     true
 }
 
@@ -290,13 +294,11 @@ unsafe fn expand_rtp_entry(
     pos_in_rtp: size_t,
 ) {
     // SAFETY: the caller's NUL-terminated entry and live set.
-    unsafe {
-        if set_has_string(rtp_used, cstr_as_string(entry)) {
-            return;
-        }
-        if *entry == 0 {
-            push_path(search_path, rtp_used, entry, after, pos_in_rtp);
-        }
+    if unsafe { set_has_string(rtp_used, cstr_as_string(entry)) } {
+        return;
+    }
+    if unsafe { *entry } == 0 {
+        unsafe { push_path(search_path, rtp_used, entry, after, pos_in_rtp) };
     }
 
     let mut num_files: c_int = 0;
@@ -304,24 +306,24 @@ unsafe fn expand_rtp_entry(
     let mut pat = [entry];
     // SAFETY: a one-element pattern array; the matches are ours until
     // `free_wild`.
-    unsafe {
-        if gen_expand_wildcards(
+    if unsafe {
+        gen_expand_wildcards(
             1,
             pat.as_mut_ptr(),
             &raw mut num_files,
             &raw mut files,
             ExpandFlags::DIR | ExpandFlags::NOBREAK,
-        ) != OK
-        {
-            return;
-        }
-        for i in 0..num_files as usize {
-            // Reusing the position is fine: it only has to be monotonic, not
-            // strictly increasing.
-            push_path(search_path, rtp_used, *files.add(i), after, pos_in_rtp);
-        }
-        free_wild(num_files, files);
+        )
+    } != OK
+    {
+        return;
     }
+    for i in 0..num_files as usize {
+        // Reusing the position is fine: it only has to be monotonic, not
+        // strictly increasing.
+        unsafe { push_path(search_path, rtp_used, *files.add(i), after, pos_in_rtp) };
+    }
+    unsafe { free_wild(num_files, files) };
 }
 
 /// The two shapes a 'packpath' entry's `start` packages can take.
@@ -348,28 +350,30 @@ unsafe fn expand_pack_entry(
         }
         // SAFETY: the length test above proves both halves fit in `buf`, and
         // `xstrlcpy` NUL-terminates within the size it is given.
+        unsafe { xstrlcpy(buf.as_mut_ptr(), pack_entry, buf.len()) };
         unsafe {
-            xstrlcpy(buf.as_mut_ptr(), pack_entry, buf.len());
             xstrlcpy(
                 buf.as_mut_ptr().add(pack_entry_len),
                 start_pat.as_ptr(),
                 buf.len() - pack_entry_len,
-            );
-            expand_rtp_entry(search_path, rtp_used, buf.as_mut_ptr(), false, pos_in_rtp);
+            )
+        };
+        unsafe { expand_rtp_entry(search_path, rtp_used, buf.as_mut_ptr(), false, pos_in_rtp) };
 
-            // The `after/` directories go in one block at the end of the
-            // build, so they sort behind every non-`after` entry.
-            let after_size = strlen(buf.as_ptr()) + 7;
-            let after = xmallocz(after_size).cast::<c_char>();
-            xstrlcpy(after, buf.as_ptr(), after_size);
-            xstrlcat(after, c"/after".as_ptr(), after_size);
-            let slot = kv_pushp(
+        // The `after/` directories go in one block at the end of the
+        // build, so they sort behind every non-`after` entry.
+        let after_size = unsafe { strlen(buf.as_ptr()) } + 7;
+        let after = unsafe { xmallocz(after_size) }.cast::<c_char>();
+        unsafe { xstrlcpy(after, buf.as_ptr(), after_size) };
+        unsafe { xstrlcat(after, c"/after".as_ptr(), after_size) };
+        let slot = unsafe {
+            kv_pushp(
                 &mut (*after_path).size,
                 &mut (*after_path).capacity,
                 &mut (*after_path).items,
-            );
-            slot.write(after);
-        }
+            )
+        };
+        unsafe { slot.write(after) };
     }
 }
 
@@ -383,11 +387,9 @@ unsafe fn expand_pack_entry(
 /// `buf` must hold `buflen` readable bytes plus a terminator.
 pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
     // SAFETY: the caller's buffer, indexed inside the length just tested.
-    unsafe {
-        buflen >= 5
-            && (buflen < 6 || vim_ispathsep(*buf.add(buflen - 6) as c_int))
-            && strcmp(buf.add(buflen - 5), c"after".as_ptr()) == 0
-    }
+    buflen >= 5
+        && (buflen < 6 || vim_ispathsep(unsafe { *buf.add(buflen - 6) } as c_int))
+        && unsafe { strcmp(buf.add(buflen - 5), c"after".as_ptr()) } == 0
 }
 
 /// Free a kvec's buffer and reset it to empty.
@@ -463,9 +465,9 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 &mut pack_entries.capacity,
                 &mut pack_entries.items,
             )
-            .write(the_entry);
-            map_put_string_int(&raw mut pack_used, the_entry, 0);
-        }
+            .write(the_entry)
+        };
+        unsafe { map_put_string_int(&raw mut pack_used, the_entry, 0) };
     }
 
     // 'runtimepath' up to its first `after/` entry.
@@ -499,16 +501,20 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 buf.as_mut_ptr(),
                 false,
                 pos_in_rtp,
-            );
-            let h = map_ref_string_int(
+            )
+        };
+        let h = unsafe {
+            map_ref_string_int(
                 &raw mut pack_used,
                 cstr_as_string(buf.as_ptr()),
                 ptr::null_mut(),
             )
-            .cast::<handle_T>();
-            if !h.is_null() {
-                // Mark this 'packpath' entry as already covered.
-                *h += 1;
+        }
+        .cast::<handle_T>();
+        if !h.is_null() {
+            // Mark this 'packpath' entry as already covered.
+            unsafe { *h += 1 };
+            unsafe {
                 expand_pack_entry(
                     &raw mut search_path,
                     &raw mut rtp_used,
@@ -516,8 +522,8 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                     buf.as_mut_ptr(),
                     buflen,
                     pos_in_rtp,
-                );
-            }
+                )
+            };
         }
     }
 
@@ -529,9 +535,9 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
 
     for i in 0..pack_entries.size {
         // SAFETY: the frame's own kvec and index.
-        unsafe {
-            let item = *pack_entries.items.add(i);
-            if map_get_string_int(&raw mut pack_used, item) == 0 {
+        let item = unsafe { *pack_entries.items.add(i) };
+        if unsafe { map_get_string_int(&raw mut pack_used, item) } == 0 {
+            unsafe {
                 expand_pack_entry(
                     &raw mut search_path,
                     &raw mut rtp_used,
@@ -539,25 +545,25 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                     item.data(),
                     item.len(),
                     sentinel_pos_in_rtp,
-                );
-            }
+                )
+            };
         }
     }
 
     // The packages' `after/` directories.
     for i in 0..after_path.size {
         // SAFETY: each entry is an `xmallocz`ed string this frame owns.
+        let dir = unsafe { *after_path.items.add(i) };
         unsafe {
-            let dir = *after_path.items.add(i);
             expand_rtp_entry(
                 &raw mut search_path,
                 &raw mut rtp_used,
                 dir,
                 true,
                 sentinel_pos_in_rtp,
-            );
-            xfree(dir.cast());
-        }
+            )
+        };
+        unsafe { xfree(dir.cast()) };
     }
 
     // The `after/` tail of 'runtimepath'.
@@ -565,22 +571,24 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
     while unsafe { *rtp_entry } != 0 {
         let cur_entry = rtp_entry;
         // SAFETY: as above.
-        unsafe {
-            let buflen = copy_option_part(
+        let buflen = unsafe {
+            copy_option_part(
                 &raw mut rtp_entry,
                 buf.as_mut_ptr(),
                 MAXPATHL as size_t,
                 c",".as_ptr().cast_mut(),
-            );
-            let pos_in_rtp = cur_entry.offset_from(p_rtp.get()) as size_t;
+            )
+        };
+        let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) } as size_t;
+        unsafe {
             expand_rtp_entry(
                 &raw mut search_path,
                 &raw mut rtp_used,
                 buf.as_mut_ptr(),
                 path_is_after(buf.as_mut_ptr(), buflen),
                 pos_in_rtp,
-            );
-        }
+            )
+        };
     }
 
     // The strings in `pack_entries` are not owned; `rtp_used`'s keys were
@@ -591,20 +599,22 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             &mut pack_entries.size,
             &mut pack_entries.capacity,
             &mut pack_entries.items,
-        );
+        )
+    };
+    unsafe {
         kv_destroy(
             &mut after_path.size,
             &mut after_path.capacity,
             &mut after_path.items,
-        );
-        xfree(pack_used.set.keys.cast());
-        xfree(pack_used.set.h.hash.cast());
-        pack_used.set = SET_INIT;
-        xfree(pack_used.values.cast());
-        pack_used.values = ptr::null_mut();
-        xfree(rtp_used.keys.cast());
-        xfree(rtp_used.h.hash.cast());
-    }
+        )
+    };
+    unsafe { xfree(pack_used.set.keys.cast()) };
+    unsafe { xfree(pack_used.set.h.hash.cast()) };
+    pack_used.set = SET_INIT;
+    unsafe { xfree(pack_used.values.cast()) };
+    pack_used.values = ptr::null_mut();
+    unsafe { xfree(rtp_used.keys.cast()) };
+    unsafe { xfree(rtp_used.h.hash.cast()) };
 
     search_path
 }
@@ -641,10 +651,8 @@ pub unsafe fn runtime_search_path_validate() {
     if runtime_search_path_ref.get().is_null() {
         // SAFETY: nothing is borrowing the old path, so it can go. The UI
         // flush is upstream's guard against recursion through a UI callback.
-        unsafe {
-            msg_ext_ui_flush();
-            runtime_search_path_free(runtime_search_path.get());
-        }
+        unsafe { msg_ext_ui_flush() };
+        unsafe { runtime_search_path_free(runtime_search_path.get()) };
     }
     // SAFETY: building sources nothing; it only globs.
     runtime_search_path.set(unsafe { runtime_search_path_build() });
@@ -666,11 +674,9 @@ pub unsafe fn update_runtime_search_path_thread(force: bool) {
     }
     // SAFETY: the mutex is the only thing standing between this and the worker
     // threads' reads; nothing between lock and unlock can block on them.
-    unsafe {
-        uv_mutex_lock(search_path_mutex());
-        runtime_search_path_free(runtime_search_path_thread.get());
-        runtime_search_path_thread.set(copy_runtime_search_path(runtime_search_path.get()));
-        uv_mutex_unlock(search_path_mutex());
-    }
+    unsafe { uv_mutex_lock(search_path_mutex()) };
+    unsafe { runtime_search_path_free(runtime_search_path_thread.get()) };
+    runtime_search_path_thread.set(unsafe { copy_runtime_search_path(runtime_search_path.get()) });
+    unsafe { uv_mutex_unlock(search_path_mutex()) };
     runtime_search_path_valid_thread.set(true);
 }

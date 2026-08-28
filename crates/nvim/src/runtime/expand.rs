@@ -42,12 +42,12 @@ unsafe fn build_pattern(
 ) {
     // SAFETY: the caller's buffer and strings; `snprintf` truncates within
     // `buf_len` and NUL-terminates.
+    let (dir, sep) = if unsafe { *dir } != 0 {
+        (dir.cast_const(), c"/".as_ptr())
+    } else {
+        (c"".as_ptr(), c"".as_ptr())
+    };
     unsafe {
-        let (dir, sep) = if *dir != 0 {
-            (dir.cast_const(), c"/".as_ptr())
-        } else {
-            (c"".as_ptr(), c"".as_ptr())
-        };
         snprintf(
             buf,
             buf_len,
@@ -57,8 +57,8 @@ unsafe fn build_pattern(
             sep,
             pat,
             suffix.as_ptr(),
-        );
-    }
+        )
+    };
 }
 
 /// Glob `pat` under `dir` in 'runtimepath' and in 'packpath''s package trees,
@@ -82,33 +82,31 @@ unsafe fn glob_rounds(
     let mut glob_flags = WildOpts::NONE;
     let mut expand_dirs = false;
     // SAFETY: the caller's buffer and strings, and `globpath` only appends.
-    unsafe {
-        build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS);
-        loop {
-            if !flags.has(RuntimeOpts::NORTP) {
-                globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs);
-            }
-            let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
-            if flags.has(RuntimeOpts::START) {
-                for prefix in [c"pack/*/start/*/", c"start/*/"] {
-                    build_pattern(buf, buf_len, prefix, dir, pat, suffix);
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                }
-            }
-            if flags.has(RuntimeOpts::OPT) {
-                for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-                    build_pattern(buf, buf_len, prefix, dir, pat, suffix);
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                }
-            }
-            // Second round, for directories.
-            if *dir != 0 || expand_dirs {
-                return;
-            }
-            snprintf(buf, buf_len, c"%s*".as_ptr(), pat);
-            glob_flags = WildOpts::ADD_SLASH;
-            expand_dirs = true;
+    unsafe { build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS) };
+    loop {
+        if !flags.has(RuntimeOpts::NORTP) {
+            unsafe { globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs) };
         }
+        let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
+        if flags.has(RuntimeOpts::START) {
+            for prefix in [c"pack/*/start/*/", c"start/*/"] {
+                unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
+                unsafe { globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs) };
+            }
+        }
+        if flags.has(RuntimeOpts::OPT) {
+            for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
+                unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
+                unsafe { globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs) };
+            }
+        }
+        // Second round, for directories.
+        if unsafe { *dir } != 0 || expand_dirs {
+            return;
+        }
+        unsafe { snprintf(buf, buf_len, c"%s*".as_ptr(), pat) };
+        glob_flags = WildOpts::ADD_SLASH;
+        expand_dirs = true;
     }
 }
 
@@ -122,38 +120,36 @@ unsafe fn glob_rounds(
 unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_int) {
     // SAFETY: `matched` is NUL-terminated, and every walk below stays between
     // its first byte and its terminator.
-    unsafe {
-        let mut e = matched.add(strlen(matched));
-        if e.offset_from(matched) > 4
-            && !keep_ext
-            && (strncasecmp(e.sub(4), c".vim".as_ptr(), 4) == 0
-                || strncasecmp(e.sub(4), c".lua".as_ptr(), 4) == 0)
-        {
-            e = e.sub(4);
-            *e = 0;
-        }
+    let mut e = unsafe { matched.add(strlen(matched)) };
+    if unsafe { e.offset_from(matched) } > 4
+        && !keep_ext
+        && (unsafe { strncasecmp(e.sub(4), c".vim".as_ptr(), 4) } == 0
+            || unsafe { strncasecmp(e.sub(4), c".lua".as_ptr(), 4) } == 0)
+    {
+        e = unsafe { e.sub(4) };
+        unsafe { *e = 0 };
+    }
 
-        // A trailing slash is a component the pattern did not have to spell.
-        let mut match_pathsep_cnt = if e > matched && *e.sub(1) == b'/' as c_char {
-            -1
-        } else {
-            0
-        };
-        let mut s = e;
-        while s > matched {
-            if vim_ispathsep(*s as c_int) {
-                match_pathsep_cnt += 1;
-                if match_pathsep_cnt > pat_pathsep_cnt {
-                    break;
-                }
+    // A trailing slash is a component the pattern did not have to spell.
+    let mut match_pathsep_cnt = if e > matched && unsafe { *e.sub(1) } == b'/' as c_char {
+        -1
+    } else {
+        0
+    };
+    let mut s = e;
+    while s > matched {
+        if vim_ispathsep(unsafe { *s } as c_int) {
+            match_pathsep_cnt += 1;
+            if match_pathsep_cnt > pat_pathsep_cnt {
+                break;
             }
-            s = s.sub(utf_head_off(matched, s.sub(1)) as usize + 1);
         }
-        s = s.add(1);
-        if s != matched {
-            debug_assert!(e.offset_from(s) + 1 >= 0, "(e - s) + 1 >= 0");
-            memmove(matched.cast(), s.cast(), (e.offset_from(s) as size_t) + 1);
-        }
+        s = unsafe { s.sub(utf_head_off(matched, s.sub(1)) as usize + 1) };
+    }
+    s = unsafe { s.add(1) };
+    if s != matched {
+        debug_assert!(unsafe { e.offset_from(s) } + 1 >= 0, "(e - s) + 1 >= 0");
+        unsafe { memmove(matched.cast(), s.cast(), (e.offset_from(s) as size_t) + 1) };
     }
 }
 
@@ -163,12 +159,10 @@ unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_in
 /// `gap` must be an initialised array of `char *`.
 unsafe fn ga_strings<'a>(gap: *mut garray_T) -> &'a [*mut c_char] {
     // SAFETY: the caller's garray, `ga_len` entries long.
-    unsafe {
-        if (*gap).ga_len <= 0 {
-            return &[];
-        }
-        slice::from_raw_parts((*gap).ga_data.cast::<*mut c_char>(), (*gap).ga_len as usize)
+    if unsafe { (*gap).ga_len } <= 0 {
+        return &[];
     }
+    unsafe { slice::from_raw_parts((*gap).ga_data.cast::<*mut c_char>(), (*gap).ga_len as usize) }
 }
 
 /// Collect the completion matches for `pat` under each of `dirnames`.
@@ -192,13 +186,11 @@ unsafe fn collect_runtime_matches(
     while !unsafe { *dirnames.add(i) }.is_null() {
         // SAFETY: as above; `buf` is sized for the longest pattern built into
         // it (the longest prefix is fifteen bytes, the longest suffix eleven).
-        unsafe {
-            let dir = *dirnames.add(i);
-            let buf_len = strlen(dir) + pat_len + 64;
-            let buf = xmalloc(buf_len).cast::<c_char>();
-            glob_rounds(pat, buf, buf_len, dir, flags, gap);
-            xfree(buf.cast());
-        }
+        let dir = unsafe { *dirnames.add(i) };
+        let buf_len = unsafe { strlen(dir) } + pat_len + 64;
+        let buf = unsafe { xmalloc(buf_len) }.cast::<c_char>();
+        unsafe { glob_rounds(pat, buf, buf_len, dir, flags, gap) };
+        unsafe { xfree(buf.cast()) };
         i += 1;
     }
 
@@ -240,10 +232,8 @@ unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut 
         return FAIL;
     }
     // SAFETY: the caller's out-parameters; the garray's buffer is handed over.
-    unsafe {
-        *file = ga.ga_data.cast();
-        *num_file = ga.ga_len;
-    }
+    unsafe { *file = ga.ga_data.cast() };
+    unsafe { *num_file = ga.ga_len };
     OK
 }
 
@@ -263,13 +253,11 @@ pub unsafe fn expand_runtime_dir(
     dirnames: *mut *mut c_char,
 ) -> c_int {
     // SAFETY: the caller's out-parameters and strings.
-    unsafe {
-        *num_file = 0;
-        *file = ptr::null_mut();
-        let mut ga = new_string_garray();
-        collect_runtime_matches(pat, strlen(pat), flags, false, &raw mut ga, dirnames);
-        take_matches(ga, num_file, file)
-    }
+    unsafe { *num_file = 0 };
+    unsafe { *file = ptr::null_mut() };
+    let mut ga = new_string_garray();
+    unsafe { collect_runtime_matches(pat, strlen(pat), flags, false, &raw mut ga, dirnames) };
+    unsafe { take_matches(ga, num_file, file) }
 }
 
 /// The `[where]` qualifiers `:runtime` completion offers.
@@ -289,12 +277,12 @@ pub unsafe fn expand_runtime_cmd(
     matches: *mut *mut *mut c_char,
 ) -> c_int {
     // SAFETY: the caller's out-parameters and pattern.
+    unsafe { *num_matches = 0 };
+    unsafe { *matches = ptr::null_mut() };
+    let mut ga = new_string_garray();
+    let pat_len = unsafe { strlen(pat) };
+    let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
     unsafe {
-        *num_matches = 0;
-        *matches = ptr::null_mut();
-        let mut ga = new_string_garray();
-        let pat_len = strlen(pat);
-        let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
         collect_runtime_matches(
             pat,
             pat_len,
@@ -302,22 +290,24 @@ pub unsafe fn expand_runtime_cmd(
             true,
             &raw mut ga,
             dirnames.as_mut_ptr(),
-        );
+        )
+    };
 
-        // Complete the [where] argument too, when none was given.
-        if runtime_expand_flags.get() == RuntimeOpts::NONE {
-            for value in WHERE_VALUES {
-                if strncmp(pat, value.as_ptr(), pat_len) == 0 {
-                    ga_grow(&raw mut ga, 1);
+    // Complete the [where] argument too, when none was given.
+    if runtime_expand_flags.get() == RuntimeOpts::NONE {
+        for value in WHERE_VALUES {
+            if unsafe { strncmp(pat, value.as_ptr(), pat_len) } == 0 {
+                unsafe { ga_grow(&raw mut ga, 1) };
+                unsafe {
                     *ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize) =
-                        xstrdup(value.as_ptr());
-                    ga.ga_len += 1;
-                }
+                        xstrdup(value.as_ptr())
+                };
+                ga.ga_len += 1;
             }
         }
-
-        take_matches(ga, num_matches, matches)
     }
+
+    unsafe { take_matches(ga, num_matches, matches) }
 }
 
 /// Expand `:packadd` names: `{packpath}/pack/*/opt/{pat}`.
@@ -331,30 +321,28 @@ pub unsafe fn expand_packadd_dir(
 ) -> c_int {
     // SAFETY: the caller's out-parameters and pattern; `s` is owned and freed
     // below.
-    unsafe {
-        *num_file = 0;
-        *file = ptr::null_mut();
-        let mut ga = new_string_garray();
+    unsafe { *num_file = 0 };
+    unsafe { *file = ptr::null_mut() };
+    let mut ga = new_string_garray();
 
-        let buflen = strlen(pat) + 26;
-        let s = xmalloc(buflen).cast::<c_char>();
-        for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
-            snprintf(s, buflen, fmt.as_ptr(), pat);
-            globpath(p_pp.get(), s, &raw mut ga, WildOpts::NONE, true);
-        }
-        xfree(s.cast());
-
-        // Offer the package name, not the path it was found at.
-        for &matched in ga_strings(&raw mut ga) {
-            let tail = path_tail(matched);
-            memmove(matched.cast(), tail.cast(), strlen(tail) + 1);
-        }
-
-        if ga.ga_len <= 0 {
-            return FAIL;
-        }
-        // Sort and remove the duplicates the two patterns can produce.
-        ga_remove_duplicate_strings(&raw mut ga);
-        take_matches(ga, num_file, file)
+    let buflen = unsafe { strlen(pat) } + 26;
+    let s = unsafe { xmalloc(buflen) }.cast::<c_char>();
+    for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
+        unsafe { snprintf(s, buflen, fmt.as_ptr(), pat) };
+        unsafe { globpath(p_pp.get(), s, &raw mut ga, WildOpts::NONE, true) };
     }
+    unsafe { xfree(s.cast()) };
+
+    // Offer the package name, not the path it was found at.
+    for &matched in unsafe { ga_strings(&raw mut ga) } {
+        let tail = unsafe { path_tail(matched) };
+        unsafe { memmove(matched.cast(), tail.cast(), strlen(tail) + 1) };
+    }
+
+    if ga.ga_len <= 0 {
+        return FAIL;
+    }
+    // Sort and remove the duplicates the two patterns can produce.
+    unsafe { ga_remove_duplicate_strings(&raw mut ga) };
+    unsafe { take_matches(ga, num_file, file) }
 }

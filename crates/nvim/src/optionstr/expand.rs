@@ -84,17 +84,13 @@ impl Matches {
     unsafe fn finish(self, matches: *mut *mut *mut c_char, num: *mut c_int) -> c_int {
         if self.count == 0 {
             // SAFETY: the array this owns, and the caller's out-parameter.
-            unsafe {
-                xfree(self.into.cast::<c_void>());
-                *matches = ptr::null_mut();
-            }
+            unsafe { xfree(self.into.cast::<c_void>()) };
+            unsafe { *matches = ptr::null_mut() };
             return FAIL;
         }
         // SAFETY: the caller's out-parameters.
-        unsafe {
-            *matches = self.into;
-            *num = self.count;
-        }
+        unsafe { *matches = self.into };
+        unsafe { *num = self.count };
         OK
     }
 }
@@ -106,10 +102,9 @@ impl Matches {
 /// `args` points at the option table's completion frame.
 unsafe fn original_value(args: *mut optexpand_T) -> Option<*mut c_char> {
     // SAFETY: the caller's frame; `oe_opt_value` is a C string.
-    unsafe {
-        let value = (*args).oe_opt_value;
-        ((*args).oe_include_orig_val && c_int::from(*value) != NUL).then_some(value)
-    }
+    let value = unsafe { (*args).oe_opt_value };
+    (unsafe { (*args).oe_include_orig_val } && c_int::from(unsafe { *value }) != NUL)
+        .then_some(value)
 }
 
 /// Complete an option whose accepted words the generated table lists.
@@ -233,8 +228,8 @@ pub(crate) unsafe fn expand_set_opt_generic(
             num_matches,
             Some(expand_set_opt_callback),
             false,
-        );
-    }
+        )
+    };
 
     ORIGINAL_VALUE.set(ptr::null_mut());
     ENUMERATOR.set(None);
@@ -461,18 +456,18 @@ pub(crate) unsafe fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut
     // SAFETY: `xp_buf` is the expansion context's own scratch, which
     // `expand_generic` reads back before it asks for the next name, and
     // `name` is a C string.
+    let buffer = unsafe { (*xp).xp_buf.as_mut_ptr() };
+    let dash = if subtract { c"-" } else { c"" };
     unsafe {
-        let buffer = (*xp).xp_buf.as_mut_ptr();
-        let dash = if subtract { c"-" } else { c"" };
         snprintf(
             buffer,
             EXPAND_BUF_LEN as size_t,
             c"%s%s".as_ptr(),
             dash.as_ptr(),
             name,
-        );
-        buffer
-    }
+        )
+    };
+    buffer
 }
 
 /// # Safety
