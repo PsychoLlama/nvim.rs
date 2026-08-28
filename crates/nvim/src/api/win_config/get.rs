@@ -8,237 +8,213 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, set_key};
-use crate::global_cell::ConstTable;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, set_key, window_by_handle};
+use crate::winlayer::Live;
+use core::ffi::{CStr, c_char, c_int};
 
-unsafe fn config_put_bordertext(
-    mut config: *mut KeyDict_win_config,
-    mut fconfig: *mut WinConfig,
-    mut bordertext_type: BorderTextType,
-    mut arena: *mut Arena,
+// The enumerated keys' spellings, each indexed by the value it names. They
+// are the same literals `parse.rs` matches on the way in; upstream keeps
+// them as `static const char *` tables and reads them through a pointer,
+// which is what made this file's answer an unchecked one.
+
+/// [`FloatRelative`]'s names, indexed by the value.
+const FLOAT_RELATIVE_STR: [&CStr; 6] = [
+    c"editor",
+    c"win",
+    c"cursor",
+    c"mouse",
+    c"tabline",
+    c"laststatus",
+];
+
+/// [`WinSplit`]'s names, indexed by the value.
+const WIN_SPLIT_STR: [&CStr; 4] = [c"left", c"right", c"above", c"below"];
+
+/// [`WinStyle`]'s names, indexed by the value.
+const WIN_STYLE_STR: [&CStr; 2] = [c"", c"minimal"];
+
+/// [`FloatAnchor`]'s names, indexed by its two bits.
+const FLOAT_ANCHOR_STR: [&CStr; 4] = [c"NW", c"NE", c"SW", c"SE"];
+
+/// [`AlignTextPos`]'s names, indexed by the value.
+const ALIGN_TEXT_STR: [&CStr; 3] = [c"left", c"center", c"right"];
+
+/// Mark `key` present in `config`'s optional-key set.
+fn set(config: &mut KeyDict_win_config, key: c_int) {
+    config.is_set__win_config_ = set_key(config.is_set__win_config_, key);
+}
+
+/// Put one of the two border texts -- its chunks and its position -- into
+/// `config`, as the keys `nvim_win_set_config` would take back.
+fn config_put_bordertext(
+    config: &mut KeyDict_win_config,
+    fconfig: WinCfg,
+    bordertext_type: BorderTextType,
+    arena: *mut Arena,
 ) {
-    unsafe {
-        let mut vt: VirtText = VirtText {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<VirtTextChunk>(),
-        };
-        let mut align: AlignTextPos = kAlignLeft;
-        match bordertext_type as ::core::ffi::c_uint {
-            0 => {
-                vt = (*fconfig).title_chunks;
-                align = (*fconfig).title_pos;
-            }
-            1 => {
-                vt = (*fconfig).footer_chunks;
-                align = (*fconfig).footer_pos;
-            }
-            _ => {}
-        }
-        let mut bordertext: Array = virt_text_to_array(vt, true, arena);
-        let mut pos: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        match align as ::core::ffi::c_uint {
-            0 => {
-                pos = c"left".as_ptr() as *mut ::core::ffi::c_char;
-            }
-            1 => {
-                pos = c"center".as_ptr() as *mut ::core::ffi::c_char;
-            }
-            2 => {
-                pos = c"right".as_ptr() as *mut ::core::ffi::c_char;
-            }
-            _ => {}
-        }
-        match bordertext_type as ::core::ffi::c_uint {
-            0 => {
-                (*config).is_set__win_config_ = ((*config).is_set__win_config_
-                    as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__title)
-                    as OptionalKeys;
-                (*config).title = object {
-                    type_0: kObjectTypeArray,
-                    data: object_data { array: bordertext },
-                };
-                (*config).is_set__win_config_ = ((*config).is_set__win_config_
-                    as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__title_pos)
-                    as OptionalKeys;
-                (*config).title_pos = cstr_as_string(pos);
-            }
-            1 => {
-                (*config).is_set__win_config_ = ((*config).is_set__win_config_
-                    as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__footer)
-                    as OptionalKeys;
-                (*config).footer = object {
-                    type_0: kObjectTypeArray,
-                    data: object_data { array: bordertext },
-                };
-                (*config).is_set__win_config_ = ((*config).is_set__win_config_
-                    as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__footer_pos)
-                    as OptionalKeys;
-                (*config).footer_pos = cstr_as_string(pos);
-            }
-            _ => {}
-        };
+    let footer = bordertext_type == kBorderTextFooter;
+    let (vt, align) = if footer {
+        (fconfig.footer_chunks, fconfig.footer_pos)
+    } else {
+        (fconfig.title_chunks, fconfig.title_pos)
+    };
+    // SAFETY: the chunks are the window's own, and `arena` is the caller's.
+    let bordertext = Object::array(unsafe { virt_text_to_array(vt, true, arena) });
+    let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);
+    let (text_key, pos_key) = if footer {
+        (
+            KEYSET_OPTIDX_win_config__footer,
+            KEYSET_OPTIDX_win_config__footer_pos,
+        )
+    } else {
+        (
+            KEYSET_OPTIDX_win_config__title,
+            KEYSET_OPTIDX_win_config__title_pos,
+        )
+    };
+    config.is_set__win_config_ = set_key(config.is_set__win_config_, text_key);
+    config.is_set__win_config_ = set_key(config.is_set__win_config_, pos_key);
+    if footer {
+        config.footer = bordertext;
+        config.footer_pos = pos;
+    } else {
+        config.title = bordertext;
+        config.title_pos = pos;
     }
 }
 
+/// The eight border cells as the `border` key takes them: a bare string per
+/// cell, or a `[char, highlight]` pair for a cell that carries one.
+///
+/// # Safety
+/// `arena` must be the caller's, and outlive the answer along with `fconfig`.
+unsafe fn border_array(fconfig: WinCfg, arena: *mut Arena) -> Array {
+    let mut border = arena_array(arena, 8);
+    for i in 0..8 {
+        // SAFETY: the cell is one of the config's own eight, and holds at
+        // most `MAX_SCHAR_SIZE` bytes; taking its address off the raw pointer
+        // rather than off a `Deref` is what keeps `fconfig` usable after.
+        let cell = unsafe {
+            let chars = (&raw mut (*fconfig.raw()).border_chars).cast::<c_char>();
+            cstrn_as_string(
+                chars.add(i * MAX_SCHAR_SIZE as usize),
+                MAX_SCHAR_SIZE as size_t,
+            )
+        };
+        let name = syn_id2name(fconfig.border_hl_ids[i]);
+        // SAFETY: `syn_id2name` answers a NUL-terminated name, empty for an
+        // id with no group.
+        let highlighted = unsafe { *name } != 0;
+        // SAFETY: `arena` is the caller's, and both strings live as long as
+        // it does.
+        unsafe {
+            if highlighted {
+                let mut tuple = arena_array(arena, 2);
+                array_add(&mut tuple, Object::string(cell));
+                array_add(&mut tuple, Object::string(cstr_as_string(name)));
+                array_add(&mut border, Object::array(tuple));
+            } else {
+                array_add(&mut border, Object::string(cell));
+            }
+        }
+    }
+    border
+}
+
+/// `win`'s configuration, as the dictionary `nvim_open_win` would take.
+///
+/// # Safety
+/// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_config(
     win: Window,
     arena: *mut Arena,
 ) -> Result<KeyDict_win_config, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    unsafe {
-        static float_relative_str: ConstTable<[*const ::core::ffi::c_char; 6]> = ConstTable::new([
-            c"editor".as_ptr(),
-            c"win".as_ptr(),
-            c"cursor".as_ptr(),
-            c"mouse".as_ptr(),
-            c"tabline".as_ptr(),
-            c"laststatus".as_ptr(),
-        ]);
-        static win_split_str: ConstTable<[*const ::core::ffi::c_char; 4]> = ConstTable::new([
-            c"left".as_ptr(),
-            c"right".as_ptr(),
-            c"above".as_ptr(),
-            c"below".as_ptr(),
-        ]);
-        static win_style_str: ConstTable<[*const ::core::ffi::c_char; 2]> =
-            ConstTable::new([c"".as_ptr(), c"minimal".as_ptr()]);
-        let mut rv: KeyDict_win_config = KEYDICT_INIT;
-        let mut wp: *mut win_T = find_window_by_handle(win, err);
-        if wp.is_null() {
-            return rv.reported(error);
-        }
-        let mut config: *mut WinConfig = &raw mut (*wp).w_config;
-        rv.is_set__win_config_ =
-            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__focusable);
-        rv.focusable = (*config).focusable as Boolean;
-        rv.is_set__win_config_ =
-            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__external);
-        rv.external = (*config).external as Boolean;
-        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__hide);
-        rv.hide = (*config).hide as Boolean;
-        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__mouse);
-        rv.mouse = (*config).mouse as Boolean;
-        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__style);
-        rv.style = cstr_as_string(win_style_str[(*config).style as usize]);
-        if (*wp).w_floating {
-            rv.is_set__win_config_ =
-                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__width);
-            rv.width = (*config).width as Integer;
-            rv.is_set__win_config_ =
-                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__height);
-            rv.height = (*config).height as Integer;
-            if !(*config).external {
-                if (*config).relative as ::core::ffi::c_uint
-                    == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    rv.is_set__win_config_ =
-                        set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__win);
-                    rv.win = (*config).window;
-                    if (*config).bufpos.lnum >= 0 as linenr_T {
-                        let mut pos: Array = arena_array(arena, 2 as size_t);
-                        array_add(&mut pos, Object::integer((*config).bufpos.lnum as Integer));
-                        array_add(&mut pos, Object::integer((*config).bufpos.col as Integer));
-                        rv.is_set__win_config_ = (rv.is_set__win_config_
-                            as ::core::ffi::c_ulonglong
-                            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__bufpos)
-                            as OptionalKeys;
-                        rv.bufpos = pos;
+    let mut rv: KeyDict_win_config = KEYDICT_INIT;
+    let Some(wp) = window_by_handle(win, &mut error) else {
+        return rv.reported(error);
+    };
+    // SAFETY: `wp` names a live window, so its own config field is live with
+    // it. The address comes off the raw pointer rather than off a `Deref`,
+    // which is what lets both stay usable.
+    let config: WinCfg = unsafe { Live::new(&raw mut (*wp.raw()).w_config) };
+
+    set(&mut rv, KEYSET_OPTIDX_win_config__focusable);
+    rv.focusable = config.focusable;
+    set(&mut rv, KEYSET_OPTIDX_win_config__external);
+    rv.external = config.external;
+    set(&mut rv, KEYSET_OPTIDX_win_config__hide);
+    rv.hide = config.hide;
+    set(&mut rv, KEYSET_OPTIDX_win_config__mouse);
+    rv.mouse = config.mouse;
+    set(&mut rv, KEYSET_OPTIDX_win_config__style);
+    rv.style = String_0::from_cstr(WIN_STYLE_STR[config.style as usize]);
+
+    if wp.w_floating {
+        set(&mut rv, KEYSET_OPTIDX_win_config__width);
+        rv.width = Integer::from(config.width);
+        set(&mut rv, KEYSET_OPTIDX_win_config__height);
+        rv.height = Integer::from(config.height);
+        if !config.external {
+            if config.relative == kFloatRelativeWindow {
+                set(&mut rv, KEYSET_OPTIDX_win_config__win);
+                rv.win = config.window;
+                if config.bufpos.lnum >= 0 {
+                    let mut pos = arena_array(arena, 2);
+                    let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
+                    // SAFETY: `pos` is the two-slot block `arena` just handed
+                    // back.
+                    unsafe {
+                        array_add(&mut pos, Object::integer(Integer::from(lnum)));
+                        array_add(&mut pos, Object::integer(Integer::from(col)));
                     }
+                    set(&mut rv, KEYSET_OPTIDX_win_config__bufpos);
+                    rv.bufpos = pos;
                 }
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__anchor);
-                rv.anchor = cstr_as_string(
-                    *(&raw const float_anchor_str as *const *const ::core::ffi::c_char)
-                        .offset((*config).anchor as isize),
-                );
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__row);
-                rv.row = (*config).row as Float;
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__col);
-                rv.col = (*config).col as Float;
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__zindex);
-                rv.zindex = (*config).zindex as Integer;
             }
-            if (*config).border {
-                let mut border: Array = arena_array(arena, 8 as size_t);
-                let mut i: size_t = 0 as size_t;
-                while i < 8 as size_t {
-                    let mut s: String_0 = cstrn_as_string(
-                        &raw mut *(&raw mut (*config).border_chars
-                            as *mut [::core::ffi::c_char; 32])
-                            .add(i) as *mut ::core::ffi::c_char,
-                        MAX_SCHAR_SIZE as size_t,
-                    );
-                    let mut hi_id: ::core::ffi::c_int = (*config).border_hl_ids[i as usize];
-                    let mut hi_name: *mut ::core::ffi::c_char = syn_id2name(hi_id);
-                    if *hi_name.offset(0 as ::core::ffi::c_int as isize) != 0 {
-                        let mut tuple: Array = arena_array(arena, 2 as size_t);
-                        array_add(&mut tuple, Object::string(s));
-                        array_add(&mut tuple, Object::string(cstr_as_string(hi_name)));
-                        array_add(&mut border, Object::array(tuple));
-                    } else {
-                        array_add(&mut border, Object::string(s));
-                    }
-                    i = i.wrapping_add(1);
-                }
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
-                rv.border = object {
-                    type_0: kObjectTypeArray,
-                    data: object_data { array: border },
-                };
-                if (*config).title {
-                    config_put_bordertext(&raw mut rv, config, kBorderTextTitle, arena);
-                }
-                if (*config).footer {
-                    config_put_bordertext(&raw mut rv, config, kBorderTextFooter, arena);
-                }
-            } else {
-                rv.is_set__win_config_ =
-                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
-                rv.border = object {
-                    type_0: kObjectTypeString,
-                    data: object_data {
-                        string: cstr_as_string(c"none".as_ptr()),
-                    },
-                };
+            set(&mut rv, KEYSET_OPTIDX_win_config__anchor);
+            rv.anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[config.anchor as usize]);
+            set(&mut rv, KEYSET_OPTIDX_win_config__row);
+            rv.row = config.row;
+            set(&mut rv, KEYSET_OPTIDX_win_config__col);
+            rv.col = config.col;
+            set(&mut rv, KEYSET_OPTIDX_win_config__zindex);
+            rv.zindex = Integer::from(config.zindex);
+        }
+        set(&mut rv, KEYSET_OPTIDX_win_config__border);
+        if config.border {
+            // SAFETY: `arena` is the caller's, and outlives the answer along
+            // with the window's config.
+            rv.border = Object::array(unsafe { border_array(config, arena) });
+            if config.title {
+                config_put_bordertext(&mut rv, config, kBorderTextTitle, arena);
             }
-        } else if !(*config).external {
-            rv.is_set__win_config_ =
-                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__width);
-            rv.width = (*wp).w_width as Integer;
-            rv.is_set__win_config_ =
-                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__height);
-            rv.height = (*wp).w_height as Integer;
-            let mut split: WinSplit = win_split_dir(wp);
-            rv.is_set__win_config_ =
-                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__split);
-            rv.split = cstr_as_string(win_split_str[split as usize]);
+            if config.footer {
+                config_put_bordertext(&mut rv, config, kBorderTextFooter, arena);
+            }
+        } else {
+            rv.border = Object::string(String_0::from_cstr(c"none"));
         }
-        let mut rel: *const ::core::ffi::c_char =
-            if (*wp).w_floating as ::core::ffi::c_int != 0 && !(*config).external {
-                float_relative_str[(*config).relative as usize]
-            } else {
-                c"".as_ptr()
-            };
-        rv.is_set__win_config_ =
-            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__relative);
-        rv.relative = cstr_as_string(rel);
-        if (*config)._cmdline_offset < INT_MAX {
-            rv.is_set__win_config_ = set_key(
-                rv.is_set__win_config_,
-                KEYSET_OPTIDX_win_config___cmdline_offset,
-            );
-            rv._cmdline_offset = (*config)._cmdline_offset as Integer;
-        }
-        rv.reported(error)
+    } else if !config.external {
+        set(&mut rv, KEYSET_OPTIDX_win_config__width);
+        rv.width = Integer::from(wp.w_width);
+        set(&mut rv, KEYSET_OPTIDX_win_config__height);
+        rv.height = Integer::from(wp.w_height);
+        let split = win_split_dir(wp);
+        set(&mut rv, KEYSET_OPTIDX_win_config__split);
+        rv.split = String_0::from_cstr(WIN_SPLIT_STR[split as usize]);
     }
+
+    let rel = if wp.w_floating && !config.external {
+        FLOAT_RELATIVE_STR[config.relative as usize]
+    } else {
+        c""
+    };
+    set(&mut rv, KEYSET_OPTIDX_win_config__relative);
+    rv.relative = String_0::from_cstr(rel);
+    if config._cmdline_offset < INT_MAX {
+        set(&mut rv, KEYSET_OPTIDX_win_config___cmdline_offset);
+        rv._cmdline_offset = Integer::from(config._cmdline_offset);
+    }
+    rv.reported(error)
 }

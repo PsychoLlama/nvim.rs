@@ -18,8 +18,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::main::{
     autocmd_no_enter, autocmd_no_leave, cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
-    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, float_anchor_str, p_sb, p_spr,
-    p_winborder, textlock,
+    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, p_sb, p_spr, p_winborder, textlock,
 };
 use crate::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::memory::{strequal, xstrdup};
@@ -29,14 +28,13 @@ use crate::os::cshim::strchr;
 use crate::strings::striequal;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_SIZE, Error, Float,
-    FloatAnchor, FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys, String_0,
-    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, colnr_T,
-    except_T, frame_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor,
-    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
-    kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T,
-    msglist_T, object, object_data, size_t, switchwin_T, tabpage_T, win_T,
+    AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_SIZE, Error, FloatAnchor,
+    FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys, String_0, TryState, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, colnr_T, frame_T, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
+    kFloatRelativeTabline, kFloatRelativeWindow, kObjectTypeArray, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T, size_t, switchwin_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
