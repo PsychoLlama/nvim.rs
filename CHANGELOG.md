@@ -7,6 +7,15 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reworked how the editor holds the objects an editing session is made of:
+  buffers, windows and tab pages, the in-memory form of a file's text, and
+  the values Vimscript passes around. Each is now owned by the editor's own
+  tables and referred to by name rather than by address, so a list or a link
+  between two of them can no longer outlive what it points at. The editor
+  behaves exactly as before.
+
 ## [2026.08.26-a99ef8068b]
 
 ### Changed
