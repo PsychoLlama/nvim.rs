@@ -101,7 +101,7 @@ fn push_win_extmark(m: WinExtmark) {
 /// `wp`/`buf` must be live and [`WinLineVars::decor`] must hold the active
 /// ranges for its `row`.
 pub(crate) unsafe fn draw_virt_text(
-    wp: *mut win_T,
+    wp: Win,
     buf: *mut buf_T,
     col_off: ::core::ffi::c_int,
     mut end_col: ::core::ffi::c_int,
@@ -109,7 +109,7 @@ pub(crate) unsafe fn draw_virt_text(
 ) -> ::core::ffi::c_int {
     let (win_row, mut state) = (wlv.row, wlv.decor);
     // SAFETY: the caller's window and decoration state.
-    let max_col = unsafe { (*wp).w_view_width };
+    let max_col = wp.w_view_width;
     let end = state.current_end;
     let do_eol = state.eol_col > -1;
 
@@ -179,7 +179,7 @@ pub(crate) unsafe fn draw_virt_text(
             if let Some(col) = placed {
                 // Out of the window: do not draw it at all.
                 unsafe {
-                    (*item).draw_col = if col < 0 || col >= (*wp).w_view_width {
+                    (*item).draw_col = if col < 0 || col >= wp.w_view_width {
                         INT_MIN
                     } else {
                         col
