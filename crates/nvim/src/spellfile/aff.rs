@@ -336,15 +336,9 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
                 )
             };
             if pc.is_null() {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        rline.as_mut_ptr(),
-                    )
-                };
+                let fmt =
+                    unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, rline.as_mut_ptr()) };
                 continue;
             }
             pc
@@ -433,15 +427,8 @@ unsafe fn handle_line(
             && unsafe { convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) }
                 == FAIL
         {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()),
-                    fname,
-                    (*aff).af_enc,
-                    p_enc.get(),
-                )
-            };
+            let fmt = unsafe { gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, (*aff).af_enc, p_enc.get()) };
         }
         unsafe { (*spin).si_conv.vc_fail = true };
         return true;
@@ -498,15 +485,8 @@ unsafe fn handle_line(
 
     if unsafe { is_aff_rule(items, c"COMPOUNDRULES", 2) } {
         if unsafe { atoi(items[1]) } == 0 {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Wrong COMPOUNDRULES value in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    items[1],
-                )
-            };
+            let fmt = unsafe { gettext(c"Wrong COMPOUNDRULES value in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
         }
         return true;
     }
@@ -560,15 +540,9 @@ unsafe fn handle_line(
     // pattern pair.
     if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) } {
         if unsafe { atoi(items[1]) } == 0 {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    items[1],
-                )
-            };
+            let fmt =
+                unsafe { gettext(c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
         }
         return true;
     }
@@ -630,14 +604,8 @@ unsafe fn handle_line(
     // The two-item form of REP/REPSAL is the count line.
     if unsafe { is_aff_rule(items, c"REP", 2) } || unsafe { is_aff_rule(items, c"REPSAL", 2) } {
         if !unsafe { is_digit_byte(*items[1]) } {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Expected REP(SAL) count in %s line %d".as_ptr()),
-                    fname,
-                    lnum,
-                )
-            };
+            let fmt = unsafe { gettext(c"Expected REP(SAL) count in %s line %d".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum) };
         }
         return true;
     }
@@ -681,15 +649,8 @@ unsafe fn handle_line(
         return true;
     }
 
-    unsafe {
-        smsg_c!(
-            0,
-            gettext(c"Unrecognized or duplicate item in %s line %d: %s".as_ptr()),
-            fname,
-            lnum,
-            items[0],
-        )
-    };
+    let fmt = unsafe { gettext(c"Unrecognized or duplicate item in %s line %d: %s".as_ptr()) };
+    unsafe { smsg_c!(0, fmt, fname, lnum, items[0]) };
     true
 }
 
@@ -726,15 +687,8 @@ unsafe fn handle_flag_type(
     } else if unsafe { strcmp(items[1], c"caplong".as_ptr()) } == 0 {
         unsafe { (*aff).af_flagtype = AFT_CAPLONG };
     } else {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Invalid value for FLAG in %s line %d: %s".as_ptr()),
-                fname,
-                lnum,
-                items[1],
-            )
-        };
+        let fmt = unsafe { gettext(c"Invalid value for FLAG in %s line %d: %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
     }
     // Anything already read used the old spelling, so it would be
     // interpreted wrongly.
@@ -749,15 +703,8 @@ unsafe fn handle_flag_type(
         || unsafe { (*aff).af_suff.ht_used } > 0
         || unsafe { (*aff).af_pref.ht_used } > 0;
     if used {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"FLAG after using flags in %s line %d: %s".as_ptr()),
-                fname,
-                lnum,
-                items[1],
-            )
-        };
+        let fmt = unsafe { gettext(c"FLAG after using flags in %s line %d: %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
     }
 }
 
@@ -796,13 +743,8 @@ unsafe fn finish_aff(
     }
     if st.compsylmax != 0 {
         if st.syllable.is_null() {
-            unsafe {
-                smsg_c!(
-                    0,
-                    c"%s".as_ptr(),
-                    gettext(c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr()),
-                )
-            };
+            let fmt = unsafe { gettext(c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr()) };
+            unsafe { smsg_c!(0, c"%s".as_ptr(), fmt) };
         }
         unsafe { aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
         unsafe { (*spin).si_compsylmax = st.compsylmax };
@@ -837,16 +779,17 @@ unsafe fn finish_aff(
 
     if !st.sofofrom.is_null() || !st.sofoto.is_null() {
         if st.sofofrom.is_null() || st.sofoto.is_null() {
+            let fmt = unsafe { gettext(c"Missing SOFO%s line in %s".as_ptr()) };
             unsafe {
                 smsg_c!(
                     0,
-                    gettext(c"Missing SOFO%s line in %s".as_ptr()),
+                    fmt,
                     if st.sofofrom.is_null() {
                         c"FROM".as_ptr()
                     } else {
                         c"TO".as_ptr()
                     },
-                    fname,
+                    fname
                 )
             };
         } else if unsafe { (*spin).si_sal.ga_len } > 0 {
@@ -871,13 +814,9 @@ unsafe fn finish_aff(
 unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
     if spinval != 0 && spinval != affval {
         // SAFETY: the format and the name are both static strings.
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"%s value differs from what is used in another .aff file".as_ptr()),
-                name.as_ptr(),
-            )
-        };
+        let fmt =
+            unsafe { gettext(c"%s value differs from what is used in another .aff file".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, name.as_ptr()) };
     }
 }
 
@@ -889,13 +828,9 @@ unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
 unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CStr) {
     // SAFETY: the caller promises the strings.
     if !spinval.is_null() && unsafe { strcmp(spinval, affval) } != 0 {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"%s value differs from what is used in another .aff file".as_ptr()),
-                name.as_ptr(),
-            )
-        };
+        let fmt =
+            unsafe { gettext(c"%s value differs from what is used in another .aff file".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, name.as_ptr()) };
     }
 }
 

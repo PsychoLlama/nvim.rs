@@ -139,15 +139,9 @@ pub(super) unsafe fn spell_read_dic(
                 )
             };
             if pc.is_null() {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        line.as_mut_ptr(),
-                    )
-                };
+                let fmt =
+                    unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, line.as_mut_ptr()) };
                 continue;
             }
             pc
@@ -222,25 +216,11 @@ pub(super) unsafe fn spell_read_dic(
             // Report every duplicate when 'verbose' is on, otherwise
             // just the first, plus a count at the end.
             if p_verbose.get() > 0 {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Duplicate word in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        dw,
-                    )
-                };
+                let fmt = unsafe { gettext(c"Duplicate word in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, dw) };
             } else if duplicate == 0 {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"First duplicate word in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        dw,
-                    )
-                };
+                let fmt = unsafe { gettext(c"First duplicate word in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, dw) };
             }
             duplicate += 1;
         }
@@ -329,24 +309,13 @@ pub(super) unsafe fn spell_read_dic(
     }
 
     if duplicate > 0 {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"%d duplicate word(s) in %s".as_ptr()),
-                duplicate,
-                fname,
-            )
-        };
+        let fmt = unsafe { gettext(c"%d duplicate word(s) in %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, duplicate, fname) };
     }
     if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr()),
-                non_ascii,
-                fname,
-            )
-        };
+        let fmt =
+            unsafe { gettext(c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, non_ascii, fname) };
     }
     unsafe { hash_clear(&raw mut ht) };
     unsafe { fclose(fd) };

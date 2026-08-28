@@ -695,12 +695,8 @@ unsafe fn output_is_writable(
             ))
         };
     } else if incount > MAXREGIONS as ::core::ffi::c_int {
-        unsafe {
-            semsg_c!(
-                gettext(c"E754: Only up to %d regions supported".as_ptr()),
-                MAXREGIONS as ::core::ffi::c_int,
-            )
-        };
+        let fmt = unsafe { gettext(c"E754: Only up to %d regions supported".as_ptr()) };
+        unsafe { semsg_c!(fmt, MAXREGIONS as ::core::ffi::c_int) };
     } else if !over_write && unsafe { os_path_exists(wfname) } {
         unsafe { emsg(gettext((&raw const e_exists).cast())) };
     } else if unsafe { os_isdir(wfname) } {

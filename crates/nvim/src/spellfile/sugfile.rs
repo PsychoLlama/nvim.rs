@@ -101,13 +101,8 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
     spell_message(spin, c"Performing soundfolding...");
     let mut fname: *mut c_char = core::ptr::null_mut();
     if unsafe { sug_filltree(spin, slang) } != FAIL && unsafe { sug_maketable(spin) } != FAIL {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Number of words after soundfolding: %ld".as_ptr()),
-                (*spin.si_spellbuf).b_ml.ml_line_count as i64,
-            )
-        };
+        let fmt = unsafe { gettext(c"Number of words after soundfolding: %ld".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, (*spin.si_spellbuf).b_ml.ml_line_count as i64) };
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
         unsafe { wordtree_compress(spin, foldroot, c"case-folded") };
@@ -233,13 +228,8 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
         }
     }
 
-    unsafe {
-        smsg_c!(
-            0,
-            gettext(c"Total number of words: %d".as_ptr()),
-            words_done,
-        )
-    };
+    let fmt = unsafe { gettext(c"Total number of words: %d".as_ptr()) };
+    unsafe { smsg_c!(0, fmt, words_done) };
     OK
 }
 

@@ -241,22 +241,13 @@ unsafe fn load_spl(
 
     match unsafe { spell_check_magic_string(fd) } {
         SP_FORMERROR | SP_TRUNCERROR => {
-            unsafe {
-                semsg_c!(
-                    c"%s".as_ptr(),
-                    gettext(c"E757: This does not look like a spell file".as_ptr()),
-                )
-            };
+            let fmt = unsafe { gettext(c"E757: This does not look like a spell file".as_ptr()) };
+            unsafe { semsg_c!(c"%s".as_ptr(), fmt) };
             return false;
         }
         SP_OTHERERROR => {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E5042: Failed to read spell file %s: %s".as_ptr()),
-                    fname,
-                    strerror(ferror(fd)),
-                )
-            };
+            let fmt = unsafe { gettext(c"E5042: Failed to read spell file %s: %s".as_ptr()) };
+            unsafe { semsg_c!(fmt, fname, strerror(ferror(fd))) };
             return false;
         }
         _ => {}
@@ -520,58 +511,40 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         *b = unsafe { getc(fd) } as c_char;
     }
     if unsafe { strncmp(buf.as_ptr(), VIMSUGMAGIC.as_ptr(), VIMSUGMAGICL as size_t) } != 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E778: This does not look like a .sug file: %s".as_ptr()),
-                (*slang).sl_fname,
-            )
-        };
+        let fmt = unsafe { gettext(c"E778: This does not look like a .sug file: %s".as_ptr()) };
+        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
         return;
     }
     let version = unsafe { getc(fd) };
     if version < VIMSUGVERSION {
-        unsafe {
-            semsg_c!(
-                gettext(c"E779: Old .sug file, needs to be updated: %s".as_ptr()),
-                (*slang).sl_fname,
-            )
-        };
+        let fmt = unsafe { gettext(c"E779: Old .sug file, needs to be updated: %s".as_ptr()) };
+        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
         return;
     }
     if version > VIMSUGVERSION {
-        unsafe {
-            semsg_c!(
-                gettext(c"E780: .sug file is for newer version of Vim: %s".as_ptr()),
-                (*slang).sl_fname,
-            )
-        };
+        let fmt = unsafe { gettext(c"E780: .sug file is for newer version of Vim: %s".as_ptr()) };
+        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
         return;
     }
     // The `.spl` stamped both files; a mismatch means the pair is
     // stale and the word numbers would point at the wrong words.
     if unsafe { get8ctime(fd) } != unsafe { (*slang).sl_sugtime } {
-        unsafe {
-            semsg_c!(
-                gettext(c"E781: .sug file doesn't match .spl file: %s".as_ptr()),
-                (*slang).sl_fname,
-            )
-        };
+        let fmt = unsafe { gettext(c"E781: .sug file doesn't match .spl file: %s".as_ptr()) };
+        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
         return;
     }
 
     if unsafe { read_sug_body(fd, slang) } {
         return;
     }
-    unsafe {
-        semsg_c!(
-            gettext(
-                super::e_error_while_reading_sug_file_str
-                    .as_ptr()
-                    .cast::<c_char>(),
-            ),
-            (*slang).sl_fname,
+    let fmt = unsafe {
+        gettext(
+            super::e_error_while_reading_sug_file_str
+                .as_ptr()
+                .cast::<c_char>(),
         )
     };
+    unsafe { semsg_c!(fmt, (*slang).sl_fname) };
     unsafe { slang_clear_sug(slang) };
 }
 

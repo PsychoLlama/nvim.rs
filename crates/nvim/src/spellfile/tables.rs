@@ -139,14 +139,8 @@ pub(super) unsafe fn handle_map(
         // The first MAP line is the number of groups.
         st.found_map = true;
         if !unsafe { is_digit_byte(*items[1]) } {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Expected MAP count in %s line %d".as_ptr()),
-                    fname,
-                    lnum,
-                )
-            };
+            let fmt = unsafe { gettext(c"Expected MAP count in %s line %d".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum) };
         }
         return;
     }
@@ -162,14 +156,8 @@ pub(super) unsafe fn handle_map(
             && !unsafe { vim_strchr((*spin).si_map.ga_data.cast::<c_char>(), c) }.is_null())
             || !unsafe { vim_strchr(p, c) }.is_null()
         {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Duplicate character in MAP in %s line %d".as_ptr()),
-                    fname,
-                    lnum,
-                )
-            };
+            let fmt = unsafe { gettext(c"Duplicate character in MAP in %s line %d".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum) };
         }
     }
     unsafe { ga_concat(&raw mut (*spin).si_map, items[1]) };

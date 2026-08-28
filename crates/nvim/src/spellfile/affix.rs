@@ -75,29 +75,16 @@ pub(super) unsafe fn handle_affix_header(
         // A continued block for an affix already defined.
         st.cur_aff = unsafe { affheader_T::of_key((*hi).hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(
-                        c"Different combining flag in continued affix block in %s line %d: %s"
-                            .as_ptr(),
-                    ),
-                    fname,
-                    lnum,
-                    items[1],
+            let fmt = unsafe {
+                gettext(
+                    c"Different combining flag in continued affix block in %s line %d: %s".as_ptr(),
                 )
             };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
         }
         if unsafe { (*st.cur_aff).ah_follows } == 0 {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Duplicate affix in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    items[1],
-                )
-            };
+            let fmt = unsafe { gettext(c"Duplicate affix in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
         }
     } else {
         st.cur_aff = unsafe { (*spin).si_arena.alloc::<affheader_T>() };
@@ -120,18 +107,10 @@ pub(super) unsafe fn handle_affix_header(
             unsafe { (*aff).af_comproot },
         ];
         if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
-            unsafe {
-                smsg_c!(
-                0,
-                gettext(
-                    c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s"
-                        .as_ptr(),
-                ),
-                fname,
-                lnum,
-                items[1],
-            )
+            let fmt = unsafe {
+                gettext( c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s" .as_ptr(), )
             };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
         }
         unsafe { strcpy(affheader_T::key(st.cur_aff), items[1]) };
         unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
@@ -155,15 +134,8 @@ pub(super) unsafe fn handle_affix_header(
     if unsafe { strcmp(items[2], c"Y".as_ptr()) } != 0
         && unsafe { strcmp(items[2], c"N".as_ptr()) } != 0
     {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Expected Y or N in %s line %d: %s".as_ptr()),
-                fname,
-                lnum,
-                items[2],
-            )
-        };
+        let fmt = unsafe { gettext(c"Expected Y or N in %s line %d: %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, items[2]) };
     }
 
     if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 {
@@ -250,15 +222,8 @@ pub(super) unsafe fn handle_affix_entry(
             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT)
         };
         if unsafe { (*entry).ae_prog }.is_null() {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Broken condition in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    items[4],
-                )
-            };
+            let fmt = unsafe { gettext(c"Broken condition in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, items[4]) };
         }
     }
 

@@ -102,12 +102,8 @@ pub unsafe fn spell_add_word(
             new_spf = true;
         }
         if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_notset as *const c_char),
-                    c"spellfile".as_ptr(),
-                )
-            };
+            let fmt = unsafe { gettext(&raw const e_notset as *const c_char) };
+            unsafe { semsg_c!(fmt, c"spellfile".as_ptr()) };
             return;
         }
 
@@ -127,12 +123,9 @@ pub unsafe fn spell_add_word(
                 break;
             }
             if unsafe { *spf } == 0 {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E765: 'spellfile' does not have %d entries".as_ptr()),
-                        idx,
-                    )
-                };
+                let fmt =
+                    unsafe { gettext(c"E765: 'spellfile' does not have %d entries".as_ptr()) };
+                unsafe { semsg_c!(fmt, idx) };
                 unsafe { xfree(fnamebuf as *mut c_void) };
                 return;
             }
@@ -205,15 +198,8 @@ pub unsafe fn spell_add_word(
                     true,
                 )
             };
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Word '%.*s' added to %s".as_ptr()),
-                    len,
-                    word,
-                    shown.as_ptr(),
-                )
-            };
+            let fmt = unsafe { gettext(c"Word '%.*s' added to %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
         }
     }
 
@@ -284,25 +270,13 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
                         true,
                     )
                 };
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Word '%.*s' removed from %s".as_ptr()),
-                        len,
-                        word,
-                        shown.as_ptr(),
-                    )
-                };
+                let fmt = unsafe { gettext(c"Word '%.*s' removed from %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
             }
         }
         if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {
-            unsafe {
-                semsg_c!(
-                    c"%s: %s".as_ptr(),
-                    gettext(c"Seek error in spellfile".as_ptr()),
-                    strerror(*__errno_location()),
-                )
-            };
+            let fmt = unsafe { gettext(c"Seek error in spellfile".as_ptr()) };
+            unsafe { semsg_c!(c"%s: %s".as_ptr(), fmt, strerror(*__errno_location())) };
             break;
         }
     }

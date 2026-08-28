@@ -81,15 +81,9 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
                 )
             };
             if pc.is_null() {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        rline.as_mut_ptr(),
-                    )
-                };
+                let fmt =
+                    unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, rline.as_mut_ptr()) };
                 continue;
             }
             pc
@@ -124,29 +118,17 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
                         flags |= WF_REGION as c_int;
                         let n = (d - b'0') as c_int;
                         if n == 0 || n > unsafe { (*spin).si_region_count } {
-                            unsafe {
-                                smsg_c!(
-                                    0,
-                                    gettext(c"Invalid region nr in %s line %d: %s".as_ptr()),
-                                    fname,
-                                    lnum,
-                                    p,
-                                )
-                            };
+                            let fmt =
+                                unsafe { gettext(c"Invalid region nr in %s line %d: %s".as_ptr()) };
+                            unsafe { smsg_c!(0, fmt, fname, lnum, p) };
                             break;
                         }
                         regionmask |= 1 << (n - 1);
                     }
                     _ => {
-                        unsafe {
-                            smsg_c!(
-                                0,
-                                gettext(c"Unrecognized flags in %s line %d: %s".as_ptr()),
-                                fname,
-                                lnum,
-                                p,
-                            )
-                        };
+                        let fmt =
+                            unsafe { gettext(c"Unrecognized flags in %s line %d: %s".as_ptr()) };
+                        unsafe { smsg_c!(0, fmt, fname, lnum, p) };
                         break;
                     }
                 }
@@ -203,67 +185,37 @@ unsafe fn read_wordfile_header(
     // only after its length has been checked against the array.
     if unsafe { strncmp(line, c"encoding=".as_ptr(), 9) } == 0 {
         if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Duplicate /encoding= line ignored in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    line.sub(1),
-                )
-            };
+            let fmt =
+                unsafe { gettext(c"Duplicate /encoding= line ignored in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, line.sub(1)) };
         } else if did_word {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"/encoding= line after word ignored in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    line.sub(1),
-                )
+            let fmt = unsafe {
+                gettext(c"/encoding= line after word ignored in %s line %d: %s".as_ptr())
             };
+            unsafe { smsg_c!(0, fmt, fname, lnum, line.sub(1)) };
         } else {
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
             if unsafe { (*spin).si_ascii } == 0
                 && unsafe { convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) } == FAIL
             {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()),
-                        fname,
-                        line,
-                        p_enc.get(),
-                    )
-                };
+                let fmt =
+                    unsafe { gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, line, p_enc.get()) };
             }
             unsafe { xfree(enc.cast()) };
             unsafe { (*spin).si_conv.vc_fail = true };
         }
     } else if unsafe { strncmp(line, c"regions=".as_ptr(), 8) } == 0 {
         if unsafe { (*spin).si_region_count } > 1 {
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Duplicate /regions= line ignored in %s line %d: %s".as_ptr()),
-                    fname,
-                    lnum,
-                    line,
-                )
-            };
+            let fmt =
+                unsafe { gettext(c"Duplicate /regions= line ignored in %s line %d: %s".as_ptr()) };
+            unsafe { smsg_c!(0, fmt, fname, lnum, line) };
         } else {
             line = unsafe { line.add(8) };
             if unsafe { strlen(line) } > (MAXREGIONS as c_int * 2) as size_t {
-                unsafe {
-                    smsg_c!(
-                        0,
-                        gettext(c"Too many regions in %s line %d: %s".as_ptr()),
-                        fname,
-                        lnum,
-                        line,
-                    )
-                };
+                let fmt = unsafe { gettext(c"Too many regions in %s line %d: %s".as_ptr()) };
+                unsafe { smsg_c!(0, fmt, fname, lnum, line) };
             } else {
                 unsafe { (*spin).si_region_count = strlen(line) as c_int / 2 };
                 unsafe { strcpy((&raw mut (*spin).si_region_name).cast::<c_char>(), line) };
@@ -271,14 +223,7 @@ unsafe fn read_wordfile_header(
             }
         }
     } else {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"/ line ignored in %s line %d: %s".as_ptr()),
-                fname,
-                lnum,
-                line.sub(1),
-            )
-        };
+        let fmt = unsafe { gettext(c"/ line ignored in %s line %d: %s".as_ptr()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, line.sub(1)) };
     }
 }
