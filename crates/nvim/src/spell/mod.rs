@@ -279,34 +279,31 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
 
     let frompatsize = repl_from_len + 7;
     let frompat = unsafe { xmalloc(frompatsize) } as *mut c_char;
-    let frompatlen = unsafe {
-        snprintf(
-            frompat,
-            frompatsize,
-            c"\\V\\<%s\\>".as_ptr(),
-            repl_from.get(),
-        )
-    } as size_t;
+    let fmt = c"\\V\\<%s\\>".as_ptr();
+    let from = repl_from.get();
+    let frompatlen = unsafe { snprintf(frompat, frompatsize, fmt, from) } as size_t;
     p_ws.set(0);
 
     sub_nsubs.set(0);
     sub_nlines.set(0);
     unsafe { (*curwin.get()).w_cursor.lnum = 0 };
     while !got_int.get() {
-        if unsafe {
+        let slash = '/' as c_int;
+        let no_oap = ::core::ptr::null_mut::<oparg_T>();
+        let no_arg = ::core::ptr::null_mut::<searchit_arg_T>();
+        let found = unsafe {
             do_search(
-                ::core::ptr::null_mut::<oparg_T>(),
-                '/' as c_int,
-                '/' as c_int,
+                no_oap,
+                slash,
+                slash,
                 frompat,
                 frompatlen,
                 1,
                 SEARCH_KEEP,
-                ::core::ptr::null_mut::<searchit_arg_T>(),
+                no_arg,
             )
-        } == 0
-            || u_save_cursor() == FAIL
-        {
+        };
+        if found == 0 || u_save_cursor() == FAIL {
             break;
         }
 
@@ -323,14 +320,9 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
             unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
             unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
             unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };
-            unsafe {
-                inserted_bytes(
-                    (*curwin.get()).w_cursor.lnum,
-                    col,
-                    repl_from_len as c_int,
-                    repl_to_len as c_int,
-                )
-            };
+            let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+            let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
+            unsafe { inserted_bytes(lnum, col, was, now) };
 
             if unsafe { (*curwin.get()).w_cursor.lnum } != prev_lnum {
                 sub_nlines.set(sub_nlines.get() + 1);

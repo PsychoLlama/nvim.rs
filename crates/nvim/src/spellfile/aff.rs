@@ -780,18 +780,12 @@ unsafe fn finish_aff(
     if !st.sofofrom.is_null() || !st.sofoto.is_null() {
         if st.sofofrom.is_null() || st.sofoto.is_null() {
             let fmt = unsafe { gettext(c"Missing SOFO%s line in %s".as_ptr()) };
-            unsafe {
-                smsg_c!(
-                    0,
-                    fmt,
-                    if st.sofofrom.is_null() {
-                        c"FROM".as_ptr()
-                    } else {
-                        c"TO".as_ptr()
-                    },
-                    fname
-                )
+            let which = if st.sofofrom.is_null() {
+                c"FROM".as_ptr()
+            } else {
+                c"TO".as_ptr()
             };
+            unsafe { smsg_c!(0, fmt, which, fname) };
         } else if unsafe { (*spin).si_sal.ga_len } > 0 {
             // SAL rules and a SOFO pair are two ways to do the same
             // thing; taking both would be ambiguous.

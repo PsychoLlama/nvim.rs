@@ -557,12 +557,8 @@ unsafe fn mkspell(
 
         let mut error = unsafe { read_inputs(&mut spin, innames, incount, fname, &mut afile) };
         if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
-            unsafe {
-                msg(
-                    gettext(c"Warning: both compounding and NOBREAK specified".as_ptr()),
-                    0,
-                )
-            };
+            let text = c"Warning: both compounding and NOBREAK specified";
+            unsafe { msg(gettext(text.as_ptr()), 0) };
         }
         if !error && !got_int.get() {
             spell_message(&spin, MSG_COMPRESSING);
@@ -647,30 +643,16 @@ unsafe fn output_name(
         if ends_with(c".add") {
             unsafe { vim_snprintf(wfname, MAXPATHL as size_t, c"%s.spl".as_ptr(), first) };
         } else {
-            unsafe {
-                vim_snprintf(
-                    wfname,
-                    MAXPATHL as size_t,
-                    SPL_FNAME_TMPL.as_ptr(),
-                    first,
-                    enc,
-                )
-            };
+            let fmt = SPL_FNAME_TMPL.as_ptr();
+            unsafe { vim_snprintf(wfname, MAXPATHL as size_t, fmt, first, enc) };
         }
         return 1;
     }
     if ends_with(c".spl") {
         unsafe { xstrlcpy(wfname, first, MAXPATHL as size_t) };
     } else {
-        unsafe {
-            vim_snprintf(
-                wfname,
-                MAXPATHL as size_t,
-                SPL_FNAME_TMPL.as_ptr(),
-                first,
-                enc,
-            )
-        };
+        let fmt = SPL_FNAME_TMPL.as_ptr();
+        unsafe { vim_snprintf(wfname, MAXPATHL as size_t, fmt, first, enc) };
     }
     default_incount
 }
@@ -782,13 +764,8 @@ unsafe fn read_inputs(
         } else {
             unsafe { spell_read_wordfile(spin, stem) == FAIL }
         };
-        unsafe {
-            convert_setup(
-                &raw mut spin.si_conv,
-                ::core::ptr::null_mut(),
-                ::core::ptr::null_mut(),
-            )
-        };
+        let none = ::core::ptr::null_mut();
+        unsafe { convert_setup(&raw mut spin.si_conv, none, none) };
         if failed {
             return true;
         }
@@ -852,15 +829,9 @@ pub unsafe fn ex_spell(eap: *mut exarg_T) {
     };
 
     // SAFETY: `arg` is the excommand's NUL-terminated argument.
-    unsafe {
-        spell_add_word(
-            arg,
-            strlen(arg) as ::core::ffi::c_int,
-            kind as SpellAddType,
-            which,
-            cmdidx == CMD_spellundo,
-        )
-    };
+    let len = unsafe { strlen(arg) } as ::core::ffi::c_int;
+    let undo = cmdidx == CMD_spellundo;
+    unsafe { spell_add_word(arg, len, kind as SpellAddType, which, undo) };
 }
 
 /// Adopt `new_st` as the word character table, or check that it agrees with

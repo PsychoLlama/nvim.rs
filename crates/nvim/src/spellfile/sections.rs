@@ -346,20 +346,20 @@ pub(super) unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_i
         // Wide copies, since sound folding works in characters.
         unsafe { (*smp).sm_lead_w = mb_str2wide((*smp).sm_lead) };
         unsafe { (*smp).sm_leadlen = mb_charlen((*smp).sm_lead) };
-        unsafe {
-            (*smp).sm_oneof_w = if (*smp).sm_oneof.is_null() {
-                core::ptr::null_mut()
-            } else {
-                mb_str2wide((*smp).sm_oneof)
-            }
+        let oneof = unsafe { (*smp).sm_oneof };
+        let wide = if oneof.is_null() {
+            core::ptr::null_mut()
+        } else {
+            unsafe { mb_str2wide(oneof) }
         };
-        unsafe {
-            (*smp).sm_to_w = if (*smp).sm_to.is_null() {
-                core::ptr::null_mut()
-            } else {
-                mb_str2wide((*smp).sm_to)
-            }
+        unsafe { (*smp).sm_oneof_w = wide };
+        let to = unsafe { (*smp).sm_to };
+        let wide = if to.is_null() {
+            core::ptr::null_mut()
+        } else {
+            unsafe { mb_str2wide(to) }
         };
+        unsafe { (*smp).sm_to_w = wide };
         unsafe { (*gap).ga_len += 1 };
     }
 
@@ -666,13 +666,8 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
             unsafe { *list = 0 };
         }
     }
-    unsafe {
-        memset(
-            (&raw mut (*lp).sl_sal_first).cast(),
-            0,
-            size_of::<salfirst_T>() * 256,
-        )
-    };
+    let first = unsafe { &raw mut (*lp).sl_sal_first }.cast();
+    unsafe { memset(first, 0, size_of::<salfirst_T>() * 256) };
 
     // Second pass: fill the lists and the direct table.
     let mut p = from;
@@ -681,12 +676,8 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
         let c = unsafe { mb_cptr2char_adv(&raw mut p) };
         let to_c = unsafe { mb_cptr2char_adv(&raw mut s) };
         if c >= 256 {
-            let mut inp = unsafe {
-                *(*gap)
-                    .ga_data
-                    .cast::<*mut c_int>()
-                    .offset((c & 0xff) as isize)
-            };
+            let lists = unsafe { (*gap).ga_data.cast::<*mut c_int>() };
+            let mut inp = unsafe { *lists.offset((c & 0xff) as isize) };
             while unsafe { *inp } != 0 {
                 inp = unsafe { inp.add(1) };
             }
@@ -734,13 +725,8 @@ unsafe fn set_sal_first(lp: *mut slang_T) {
                     i += 1;
                     n -= 1;
                     let tsal = unsafe { *smp.offset((i + n) as isize) };
-                    unsafe {
-                        core::ptr::copy(
-                            smp.offset(i as isize),
-                            smp.offset(i as isize).add(1),
-                            n as usize,
-                        )
-                    };
+                    let from = unsafe { smp.offset(i as isize) };
+                    unsafe { core::ptr::copy(from, from.add(1), n as usize) };
                     unsafe { *smp.offset(i as isize) = tsal };
                 }
                 n += 1;

@@ -284,15 +284,10 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                 } else if mode == FIND_PREFIX && !prefix_found {
                     // The word has to accept one of the prefixes
                     // find_prefix() left at mi_prefarridx.
+                    let (cnt, arridx) = unsafe { ((*mip).mi_prefcnt, (*mip).mi_prefarridx) };
+                    let after = unsafe { (*mip).mi_word.offset((*mip).mi_cprefixlen as isize) };
                     let c = unsafe {
-                        valid_word_prefix(
-                            (*mip).mi_prefcnt,
-                            (*mip).mi_prefarridx,
-                            flags as c_int,
-                            (*mip).mi_word.offset((*mip).mi_cprefixlen as isize),
-                            slang,
-                            false,
-                        )
+                        valid_word_prefix(cnt, arridx, flags as c_int, after, slang, false)
                     };
                     if c == 0 {
                         break 'variant;
@@ -313,17 +308,11 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         break 'variants;
                     }
                 } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
-                    if !unsafe {
-                        compound_part_allowed(
-                            mip,
-                            ptr,
-                            wlen,
-                            flags,
-                            word_ends,
-                            mode,
-                            endlen[endidxcnt],
-                        )
-                    } {
+                    let at = endlen[endidxcnt];
+                    let allowed = unsafe {
+                        compound_part_allowed(mip, ptr, wlen, flags, word_ends, mode, at)
+                    };
+                    if !allowed {
                         break 'variant;
                     }
                 } else if flags & WF_NEEDCOMP != 0 {
@@ -584,23 +573,13 @@ unsafe fn compound_part_allowed(
         if unsafe { (*slang).sl_compsylmax } < MAXWLEN as c_int {
             // Only syllable counting needs the word itself.
             if ptr == unsafe { (*mip).mi_word } {
-                unsafe {
-                    spell_casefold(
-                        (*mip).mi_win,
-                        ptr,
-                        wlen,
-                        fword.as_mut_ptr(),
-                        MAXWLEN as c_int,
-                    )
-                };
+                let win = unsafe { (*mip).mi_win };
+                let out = fword.as_mut_ptr();
+                unsafe { spell_casefold(win, ptr, wlen, out, MAXWLEN as c_int) };
             } else {
-                unsafe {
-                    xmemcpyz(
-                        fword.as_mut_ptr() as *mut ::core::ffi::c_void,
-                        ptr as *const ::core::ffi::c_void,
-                        endlen as usize,
-                    )
-                };
+                let to = fword.as_mut_ptr() as *mut ::core::ffi::c_void;
+                let from = ptr as *const ::core::ffi::c_void;
+                unsafe { xmemcpyz(to, from, endlen as usize) };
             }
         }
         if !unsafe { can_compound(slang, fword.as_ptr(), (*mip).mi_compflags.as_ptr()) } {
@@ -892,15 +871,10 @@ unsafe fn fold_more(mip: *mut matchinf_T) -> c_int {
 
     let fwordlen = unsafe { (*mip).mi_fwordlen };
     let tail = unsafe { (&raw mut (*mip).mi_fword as *mut c_char).offset(fwordlen as isize) };
-    unsafe {
-        spell_casefold(
-            (*mip).mi_win,
-            p,
-            (*mip).mi_fend.offset_from(p) as c_int,
-            tail,
-            MAXWLEN as c_int - fwordlen,
-        )
-    };
+    let win = unsafe { (*mip).mi_win };
+    let taken = unsafe { (*mip).mi_fend.offset_from(p) } as c_int;
+    let room = MAXWLEN as c_int - fwordlen;
+    unsafe { spell_casefold(win, p, taken, tail, room) };
     let flen = unsafe { strlen(tail) } as c_int;
     unsafe { (*mip).mi_fwordlen += flen };
     flen

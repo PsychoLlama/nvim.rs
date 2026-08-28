@@ -166,15 +166,9 @@ pub unsafe fn spell_check(
         mi.mi_fend = unsafe { mi.mi_fend.offset(utfc_ptr2len(mi.mi_fend) as isize) };
     }
     let fword = &raw mut mi.mi_fword as *mut c_char;
-    unsafe {
-        super::chartab::spell_casefold(
-            wp,
-            ptr,
-            mi.mi_fend.offset_from(ptr) as c_int,
-            fword,
-            MAXWLEN as c_int + 1,
-        )
-    };
+    let taken = unsafe { mi.mi_fend.offset_from(ptr) } as c_int;
+    let room = MAXWLEN as c_int + 1;
+    unsafe { super::chartab::spell_casefold(wp, ptr, taken, fword, room) };
     mi.mi_fwordlen = unsafe { strlen(fword) } as c_int;
 
     if is_camel_case && mi.mi_fwordlen > 0 {
@@ -214,14 +208,9 @@ pub unsafe fn spell_check(
 
         // Count the word in the first language that accepts it.
         if count_word && mi.mi_result == SP_OK {
-            unsafe {
-                count_common_word(
-                    (*mi.mi_lp).lp_slang,
-                    ptr,
-                    mi.mi_end.offset_from(ptr) as c_int,
-                    1,
-                )
-            };
+            let slang = unsafe { (*mi.mi_lp).lp_slang };
+            let len = unsafe { mi.mi_end.offset_from(ptr) } as c_int;
+            unsafe { count_common_word(slang, ptr, len, 1) };
             count_word = false;
         }
     }
@@ -278,15 +267,14 @@ pub unsafe fn spell_check(
             }
         }
 
-        unsafe {
-            *attrp = if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
-                HLF_SPB
-            } else if mi.mi_result == SP_RARE {
-                HLF_SPR
-            } else {
-                HLF_SPL
-            }
+        let attr = if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
+            HLF_SPB
+        } else if mi.mi_result == SP_RARE {
+            HLF_SPR
+        } else {
+            HLF_SPL
         };
+        unsafe { *attrp = attr };
     }
 
     if wrongcaplen > 0 && (mi.mi_result == SP_OK || mi.mi_result == SP_RARE) {
@@ -369,12 +357,9 @@ pub fn spell_valid_case(wordflags: c_int, treeflags: c_int) -> bool {
 
 /// Whether spell checking is on for `wp` and a language is actually loaded.
 pub unsafe fn spell_check_window(wp: *mut win_T) -> bool {
-    unsafe {
-        (*wp).w_onebuf_opt.wo_spell != 0
-            && *(*(*wp).w_s).b_p_spl != 0
-            && (*(*wp).w_s).b_langp.ga_len > 0
-            && !(*((*(*wp).w_s).b_langp.ga_data as *mut *mut c_char)).is_null()
-    }
+    let on = unsafe { (*wp).w_onebuf_opt.wo_spell != 0 && *(*(*wp).w_s).b_p_spl != 0 };
+    on && unsafe { (*(*wp).w_s).b_langp.ga_len } > 0
+        && !unsafe { *((*(*wp).w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
 }
 
 /// Whether spell checking is *off* for `wp`, giving an error if so.

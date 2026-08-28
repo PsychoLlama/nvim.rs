@@ -210,14 +210,8 @@ pub(super) unsafe fn handle_affix_entry(
         let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
         // A prefix condition anchors at the start, a suffix at the end.
         let pattern = if is_prefix { c"^%s" } else { c"%s$" };
-        unsafe {
-            snprintf(
-                buf.as_mut_ptr(),
-                size_of_val(&buf),
-                pattern.as_ptr(),
-                items[4],
-            )
-        };
+        let (out, room) = (buf.as_mut_ptr(), size_of_val(&buf));
+        unsafe { snprintf(out, room, pattern.as_ptr(), items[4]) };
         unsafe {
             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT)
         };
@@ -281,14 +275,9 @@ pub(super) unsafe fn postpone_prefix(
                     unsafe { onecap_copy(items[4], buf.as_mut_ptr(), true) };
                     unsafe { (*entry).ae_cond = (*spin).si_arena.save_str(buf.as_mut_ptr()) };
                     if !unsafe { (*entry).ae_cond }.is_null() {
-                        unsafe {
-                            snprintf(
-                                buf.as_mut_ptr(),
-                                MAXLINELEN as size_t,
-                                c"^%s".as_ptr(),
-                                (*entry).ae_cond,
-                            )
-                        };
+                        let out = buf.as_mut_ptr();
+                        let cond = unsafe { (*entry).ae_cond };
+                        unsafe { snprintf(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
                         unsafe { vim_regfree((*entry).ae_prog) };
                         unsafe {
                             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING)
@@ -326,13 +315,8 @@ pub(super) unsafe fn file_postponed_prefix(
     // Conditions are shared: the tree stores an index into si_prefcond.
     let mut idx = unsafe { (*spin).si_prefcond.ga_len } - 1;
     while idx >= 0 {
-        let p = unsafe {
-            *(*spin)
-                .si_prefcond
-                .ga_data
-                .cast::<*mut c_char>()
-                .offset(idx as isize)
-        };
+        let conds = unsafe { (*spin).si_prefcond.ga_data.cast::<*mut c_char>() };
+        let p = unsafe { *conds.offset(idx as isize) };
         if unsafe { str_equal(p, (*entry).ae_cond) } {
             break;
         }
@@ -343,13 +327,13 @@ pub(super) unsafe fn file_postponed_prefix(
         let pp =
             unsafe { ga_append_via_ptr(&raw mut (*spin).si_prefcond, size_of::<*mut c_char>()) }
                 .cast::<*mut c_char>();
-        unsafe {
-            *pp = if (*entry).ae_cond.is_null() {
-                core::ptr::null_mut()
-            } else {
-                (*spin).si_arena.save_str((*entry).ae_cond)
-            }
+        let cond = unsafe { (*entry).ae_cond };
+        let saved = if cond.is_null() {
+            core::ptr::null_mut()
+        } else {
+            unsafe { (*spin).si_arena.save_str(cond) }
         };
+        unsafe { *pp = saved };
     }
 
     let added = if unsafe { (*entry).ae_add }.is_null() {

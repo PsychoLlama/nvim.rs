@@ -297,28 +297,13 @@ pub(super) unsafe fn store_word(
         return FAIL;
     }
 
-    unsafe {
-        spell_casefold(
-            curwin.get(),
-            word,
-            len,
-            foldword.as_mut_ptr(),
-            MAXWLEN as c_int,
-        )
-    };
+    let (win, out) = (curwin.get(), foldword.as_mut_ptr());
+    unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
 
     let root = spin.si_foldroot;
-    res = unsafe {
-        add_per_affix(
-            spin,
-            foldword.as_ptr(),
-            root,
-            ct | flags,
-            region,
-            pfxlist,
-            need_affix,
-        )
-    };
+    let folded = foldword.as_ptr();
+    let with_case = ct | flags;
+    res = unsafe { add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix) };
     spin.si_foldwcount += 1;
 
     if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {

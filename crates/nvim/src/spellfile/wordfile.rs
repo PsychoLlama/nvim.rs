@@ -73,13 +73,8 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
         unsafe { xfree(pc.cast()) };
         pc = core::ptr::null_mut();
         let mut line = if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
-            pc = unsafe {
-                string_convert(
-                    &raw mut (*spin).si_conv,
-                    rline.as_mut_ptr(),
-                    core::ptr::null_mut(),
-                )
-            };
+            let conv = unsafe { &raw mut (*spin).si_conv };
+            pc = unsafe { string_convert(conv, rline.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
                 let fmt =
                     unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
@@ -136,19 +131,10 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
             }
         }
 
+        let none = core::ptr::null();
         if unsafe { (*spin).si_ascii } != 0 && unsafe { has_non_ascii(line) } {
             non_ascii += 1;
-        } else if unsafe {
-            store_word(
-                &mut *spin,
-                line,
-                flags,
-                regionmask,
-                core::ptr::null(),
-                false,
-            )
-        } == FAIL
-        {
+        } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) } == FAIL {
             retval = FAIL;
             break;
         } else {

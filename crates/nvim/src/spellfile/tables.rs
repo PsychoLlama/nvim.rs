@@ -208,25 +208,13 @@ pub(super) unsafe fn add_fromto(
     let ftp = unsafe { ga_append_via_ptr(gap, size_of::<fromto_T>()) }.cast::<fromto_T>();
     let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
 
-    unsafe {
-        spell_casefold(
-            curwin.get(),
-            from,
-            strlen(from) as c_int,
-            word.as_mut_ptr(),
-            MAXWLEN as c_int,
-        )
-    };
+    let (win, out) = (curwin.get(), word.as_mut_ptr());
+    let len = unsafe { strlen(from) } as c_int;
+    unsafe { spell_casefold(win, from, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_from = (*spin).si_arena.save_str(word.as_mut_ptr()) };
-    unsafe {
-        spell_casefold(
-            curwin.get(),
-            to,
-            strlen(to) as c_int,
-            word.as_mut_ptr(),
-            MAXWLEN as c_int,
-        )
-    };
+    let (win, out) = (curwin.get(), word.as_mut_ptr());
+    let len = unsafe { strlen(to) } as c_int;
+    unsafe { spell_casefold(win, to, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_to = (*spin).si_arena.save_str(word.as_mut_ptr()) };
 }
 

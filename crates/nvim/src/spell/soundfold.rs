@@ -47,14 +47,9 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
             let lp = unsafe { (langp.ga_data as *mut langp_T).offset(lpi as isize) };
             if unsafe { (*(*lp).lp_slang).sl_sal.ga_len } > 0 {
                 let mut sound = [0 as c_char; MAXWLEN];
-                unsafe {
-                    spell_soundfold(
-                        (*lp).lp_slang,
-                        word as *mut c_char,
-                        false,
-                        sound.as_mut_ptr(),
-                    )
-                };
+                let slang = unsafe { (*lp).lp_slang };
+                let out = sound.as_mut_ptr();
+                unsafe { spell_soundfold(slang, word as *mut c_char, false, out) };
                 return unsafe { xstrdup(sound.as_ptr()) };
             }
         }
@@ -80,15 +75,9 @@ pub unsafe fn spell_soundfold(
         unsafe { spell_soundfold_wsal(slang, inword, res) };
     } else {
         let mut fword = [0 as c_char; MAXWLEN];
-        unsafe {
-            spell_casefold(
-                curwin.get(),
-                inword,
-                strlen(inword) as c_int,
-                fword.as_mut_ptr(),
-                MAXWLEN as c_int,
-            )
-        };
+        let (win, out) = (curwin.get(), fword.as_mut_ptr());
+        let len = unsafe { strlen(inword) } as c_int;
+        unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
     }
 }

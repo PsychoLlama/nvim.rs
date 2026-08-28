@@ -198,17 +198,9 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
         tword[depth] = NUL as c_char;
         unsafe { spell_soundfold(slang, tword.as_mut_ptr(), true, tsalword.as_mut_ptr()) };
         let foldroot = spin.si_foldroot;
-        if unsafe {
-            tree_add_word(
-                spin,
-                tsalword.as_ptr(),
-                foldroot,
-                (words_done >> 16) as c_int,
-                (words_done & 0xffff) as c_int,
-                0,
-            )
-        } == FAIL
-        {
+        let word = tsalword.as_ptr();
+        let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
+        if unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) } == FAIL {
             return FAIL;
         }
         words_done = words_done.wrapping_add(1);
@@ -298,24 +290,18 @@ unsafe fn sug_filltable(
             unsafe { (*gap).ga_len += n as c_int };
             np = unsafe { (*np).wn_sibling };
         }
-        unsafe {
-            *(*gap)
+        let end = unsafe {
+            (*gap)
                 .ga_data
                 .cast::<c_char>()
-                .offset((*gap).ga_len as isize) = NUL as c_char
+                .offset((*gap).ga_len as isize)
         };
+        unsafe { *end = NUL as c_char };
         unsafe { (*gap).ga_len += 1 };
 
-        if unsafe {
-            ml_append_buf(
-                spin.si_spellbuf,
-                wordnr as linenr_T,
-                (*gap).ga_data.cast::<c_char>(),
-                (*gap).ga_len as colnr_T,
-                true,
-            )
-        } == FAIL
-        {
+        let at = wordnr as linenr_T;
+        let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as colnr_T) };
+        if unsafe { ml_append_buf(spin.si_spellbuf, at, text, len, true) } == FAIL {
             return -1;
         }
         wordnr += 1;

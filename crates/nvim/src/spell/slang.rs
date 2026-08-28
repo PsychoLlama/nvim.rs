@@ -183,13 +183,8 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
     } else if len >= MAXWLEN as c_int {
         return;
     } else {
-        unsafe {
-            xmemcpyz(
-                buf.as_mut_ptr() as *mut c_void,
-                word as *const c_void,
-                len as size_t,
-            )
-        };
+        let to = buf.as_mut_ptr() as *mut c_void;
+        unsafe { xmemcpyz(to, word as *const c_void, len as size_t) };
         buf.as_mut_ptr()
     };
 
@@ -219,13 +214,8 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
 ///
 /// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
 pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
-    unsafe {
-        ga_init(
-            &raw mut (*slang).sl_syl_items,
-            size_of::<syl_item_T>() as c_int,
-            4,
-        )
-    };
+    let items = unsafe { &raw mut (*slang).sl_syl_items };
+    unsafe { ga_init(items, size_of::<syl_item_T>() as c_int, 4) };
     let mut p = unsafe { vim_strchr((*slang).sl_syllable, '/' as c_int) };
     while !p.is_null() {
         unsafe { *p = NUL as c_char };
@@ -247,13 +237,8 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
         let syl =
             unsafe { ga_append_via_ptr(&raw mut (*slang).sl_syl_items, size_of::<syl_item_T>()) }
                 as *mut syl_item_T;
-        unsafe {
-            xmemcpyz(
-                &raw mut (*syl).sy_chars as *mut c_void,
-                s as *const c_void,
-                l as size_t,
-            )
-        };
+        let to = unsafe { &raw mut (*syl).sy_chars } as *mut c_void;
+        unsafe { xmemcpyz(to, s as *const c_void, l as size_t) };
         unsafe { (*syl).sy_len = l };
     }
     OK
@@ -325,16 +310,10 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
     unsafe { (*buf).b_spell = true };
     unsafe { (*buf).b_p_swf = 1 };
     if unsafe { ml_open(buf) } == FAIL {
-        unsafe {
-            logmsg_c!(
-                LOGLVL_ERR,
-                core::ptr::null(),
-                c"open_spellbuf".as_ptr(),
-                line!() as c_int,
-                true,
-                c"Error opening a new memline".as_ptr(),
-            )
-        };
+        let (site, at) = (c"open_spellbuf".as_ptr(), line!() as c_int);
+        let text = c"Error opening a new memline".as_ptr();
+        let none = core::ptr::null();
+        unsafe { logmsg_c!(LOGLVL_ERR, none, site, at, true, text) };
     }
     unsafe { ml_open_file(buf) }; // create the swap file now
 

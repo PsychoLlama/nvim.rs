@@ -111,14 +111,8 @@ pub unsafe fn spell_add_word(
         let mut spf = unsafe { (*(*curwin.get()).w_s).b_p_spf };
         let mut i = 1;
         while unsafe { *spf } != 0 {
-            unsafe {
-                copy_option_part(
-                    &raw mut spf,
-                    fnamebuf,
-                    MAXPATHL as size_t,
-                    c",".as_ptr() as *mut c_char,
-                )
-            };
+            let sep = c",".as_ptr() as *mut c_char;
+            unsafe { copy_option_part(&raw mut spf, fnamebuf, MAXPATHL as size_t, sep) };
             if i == idx {
                 break;
             }
@@ -189,15 +183,8 @@ pub unsafe fn spell_add_word(
             unsafe { fprintf(fd, format, len, word) };
             unsafe { fclose(fd) };
 
-            unsafe {
-                home_replace(
-                    core::ptr::null(),
-                    fname,
-                    shown.as_mut_ptr(),
-                    MAXPATHL as size_t,
-                    true,
-                )
-            };
+            let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
+            unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
             let fmt = unsafe { gettext(c"Word '%.*s' added to %s".as_ptr()) };
             unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
         }
@@ -261,15 +248,8 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
         if unsafe { fseek(fd, fpos as c_long, SEEK_SET) } == 0 {
             unsafe { fputc('#' as c_int, fd) };
             if undo {
-                unsafe {
-                    home_replace(
-                        core::ptr::null(),
-                        fname,
-                        shown.as_mut_ptr(),
-                        MAXPATHL as size_t,
-                        true,
-                    )
-                };
+                let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
+                unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
                 let fmt = unsafe { gettext(c"Word '%.*s' removed from %s".as_ptr()) };
                 unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
             }
@@ -321,13 +301,9 @@ unsafe fn init_spellfile() {
             unsafe { xfree(buf as *mut c_void) };
             return;
         }
-        unsafe {
-            xmemcpyz(
-                buf as *mut c_void,
-                (*curbuf.get()).b_s.b_p_spl as *const c_void,
-                lend.offset_from((*curbuf.get()).b_s.b_p_spl) as size_t,
-            )
-        };
+        let spl = unsafe { (*curbuf.get()).b_s.b_p_spl };
+        let len = unsafe { lend.offset_from(spl) } as size_t;
+        unsafe { xmemcpyz(buf as *mut c_void, spl as *const c_void, len) };
     } else {
         // Otherwise the user's own site directory, created if need be.
         let xdg_path = get_xdg_home(kXDGDataHome);
@@ -336,15 +312,8 @@ unsafe fn init_spellfile() {
         unsafe { xstrlcat(buf, c"/site/spell".as_ptr(), buf_len) };
 
         let mut failed_dir: *mut c_char = core::ptr::null_mut();
-        if unsafe {
-            os_mkdir_recurse(
-                buf,
-                0o755 as int32_t,
-                &raw mut failed_dir,
-                core::ptr::null_mut(),
-            )
-        } != 0
-        {
+        let none = core::ptr::null_mut();
+        if unsafe { os_mkdir_recurse(buf, 0o755 as int32_t, &raw mut failed_dir, none) } != 0 {
             unsafe { xfree(buf as *mut c_void) };
             unsafe { xfree(failed_dir as *mut c_void) };
             return;
@@ -352,15 +321,10 @@ unsafe fn init_spellfile() {
     }
 
     // "<dir>/<lang>"
-    unsafe {
-        vim_snprintf(
-            buf.add(strlen(buf)),
-            buf_len - strlen(buf),
-            c"/%.*s".as_ptr(),
-            lend.offset_from(lstart) as c_int,
-            lstart,
-        )
-    };
+    let used = unsafe { strlen(buf) };
+    let at = unsafe { buf.add(used) };
+    let taken = unsafe { lend.offset_from(lstart) } as c_int;
+    unsafe { vim_snprintf(at, buf_len - used, c"/%.*s".as_ptr(), taken, lstart) };
 
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
@@ -373,14 +337,9 @@ unsafe fn init_spellfile() {
     } else {
         unsafe { spell_enc() as *const c_char }
     };
-    unsafe {
-        vim_snprintf(
-            buf.add(strlen(buf)),
-            buf_len - strlen(buf),
-            c".%s.add".as_ptr(),
-            enc_suffix,
-        )
-    };
+    let used = unsafe { strlen(buf) };
+    let at = unsafe { buf.add(used) };
+    unsafe { vim_snprintf(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };
 
     set_option_value_give_err(
         kOptSpellfile,
