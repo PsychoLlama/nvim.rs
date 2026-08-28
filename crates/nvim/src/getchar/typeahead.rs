@@ -315,115 +315,123 @@ impl TypeAhead {
         nottyped: bool,
         silent: bool,
     ) -> bool {
-        unsafe {
-            if offset == 0 && addlen <= self.off {
-                // Easy case: there is room in front of the valid bytes.
-                self.off -= addlen;
+        if offset == 0 && addlen <= self.off {
+            // Easy case: there is room in front of the valid bytes.
+            self.off -= addlen;
+            unsafe {
                 ptr::copy_nonoverlapping(
                     str.cast::<u8>(),
                     self.buf.offset(self.off as isize),
                     addlen as usize,
-                );
-            } else if self.len == 0 && self.buflen >= addlen + 3 * HEAD_ROOM {
-                // Buffer is empty and the string fits: centre it, leaving
-                // room before and after.
-                self.off = (self.buflen - addlen - 3 * HEAD_ROOM) / 2;
+                )
+            };
+        } else if self.len == 0 && self.buflen >= addlen + 3 * HEAD_ROOM {
+            // Buffer is empty and the string fits: centre it, leaving
+            // room before and after.
+            self.off = (self.buflen - addlen - 3 * HEAD_ROOM) / 2;
+            unsafe {
                 ptr::copy_nonoverlapping(
                     str.cast::<u8>(),
                     self.buf.offset(self.off as isize),
                     addlen as usize,
-                );
-            } else {
-                // Reallocate. There must always be room for 3 * HEAD_ROOM
-                // bytes, and some extra so this does not happen every time.
-                let extra = addlen + HEAD_ROOM + 4 * HEAD_ROOM;
-                if self.len > c_int::MAX - extra {
-                    // The string is getting too long for a 32-bit int.
-                    return false;
-                }
-                let newlen = self.len + extra;
-                let buf = xmalloc(newlen as usize).cast::<u8>();
-                let noremaps = xmalloc(newlen as usize).cast::<u8>();
-                self.buflen = newlen;
+                )
+            };
+        } else {
+            // Reallocate. There must always be room for 3 * HEAD_ROOM
+            // bytes, and some extra so this does not happen every time.
+            let extra = addlen + HEAD_ROOM + 4 * HEAD_ROOM;
+            if self.len > c_int::MAX - extra {
+                // The string is getting too long for a 32-bit int.
+                return false;
+            }
+            let newlen = self.len + extra;
+            let buf = unsafe { xmalloc(newlen as usize) }.cast::<u8>();
+            let noremaps = unsafe { xmalloc(newlen as usize) }.cast::<u8>();
+            self.buflen = newlen;
 
-                // Old bytes before the insertion point, then the new ones,
-                // then the old bytes after it -- including the NUL at the end.
-                let old = self.buf.offset(self.off as isize);
-                let at = buf.offset(HEAD_ROOM as isize);
-                ptr::copy_nonoverlapping(old, at, offset as usize);
+            // Old bytes before the insertion point, then the new ones,
+            // then the old bytes after it -- including the NUL at the end.
+            let old = unsafe { self.buf.offset(self.off as isize) };
+            let at = unsafe { buf.offset(HEAD_ROOM as isize) };
+            unsafe { ptr::copy_nonoverlapping(old, at, offset as usize) };
+            unsafe {
                 ptr::copy_nonoverlapping(
                     str.cast::<u8>(),
                     at.offset(offset as isize),
                     addlen as usize,
-                );
-                let tail = self.len - offset + 1;
-                debug_assert!(tail > 0);
+                )
+            };
+            let tail = self.len - offset + 1;
+            debug_assert!(tail > 0);
+            unsafe {
                 ptr::copy_nonoverlapping(
                     old.offset(offset as isize),
                     at.offset(offset as isize).offset(addlen as isize),
                     tail as usize,
-                );
-                if self.buf != static_buf() {
-                    xfree(self.buf.cast());
-                }
-                self.buf = buf;
+                )
+            };
+            if self.buf != static_buf() {
+                unsafe { xfree(self.buf.cast()) };
+            }
+            self.buf = buf;
 
-                // The same for `noremap`, which has no terminator to carry.
-                let old = self.noremap.offset(self.off as isize);
-                let at = noremaps.offset(HEAD_ROOM as isize);
-                ptr::copy_nonoverlapping(old, at, offset as usize);
+            // The same for `noremap`, which has no terminator to carry.
+            let old = unsafe { self.noremap.offset(self.off as isize) };
+            let at = unsafe { noremaps.offset(HEAD_ROOM as isize) };
+            unsafe { ptr::copy_nonoverlapping(old, at, offset as usize) };
+            unsafe {
                 ptr::copy_nonoverlapping(
                     old.offset(offset as isize),
                     at.offset(offset as isize).offset(addlen as isize),
                     (self.len - offset) as usize,
-                );
-                if self.noremap != static_noremap() {
-                    xfree(self.noremap.cast());
-                }
-                self.noremap = noremaps;
-
-                self.off = HEAD_ROOM;
-            }
-            self.len += addlen;
-
-            // What the characters that may not be remapped are marked with,
-            // and how many of them there are.
-            let val = if noremap == REMAP_SCRIPT {
-                RM_SCRIPT as c_int
-            } else if noremap == REMAP_SKIP {
-                RM_ABBR as c_int
-            } else {
-                RM_NONE as c_int
+                )
             };
-            let noremapped = if noremap == REMAP_SKIP {
-                1
-            } else if noremap < 0 {
-                addlen
-            } else {
-                noremap
-            };
-            for i in 0..addlen {
-                let flags = if i < noremapped { val } else { RM_YES as c_int };
-                *self.noremap.offset((self.off + i + offset) as isize) = flags as u8;
+            if self.noremap != static_noremap() {
+                unsafe { xfree(self.noremap.cast()) };
             }
+            self.noremap = noremaps;
 
-            // `maplen` and `silent` only remember the length of the mapped
-            // and/or silent run at the *start* of the buffer, on the
-            // assumption that a mapped sequence does not produce typed
-            // characters.
-            if nottyped || self.maplen > offset {
-                self.maplen += addlen;
-            }
-            if silent || self.silent > offset {
-                self.silent += addlen;
-                cmd_silent.set(true);
-            }
-            if self.no_abbr_cnt != 0 && offset == 0 {
-                // ... and is not to be used for abbreviations.
-                self.no_abbr_cnt += addlen;
-            }
-            true
+            self.off = HEAD_ROOM;
         }
+        self.len += addlen;
+
+        // What the characters that may not be remapped are marked with,
+        // and how many of them there are.
+        let val = if noremap == REMAP_SCRIPT {
+            RM_SCRIPT as c_int
+        } else if noremap == REMAP_SKIP {
+            RM_ABBR as c_int
+        } else {
+            RM_NONE as c_int
+        };
+        let noremapped = if noremap == REMAP_SKIP {
+            1
+        } else if noremap < 0 {
+            addlen
+        } else {
+            noremap
+        };
+        for i in 0..addlen {
+            let flags = if i < noremapped { val } else { RM_YES as c_int };
+            unsafe { *self.noremap.offset((self.off + i + offset) as isize) = flags as u8 };
+        }
+
+        // `maplen` and `silent` only remember the length of the mapped
+        // and/or silent run at the *start* of the buffer, on the
+        // assumption that a mapped sequence does not produce typed
+        // characters.
+        if nottyped || self.maplen > offset {
+            self.maplen += addlen;
+        }
+        if silent || self.silent > offset {
+            self.silent += addlen;
+            cmd_silent.set(true);
+        }
+        if self.no_abbr_cnt != 0 && offset == 0 {
+            // ... and is not to be used for abbreviations.
+            self.no_abbr_cnt += addlen;
+        }
+        true
     }
 
     /// Remove `len` bytes at `offset`.
@@ -431,55 +439,61 @@ impl TypeAhead {
     /// # Safety
     /// `offset + len` must be within the current typeahead.
     unsafe fn delete(&mut self, len: c_int, offset: c_int) {
-        unsafe {
-            self.len -= len;
+        self.len -= len;
 
-            if offset == 0 && self.buflen - (self.off + len) >= 3 * MAXMAPLEN as c_int + 3 {
-                // Easy case: just leave the bytes in front and step over them.
-                self.off += len;
-            } else {
-                // Otherwise both arrays have to be moved down.
-                let from = self.off + offset;
-                if self.off > MAXMAPLEN as c_int {
-                    // Leave some extra room at the end to avoid a
-                    // reallocation.
+        if offset == 0 && self.buflen - (self.off + len) >= 3 * MAXMAPLEN as c_int + 3 {
+            // Easy case: just leave the bytes in front and step over them.
+            self.off += len;
+        } else {
+            // Otherwise both arrays have to be moved down.
+            let from = self.off + offset;
+            if self.off > MAXMAPLEN as c_int {
+                // Leave some extra room at the end to avoid a
+                // reallocation.
+                unsafe {
                     ptr::copy(
                         self.buf.offset(self.off as isize),
                         self.buf.offset(MAXMAPLEN as isize),
                         offset as usize,
-                    );
+                    )
+                };
+                unsafe {
                     ptr::copy(
                         self.noremap.offset(self.off as isize),
                         self.noremap.offset(MAXMAPLEN as isize),
                         offset as usize,
-                    );
-                    self.off = MAXMAPLEN as c_int;
-                }
-                // Include the NUL at the end for `buf`; `noremap` has none.
-                let tail = self.len - offset + 1;
-                debug_assert!(tail > 0);
+                    )
+                };
+                self.off = MAXMAPLEN as c_int;
+            }
+            // Include the NUL at the end for `buf`; `noremap` has none.
+            let tail = self.len - offset + 1;
+            debug_assert!(tail > 0);
+            unsafe {
                 ptr::copy(
                     self.buf.offset((from + len) as isize),
                     self.buf.offset((self.off + offset) as isize),
                     tail as usize,
-                );
+                )
+            };
+            unsafe {
                 ptr::copy(
                     self.noremap.offset((from + len) as isize),
                     self.noremap.offset((self.off + offset) as isize),
                     (self.len - offset) as usize,
-                );
-            }
+                )
+            };
+        }
 
-            // Each of the three run lengths shrinks only by the part of the
-            // deletion that fell inside it.
-            for run in [&mut self.maplen, &mut self.silent, &mut self.no_abbr_cnt] {
-                if *run > offset {
-                    *run = if *run < offset + len {
-                        offset
-                    } else {
-                        *run - len
-                    };
-                }
+        // Each of the three run lengths shrinks only by the part of the
+        // deletion that fell inside it.
+        for run in [&mut self.maplen, &mut self.silent, &mut self.no_abbr_cnt] {
+            if *run > offset {
+                *run = if *run < offset + len {
+                    offset
+                } else {
+                    *run - len
+                };
             }
         }
     }
@@ -530,23 +544,21 @@ pub unsafe fn ins_typebuf(
     nottyped: bool,
     silent: bool,
 ) -> c_int {
-    unsafe {
-        init_typebuf();
-        typeahead().note_change();
-        state_no_longer_safe(c"ins_typebuf()".as_ptr());
+    init_typebuf();
+    typeahead().note_change();
+    unsafe { state_no_longer_safe(c"ins_typebuf()".as_ptr()) };
 
-        let addlen = strlen(str) as c_int;
-        let inserted =
-            TYPEBUF.with_mut(|tb| tb.insert(str, addlen, offset, noremap, nottyped, silent));
-        if !inserted {
-            // Outside the borrow: `emsg` also flushes the buffers, i.e.
-            // reaches the typeahead itself.
-            emsg(gettext(&raw const e_toocompl as *const c_char));
-            setcursor();
-            return FAIL;
-        }
-        OK
+    let addlen = unsafe { strlen(str) } as c_int;
+    let inserted =
+        TYPEBUF.with_mut(|tb| unsafe { tb.insert(str, addlen, offset, noremap, nottyped, silent) });
+    if !inserted {
+        // Outside the borrow: `emsg` also flushes the buffers, i.e.
+        // reaches the typeahead itself.
+        unsafe { emsg(gettext(&raw const e_toocompl as *const c_char)) };
+        unsafe { setcursor() };
+        return FAIL;
     }
+    OK
 }
 
 /// Put character `c` back into the typeahead buffer, restoring the flags that
@@ -559,24 +571,24 @@ pub unsafe fn ins_typebuf(
 /// # Safety
 /// Callable at any time.
 pub unsafe fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int {
+    // Room for the modifier prefix plus a K_SPECIAL-escaped character.
+    let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
+    let len = unsafe { special_to_buf(c, modifiers, true, buf.as_mut_ptr()) } as usize;
+    debug_assert!(len < buf.len());
+    buf[len] = 0;
     unsafe {
-        // Room for the modifier prefix plus a K_SPECIAL-escaped character.
-        let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
-        let len = special_to_buf(c, modifiers, true, buf.as_mut_ptr()) as usize;
-        debug_assert!(len < buf.len());
-        buf[len] = 0;
         ins_typebuf(
             buf.as_mut_ptr(),
             KeyNoremap.get(),
             0,
             !KeyTyped.get(),
             cmd_silent.get(),
-        );
-        if KeyTyped.get() && on_key_ignore {
-            on_key_ignore_len.set(on_key_ignore_len.get() + len);
-        }
-        len as c_int
+        )
+    };
+    if KeyTyped.get() && on_key_ignore {
+        on_key_ignore_len.set(on_key_ignore_len.get() + len);
     }
+    len as c_int
 }
 
 /// Whether the typeahead buffer changed while waiting for a character —
@@ -754,17 +766,15 @@ pub(crate) fn can_get_old_char() -> bool {
 /// `tp` must point at writable storage that outlives the matching
 /// [`restore_typeahead`].
 pub unsafe fn save_typeahead(tp: *mut tasave_T) {
-    unsafe {
-        (*tp).save_typebuf = typeahead().take();
-        alloc_typebuf((*tp).save_typebuf.change_cnt());
-        (*tp).typebuf_valid = true;
-        (*tp).old_char = old_char.get();
-        (*tp).old_mod_mask = old_mod_mask.get();
-        old_char.set(-1);
+    unsafe { (*tp).save_typebuf = typeahead().take() };
+    unsafe { alloc_typebuf((*tp).save_typebuf.change_cnt()) };
+    unsafe { (*tp).typebuf_valid = true };
+    unsafe { (*tp).old_char = old_char.get() };
+    unsafe { (*tp).old_mod_mask = old_mod_mask.get() };
+    old_char.set(-1);
 
-        (*tp).save_readbuf1 = readbuf1().take();
-        (*tp).save_readbuf2 = readbuf2().take();
-    }
+    unsafe { (*tp).save_readbuf1 = readbuf1().take() };
+    unsafe { (*tp).save_readbuf2 = readbuf2().take() };
 }
 
 /// Put back what [`save_typeahead`] saved, freeing what was read in the
@@ -773,17 +783,15 @@ pub unsafe fn save_typeahead(tp: *mut tasave_T) {
 /// # Safety
 /// `tp` must be the one a matching [`save_typeahead`] filled.
 pub unsafe fn restore_typeahead(tp: *mut tasave_T) {
-    unsafe {
-        if (*tp).typebuf_valid {
-            free_typebuf();
-            typeahead().set(core::mem::take(&mut (*tp).save_typebuf));
-        }
-        old_char.set((*tp).old_char);
-        old_mod_mask.set((*tp).old_mod_mask);
-
-        readbuf1().free();
-        readbuf1().set(core::mem::take(&mut (*tp).save_readbuf1));
-        readbuf2().free();
-        readbuf2().set(core::mem::take(&mut (*tp).save_readbuf2));
+    if unsafe { (*tp).typebuf_valid } {
+        unsafe { free_typebuf() };
+        typeahead().set(core::mem::take(unsafe { &mut (*tp).save_typebuf }));
     }
+    old_char.set(unsafe { (*tp).old_char });
+    old_mod_mask.set(unsafe { (*tp).old_mod_mask });
+
+    unsafe { readbuf1().free() };
+    readbuf1().set(core::mem::take(unsafe { &mut (*tp).save_readbuf1 }));
+    unsafe { readbuf2().free() };
+    readbuf2().set(core::mem::take(unsafe { &mut (*tp).save_readbuf2 }));
 }

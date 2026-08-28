@@ -87,55 +87,53 @@ pub(crate) fn gotchars_add_byte(state: &mut gotchars_state_T, byte: u8) -> bool 
 /// than a slice because the loop calls `updatescript` and `add` between
 /// reads, and neither is provably unable to reach the buffer it points into.
 pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
-    unsafe {
-        /// What `gotchars` has half a key of, between calls.
-        static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
+    /// What `gotchars` has half a key of, between calls.
+    static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
 
-        for i in 0..len {
-            if !state.with_mut(|st| gotchars_add_byte(st, *chars.add(i))) {
-                continue;
-            }
-            // A copy of the finished key, so that nothing below holds a
-            // borrow of the cell across `updatescript` or the callbacks.
-            let key = state.get();
-            let buflen = key.buflen;
+    for i in 0..len {
+        if !state.with_mut(|st| gotchars_add_byte(st, unsafe { *chars.add(i) })) {
+            continue;
+        }
+        // A copy of the finished key, so that nothing below holds a
+        // borrow of the cell across `updatescript` or the callbacks.
+        let key = state.get();
+        let buflen = key.buflen;
 
-            // One byte at a time; no translation to be done.
-            for i in 0..buflen {
-                updatescript(c_int::from(key.buf[i]));
-            }
-
-            // `ins_char_typebuf` can ask for the bytes it puts back to be
-            // hidden from vim.on_key(); that is what the ignore count is.
-            if buflen > on_key_ignore_len.get() {
-                let from = on_key_ignore_len.get();
-                on_key_buf.with_mut(|buf| buf.extend_from_slice(&key.buf[from..buflen]));
-                on_key_ignore_len.set(0);
-            } else {
-                on_key_ignore_len.set(on_key_ignore_len.get() - buflen);
-            }
-
-            if reg_recording.get() != 0 {
-                let mut bytes = key.buf;
-                bytes[buflen] = 0;
-                recordbuff().add(bytes.as_ptr().cast(), buflen as ptrdiff_t);
-                // Remember how many characters were recorded last, so that
-                // `get_recorded` can drop the keys that stopped the recording.
-                last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
-            }
-
-            state.with_mut(|st| st.buflen = 0);
+        // One byte at a time; no translation to be done.
+        for i in 0..buflen {
+            unsafe { updatescript(c_int::from(key.buf[i])) };
         }
 
-        may_sync_undo();
+        // `ins_char_typebuf` can ask for the bytes it puts back to be
+        // hidden from vim.on_key(); that is what the ignore count is.
+        if buflen > on_key_ignore_len.get() {
+            let from = on_key_ignore_len.get();
+            on_key_buf.with_mut(|buf| buf.extend_from_slice(&key.buf[from..buflen]));
+            on_key_ignore_len.set(0);
+        } else {
+            on_key_ignore_len.set(on_key_ignore_len.get() - buflen);
+        }
 
-        // Output the "debug mode" message again next time round.
-        debug_did_msg.set(false);
+        if reg_recording.get() != 0 {
+            let mut bytes = key.buf;
+            bytes[buflen] = 0;
+            unsafe { recordbuff().add(bytes.as_ptr().cast(), buflen as ptrdiff_t) };
+            // Remember how many characters were recorded last, so that
+            // `get_recorded` can drop the keys that stopped the recording.
+            last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
+        }
 
-        // Characters have been typed, so whatever follows counts as another
-        // mapping. A search string is kept in the history.
-        maptick.set(maptick.get() + 1);
+        state.with_mut(|st| st.buflen = 0);
     }
+
+    may_sync_undo();
+
+    // Output the "debug mode" message again next time round.
+    debug_did_msg.set(false);
+
+    // Characters have been typed, so whatever follows counts as another
+    // mapping. A search string is kept in the history.
+    maptick.set(maptick.get() + 1);
 }
 
 /// Record an `<Ignore>` key, which nothing acts on.
@@ -158,70 +156,68 @@ pub unsafe fn gotchars_ignore() {
 /// Callable at any time.
 pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
     let mut ch = [0 as c_char; MB_MAXCHAR];
-    unsafe {
-        /// What `add_byte_to_showcmd` has half a key of, between calls.
-        static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
+    /// What `add_byte_to_showcmd` has half a key of, between calls.
+    static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
 
-        if p_sc.get() == 0 || msg_silent.get() != 0 {
-            return;
-        }
-        if !state.with_mut(|st| gotchars_add_byte(st, byte)) {
-            return;
-        }
-        // A copy of the finished key: `add_to_showcmd` below can reach the
-        // screen, so no borrow of the cell may be outstanding, and the walk
-        // wants a stable buffer to point into.
-        let mut key = state.get();
-        let buflen = key.buflen;
-        key.buf[buflen] = 0;
-        state.with_mut(|st| st.buflen = 0);
+    if p_sc.get() == 0 || msg_silent.get() != 0 {
+        return;
+    }
+    if !state.with_mut(|st| gotchars_add_byte(st, byte)) {
+        return;
+    }
+    // A copy of the finished key: `add_to_showcmd` below can reach the
+    // screen, so no borrow of the cell may be outstanding, and the walk
+    // wants a stable buffer to point into.
+    let mut key = state.get();
+    let buflen = key.buflen;
+    key.buf[buflen] = 0;
+    state.with_mut(|st| st.buflen = 0);
 
-        // Split the key into its modifier prefix and the key itself.
-        let mut ptr: *const c_char = key.buf.as_ptr().cast();
-        let mut modifiers = 0;
-        if c_int::from(*ptr as u8) == K_SPECIAL
-            && c_int::from(*ptr.add(1) as u8) == KS_MODIFIER
-            && c_int::from(*ptr.add(2) as u8) != NUL
-        {
-            modifiers = c_int::from(*ptr.add(2) as u8);
-            ptr = ptr.add(3);
-        }
+    // Split the key into its modifier prefix and the key itself.
+    let mut ptr: *const c_char = key.buf.as_ptr().cast();
+    let mut modifiers = 0;
+    if c_int::from(unsafe { *ptr } as u8) == K_SPECIAL
+        && c_int::from(unsafe { *ptr.add(1) } as u8) == KS_MODIFIER
+        && c_int::from(unsafe { *ptr.add(2) } as u8) != NUL
+    {
+        modifiers = c_int::from(unsafe { *ptr.add(2) } as u8);
+        ptr = unsafe { ptr.add(3) };
+    }
 
-        let mut c = NUL;
-        if c_int::from(*ptr as u8) != NUL {
-            let mb_ptr = mb_unescape(&raw mut ptr, &mut ch);
-            c = if !mb_ptr.is_null() {
-                utf_ptr2char(mb_ptr)
-            } else {
-                let byte = *ptr as u8;
-                ptr = ptr.add(1);
-                c_int::from(byte)
-            };
-            if c <= 0x7f {
-                // Fold the modifiers into the key where that has a spelling,
-                // which reads better: CTRL-A rather than <C-> then A.
-                let mut left = modifiers;
-                let merged = merge_modifiers(c, &mut left);
-                if left == 0 {
-                    modifiers = 0;
-                    c = merged;
-                }
+    let mut c = NUL;
+    if c_int::from(unsafe { *ptr } as u8) != NUL {
+        let mb_ptr = unsafe { mb_unescape(&raw mut ptr, &mut ch) };
+        c = if !mb_ptr.is_null() {
+            unsafe { utf_ptr2char(mb_ptr) }
+        } else {
+            let byte = unsafe { *ptr } as u8;
+            ptr = unsafe { ptr.add(1) };
+            c_int::from(byte)
+        };
+        if c <= 0x7f {
+            // Fold the modifiers into the key where that has a spelling,
+            // which reads better: CTRL-A rather than <C-> then A.
+            let mut left = modifiers;
+            let merged = merge_modifiers(c, &mut left);
+            if left == 0 {
+                modifiers = 0;
+                c = merged;
             }
         }
+    }
 
-        // TODO(zeertzjq): is there a more readable and yet compact
-        // representation of modifiers and special keys?
-        if modifiers != 0 {
-            add_to_showcmd(K_SPECIAL);
-            add_to_showcmd(KS_MODIFIER);
-            add_to_showcmd(modifiers);
-        }
-        if c != NUL {
-            add_to_showcmd(c);
-        }
-        while c_int::from(*ptr as u8) != NUL {
-            add_to_showcmd(c_int::from(*ptr as u8));
-            ptr = ptr.add(1);
-        }
+    // TODO(zeertzjq): is there a more readable and yet compact
+    // representation of modifiers and special keys?
+    if modifiers != 0 {
+        add_to_showcmd(K_SPECIAL);
+        add_to_showcmd(KS_MODIFIER);
+        add_to_showcmd(modifiers);
+    }
+    if c != NUL {
+        add_to_showcmd(c);
+    }
+    while c_int::from(unsafe { *ptr } as u8) != NUL {
+        add_to_showcmd(c_int::from(unsafe { *ptr } as u8));
+        ptr = unsafe { ptr.add(1) };
     }
 }

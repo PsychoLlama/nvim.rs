@@ -43,7 +43,9 @@ use crate::main::{
     test_disable_char_avail, typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char,
     vgetc_mod_mask, want_garbage_collect,
 };
-use crate::mapping::{eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb};
+use crate::mapping::{
+    Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
+};
 use crate::mbyte::{
     mb_cptr2char_adv, mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char,
     utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,

@@ -36,74 +36,72 @@ pub enum PastePhase {
 /// # Safety
 /// `str` must be a valid string when `phase` is [`PastePhase::Chunk`].
 pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0, crlf: bool) {
-    unsafe {
-        if State.get() & MODE_CMDLINE != 0 {
-            return;
-        }
-        let need_redo = !block_redo.get();
-        let need_record = reg_recording.get() != 0 && !is_internal_call(channel_id);
-        if !need_redo && !need_record {
-            return;
-        }
+    if State.get() & MODE_CMDLINE != 0 {
+        return;
+    }
+    let need_redo = !block_redo.get();
+    let need_record = reg_recording.get() != 0 && !is_internal_call(channel_id);
+    if !need_redo && !need_record {
+        return;
+    }
 
-        if phase != PastePhase::Chunk {
-            let c = if phase == PastePhase::Start {
-                K_PASTE_START
-            } else {
-                K_PASTE_END
-            };
+    if phase != PastePhase::Chunk {
+        let c = if phase == PastePhase::Start {
+            K_PASTE_START
+        } else {
+            K_PASTE_END
+        };
+        if need_redo {
+            if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
+                unsafe { reset_redobuff() };
+            }
+            redobuff().add_char(c);
+        }
+        if need_record {
+            recordbuff().add_char(c);
+        }
+        return;
+    }
+
+    let mut s: *const c_char = str.data();
+    let end = unsafe { str.data().add(str.len()) };
+    while s < end {
+        // A run of bytes that need no escaping goes in one piece.
+        let start = s;
+        while s < end
+            && c_int::from(unsafe { *s } as u8) != K_SPECIAL
+            && c_int::from(unsafe { *s }) != NUL
+            && c_int::from(unsafe { *s }) != NL
+            && !(crlf && c_int::from(unsafe { *s }) == CAR)
+        {
+            s = unsafe { s.add(1) };
+        }
+        if s > start {
+            let len = unsafe { s.offset_from(start) };
             if need_redo {
-                if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
-                    reset_redobuff();
-                }
-                redobuff().add_char(c);
+                unsafe { redobuff().add(start, len) };
             }
             if need_record {
-                recordbuff().add_char(c);
+                unsafe { recordbuff().add(start, len) };
             }
-            return;
         }
 
-        let mut s: *const c_char = str.data();
-        let end = str.data().add(str.len());
-        while s < end {
-            // A run of bytes that need no escaping goes in one piece.
-            let start = s;
-            while s < end
-                && c_int::from(*s as u8) != K_SPECIAL
-                && c_int::from(*s) != NUL
-                && c_int::from(*s) != NL
-                && !(crlf && c_int::from(*s) == CAR)
-            {
-                s = s.add(1);
+        // Then the byte that stopped it, escaped as one key.
+        if s < end {
+            let mut c = c_int::from(unsafe { *s } as u8);
+            s = unsafe { s.add(1) };
+            if crlf && c == CAR {
+                // A CRLF pair counts as one newline.
+                if s < end && c_int::from(unsafe { *s }) == NL {
+                    s = unsafe { s.add(1) };
+                }
+                c = NL;
             }
-            if s > start {
-                let len = s.offset_from(start);
-                if need_redo {
-                    redobuff().add(start, len);
-                }
-                if need_record {
-                    recordbuff().add(start, len);
-                }
+            if need_redo {
+                redobuff().add_byte(c);
             }
-
-            // Then the byte that stopped it, escaped as one key.
-            if s < end {
-                let mut c = c_int::from(*s as u8);
-                s = s.add(1);
-                if crlf && c == CAR {
-                    // A CRLF pair counts as one newline.
-                    if s < end && c_int::from(*s) == NL {
-                        s = s.add(1);
-                    }
-                    c = NL;
-                }
-                if need_redo {
-                    redobuff().add_byte(c);
-                }
-                if need_record {
-                    recordbuff().add_byte(c);
-                }
+            if need_record {
+                recordbuff().add_byte(c);
             }
         }
     }
@@ -115,60 +113,59 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
 /// # Safety
 /// Callable at any time; reads from the typeahead until `K_PASTE_END`.
 pub unsafe fn paste_repeat(count: c_int) {
-    unsafe {
-        let mut ga = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 1,
-            ga_growsize: 32,
-            ga_data: ptr::null_mut(),
-        };
-        let mut aborted = false;
+    let mut ga = garray_T {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 1,
+        ga_growsize: 32,
+        ga_data: ptr::null_mut(),
+    };
+    let mut aborted = false;
 
-        let unmapped = Keys::unmapped();
-        got_int.set(false);
-        while !aborted {
-            ga_grow(&raw mut ga, 32);
-            let first = vgetorpeek(true) as u8;
-            if c_int::from(first) == K_SPECIAL {
-                // Undo the escaping `paste_store` applied, except that the
-                // bytes of a real key code go back in as they came out.
-                let second = vgetorpeek(true) as u8;
-                let third = vgetorpeek(true) as u8;
-                match key_unescape(second, third) {
-                    K_PASTE_END => break,
-                    K_ZERO => ga_append(&raw mut ga, NUL as u8),
-                    K_SPECIAL => ga_append(&raw mut ga, K_SPECIAL as u8),
-                    _ => {
-                        ga_append(&raw mut ga, K_SPECIAL as u8);
-                        ga_append(&raw mut ga, second);
-                        ga_append(&raw mut ga, third);
-                    }
+    let unmapped = Keys::unmapped();
+    got_int.set(false);
+    while !aborted {
+        unsafe { ga_grow(&raw mut ga, 32) };
+        let first = unsafe { vgetorpeek(true) } as u8;
+        if c_int::from(first) == K_SPECIAL {
+            // Undo the escaping `paste_store` applied, except that the
+            // bytes of a real key code go back in as they came out.
+            let second = unsafe { vgetorpeek(true) } as u8;
+            let third = unsafe { vgetorpeek(true) } as u8;
+            match key_unescape(second, third) {
+                K_PASTE_END => break,
+                K_ZERO => unsafe { ga_append(&raw mut ga, NUL as u8) },
+                K_SPECIAL => unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) },
+                _ => {
+                    unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) };
+                    unsafe { ga_append(&raw mut ga, second) };
+                    unsafe { ga_append(&raw mut ga, third) };
                 }
-            } else {
-                ga_append(&raw mut ga, first);
             }
-            aborted = got_int.get();
+        } else {
+            unsafe { ga_append(&raw mut ga, first) };
         }
-        drop(unmapped);
-
-        let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
-        let mut arena: Arena = ARENA_EMPTY;
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
-        let mut i = 0;
-        while !aborted && i < count {
-            if let Err(e) = nvim_paste(LUA_INTERNAL_CALL, str, false, -1 as Integer, &raw mut arena)
-            {
-                err = e;
-            }
-            aborted = err.type_0 != kErrorTypeNone;
-            i += 1;
-        }
-        api_clear_error(&raw mut err);
-        arena_mem_free(arena_finish(&raw mut arena));
-        ga_clear(&raw mut ga);
+        aborted = got_int.get();
     }
+    drop(unmapped);
+
+    let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
+    let mut arena: Arena = ARENA_EMPTY;
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ptr::null_mut(),
+    };
+    let mut i = 0;
+    while !aborted && i < count {
+        if let Err(e) =
+            unsafe { nvim_paste(LUA_INTERNAL_CALL, str, false, -1 as Integer, &raw mut arena) }
+        {
+            err = e;
+        }
+        aborted = err.type_0 != kErrorTypeNone;
+        i += 1;
+    }
+    unsafe { api_clear_error(&raw mut err) };
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { ga_clear(&raw mut ga) };
 }

@@ -133,13 +133,11 @@ impl KeyBuffer {
     /// # Safety
     /// Nothing may hold a pointer into the chain.
     unsafe fn free(&mut self) {
-        unsafe {
-            let mut block = self.first;
-            while !block.is_null() {
-                let next = (*block).next;
-                xfree(block.cast());
-                block = next;
-            }
+        let mut block = self.first;
+        while !block.is_null() {
+            let next = unsafe { (*block).next };
+            unsafe { xfree(block.cast()) };
+            block = next;
         }
         self.first = ptr::null_mut();
         self.at = InsertPoint::Gone;
@@ -153,36 +151,34 @@ impl KeyBuffer {
     /// # Safety
     /// The answer must be freed with `xfree`.
     pub(crate) unsafe fn contents(&self, dozero: bool) -> (*mut c_char, usize) {
-        unsafe {
-            let mut count = 0;
-            let mut block = self.first;
-            while !block.is_null() {
-                count += (*block).len;
-                block = (*block).next;
-            }
-            if count == 0 && !dozero {
-                return (ptr::null_mut(), 0);
-            }
-
-            let out = xmalloc(count + 1).cast::<c_char>();
-            let mut at = 0;
-            let mut block = self.first;
-            while !block.is_null() {
-                // Copy up to the block's own terminator rather than up to
-                // `len`: `delete_tail` shortens a block by moving the NUL,
-                // and upstream reads the NUL here too.
-                let str = block_str(block);
-                let mut i = 0;
-                while *str.add(i) != 0 {
-                    *out.add(at) = *str.add(i);
-                    at += 1;
-                    i += 1;
-                }
-                block = (*block).next;
-            }
-            *out.add(at) = 0;
-            (out, at)
+        let mut count = 0;
+        let mut block = self.first;
+        while !block.is_null() {
+            count += unsafe { (*block).len };
+            block = unsafe { (*block).next };
         }
+        if count == 0 && !dozero {
+            return (ptr::null_mut(), 0);
+        }
+
+        let out = unsafe { xmalloc(count + 1) }.cast::<c_char>();
+        let mut at = 0;
+        let mut block = self.first;
+        while !block.is_null() {
+            // Copy up to the block's own terminator rather than up to
+            // `len`: `delete_tail` shortens a block by moving the NUL,
+            // and upstream reads the NUL here too.
+            let str = unsafe { block_str(block) };
+            let mut i = 0;
+            while unsafe { *str.add(i) } != 0 {
+                unsafe { *out.add(at) = *str.add(i) };
+                at += 1;
+                i += 1;
+            }
+            block = unsafe { (*block).next };
+        }
+        unsafe { *out.add(at) = 0 };
+        (out, at)
     }
 
     /// Append `s` at the insertion point.
@@ -196,63 +192,66 @@ impl KeyBuffer {
     /// # Safety
     /// `s` must point at `slen` readable bytes.
     unsafe fn add(&mut self, s: *const c_char, slen: ptrdiff_t) -> bool {
-        unsafe {
-            let slen = if slen < 0 { strlen(s) } else { slen as usize };
-            if slen == 0 {
-                return true; // don't add empty strings
-            }
-
-            if self.first.is_null() {
-                // First add to the list.
-                self.at = InsertPoint::Front;
-                self.create_newblock = true;
-            } else if matches!(self.at, InsertPoint::Gone) {
-                return false;
-            } else if self.index != 0 {
-                // Reclaim what has already been read out of the head block.
-                let head = self.first;
-                let str = block_str(head);
-                let kept = (*head).len - self.index;
-                ptr::copy(str.add(self.index), str, kept + 1);
-                (*head).len = kept;
-                self.space += self.index;
-            }
-            self.index = 0;
-
-            match self.at {
-                InsertPoint::Block(curr) if !self.create_newblock && self.space >= slen => {
-                    xmemcpyz(block_str(curr).add((*curr).len).cast(), s.cast(), slen);
-                    (*curr).len += slen;
-                    self.space -= slen;
-                }
-                at => {
-                    let len = MINIMAL_SIZE.max(slen);
-                    let block = xmalloc(offset_of!(KeyBlock, bytes) + len + 1).cast::<KeyBlock>();
-                    xmemcpyz(block_str(block).cast(), s.cast(), slen);
-                    (*block).len = slen;
-                    self.space = len - slen;
-                    self.create_newblock = false;
-
-                    // Link it in *after* the insertion point, which is what
-                    // makes `Front` mean "read this before the rest".
-                    match at {
-                        InsertPoint::Block(curr) => {
-                            (*block).next = (*curr).next;
-                            (*curr).next = block;
-                        }
-                        // `Gone` is impossible: the chain is either empty,
-                        // and the first branch above reset `at`, or it is not
-                        // and `Gone` returned early.
-                        InsertPoint::Front | InsertPoint::Gone => {
-                            (*block).next = self.first;
-                            self.first = block;
-                        }
-                    }
-                    self.at = InsertPoint::Block(block);
-                }
-            }
-            true
+        let slen = if slen < 0 {
+            unsafe { strlen(s) }
+        } else {
+            slen as usize
+        };
+        if slen == 0 {
+            return true; // don't add empty strings
         }
+
+        if self.first.is_null() {
+            // First add to the list.
+            self.at = InsertPoint::Front;
+            self.create_newblock = true;
+        } else if matches!(self.at, InsertPoint::Gone) {
+            return false;
+        } else if self.index != 0 {
+            // Reclaim what has already been read out of the head block.
+            let head = self.first;
+            let str = unsafe { block_str(head) };
+            let kept = unsafe { (*head).len } - self.index;
+            unsafe { ptr::copy(str.add(self.index), str, kept + 1) };
+            unsafe { (*head).len = kept };
+            self.space += self.index;
+        }
+        self.index = 0;
+
+        match self.at {
+            InsertPoint::Block(curr) if !self.create_newblock && self.space >= slen => {
+                unsafe { xmemcpyz(block_str(curr).add((*curr).len).cast(), s.cast(), slen) };
+                unsafe { (*curr).len += slen };
+                self.space -= slen;
+            }
+            at => {
+                let len = MINIMAL_SIZE.max(slen);
+                let block =
+                    unsafe { xmalloc(offset_of!(KeyBlock, bytes) + len + 1) }.cast::<KeyBlock>();
+                unsafe { xmemcpyz(block_str(block).cast(), s.cast(), slen) };
+                unsafe { (*block).len = slen };
+                self.space = len - slen;
+                self.create_newblock = false;
+
+                // Link it in *after* the insertion point, which is what
+                // makes `Front` mean "read this before the rest".
+                match at {
+                    InsertPoint::Block(curr) => {
+                        unsafe { (*block).next = (*curr).next };
+                        unsafe { (*curr).next = block };
+                    }
+                    // `Gone` is impossible: the chain is either empty,
+                    // and the first branch above reset `at`, or it is not
+                    // and `Gone` returned early.
+                    InsertPoint::Front | InsertPoint::Gone => {
+                        unsafe { (*block).next = self.first };
+                        self.first = block;
+                    }
+                }
+                self.at = InsertPoint::Block(block);
+            }
+        }
+        true
     }
 
     /// Delete `slen` bytes from the end. Only works when they were just
@@ -263,13 +262,11 @@ impl KeyBuffer {
             return; // nothing to delete from
         };
         // SAFETY: `at` names a live block of this buffer's own chain.
-        unsafe {
-            if (*curr).len < slen as usize {
-                return; // the bytes are not all in the last block
-            }
-            (*curr).len -= slen as usize;
-            *block_str(curr).add((*curr).len) = 0;
+        if unsafe { (*curr).len } < slen as usize {
+            return; // the bytes are not all in the last block
         }
+        unsafe { (*curr).len -= slen as usize };
+        unsafe { *block_str(curr).add((*curr).len) = 0 };
         self.space += slen as usize;
     }
 
@@ -278,32 +275,30 @@ impl KeyBuffer {
     /// # Safety
     /// Nothing may hold a pointer into the block being consumed.
     unsafe fn read(&mut self, advance: bool) -> c_int {
-        unsafe {
-            let curr = self.first;
-            if curr.is_null() {
-                return NUL; // buffer is empty
-            }
-
-            let str = block_str(curr);
-            let c = *str.add(self.index) as u8;
-            if advance {
-                self.index += 1;
-                if c_int::from(*str.add(self.index)) == NUL {
-                    self.first = (*curr).next;
-                    if matches!(self.at, InsertPoint::Block(at) if at == curr) {
-                        // Upstream leaves `bh_curr` pointing at the block it
-                        // just freed, and the next add writes through it.
-                        // Fall back to the front, which is where `restart`
-                        // would have put the cursor anyway.
-                        self.at = InsertPoint::Front;
-                        self.create_newblock = true;
-                    }
-                    xfree(curr.cast());
-                    self.index = 0;
-                }
-            }
-            c_int::from(c)
+        let curr = self.first;
+        if curr.is_null() {
+            return NUL; // buffer is empty
         }
+
+        let str = unsafe { block_str(curr) };
+        let c = unsafe { *str.add(self.index) } as u8;
+        if advance {
+            self.index += 1;
+            if c_int::from(unsafe { *str.add(self.index) }) == NUL {
+                self.first = unsafe { (*curr).next };
+                if matches!(self.at, InsertPoint::Block(at) if at == curr) {
+                    // Upstream leaves `bh_curr` pointing at the block it
+                    // just freed, and the next add writes through it.
+                    // Fall back to the front, which is where `restart`
+                    // would have put the cursor anyway.
+                    self.at = InsertPoint::Front;
+                    self.create_newblock = true;
+                }
+                unsafe { xfree(curr.cast()) };
+                self.index = 0;
+            }
+        }
+        c_int::from(c)
     }
 
     /// Prepare the buffer for reading, if it holds anything.
@@ -484,26 +479,27 @@ impl KeyBufferRef {
 /// # Safety
 /// Callable at any time; the answer must be freed with `xfree`.
 pub unsafe fn get_recorded() -> *mut c_char {
-    unsafe {
-        let (recorded, mut len) = recordbuff().contents(true);
-        if recorded.is_null() {
-            return ptr::null_mut();
-        }
-        recordbuff().free();
-
-        // Drop the characters added last, which must be the (possibly mapped)
-        // keys that stopped the recording.
-        if len >= last_recorded_len.get() {
-            len -= last_recorded_len.get();
-            *recorded.add(len) = 0;
-        }
-        // Stopping a recording from Insert mode with CTRL-O q also leaves the
-        // CTRL-O behind.
-        if len > 0 && restart_edit.get() != 0 && c_int::from(*recorded.add(len - 1)) == Ctrl_O {
-            *recorded.add(len - 1) = 0;
-        }
-        recorded
+    let (recorded, mut len) = unsafe { recordbuff().contents(true) };
+    if recorded.is_null() {
+        return ptr::null_mut();
     }
+    unsafe { recordbuff().free() };
+
+    // Drop the characters added last, which must be the (possibly mapped)
+    // keys that stopped the recording.
+    if len >= last_recorded_len.get() {
+        len -= last_recorded_len.get();
+        unsafe { *recorded.add(len) = 0 };
+    }
+    // Stopping a recording from Insert mode with CTRL-O q also leaves the
+    // CTRL-O behind.
+    if len > 0
+        && restart_edit.get() != 0
+        && c_int::from(unsafe { *recorded.add(len - 1) }) == Ctrl_O
+    {
+        unsafe { *recorded.add(len - 1) = 0 };
+    }
+    recorded
 }
 
 /// The contents of the redo buffer as one string, with `K_SPECIAL` escaped.
@@ -547,13 +543,11 @@ fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
 /// # Safety
 /// Callable at any time.
 pub(crate) unsafe fn read_readbuffers(advance: bool) -> c_int {
-    unsafe {
-        let c = readbuf1().read(advance);
-        if c == NUL {
-            readbuf2().read(advance)
-        } else {
-            c
-        }
+    let c = unsafe { readbuf1().read(advance) };
+    if c == NUL {
+        unsafe { readbuf2().read(advance) }
+    } else {
+        c
     }
 }
 
@@ -589,31 +583,27 @@ pub fn typeahead_noflush(c: c_int) {
 /// # Safety
 /// Callable at any time; may block briefly reading input.
 pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
-    unsafe {
-        init_typebuf();
+    init_typebuf();
 
-        start_stuff();
-        while read_readbuffers(true) != NUL {}
+    start_stuff();
+    while unsafe { read_readbuffers(true) } != NUL {}
 
-        if flush_typeahead == FLUSH_INPUT {
-            // Drain what the OS has for us as well, before the typeahead's
-            // bounds move under `inchar`.
-            let tb = typeahead();
-            while inchar(tb.storage(), tb.buflen() - 1, 10) != 0 {}
-        }
-        flush_typebuf(flush_typeahead == FLUSH_MINIMAL);
+    if flush_typeahead == FLUSH_INPUT {
+        // Drain what the OS has for us as well, before the typeahead's
+        // bounds move under `inchar`.
+        let tb = typeahead();
+        while unsafe { inchar(tb.storage(), tb.buflen() - 1, 10) } != 0 {}
     }
+    flush_typebuf(flush_typeahead == FLUSH_MINIMAL);
 }
 
 /// Flush the map and typeahead buffers and beep about an error.
 ///
 /// Safe: the only promise is that the editor exists.
 pub fn beep_flush() {
-    unsafe {
-        if emsg_silent.get() == 0 {
-            flush_buffers(FLUSH_MINIMAL);
-            vim_beep(kOptBoFlagError as c_uint);
-        }
+    if emsg_silent.get() == 0 {
+        unsafe { flush_buffers(FLUSH_MINIMAL) };
+        unsafe { vim_beep(kOptBoFlagError as c_uint) };
     }
 }
 
@@ -650,23 +640,21 @@ pub unsafe fn stuff_readbuf_len(s: *const c_char, len: ptrdiff_t) {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_readbuf_one_line(mut s: *const c_char) {
-    unsafe {
-        while c_int::from(*s) != NUL {
-            if c_int::from(*s as u8) == K_SPECIAL
-                && c_int::from(*s.add(1)) != NUL
-                && c_int::from(*s.add(2)) != NUL
-            {
-                // Copy an escaped key code through untouched.
-                stuff_readbuf_len(s, 3);
-                s = s.add(3);
+    while c_int::from(unsafe { *s }) != NUL {
+        if c_int::from(unsafe { *s } as u8) == K_SPECIAL
+            && c_int::from(unsafe { *s.add(1) }) != NUL
+            && c_int::from(unsafe { *s.add(2) }) != NUL
+        {
+            // Copy an escaped key code through untouched.
+            unsafe { stuff_readbuf_len(s, 3) };
+            s = unsafe { s.add(3) };
+        } else {
+            let c = unsafe { mb_cptr2char_adv(&raw mut s) };
+            stuff_readbuf_char(if c == CAR || c == NL || c == ESC {
+                ' ' as c_int
             } else {
-                let c = mb_cptr2char_adv(&raw mut s);
-                stuff_readbuf_char(if c == CAR || c == NL || c == ESC {
-                    ' ' as c_int
-                } else {
-                    c
-                });
-            }
+                c
+            });
         }
     }
 }
@@ -690,27 +678,25 @@ pub fn stuff_readbuf_number(n: c_int) {
 /// # Safety
 /// `arg` must point at a NUL-terminated string.
 pub unsafe fn stuffescaped(mut arg: *const c_char, literally: bool) {
-    unsafe {
-        while c_int::from(*arg) != NUL {
-            // Stuff a run of ordinary characters in one go.
-            let start = arg;
-            while (c_int::from(*arg) >= ' ' as c_int && c_int::from(*arg) < DEL)
-                || (c_int::from(*arg as u8) == K_SPECIAL && !literally)
-            {
-                arg = arg.add(1);
-            }
-            if arg > start {
-                stuff_readbuf_len(start, arg.offset_from(start));
-            }
+    while c_int::from(unsafe { *arg }) != NUL {
+        // Stuff a run of ordinary characters in one go.
+        let start = arg;
+        while (c_int::from(unsafe { *arg }) >= ' ' as c_int && c_int::from(unsafe { *arg }) < DEL)
+            || (c_int::from(unsafe { *arg } as u8) == K_SPECIAL && !literally)
+        {
+            arg = unsafe { arg.add(1) };
+        }
+        if arg > start {
+            unsafe { stuff_readbuf_len(start, arg.offset_from(start)) };
+        }
 
-            // Then the character that stopped it, one at a time.
-            if c_int::from(*arg) != NUL {
-                let c = mb_cptr2char_adv(&raw mut arg);
-                if literally && ((c < ' ' as c_int && c != TAB) || c == DEL) {
-                    stuff_readbuf_char(Ctrl_V);
-                }
-                stuff_readbuf_char(c);
+        // Then the character that stopped it, one at a time.
+        if c_int::from(unsafe { *arg }) != NUL {
+            let c = unsafe { mb_cptr2char_adv(&raw mut arg) };
+            if literally && ((c < ' ' as c_int && c != TAB) || c == DEL) {
+                stuff_readbuf_char(Ctrl_V);
             }
+            stuff_readbuf_char(c);
         }
     }
 }
