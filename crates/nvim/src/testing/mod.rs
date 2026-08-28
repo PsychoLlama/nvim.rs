@@ -180,7 +180,7 @@ unsafe fn assert_match_common(argvars: *mut typval_T, atype: AssertType) -> c_in
 unsafe fn assert_bool(argvars: *mut typval_T, is_true: bool) -> c_int {
     let mut error = false;
     // SAFETY: the caller's arguments.
-    let actual = &unsafe { *arg(argvars, 0) };
+    let actual = unsafe { &*arg(argvars, 0) };
     let number_ok = actual.v_type == VAR_NUMBER
         && (unsafe { tv_get_number_chk(arg(argvars, 0), &raw mut error) } == 0) != is_true
         && !error;

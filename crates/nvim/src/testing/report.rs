@@ -199,7 +199,7 @@ unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
 /// `gap` is open and `opt_msg_tv` is a live typval.
 unsafe fn append_opt_msg(gap: *mut garray_T, opt_msg_tv: *mut typval_T) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    let msg = &unsafe { *opt_msg_tv };
+    let msg = unsafe { &*opt_msg_tv };
     let blank = msg.v_type == VAR_STRING
         && (unsafe { msg.vval.v_string }.is_null() || unsafe { *msg.vval.v_string } == 0);
     if msg.v_type == VAR_UNKNOWN || blank {

@@ -232,7 +232,7 @@ pub unsafe fn channel_job_running(id: uint64_t) -> bool {
     let chan = find_channel(id);
     !chan.is_null()
         && unsafe { (*chan).streamtype } == kChannelStreamProc
-        && !proc_is_stopped(&unsafe { *channel_proc(chan) })
+        && !proc_is_stopped(unsafe { &*channel_proc(chan) })
 }
 
 /// What `nvim_get_chan_info()` reports. An unknown id answers with an empty
