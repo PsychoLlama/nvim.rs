@@ -37,56 +37,55 @@ pub unsafe fn redraw_custom_title_later() -> bool {
 /// last drawn, and if so which of them to mark. `force` reports unconditionally.
 pub unsafe fn show_cursor_info_later(force: bool) {
     // SAFETY: `curwin` is the editor's current window on the main thread.
-    let wp = curwin.get();
+    let mut wp = unsafe { Win::current() };
     let state = get_real_state();
     // "The cursor is on an empty line" is a status-line item of its own, and
     // in Insert mode it is deliberately always reported as false.
     let empty_line = State.get() & MODE_INSERT == 0
-        && unsafe { *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) } == 0;
+        && unsafe { *ml_get_buf(wp.w_buffer, wp.w_cursor.lnum) } == 0;
 
-    validate_virtcol(unsafe { Win::new(wp) });
+    validate_virtcol(unsafe { Win::new(wp.raw()) });
 
     let visual_moved = visual_active()
-        && (visual_mode().raw() != unsafe { (*wp).w_stl_visual_mode }
-            || visual_anchor() != unsafe { (*wp).w_stl_visual_pos });
+        && (visual_mode().raw() != wp.w_stl_visual_mode || visual_anchor() != wp.w_stl_visual_pos);
     if force
-        || unsafe { (*wp).w_cursor } != unsafe { (*wp).w_stl_cursor }
-        || unsafe { (*wp).w_virtcol } != unsafe { (*wp).w_stl_virtcol }
-        || unsafe { (*wp).w_topline } != unsafe { (*wp).w_stl_topline }
-        || unsafe { (*(*wp).w_buffer).b_ml.ml_line_count } != unsafe { (*wp).w_stl_line_count }
-        || unsafe { (*wp).w_topfill } != unsafe { (*wp).w_stl_topfill }
-        || empty_line != unsafe { (*wp).w_stl_empty }
-        || reg_recording.get() != unsafe { (*wp).w_stl_recording }
-        || state != unsafe { (*wp).w_stl_state }
+        || wp.w_cursor != wp.w_stl_cursor
+        || wp.w_virtcol != wp.w_stl_virtcol
+        || wp.w_topline != wp.w_stl_topline
+        || unsafe { (*wp.w_buffer).b_ml.ml_line_count } != wp.w_stl_line_count
+        || wp.w_topfill != wp.w_stl_topfill
+        || empty_line != wp.w_stl_empty
+        || reg_recording.get() != wp.w_stl_recording
+        || state != wp.w_stl_state
         || visual_moved
     {
-        if unsafe { (*wp).w_status_height } != 0 || global_stl_height() != 0 {
-            unsafe { (*wp).w_redr_status = true };
+        if wp.w_status_height != 0 || global_stl_height() != 0 {
+            wp.w_redr_status = true;
         } else {
             redraw_cmdline.set(true);
         }
         // A window bar can show the same items, and it is never on the
         // command line, so it needs the status-line treatment either way.
-        if unsafe { *p_wbr.get() } != 0 || unsafe { *(*wp).w_onebuf_opt.wo_wbr } != 0 {
-            unsafe { (*wp).w_redr_status = true };
+        if unsafe { *p_wbr.get() } != 0 || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
+            wp.w_redr_status = true;
         }
         unsafe { redraw_custom_title_later() };
     }
 
-    unsafe { (*wp).w_stl_cursor = (*wp).w_cursor };
-    unsafe { (*wp).w_stl_virtcol = (*wp).w_virtcol };
-    unsafe { (*wp).w_stl_empty = empty_line };
-    unsafe { (*wp).w_stl_topline = (*wp).w_topline };
-    unsafe { (*wp).w_stl_line_count = (*(*wp).w_buffer).b_ml.ml_line_count };
-    unsafe { (*wp).w_stl_topfill = (*wp).w_topfill };
-    unsafe { (*wp).w_stl_recording = reg_recording.get() };
-    unsafe { (*wp).w_stl_state = state };
+    wp.w_stl_cursor = wp.w_cursor;
+    wp.w_stl_virtcol = wp.w_virtcol;
+    wp.w_stl_empty = empty_line;
+    wp.w_stl_topline = wp.w_topline;
+    unsafe { wp.w_stl_line_count = (*wp.w_buffer).b_ml.ml_line_count };
+    wp.w_stl_topfill = wp.w_topfill;
+    wp.w_stl_recording = reg_recording.get();
+    wp.w_stl_state = state;
     // Upstream leaves the remembered Visual position alone when Visual mode
     // is not active, so that leaving and re-entering it on the same
     // selection does not count as a change. Reproduced.
     if visual_active() {
-        unsafe { (*wp).w_stl_visual_mode = visual_mode().raw() };
-        unsafe { (*wp).w_stl_visual_pos = visual_anchor() };
+        wp.w_stl_visual_mode = visual_mode().raw();
+        wp.w_stl_visual_pos = visual_anchor();
     }
 }
 
@@ -96,12 +95,16 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 /// [`update_screen`] resets it.
 pub unsafe fn redraw_later(wp: *mut win_T, redr_type: c_int) {
     debug_assert!(!wp.is_null() || exiting.get(), "wp != NULL || exiting");
-    // SAFETY: a live window, unless the editor is exiting -- in which case the
-    // guard below returns before the pointer is used.
-    if !exiting.get() && !redraw_not_allowed.get() && unsafe { (*wp).w_redr_type } < redr_type {
-        unsafe { (*wp).w_redr_type = redr_type };
+    if exiting.get() || redraw_not_allowed.get() {
+        return;
+    }
+    // SAFETY: a live window -- the guard above has ruled out the one caller
+    // that may pass a null, which is the editor on its way out.
+    let mut wp = unsafe { Win::new(wp) };
+    if wp.w_redr_type < redr_type {
+        wp.w_redr_type = redr_type;
         if redr_type >= UPD_NOT_VALID {
-            unsafe { (*wp).w_lines_valid = 0 };
+            wp.w_lines_valid = 0;
         }
         set_must_redraw_unchecked(redr_type);
     }
@@ -110,8 +113,8 @@ pub unsafe fn redraw_later(wp: *mut win_T, redr_type: c_int) {
 /// Mark every window of the current tab page for redraw.
 pub unsafe fn redraw_all_later(redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        unsafe { redraw_later(wp, redr_type) };
+    for wp in winlayer::windows() {
+        unsafe { redraw_later(wp.raw(), redr_type) };
     }
     // Needed as well when switching tab pages: the windows marked above are
     // not the ones that will be drawn.
@@ -135,9 +138,9 @@ fn set_must_redraw_unchecked(redr_type: c_int) {
 /// are rebuilt.
 pub unsafe fn screen_invalidate_highlights() {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        unsafe { redraw_later(wp, UPD_NOT_VALID) };
-        unsafe { (*wp).w_grid_alloc.valid = false };
+    for mut wp in winlayer::windows() {
+        unsafe { redraw_later(wp.raw(), UPD_NOT_VALID) };
+        wp.w_grid_alloc.valid = false;
     }
 }
 
@@ -153,9 +156,9 @@ pub fn redraw_curbuf_later(redr_type: c_int) {
 /// Mark every window showing `buf`.
 pub unsafe fn redraw_buf_later(buf: *mut buf_T, redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_buffer } == buf {
-            unsafe { redraw_later(wp, redr_type) };
+    for wp in winlayer::windows() {
+        if wp.w_buffer == buf {
+            unsafe { redraw_later(wp.raw(), redr_type) };
         }
     }
 }
@@ -166,11 +169,11 @@ pub unsafe fn redraw_buf_later(buf: *mut buf_T, redr_type: c_int) {
 /// deletion gets the rows it used to occupy redrawn.
 pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_buffer } == buf {
-            unsafe { redraw_win_line(wp, line.min((*buf).b_ml.ml_line_count)) };
+    for mut wp in winlayer::windows() {
+        if wp.w_buffer == buf {
+            unsafe { redraw_win_line(wp.raw(), line.min((*buf).b_ml.ml_line_count)) };
             if force && line > unsafe { (*buf).b_ml.ml_line_count } {
-                unsafe { (*wp).w_redraw_bot = line };
+                wp.w_redraw_bot = line;
             }
         }
     }
@@ -181,12 +184,13 @@ pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool
 /// Nothing is marked when the range is entirely outside the window.
 pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: linenr_T) {
     // SAFETY: a live window on the main thread.
-    if last >= unsafe { (*wp).w_topline } && first < unsafe { (*wp).w_botline } {
-        if unsafe { (*wp).w_redraw_top } == 0 || unsafe { (*wp).w_redraw_top } > first {
-            unsafe { (*wp).w_redraw_top = first };
+    let mut win = unsafe { Win::new(wp) };
+    if last >= win.w_topline && first < win.w_botline {
+        if win.w_redraw_top == 0 || win.w_redraw_top > first {
+            win.w_redraw_top = first;
         }
-        if unsafe { (*wp).w_redraw_bot } == 0 || unsafe { (*wp).w_redraw_bot } < last {
-            unsafe { (*wp).w_redraw_bot = last };
+        if win.w_redraw_bot == 0 || win.w_redraw_bot < last {
+            win.w_redraw_bot = last;
         }
         unsafe { redraw_later(wp, UPD_VALID) };
     }
@@ -204,9 +208,9 @@ pub unsafe fn redraw_win_line(wp: *mut win_T, lnum: linenr_T) {
 /// Mark lines `first..=last` of `buf` in every window showing it.
 pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: linenr_T, last: linenr_T) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_buffer } == buf {
-            unsafe { redraw_win_range_later(wp, first, last) };
+    for wp in winlayer::windows() {
+        if wp.w_buffer == buf {
+            unsafe { redraw_win_range_later(wp.raw(), first, last) };
         }
     }
 }
@@ -214,13 +218,13 @@ pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: linenr_T, last: lin
 /// Mark the status lines and window bars of every window showing `buf`.
 pub unsafe fn redraw_buf_status_later(buf: *mut buf_T) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_buffer } == buf
-            && (unsafe { (*wp).w_status_height } != 0
-                || (wp == curwin.get() && global_stl_height() != 0)
-                || unsafe { (*wp).w_winbar_height } != 0)
+    for mut wp in winlayer::windows() {
+        if wp.w_buffer == buf
+            && (wp.w_status_height != 0
+                || (wp.raw() == curwin.get() && global_stl_height() != 0)
+                || wp.w_winbar_height != 0)
         {
-            unsafe { (*wp).w_redr_status = true };
+            wp.w_redr_status = true;
             set_must_redraw(UPD_VALID);
         }
     }
@@ -230,13 +234,13 @@ pub unsafe fn redraw_buf_status_later(buf: *mut buf_T) {
 pub unsafe fn status_redraw_all() {
     // SAFETY: walking the current tab page's window list on the main thread.
     let is_stl_global = global_stl_height() != 0;
-    for wp in windows_in_curtab() {
-        if (!is_stl_global && unsafe { (*wp).w_status_height } != 0)
-            || wp == curwin.get()
-            || unsafe { (*wp).w_winbar_height } != 0
+    for mut wp in winlayer::windows() {
+        if (!is_stl_global && wp.w_status_height != 0)
+            || wp.raw() == curwin.get()
+            || wp.w_winbar_height != 0
         {
-            unsafe { (*wp).w_redr_status = true };
-            unsafe { redraw_later(wp, UPD_VALID) };
+            wp.w_redr_status = true;
+            unsafe { redraw_later(wp.raw(), UPD_VALID) };
         }
     }
 }
@@ -251,23 +255,23 @@ pub unsafe fn status_redraw_curbuf() {
 pub unsafe fn status_redraw_buf(buf: *mut buf_T) {
     // SAFETY: walking the current tab page's window list on the main thread.
     let is_stl_global = global_stl_height() != 0;
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_buffer } == buf
-            && ((!is_stl_global && unsafe { (*wp).w_status_height } != 0)
-                || (is_stl_global && wp == curwin.get())
-                || unsafe { (*wp).w_winbar_height } != 0)
+    for mut wp in winlayer::windows() {
+        if wp.w_buffer == buf
+            && ((!is_stl_global && wp.w_status_height != 0)
+                || (is_stl_global && wp.raw() == curwin.get())
+                || wp.w_winbar_height != 0)
         {
-            unsafe { (*wp).w_redr_status = true };
-            unsafe { redraw_later(wp, UPD_VALID) };
+            wp.w_redr_status = true;
+            unsafe { redraw_later(wp.raw(), UPD_VALID) };
         }
     }
     // With no status line at all the ruler lives on the command line, so it
     // has to be marked separately -- but only if the loop above did not
     // already mark the current window.
-    let wp = curwin.get();
-    if p_ru.get() != 0 && unsafe { (*wp).w_status_height } == 0 && !unsafe { (*wp).w_redr_status } {
+    let wp = unsafe { Win::current() };
+    if p_ru.get() != 0 && wp.w_status_height == 0 && !wp.w_redr_status {
         redraw_cmdline.set(true);
-        unsafe { redraw_later(wp, UPD_VALID) };
+        unsafe { redraw_later(wp.raw(), UPD_VALID) };
     }
 }
 
@@ -275,11 +279,11 @@ pub unsafe fn status_redraw_buf(buf: *mut buf_T) {
 /// the title.
 pub unsafe fn redraw_statuslines() {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_redr_status } {
-            unsafe { win_check_ns_hl(wp) };
-            unsafe { win_redr_winbar(wp) };
-            unsafe { win_redr_status(wp) };
+    for wp in winlayer::windows() {
+        if wp.w_redr_status {
+            unsafe { win_check_ns_hl(wp.raw()) };
+            unsafe { win_redr_winbar(wp.raw()) };
+            unsafe { win_redr_status(wp.raw()) };
         }
     }
     unsafe { win_check_ns_hl(::core::ptr::null_mut()) };

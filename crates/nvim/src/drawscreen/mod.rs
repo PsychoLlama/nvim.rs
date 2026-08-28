@@ -191,21 +191,21 @@ pub(crate) unsafe fn win_endcol(wp: *const win_T) -> c_int {
 /// anyway, so this only matters when it did not.
 pub unsafe fn conceal_check_cursor_line() {
     // SAFETY: `curwin` is the editor's current window, on the main thread.
-    let wp = curwin.get();
-    let should_conceal = unsafe { conceal_cursor_line(wp) };
-    if unsafe { (*wp).w_onebuf_opt.wo_cole } <= 0 || conceal_cursor_used.get() == should_conceal {
+    let wp = unsafe { Win::current() };
+    let should_conceal = unsafe { conceal_cursor_line(wp.raw()) };
+    if wp.w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
         return;
     }
 
-    unsafe { redraw_win_line(wp, (*wp).w_cursor.lnum) };
+    unsafe { redraw_win_line(wp.raw(), wp.w_cursor.lnum) };
 
     // Whether the line is displayed at all may have changed with it.
-    if unsafe { decor_conceal_line(wp, (*wp).w_cursor.lnum - 1, true) } {
-        changed_window_setting(unsafe { Win::new(wp) });
+    if unsafe { decor_conceal_line(wp.raw(), wp.w_cursor.lnum - 1, true) } {
+        changed_window_setting(unsafe { Win::new(wp.raw()) });
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
     // mode stops the line being concealed.
-    curs_columns(unsafe { Win::new(wp) }, c_int::from(true)); // may_scroll
+    curs_columns(unsafe { Win::new(wp.raw()) }, c_int::from(true)); // may_scroll
 }
 
 /// Whether redrawing should happen right now.
@@ -257,19 +257,17 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
             dg.clear_line(off, Columns.get(), false);
             row += 1;
         }
-        for wp in windows_in_curtab() {
-            if unsafe { (*wp).w_floating } {
+        for mut wp in winlayer::windows() {
+            if wp.w_floating {
                 continue;
             }
-            if unsafe { win_endrow(wp) } > valid {
+            if unsafe { win_endrow(wp.raw()) } > valid {
                 // Pessimistic: `redr_type` could be UPD_NOT_VALID only
                 // because of windows above the separator.
-                unsafe { (*wp).w_redr_type = (*wp).w_redr_type.max(UPD_NOT_VALID) };
+                wp.w_redr_type = wp.w_redr_type.max(UPD_NOT_VALID);
             }
-            if !is_stl_global
-                && unsafe { win_endrow(wp) } + unsafe { (*wp).w_status_height } > valid
-            {
-                unsafe { (*wp).w_redr_status = true };
+            if !is_stl_global && unsafe { win_endrow(wp.raw()) } + wp.w_status_height > valid {
+                wp.w_redr_status = true;
             }
         }
         if is_stl_global && Rows.get() as OptInt - p_ch.get() - 1 > valid as OptInt {
@@ -300,14 +298,16 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 /// Called from [`update_screen`].
 unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    for wp in windows_in_curtab() {
-        unsafe { update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed) };
+    for wp in winlayer::windows() {
+        unsafe { update_window_hl(wp.raw(), redr_type >= UPD_NOT_VALID || hl_changed) };
 
-        let buf = unsafe { (*wp).w_buffer };
+        let buf = wp.w_buffer;
         if !unsafe { (*buf).b_mod_set } {
             continue;
         }
-        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && unsafe { syntax_present(wp) } {
+        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get()
+            && unsafe { syntax_present(wp.raw()) }
+        {
             unsafe { syn_stack_apply_changes(buf) };
             unsafe { (*buf).b_mod_tick_syn = display_tick.get() };
         }
@@ -440,25 +440,25 @@ pub unsafe fn update_screen() -> c_int {
     //
     // Upstream special-cases `curwin` here and says so in a comment; either
     // every window should be checked or none should. Reproduced.
-    let wp = curwin.get();
+    let mut wp = unsafe { Win::current() };
     // `number_width` is NOT pure -- it caches its answer in the window and
     // resets the 'statuscolumn' width estimate -- so it stays behind the
     // `w_redr_type` test, where upstream's `&&` puts it.
-    if unsafe { (*wp).w_redr_type } < UPD_NOT_VALID {
-        let nrwidth = if unsafe { (*wp).w_onebuf_opt.wo_nu } != 0
-            || unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
-            || unsafe { *(*wp).w_onebuf_opt.wo_stc } != 0
+    if wp.w_redr_type < UPD_NOT_VALID {
+        let nrwidth = if wp.w_onebuf_opt.wo_nu != 0
+            || wp.w_onebuf_opt.wo_rnu != 0
+            || unsafe { *wp.w_onebuf_opt.wo_stc } != 0
         {
-            unsafe { number_width(wp) }
+            unsafe { number_width(wp.raw()) }
         } else {
             0
         };
-        if unsafe { (*wp).w_nrwidth } != nrwidth {
-            unsafe { (*wp).w_redr_type = UPD_NOT_VALID };
+        if wp.w_nrwidth != nrwidth {
+            wp.w_redr_type = UPD_NOT_VALID;
         }
     }
 
-    if unsafe { (*wp).w_redr_type } == UPD_INVERTED {
+    if wp.w_redr_type == UPD_INVERTED {
         // So the end of the Visual selection is right.
         unsafe { update_curswant() };
     }
@@ -479,31 +479,28 @@ pub unsafe fn update_screen() -> c_int {
     let mut did_one = false;
     SearchHl::current().set_regprog(::core::ptr::null_mut());
 
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_redr_type } == UPD_CLEAR
-            && unsafe { (*wp).w_floating }
-            && unsafe { (*wp).w_grid_alloc.is_allocated() }
-        {
-            unsafe { (*wp).w_grid_alloc.invalidate() };
-            unsafe { (*wp).w_redr_type = UPD_NOT_VALID };
+    for mut wp in winlayer::windows() {
+        if wp.w_redr_type == UPD_CLEAR && wp.w_floating && wp.w_grid_alloc.is_allocated() {
+            wp.w_grid_alloc.invalidate();
+            wp.w_redr_type = UPD_NOT_VALID;
         }
 
-        unsafe { win_check_ns_hl(wp) };
-        unsafe { win_grid_alloc(wp) };
+        unsafe { win_check_ns_hl(wp.raw()) };
+        unsafe { win_grid_alloc(wp.raw()) };
 
-        if unsafe { (*wp).w_redr_border } || unsafe { (*wp).w_redr_type } >= UPD_NOT_VALID {
+        if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
             unsafe {
                 grid_draw_border(
-                    &raw mut (*wp).w_grid_alloc,
-                    &raw mut (*wp).w_config,
-                    (&raw mut (*wp).w_border_adj).cast::<c_int>(),
-                    (*wp).w_onebuf_opt.wo_winbl as c_int,
-                    (*wp).w_ns_hl_attr,
+                    &raw mut wp.w_grid_alloc,
+                    &raw mut wp.w_config,
+                    (&raw mut wp.w_border_adj).cast::<c_int>(),
+                    wp.w_onebuf_opt.wo_winbl as c_int,
+                    wp.w_ns_hl_attr,
                 )
             };
         }
 
-        if unsafe { (*wp).w_redr_type } != 0 {
+        if wp.w_redr_type != 0 {
             if !did_one {
                 did_one = true;
                 unsafe { start_search_hl() };
@@ -513,16 +510,16 @@ pub unsafe fn update_screen() -> c_int {
 
         // The status line and window bar go after the window, to minimise
         // cursor movement.
-        if unsafe { (*wp).w_redr_status } {
-            unsafe { win_redr_winbar(wp) };
-            unsafe { win_redr_status(wp) };
+        if wp.w_redr_status {
+            unsafe { win_redr_winbar(wp.raw()) };
+            unsafe { win_redr_status(wp.raw()) };
         }
     }
 
     // Separator connectors go after every window update, so that a
     // connector is never overwritten by a neighbour's separator.
     if did_one {
-        for wp in windows_in_curtab() {
+        for wp in winlayer::windows() {
             unsafe { draw_sep_connectors_win(wp) };
         }
     }
@@ -540,8 +537,8 @@ pub unsafe fn update_screen() -> c_int {
 
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.
-    for wp in windows_in_curtab() {
-        unsafe { (*(*wp).w_buffer).b_mod_set = false };
+    for mut wp in winlayer::windows() {
+        unsafe { (*wp.w_buffer).b_mod_set = false };
     }
 
     updating_screen.set(false);
@@ -655,16 +652,16 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
     if !force && !unsafe { redrawing() } {
         return;
     }
-    validate_cursor(unsafe { Win::new(wp) });
+    let wp = unsafe { Win::new(wp) };
+    validate_cursor(wp);
 
-    let mut row = unsafe { (*wp).w_wrow };
-    let mut col = unsafe { (*wp).w_wcol };
-    if unsafe { (*wp).w_onebuf_opt.wo_rl } != 0 {
+    let mut row = wp.w_wrow;
+    let mut col = wp.w_wcol;
+    if wp.w_onebuf_opt.wo_rl != 0 {
         // With 'rightleft' and the cursor on a double-width character, the
         // cursor goes on its leftmost column.
-        let cursor = unsafe {
-            ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum).add((*wp).w_cursor.col as usize)
-        };
+        let cursor =
+            unsafe { ml_get_buf(wp.w_buffer, wp.w_cursor.lnum).add(wp.w_cursor.col as usize) };
         let cells = if unsafe { utf_ptr2cells(cursor) } == 2
             && unsafe { vim_isprintc(utf_ptr2char(cursor)) }
         {
@@ -672,10 +669,10 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
         } else {
             1
         };
-        col = unsafe { (*wp).w_view_width } - unsafe { (*wp).w_wcol } - cells;
+        col = wp.w_view_width - wp.w_wcol - cells;
     }
 
-    let grid = unsafe { grid_adjust((*wp).w_grid, &mut row, &mut col) };
+    let grid = unsafe { grid_adjust(wp.w_grid, &mut row, &mut col) };
     if !grid.is_unresolved() {
         ui_grid_cursor_goto(grid.handle, row, col);
     }
@@ -689,13 +686,14 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
 /// leaves one for the current window).
 pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
-    let fdc = unsafe { win_fdccol_count(wp) };
-    let min_width = if wp == curwin.get() && p_wmw.get() == 0 {
+    let wp = unsafe { Win::new(wp) };
+    let fdc = unsafe { win_fdccol_count(wp.raw()) };
+    let min_width = if wp.raw() == curwin.get() && p_wmw.get() == 0 {
         1
     } else {
         p_wmw.get() as c_int
     };
-    fdc.min(unsafe { (*wp).w_view_width } - (col + min_width))
+    fdc.min(wp.w_view_width - (col + min_width))
 }
 
 /// The width of window `wp`'s `'number'`/`'relativenumber'` column.
@@ -705,31 +703,28 @@ pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
 /// for, since it only changes when that crosses a power of ten.
 pub unsafe fn number_width(wp: *mut win_T) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
+    let mut wp = unsafe { Win::new(wp) };
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
-    let largest =
-        if unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0 && unsafe { (*wp).w_onebuf_opt.wo_nu } == 0 {
-            unsafe { (*wp).w_view_height as linenr_T }
-        } else {
-            unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }
-        };
+    let largest = if wp.w_onebuf_opt.wo_rnu != 0 && wp.w_onebuf_opt.wo_nu == 0 {
+        wp.w_view_height as linenr_T
+    } else {
+        unsafe { (*wp.w_buffer).b_ml.ml_line_count }
+    };
 
-    if largest == unsafe { (*wp).w_nrwidth_line_count } {
-        return unsafe { (*wp).w_nrwidth_width };
+    if largest == wp.w_nrwidth_line_count {
+        return wp.w_nrwidth_width;
     }
-    unsafe { (*wp).w_nrwidth_line_count = largest };
+    wp.w_nrwidth_line_count = largest;
 
-    if unsafe { *(*wp).w_onebuf_opt.wo_stc } != 0 {
+    if unsafe { *wp.w_onebuf_opt.wo_stc } != 0 {
         // 'statuscolumn' draws the number itself, so all that is reserved
         // here is 'numberwidth'; the real width is re-estimated from the
         // expression's output.
-        unsafe { (*wp).w_statuscol_line_count = 0 };
-        unsafe {
-            (*wp).w_nrwidth_width =
-                c_int::from((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
-                    * (*wp).w_onebuf_opt.wo_nuw as c_int
-        };
-        return unsafe { (*wp).w_nrwidth_width };
+        wp.w_statuscol_line_count = 0;
+        wp.w_nrwidth_width = c_int::from(wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
+            * wp.w_onebuf_opt.wo_nuw as c_int;
+        return wp.w_nrwidth_width;
     }
 
     // Digits in `largest`, at least one -- upstream's do-while, which
@@ -745,18 +740,18 @@ pub unsafe fn number_width(wp: *mut win_T) -> c_int {
     }
 
     // 'numberwidth' is the minimal width plus one.
-    n = n.max(unsafe { (*wp).w_onebuf_opt.wo_nuw } as c_int - 1);
+    n = n.max(wp.w_onebuf_opt.wo_nuw as c_int - 1);
 
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
     if n < 2
-        && buf_meta_total(unsafe { Win::new(wp) }.buffer(), kMTMetaSignText) != 0
-        && unsafe { (*wp).w_minscwidth } == SCL_NUM
+        && buf_meta_total(unsafe { Win::new(wp.raw()) }.buffer(), kMTMetaSignText) != 0
+        && wp.w_minscwidth == SCL_NUM
     {
         n = 2;
     }
 
-    unsafe { (*wp).w_nrwidth_width = n };
+    wp.w_nrwidth_width = n;
     n
 }
 
@@ -801,17 +796,18 @@ pub unsafe fn win_cursorline_standout(wp: *const win_T) -> bool {
 /// cursor moves onto it.
 pub unsafe fn win_update_cursorline(wp: *mut win_T, foldinfo: *mut foldinfo_T) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
+    let mut wp = unsafe { Win::new(wp) };
     unsafe {
-        (*wp).w_cursorline = if win_cursorline_standout(wp) {
-            (*wp).w_cursor.lnum
+        wp.w_cursorline = if win_cursorline_standout(wp.raw()) {
+            wp.w_cursor.lnum
         } else {
             0
         }
     };
-    if unsafe { (*wp).w_onebuf_opt.wo_cul } != 0 {
-        unsafe { *foldinfo = fold_info(Win::new(wp), (*wp).w_cursor.lnum) };
+    if wp.w_onebuf_opt.wo_cul != 0 {
+        unsafe { *foldinfo = fold_info(Win::new(wp.raw()), wp.w_cursor.lnum) };
         if unsafe { (*foldinfo).fi_level } != 0 && unsafe { (*foldinfo).fi_lines } > 0 {
-            unsafe { (*wp).w_cursorline = (*foldinfo).fi_lnum };
+            unsafe { wp.w_cursorline = (*foldinfo).fi_lnum };
         }
     }
 }

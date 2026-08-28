@@ -65,7 +65,7 @@ struct Walk {
 /// `wp` must be a live window, `buf` its buffer, and `decor` and the
 /// search-highlight state must be set up for this redraw.
 pub(crate) unsafe fn draw_window_lines(
-    wp: *mut win_T,
+    mut wp: Win,
     buf: *mut buf_T,
     rg: &mut Regions,
     cursorline_fi: foldinfo_T,
@@ -79,7 +79,7 @@ pub(crate) unsafe fn draw_window_lines(
         row: 0,
         srow: 0,
         // SAFETY: the caller's window.
-        lnum: unsafe { (*wp).w_topline },
+        lnum: wp.w_topline,
         eof: false,
         didline: false,
         syntax_last_parsed: 0,
@@ -96,14 +96,14 @@ pub(crate) unsafe fn draw_window_lines(
     'restart: loop {
         w.idx = 0;
         w.row = 0;
-        w.lnum = unsafe { (*wp).w_topline };
+        w.lnum = wp.w_topline;
         w.eof = false;
         w.didline = false;
 
         loop {
             // Stop at the end of the window; the check for going *past* it
             // is at the bottom.
-            if w.row == unsafe { (*wp).w_view_height } {
+            if w.row == wp.w_view_height {
                 w.didline = true;
                 break;
             }
@@ -121,12 +121,12 @@ pub(crate) unsafe fn draw_window_lines(
                 }
             } else {
                 unsafe { skip_one_line(wp, buf, rg, &mut w, cursorline_fi, spv, decor) };
-                if w.row > unsafe { (*wp).w_view_height } {
+                if w.row > wp.w_view_height {
                     break;
                 }
             }
 
-            if unsafe { (*wp).w_redr_statuscol } {
+            if wp.w_redr_statuscol {
                 unsafe { restart_for_statuscol(wp, decor) };
                 continue 'restart;
             }
@@ -138,25 +138,23 @@ pub(crate) unsafe fn draw_window_lines(
 
         // The window has been drawn with both the old and the new cursor
         // line, so the remembered one can move.
-        unsafe { (*wp).w_last_cursorline = (*wp).w_cursorline };
-        unsafe {
-            (*wp).w_last_cursor_lnum_rnu = if (*wp).w_onebuf_opt.wo_rnu != 0 {
-                (*wp).w_cursor.lnum
-            } else {
-                0
-            }
+        wp.w_last_cursorline = wp.w_cursorline;
+        wp.w_last_cursor_lnum_rnu = if wp.w_onebuf_opt.wo_rnu != 0 {
+            wp.w_cursor.lnum
+        } else {
+            0
         };
-        unsafe { (*wp).w_lines_valid = (*wp).w_lines_valid.max(w.idx) };
-        unsafe { (*wp).w_display_tick = display_tick.get() };
+        wp.w_lines_valid = wp.w_lines_valid.max(w.idx);
+        wp.w_display_tick = display_tick.get();
 
         // Tell the syntax machinery where parsing stopped.
-        if w.syntax_last_parsed != 0 && unsafe { syntax_present(wp) } {
-            unsafe { syntax_end_parsing(wp, w.syntax_last_parsed + 1) };
+        if w.syntax_last_parsed != 0 && unsafe { syntax_present(wp.raw()) } {
+            unsafe { syntax_end_parsing(wp.raw(), w.syntax_last_parsed + 1) };
         }
 
-        let old_botline = unsafe { (*wp).w_botline };
-        unsafe { (*wp).w_empty_rows = 0 };
-        unsafe { (*wp).w_filler_rows = 0 };
+        let old_botline = wp.w_botline;
+        wp.w_empty_rows = 0;
+        wp.w_filler_rows = 0;
 
         if !w.eof && !w.didline {
             unsafe { draw_unfinished_last_line(wp, &w) };
@@ -164,17 +162,16 @@ pub(crate) unsafe fn draw_window_lines(
             if w.eof {
                 // Filler text below the last line. `win_line` recognises
                 // `ml_line_count + 1` and draws only the filler.
-                unsafe { (*wp).w_botline = (*buf).b_ml.ml_line_count + 1 };
-                let fill = unsafe { win_get_fill(Win::new(wp), (*wp).w_botline) };
-                if fill > 0 && !unsafe { (*wp).w_botfill } && w.row < unsafe { (*wp).w_view_height }
-                {
+                unsafe { wp.w_botline = (*buf).b_ml.ml_line_count + 1 };
+                let fill = unsafe { win_get_fill(Win::new(wp.raw()), wp.w_botline) };
+                if fill > 0 && !wp.w_botfill && w.row < wp.w_view_height {
                     let mut zero_spv = spellvars_T::default();
                     w.row = unsafe {
                         win_line(
-                            wp,
-                            (*wp).w_botline,
+                            wp.raw(),
+                            wp.w_botline,
                             w.row,
-                            (*wp).w_view_height,
+                            wp.w_view_height,
                             0,
                             false,
                             &raw mut zero_spv,
@@ -182,14 +179,14 @@ pub(crate) unsafe fn draw_window_lines(
                             decor,
                         )
                     };
-                    if unsafe { (*wp).w_redr_statuscol } {
+                    if wp.w_redr_statuscol {
                         w.eof = false;
                         unsafe { restart_for_statuscol(wp, decor) };
                         continue 'restart;
                     }
                 }
-            } else if dollar_vcol.get() == -1 || wp != curwin.get() {
-                unsafe { (*wp).w_botline = w.lnum };
+            } else if dollar_vcol.get() == -1 || wp.raw() != curwin.get() {
+                wp.w_botline = w.lnum;
             }
 
             unsafe { draw_end_of_buffer(wp, buf, rg, &w) };
@@ -209,13 +206,13 @@ pub(crate) unsafe fn draw_window_lines(
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &Walk) -> bool {
+unsafe fn line_needs_drawing(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     if w.row < rg.top_end
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
         || rg.top_to_mod
-        || w.idx >= unsafe { (*wp).w_lines_valid }
-        || w.row + unsafe { *(*wp).w_lines.add(w.idx as usize) }.wl_size as c_int > rg.bot_start
+        || w.idx >= wp.w_lines_valid
+        || w.row + unsafe { *wp.w_lines.add(w.idx as usize) }.wl_size as c_int > rg.bot_start
     {
         return true;
     }
@@ -235,19 +232,19 @@ unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
                 && (w.lnum < rg.mod_bot
                     || w.did_update == DidUpdate::Fold
                     || (w.did_update == DidUpdate::Line
-                        && unsafe { syntax_present(wp) }
-                        && ((foldmethod_is_syntax(unsafe { Win::new(wp) }) && has_any_folding(unsafe { Win::new(wp) }) != 0)
+                        && unsafe { syntax_present(wp.raw()) }
+                        && ((foldmethod_is_syntax(unsafe { Win::new(wp.raw()) }) && has_any_folding(unsafe { Win::new(wp.raw()) }) != 0)
                             || unsafe { syntax_check_changed(w.lnum) }))
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
-                    || (!unsafe { (*wp).w_match_head }.is_null()
+                    || (!wp.w_match_head.is_null()
                         && unsafe { (*buf).b_mod_set }
                         && unsafe { (*buf).b_mod_xlines } != 0))))
     {
         return true;
     }
 
-    w.lnum == unsafe { (*wp).w_cursorline } || w.lnum == unsafe { (*wp).w_last_cursorline }
+    w.lnum == wp.w_cursorline || w.lnum == wp.w_last_cursorline
 }
 
 /// Draw the line at `w.lnum`, and record what it took.
@@ -258,7 +255,7 @@ unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
 unsafe fn draw_one_line(
-    wp: *mut win_T,
+    wp: Win,
     buf: *mut buf_T,
     rg: &mut Regions,
     w: &mut Walk,
@@ -273,16 +270,15 @@ unsafe fn draw_one_line(
 
     // Folded lines are drawn as one line for all of them. The cursor line's
     // fold info was computed once, before the walk.
-    let foldinfo =
-        if unsafe { (*wp).w_onebuf_opt.wo_cul } != 0 && w.lnum == unsafe { (*wp).w_cursor.lnum } {
-            cursorline_fi
-        } else {
-            fold_info(unsafe { Win::new(wp) }, w.lnum)
-        };
+    let foldinfo = if wp.w_onebuf_opt.wo_cul != 0 && w.lnum == wp.w_cursor.lnum {
+        cursorline_fi
+    } else {
+        fold_info(unsafe { Win::new(wp.raw()) }, w.lnum)
+    };
 
     // A concealed line with no filler lines takes no rows at all.
-    let concealed = unsafe { decor_conceal_line(wp, w.lnum - 1, false) };
-    if concealed && unsafe { win_get_fill(Win::new(wp), w.lnum) } == 0 {
+    let concealed = unsafe { decor_conceal_line(wp.raw(), w.lnum - 1, false) };
+    if concealed && unsafe { win_get_fill(Win::new(wp.raw()), w.lnum) } == 0 {
         let step = if foldinfo.fi_lines != 0 {
             foldinfo.fi_lines
         } else {
@@ -298,33 +294,33 @@ unsafe fn draw_one_line(
 
     unsafe { scroll_for_changed_lines(wp, rg, w) };
 
-    let wl = unsafe { (*wp).w_lines.add(w.idx as usize) };
+    let wl = unsafe { wp.w_lines.add(w.idx as usize) };
     if foldinfo.fi_lines == 0
-        && w.idx < unsafe { (*wp).w_lines_valid }
+        && w.idx < wp.w_lines_valid
         && unsafe { (*wl).wl_valid }
         && unsafe { (*wl).wl_lnum } == w.lnum
-        && w.lnum > unsafe { (*wp).w_topline }
+        && w.lnum > wp.w_topline
         && dy_flags.get() & (kOptDyFlagLastline | kOptDyFlagTruncate) == 0
-        && w.srow + unsafe { (*wl).wl_size } as c_int > unsafe { (*wp).w_view_height }
-        && unsafe { win_get_fill(Win::new(wp), w.lnum) } == 0
+        && w.srow + unsafe { (*wl).wl_size } as c_int > wp.w_view_height
+        && unsafe { win_get_fill(Win::new(wp.raw()), w.lnum) } == 0
     {
         // This line is not going to fit. Draw nothing here; the "@" lines
         // below take the rest.
-        w.row = unsafe { (*wp).w_view_height } + 1;
+        w.row = wp.w_view_height + 1;
     } else {
-        unsafe { prepare_search_hl(wp, SearchHl::current().raw(), w.lnum) };
+        unsafe { prepare_search_hl(wp.raw(), SearchHl::current().raw(), w.lnum) };
         // Let the syntax machinery know lines were skipped.
         if w.syntax_last_parsed != 0
             && w.syntax_last_parsed + 1 < w.lnum
-            && unsafe { syntax_present(wp) }
+            && unsafe { syntax_present(wp.raw()) }
         {
-            unsafe { syntax_end_parsing(wp, w.syntax_last_parsed + 1) };
+            unsafe { syntax_end_parsing(wp.raw(), w.syntax_last_parsed + 1) };
         }
 
         // Spell checking only applies to real buffer text: a concealed line
         // or a fold whose 'foldtext' replaces it has none.
         let display_buf_line =
-            !concealed && (foldinfo.fi_lines == 0 || unsafe { *(*wp).w_onebuf_opt.wo_fdt } == 0);
+            !concealed && (foldinfo.fi_lines == 0 || unsafe { *wp.w_onebuf_opt.wo_fdt } == 0);
 
         let mut zero_spv = spellvars_T::default();
         let spv_arg: *mut spellvars_T = if display_buf_line {
@@ -334,10 +330,10 @@ unsafe fn draw_one_line(
         };
         w.row = unsafe {
             win_line(
-                wp,
+                wp.raw(),
                 w.lnum,
                 w.srow,
-                (*wp).w_view_height,
+                wp.w_view_height,
                 0,
                 concealed,
                 spv_arg,
@@ -368,7 +364,7 @@ unsafe fn draw_one_line(
         // concealed line is concealed with it.
         let mut virt_below = unsafe {
             decor_virt_lines(
-                wp,
+                wp.raw(),
                 lastlnum,
                 lastlnum + 1,
                 ::core::ptr::null_mut(),
@@ -378,12 +374,12 @@ unsafe fn draw_one_line(
         } > 0;
         while !virt_below
             && unsafe { (*wl).wl_lastlnum } < unsafe { (*buf).b_ml.ml_line_count }
-            && unsafe { decor_conceal_line(wp, (*wl).wl_lastlnum, false) }
+            && unsafe { decor_conceal_line(wp.raw(), (*wl).wl_lastlnum, false) }
         {
             virt_below = false;
             unsafe { (*wl).wl_lastlnum += 1 };
             has_folding(
-                unsafe { Win::new(wp) },
+                unsafe { Win::new(wp.raw()) },
                 unsafe { (*wl).wl_lastlnum },
                 None,
                 Some(unsafe { &mut (*wl).wl_lastlnum }),
@@ -396,12 +392,12 @@ unsafe fn draw_one_line(
 
     // `dollar_vcol >= 0` on the cursor line means it was not fully drawn
     // for a change command, so its recorded height must not move.
-    let is_curline = wp == curwin.get() && w.lnum == unsafe { (*wp).w_cursor.lnum };
+    let is_curline = wp.raw() == curwin.get() && w.lnum == wp.w_cursor.lnum;
 
-    if w.row > unsafe { (*wp).w_view_height } {
+    if w.row > wp.w_view_height {
         // Past the end of the grid. The height may still be needed later.
         if dollar_vcol.get() == -1 || !is_curline {
-            unsafe { (*wl).wl_size = plines_win(Win::new(wp), w.lnum, true) as uint16_t };
+            unsafe { (*wl).wl_size = plines_win(Win::new(wp.raw()), w.lnum, true) as uint16_t };
         }
         w.idx += 1;
         return false;
@@ -421,7 +417,7 @@ unsafe fn draw_one_line(
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Walk) {
+unsafe fn scroll_for_changed_lines(wp: Win, rg: &mut Regions, w: &mut Walk) {
     // SAFETY: the caller's window and its `w_lines` array.
     // Not when the change continues to the end, and not for changed lines
     // in a top area that was already scrolled for.
@@ -440,14 +436,14 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
     let mut old_cline_height = 0;
     let mut old_rows = 0;
     let mut i = w.idx;
-    while i < unsafe { (*wp).w_lines_valid } {
-        let wl = unsafe { (*wp).w_lines.add(i as usize) };
+    while i < wp.w_lines_valid {
+        let wl = unsafe { wp.w_lines.add(i as usize) };
         // Only valid entries have a meaningful `wl_lnum`; invalid ones are
         // part of the changed area.
         if unsafe { (*wl).wl_valid } && unsafe { (*wl).wl_lnum } == rg.mod_bot {
             break;
         }
-        if unsafe { (*wl).wl_lnum } == unsafe { (*wp).w_cursor.lnum } {
+        if unsafe { (*wl).wl_lnum } == wp.w_cursor.lnum {
             old_cline_height = unsafe { (*wl).wl_size } as c_int;
         }
         old_rows += unsafe { (*wl).wl_size } as c_int;
@@ -455,10 +451,8 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
             // The last valid entry above `mod_bot`; the invalid entries
             // after it are part of the change too.
             i += 1;
-            while i < unsafe { (*wp).w_lines_valid }
-                && !unsafe { *(*wp).w_lines.add(i as usize) }.wl_valid
-            {
-                old_rows += unsafe { *(*wp).w_lines.add(i as usize) }.wl_size as c_int;
+            while i < wp.w_lines_valid && !unsafe { *wp.w_lines.add(i as usize) }.wl_valid {
+                old_rows += unsafe { *wp.w_lines.add(i as usize) }.wl_size as c_int;
                 i += 1;
             }
             break;
@@ -466,7 +460,7 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
         i += 1;
     }
 
-    if i >= unsafe { (*wp).w_lines_valid } {
+    if i >= wp.w_lines_valid {
         // No valid line below the change: redraw to the end of the window.
         // Inserting or deleting rows would buy nothing.
         rg.bot_start = 0;
@@ -480,20 +474,20 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
     let mut l = w.lnum;
     while l < rg.mod_bot {
         if dollar_vcol.get() >= 0
-            && wp == curwin.get()
+            && wp.raw() == curwin.get()
             && old_cline_height > 0
-            && l == unsafe { (*wp).w_cursor.lnum }
+            && l == wp.w_cursor.lnum
         {
             // The cursor line is not fully redrawn, so its height is
             // unchanged.
             new_rows += old_cline_height;
             j += 1;
         } else {
-            let (n, l_last) = unsafe { plines_correct_topline(wp, l, true) };
+            let (n, l_last) = unsafe { plines_correct_topline(wp.raw(), l, true) };
             (l, new_rows) = (l_last, new_rows + n);
             j += c_int::from(n > 0); // do not count concealed lines
         }
-        if new_rows > unsafe { (*wp).w_view_height } - w.row - 2 {
+        if new_rows > wp.w_view_height - w.row - 2 {
             new_rows = 9999; // too much: redraw the rest
             break;
         }
@@ -505,20 +499,20 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
         // The text got shorter: scroll the rows below it up, and redraw
         // from where they used to end. Not worth it if there is barely any
         // text left, or if the scroll fails.
-        if w.row - xtra_rows >= unsafe { (*wp).w_view_height } - 2 {
+        if w.row - xtra_rows >= wp.w_view_height - 2 {
             rg.mod_bot = MAXLNUM as linenr_T;
         } else {
-            unsafe { win_scroll_lines(wp, w.row, xtra_rows) };
-            rg.bot_start = unsafe { (*wp).w_view_height } + xtra_rows;
+            unsafe { win_scroll_lines(wp.raw(), w.row, xtra_rows) };
+            rg.bot_start = wp.w_view_height + xtra_rows;
             rg.bot_scroll_start = rg.bot_start;
         }
     } else if xtra_rows > 0 {
         // The text got taller: scroll the rows below it down. They keep
         // their contents, so only the end-of-buffer area is stale.
-        if w.row + xtra_rows >= unsafe { (*wp).w_view_height } - 2 {
+        if w.row + xtra_rows >= wp.w_view_height - 2 {
             rg.mod_bot = MAXLNUM as linenr_T;
         } else {
-            unsafe { win_scroll_lines(wp, w.row + old_rows, xtra_rows) };
+            unsafe { win_scroll_lines(wp.raw(), w.row + old_rows, xtra_rows) };
             rg.bot_scroll_start = 0;
             if rg.top_end > w.row + old_rows {
                 // The part of the top area that still needs updating was
@@ -542,7 +536,7 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
 /// # Safety
 /// `wp` must be a live window.
 unsafe fn move_line_entries(
-    wp: *mut win_T,
+    mut wp: Win,
     rg: &mut Regions,
     w: &Walk,
     mut i: c_int,
@@ -554,19 +548,17 @@ unsafe fn move_line_entries(
         // Upwards.
         let mut at_row = w.row + new_rows;
         loop {
-            if i >= unsafe { (*wp).w_lines_valid } {
-                unsafe { (*wp).w_lines_valid = j };
+            if i >= wp.w_lines_valid {
+                wp.w_lines_valid = j;
                 break;
             }
-            unsafe { *(*wp).w_lines.add(j as usize) = *(*wp).w_lines.add(i as usize) };
+            unsafe { *wp.w_lines.add(j as usize) = *wp.w_lines.add(i as usize) };
             // Stop at a line that will not fit.
-            if at_row + unsafe { *(*wp).w_lines.add(j as usize) }.wl_size as c_int
-                > unsafe { (*wp).w_view_height }
-            {
-                unsafe { (*wp).w_lines_valid = j + 1 };
+            if at_row + unsafe { *wp.w_lines.add(j as usize) }.wl_size as c_int > wp.w_view_height {
+                wp.w_lines_valid = j + 1;
                 break;
             }
-            at_row += unsafe { *(*wp).w_lines.add(j as usize) }.wl_size as c_int;
+            at_row += unsafe { *wp.w_lines.add(j as usize) }.wl_size as c_int;
             j += 1;
             i += 1;
         }
@@ -574,16 +566,16 @@ unsafe fn move_line_entries(
     } else {
         // Downwards.
         j -= i;
-        unsafe { (*wp).w_lines_valid = ((*wp).w_lines_valid + j).min((*wp).w_view_height) };
-        let mut at = unsafe { (*wp).w_lines_valid };
+        wp.w_lines_valid = (wp.w_lines_valid + j).min(wp.w_view_height);
+        let mut at = wp.w_lines_valid;
         while at - j >= w.idx {
-            unsafe { *(*wp).w_lines.add(at as usize) = *(*wp).w_lines.add((at - j) as usize) };
+            unsafe { *wp.w_lines.add(at as usize) = *wp.w_lines.add((at - j) as usize) };
             at -= 1;
         }
         // The entries for the inserted lines are invalid now, but `wl_size`
         // is read above, so it is zeroed rather than left alone.
         while at >= w.idx {
-            let wl = unsafe { (*wp).w_lines.add(at as usize) };
+            let wl = unsafe { wp.w_lines.add(at as usize) };
             unsafe { (*wl).wl_size = 0 };
             unsafe { (*wl).wl_valid = false };
             at -= 1;
@@ -600,7 +592,7 @@ unsafe fn move_line_entries(
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
 unsafe fn skip_one_line(
-    wp: *mut win_T,
+    wp: Win,
     buf: *mut buf_T,
     rg: &Regions,
     w: &mut Walk,
@@ -609,29 +601,26 @@ unsafe fn skip_one_line(
     decor: DecorStateRef,
 ) {
     // SAFETY: the caller's window, buffer and `w_lines` array.
-    let wl = unsafe { (*wp).w_lines.add(w.idx as usize) };
-    let numbers_moved = (unsafe { (*wp).w_onebuf_opt.wo_nu } != 0
+    let wl = unsafe { wp.w_lines.add(w.idx as usize) };
+    let numbers_moved = (wp.w_onebuf_opt.wo_nu != 0
         && rg.mod_top != 0
         && w.lnum >= rg.mod_bot
         && unsafe { (*buf).b_mod_set }
         && unsafe { (*buf).b_mod_xlines } != 0)
-        || (unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
-            && unsafe { (*wp).w_last_cursor_lnum_rnu } != unsafe { (*wp).w_cursor.lnum });
+        || (wp.w_onebuf_opt.wo_rnu != 0 && wp.w_last_cursor_lnum_rnu != wp.w_cursor.lnum);
     if numbers_moved {
-        let info = if unsafe { (*wp).w_onebuf_opt.wo_cul } != 0
-            && w.lnum == unsafe { (*wp).w_cursor.lnum }
-        {
+        let info = if wp.w_onebuf_opt.wo_cul != 0 && w.lnum == wp.w_cursor.lnum {
             cursorline_fi
         } else {
-            fold_info(unsafe { Win::new(wp) }, w.lnum)
+            fold_info(unsafe { Win::new(wp.raw()) }, w.lnum)
         };
         // A non-zero `col_rows` tells `win_line` to draw only the columns.
         unsafe {
             win_line(
-                wp,
+                wp.raw(),
                 w.lnum,
                 w.srow,
-                (*wp).w_view_height,
+                wp.w_view_height,
                 (*wl).wl_size as c_int,
                 false,
                 &raw mut *spv,
@@ -643,10 +632,10 @@ unsafe fn skip_one_line(
 
     w.row += unsafe { (*wl).wl_size } as c_int;
     w.idx += 1;
-    if w.row > unsafe { (*wp).w_view_height } {
+    if w.row > wp.w_view_height {
         return;
     }
-    w.lnum = unsafe { *(*wp).w_lines.add((w.idx - 1) as usize) }.wl_lastlnum + 1;
+    w.lnum = unsafe { *wp.w_lines.add((w.idx - 1) as usize) }.wl_lastlnum + 1;
     w.did_update = DidUpdate::None;
     spv.spv_capcol_lnum = 0;
 }
@@ -655,69 +644,64 @@ unsafe fn skip_one_line(
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn restart_for_statuscol(wp: *mut win_T, decor: DecorStateRef) {
+unsafe fn restart_for_statuscol(mut wp: Win, decor: DecorStateRef) {
     // SAFETY: the caller's window and decoration state.
-    unsafe { (*wp).w_redr_statuscol = false };
-    unsafe { (*wp).w_lines_valid = 0 };
-    unsafe { (*wp).w_valid.clear(WinValid::WCOL) };
-    unsafe { decor_redraw_reset(wp, decor) };
-    unsafe { decor_providers_invoke_win(wp, decor) };
+    wp.w_redr_statuscol = false;
+    wp.w_lines_valid = 0;
+    wp.w_valid.clear(WinValid::WCOL);
+    unsafe { decor_redraw_reset(wp.raw(), decor) };
+    unsafe { decor_providers_invoke_win(wp.raw(), decor) };
 }
 
 /// The last line did not fit in the window: say so, per `'display'`.
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
+unsafe fn draw_unfinished_last_line(mut wp: Win, w: &Walk) {
     // SAFETY: the caller's window; the grid batch is opened and flushed here.
-    let at_attr = unsafe { hl_combine_attr(win_bg_attr(wp), win_hl_attr(wp, HLF_AT)) };
+    let at_attr = unsafe { hl_combine_attr(win_bg_attr(wp.raw()), win_hl_attr(wp.raw(), HLF_AT)) };
 
-    if w.lnum == unsafe { (*wp).w_topline } {
+    if w.lnum == wp.w_topline {
         // A single line that does not fit. Do not overwrite it -- it can
         // still be edited.
-        unsafe { (*wp).w_botline = w.lnum + 1 };
+        wp.w_botline = w.lnum + 1;
         return;
     }
 
-    if unsafe { win_get_fill(Win::new(wp), w.lnum) } >= unsafe { (*wp).w_view_height } - w.srow {
+    if unsafe { win_get_fill(Win::new(wp.raw()), w.lnum) } >= wp.w_view_height - w.srow {
         // The window ends in filler lines.
-        unsafe { (*wp).w_botline = w.lnum };
-        unsafe { (*wp).w_filler_rows = (*wp).w_view_height - w.srow };
+        wp.w_botline = w.lnum;
+        wp.w_filler_rows = wp.w_view_height - w.srow;
         return;
     }
 
     if dy_flags.get() & kOptDyFlagTruncate != 0 {
         // "@@@" in the last screen line, and nothing else on it.
-        unsafe { grid_line_start((*wp).w_grid, (*wp).w_view_height - 1) };
+        unsafe { grid_line_start(wp.w_grid, wp.w_view_height - 1) };
         grid_line_fill(
             0,
-            unsafe { (*wp).w_view_width }.min(3),
-            unsafe { (*wp).w_p_fcs_chars.lastline },
+            wp.w_view_width.min(3),
+            wp.w_p_fcs_chars.lastline,
             at_attr,
         );
-        grid_line_fill(
-            3,
-            unsafe { (*wp).w_view_width },
-            schar_from_ascii(b' '),
-            at_attr,
-        );
+        grid_line_fill(3, wp.w_view_width, schar_from_ascii(b' '), at_attr);
         unsafe { grid_line_flush() };
     } else if dy_flags.get() & kOptDyFlagLastline != 0 {
         // "@@@" at the end of the last screen line, over the text. Four
         // cells when three would split a double-width character in half.
-        unsafe { grid_line_start((*wp).w_grid, (*wp).w_view_height - 1) };
-        let width = if unsafe {
-            grid_line_getchar(((*wp).w_view_width - 3).max(0), ::core::ptr::null_mut())
-        } == 0
-        {
-            4
-        } else {
-            3
-        };
+        unsafe { grid_line_start(wp.w_grid, wp.w_view_height - 1) };
+        let width =
+            if unsafe { grid_line_getchar((wp.w_view_width - 3).max(0), ::core::ptr::null_mut()) }
+                == 0
+            {
+                4
+            } else {
+                3
+            };
         grid_line_fill(
-            (unsafe { (*wp).w_view_width } - width).max(0),
-            unsafe { (*wp).w_view_width },
-            unsafe { (*wp).w_p_fcs_chars.lastline },
+            (wp.w_view_width - width).max(0),
+            wp.w_view_width,
+            wp.w_p_fcs_chars.lastline,
             at_attr,
         );
         unsafe { grid_line_flush() };
@@ -726,16 +710,16 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
         unsafe {
             win_draw_end(
                 wp,
-                (*wp).w_p_fcs_chars.lastline,
+                wp.w_p_fcs_chars.lastline,
                 true,
                 w.srow,
-                (*wp).w_view_height,
+                wp.w_view_height,
                 HLF_AT,
             )
         };
     }
-    set_empty_rows(unsafe { Win::new(wp) }, w.srow);
-    unsafe { (*wp).w_botline = w.lnum };
+    set_empty_rows(unsafe { Win::new(wp.raw()) }, w.srow);
+    wp.w_botline = w.lnum;
 }
 
 /// Fill the rows below the last buffer line with `'fillchars'` "eob".
@@ -746,7 +730,7 @@ unsafe fn draw_unfinished_last_line(wp: *mut win_T, w: &Walk) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn draw_end_of_buffer(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &Walk) {
+unsafe fn draw_end_of_buffer(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) {
     // SAFETY: the caller's window and buffer.
     let mut lastline = rg.bot_scroll_start;
     if rg.mid_end >= w.row {
@@ -761,14 +745,14 @@ unsafe fn draw_end_of_buffer(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
     unsafe {
         win_draw_end(
             wp,
-            (*wp).w_p_fcs_chars.eob,
+            wp.w_p_fcs_chars.eob,
             false,
             lastline.max(w.row),
-            (*wp).w_view_height,
+            wp.w_view_height,
             HLF_EOB,
         )
     };
-    set_empty_rows(unsafe { Win::new(wp) }, w.row);
+    set_empty_rows(unsafe { Win::new(wp.raw()) }, w.row);
 }
 
 /// Scroll `line_count` screen rows at window row `row`.
@@ -782,16 +766,17 @@ pub unsafe fn win_scroll_lines(wp: *mut win_T, row: c_int, line_count: c_int) {
     if !unsafe { redrawing() } || line_count == 0 {
         return;
     }
+    let wp = unsafe { Win::new(wp) };
 
     let mut col = 0;
     let mut row_off = 0;
-    let grid = unsafe { grid_adjust((*wp).w_grid, &mut row_off, &mut col) };
+    let grid = unsafe { grid_adjust(wp.w_grid, &mut row_off, &mut col) };
 
     // The bounds are the grid's rather than the window's because
     // `curs_columns` reaches here from outside `update_screen`, when the
     // two may disagree.
-    let checked_width = (grid.cols - col).min(unsafe { (*wp).w_view_width });
-    let checked_height = (grid.rows - row_off).min(unsafe { (*wp).w_view_height });
+    let checked_width = (grid.cols - col).min(wp.w_view_width);
+    let checked_height = (grid.rows - row_off).min(wp.w_view_height);
 
     // Nothing would be moved; the caller draws over the whole area.
     if row + line_count.abs() >= checked_height {
@@ -824,7 +809,7 @@ pub unsafe fn win_scroll_lines(wp: *mut win_T, row: c_int, line_count: c_int) {
 /// With `draw_margin` the fold, sign and number columns are drawn as blanks
 /// first, so the marker starts where the text would.
 pub unsafe fn win_draw_end(
-    wp: *mut win_T,
+    wp: Win,
     c1: schar_T,
     draw_margin: bool,
     startrow: c_int,
@@ -833,21 +818,21 @@ pub unsafe fn win_draw_end(
 ) {
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.
-    let view_width = unsafe { (*wp).w_view_width };
-    let fdc = unsafe { compute_foldcolumn(wp, 0) };
-    let scwidth = unsafe { (*wp).w_scwidth };
+    let view_width = wp.w_view_width;
+    let fdc = unsafe { compute_foldcolumn(wp.raw(), 0) };
+    let scwidth = wp.w_scwidth;
 
     // The `win_hl_attr` lookups deliberately stay inside the loop, in
     // upstream's order: it hands out attribute ids in call order, so
     // hoisting `hl` above the three margin groups would renumber them.
     for row in startrow..endrow {
-        unsafe { grid_line_start((*wp).w_grid, row) };
+        unsafe { grid_line_start(wp.w_grid, row) };
 
         let mut n = 0;
         if draw_margin {
             if fdc > 0 {
                 n = grid_line_fill(n, view_width.min(n + fdc), schar_from_ascii(b' '), unsafe {
-                    win_hl_attr(wp, HLF_FC)
+                    win_hl_attr(wp.raw(), HLF_FC)
                 });
             }
             if scwidth > 0 {
@@ -855,31 +840,30 @@ pub unsafe fn win_draw_end(
                     n,
                     view_width.min(n + scwidth * SIGN_WIDTH as c_int),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(wp, HLF_SC) },
+                    unsafe { win_hl_attr(wp.raw(), HLF_SC) },
                 );
             }
-            if (unsafe { (*wp).w_onebuf_opt.wo_nu } != 0
-                || unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0)
+            if (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
                 && !cpo_has(CpoFlag::NUMCOL)
             {
-                let width = unsafe { number_width(wp) } + 1;
+                let width = unsafe { number_width(wp.raw()) } + 1;
                 n = grid_line_fill(
                     n,
                     view_width.min(n + width),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(wp, HLF_N) },
+                    unsafe { win_hl_attr(wp.raw(), HLF_N) },
                 );
             }
         }
 
-        let attr = unsafe { win_hl_attr(wp, hl) };
+        let attr = unsafe { win_hl_attr(wp.raw(), hl) };
         if n < view_width {
             grid_line_put_schar(n, c1, attr);
             n += 1;
         }
-        grid_line_clear_end(n, view_width, unsafe { win_bg_attr(wp) }, attr);
+        grid_line_clear_end(n, view_width, unsafe { win_bg_attr(wp.raw()) }, attr);
 
-        if unsafe { (*wp).w_onebuf_opt.wo_rl } != 0 {
+        if wp.w_onebuf_opt.wo_rl != 0 {
             grid_line_mirror(view_width);
         }
         unsafe { grid_line_flush() };

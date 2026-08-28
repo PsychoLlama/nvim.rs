@@ -47,9 +47,8 @@ impl WindowCorner {
 /// columns shift. `'statuscolumn'` is the second reason to answer true — the
 /// expression can read the sign count, so a change to it invalidates the cached
 /// width estimate even when the column itself did not move.
-pub(crate) unsafe fn win_redraw_signcols(wp: *mut win_T) -> bool {
+pub(crate) unsafe fn win_redraw_signcols(mut wp: Win) -> bool {
     // SAFETY: the caller's live window; its buffer is live with it.
-    let mut wp = unsafe { Win::new(wp) };
     let mut buf = wp.buffer();
 
     // 'signcolumn' with a range, or a 'statuscolumn' that may ask for the
@@ -104,9 +103,9 @@ pub(crate) unsafe fn win_redraw_signcols(wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `wp` must be a live window of the current layout.
-unsafe fn neighbour_frame(wp: *mut win_T, layout: c_int, before: bool) -> Option<*mut frame_T> {
+unsafe fn neighbour_frame(wp: Win, layout: c_int, before: bool) -> Option<*mut frame_T> {
     // SAFETY: walking the window layout tree on the main thread.
-    let mut fr = unsafe { (*wp).w_frame };
+    let mut fr = wp.w_frame;
     while !unsafe { (*fr).fr_parent }.is_null() {
         let sibling = if before {
             unsafe { (*fr).fr_prev }
@@ -126,13 +125,13 @@ unsafe fn neighbour_frame(wp: *mut win_T, layout: c_int, before: bool) -> Option
 ///
 /// Assumes the global statusline is enabled — without it a horizontal boundary
 /// is a status line, not a separator.
-pub(crate) unsafe fn hsep_connected(wp: *mut win_T, corner: WindowCorner) -> bool {
+pub(crate) unsafe fn hsep_connected(wp: Win, corner: WindowCorner) -> bool {
     // SAFETY: walking the window layout tree on the main thread.
     let before = corner.is_left();
     let sep_row = if corner.is_top() {
-        unsafe { (*wp).w_winrow - 1 }
+        wp.w_winrow - 1
     } else {
-        unsafe { win_endrow(wp) }
+        unsafe { win_endrow(wp.raw()) }
     };
 
     // SAFETY: walking the layout tree of the caller's live window.
@@ -166,15 +165,15 @@ pub(crate) unsafe fn hsep_connected(wp: *mut win_T, corner: WindowCorner) -> boo
 
 /// Whether window `wp`'s vertical separator at `corner` is continued by the
 /// vertical separator of the window above or below it.
-pub(crate) unsafe fn vsep_connected(wp: *mut win_T, corner: WindowCorner) -> bool {
+pub(crate) unsafe fn vsep_connected(wp: Win, corner: WindowCorner) -> bool {
     // SAFETY: walking the window layout tree on the main thread.
     // The mirror image of `hsep_connected`: "before" is up rather than
     // left, and the sibling direction is a column rather than a row.
     let before = corner.is_top();
     let sep_col = if corner.is_left() {
-        unsafe { (*wp).w_wincol - 1 }
+        wp.w_wincol - 1
     } else {
-        unsafe { win_endcol(wp) }
+        unsafe { win_endcol(wp.raw()) }
     };
 
     // SAFETY: walking the layout tree of the caller's live window.
@@ -203,33 +202,33 @@ pub(crate) unsafe fn vsep_connected(wp: *mut win_T, corner: WindowCorner) -> boo
 }
 
 /// Draw the vertical separator right of window `wp`.
-pub(crate) unsafe fn draw_vsep_win(wp: *mut win_T) {
+pub(crate) unsafe fn draw_vsep_win(wp: Win) {
     // SAFETY: a live window; the grid batch is opened and flushed per row.
-    if unsafe { (*wp).w_vsep_width } == 0 {
+    if wp.w_vsep_width == 0 {
         return;
     }
-    let attr = unsafe { win_hl_attr(wp, HLF_C) };
-    let col = unsafe { win_endcol(wp) };
-    let end_row = unsafe { win_endrow(wp) };
-    for row in unsafe { ((*wp).w_winrow)..end_row } {
+    let attr = unsafe { win_hl_attr(wp.raw(), HLF_C) };
+    let col = unsafe { win_endcol(wp.raw()) };
+    let end_row = unsafe { win_endrow(wp.raw()) };
+    for row in (wp.w_winrow)..end_row {
         unsafe { grid_line_start(default_gridview(), row) };
-        grid_line_put_schar(col, unsafe { (*wp).w_p_fcs_chars.vert }, attr);
+        grid_line_put_schar(col, wp.w_p_fcs_chars.vert, attr);
         unsafe { grid_line_flush() };
     }
 }
 
 /// Draw the horizontal separator below window `wp`.
-pub(crate) unsafe fn draw_hsep_win(wp: *mut win_T) {
+pub(crate) unsafe fn draw_hsep_win(wp: Win) {
     // SAFETY: a live window; the grid batch is opened and flushed here.
-    if unsafe { (*wp).w_hsep_height } == 0 {
+    if wp.w_hsep_height == 0 {
         return;
     }
-    unsafe { grid_line_start(default_gridview(), win_endrow(wp)) };
+    unsafe { grid_line_start(default_gridview(), win_endrow(wp.raw())) };
     grid_line_fill(
-        unsafe { (*wp).w_wincol },
-        unsafe { win_endcol(wp) },
-        unsafe { (*wp).w_p_fcs_chars.horiz },
-        unsafe { win_hl_attr(wp, HLF_C) },
+        wp.w_wincol,
+        unsafe { win_endcol(wp.raw()) },
+        wp.w_p_fcs_chars.horiz,
+        unsafe { win_hl_attr(wp.raw(), HLF_C) },
     );
     unsafe { grid_line_flush() };
 }
@@ -239,9 +238,9 @@ pub(crate) unsafe fn draw_hsep_win(wp: *mut win_T) {
 /// Two windows can be connected neither vertically nor horizontally, so if the
 /// vertical separator does not continue through the corner the horizontal one
 /// must — which is why the second half needs no test of its own.
-unsafe fn get_corner_sep_connector(wp: *mut win_T, corner: WindowCorner) -> schar_T {
+unsafe fn get_corner_sep_connector(wp: Win, corner: WindowCorner) -> schar_T {
     // SAFETY: a live window of the current layout.
-    let fcs = unsafe { &(*wp).w_p_fcs_chars };
+    let fcs = &wp.w_p_fcs_chars;
     if unsafe { vsep_connected(wp, corner) } {
         if unsafe { hsep_connected(wp, corner) } {
             fcs.verthoriz
@@ -265,29 +264,27 @@ unsafe fn get_corner_sep_connector(wp: *mut win_T, corner: WindowCorner) -> scha
 ///
 /// `update_screen` runs this for every window *after* all the window updates, so
 /// that a connector is never overwritten by a neighbour's separator.
-pub(crate) unsafe fn draw_sep_connectors_win(wp: *mut win_T) {
+pub(crate) unsafe fn draw_sep_connectors_win(wp: Win) {
     // SAFETY: a live window of the current layout; each grid batch is opened
     // and flushed here.
-    if global_stl_height() == 0
-        || !(unsafe { (*wp).w_hsep_height } == 1 || unsafe { (*wp).w_vsep_width } == 1)
-    {
+    if global_stl_height() == 0 || !(wp.w_hsep_height == 1 || wp.w_vsep_width == 1) {
         return;
     }
 
-    let hl = unsafe { win_hl_attr(wp, HLF_C) };
+    let hl = unsafe { win_hl_attr(wp.raw(), HLF_C) };
 
     // Which edges of the screen the window is on. Left and top are decided
     // by walking out to the root without finding a preceding sibling in the
     // relevant direction; right and bottom are simply "no separator there".
-    let at_bottom = unsafe { (*wp).w_hsep_height } == 0;
-    let at_right = unsafe { (*wp).w_vsep_width } == 0;
+    let at_bottom = wp.w_hsep_height == 0;
+    let at_right = wp.w_vsep_width == 0;
     let at_top = unsafe { neighbour_frame(wp, FR_COL, true) }.is_none();
     let at_left = unsafe { neighbour_frame(wp, FR_ROW, true) }.is_none();
 
-    let top = unsafe { (*wp).w_winrow } - 1;
-    let bottom = unsafe { win_endrow(wp) };
-    let left = unsafe { (*wp).w_wincol } - 1;
-    let right = unsafe { win_endcol(wp) };
+    let top = wp.w_winrow - 1;
+    let bottom = unsafe { win_endrow(wp.raw()) };
+    let left = wp.w_wincol - 1;
+    let right = unsafe { win_endcol(wp.raw()) };
 
     for (draw, row, col, corner) in [
         (!(at_top || at_left), top, left, WindowCorner::TopLeft),

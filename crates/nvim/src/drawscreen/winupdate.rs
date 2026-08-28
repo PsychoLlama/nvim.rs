@@ -19,7 +19,7 @@ use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::pos::MAXCOL;
-use crate::winlayer::Win;
+use crate::winlayer::{self, Win};
 
 /// A row index no window can reach, used as "this area is empty".
 ///
@@ -82,10 +82,10 @@ impl Regions {
     }
 
     /// Redraw every row of the window.
-    fn redraw_all(&mut self, wp: *mut win_T) {
+    fn redraw_all(&mut self, wp: Win) {
         // SAFETY: a live window.
         self.mid_start = 0;
-        self.mid_end = unsafe { (*wp).w_view_height };
+        self.mid_end = wp.w_view_height;
     }
 }
 
@@ -104,9 +104,9 @@ impl Regions {
 /// - `UPD_INVERTED_ALL` -- redraw the whole Visual area
 /// - `UPD_VALID` -- scroll for a changed `w_topline`, redraw changed text, and
 ///   redraw the lines a scroll brought in at either end.
-pub(crate) unsafe fn win_update(wp: *mut win_T) {
+pub(crate) unsafe fn win_update(wp: Win) {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut win = unsafe { Win::new(wp) };
+    let mut win = unsafe { Win::new(wp.raw()) };
     // SAFETY: a live window of the current layout, during a redraw.
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
@@ -149,17 +149,17 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
     // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
-    unsafe { decor_redraw_reset(wp, decor) };
-    unsafe { decor_providers_invoke_win(wp, decor) };
+    unsafe { decor_redraw_reset(wp.raw(), decor) };
+    unsafe { decor_providers_invoke_win(wp.raw(), decor) };
 
     unsafe { add_suspended_terminal_note(buf, decor) };
 
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
-    for win in windows_in_curtab() {
-        if unsafe { (*win).w_buffer } == buf && unsafe { win_redraw_signcols(win) } {
-            changed_line_abv_curs_win(unsafe { Win::new(win) });
-            unsafe { redraw_later(win, UPD_NOT_VALID) };
+    for win in winlayer::windows() {
+        if win.w_buffer == buf && unsafe { win_redraw_signcols(win) } {
+            changed_line_abv_curs_win(win);
+            unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
         }
     }
     unsafe { (*buf).b_signcols.last_max = (*buf).b_signcols.max };
@@ -169,7 +169,7 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
     validate_virtcol(win);
     rg.redr_type = win.w_redr_type;
 
-    unsafe { init_search_hl(wp, SearchHl::current().raw()) };
+    unsafe { init_search_hl(wp.raw(), SearchHl::current().raw()) };
 
     unsafe { clamp_skipcol(wp) };
 
@@ -178,7 +178,7 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
         || win.w_onebuf_opt.wo_rnu != 0
         || unsafe { *win.w_onebuf_opt.wo_stc } != 0
     {
-        unsafe { number_width(wp) }
+        unsafe { number_width(wp.raw()) }
     } else {
         0
     };
@@ -224,15 +224,15 @@ pub(crate) unsafe fn win_update(wp: *mut win_T) {
     unsafe { remember_visual_area(wp, buf) };
 
     let mut cursorline_fi = foldinfo_T::default();
-    unsafe { win_update_cursorline(wp, &raw mut cursorline_fi) };
-    if wp == curwin.get() {
+    unsafe { win_update_cursorline(wp.raw(), &raw mut cursorline_fi) };
+    if wp.raw() == curwin.get() {
         conceal_cursor_used.set(unsafe { conceal_cursor_line(curwin.get()) });
     }
 
-    unsafe { win_check_ns_hl(wp) };
+    unsafe { win_check_ns_hl(wp.raw()) };
 
     let mut spv = spellvars_T::default();
-    if unsafe { spell_check_window(wp) } {
+    if unsafe { spell_check_window(wp.raw()) } {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;
     }
@@ -309,29 +309,27 @@ unsafe fn add_suspended_terminal_note(buf: *mut buf_T, state: DecorStateRef) {
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn clamp_skipcol(wp: *mut win_T) {
+unsafe fn clamp_skipcol(mut wp: Win) {
     // SAFETY: a live window.
-    if unsafe { (*wp).w_skipcol } <= 0
-        || unsafe { (*wp).w_view_width } <= unsafe { win_col_off(wp) }
-    {
+    if wp.w_skipcol <= 0 || wp.w_view_width <= unsafe { win_col_off(wp.raw()) } {
         return;
     }
-    let width1 = unsafe { (*wp).w_view_width } - unsafe { win_col_off(wp) };
-    let width2 = width1 + win_col_off2(unsafe { Win::new(wp) });
+    let width1 = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
+    let width2 = width1 + win_col_off2(unsafe { Win::new(wp.raw()) });
 
     // The first screen row of a wrapped line is `width1` wide and every
     // later one `width2`, so the valid skip columns are that series.
     let mut at = 0;
     let mut step = width1;
-    while at < unsafe { (*wp).w_skipcol } {
+    while at < wp.w_skipcol {
         if at > 0 {
             step = width2;
         }
         at += step;
     }
-    if at != unsafe { (*wp).w_skipcol } {
+    if at != wp.w_skipcol {
         // Always round down; the higher value may not be valid.
-        unsafe { (*wp).w_skipcol = at - step };
+        wp.w_skipcol = at - step;
     }
 }
 
@@ -503,7 +501,7 @@ unsafe fn plan_scroll(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
         && !win.w_old_botfill;
     if !scrollable {
         // Not UPD_VALID or UPD_INVERTED: redraw all lines.
-        rg.redraw_all(win.raw());
+        rg.redraw_all(win);
         return;
     }
 
@@ -592,7 +590,7 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
     }
     // The entries the scrolled ones vacated describe lines that are gone.
     while idx >= 0 {
-        unsafe { *win.w_lines.add(idx as usize) }.wl_valid = false;
+        unsafe { (*win.w_lines.add(idx as usize)).wl_valid = false };
         idx -= 1;
     }
 }
@@ -880,19 +878,19 @@ unsafe fn visual_block_columns(mut win: Win, sel: VisualSelection) -> (colnr_T, 
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn remember_visual_area(wp: *mut win_T, buf: *mut buf_T) {
+unsafe fn remember_visual_area(mut wp: Win, buf: *mut buf_T) {
     // SAFETY: the caller's window and the global Visual state.
     if let Some(sel) = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer }) {
-        unsafe { (*wp).w_old_visual_mode = sel.mode.raw() as c_char };
-        unsafe { (*wp).w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
-        unsafe { (*wp).w_old_visual_lnum = sel.anchor.lnum };
-        unsafe { (*wp).w_old_visual_col = sel.anchor.col };
-        unsafe { (*wp).w_old_curswant = (*curwin.get()).w_curswant };
+        wp.w_old_visual_mode = sel.mode.raw() as c_char;
+        unsafe { wp.w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
+        wp.w_old_visual_lnum = sel.anchor.lnum;
+        wp.w_old_visual_col = sel.anchor.col;
+        unsafe { wp.w_old_curswant = (*curwin.get()).w_curswant };
     } else {
-        unsafe { (*wp).w_old_visual_mode = 0 };
-        unsafe { (*wp).w_old_cursor_lnum = 0 };
-        unsafe { (*wp).w_old_visual_lnum = 0 };
-        unsafe { (*wp).w_old_visual_col = 0 };
+        wp.w_old_visual_mode = 0;
+        wp.w_old_cursor_lnum = 0;
+        wp.w_old_visual_lnum = 0;
+        wp.w_old_visual_col = 0;
     }
 }
 
@@ -900,13 +898,13 @@ unsafe fn remember_visual_area(wp: *mut win_T, buf: *mut buf_T) {
 ///
 /// # Safety
 /// `wp` must be the window that was just drawn.
-unsafe fn send_win_extmarks(wp: *mut win_T) {
+unsafe fn send_win_extmarks(wp: Win) {
     // SAFETY: the caller's window; the list is filled by this redraw only.
     win_extmark_arr.with(|marks| {
         for m in marks {
             ui_call_win_extmark(
-                unsafe { (*wp).w_grid_alloc.handle } as Integer,
-                unsafe { (*wp).handle } as Window,
+                wp.w_grid_alloc.handle as Integer,
+                wp.handle as Window,
                 m.ns_id as Integer,
                 m.mark_id as Integer,
                 m.win_row as Integer,
@@ -928,7 +926,7 @@ unsafe fn send_win_extmarks(wp: *mut win_T) {
 /// # Safety
 /// `wp` must be the window that was just drawn and `buf` its buffer.
 unsafe fn finish_botline(
-    wp: *mut win_T,
+    mut wp: Win,
     buf: *mut buf_T,
     old_botline: linenr_T,
     nrwidth_before: c_int,
@@ -939,10 +937,10 @@ unsafe fn finish_botline(
     // SAFETY: the caller's window and buffer.
     // `dollar_vcol >= 0` means the cursor line is showing a `$` for a change
     // command and was not fully drawn, so its height is not known here.
-    if dollar_vcol.get() == -1 || wp != curwin.get() {
-        unsafe { (*wp).w_valid |= WinValid::BOTLINE };
-        unsafe { (*wp).w_viewport_invalid = true };
-        if wp == curwin.get() && unsafe { (*wp).w_botline } != old_botline && !RECURSIVE.get() {
+    if dollar_vcol.get() == -1 || wp.raw() != curwin.get() {
+        wp.w_valid |= WinValid::BOTLINE;
+        wp.w_viewport_invalid = true;
+        if wp.raw() == curwin.get() && wp.w_botline != old_botline && !RECURSIVE.get() {
             RECURSIVE.set(true);
             unsafe { (*curwin.get()).w_valid.clear(WinValid::TOPLINE) };
             update_topline(unsafe { Win::current() }); // may invalidate w_botline again
@@ -952,7 +950,7 @@ unsafe fn finish_botline(
                 let mod_set = unsafe { (*curbuf.get()).b_mod_set };
                 unsafe { (*curbuf.get()).b_mod_set = false };
                 curs_columns(unsafe { Win::current() }, c_int::from(true));
-                unsafe { win_update(curwin.get()) };
+                unsafe { win_update(Win::current()) };
                 must_redraw.set(0);
                 unsafe { (*curbuf.get()).b_mod_set = mod_set };
             }
@@ -960,7 +958,7 @@ unsafe fn finish_botline(
         }
     }
 
-    if nrwidth_before != unsafe { (*wp).w_nrwidth } && !unsafe { (*buf).terminal }.is_null() {
+    if nrwidth_before != wp.w_nrwidth && !unsafe { (*buf).terminal }.is_null() {
         unsafe { terminal_check_size((*buf).terminal) };
     }
 }

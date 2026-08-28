@@ -300,7 +300,7 @@ impl Cells {
         if wlv.col <= self.left_columns_width {
             unsafe {
                 win_draw_end(
-                    wp.raw(),
+                    wp,
                     schar_from_ascii(b'@'),
                     true,
                     wlv.row,

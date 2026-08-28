@@ -92,9 +92,9 @@ pub unsafe fn screenclear() {
     redraw_tabline.set(true);
     redraw_popupmenu.set(true);
     pum_invalidate();
-    for wp in windows_in_curtab() {
-        if unsafe { (*wp).w_floating } {
-            unsafe { (*wp).w_redr_type = UPD_CLEAR };
+    for mut wp in winlayer::windows() {
+        if wp.w_floating {
+            wp.w_redr_type = UPD_CLEAR;
         }
     }
     if must_redraw.get() == UPD_CLEAR {
