@@ -191,16 +191,15 @@ pub unsafe fn win_line(
     };
 
     // SAFETY: the caller's window, line and spell state.
-    unsafe {
-        let buf: *mut buf_T = (*wp).w_buffer;
+    let buf: *mut buf_T = unsafe { (*wp).w_buffer };
 
-        // The two scratch buffers the loop needs but never owns: the spell
-        // look-ahead, filled by the setup half, and the fold text.
-        let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
-        let mut fold_buf: [::core::ffi::c_char; FOLD_TEXT_LEN as usize] =
-            [0; FOLD_TEXT_LEN as usize];
+    // The two scratch buffers the loop needs but never owns: the spell
+    // look-ahead, filled by the setup half, and the fold text.
+    let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
+    let mut fold_buf: [::core::ffi::c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
 
-        let setup = prepare_line(
+    let setup = unsafe {
+        prepare_line(
             &mut wlv,
             wp,
             endrow,
@@ -208,38 +207,40 @@ pub unsafe fn win_line(
             concealed,
             spv,
             &mut nextline,
-        );
+        )
+    };
 
-        // Zeroed here rather than in the setup half so that it is zeroed only
-        // for a `:terminal` buffer; see `LineSetup::has_terminal`.
-        let mut term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize] =
-            [0; TERM_ATTRS_MAX as usize];
-        if setup.has_terminal {
+    // Zeroed here rather than in the setup half so that it is zeroed only
+    // for a `:terminal` buffer; see `LineSetup::has_terminal`.
+    let mut term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize] =
+        [0; TERM_ATTRS_MAX as usize];
+    if setup.has_terminal {
+        unsafe {
             terminal_get_line_attributes(
                 (*(*wp).w_buffer).terminal,
                 wp,
                 lnum,
                 term_attrs.as_mut_ptr(),
-            );
-        }
-
-        // `sattrs` is attached here rather than by the setup half: it points
-        // into `wlv`, which lives in this frame, and a pointer derived from
-        // the borrow the setup half takes would not outlive it.
-        let mut statuscol = setup.statuscol;
-        statuscol.sattrs = &raw mut wlv.sign_attrs as *mut SignTextAttrs;
-
-        let frame = LineFrame {
-            endrow,
-            col_rows,
-            spv,
-            statuscol: &raw mut statuscol,
-            term_attrs: term_attrs.as_ptr(),
-            nextline: nextline.as_mut_ptr(),
-            fold_buf: fold_buf.as_mut_ptr(),
+            )
         };
-        Cells::new(setup).run(&mut wlv, wp, buf, &frame)
     }
+
+    // `sattrs` is attached here rather than by the setup half: it points
+    // into `wlv`, which lives in this frame, and a pointer derived from
+    // the borrow the setup half takes would not outlive it.
+    let mut statuscol = setup.statuscol;
+    statuscol.sattrs = &raw mut wlv.sign_attrs as *mut SignTextAttrs;
+
+    let frame = LineFrame {
+        endrow,
+        col_rows,
+        spv,
+        statuscol: &raw mut statuscol,
+        term_attrs: term_attrs.as_ptr(),
+        nextline: nextline.as_mut_ptr(),
+        fold_buf: fold_buf.as_mut_ptr(),
+    };
+    unsafe { Cells::new(setup).run(&mut wlv, wp, buf, &frame) }
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so
@@ -268,65 +269,61 @@ unsafe fn wlv_put_linebuf(
 ) {
     let mut line = linebuf();
     // SAFETY: the caller's window and line buffers.
-    unsafe {
-        let grid: GridView = (*wp).w_grid;
-        let mut startcol = 0;
-        let mut clear_width = if clear_end {
+    let grid: GridView = unsafe { (*wp).w_grid };
+    let mut startcol = 0;
+    let mut clear_width = if clear_end {
+        unsafe { (*wp).w_view_width }
+    } else {
+        endcol
+    };
+
+    debug_assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
+    if unsafe { (*wp).w_onebuf_opt.wo_rl } != 0 {
+        linebuf_mirror(&mut startcol, &mut endcol, &mut clear_width, unsafe {
             (*wp).w_view_width
-        } else {
-            endcol
-        };
+        });
+        flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
+    }
 
-        debug_assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
-        if (*wp).w_onebuf_opt.wo_rl != 0 {
-            linebuf_mirror(
-                &mut startcol,
-                &mut endcol,
-                &mut clear_width,
-                (*wp).w_view_width,
-            );
-            flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
-        }
-
-        if wlv.row == 0
-            && (*wp).w_skipcol > 0
-            // Do not overwrite the 'showbreak' text with "<<<" ...
-            && *get_showbreak_value(wp) as ::core::ffi::c_int == NUL
-            // ... nor the 'listchars' "precedes" text.
-            && !((*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.prec != 0)
-        {
-            let mut off = 0;
-            if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
-                // Do not overwrite the line number either: "123 text" becomes
-                // "123<<<xt".
-                while off < (*wp).w_view_width
-                    && ascii_isdigit(
-                        schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int
-                    )
-                {
-                    off += 1;
-                }
-            }
-            let at_attr = *hl_attr_active.get().add(HLF_AT as usize) as sattr_T;
-            for _ in 0..3 {
-                if off >= (*wp).w_view_width {
-                    break;
-                }
-                if off + 1 < (*wp).w_view_width && line.chars()[off as usize + 1] == NUL as schar_T
-                {
-                    // The first half of a double-width character is being
-                    // overwritten; blank its second half.
-                    line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
-                }
-                line.chars_mut()[off as usize] = schar_from_ascii(b'<');
-                line.attrs_mut()[off as usize] = at_attr;
+    if wlv.row == 0
+        && unsafe { (*wp).w_skipcol } > 0
+        // Do not overwrite the 'showbreak' text with "<<<" ...
+        && unsafe { *get_showbreak_value(wp) } as ::core::ffi::c_int == NUL
+        // ... nor the 'listchars' "precedes" text.
+        && !(unsafe { (*wp).w_onebuf_opt.wo_list } != 0 && unsafe { (*wp).w_p_lcs_chars.prec } != 0)
+    {
+        let mut off = 0;
+        if unsafe { (*wp).w_onebuf_opt.wo_nu } != 0 && unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0 {
+            // Do not overwrite the line number either: "123 text" becomes
+            // "123<<<xt".
+            while off < unsafe { (*wp).w_view_width }
+                && ascii_isdigit(schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int)
+            {
                 off += 1;
             }
         }
+        let at_attr = unsafe { *hl_attr_active.get().add(HLF_AT as usize) } as sattr_T;
+        for _ in 0..3 {
+            if off >= unsafe { (*wp).w_view_width } {
+                break;
+            }
+            if off + 1 < unsafe { (*wp).w_view_width }
+                && line.chars()[off as usize + 1] == NUL as schar_T
+            {
+                // The first half of a double-width character is being
+                // overwritten; blank its second half.
+                line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
+            }
+            line.chars_mut()[off as usize] = schar_from_ascii(b'<');
+            line.attrs_mut()[off as usize] = at_attr;
+            off += 1;
+        }
+    }
 
-        let mut row = wlv.row;
-        let mut coloff = 0;
-        let g = grid_adjust(grid, &mut row, &mut coloff);
+    let mut row = wlv.row;
+    let mut coloff = 0;
+    let g = unsafe { grid_adjust(grid, &mut row, &mut coloff) };
+    unsafe {
         grid_put_linebuf(
             g,
             row,
@@ -342,8 +339,8 @@ unsafe fn wlv_put_linebuf(
             },
             wlv.vcol - 1,
             flags,
-        );
-    }
+        )
+    };
 }
 
 /// Tell the decoration providers that a line is about to be drawn, and ask
@@ -364,22 +361,20 @@ unsafe fn decor_providers_setup(
     wp: *mut win_T,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    unsafe {
-        let rem_vcols = if (*wp).w_onebuf_opt.wo_wrap != 0 {
-            let width = (*wp).w_view_width - win_col_off(wp);
-            let width2 = width + win_col_off2(Win::new(wp));
-            let first_row_width = if draw_from_line_start { width } else { width2 };
-            first_row_width + (rows_to_draw - 1) * width2
-        } else {
-            (*wp).w_view_width - win_col_off(wp)
-        };
+    let rem_vcols = if unsafe { (*wp).w_onebuf_opt.wo_wrap } != 0 {
+        let width = unsafe { (*wp).w_view_width } - unsafe { win_col_off(wp) };
+        let width2 = width + win_col_off2(unsafe { Win::new(wp) });
+        let first_row_width = if draw_from_line_start { width } else { width2 };
+        first_row_width + (rows_to_draw - 1) * width2
+    } else {
+        unsafe { (*wp).w_view_width - win_col_off(wp) }
+    };
 
-        // Called here because the line pointer has to be invalidated anyway.
-        decor_providers_invoke_line(wp, lnum - 1);
-        validate_virtcol(Win::new(wp));
+    // Called here because the line pointer has to be invalidated anyway.
+    unsafe { decor_providers_invoke_line(wp, lnum - 1) };
+    validate_virtcol(unsafe { Win::new(wp) });
 
-        invoke_range_next(wp, lnum, col, rem_vcols + 1)
-    }
+    unsafe { invoke_range_next(wp, lnum, col, rem_vcols + 1) }
 }
 
 /// Drive the decoration providers over the next span of a line.
@@ -396,22 +391,20 @@ unsafe fn invoke_range_next(
     col_off: colnr_T,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    unsafe {
-        let line = ml_get_buf((*wp).w_buffer, lnum);
-        let line_len = ml_get_buf_len((*wp).w_buffer, lnum);
-        let col_off = col_off.max(1);
+    let line = unsafe { ml_get_buf((*wp).w_buffer, lnum) };
+    let line_len = unsafe { ml_get_buf_len((*wp).w_buffer, lnum) };
+    let col_off = col_off.max(1);
 
-        if col_off <= line_len - begin_col {
-            let mut end_col = begin_col + col_off;
-            // Do not cut a character in half.
-            end_col += mb_off_next(line, line.offset(end_col as isize));
-            decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col);
-            validate_virtcol(Win::new(wp));
-            end_col
-        } else {
-            decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0);
-            validate_virtcol(Win::new(wp));
-            ::core::ffi::c_int::MAX
-        }
+    if col_off <= line_len - begin_col {
+        let mut end_col = begin_col + col_off;
+        // Do not cut a character in half.
+        end_col += unsafe { mb_off_next(line, line.offset(end_col as isize)) };
+        unsafe { decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col) };
+        validate_virtcol(unsafe { Win::new(wp) });
+        end_col
+    } else {
+        unsafe { decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0) };
+        validate_virtcol(unsafe { Win::new(wp) });
+        ::core::ffi::c_int::MAX
     }
 }

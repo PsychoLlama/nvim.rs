@@ -422,10 +422,8 @@ impl Cells {
         at: ::core::ffi::c_int,
     ) {
         // SAFETY: the caller's window and line.
-        unsafe {
-            self.line = ml_get_buf((*wp).w_buffer, lnum);
-            self.ptr = self.line.offset(at as isize);
-        }
+        self.line = unsafe { ml_get_buf((*wp).w_buffer, lnum) };
+        self.ptr = unsafe { self.line.offset(at as isize) };
     }
 
     // -----------------------------------------------------------------------
@@ -457,104 +455,107 @@ impl Cells {
         f: &LineFrame,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
-        unsafe {
-            let grid: GridView = (*wp).w_grid;
-            'row: loop {
-                self.has_match_conc = 0;
-                self.decor_conceal = 0;
-                self.did_decrement_ptr = false;
-                self.provider_chunk(wp, wlv.lnum, wlv.decor);
+        let grid: GridView = unsafe { (*wp).w_grid };
+        'row: loop {
+            self.has_match_conc = 0;
+            self.decor_conceal = 0;
+            self.did_decrement_ptr = false;
+            unsafe { self.provider_chunk(wp, wlv.lnum, wlv.decor) };
 
-                'row_full: {
-                    if self.columns_todo {
-                        match self.draw_columns(wlv, wp, f) {
-                            Step::Done => break 'row,
-                            Step::NextRow => continue 'row,
-                            Step::RowFull => break 'row_full,
-                            Step::Go => {}
-                        }
+            'row_full: {
+                if self.columns_todo {
+                    match unsafe { self.draw_columns(wlv, wp, f) } {
+                        Step::Done => break 'row,
+                        Step::NextRow => continue 'row,
+                        Step::RowFull => break 'row_full,
+                        Step::Go => {}
                     }
-
-                    if self.cul_screenline
-                        && wlv.filler_todo <= 0
-                        && wlv.vcol >= self.left_curline_col
-                        && wlv.vcol < self.right_curline_col
-                    {
-                        wlv.apply_cursorline_highlight(wp);
-                    }
-
-                    // Still showing the '$' of a change command: stop at the
-                    // cursor.
-                    if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= (*wp).w_virtcol {
-                        wlv.col = draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv);
-                        // Nothing after `col` is ours to clear.
-                        wlv_put_linebuf(wp, wlv, wlv.col, false, self.bg_attr, 0);
-                        // Pretend the window is finished, except that
-                        // 'cursorcolumn' still wants the rest of it.
-                        wlv.row = if (*wp).w_onebuf_opt.wo_cuc != 0 {
-                            (*wp).w_cline_row + (*wp).w_cline_height
-                        } else {
-                            self.view_height
-                        };
-                        break 'row;
-                    }
-
-                    self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
-                    if self.draw_folded && wlv.extra_todo == 0 {
-                        self.fold_attr = win_hl_attr(wp, HLF_FL);
-                        wlv.char_attr = self.fold_attr;
-                        self.decor_attr = 0;
-                    }
-
-                    self.extmark_attr = 0;
-                    if wlv.filler_todo <= 0
-                        && (self.area_highlighting || (*f.spv).spv_has_spell || self.extra_check)
-                    {
-                        self.cell_attributes(wlv, wp);
-                    }
-
-                    self.fold_text(wlv, wp, f);
-                    self.next_char(wlv, wp, f);
-                    self.correct_cursor_col(wlv, wp);
-                    self.apply_extra_attr(wlv);
-                    self.draw_precedes(wlv, wp);
-                    self.highlight_at_eol(wlv, wp);
-
-                    if self.cell_char == NUL as schar_T {
-                        self.finish_line(wlv, wp, buf, f);
-                        break 'row;
-                    }
-
-                    self.draw_extends(wlv, wp);
-                    wlv.advance_color_col(wlv.hl_vcol());
-                    self.column_highlight(wlv, wp);
-                    self.apply_line_attr_lowprio(wlv);
-                    if wlv.filler_todo <= 0 {
-                        self.prev_vcol = wlv.vcol;
-                    }
-                    self.store_cell(wlv, wp);
-                    self.advance_vcol(wlv);
-                    self.peek_decor_past_edge(wlv, wp);
                 }
 
-                if !self.row_is_full(wlv, wp) {
-                    continue 'row;
+                if self.cul_screenline
+                    && wlv.filler_todo <= 0
+                    && wlv.vcol >= self.left_curline_col
+                    && wlv.vcol < self.right_curline_col
+                {
+                    unsafe { wlv.apply_cursorline_highlight(wp) };
                 }
-                if self.finish_screen_line(wlv, wp, buf, f, grid) == Step::Done {
+
+                // Still showing the '$' of a change command: stop at the
+                // cursor.
+                if dollar_vcol.get() >= 0
+                    && self.in_curline
+                    && wlv.vcol >= unsafe { (*wp).w_virtcol }
+                {
+                    wlv.col = unsafe { draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv) };
+                    // Nothing after `col` is ours to clear.
+                    unsafe { wlv_put_linebuf(wp, wlv, wlv.col, false, self.bg_attr, 0) };
+                    // Pretend the window is finished, except that
+                    // 'cursorcolumn' still wants the rest of it.
+                    wlv.row = if unsafe { (*wp).w_onebuf_opt.wo_cuc } != 0 {
+                        unsafe { (*wp).w_cline_row + (*wp).w_cline_height }
+                    } else {
+                        self.view_height
+                    };
                     break 'row;
                 }
+
+                self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
+                if self.draw_folded && wlv.extra_todo == 0 {
+                    self.fold_attr = unsafe { win_hl_attr(wp, HLF_FL) };
+                    wlv.char_attr = self.fold_attr;
+                    self.decor_attr = 0;
+                }
+
+                self.extmark_attr = 0;
+                if wlv.filler_todo <= 0
+                    && (self.area_highlighting
+                        || unsafe { (*f.spv).spv_has_spell }
+                        || self.extra_check)
+                {
+                    unsafe { self.cell_attributes(wlv, wp) };
+                }
+
+                unsafe { self.fold_text(wlv, wp, f) };
+                unsafe { self.next_char(wlv, wp, f) };
+                unsafe { self.correct_cursor_col(wlv, wp) };
+                unsafe { self.apply_extra_attr(wlv) };
+                unsafe { self.draw_precedes(wlv, wp) };
+                unsafe { self.highlight_at_eol(wlv, wp) };
+
+                if self.cell_char == NUL as schar_T {
+                    unsafe { self.finish_line(wlv, wp, buf, f) };
+                    break 'row;
+                }
+
+                unsafe { self.draw_extends(wlv, wp) };
+                unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
+                unsafe { self.column_highlight(wlv, wp) };
+                unsafe { self.apply_line_attr_lowprio(wlv) };
+                if wlv.filler_todo <= 0 {
+                    self.prev_vcol = wlv.vcol;
+                }
+                unsafe { self.store_cell(wlv, wp) };
+                self.advance_vcol(wlv);
+                unsafe { self.peek_decor_past_edge(wlv, wp) };
             }
 
-            clear_virttext(&raw mut self.fold_vt);
-            xfree(self.virt_lines.items.cast::<::core::ffi::c_void>());
-            self.virt_lines = VirtLines {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<virt_line>(),
-            };
-            xfree(self.foldtext_free.cast::<::core::ffi::c_void>());
-            wlv.row
+            if !unsafe { self.row_is_full(wlv, wp) } {
+                continue 'row;
+            }
+            if unsafe { self.finish_screen_line(wlv, wp, buf, f, grid) } == Step::Done {
+                break 'row;
+            }
         }
+
+        unsafe { clear_virttext(&raw mut self.fold_vt) };
+        unsafe { xfree(self.virt_lines.items.cast::<::core::ffi::c_void>()) };
+        self.virt_lines = VirtLines {
+            size: 0,
+            capacity: 0,
+            items: ::core::ptr::null_mut::<virt_line>(),
+        };
+        unsafe { xfree(self.foldtext_free.cast::<::core::ffi::c_void>()) };
+        wlv.row
     }
 
     // -----------------------------------------------------------------------
@@ -573,17 +574,15 @@ impl Cells {
         decor: DecorStateRef,
     ) {
         // SAFETY: the caller's window and line.
-        unsafe {
-            if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
-                return;
-            }
-            let at = self.byte_col();
-            self.decor_provider_end_col = invoke_range_next(wp, lnum, at, 100);
-            self.refetch_line(wp, lnum, at);
-            if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
-                self.has_decor = true;
-                self.extra_check = true;
-            }
+        if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
+            return;
+        }
+        let at = self.byte_col();
+        self.decor_provider_end_col = unsafe { invoke_range_next(wp, lnum, at, 100) };
+        unsafe { self.refetch_line(wp, lnum, at) };
+        if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
+            self.has_decor = true;
+            self.extra_check = true;
         }
     }
 
@@ -598,25 +597,23 @@ impl Cells {
     /// `wp` must be a live window.
     pub(super) unsafe fn correct_cursor_col(&mut self, wlv: &WinLineVars, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            if self.did_cursor_col
-                || wlv.filler_todo > 0
-                || !self.in_curline
-                || !conceal_cursor_line(wp)
-                || !(wlv.vcol + wlv.skip_cells >= (*wp).w_virtcol
-                    || self.cell_char == NUL as schar_T)
-            {
-                return;
-            }
-            (*wp).w_wcol = wlv.col - wlv.boguscols;
-            if wlv.vcol + wlv.skip_cells < (*wp).w_virtcol {
-                // Cursor beyond the end of the line with 'virtualedit'.
-                (*wp).w_wcol += (*wp).w_virtcol - wlv.vcol - wlv.skip_cells;
-            }
-            (*wp).w_wrow = wlv.row;
-            self.did_cursor_col = true;
-            (*wp).w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
+        if self.did_cursor_col
+            || wlv.filler_todo > 0
+            || !self.in_curline
+            || !unsafe { conceal_cursor_line(wp) }
+            || !(wlv.vcol + wlv.skip_cells >= unsafe { (*wp).w_virtcol }
+                || self.cell_char == NUL as schar_T)
+        {
+            return;
         }
+        unsafe { (*wp).w_wcol = wlv.col - wlv.boguscols };
+        if wlv.vcol + wlv.skip_cells < unsafe { (*wp).w_virtcol } {
+            // Cursor beyond the end of the line with 'virtualedit'.
+            unsafe { (*wp).w_wcol += (*wp).w_virtcol - wlv.vcol - wlv.skip_cells };
+        }
+        unsafe { (*wp).w_wrow = wlv.row };
+        self.did_cursor_col = true;
+        unsafe { (*wp).w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL };
     }
 
     /// Write the cell — or, when it is being concealed or skipped over, count
@@ -626,42 +623,40 @@ impl Cells {
     /// `wp` must be a live window and `off` inside the line buffers.
     pub(super) unsafe fn store_cell(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
         // SAFETY: the caller's window; `off` is bounded by `view_width`.
-        unsafe {
-            if wlv.filler_todo > 0 {
-                // TODO(bfredl): the main render loop should get called with
-                // the virtual line chunks too, so they get line wrapping and
-                // other Nice Things.
-                return;
-            }
-            if wlv.skip_cells <= 0 {
-                let attr = if self.overflow_attr != 0 {
-                    let a = self.overflow_attr;
-                    self.overflow_attr = 0;
-                    a
-                } else {
-                    wlv.char_attr
-                };
-                put_cell(wlv.off, self.cell_char, attr, wlv.vcol);
-                if schar_cells(self.cell_char) > 1 {
-                    // A double-width character needs two screen columns; the
-                    // second carries a 0 and the same attribute.
-                    wlv.off += 1;
-                    wlv.col += 1;
-                    wlv.vcol += 1;
-                    put_cell(wlv.off, 0, attr, wlv.vcol);
-                    // When "tocol" is halfway through a character, put it at
-                    // the end of it, or highlighting would not stop.
-                    if wlv.tocol == wlv.vcol {
-                        wlv.tocol += 1;
-                    }
-                }
+        if wlv.filler_todo > 0 {
+            // TODO(bfredl): the main render loop should get called with
+            // the virtual line chunks too, so they get line wrapping and
+            // other Nice Things.
+            return;
+        }
+        if wlv.skip_cells <= 0 {
+            let attr = if self.overflow_attr != 0 {
+                let a = self.overflow_attr;
+                self.overflow_attr = 0;
+                a
+            } else {
+                wlv.char_attr
+            };
+            put_cell(wlv.off, self.cell_char, attr, wlv.vcol);
+            if unsafe { schar_cells(self.cell_char) } > 1 {
+                // A double-width character needs two screen columns; the
+                // second carries a 0 and the same attribute.
                 wlv.off += 1;
                 wlv.col += 1;
-            } else if (*wp).w_onebuf_opt.wo_cole > 0 && self.is_concealing {
-                self.skip_concealed(wlv, schar_cells(self.cell_char) > 1);
-            } else {
-                wlv.skip_cells -= 1;
+                wlv.vcol += 1;
+                put_cell(wlv.off, 0, attr, wlv.vcol);
+                // When "tocol" is halfway through a character, put it at
+                // the end of it, or highlighting would not stop.
+                if wlv.tocol == wlv.vcol {
+                    wlv.tocol += 1;
+                }
             }
+            wlv.off += 1;
+            wlv.col += 1;
+        } else if unsafe { (*wp).w_onebuf_opt.wo_cole } > 0 && self.is_concealing {
+            self.skip_concealed(wlv, unsafe { schar_cells(self.cell_char) } > 1);
+        } else {
+            wlv.skip_cells -= 1;
         }
     }
 
@@ -742,11 +737,11 @@ impl Cells {
     /// `wp` must be a live window.
     pub(super) unsafe fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, wp: *mut win_T) {
         // SAFETY: the caller's window and the redraw's decoration state.
-        unsafe {
-            if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
-                return;
-            }
-            if self.is_wrapped && wlv.extra_todo == 0 {
+        if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
+            return;
+        }
+        if self.is_wrapped && wlv.extra_todo == 0 {
+            unsafe {
                 decor_redraw_col(
                     wp,
                     self.byte_col(),
@@ -754,13 +749,15 @@ impl Cells {
                     false,
                     wlv.decor,
                     self.decor_provider_end_col - 1,
-                );
-                // Where they go has to be decided again on the next row.
-                self.decor_need_recheck = true;
-            } else if !self.is_wrapped {
-                // Without wrapping, "right_align" and "win_col" virtual texts
-                // for the whole line still have to be placed.
-                decor_recheck_draw_col(-1, true, wlv.decor);
+                )
+            };
+            // Where they go has to be decided again on the next row.
+            self.decor_need_recheck = true;
+        } else if !self.is_wrapped {
+            // Without wrapping, "right_align" and "win_col" virtual texts
+            // for the whole line still have to be placed.
+            decor_recheck_draw_col(-1, true, wlv.decor);
+            unsafe {
                 decor_redraw_col(
                     wp,
                     MAXCOL as ::core::ffi::c_int,
@@ -768,8 +765,8 @@ impl Cells {
                     true,
                     wlv.decor,
                     self.decor_provider_end_col - 1,
-                );
-            }
+                )
+            };
         }
     }
 }

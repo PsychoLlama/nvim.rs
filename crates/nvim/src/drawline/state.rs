@@ -348,12 +348,10 @@ pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
     let size = size.max(64);
     // SAFETY: the buffer is only ever reached through this function, so
     // nothing can hold the old pointer across the reallocation.
-    unsafe {
-        if extra_buf_size.get() < size {
-            xfree(extra_buf.get().cast::<::core::ffi::c_void>());
-            extra_buf.set(xmalloc(size).cast::<::core::ffi::c_char>());
-            extra_buf_size.set(size);
-        }
+    if extra_buf_size.get() < size {
+        unsafe { xfree(extra_buf.get().cast::<::core::ffi::c_void>()) };
+        extra_buf.set(unsafe { xmalloc(size) }.cast::<::core::ffi::c_char>());
+        extra_buf_size.set(size);
     }
     extra_buf.get()
 }
@@ -365,20 +363,18 @@ pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
 /// `wp` must be a live window.
 pub(crate) unsafe fn get_lcs_ext(wp: *mut win_T) -> schar_T {
     // SAFETY: the caller's window.
-    unsafe {
-        if (*wp).w_onebuf_opt.wo_wrap != 0 {
-            // With 'wrap' a line never continues past the right of the screen.
-            return NUL as schar_T;
-        }
-        if (*wp).w_onebuf_opt.wo_wrap_flags & kOptFlagInsecure as uint32_t != 0 {
-            // 'nowrap' set from a modeline: forcibly use '>'.
-            return schar_from_ascii(b'>');
-        }
-        if (*wp).w_onebuf_opt.wo_list != 0 {
-            (*wp).w_p_lcs_chars.ext
-        } else {
-            NUL as schar_T
-        }
+    if unsafe { (*wp).w_onebuf_opt.wo_wrap } != 0 {
+        // With 'wrap' a line never continues past the right of the screen.
+        return NUL as schar_T;
+    }
+    if unsafe { (*wp).w_onebuf_opt.wo_wrap_flags } & kOptFlagInsecure as uint32_t != 0 {
+        // 'nowrap' set from a modeline: forcibly use '>'.
+        return schar_from_ascii(b'>');
+    }
+    if unsafe { (*wp).w_onebuf_opt.wo_list } != 0 {
+        unsafe { (*wp).w_p_lcs_chars.ext }
+    } else {
+        NUL as schar_T
     }
 }
 
@@ -395,21 +391,19 @@ pub(crate) unsafe fn get_rightmost_vcol(
     color_cols: *const ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and terminated array.
-    unsafe {
-        let mut ret = if (*wp).w_onebuf_opt.wo_cuc != 0 {
-            (*wp).w_virtcol
-        } else {
-            0
-        };
-        if !color_cols.is_null() {
-            let mut i = 0;
-            while *color_cols.add(i) >= 0 {
-                ret = ret.max(*color_cols.add(i));
-                i += 1;
-            }
+    let mut ret = if unsafe { (*wp).w_onebuf_opt.wo_cuc } != 0 {
+        unsafe { (*wp).w_virtcol }
+    } else {
+        0
+    };
+    if !color_cols.is_null() {
+        let mut i = 0;
+        while unsafe { *color_cols.add(i) } >= 0 {
+            ret = ret.max(unsafe { *color_cols.add(i) });
+            i += 1;
         }
-        ret
     }
+    ret
 }
 
 /// The screen columns `'cursorlineopt'` "screenline" highlights between.
@@ -434,35 +428,33 @@ pub(crate) unsafe fn margin_columns_win(
     static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     // SAFETY: the caller's window.
-    unsafe {
-        let width1 = (*wp).w_view_width - win_col_off(wp);
-        let width2 = width1 + win_col_off2(Win::new(wp));
-        if SAVED_W_VIRTCOL.get() == (*wp).w_virtcol
-            && PREV_WP.get() == wp
-            && PREV_WIDTH1.get() == width1
-            && PREV_WIDTH2.get() == width2
-        {
-            return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
-        }
-
-        let (left_col, right_col) = if (*wp).w_virtcol >= width1 && width2 > 0 {
-            let past = (*wp).w_virtcol - width1;
-            (
-                past / width2 * width2 + width1,
-                width1 + (past / width2 + 1) * width2,
-            )
-        } else {
-            (0, width1)
-        };
-
-        PREV_LEFT_COL.set(left_col);
-        PREV_RIGHT_COL.set(right_col);
-        PREV_WP.set(wp);
-        PREV_WIDTH1.set(width1);
-        PREV_WIDTH2.set(width2);
-        SAVED_W_VIRTCOL.set((*wp).w_virtcol);
-        (left_col, right_col)
+    let width1 = unsafe { (*wp).w_view_width } - unsafe { win_col_off(wp) };
+    let width2 = width1 + win_col_off2(unsafe { Win::new(wp) });
+    if SAVED_W_VIRTCOL.get() == unsafe { (*wp).w_virtcol }
+        && PREV_WP.get() == wp
+        && PREV_WIDTH1.get() == width1
+        && PREV_WIDTH2.get() == width2
+    {
+        return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
     }
+
+    let (left_col, right_col) = if unsafe { (*wp).w_virtcol } >= width1 && width2 > 0 {
+        let past = unsafe { (*wp).w_virtcol } - width1;
+        (
+            past / width2 * width2 + width1,
+            width1 + (past / width2 + 1) * width2,
+        )
+    } else {
+        (0, width1)
+    };
+
+    PREV_LEFT_COL.set(left_col);
+    PREV_RIGHT_COL.set(right_col);
+    PREV_WP.set(wp);
+    PREV_WIDTH1.set(width1);
+    PREV_WIDTH2.set(width2);
+    SAVED_W_VIRTCOL.set(unsafe { (*wp).w_virtcol });
+    (left_col, right_col)
 }
 
 // ---------------------------------------------------------------------------
@@ -482,10 +474,8 @@ impl WinLineVars {
         self.linebreak_armed = false;
         // SAFETY: `grid_alloc` keeps the line buffers at least `w_view_width`
         // wide, which is the invariant every writer here relies on.
-        unsafe {
-            for i in 0..(*wp).w_view_width {
-                put_cell(i, schar_from_ascii(b' '), 0, -1);
-            }
+        for i in 0..unsafe { (*wp).w_view_width } {
+            put_cell(i, schar_from_ascii(b' '), 0, -1);
         }
     }
 
@@ -525,16 +515,14 @@ impl WinLineVars {
     pub(crate) unsafe fn advance_color_col(&mut self, vcol: ::core::ffi::c_int) {
         // SAFETY: the caller's array, walked only while its entries are
         // non-negative — the terminator stops it.
-        unsafe {
-            if self.color_cols.is_null() {
-                return;
-            }
-            while *self.color_cols >= 0 && vcol > *self.color_cols {
-                self.color_cols = self.color_cols.add(1);
-            }
-            if *self.color_cols < 0 {
-                self.color_cols = ::core::ptr::null_mut();
-            }
+        if self.color_cols.is_null() {
+            return;
+        }
+        while unsafe { *self.color_cols } >= 0 && vcol > unsafe { *self.color_cols } {
+            self.color_cols = unsafe { self.color_cols.add(1) };
+        }
+        if unsafe { *self.color_cols } < 0 {
+            self.color_cols = ::core::ptr::null_mut();
         }
     }
 
@@ -554,13 +542,11 @@ impl WinLineVars {
         attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window and array.
-        unsafe {
-            self.advance_color_col(self.vcol);
-            if !self.color_cols.is_null() && self.vcol == *self.color_cols {
-                hl_combine_attr(win_hl_attr(wp, HLF_MC), attr)
-            } else {
-                attr
-            }
+        unsafe { self.advance_color_col(self.vcol) };
+        if !self.color_cols.is_null() && self.vcol == unsafe { *self.color_cols } {
+            unsafe { hl_combine_attr(win_hl_attr(wp, HLF_MC), attr) }
+        } else {
+            attr
         }
     }
 
@@ -574,21 +560,19 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn apply_cursorline_highlight(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            self.cursorline_attr = win_hl_attr(wp, HLF_CUL);
-            let ae = syn_attr2entry(self.cursorline_attr);
-            if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
-                self.line_attr_lowprio = self.cursorline_attr;
-            } else if State.get() & MODE_INSERT == 0
-                && buf_is_quickfix(Buf::from_raw((*wp).w_buffer))
-                && qf_current_entry(Win::new(wp)) == self.lnum
-            {
-                // A quickfix window's current-entry highlight keeps its own
-                // colours; CursorLine goes underneath it.
-                self.line_attr = hl_combine_attr(self.cursorline_attr, self.line_attr);
-            } else {
-                self.line_attr = self.cursorline_attr;
-            }
+        self.cursorline_attr = unsafe { win_hl_attr(wp, HLF_CUL) };
+        let ae = syn_attr2entry(self.cursorline_attr);
+        if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
+            self.line_attr_lowprio = self.cursorline_attr;
+        } else if State.get() & MODE_INSERT == 0
+            && buf_is_quickfix(unsafe { Buf::from_raw((*wp).w_buffer) })
+            && qf_current_entry(unsafe { Win::new(wp) }) == self.lnum
+        {
+            // A quickfix window's current-entry highlight keeps its own
+            // colours; CursorLine goes underneath it.
+            self.line_attr = unsafe { hl_combine_attr(self.cursorline_attr, self.line_attr) };
+        } else {
+            self.line_attr = self.cursorline_attr;
         }
     }
 
@@ -598,18 +582,18 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn set_line_attr_for_diff(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            self.line_attr = win_hl_attr(wp, self.diff_hlf);
-            if self.cursorline_attr != 0 {
-                self.line_attr = if self.line_attr_lowprio != 0 {
+        self.line_attr = unsafe { win_hl_attr(wp, self.diff_hlf) };
+        if self.cursorline_attr != 0 {
+            self.line_attr = if self.line_attr_lowprio != 0 {
+                unsafe {
                     hl_combine_attr(
                         hl_combine_attr(self.cursorline_attr, self.line_attr),
                         hl_get_underline(),
                     )
-                } else {
-                    hl_combine_attr(self.line_attr, self.cursorline_attr)
-                };
-            }
+                }
+            } else {
+                unsafe { hl_combine_attr(self.line_attr, self.cursorline_attr) }
+            };
         }
     }
 }

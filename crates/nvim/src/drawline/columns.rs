@@ -67,38 +67,38 @@ impl WinLineVars {
         // SAFETY: the caller's buffer, and `off` is kept under the view width
         // by the loop condition.
         let mut line = linebuf();
-        unsafe {
-            let end = text.add(len);
-            let mut ptr = text;
-            while ptr < end && self.off < (*wp).w_view_width {
-                let cells = line_putchar(
+        let end = unsafe { text.add(len) };
+        let mut ptr = text;
+        while ptr < end && self.off < unsafe { (*wp).w_view_width } {
+            let cells = unsafe {
+                line_putchar(
                     (*wp).w_buffer,
                     &mut ptr,
                     &mut line.chars_mut()[self.off as usize..],
                     (*wp).w_view_width - self.off,
                     self.off,
-                );
-                let myattr = if inc_vcol {
-                    self.color_col_attr(wp, attr)
+                )
+            };
+            let myattr = if inc_vcol {
+                unsafe { self.color_col_attr(wp, attr) }
+            } else {
+                attr
+            };
+            for _ in 0..cells {
+                let vcol = if inc_vcol {
+                    let at = self.vcol;
+                    self.vcol += 1;
+                    at
+                } else if !fold_vcol.is_null() {
+                    let at = unsafe { *fold_vcol };
+                    fold_vcol = unsafe { fold_vcol.add(1) };
+                    at
                 } else {
-                    attr
+                    -1
                 };
-                for _ in 0..cells {
-                    let vcol = if inc_vcol {
-                        let at = self.vcol;
-                        self.vcol += 1;
-                        at
-                    } else if !fold_vcol.is_null() {
-                        let at = *fold_vcol;
-                        fold_vcol = fold_vcol.add(1);
-                        at
-                    } else {
-                        -1
-                    };
-                    line.attrs_mut()[self.off as usize] = myattr as sattr_T;
-                    line.vcols_mut()[self.off as usize] = vcol;
-                    self.off += 1;
-                }
+                line.attrs_mut()[self.off as usize] = myattr as sattr_T;
+                line.vcols_mut()[self.off as usize] = vcol;
+                self.off += 1;
             }
         }
     }
@@ -164,16 +164,14 @@ unsafe fn foldcolumn_sep_char(
     wp: *mut win_T,
 ) -> schar_T {
     // SAFETY: the caller's window.
-    unsafe {
-        if first_level == 1 {
-            (*wp).w_p_fcs_chars.foldsep
-        } else if (*wp).w_p_fcs_chars.foldinner != NUL as schar_T {
-            (*wp).w_p_fcs_chars.foldinner
-        } else if first_level + i <= 9 {
-            schar_from_ascii(b'0' + (first_level + i) as u8)
-        } else {
-            schar_from_ascii(b'>')
-        }
+    if first_level == 1 {
+        unsafe { (*wp).w_p_fcs_chars.foldsep }
+    } else if unsafe { (*wp).w_p_fcs_chars.foldinner } != NUL as schar_T {
+        unsafe { (*wp).w_p_fcs_chars.foldinner }
+    } else if first_level + i <= 9 {
+        schar_from_ascii(b'0' + (first_level + i) as u8)
+    } else {
+        schar_from_ascii(b'>')
     }
 }
 
@@ -195,53 +193,51 @@ unsafe fn fold_column_cells(
     is_virt: bool,
 ) -> [(schar_T, colnr_T); MAX_FOLDCOLUMN] {
     // SAFETY: the caller's window.
-    unsafe {
-        let closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
-        let level = foldinfo.fi_level;
-        // Too narrow for the nesting: start at the lowest level that fits and
-        // use digits for the depth.
-        let first_level = (level - fdc - closed as ::core::ffi::c_int + 1).max(1);
-        let closedcol = fdc.min(level);
-        // A filler line shows the fold column of the line above, so the
-        // `foldopen`/`foldclose` markers are not drawn twice. That is the
-        // same computation one level out.
-        let outer = if is_virt && foldinfo.fi_level != 0 && foldinfo.fi_lnum == lnum {
-            let outer_level = (foldinfo.fi_low_level - 1).max(0);
-            Some((outer_level, (outer_level - fdc + 1).max(1)))
-        } else {
-            None
-        };
+    let closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
+    let level = foldinfo.fi_level;
+    // Too narrow for the nesting: start at the lowest level that fits and
+    // use digits for the depth.
+    let first_level = (level - fdc - closed as ::core::ffi::c_int + 1).max(1);
+    let closedcol = fdc.min(level);
+    // A filler line shows the fold column of the line above, so the
+    // `foldopen`/`foldclose` markers are not drawn twice. That is the
+    // same computation one level out.
+    let outer = if is_virt && foldinfo.fi_level != 0 && foldinfo.fi_lnum == lnum {
+        let outer_level = (foldinfo.fi_low_level - 1).max(0);
+        Some((outer_level, (outer_level - fdc + 1).max(1)))
+    } else {
+        None
+    };
 
-        let mut cells = [(0 as schar_T, 0 as colnr_T); MAX_FOLDCOLUMN];
-        for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
-            let i = i as ::core::ffi::c_int;
-            let mut symbol = if i >= level {
+    let mut cells = [(0 as schar_T, 0 as colnr_T); MAX_FOLDCOLUMN];
+    for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
+        let i = i as ::core::ffi::c_int;
+        let mut symbol = if i >= level {
+            schar_from_ascii(b' ')
+        } else if i == closedcol - 1 && closed {
+            unsafe { (*wp).w_p_fcs_chars.foldclosed }
+        } else if foldinfo.fi_lnum == lnum && first_level + i >= foldinfo.fi_low_level {
+            unsafe { (*wp).w_p_fcs_chars.foldopen }
+        } else {
+            unsafe { foldcolumn_sep_char(first_level, i, wp) }
+        };
+        if let Some((outer_level, outer_first_level)) = outer {
+            symbol = if i >= outer_level {
                 schar_from_ascii(b' ')
-            } else if i == closedcol - 1 && closed {
-                (*wp).w_p_fcs_chars.foldclosed
-            } else if foldinfo.fi_lnum == lnum && first_level + i >= foldinfo.fi_low_level {
-                (*wp).w_p_fcs_chars.foldopen
             } else {
-                foldcolumn_sep_char(first_level, i, wp)
+                unsafe { foldcolumn_sep_char(outer_first_level, i, wp) }
             };
-            if let Some((outer_level, outer_first_level)) = outer {
-                symbol = if i >= outer_level {
-                    schar_from_ascii(b' ')
-                } else {
-                    foldcolumn_sep_char(outer_first_level, i, wp)
-                };
-            }
-            let vcol = if i >= level {
-                -1
-            } else if i == closedcol - 1 && closed {
-                -2
-            } else {
-                -3
-            };
-            *cell = (symbol, vcol);
         }
-        cells
+        let vcol = if i >= level {
+            -1
+        } else if i == closedcol - 1 && closed {
+            -2
+        } else {
+            -3
+        };
+        *cell = (symbol, vcol);
     }
+    cells
 }
 
 /// Fill a caller's arrays with the fold column, for `'statuscolumn'`'s `%C`.
@@ -259,12 +255,10 @@ pub unsafe fn fill_foldcolumn(
     out_buffer: *mut schar_T,
 ) {
     // SAFETY: the caller's window and arrays.
-    unsafe {
-        let cells = fold_column_cells(wp, foldinfo, lnum, fdc, is_virt);
-        for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
-            *out_vcol.add(i) = vcol;
-            *out_buffer.add(i) = symbol;
-        }
+    let cells = unsafe { fold_column_cells(wp, foldinfo, lnum, fdc, is_virt) };
+    for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
+        unsafe { *out_vcol.add(i) = vcol };
+        unsafe { *out_buffer.add(i) = symbol };
     }
 }
 
@@ -275,25 +269,25 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn draw_foldcolumn(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            let fdc = compute_foldcolumn(wp, 0);
-            if fdc <= 0 {
-                return;
-            }
-            let attr = win_hl_attr(
+        let fdc = unsafe { compute_foldcolumn(wp, 0) };
+        if fdc <= 0 {
+            return;
+        }
+        let attr = unsafe {
+            win_hl_attr(
                 wp,
                 if use_cursor_line_highlight(wp, self.lnum) {
                     HLF_CLF
                 } else {
                     HLF_FC
                 },
-            );
-            let is_virt = self.filler_todo > 0;
-            let cells = fold_column_cells(wp, self.foldinfo, self.lnum, fdc, is_virt);
-            for &(symbol, vcol) in cells.iter().take(fdc as usize) {
-                put_cell(self.off, symbol, attr, vcol);
-                self.off += 1;
-            }
+            )
+        };
+        let is_virt = self.filler_todo > 0;
+        let cells = unsafe { fold_column_cells(wp, self.foldinfo, self.lnum, fdc, is_virt) };
+        for &(symbol, vcol) in cells.iter().take(fdc as usize) {
+            put_cell(self.off, symbol, attr, vcol);
+            self.off += 1;
         }
     }
 }
@@ -319,60 +313,63 @@ impl WinLineVars {
         sign_idx: ::core::ffi::c_int,
     ) {
         // SAFETY: the caller's window and index.
-        unsafe {
-            let sattr = self.sign_attrs[sign_idx as usize];
-            let scl_attr = win_hl_attr(
+        let sattr = self.sign_attrs[sign_idx as usize];
+        let scl_attr = unsafe {
+            win_hl_attr(
                 wp,
                 if use_cursor_line_highlight(wp, self.lnum) {
                     HLF_CLS
                 } else {
                     HLF_SC
                 },
-            );
+            )
+        };
 
-            if sattr.text[0] == 0
-                || self.row != self.startrow + self.filler_lines
-                || self.filler_todo > 0
-            {
-                // No sign on this row. The number column never gets here:
-                // `draw_lnum_col` only asks for `nrcol` when there is a sign.
-                debug_assert!(!nrcol);
+        if sattr.text[0] == 0
+            || self.row != self.startrow + self.filler_lines
+            || self.filler_todo > 0
+        {
+            // No sign on this row. The number column never gets here:
+            // `draw_lnum_col` only asks for `nrcol` when there is a sign.
+            debug_assert!(!nrcol);
+            unsafe {
                 self.draw_col_fill(
                     schar_from_ascii(b' '),
                     SIGN_WIDTH as ::core::ffi::c_int,
                     scl_attr,
-                );
-                return;
-            }
+                )
+            };
+            return;
+        }
 
-            let fill = if nrcol {
-                number_width(wp) + 1
-            } else {
-                SIGN_WIDTH as ::core::ffi::c_int
-            };
-            let attr = if self.sign_cul_attr != 0 {
-                self.sign_cul_attr
-            } else if sattr.hl_id != 0 {
-                syn_id2attr(sattr.hl_id)
-            } else {
-                0
-            };
-            // Blank the whole column first, then overwrite the two cells the
-            // sign text occupies: in the number column the sign is drawn at
-            // the right, with the extra width padding it on the left.
+        let fill = if nrcol {
+            unsafe { number_width(wp) + 1 }
+        } else {
+            SIGN_WIDTH as ::core::ffi::c_int
+        };
+        let attr = if self.sign_cul_attr != 0 {
+            self.sign_cul_attr
+        } else if sattr.hl_id != 0 {
+            unsafe { syn_id2attr(sattr.hl_id) }
+        } else {
+            0
+        };
+        // Blank the whole column first, then overwrite the two cells the
+        // sign text occupies: in the number column the sign is drawn at
+        // the right, with the extra width padding it on the left.
+        unsafe {
             self.draw_col_fill(
                 schar_from_ascii(b' '),
                 fill,
                 hl_combine_attr(scl_attr, attr),
-            );
-            let sign_pos =
-                self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
-            debug_assert!(sign_pos >= 0);
-            let mut line = linebuf();
-            let chars = &mut line.chars_mut()[sign_pos as usize..];
-            chars[0] = sattr.text[0];
-            chars[1] = sattr.text[1];
-        }
+            )
+        };
+        let sign_pos = self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
+        debug_assert!(sign_pos >= 0);
+        let mut line = linebuf();
+        let chars = &mut line.chars_mut()[sign_pos as usize..];
+        chars[0] = sattr.text[0];
+        chars[1] = sattr.text[1];
     }
 }
 
@@ -392,25 +389,29 @@ impl WinLineVars {
 #[inline]
 unsafe fn line_number_str(wp: *mut win_T, lnum: linenr_T, buf: &mut [::core::ffi::c_char; 32]) {
     // SAFETY: the caller's window; `snprintf` is bounded by the array size.
-    unsafe {
-        let (num, fmt) = if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu == 0 {
+    let (num, fmt) =
+        if unsafe { (*wp).w_onebuf_opt.wo_nu } != 0 && unsafe { (*wp).w_onebuf_opt.wo_rnu } == 0 {
             (lnum, c"%*d ")
         } else {
-            let rel = abs(get_cursor_rel_lnum(Win::new(wp), lnum)) as linenr_T;
-            if rel == 0 && (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
+            let rel = unsafe { abs(get_cursor_rel_lnum(Win::new(wp), lnum)) } as linenr_T;
+            if rel == 0
+                && unsafe { (*wp).w_onebuf_opt.wo_nu } != 0
+                && unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
+            {
                 (lnum, c"%-*d ")
             } else {
                 (rel, c"%*d ")
             }
         };
+    unsafe {
         snprintf(
             buf.as_mut_ptr(),
             buf.len() as size_t,
             fmt.as_ptr(),
             number_width(wp),
             num,
-        );
-    }
+        )
+    };
 }
 
 impl WinLineVars {
@@ -424,8 +425,8 @@ impl WinLineVars {
     /// `wp` must be a live window.
     unsafe fn use_cursor_line_nr(&self, wp: *mut win_T) -> bool {
         // SAFETY: the caller's window.
+        let culopt = unsafe { (*wp).w_p_culopt_flags } as ::core::ffi::c_int;
         unsafe {
-            let culopt = (*wp).w_p_culopt_flags as ::core::ffi::c_int;
             (*wp).w_onebuf_opt.wo_cul != 0
                 && self.lnum == (*wp).w_cursorline
                 && culopt & kOptCuloptFlagNumber as ::core::ffi::c_int != 0
@@ -442,12 +443,12 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn line_number_attr(&mut self, wp: *mut win_T) -> ::core::ffi::c_int {
         // SAFETY: the caller's window.
-        unsafe {
-            let mut numhl_attr = self.sign_num_attr;
-            if self.n_virt_lines - self.filler_todo < self.n_virt_below {
-                // A virtual line belonging to the line above takes *its* sign
-                // numhl. Looked up once and cached: this runs per row.
-                if self.prev_num_attr == -1 {
+        let mut numhl_attr = self.sign_num_attr;
+        if self.n_virt_lines - self.filler_todo < self.n_virt_below {
+            // A virtual line belonging to the line above takes *its* sign
+            // numhl. Looked up once and cached: this runs per row.
+            if self.prev_num_attr == -1 {
+                unsafe {
                     decor_redraw_signs(
                         wp,
                         (*wp).w_buffer,
@@ -456,26 +457,30 @@ impl WinLineVars {
                         ::core::ptr::null_mut(),
                         ::core::ptr::null_mut(),
                         &raw mut self.prev_num_attr,
-                    );
-                    if self.prev_num_attr > 0 {
-                        self.prev_num_attr = syn_id2attr(self.prev_num_attr);
-                    }
+                    )
+                };
+                if self.prev_num_attr > 0 {
+                    self.prev_num_attr = unsafe { syn_id2attr(self.prev_num_attr) };
                 }
-                numhl_attr = self.prev_num_attr;
             }
-
-            let hlf = if self.use_cursor_line_nr(wp) {
-                // TODO(vim): can CursorLine stand in when CursorLineNr is unset?
-                HLF_CLN
-            } else if (*wp).w_onebuf_opt.wo_rnu != 0 && self.lnum < (*wp).w_cursor.lnum {
-                HLF_LNA
-            } else if (*wp).w_onebuf_opt.wo_rnu != 0 && self.lnum > (*wp).w_cursor.lnum {
-                HLF_LNB
-            } else {
-                HLF_N
-            };
-            hl_combine_attr(win_hl_attr(wp, hlf), numhl_attr)
+            numhl_attr = self.prev_num_attr;
         }
+
+        let hlf = if unsafe { self.use_cursor_line_nr(wp) } {
+            // TODO(vim): can CursorLine stand in when CursorLineNr is unset?
+            HLF_CLN
+        } else if unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
+            && self.lnum < unsafe { (*wp).w_cursor.lnum }
+        {
+            HLF_LNA
+        } else if unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
+            && self.lnum > unsafe { (*wp).w_cursor.lnum }
+        {
+            HLF_LNB
+        } else {
+            HLF_N
+        };
+        unsafe { hl_combine_attr(win_hl_attr(wp, hlf), numhl_attr) }
     }
 
     /// Draw the number column: the absolute or relative line number on the
@@ -486,61 +491,62 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn draw_lnum_col(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
-            if (*wp).w_onebuf_opt.wo_nu == 0 && (*wp).w_onebuf_opt.wo_rnu == 0 {
-                return;
-            }
-            if self.row != self.startrow + self.filler_lines && has_cpo_n {
-                return;
-            }
-            // With "n" in 'cpoptions' there is no number column on a wrapped
-            // line — but 'breakindent' assumes there is one anyway.
-            if has_cpo_n
-                && (*wp).w_onebuf_opt.wo_bri == 0
-                && (*wp).w_skipcol > 0
-                && self.lnum == (*wp).w_topline
-            {
-                return;
-            }
+        let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
+        if unsafe { (*wp).w_onebuf_opt.wo_nu } == 0 && unsafe { (*wp).w_onebuf_opt.wo_rnu } == 0 {
+            return;
+        }
+        if self.row != self.startrow + self.filler_lines && has_cpo_n {
+            return;
+        }
+        // With "n" in 'cpoptions' there is no number column on a wrapped
+        // line — but 'breakindent' assumes there is one anyway.
+        if has_cpo_n
+            && unsafe { (*wp).w_onebuf_opt.wo_bri } == 0
+            && unsafe { (*wp).w_skipcol } > 0
+            && self.lnum == unsafe { (*wp).w_topline }
+        {
+            return;
+        }
 
-            let first_row = self.row == self.startrow + self.filler_lines;
-            // 'signcolumn'=number: a sign on this line replaces the number.
-            if (*wp).w_minscwidth == SCL_NUM
-                && self.sign_attrs[0].text[0] != 0
-                && first_row
-                && self.filler_todo <= 0
-            {
-                self.draw_sign(true, wp, 0);
-                return;
-            }
+        let first_row = self.row == self.startrow + self.filler_lines;
+        // 'signcolumn'=number: a sign on this line replaces the number.
+        if unsafe { (*wp).w_minscwidth } == SCL_NUM
+            && self.sign_attrs[0].text[0] != 0
+            && first_row
+            && self.filler_todo <= 0
+        {
+            unsafe { self.draw_sign(true, wp, 0) };
+            return;
+        }
 
-            let width = number_width(wp) + 1;
-            let attr = self.line_number_attr(wp);
-            let both = (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0;
-            if !(first_row && ((*wp).w_skipcol == 0 || self.row > 0 || both)) {
-                // A continuation row, or the first row of a line whose top is
-                // scrolled off with 'smoothscroll': blank.
-                self.draw_col_fill(schar_from_ascii(b' '), width, attr);
-                return;
-            }
+        let width = unsafe { number_width(wp) } + 1;
+        let attr = unsafe { self.line_number_attr(wp) };
+        let both =
+            unsafe { (*wp).w_onebuf_opt.wo_nu } != 0 && unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0;
+        if !(first_row && (unsafe { (*wp).w_skipcol } == 0 || self.row > 0 || both)) {
+            // A continuation row, or the first row of a line whose top is
+            // scrolled off with 'smoothscroll': blank.
+            unsafe { self.draw_col_fill(schar_from_ascii(b' '), width, attr) };
+            return;
+        }
 
-            let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-            line_number_str(wp, self.lnum, &mut buf);
-            if (*wp).w_skipcol > 0 && self.startrow == 0 {
-                // Part of this line is scrolled off above: say so by filling
-                // the number's padding with dashes.
-                for c in buf.iter_mut() {
-                    if *c != b' ' as ::core::ffi::c_char {
-                        break;
-                    }
-                    *c = b'-' as ::core::ffi::c_char;
+        let mut buf: [::core::ffi::c_char; 32] = [0; 32];
+        unsafe { line_number_str(wp, self.lnum, &mut buf) };
+        if unsafe { (*wp).w_skipcol } > 0 && self.startrow == 0 {
+            // Part of this line is scrolled off above: say so by filling
+            // the number's padding with dashes.
+            for c in buf.iter_mut() {
+                if *c != b' ' as ::core::ffi::c_char {
+                    break;
                 }
+                *c = b'-' as ::core::ffi::c_char;
             }
-            if (*wp).w_onebuf_opt.wo_rl != 0 {
-                let num = skipwhite(buf.as_mut_ptr());
-                rl_mirror_ascii(num, skiptowhite(num));
-            }
+        }
+        if unsafe { (*wp).w_onebuf_opt.wo_rl } != 0 {
+            let num = unsafe { skipwhite(buf.as_mut_ptr()) };
+            unsafe { rl_mirror_ascii(num, skiptowhite(num)) };
+        }
+        unsafe {
             self.draw_col_buf(
                 wp,
                 buf.as_ptr(),
@@ -548,8 +554,8 @@ impl WinLineVars {
                 attr,
                 ::core::ptr::null(),
                 false,
-            );
-        }
+            )
+        };
     }
 }
 
@@ -579,135 +585,152 @@ impl WinLineVars {
         stcp: *mut statuscol_T,
     ) {
         // SAFETY: the caller's window and status-column state.
-        unsafe {
-            // Filler lines belonging to the line above report that line's
-            // number; `v:relnum` is only set on the first row of each of the
-            // three groups (filler, buffer line, virtual lines below).
-            let lnum =
-                self.lnum - (self.n_virt_lines - self.filler_todo < self.n_virt_below) as linenr_T;
-            let relnum = if virtnum == -self.filler_lines
-                || virtnum == 0
-                || virtnum == self.n_virt_below - self.filler_lines
-            {
-                abs(get_cursor_rel_lnum(Win::new(wp), lnum)) as linenr_T
-            } else {
-                -1
-            };
+        // Filler lines belonging to the line above report that line's
+        // number; `v:relnum` is only set on the first row of each of the
+        // three groups (filler, buffer line, virtual lines below).
+        let lnum =
+            self.lnum - (self.n_virt_lines - self.filler_todo < self.n_virt_below) as linenr_T;
+        let relnum = if virtnum == -self.filler_lines
+            || virtnum == 0
+            || virtnum == self.n_virt_below - self.filler_lines
+        {
+            unsafe { abs(get_cursor_rel_lnum(Win::new(wp), lnum)) as linenr_T }
+        } else {
+            -1
+        };
 
-            let mut buf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-            if (*wp).w_statuscol_line_count != (*wp).w_nrwidth_line_count {
-                // The line count changed. Estimate the full width by building
-                // with the largest line number there can be, and widen before
-                // anything is drawn.
-                (*wp).w_statuscol_line_count = (*wp).w_nrwidth_line_count;
-                set_vim_var_nr(Vv::Virtnum, 0);
-                let width = build_statuscol_str(
+        let mut buf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        if unsafe { (*wp).w_statuscol_line_count } != unsafe { (*wp).w_nrwidth_line_count } {
+            // The line count changed. Estimate the full width by building
+            // with the largest line number there can be, and widen before
+            // anything is drawn.
+            unsafe { (*wp).w_statuscol_line_count = (*wp).w_nrwidth_line_count };
+            unsafe { set_vim_var_nr(Vv::Virtnum, 0) };
+            let width = unsafe {
+                build_statuscol_str(
                     wp,
                     (*wp).w_nrwidth_line_count,
                     (*wp).w_nrwidth_line_count,
                     buf.as_mut_ptr(),
                     stcp,
-                );
-                if width > (*stcp).width {
-                    let addwidth = (width - (*stcp).width).min(MAX_STCWIDTH - (*stcp).width);
-                    (*wp).w_nrwidth += addwidth;
-                    (*wp).w_nrwidth_width = (*wp).w_nrwidth;
-                    if col_rows > 0 {
-                        // Only the columns were being redrawn; the text has to
-                        // move too now.
-                        (*wp).w_redr_statuscol = true;
-                        return;
-                    }
-                    (*stcp).width += addwidth;
-                    (*wp).w_valid.clear(WinValid::WCOL);
+                )
+            };
+            if width > unsafe { (*stcp).width } {
+                let addwidth =
+                    (width - unsafe { (*stcp).width }).min(MAX_STCWIDTH - unsafe { (*stcp).width });
+                unsafe { (*wp).w_nrwidth += addwidth };
+                unsafe { (*wp).w_nrwidth_width = (*wp).w_nrwidth };
+                if col_rows > 0 {
+                    // Only the columns were being redrawn; the text has to
+                    // move too now.
+                    unsafe { (*wp).w_redr_statuscol = true };
+                    return;
                 }
+                unsafe { (*stcp).width += addwidth };
+                unsafe { (*wp).w_valid.clear(WinValid::WCOL) };
             }
+        }
 
-            set_vim_var_nr(Vv::Virtnum, virtnum as varnumber_T);
-            let width = build_statuscol_str(wp, lnum, relnum, buf.as_mut_ptr(), stcp);
-            let was_reset = *(*wp).w_onebuf_opt.wo_stc == NUL as ::core::ffi::c_char;
-            if was_reset || (width > (*stcp).width && (*stcp).width < MAX_STCWIDTH) {
-                if was_reset {
-                    // 'statuscolumn' was reset because the expression failed.
-                    (*wp).w_nrwidth_line_count = 0;
+        unsafe { set_vim_var_nr(Vv::Virtnum, virtnum as varnumber_T) };
+        let width = unsafe { build_statuscol_str(wp, lnum, relnum, buf.as_mut_ptr(), stcp) };
+        let was_reset = unsafe { *(*wp).w_onebuf_opt.wo_stc } == NUL as ::core::ffi::c_char;
+        if was_reset
+            || (width > unsafe { (*stcp).width } && unsafe { (*stcp).width } < MAX_STCWIDTH)
+        {
+            if was_reset {
+                // 'statuscolumn' was reset because the expression failed.
+                unsafe { (*wp).w_nrwidth_line_count = 0 };
+                unsafe {
                     (*wp).w_nrwidth = ((*wp).w_onebuf_opt.wo_nu != 0
                         || (*wp).w_onebuf_opt.wo_rnu != 0)
                         as ::core::ffi::c_int
-                        * number_width(wp);
-                } else {
-                    (*wp).w_nrwidth += (width - (*stcp).width).min(MAX_STCWIDTH - (*stcp).width);
-                    (*wp).w_nrwidth_width = (*wp).w_nrwidth;
-                }
-                (*wp).w_redr_statuscol = true;
-                return;
+                        * number_width(wp)
+                };
+            } else {
+                unsafe {
+                    (*wp).w_nrwidth += (width - (*stcp).width).min(MAX_STCWIDTH - (*stcp).width)
+                };
+                unsafe { (*wp).w_nrwidth_width = (*wp).w_nrwidth };
             }
+            unsafe { (*wp).w_redr_statuscol = true };
+            return;
+        }
 
-            // Draw each segment with the highlight `build_statuscol_str`
-            // recorded for it. A `hlrec` entry marks where a new highlight
-            // *starts*, so each pass draws the text up to it and then works
-            // out the attribute the next stretch takes.
-            let scl_attr = win_hl_attr(
+        // Draw each segment with the highlight `build_statuscol_str`
+        // recorded for it. A `hlrec` entry marks where a new highlight
+        // *starts*, so each pass draws the text up to it and then works
+        // out the attribute the next stretch takes.
+        let scl_attr = unsafe {
+            win_hl_attr(
                 wp,
                 if use_cursor_line_highlight(wp, self.lnum) {
                     HLF_CLS
                 } else {
                     HLF_SC
                 },
-            );
-            let num_attr = self.line_number_attr(wp);
-            let mut cur_attr = num_attr;
-            let mut fold_vcol: *const colnr_T = ::core::ptr::null();
-            let mut transbuf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-            let mut p = buf.as_ptr();
-            let mut sp = (*stcp).hlrec;
-            while !(*sp).start.is_null() {
-                let textlen = (*sp).start.offset_from(p);
-                let translen = transstr_buf(
+            )
+        };
+        let num_attr = unsafe { self.line_number_attr(wp) };
+        let mut cur_attr = num_attr;
+        let mut fold_vcol: *const colnr_T = ::core::ptr::null();
+        let mut transbuf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        let mut p = buf.as_ptr();
+        let mut sp = unsafe { (*stcp).hlrec };
+        while !unsafe { (*sp).start }.is_null() {
+            let textlen = unsafe { (*sp).start.offset_from(p) };
+            let translen = unsafe {
+                transstr_buf(
                     p,
                     textlen as ssize_t,
                     transbuf.as_mut_ptr(),
                     MAXPATHL as size_t,
                     true,
-                );
-                self.draw_col_buf(wp, transbuf.as_ptr(), translen, cur_attr, fold_vcol, false);
-                // The sign segment takes the sign column's highlight and the
-                // number segments the number column's; the fold segment takes
-                // none, because `fill_foldcolumn` gave it its own through the
-                // user highlight below.
-                let base = if (*sp).item == STL_SIGNCOL {
-                    scl_attr
-                } else if (*sp).item == STL_FOLDCOL {
-                    0
-                } else {
-                    num_attr
-                };
-                cur_attr = hl_combine_attr(
+                )
+            };
+            unsafe {
+                self.draw_col_buf(wp, transbuf.as_ptr(), translen, cur_attr, fold_vcol, false)
+            };
+            // The sign segment takes the sign column's highlight and the
+            // number segments the number column's; the fold segment takes
+            // none, because `fill_foldcolumn` gave it its own through the
+            // user highlight below.
+            let base = if unsafe { (*sp).item } == STL_SIGNCOL {
+                scl_attr
+            } else if unsafe { (*sp).item } == STL_FOLDCOL {
+                0
+            } else {
+                num_attr
+            };
+            cur_attr = unsafe {
+                hl_combine_attr(
                     base,
                     if (*sp).userhl < 0 {
                         syn_id2attr(-(*sp).userhl)
                     } else {
                         0
                     },
-                );
-                fold_vcol = if (*sp).item == STL_FOLDCOL {
-                    (&raw const (*stcp).fold_vcol).cast::<colnr_T>()
-                } else {
-                    ::core::ptr::null()
-                };
-                p = (*sp).start;
-                sp = sp.add(1);
-            }
-            let len = strlen(buf.as_ptr());
-            let translen = transstr_buf(
+                )
+            };
+            fold_vcol = if unsafe { (*sp).item } == STL_FOLDCOL {
+                unsafe { &raw const (*stcp).fold_vcol }.cast::<colnr_T>()
+            } else {
+                ::core::ptr::null()
+            };
+            p = unsafe { (*sp).start };
+            sp = unsafe { sp.add(1) };
+        }
+        let len = unsafe { strlen(buf.as_ptr()) };
+        let translen = unsafe {
+            transstr_buf(
                 p,
                 buf.as_ptr().add(len as usize).offset_from(p) as ssize_t,
                 transbuf.as_mut_ptr(),
                 MAXPATHL as size_t,
                 true,
-            );
-            self.draw_col_buf(wp, transbuf.as_ptr(), translen, cur_attr, fold_vcol, false);
-            self.draw_col_fill(schar_from_ascii(b' '), (*stcp).width - width, cur_attr);
-        }
+            )
+        };
+        unsafe { self.draw_col_buf(wp, transbuf.as_ptr(), translen, cur_attr, fold_vcol, false) };
+        unsafe { self.draw_col_fill(schar_from_ascii(b' '), (*stcp).width - width, cur_attr) };
     }
 }
 
@@ -722,52 +745,50 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn handle_breakindent(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            if (*wp).w_onebuf_opt.wo_bri != 0
-                && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
-            {
-                let attr = if self.diff_hlf != HLF_NONE {
-                    win_hl_attr(wp, self.diff_hlf)
-                } else {
-                    0
-                };
-                let mut num = get_breakindent_win(wp, ml_get_buf((*wp).w_buffer, self.lnum));
-                if self.row == self.startrow {
-                    // The first row of a line whose top is scrolled off: the
-                    // indent is measured from the second row's left edge.
-                    num -= win_col_off2(Win::new(wp));
-                    if self.extra_todo < 0 {
-                        num = 0;
-                    }
-                }
-
-                let vcol_before = self.vcol;
-                for _ in 0..num {
-                    // These really are vcols: the indent counts as part of the
-                    // line for 'colorcolumn' and for the highlighted area.
-                    let myattr = self.color_col_attr(wp, attr);
-                    put_cell(self.off, schar_from_ascii(b' '), myattr, self.vcol);
-                    self.vcol += 1;
-                    self.off += 1;
-                }
-
-                // Move the start and end of the highlighted area past the
-                // indent. The end needs it when 'linebreak' is also set.
-                if self.fromcol >= vcol_before && self.fromcol < self.vcol {
-                    self.fromcol = self.vcol;
-                }
-                if self.tocol == vcol_before {
-                    self.tocol = self.vcol;
+        if unsafe { (*wp).w_onebuf_opt.wo_bri } != 0
+            && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
+        {
+            let attr = if self.diff_hlf != HLF_NONE {
+                unsafe { win_hl_attr(wp, self.diff_hlf) }
+            } else {
+                0
+            };
+            let mut num = unsafe { get_breakindent_win(wp, ml_get_buf((*wp).w_buffer, self.lnum)) };
+            if self.row == self.startrow {
+                // The first row of a line whose top is scrolled off: the
+                // indent is measured from the second row's left edge.
+                num -= win_col_off2(unsafe { Win::new(wp) });
+                if self.extra_todo < 0 {
+                    num = 0;
                 }
             }
 
-            if (*wp).w_skipcol > 0
-                && self.startrow == 0
-                && (*wp).w_onebuf_opt.wo_wrap != 0
-                && (*wp).w_briopt_sbr
-            {
-                self.need_showbreak = false;
+            let vcol_before = self.vcol;
+            for _ in 0..num {
+                // These really are vcols: the indent counts as part of the
+                // line for 'colorcolumn' and for the highlighted area.
+                let myattr = unsafe { self.color_col_attr(wp, attr) };
+                put_cell(self.off, schar_from_ascii(b' '), myattr, self.vcol);
+                self.vcol += 1;
+                self.off += 1;
             }
+
+            // Move the start and end of the highlighted area past the
+            // indent. The end needs it when 'linebreak' is also set.
+            if self.fromcol >= vcol_before && self.fromcol < self.vcol {
+                self.fromcol = self.vcol;
+            }
+            if self.tocol == vcol_before {
+                self.tocol = self.vcol;
+            }
+        }
+
+        if unsafe { (*wp).w_skipcol } > 0
+            && self.startrow == 0
+            && unsafe { (*wp).w_onebuf_opt.wo_wrap } != 0
+            && unsafe { (*wp).w_briopt_sbr }
+        {
+            self.need_showbreak = false;
         }
     }
 
@@ -778,48 +799,48 @@ impl WinLineVars {
     /// `wp` must be a live window.
     pub(crate) unsafe fn handle_showbreak_and_filler(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
-        unsafe {
-            let remaining = (*wp).w_view_width - self.off;
-            if self.filler_todo > self.filler_lines - self.n_virt_lines {
-                // A virtual line: its text is drawn by the decoration code, so
-                // all this owes is the background.
-                // TODO(bfredl): check this doesn't inhibit TUI-style
-                //               clear-to-end-of-line.
-                self.draw_col_fill(schar_from_ascii(b' '), remaining, 0);
-            } else if self.filler_todo > 0 {
-                // A "deleted" diff line.
+        let remaining = unsafe { (*wp).w_view_width } - self.off;
+        if self.filler_todo > self.filler_lines - self.n_virt_lines {
+            // A virtual line: its text is drawn by the decoration code, so
+            // all this owes is the background.
+            // TODO(bfredl): check this doesn't inhibit TUI-style
+            //               clear-to-end-of-line.
+            unsafe { self.draw_col_fill(schar_from_ascii(b' '), remaining, 0) };
+        } else if self.filler_todo > 0 {
+            // A "deleted" diff line.
+            unsafe {
                 self.draw_col_fill(
                     (*wp).w_p_fcs_chars.diff,
                     remaining,
                     win_hl_attr(wp, HLF_DED),
-                );
-            }
+                )
+            };
+        }
 
-            let sbr = get_showbreak_value(wp);
-            if *sbr != NUL as ::core::ffi::c_char && self.need_showbreak {
-                // 'showbreak' combined with 'cursorline', 'showbreak' winning.
-                let attr = hl_combine_attr(self.cursorline_attr, win_hl_attr(wp, HLF_AT));
-                let vcol_before = self.vcol;
-                self.draw_col_buf(wp, sbr, strlen(sbr), attr, ::core::ptr::null(), true);
-                self.showbreak_vcol = self.vcol;
+        let sbr = unsafe { get_showbreak_value(wp) };
+        if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
+            // 'showbreak' combined with 'cursorline', 'showbreak' winning.
+            let attr = unsafe { hl_combine_attr(self.cursorline_attr, win_hl_attr(wp, HLF_AT)) };
+            let vcol_before = self.vcol;
+            unsafe { self.draw_col_buf(wp, sbr, strlen(sbr), attr, ::core::ptr::null(), true) };
+            self.showbreak_vcol = self.vcol;
 
-                // As in `handle_breakindent`: move the highlighted area past
-                // what was just drawn.
-                if self.fromcol >= vcol_before && self.fromcol < self.vcol {
-                    self.fromcol = self.vcol;
-                }
-                if self.tocol == vcol_before {
-                    self.tocol = self.vcol;
-                }
+            // As in `handle_breakindent`: move the highlighted area past
+            // what was just drawn.
+            if self.fromcol >= vcol_before && self.fromcol < self.vcol {
+                self.fromcol = self.vcol;
             }
+            if self.tocol == vcol_before {
+                self.tocol = self.vcol;
+            }
+        }
 
-            if (*wp).w_skipcol == 0
-                || self.startrow > 0
-                || (*wp).w_onebuf_opt.wo_wrap == 0
-                || !(*wp).w_briopt_sbr
-            {
-                self.need_showbreak = false;
-            }
+        if unsafe { (*wp).w_skipcol } == 0
+            || self.startrow > 0
+            || unsafe { (*wp).w_onebuf_opt.wo_wrap } == 0
+            || !unsafe { (*wp).w_briopt_sbr }
+        {
+            self.need_showbreak = false;
         }
     }
 }
