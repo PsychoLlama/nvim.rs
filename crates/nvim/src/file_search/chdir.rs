@@ -27,65 +27,69 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
     cause: CdCause,
     pre: bool,
 ) {
+    // A DirChanged autocommand that changes directory itself must not
+    // fire this again.
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
+
+    let event = if pre {
+        EVENT_DIRCHANGEDPRE
+    } else {
+        EVENT_DIRCHANGED
+    } as event_T;
+    if RECURSIVE.get() || !has_event(event) {
+        return;
+    }
+    RECURSIVE.set(true);
+
+    let scope_name: &CStr = match scope {
+        kCdScopeGlobal => c"global",
+        kCdScopeTabpage => c"tabpage",
+        kCdScopeWindow => c"window",
+        // "Should never happen." Any other value falls through upstream's
+        // switch, leaving the buffer it would have named unwritten.
+        kCdScopeInvalid => unsafe { abort() },
+        _ => c"",
+    };
+    let pattern: &CStr = match cause {
+        kCdCauseAuto => c"auto",
+        kCdCauseOther => unsafe { abort() }, // "Should never happen."
+        _ => scope_name,                     // manual, or following a window change
+    };
+
+    let mut saved = save_v_event_T::default();
+    let dict = unsafe { get_v_event(&raw mut saved) };
+    let key: &CStr = if pre { c"directory" } else { c"cwd" };
+    unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), new_dir) };
     unsafe {
-        // A DirChanged autocommand that changes directory itself must not
-        // fire this again.
-        static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
-
-        let event = if pre {
-            EVENT_DIRCHANGEDPRE
-        } else {
-            EVENT_DIRCHANGED
-        } as event_T;
-        if RECURSIVE.get() || !has_event(event) {
-            return;
-        }
-        RECURSIVE.set(true);
-
-        let scope_name: &CStr = match scope {
-            kCdScopeGlobal => c"global",
-            kCdScopeTabpage => c"tabpage",
-            kCdScopeWindow => c"window",
-            // "Should never happen." Any other value falls through upstream's
-            // switch, leaving the buffer it would have named unwritten.
-            kCdScopeInvalid => abort(),
-            _ => c"",
-        };
-        let pattern: &CStr = match cause {
-            kCdCauseAuto => c"auto",
-            kCdCauseOther => abort(), // "Should never happen."
-            _ => scope_name,          // manual, or following a window change
-        };
-
-        let mut saved = save_v_event_T::default();
-        let dict = get_v_event(&raw mut saved);
-        let key: &CStr = if pre { c"directory" } else { c"cwd" };
-        tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), new_dir);
         tv_dict_add_str(
             dict,
             c"scope".as_ptr(),
             c"scope".count_bytes(),
             scope_name.as_ptr().cast_mut(),
-        );
+        )
+    };
+    unsafe {
         tv_dict_add_bool(
             dict,
             c"changed_window".as_ptr(),
             c"changed_window".count_bytes(),
             (cause == kCdCauseWindow) as BoolVarValue,
-        );
-        tv_dict_set_keys_readonly(dict);
+        )
+    };
+    unsafe { tv_dict_set_keys_readonly(dict) };
 
+    unsafe {
         apply_autocmds(
             event,
             pattern.as_ptr().cast_mut(),
             new_dir,
             false,
             curbuf.get(),
-        );
+        )
+    };
 
-        restore_v_event(dict, &raw mut saved);
-        RECURSIVE.set(false);
-    }
+    unsafe { restore_v_event(dict, &raw mut saved) };
+    RECURSIVE.set(false);
 }
 
 /// Change to the directory holding `fname`.
@@ -95,54 +99,52 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
 /// @return  OK or FAIL
 pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> c_int {
     let mut cwd = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        let mut dir = [0 as c_char; MAXPATHL as usize];
-        xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL as usize);
-        *path_tail_with_sep(dir.as_mut_ptr()) = 0;
+    let mut dir = [0 as c_char; MAXPATHL as usize];
+    unsafe { xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL as usize) };
+    unsafe { *path_tail_with_sep(dir.as_mut_ptr()) = 0 };
 
-        let name_buff = cwd.as_mut_ptr();
-        if os_dirname(name_buff, MAXPATHL as usize) != OK {
-            *name_buff = 0;
-        }
-        if pathcmp(dir.as_ptr(), name_buff, -1) == 0 {
-            return OK; // nothing to do
-        }
-
-        let announce = cause != kCdCauseOther;
-        if announce {
-            do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, true);
-        }
-        if os_chdir(dir.as_ptr()) != 0 {
-            return FAIL;
-        }
-        if announce {
-            do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, false);
-        }
-        OK
+    let name_buff = cwd.as_mut_ptr();
+    if unsafe { os_dirname(name_buff, MAXPATHL as usize) } != OK {
+        unsafe { *name_buff = 0 };
     }
+    if unsafe { pathcmp(dir.as_ptr(), name_buff, -1) } == 0 {
+        return OK; // nothing to do
+    }
+
+    let announce = cause != kCdCauseOther;
+    if announce {
+        unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, true) };
+    }
+    if unsafe { os_chdir(dir.as_ptr()) } != 0 {
+        return FAIL;
+    }
+    if announce {
+        unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, false) };
+    }
+    OK
 }
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.
 pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
-    unsafe {
-        let mut file_to_find: *mut c_char = ptr::null_mut();
-        let mut search_ctx: *mut c_char = ptr::null_mut();
-        let dir_name = find_directory_in_path(
+    let mut file_to_find: *mut c_char = ptr::null_mut();
+    let mut search_ctx: *mut c_char = ptr::null_mut();
+    let dir_name = unsafe {
+        find_directory_in_path(
             new_dir,
             strlen(new_dir),
             FileNameOpts::MESS,
             (*curbuf.get()).b_ffname,
             &raw mut file_to_find,
             &raw mut search_ctx,
-        );
-        xfree(file_to_find.cast());
-        vim_findfile_cleanup(search_ctx.cast());
+        )
+    };
+    unsafe { xfree(file_to_find.cast()) };
+    unsafe { vim_findfile_cleanup(search_ctx.cast()) };
 
-        if dir_name.is_null() {
-            return -1;
-        }
-        let r = os_chdir(dir_name);
-        xfree(dir_name.cast());
-        r
+    if dir_name.is_null() {
+        return -1;
     }
+    let r = unsafe { os_chdir(dir_name) };
+    unsafe { xfree(dir_name.cast()) };
+    r
 }

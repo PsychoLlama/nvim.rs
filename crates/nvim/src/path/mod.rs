@@ -125,17 +125,15 @@ pub const ENV_SEPCHAR: c_int = ':' as c_int;
 /// # Safety
 /// `fname` must be a NUL-terminated string, or NULL.
 pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
-    unsafe {
-        if fname.is_null() {
-            return core::ptr::null_mut();
-        }
-        let buf: *mut c_char = xmalloc(MAXPATHL as size_t).cast();
-        if vim_full_name(fname, buf, MAXPATHL as size_t, force) == FAIL {
-            xfree(buf.cast());
-            return xstrdup(fname);
-        }
-        buf
+    if fname.is_null() {
+        return core::ptr::null_mut();
     }
+    let buf: *mut c_char = unsafe { xmalloc(MAXPATHL as size_t) }.cast();
+    if unsafe { vim_full_name(fname, buf, MAXPATHL as size_t, force) } == FAIL {
+        unsafe { xfree(buf.cast()) };
+        return unsafe { xstrdup(fname) };
+    }
+    buf
 }
 
 /// [`full_name_save`] for a name that may already be absolute, in which case
@@ -144,12 +142,10 @@ pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
 /// # Safety
 /// `name` must be a NUL-terminated string.
 pub unsafe fn save_abs_path(name: *const c_char) -> *mut c_char {
-    unsafe {
-        if path_is_absolute(name) {
-            xstrdup(name)
-        } else {
-            full_name_save(name, true)
-        }
+    if unsafe { path_is_absolute(name) } {
+        unsafe { xstrdup(name) }
+    } else {
+        unsafe { full_name_save(name, true) }
     }
 }
 
@@ -183,14 +179,12 @@ impl Simplify<'_> {
     /// # Safety
     /// `at` must index into the name.
     unsafe fn past_separators(&self, mut at: usize) -> usize {
-        unsafe {
-            while vim_ispathsep(self.name[at] as c_int) {
-                // A separator with a composing character after it is one
-                // character, and upstream steps over both.
-                at += utfc_ptr2len(self.name.as_ptr().add(at).cast()) as usize;
-            }
-            at
+        while vim_ispathsep(self.name[at] as c_int) {
+            // A separator with a composing character after it is one
+            // character, and upstream steps over both.
+            at += unsafe { utfc_ptr2len(self.name.as_ptr().add(at).cast()) } as usize;
         }
+        at
     }
 
     /// Handle the `".."` at `p`, answering where to carry on from.
@@ -198,51 +192,49 @@ impl Simplify<'_> {
     /// # Safety
     /// `p` must index the `".."`.
     unsafe fn strip_parent(&mut self, mut p: usize) -> usize {
-        unsafe {
-            // Past the ".." and any separators after it.
-            let mut tail = self.past_separators(p + 2);
+        // Past the ".." and any separators after it.
+        let mut tail = unsafe { self.past_separators(p + 2) };
 
-            if self.components > 0 {
-                if self.can_strip(&mut p, tail) {
-                    // Strip the component before it. If that would leave
-                    // nothing and there is no trailing separator, leave a
-                    // single "." instead.
-                    if p == self.start && self.relative && self.name[tail - 1] == b'.' {
-                        self.name[p] = b'.';
-                        self.name[p + 1] = 0;
-                        // Upstream does not move the end of the name here,
-                        // so a name that simplifies to "." answers the
-                        // length it had before. Preserved: the walk stops at
-                        // the NUL just written, so nothing else reads it.
-                        p += 1;
-                    } else {
-                        // A component is left before it, which can lose its
-                        // trailing separator as well.
-                        if p > self.start && self.name[tail - 1] == b'.' {
-                            p -= 1;
-                        }
-                        self.remove(p, tail);
-                    }
-                    self.components -= 1;
+        if self.components > 0 {
+            if unsafe { self.can_strip(&mut p, tail) } {
+                // Strip the component before it. If that would leave
+                // nothing and there is no trailing separator, leave a
+                // single "." instead.
+                if p == self.start && self.relative && self.name[tail - 1] == b'.' {
+                    self.name[p] = b'.';
+                    self.name[p + 1] = 0;
+                    // Upstream does not move the end of the name here,
+                    // so a name that simplifies to "." answers the
+                    // length it had before. Preserved: the walk stops at
+                    // the NUL just written, so nothing else reads it.
+                    p += 1;
                 } else {
-                    // Skip the ".." and start counting again: nothing before
-                    // it may be stripped either.
-                    p = tail;
-                    self.components = 0;
+                    // A component is left before it, which can lose its
+                    // trailing separator as well.
+                    if p > self.start && self.name[tail - 1] == b'.' {
+                        p -= 1;
+                    }
+                    self.remove(p, tail);
                 }
-            } else if p == self.start && !self.relative {
-                // A leading "/.." names the root, which is already there.
-                self.remove(p, tail);
+                self.components -= 1;
             } else {
-                if p == self.start + 2 && self.name[p - 2] == b'.' {
-                    // A leading "./" before a ".." says nothing.
-                    self.remove(p - 2, p);
-                    tail -= 2;
-                }
+                // Skip the ".." and start counting again: nothing before
+                // it may be stripped either.
                 p = tail;
+                self.components = 0;
             }
-            p
+        } else if p == self.start && !self.relative {
+            // A leading "/.." names the root, which is already there.
+            self.remove(p, tail);
+        } else {
+            if p == self.start + 2 && self.name[p - 2] == b'.' {
+                // A leading "./" before a ".." says nothing.
+                self.remove(p - 2, p);
+                tail -= 2;
+            }
+            p = tail;
         }
+        p
     }
 
     /// May the component before `p` be stripped by a `".."`? Moves `p` back
@@ -252,52 +244,55 @@ impl Simplify<'_> {
     /// `p` must index a `".."` that a component and a separator precede, and
     /// `tail` must index past it.
     unsafe fn can_strip(&mut self, p: &mut usize, tail: usize) -> bool {
-        unsafe {
-            if self.stripping_disabled {
-                return false;
-            }
-            let filename: *mut c_char = self.name.as_mut_ptr().cast();
-            let mut file_info = FileInfo::default();
-
-            // A component that does not exist is stripped without further
-            // thought — and a symlink to a name that does not exist counts
-            // as not existing.
-            let exists =
-                self.terminated_at(*p - 1, |name| os_fileinfo_link(name, &raw mut file_info));
-
-            // Back to the start of the component being stripped.
-            *p -= 1;
-            while *p > self.start && after_pathsep(filename, filename.add(*p)) == 0 {
-                // MB_PTR_BACK: to the head of the character before this one.
-                *p -= utf_head_off(filename, filename.add(*p - 1)) as usize + 1;
-            }
-            if !exists {
-                return true;
-            }
-
-            // The component does exist. Stripping it may still change what
-            // the name means, so ask the file system about the unstripped
-            // name. That can fail when the component is not a searchable
-            // directory — a regular file, say — since the trailing "/.."
-            // cannot be applied then; the name is wrong, and later
-            // components are left alone too.
-            if !self.terminated_at(tail, |name| os_fileinfo(name, &raw mut file_info)) {
-                self.stripping_disabled = true;
-                return false;
-            }
-
-            // That test passes for a symlink to a searchable directory too,
-            // and then the directory's parent must be the same file as the
-            // stripped name — which does exist, being the component's own
-            // parent.
-            let mut new_file_info = FileInfo::default();
-            if *p == self.start && self.relative {
-                os_fileinfo(c".".as_ptr(), &raw mut new_file_info);
-            } else {
-                self.terminated_at(*p, |name| os_fileinfo(name, &raw mut new_file_info));
-            }
-            os_fileinfo_id_equal(&raw mut file_info, &raw mut new_file_info)
+        if self.stripping_disabled {
+            return false;
         }
+        let filename: *mut c_char = self.name.as_mut_ptr().cast();
+        let mut file_info = FileInfo::default();
+
+        // A component that does not exist is stripped without further
+        // thought — and a symlink to a name that does not exist counts
+        // as not existing.
+        let exists = self.terminated_at(*p - 1, |name| unsafe {
+            os_fileinfo_link(name, &raw mut file_info)
+        });
+
+        // Back to the start of the component being stripped.
+        *p -= 1;
+        while *p > self.start && unsafe { after_pathsep(filename, filename.add(*p)) } == 0 {
+            // MB_PTR_BACK: to the head of the character before this one.
+            *p -= unsafe { utf_head_off(filename, filename.add(*p - 1)) } as usize + 1;
+        }
+        if !exists {
+            return true;
+        }
+
+        // The component does exist. Stripping it may still change what
+        // the name means, so ask the file system about the unstripped
+        // name. That can fail when the component is not a searchable
+        // directory — a regular file, say — since the trailing "/.."
+        // cannot be applied then; the name is wrong, and later
+        // components are left alone too.
+        if !self.terminated_at(tail, |name| unsafe {
+            os_fileinfo(name, &raw mut file_info)
+        }) {
+            self.stripping_disabled = true;
+            return false;
+        }
+
+        // That test passes for a symlink to a searchable directory too,
+        // and then the directory's parent must be the same file as the
+        // stripped name — which does exist, being the component's own
+        // parent.
+        let mut new_file_info = FileInfo::default();
+        if *p == self.start && self.relative {
+            unsafe { os_fileinfo(c".".as_ptr(), &raw mut new_file_info) };
+        } else {
+            self.terminated_at(*p, |name| unsafe {
+                os_fileinfo(name, &raw mut new_file_info)
+            });
+        }
+        unsafe { os_fileinfo_id_equal(&raw mut file_info, &raw mut new_file_info) }
     }
 
     /// Ask `question` about the name cut short at `at`, which is put back
@@ -322,76 +317,75 @@ impl Simplify<'_> {
 /// # Safety
 /// `filename` must be a writable NUL-terminated string.
 pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
-    unsafe {
-        let len = CStr::from_ptr(filename).to_bytes().len();
-        let mut s = Simplify {
-            name: core::slice::from_raw_parts_mut(filename.cast::<u8>(), len + 1),
-            end: len,
-            start: 0,
-            relative: true,
-            components: 0,
-            stripping_disabled: false,
-        };
+    let len = unsafe { CStr::from_ptr(filename) }.to_bytes().len();
+    let mut s = Simplify {
+        name: unsafe { core::slice::from_raw_parts_mut(filename.cast::<u8>(), len + 1) },
+        end: len,
+        start: 0,
+        relative: true,
+        components: 0,
+        stripping_disabled: false,
+    };
 
-        let mut p = 0;
-        if vim_ispathsep(s.name[0] as c_int) {
-            s.relative = false;
-            while vim_ispathsep(s.name[p] as c_int) {
-                p += 1;
-            }
+    let mut p = 0;
+    if vim_ispathsep(s.name[0] as c_int) {
+        s.relative = false;
+        while vim_ispathsep(s.name[p] as c_int) {
+            p += 1;
         }
-        // Where the path starts, after "/" or "///".
-        s.start = p;
-        // Posix says that "//path" is unchanged but "///path" is "/path".
-        if s.start > 2 {
-            s.remove(1, p);
-            p = 1;
-            s.start = 1;
-        }
-
-        loop {
-            // `p` is now at the character after a single separator, or at
-            // the start of the path.
-            if vim_ispathsep(s.name[p] as c_int) {
-                // A duplicate separator.
-                s.remove(p, p + 1);
-            } else if s.name[p] == b'.'
-                && (vim_ispathsep(s.name[p + 1] as c_int) || s.name[p + 1] == 0)
-            {
-                if p == s.start && s.relative {
-                    // Keep a single "." or a leading "./".
-                    p += 1 + usize::from(s.name[p + 1] != 0);
-                } else {
-                    // Strip "./" or ".///". At the end of the name, with no
-                    // trailing separator, strip the "/." after the start —
-                    // or the "." alone at the start of an absolute name.
-                    let mut tail = p + 1;
-                    if s.name[p + 1] != 0 {
-                        tail = s.past_separators(tail);
-                    } else if p > s.start {
-                        p -= 1;
-                    }
-                    s.remove(p, tail);
-                }
-            } else if s.name[p] == b'.'
-                && s.name[p + 1] == b'.'
-                && (vim_ispathsep(s.name[p + 2] as c_int) || s.name[p + 2] == 0)
-            {
-                p = s.strip_parent(p);
-            } else {
-                // A simple path component: on past the separator after it.
-                // Everything here works through `s.name`; `filename` itself
-                // is not touched again, so the borrow stays whole.
-                s.components += 1;
-                let base = s.name.as_ptr().cast::<c_char>();
-                p = path_next_component(base.add(p)).offset_from(base) as usize;
-            }
-            if s.name[p] == 0 {
-                break;
-            }
-        }
-        s.end as size_t
     }
+    // Where the path starts, after "/" or "///".
+    s.start = p;
+    // Posix says that "//path" is unchanged but "///path" is "/path".
+    if s.start > 2 {
+        s.remove(1, p);
+        p = 1;
+        s.start = 1;
+    }
+
+    loop {
+        // `p` is now at the character after a single separator, or at
+        // the start of the path.
+        if vim_ispathsep(s.name[p] as c_int) {
+            // A duplicate separator.
+            s.remove(p, p + 1);
+        } else if s.name[p] == b'.' && (vim_ispathsep(s.name[p + 1] as c_int) || s.name[p + 1] == 0)
+        {
+            if p == s.start && s.relative {
+                // Keep a single "." or a leading "./".
+                p += 1 + usize::from(s.name[p + 1] != 0);
+            } else {
+                // Strip "./" or ".///". At the end of the name, with no
+                // trailing separator, strip the "/." after the start —
+                // or the "." alone at the start of an absolute name.
+                let mut tail = p + 1;
+                if s.name[p + 1] != 0 {
+                    tail = unsafe { s.past_separators(tail) };
+                } else if p > s.start {
+                    p -= 1;
+                }
+                s.remove(p, tail);
+            }
+        } else if s.name[p] == b'.'
+            && s.name[p + 1] == b'.'
+            && (vim_ispathsep(s.name[p + 2] as c_int) || s.name[p + 2] == 0)
+        {
+            p = unsafe { s.strip_parent(p) };
+        } else {
+            // A simple path component: on past the separator after it.
+            // Everything here works through `s.name`; `filename` itself
+            // is not touched again, so the borrow stays whole.
+            s.components += 1;
+            let base = s.name.as_ptr().cast::<c_char>();
+            // SAFETY: `p` is within `s.name`, and `path_next_component`
+            // answers a pointer into the same name.
+            p = unsafe { path_next_component(base.add(p)).offset_from(base) } as usize;
+        }
+        if s.name[p] == 0 {
+            break;
+        }
+    }
+    s.end as size_t
 }
 
 /// Put the full path of `fname` in `buf`, which holds `len` bytes.
@@ -411,25 +405,23 @@ pub unsafe fn vim_full_name(
     len: size_t,
     force: bool,
 ) -> c_int {
-    unsafe {
-        *buf = 0;
-        if fname.is_null() {
-            return FAIL;
-        }
-        if strlen(fname) > len.wrapping_sub(1) {
-            xstrlcpy(buf, fname, len); // truncate
-            return FAIL;
-        }
-        if path_with_url(fname) != 0 {
-            xstrlcpy(buf, fname, len);
-            return OK;
-        }
-        let rv = path_to_absolute(fname, buf, len, force);
-        if rv == FAIL {
-            xstrlcpy(buf, fname, len); // something failed; use the file name
-        }
-        rv
+    unsafe { *buf = 0 };
+    if fname.is_null() {
+        return FAIL;
     }
+    if unsafe { strlen(fname) } > len.wrapping_sub(1) {
+        unsafe { xstrlcpy(buf, fname, len) }; // truncate
+        return FAIL;
+    }
+    if unsafe { path_with_url(fname) } != 0 {
+        unsafe { xstrlcpy(buf, fname, len) };
+        return OK;
+    }
+    let rv = unsafe { path_to_absolute(fname, buf, len, force) };
+    if rv == FAIL {
+        unsafe { xstrlcpy(buf, fname, len) }; // something failed; use the file name
+    }
+    rv
 }
 
 /// The full resolved path of `fname`, in a string the caller owns.
@@ -454,26 +446,24 @@ pub unsafe fn path_full_dir_name(
     buffer: *mut c_char,
     len: size_t,
 ) -> c_int {
-    unsafe {
-        if *directory == 0 {
-            return os_dirname(buffer, len);
-        }
-        if !os_realpath(directory, buffer, len).is_null() {
-            return OK;
-        }
-        // The path does not exist (yet). An absolute one fails, and the
-        // caller uses it as it is.
-        if path_is_absolute(directory) {
-            return FAIL;
-        }
-        // A relative one is taken from the current directory.
-        let mut old_dir = [0 as c_char; MAXPATHL as usize];
-        if os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) == FAIL {
-            return FAIL;
-        }
-        xstrlcpy(buffer, old_dir.as_ptr(), len);
-        append_path(buffer, directory, len)
+    if unsafe { *directory } == 0 {
+        return unsafe { os_dirname(buffer, len) };
     }
+    if !unsafe { os_realpath(directory, buffer, len) }.is_null() {
+        return OK;
+    }
+    // The path does not exist (yet). An absolute one fails, and the
+    // caller uses it as it is.
+    if unsafe { path_is_absolute(directory) } {
+        return FAIL;
+    }
+    // A relative one is taken from the current directory.
+    let mut old_dir = [0 as c_char; MAXPATHL as usize];
+    if unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) } == FAIL {
+        return FAIL;
+    }
+    unsafe { xstrlcpy(buffer, old_dir.as_ptr(), len) };
+    unsafe { append_path(buffer, directory, len) }
 }
 
 /// Append `to_append` to `path`, with a separator between them, answering
@@ -483,42 +473,46 @@ pub unsafe fn path_full_dir_name(
 /// `path` must be a NUL-terminated string writable for `max_len` bytes, and
 /// `to_append` a NUL-terminated string.
 pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: size_t) -> c_int {
-    unsafe {
-        let mut current_length = CStr::from_ptr(path).to_bytes().len();
-        let to_append_length = CStr::from_ptr(to_append).to_bytes().len();
-        // The separator, without its NUL.
-        let sep_len = PATHSEPSTR.count_bytes();
+    let mut current_length = unsafe { CStr::from_ptr(path) }.to_bytes().len();
+    let to_append_length = unsafe { CStr::from_ptr(to_append) }.to_bytes().len();
+    // The separator, without its NUL.
+    let sep_len = PATHSEPSTR.count_bytes();
 
-        // Do not append an empty string, or a dot.
-        if to_append_length == 0 || strcmp(to_append, c".".as_ptr()) == 0 {
-            return OK;
+    // Do not append an empty string, or a dot.
+    if to_append_length == 0 || unsafe { strcmp(to_append, c".".as_ptr()) } == 0 {
+        return OK;
+    }
+
+    // Join them with a separator, when there is not one there already.
+    if current_length > 0
+        && !vim_ispathsep_nocolon(unsafe { *path.add(current_length - 1) } as c_int)
+    {
+        // The separator and the NUL at the end.
+        if current_length + sep_len + 1 > max_len {
+            return FAIL;
         }
-
-        // Join them with a separator, when there is not one there already.
-        if current_length > 0 && !vim_ispathsep_nocolon(*path.add(current_length - 1) as c_int) {
-            // The separator and the NUL at the end.
-            if current_length + sep_len + 1 > max_len {
-                return FAIL;
-            }
+        unsafe {
             xstrlcpy(
                 path.add(current_length),
                 PATHSEPSTR.as_ptr(),
                 (max_len - current_length) as size_t,
-            );
-            current_length += sep_len;
-        }
+            )
+        };
+        current_length += sep_len;
+    }
 
-        // The name and the NUL at the end.
-        if current_length + to_append_length + 1 > max_len {
-            return FAIL;
-        }
+    // The name and the NUL at the end.
+    if current_length + to_append_length + 1 > max_len {
+        return FAIL;
+    }
+    unsafe {
         xstrlcpy(
             path.add(current_length),
             to_append,
             (max_len - current_length) as size_t,
-        );
-        OK
-    }
+        )
+    };
+    OK
 }
 
 /// Put the full path of `fname` in `buf`, which holds `len` bytes. What
@@ -536,43 +530,43 @@ unsafe fn path_to_absolute(
     len: size_t,
     force: bool,
 ) -> c_int {
-    unsafe {
-        *buf = 0;
-        let name = CStr::from_ptr(fname).to_bytes();
-        // What the name is relative to: everything up to and including its
-        // last separator. One byte longer than upstream's, which writes its
-        // NUL one past the end for a name of exactly `len - 1` bytes ending
-        // in "/..".
-        let mut relative_directory = vec![0 as c_char; len + 1];
-        let mut end_of_path = fname;
+    unsafe { *buf = 0 };
+    let name = unsafe { CStr::from_ptr(fname) }.to_bytes();
+    // What the name is relative to: everything up to and including its
+    // last separator. One byte longer than upstream's, which writes its
+    // NUL one past the end for a name of exactly `len - 1` bytes ending
+    // in "/..".
+    let mut relative_directory = vec![0 as c_char; len + 1];
+    let mut end_of_path = fname;
 
-        // Expand it if forced, or if it is not an absolute path.
-        if force || !path_is_absolute(fname) {
-            let mut sep = name.iter().rposition(|&b| b == b'/');
-            if sep.is_none() && name == b".." {
-                // A ".." with no separator in it names a directory too.
-                sep = Some(2);
-            }
-            if let Some(mut at) = sep {
-                if vim_ispathsep(*fname.add(at) as c_int) && name[at + 1..] == *b".." {
-                    // For "/path/dir/.." include the "/..".
-                    at += 3;
-                }
-                core::ptr::copy_nonoverlapping(fname, relative_directory.as_mut_ptr(), at + 1);
-                relative_directory[at + 1] = 0;
-                end_of_path = if vim_ispathsep(*fname.add(at) as c_int) {
-                    fname.add(at + 1)
-                } else {
-                    fname.add(at)
-                };
-            }
-
-            if path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) == FAIL {
-                return FAIL;
-            }
+    // Expand it if forced, or if it is not an absolute path.
+    if force || !unsafe { path_is_absolute(fname) } {
+        let mut sep = name.iter().rposition(|&b| b == b'/');
+        if sep.is_none() && name == b".." {
+            // A ".." with no separator in it names a directory too.
+            sep = Some(2);
         }
-        append_path(buf, end_of_path, len)
+        if let Some(mut at) = sep {
+            if vim_ispathsep(unsafe { *fname.add(at) } as c_int) && name[at + 1..] == *b".." {
+                // For "/path/dir/.." include the "/..".
+                at += 3;
+            }
+            unsafe {
+                core::ptr::copy_nonoverlapping(fname, relative_directory.as_mut_ptr(), at + 1)
+            };
+            relative_directory[at + 1] = 0;
+            end_of_path = if vim_ispathsep(unsafe { *fname.add(at) } as c_int) {
+                unsafe { fname.add(at + 1) }
+            } else {
+                unsafe { fname.add(at) }
+            };
+        }
+
+        if unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) } == FAIL {
+            return FAIL;
+        }
     }
+    unsafe { append_path(buf, end_of_path, len) }
 }
 
 /// Guess the full path Nvim was started from, given the `argv0` it was
@@ -586,51 +580,51 @@ unsafe fn path_to_absolute(
 /// bytes.
 pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize: size_t) {
     let mut candidate = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        let path = os_getenv(c"PATH".as_ptr());
-        if path.is_null() || path_is_absolute(argv0) {
-            xstrlcpy(buf, argv0, bufsize);
-        } else if *argv0 == b'.' as c_char || !strchr(argv0, PATHSEP).is_null() {
-            // Relative to the current directory.
-            if os_dirname(buf, MAXPATHL as size_t) != OK {
-                *buf = 0;
-            }
-            xstrlcat(buf, PATHSEPSTR.as_ptr(), bufsize);
-            xstrlcat(buf, argv0, bufsize);
-        } else {
-            // Search $PATH for a plausible location.
-            let name = candidate.as_mut_ptr();
-            let size = candidate.len();
-            let mut iter: *const core::ffi::c_void = core::ptr::null();
-            loop {
-                let mut dir: *const c_char = core::ptr::null();
-                let mut dir_len: size_t = 0;
-                iter = vim_env_iter(
+    let path = unsafe { os_getenv(c"PATH".as_ptr()) };
+    if path.is_null() || unsafe { path_is_absolute(argv0) } {
+        unsafe { xstrlcpy(buf, argv0, bufsize) };
+    } else if unsafe { *argv0 } == b'.' as c_char || !unsafe { strchr(argv0, PATHSEP) }.is_null() {
+        // Relative to the current directory.
+        if unsafe { os_dirname(buf, MAXPATHL as size_t) } != OK {
+            unsafe { *buf = 0 };
+        }
+        unsafe { xstrlcat(buf, PATHSEPSTR.as_ptr(), bufsize) };
+        unsafe { xstrlcat(buf, argv0, bufsize) };
+    } else {
+        // Search $PATH for a plausible location.
+        let name = candidate.as_mut_ptr();
+        let size = candidate.len();
+        let mut iter: *const core::ffi::c_void = core::ptr::null();
+        loop {
+            let mut dir: *const c_char = core::ptr::null();
+            let mut dir_len: size_t = 0;
+            iter = unsafe {
+                vim_env_iter(
                     ENV_SEPCHAR as c_char,
                     path,
                     iter,
                     &raw mut dir,
                     &raw mut dir_len,
-                );
-                if dir.is_null() || dir_len == 0 {
-                    break;
-                }
-                if (dir_len as usize) < size {
-                    xmemcpyz(name.cast(), dir.cast(), dir_len);
-                    xstrlcat(name, PATHSEPSTR.as_ptr(), size);
-                    xstrlcat(name, argv0, size);
-                    if os_can_exe(name, core::ptr::null_mut(), false) {
-                        xstrlcpy(buf, name, bufsize);
-                        return;
-                    }
-                }
-                if iter.is_null() {
-                    break;
+                )
+            };
+            if dir.is_null() || dir_len == 0 {
+                break;
+            }
+            if (dir_len as usize) < size {
+                unsafe { xmemcpyz(name.cast(), dir.cast(), dir_len) };
+                unsafe { xstrlcat(name, PATHSEPSTR.as_ptr(), size) };
+                unsafe { xstrlcat(name, argv0, size) };
+                if unsafe { os_can_exe(name, core::ptr::null_mut(), false) } {
+                    unsafe { xstrlcpy(buf, name, bufsize) };
+                    return;
                 }
             }
-            // Not found in $PATH; fall back on argv0.
-            xstrlcpy(buf, argv0, bufsize);
+            if iter.is_null() {
+                break;
+            }
         }
-        xfree(path.cast());
+        // Not found in $PATH; fall back on argv0.
+        unsafe { xstrlcpy(buf, argv0, bufsize) };
     }
+    unsafe { xfree(path.cast()) };
 }

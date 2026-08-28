@@ -108,26 +108,22 @@ impl ScanWithDots {
     /// # Safety
     /// `path` must be a NUL-terminated string.
     unsafe fn open(path: *const c_char) -> Option<Self> {
-        unsafe {
-            let mut dir = Directory::default();
-            if !os_file_is_readable(path) || !os_scandir(&raw mut dir, path) {
-                return None;
-            }
-            Some(ScanWithDots { dir, count: 0 })
+        let mut dir = Directory::default();
+        if !unsafe { os_file_is_readable(path) } || !unsafe { os_scandir(&raw mut dir, path) } {
+            return None;
         }
+        Some(ScanWithDots { dir, count: 0 })
     }
 
     /// The next entry's name, valid until the following call.
     unsafe fn next(&mut self) -> Option<&CStr> {
-        unsafe {
-            self.count += 1;
-            let name = match self.count {
-                1 => c".".as_ptr(),
-                2 => c"..".as_ptr(),
-                _ => os_scandir_next(&raw mut self.dir),
-            };
-            (!name.is_null()).then(|| CStr::from_ptr(name))
-        }
+        self.count += 1;
+        let name = match self.count {
+            1 => c".".as_ptr(),
+            2 => c"..".as_ptr(),
+            _ => unsafe { os_scandir_next(&raw mut self.dir) },
+        };
+        (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) })
     }
 }
 
@@ -163,64 +159,62 @@ unsafe fn split_wild_component(
     flags: ExpandFlags,
     buf: &mut [u8],
 ) -> Split {
-    unsafe {
-        // With every letter a wildcard, a name that differs only in case is
-        // still a match.
-        let icase = p_fic.get() == 0 && flags.has(ExpandFlags::ICASE);
-        // Where the component starts, and whether a wildcard has turned up
-        // in it yet.
-        let mut comp = 0;
-        let mut seen_wild = false;
-        // The read and write positions advance together: nothing is dropped
-        // here, only stopped at.
-        let mut at = 0;
-        while at < pattern.len() {
-            let p = pattern.as_ptr().add(at).cast::<c_char>();
-            if at >= wildoff && rem_backslash(p) {
-                // The backslash stays for `file_pat_to_reg_pat` to drop; the
-                // character it escapes is copied with the step below.
-                buf[at] = pattern[at];
-                at += 1;
-            } else if vim_ispathsep_nocolon(pattern[at] as c_int) {
-                if seen_wild {
-                    break;
-                }
-                // A later component; the wildcard is not in this one.
-                comp = at + 1;
-            } else if at >= wildoff
-                && (b"*?[{~$".contains(&pattern[at])
-                    || (icase && mb_isalpha(utf_ptr2char(pattern.as_ptr().add(at).cast()))))
-            {
-                seen_wild = true;
-            }
-            // A character is copied whole, however many bytes it takes.
-            let charlen = utfc_ptr2len(pattern.as_ptr().add(at).cast()) as usize;
-            buf[at..at + charlen].copy_from_slice(&pattern[at..at + charlen]);
-            at += charlen;
-        }
-        let rest = at;
-        let mut comp_end = at;
-        buf[comp_end] = 0;
-
-        // The backslashes before the component are the caller's escaping and
-        // come off now; the ones inside it belong to the regexp.
-        let mut at = wildoff;
-        while at < comp {
-            if rem_backslash(buf.as_ptr().add(at).cast()) {
-                buf.copy_within(at + 1..comp_end + 1, at);
-                comp_end -= 1;
-                comp -= 1;
-            }
+    // With every letter a wildcard, a name that differs only in case is
+    // still a match.
+    let icase = p_fic.get() == 0 && flags.has(ExpandFlags::ICASE);
+    // Where the component starts, and whether a wildcard has turned up
+    // in it yet.
+    let mut comp = 0;
+    let mut seen_wild = false;
+    // The read and write positions advance together: nothing is dropped
+    // here, only stopped at.
+    let mut at = 0;
+    while at < pattern.len() {
+        let p = unsafe { pattern.as_ptr().add(at) }.cast::<c_char>();
+        if at >= wildoff && unsafe { rem_backslash(p) } {
+            // The backslash stays for `file_pat_to_reg_pat` to drop; the
+            // character it escapes is copied with the step below.
+            buf[at] = pattern[at];
             at += 1;
+        } else if vim_ispathsep_nocolon(pattern[at] as c_int) {
+            if seen_wild {
+                break;
+            }
+            // A later component; the wildcard is not in this one.
+            comp = at + 1;
+        } else if at >= wildoff
+            && (b"*?[{~$".contains(&pattern[at])
+                || (icase && mb_isalpha(unsafe { utf_ptr2char(pattern.as_ptr().add(at).cast()) })))
+        {
+            seen_wild = true;
         }
+        // A character is copied whole, however many bytes it takes.
+        let charlen = unsafe { utfc_ptr2len(pattern.as_ptr().add(at).cast()) } as usize;
+        buf[at..at + charlen].copy_from_slice(&pattern[at..at + charlen]);
+        at += charlen;
+    }
+    let rest = at;
+    let mut comp_end = at;
+    buf[comp_end] = 0;
 
-        let starstar = buf[comp..comp_end].windows(2).any(|pair| pair == b"**");
-        Split {
-            comp,
-            comp_end,
-            rest,
-            starstar,
+    // The backslashes before the component are the caller's escaping and
+    // come off now; the ones inside it belong to the regexp.
+    let mut at = wildoff;
+    while at < comp {
+        if unsafe { rem_backslash(buf.as_ptr().add(at).cast()) } {
+            buf.copy_within(at + 1..comp_end + 1, at);
+            comp_end -= 1;
+            comp -= 1;
         }
+        at += 1;
+    }
+
+    let starstar = buf[comp..comp_end].windows(2).any(|pair| pair == b"**");
+    Split {
+        comp,
+        comp_end,
+        rest,
+        starstar,
     }
 }
 
@@ -261,137 +255,142 @@ pub(crate) unsafe fn do_path_expand(
     flags: ExpandFlags,
     didstar: bool,
 ) -> usize {
-    unsafe {
-        let start_len = (*gap).ga_len;
+    let start_len = unsafe { (*gap).ga_len };
 
-        // Expanding "**" may take a long time; let CTRL-C out of it.
-        if STARDEPTH.get() > 0 && !flags.has(ExpandFlags::NOBREAK) {
-            os_breakcheck();
-            if got_int.get() {
-                return 0;
-            }
+    // Expanding "**" may take a long time; let CTRL-C out of it.
+    if STARDEPTH.get() > 0 && !flags.has(ExpandFlags::NOBREAK) {
+        os_breakcheck();
+        if got_int.get() {
+            return 0;
         }
+    }
 
-        let pattern = CStr::from_ptr(path).to_bytes();
-        // Room for the pattern and any one name it grows into.
-        let buflen = pattern.len() + MAXPATHL as usize;
-        let mut buf = vec![0u8; buflen];
-        let split = split_wild_component(pattern, wildoff, flags, &mut buf);
-        let dir_len = split.comp;
-        let rest = pattern.as_ptr().add(split.rest).cast::<c_char>();
+    let pattern = unsafe { CStr::from_ptr(path) }.to_bytes();
+    // Room for the pattern and any one name it grows into.
+    let buflen = pattern.len() + MAXPATHL as usize;
+    let mut buf = vec![0u8; buflen];
+    let split = unsafe { split_wild_component(pattern, wildoff, flags, &mut buf) };
+    let dir_len = split.comp;
+    let rest = unsafe { pattern.as_ptr().add(split.rest) }.cast::<c_char>();
 
-        // A name starting with a dot is only matched by a pattern that does.
-        let starts_with_dot = buf[dir_len] == b'.';
-        let pat = file_pat_to_reg_pat(
+    // A name starting with a dot is only matched by a pattern that does.
+    let starts_with_dot = buf[dir_len] == b'.';
+    let pat = unsafe {
+        file_pat_to_reg_pat(
             buf.as_ptr().add(dir_len).cast(),
             buf.as_ptr().add(split.comp_end).cast(),
             core::ptr::null_mut(),
             0,
-        );
-        if pat.is_null() {
-            return 0;
-        }
-        let mut regmatch = regmatch_T {
-            // Ignore case if given 'wildignorecase', else respect
-            // 'fileignorecase'.
-            rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
-            ..Default::default()
-        };
-        let silent = flags.has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD);
-        if silent {
-            emsg_silent.set(emsg_silent.get() + 1);
-        }
-        let nobreak = flags.has(ExpandFlags::NOBREAK);
-        regmatch.regprog = vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 });
-        if silent {
-            emsg_silent.set(emsg_silent.get() - 1);
-        }
-        xfree(pat.cast());
-        if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {
-            return 0;
-        }
-        // A "**" by itself also matches no directory at all, so the
-        // components after it are tried against the directory reached so
-        // far.
-        if !didstar
-            && STARDEPTH.get() < MAX_STAR_DEPTH
-            && split.starstar
-            && split.comp_end - dir_len == 2
-            && pattern.get(split.rest) == Some(&b'/')
-        {
-            write_at(&mut buf, dir_len, &[&pattern[split.rest + 1..]]);
-            STARDEPTH.set(STARDEPTH.get() + 1);
-            do_path_expand(gap, buf.as_ptr().cast(), dir_len, flags, true);
-            STARDEPTH.set(STARDEPTH.get() - 1);
-        }
-        // Back to the directory the component lives in.
-        buf[dir_len] = 0;
+        )
+    };
+    if pat.is_null() {
+        return 0;
+    }
+    let mut regmatch = regmatch_T {
+        // Ignore case if given 'wildignorecase', else respect
+        // 'fileignorecase'.
+        rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
+        ..Default::default()
+    };
+    let silent = flags.has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD);
+    if silent {
+        emsg_silent.set(emsg_silent.get() + 1);
+    }
+    let nobreak = flags.has(ExpandFlags::NOBREAK);
+    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 }) };
+    if silent {
+        emsg_silent.set(emsg_silent.get() - 1);
+    }
+    unsafe { xfree(pat.cast()) };
+    if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {
+        return 0;
+    }
+    // A "**" by itself also matches no directory at all, so the
+    // components after it are tried against the directory reached so
+    // far.
+    if !didstar
+        && STARDEPTH.get() < MAX_STAR_DEPTH
+        && split.starstar
+        && split.comp_end - dir_len == 2
+        && pattern.get(split.rest) == Some(&b'/')
+    {
+        write_at(&mut buf, dir_len, &[&pattern[split.rest + 1..]]);
+        STARDEPTH.set(STARDEPTH.get() + 1);
+        unsafe { do_path_expand(gap, buf.as_ptr().cast(), dir_len, flags, true) };
+        STARDEPTH.set(STARDEPTH.get() - 1);
+    }
+    // Back to the directory the component lives in.
+    buf[dir_len] = 0;
 
-        let dirpath = if dir_len == 0 {
-            c".".as_ptr()
-        } else {
-            buf.as_ptr().cast()
-        };
-        if let Some(mut scan) = ScanWithDots::open(dirpath) {
-            while !got_int.get() {
-                let Some(name) = scan.next() else { break };
-                let name = name.to_bytes();
-                if !name_is_wanted(name, starts_with_dot, flags)
-                    || !name_matches(
+    let dirpath = if dir_len == 0 {
+        c".".as_ptr()
+    } else {
+        buf.as_ptr().cast()
+    };
+    if let Some(mut scan) = unsafe { ScanWithDots::open(dirpath) } {
+        while !got_int.get() {
+            let name = unsafe { scan.next() };
+            let Some(name) = name else { break };
+            let name = name.to_bytes();
+            if !name_is_wanted(name, starts_with_dot, flags)
+                || !unsafe {
+                    name_matches(
                         &mut regmatch,
                         name,
                         flags,
                         &pattern[dir_len..],
                         split.comp_end - dir_len,
                     )
-                {
-                    continue;
                 }
-                let len = dir_len + write_at(&mut buf, dir_len, &[name]);
-                if len + 1 >= buflen {
-                    continue;
-                }
+            {
+                continue;
+            }
+            let len = dir_len + write_at(&mut buf, dir_len, &[name]);
+            if len + 1 >= buflen {
+                continue;
+            }
 
-                if split.starstar && STARDEPTH.get() < MAX_STAR_DEPTH {
-                    // For "**" first go deeper in the tree to find matches.
-                    write_at(&mut buf, len, &[b"/**", &pattern[split.rest..]]);
+            if split.starstar && STARDEPTH.get() < MAX_STAR_DEPTH {
+                // For "**" first go deeper in the tree to find matches.
+                write_at(&mut buf, len, &[b"/**", &pattern[split.rest..]]);
+                STARDEPTH.set(STARDEPTH.get() + 1);
+                unsafe { do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, true) };
+                STARDEPTH.set(STARDEPTH.get() - 1);
+            }
+
+            write_at(&mut buf, len, &[&pattern[split.rest..]]);
+            if unsafe { path_has_exp_wildcard(rest) } {
+                // Another component to expand.
+                if STARDEPTH.get() < MAX_STAR_DEPTH {
                     STARDEPTH.set(STARDEPTH.get() + 1);
-                    do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, true);
+                    unsafe { do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, false) };
                     STARDEPTH.set(STARDEPTH.get() - 1);
                 }
-
-                write_at(&mut buf, len, &[&pattern[split.rest..]]);
-                if path_has_exp_wildcard(rest) {
-                    // Another component to expand.
-                    if STARDEPTH.get() < MAX_STAR_DEPTH {
-                        STARDEPTH.set(STARDEPTH.get() + 1);
-                        do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, false);
-                        STARDEPTH.set(STARDEPTH.get() - 1);
-                    }
+            } else {
+                // No more wildcards: the escaping in what is left is the
+                // caller's, and comes off before the name is looked up.
+                if unsafe { *rest } != 0 {
+                    unsafe { backslash_halve(buf.as_mut_ptr().add(len + 1).cast()) };
+                }
+                let mut file_info = FileInfo::default();
+                let found = if flags.has(ExpandFlags::ALLLINKS) {
+                    unsafe { os_fileinfo_link(buf.as_ptr().cast(), &raw mut file_info) }
                 } else {
-                    // No more wildcards: the escaping in what is left is the
-                    // caller's, and comes off before the name is looked up.
-                    if *rest != 0 {
-                        backslash_halve(buf.as_mut_ptr().add(len + 1).cast());
-                    }
-                    let mut file_info = FileInfo::default();
-                    let found = if flags.has(ExpandFlags::ALLLINKS) {
-                        os_fileinfo_link(buf.as_ptr().cast(), &raw mut file_info)
-                    } else {
-                        os_path_exists(buf.as_ptr().cast())
-                    };
-                    if found {
-                        addfile(gap, buf.as_mut_ptr().cast(), flags);
-                    }
+                    unsafe { os_path_exists(buf.as_ptr().cast()) }
+                };
+                if found {
+                    unsafe { addfile(gap, buf.as_mut_ptr().cast(), flags) };
                 }
             }
         }
-        vim_regfree(regmatch.regprog);
+    }
+    unsafe { vim_regfree(regmatch.regprog) };
 
-        // When interrupted the matches probably won't be used, and sorting
-        // can be slow.
-        let matches = ((*gap).ga_len - start_len) as usize;
-        if matches > 0 && !got_int.get() {
+    // When interrupted the matches probably won't be used, and sorting
+    // can be slow.
+    let matches = (unsafe { (*gap).ga_len } - start_len) as usize;
+    if matches > 0 && !got_int.get() {
+        unsafe {
             qsort(
                 (*gap)
                     .ga_data
@@ -401,10 +400,10 @@ pub(crate) unsafe fn do_path_expand(
                 matches,
                 size_of::<*mut c_char>(),
                 Some(pstrcmp),
-            );
-        }
-        matches
+            )
+        };
     }
+    matches
 }
 
 /// Is `name` one the walk should even try to match? A name starting with a
@@ -430,17 +429,17 @@ unsafe fn name_matches(
     comp: &[u8],
     comp_len: usize,
 ) -> bool {
-    unsafe {
-        if !regmatch.regprog.is_null() && vim_regexec(regmatch, name.as_ptr().cast(), 0) {
-            return true;
-        }
-        flags.has(ExpandFlags::NOTWILD)
-            && path_fnamencmp(
+    if !regmatch.regprog.is_null() && unsafe { vim_regexec(regmatch, name.as_ptr().cast(), 0) } {
+        return true;
+    }
+    flags.has(ExpandFlags::NOTWILD)
+        && unsafe {
+            path_fnamencmp(
                 comp.as_ptr().cast(),
                 name.as_ptr().cast(),
                 comp_len as size_t,
-            ) == 0
-    }
+            )
+        } == 0
 }
 
 /// Does `p` hold a wildcard character only a shell can expand?
@@ -491,44 +490,44 @@ pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: ExpandFlags) ->
 /// `f` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
 pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: ExpandFlags) {
+    let mut file_info = FileInfo::default();
+    let exists = if flags.has(ExpandFlags::ALLLINKS) {
+        unsafe { os_fileinfo_link(f, &raw mut file_info) }
+    } else {
+        unsafe { os_path_exists(f) }
+    };
+    if !flags.has(ExpandFlags::NOTFOUND) && !exists {
+        return;
+    }
+
+    let isdir = unsafe { os_isdir(f) };
+    if isdir && !flags.has(ExpandFlags::DIR) || !isdir && !flags.has(ExpandFlags::FILE) {
+        return;
+    }
+    // Directories are accepted whether or not they are executable. When
+    // this is `expand_shellcmd` looking, do not use $PATH.
+    if !isdir
+        && flags.has(ExpandFlags::EXEC)
+        && !unsafe { os_can_exe(f, core::ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD)) }
+    {
+        return;
+    }
+
+    // Room for the name, its NUL, and the separator a directory gets.
+    let name = unsafe { CStr::from_ptr(f) }.to_bytes_with_nul();
+    let p: *mut c_char = unsafe { xmalloc(name.len() + usize::from(isdir)) }.cast();
+    unsafe { core::ptr::copy_nonoverlapping(name.as_ptr().cast(), p, name.len()) };
+    if isdir && flags.has(ExpandFlags::ADDSLASH) {
+        unsafe { add_pathsep(p) };
+    }
+    unsafe { ga_grow(gap, 1) };
     unsafe {
-        let mut file_info = FileInfo::default();
-        let exists = if flags.has(ExpandFlags::ALLLINKS) {
-            os_fileinfo_link(f, &raw mut file_info)
-        } else {
-            os_path_exists(f)
-        };
-        if !flags.has(ExpandFlags::NOTFOUND) && !exists {
-            return;
-        }
-
-        let isdir = os_isdir(f);
-        if isdir && !flags.has(ExpandFlags::DIR) || !isdir && !flags.has(ExpandFlags::FILE) {
-            return;
-        }
-        // Directories are accepted whether or not they are executable. When
-        // this is `expand_shellcmd` looking, do not use $PATH.
-        if !isdir
-            && flags.has(ExpandFlags::EXEC)
-            && !os_can_exe(f, core::ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD))
-        {
-            return;
-        }
-
-        // Room for the name, its NUL, and the separator a directory gets.
-        let name = CStr::from_ptr(f).to_bytes_with_nul();
-        let p: *mut c_char = xmalloc(name.len() + usize::from(isdir)).cast();
-        core::ptr::copy_nonoverlapping(name.as_ptr().cast(), p, name.len());
-        if isdir && flags.has(ExpandFlags::ADDSLASH) {
-            add_pathsep(p);
-        }
-        ga_grow(gap, 1);
         *(*gap)
             .ga_data
             .cast::<*mut c_char>()
-            .add((*gap).ga_len as usize) = p;
-        (*gap).ga_len += 1;
-    }
+            .add((*gap).ga_len as usize) = p
+    };
+    unsafe { (*gap).ga_len += 1 };
 }
 
 /// Does `fname` end in one of the `'suffixes'`?
@@ -538,37 +537,39 @@ pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: ExpandFlags) {
 /// # Safety
 /// `fname` must be a NUL-terminated string.
 pub unsafe fn match_suffix(fname: *mut c_char) -> bool {
-    unsafe {
-        let mut suf_buf = [0 as c_char; MAXSUFLEN as usize];
-        let fnamelen = CStr::from_ptr(fname).to_bytes().len();
-        let mut setsuflen = 0;
-        let mut setsuf = p_su.get();
-        while *setsuf != 0 {
-            setsuflen = copy_option_part(
+    let mut suf_buf = [0 as c_char; MAXSUFLEN as usize];
+    let fnamelen = unsafe { CStr::from_ptr(fname) }.to_bytes().len();
+    let mut setsuflen = 0;
+    let mut setsuf = p_su.get();
+    while unsafe { *setsuf } != 0 {
+        setsuflen = unsafe {
+            copy_option_part(
                 &raw mut setsuf,
                 suf_buf.as_mut_ptr(),
                 MAXSUFLEN as size_t,
                 c".,".as_ptr().cast_mut(),
-            ) as usize;
-            if setsuflen == 0 {
-                // An empty entry matches a name without a '.' in it.
-                if vim_strchr(path_tail(fname), c_int::from(b'.')).is_null() {
-                    setsuflen = 1;
-                    break;
-                }
-            } else {
-                if fnamelen >= setsuflen
-                    && path_fnamencmp(
+            )
+        } as usize;
+        if setsuflen == 0 {
+            // An empty entry matches a name without a '.' in it.
+            if unsafe { vim_strchr(path_tail(fname), c_int::from(b'.')) }.is_null() {
+                setsuflen = 1;
+                break;
+            }
+        } else {
+            if fnamelen >= setsuflen
+                && unsafe {
+                    path_fnamencmp(
                         suf_buf.as_ptr(),
                         fname.add(fnamelen - setsuflen),
                         setsuflen as size_t,
-                    ) == 0
-                {
-                    break;
-                }
-                setsuflen = 0;
+                    )
+                } == 0
+            {
+                break;
             }
+            setsuflen = 0;
         }
-        setsuflen != 0
     }
+    setsuflen != 0
 }

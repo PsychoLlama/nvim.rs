@@ -38,13 +38,11 @@ pub(crate) fn tail_index(name: &[u8]) -> usize {
 /// # Safety
 /// `fname` must be a NUL-terminated string, or NULL for `""`.
 pub unsafe fn path_tail(fname: *const c_char) -> *mut c_char {
-    unsafe {
-        if fname.is_null() {
-            return c"".as_ptr().cast_mut();
-        }
-        let at = tail_index(CStr::from_ptr(fname).to_bytes());
-        fname.add(at).cast_mut()
+    if fname.is_null() {
+        return c"".as_ptr().cast_mut();
     }
+    let at = tail_index(unsafe { CStr::from_ptr(fname) }.to_bytes());
+    unsafe { fname.add(at) }.cast_mut()
 }
 
 /// The tail of `fname` *with* its leading path separators, so
@@ -54,14 +52,12 @@ pub unsafe fn path_tail(fname: *const c_char) -> *mut c_char {
 /// # Safety
 /// `fname` must be a NUL-terminated string.
 pub unsafe fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
-    unsafe {
-        let past_head = get_past_head(fname);
-        let mut tail = path_tail(fname);
-        while tail > past_head && after_pathsep(fname, tail) != 0 {
-            tail = tail.sub(1);
-        }
-        tail
+    let past_head = unsafe { get_past_head(fname) };
+    let mut tail = unsafe { path_tail(fname) };
+    while tail > past_head && unsafe { after_pathsep(fname, tail) } != 0 {
+        tail = unsafe { tail.sub(1) };
     }
+    tail
 }
 
 /// The executable in a `"path/to/exe [args]"` invocation, and — through
@@ -70,17 +66,15 @@ pub unsafe fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `invocation` must be a NUL-terminated string and `len` writable or NULL.
 pub unsafe fn invocation_path_tail(invocation: *const c_char, len: *mut size_t) -> *const c_char {
-    unsafe {
-        let past_head = get_past_head(invocation).cast_const();
-        let bytes = CStr::from_ptr(past_head).to_bytes();
-        // The arguments are not part of the name.
-        let exe = bytes.split(|&b| b == b' ').next().unwrap_or(bytes);
-        let at = exe.iter().rposition(|&b| b == b'/').map_or(0, |at| at + 1);
-        if !len.is_null() {
-            *len = (exe.len() - at) as size_t;
-        }
-        past_head.add(at)
+    let past_head = unsafe { get_past_head(invocation) }.cast_const();
+    let bytes = unsafe { CStr::from_ptr(past_head) }.to_bytes();
+    // The arguments are not part of the name.
+    let exe = bytes.split(|&b| b == b' ').next().unwrap_or(bytes);
+    let at = exe.iter().rposition(|&b| b == b'/').map_or(0, |at| at + 1);
+    if !len.is_null() {
+        unsafe { *len = (exe.len() - at) as size_t };
     }
+    unsafe { past_head.add(at) }
 }
 
 /// What is left of `fname` after its first path component: the byte past the
@@ -89,14 +83,12 @@ pub unsafe fn invocation_path_tail(invocation: *const c_char, len: *mut size_t) 
 /// # Safety
 /// `fname` must be a NUL-terminated string.
 pub unsafe fn path_next_component(fname: *const c_char) -> *const c_char {
-    unsafe {
-        let bytes = CStr::from_ptr(fname).to_bytes();
-        let at = bytes
-            .iter()
-            .position(|&b| b == b'/')
-            .map_or(bytes.len(), |at| at + 1);
-        fname.add(at)
-    }
+    let bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
+    let at = bytes
+        .iter()
+        .position(|&b| b == b'/')
+        .map_or(bytes.len(), |at| at + 1);
+    unsafe { fname.add(at) }
 }
 
 /// How long the head of a path is here: 1, where Windows would say 3.
@@ -118,11 +110,9 @@ pub unsafe fn is_path_head(path: *const c_char) -> bool {
 /// # Safety
 /// `path` must be a NUL-terminated string.
 pub unsafe fn get_past_head(path: *const c_char) -> *mut c_char {
-    unsafe {
-        let bytes = CStr::from_ptr(path).to_bytes();
-        let head = bytes.iter().position(|&b| b != b'/').unwrap_or(bytes.len());
-        path.add(head).cast_mut()
-    }
+    let bytes = unsafe { CStr::from_ptr(path) }.to_bytes();
+    let head = bytes.iter().position(|&b| b != b'/').unwrap_or(bytes.len());
+    unsafe { path.add(head) }.cast_mut()
 }
 
 /// Is `c` a path separator? On Windows this includes the colon, which is why
@@ -148,17 +138,15 @@ pub fn vim_ispathlistsep(c: c_int) -> bool {
 /// `fname` must be a writable NUL-terminated string: the directory part is
 /// terminated in place for the question, as upstream does.
 pub unsafe fn dir_of_file_exists(fname: *mut c_char) -> bool {
-    unsafe {
-        let tail = path_tail_with_sep(fname);
-        if tail == fname {
-            return true;
-        }
-        let saved = *tail;
-        *tail = 0;
-        let exists = os_isdir(fname);
-        *tail = saved;
-        exists
+    let tail = unsafe { path_tail_with_sep(fname) };
+    if tail == fname {
+        return true;
     }
+    let saved = unsafe { *tail };
+    unsafe { *tail = 0 };
+    let exists = unsafe { os_isdir(fname) };
+    unsafe { *tail = saved };
+    exists
 }
 
 /// Compare two file names, honouring `'fileignorecase'`.
@@ -177,12 +165,10 @@ pub unsafe fn path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_i
 /// # Safety
 /// Both must name at least `len` readable bytes, up to a NUL.
 pub unsafe fn path_fnamencmp(fname1: *const c_char, fname2: *const c_char, len: size_t) -> c_int {
-    unsafe {
-        if p_fic.get() != 0 {
-            mb_strnicmp(fname1, fname2, len)
-        } else {
-            strncmp(fname1, fname2, len)
-        }
+    if p_fic.get() != 0 {
+        unsafe { mb_strnicmp(fname1, fname2, len) }
+    } else {
+        unsafe { strncmp(fname1, fname2, len) }
     }
 }
 
@@ -200,16 +186,14 @@ pub(crate) unsafe fn do_concat_fnames(
     len2: size_t,
     sep: bool,
 ) -> *mut c_char {
-    unsafe {
-        let mut at = len1;
-        if sep && *fname1 != 0 && after_pathsep(fname1, fname1.add(at)) == 0 {
-            *fname1.add(at) = PATHSEP as c_char;
-            at += 1;
-        }
-        // The NUL comes across with the name.
-        core::ptr::copy(fname2, fname1.add(at), len2 + 1);
-        fname1
+    let mut at = len1;
+    if sep && unsafe { *fname1 } != 0 && unsafe { after_pathsep(fname1, fname1.add(at)) } == 0 {
+        unsafe { *fname1.add(at) = PATHSEP as c_char };
+        at += 1;
     }
+    // The NUL comes across with the name.
+    unsafe { core::ptr::copy(fname2, fname1.add(at), len2 + 1) };
+    fname1
 }
 
 /// Join `fname1` and `fname2`, with a path separator between them if `sep`
@@ -222,14 +206,12 @@ pub unsafe fn concat_fnames(
     fname2: *const c_char,
     sep: bool,
 ) -> *mut c_char {
-    unsafe {
-        let len1 = CStr::from_ptr(fname1).to_bytes().len();
-        let len2 = CStr::from_ptr(fname2).to_bytes().len();
-        // Room for both names, the separator, and the NUL.
-        let dest: *mut c_char = xmalloc(len1 + len2 + 3).cast();
-        core::ptr::copy_nonoverlapping(fname1, dest, len1 + 1);
-        do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep)
-    }
+    let len1 = unsafe { CStr::from_ptr(fname1) }.to_bytes().len();
+    let len2 = unsafe { CStr::from_ptr(fname2) }.to_bytes().len();
+    // Room for both names, the separator, and the NUL.
+    let dest: *mut c_char = unsafe { xmalloc(len1 + len2 + 3) }.cast();
+    unsafe { core::ptr::copy_nonoverlapping(fname1, dest, len1 + 1) };
+    unsafe { do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep) }
 }
 
 /// [`concat_fnames`], but growing `fname1` in place rather than allocating.
@@ -242,12 +224,10 @@ pub unsafe fn concat_fnames_realloc(
     fname2: *const c_char,
     sep: bool,
 ) -> *mut c_char {
-    unsafe {
-        let len1 = CStr::from_ptr(fname1).to_bytes().len();
-        let len2 = CStr::from_ptr(fname2).to_bytes().len();
-        let dest: *mut c_char = xrealloc(fname1.cast(), len1 + len2 + 3).cast();
-        do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep)
-    }
+    let len1 = unsafe { CStr::from_ptr(fname1) }.to_bytes().len();
+    let len2 = unsafe { CStr::from_ptr(fname2) }.to_bytes().len();
+    let dest: *mut c_char = unsafe { xrealloc(fname1.cast(), len1 + len2 + 3) }.cast();
+    unsafe { do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep) }
 }
 
 /// Add a path separator to `p` unless it ends in one already.
@@ -258,19 +238,17 @@ pub unsafe fn concat_fnames_realloc(
 /// # Safety
 /// `p` must be a NUL-terminated string in a buffer of [`MAXPATHL`] bytes.
 pub unsafe fn add_pathsep(p: *mut c_char) -> bool {
-    unsafe {
-        let len = CStr::from_ptr(p).to_bytes().len();
-        if len == 0 || after_pathsep(p, p.add(len)) != 0 {
-            return true;
-        }
-        // The separator and the NUL after it.
-        if len + 2 > MAXPATHL as usize {
-            return false;
-        }
-        *p.add(len) = PATHSEP as c_char;
-        *p.add(len + 1) = 0;
-        true
+    let len = unsafe { CStr::from_ptr(p) }.to_bytes().len();
+    if len == 0 || unsafe { after_pathsep(p, p.add(len)) } != 0 {
+        return true;
     }
+    // The separator and the NUL after it.
+    if len + 2 > MAXPATHL as usize {
+        return false;
+    }
+    unsafe { *p.add(len) = PATHSEP as c_char };
+    unsafe { *p.add(len + 1) = 0 };
+    true
 }
 
 /// Does `p` start with a Windows drive letter (`"C:/"`)?
@@ -315,26 +293,24 @@ pub unsafe fn path_is_url(p: *const c_char) -> c_int {
 /// # Safety
 /// `fname` must be a NUL-terminated string.
 pub unsafe fn path_with_url(fname: *const c_char) -> c_int {
-    unsafe {
-        let bytes = CStr::from_ptr(fname).to_bytes();
-        // A scheme starts with a letter — and a Windows drive letter, which
-        // also does, is not a scheme.
-        if !bytes.first().is_some_and(u8::is_ascii_alphabetic)
-            || path_has_drive_letter(fname, bytes.len() as size_t)
-        {
-            return 0;
-        }
-        // The rest of the scheme is what RFC 3986 allows, and may not end in
-        // a `+`, `-` or `.`.
-        let end = 1 + bytes[1..]
-            .iter()
-            .position(|b| !(b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.')))
-            .unwrap_or(bytes.len() - 1);
-        if matches!(bytes[end - 1], b'+' | b'-' | b'.') {
-            return 0;
-        }
-        path_is_url(fname.add(end))
+    let bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
+    // A scheme starts with a letter — and a Windows drive letter, which
+    // also does, is not a scheme.
+    if !bytes.first().is_some_and(u8::is_ascii_alphabetic)
+        || unsafe { path_has_drive_letter(fname, bytes.len() as size_t) }
+    {
+        return 0;
     }
+    // The rest of the scheme is what RFC 3986 allows, and may not end in
+    // a `+`, `-` or `.`.
+    let end = 1 + bytes[1..]
+        .iter()
+        .position(|b| !(b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.')))
+        .unwrap_or(bytes.len() - 1);
+    if matches!(bytes[end - 1], b'+' | b'-' | b'.') {
+        return 0;
+    }
+    unsafe { path_is_url(fname.add(end)) }
 }
 
 /// Does `path` end in `extension`, ignoring the dot and honouring
@@ -343,13 +319,11 @@ pub unsafe fn path_with_url(fname: *const c_char) -> c_int {
 /// # Safety
 /// Both must be NUL-terminated strings.
 pub unsafe fn path_with_extension(path: *const c_char, extension: *const c_char) -> bool {
-    unsafe {
-        let bytes = CStr::from_ptr(path).to_bytes();
-        let Some(dot) = bytes.iter().rposition(|&b| b == b'.') else {
-            return false;
-        };
-        mb_strcmp_ic(p_fic.get() != 0, path.add(dot + 1), extension) == 0
-    }
+    let bytes = unsafe { CStr::from_ptr(path) }.to_bytes();
+    let Some(dot) = bytes.iter().rposition(|&b| b == b'.') else {
+        return false;
+    };
+    unsafe { mb_strcmp_ic(p_fic.get() != 0, path.add(dot + 1), extension) == 0 }
 }
 
 /// Is `name` a full (absolute) path name, or a URL?
@@ -367,9 +341,9 @@ pub unsafe fn vim_is_abs_name(name: *const c_char) -> bool {
 /// # Safety
 /// `b` and `p` must point into the same string, with `b` no later than `p`.
 pub unsafe fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
-    unsafe {
-        (p > b && vim_ispathsep(*p.sub(1) as c_int) && utf_head_off(b, p.sub(1)) == 0) as c_int
-    }
+    (p > b
+        && vim_ispathsep(unsafe { *p.sub(1) } as c_int)
+        && unsafe { utf_head_off(b, p.sub(1)) } == 0) as c_int
 }
 
 /// Is `fname` an absolute path? `~` counts: it names the home directory.

@@ -50,11 +50,9 @@ impl FileList {
     pub(crate) unsafe fn of_one(name: *const c_char, namelen: usize) -> Self {
         // SAFETY: the caller's promise. `free_wild` frees the entry and then
         // the array, so both are taken from the allocator it gives them to.
-        unsafe {
-            let names = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>();
-            *names = xmemdupz(name.cast(), namelen).cast();
-            FileList { names, len: 1 }
-        }
+        let names = unsafe { xmalloc(size_of::<*mut c_char>()) }.cast::<*mut c_char>();
+        unsafe { *names = xmemdupz(name.cast(), namelen).cast() };
+        FileList { names, len: 1 }
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -154,44 +152,42 @@ impl VisitedList {
     /// # Safety
     /// There is nothing to promise; both names carry their own length.
     pub(crate) unsafe fn add(&mut self, fname: &[u8], wc_path: &[u8]) -> bool {
-        unsafe {
-            // Owned copies first: the comparisons below walk to a
-            // terminator, which a borrowed slice does not have.
-            let fname = Name::from_bytes(fname);
-            let wc_path = Name::from_bytes(wc_path);
-            // For a URL we only compare the name, otherwise the
-            // device/inode.
-            let url = path_with_url(fname.as_ptr()) != 0;
-            let file_id = if url {
-                None
-            } else {
-                let mut file_id = FileID::default();
-                if !os_fileid(fname.as_ptr(), &raw mut file_id) {
-                    return false;
-                }
-                Some(file_id)
-            };
-
-            let known = self.entries.iter().any(|seen| {
-                let same = match (&seen.file_id, &file_id) {
-                    (Some(seen_id), Some(id)) => os_fileid_equal(seen_id, id),
-                    (None, None) => path_fnamecmp(seen.fname.as_ptr(), fname.as_ptr()) == 0,
-                    _ => false,
-                };
-                same && ff_wc_equal(seen.wc_path.as_ptr(), wc_path.as_ptr())
-            });
-            if known {
+        // Owned copies first: the comparisons below walk to a
+        // terminator, which a borrowed slice does not have.
+        let fname = Name::from_bytes(fname);
+        let wc_path = Name::from_bytes(wc_path);
+        // For a URL we only compare the name, otherwise the
+        // device/inode.
+        let url = unsafe { path_with_url(fname.as_ptr()) } != 0;
+        let file_id = if url {
+            None
+        } else {
+            let mut file_id = FileID::default();
+            if !unsafe { os_fileid(fname.as_ptr(), &raw mut file_id) } {
                 return false;
             }
+            Some(file_id)
+        };
 
-            // New file/dir. Add it to the list of visited files/dirs.
-            self.entries.push(Visited {
-                wc_path,
-                file_id,
-                fname: if url { fname } else { Name::default() },
-            });
-            true
+        let known = self.entries.iter().any(|seen| {
+            let same = match (&seen.file_id, &file_id) {
+                (Some(seen_id), Some(id)) => unsafe { os_fileid_equal(seen_id, id) },
+                (None, None) => unsafe { path_fnamecmp(seen.fname.as_ptr(), fname.as_ptr()) == 0 },
+                _ => false,
+            };
+            same && unsafe { ff_wc_equal(seen.wc_path.as_ptr(), wc_path.as_ptr()) }
+        });
+        if known {
+            return false;
         }
+
+        // New file/dir. Add it to the list of visited files/dirs.
+        self.entries.push(Visited {
+            wc_path,
+            file_id,
+            fname: if url { fname } else { Name::default() },
+        });
+        true
     }
 }
 
@@ -214,21 +210,18 @@ impl VisitedLists {
     /// # Safety
     /// `filename` must hold `filenamelen` readable bytes.
     pub(crate) unsafe fn select(&mut self, filename: *const c_char, filenamelen: usize) {
-        unsafe {
-            let filename =
-                Name::from_bytes(slice::from_raw_parts(filename.cast::<u8>(), filenamelen));
-            let found = self
-                .lists
-                .iter()
-                .position(|list| path_fnamecmp(filename.as_ptr(), list.filename.as_ptr()) == 0);
-            self.at = found.unwrap_or_else(|| {
-                self.lists.push(VisitedList {
-                    filename,
-                    entries: Vec::new(),
-                });
-                self.lists.len() - 1
+        let filename =
+            Name::from_bytes(unsafe { slice::from_raw_parts(filename.cast::<u8>(), filenamelen) });
+        let found = self.lists.iter().position(
+            |list| unsafe { path_fnamecmp(filename.as_ptr(), list.filename.as_ptr()) } == 0,
+        );
+        self.at = found.unwrap_or_else(|| {
+            self.lists.push(VisitedList {
+                filename,
+                entries: Vec::new(),
             });
-        }
+            self.lists.len() - 1
+        });
     }
 
     /// Free the list of lists of visited files and directories.
@@ -260,29 +253,27 @@ impl VisitedLists {
 /// # Safety
 /// Both must be NUL-terminated strings.
 pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
-    unsafe {
-        if s1 == s2 {
-            return true;
-        }
-        let ignorecase = p_fic.get() != 0;
-        let fold = |c: c_int| if ignorecase { mb_tolower(c) } else { c };
-
-        let (mut i, mut j) = (0usize, 0usize);
-        let mut prev1 = 0;
-        let mut prev2 = 0;
-        while *s1.add(i) != 0 && *s2.add(j) != 0 {
-            let c1 = utf_ptr2char(s1.add(i));
-            let c2 = utf_ptr2char(s2.add(j));
-            if fold(c1) != fold(c2) && (prev1 != '*' as c_int || prev2 != '*' as c_int) {
-                return false;
-            }
-            prev2 = prev1;
-            prev1 = c1;
-            i += utfc_ptr2len(s1.add(i)) as usize;
-            j += utfc_ptr2len(s2.add(j)) as usize;
-        }
-        *s1.add(i) == *s2.add(j)
+    if s1 == s2 {
+        return true;
     }
+    let ignorecase = p_fic.get() != 0;
+    let fold = |c: c_int| if ignorecase { mb_tolower(c) } else { c };
+
+    let (mut i, mut j) = (0usize, 0usize);
+    let mut prev1 = 0;
+    let mut prev2 = 0;
+    while unsafe { *s1.add(i) } != 0 && unsafe { *s2.add(j) } != 0 {
+        let c1 = unsafe { utf_ptr2char(s1.add(i)) };
+        let c2 = unsafe { utf_ptr2char(s2.add(j)) };
+        if fold(c1) != fold(c2) && (prev1 != '*' as c_int || prev2 != '*' as c_int) {
+            return false;
+        }
+        prev2 = prev1;
+        prev1 = c1;
+        i += unsafe { utfc_ptr2len(s1.add(i)) } as usize;
+        j += unsafe { utfc_ptr2len(s2.add(j)) } as usize;
+    }
+    unsafe { *s1.add(i) == *s2.add(j) }
 }
 
 /// Is `path`, for its first `path_len` bytes, at or below one of the stop
@@ -295,20 +286,18 @@ pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
 /// # Safety
 /// There must be a current buffer, for `'fileignorecase'`.
 pub(crate) unsafe fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs: &[Name]) -> bool {
-    unsafe {
-        // Eat up trailing path separators, except the first.
-        let mut path_len = path_len;
-        while path_len > 1 && vim_ispathsep(path.at(path_len - 1) as c_int) {
-            path_len -= 1;
-        }
-        // If no path consider it as match.
-        if path_len == 0 {
-            return true;
-        }
-
-        stopdirs.iter().any(|stop| {
-            path_fnamencmp(stop.as_ptr(), path.as_ptr(), path_len) == 0
-                && (stop.len() <= path_len || vim_ispathsep(stop.at(path_len) as c_int))
-        })
+    // Eat up trailing path separators, except the first.
+    let mut path_len = path_len;
+    while path_len > 1 && vim_ispathsep(path.at(path_len - 1) as c_int) {
+        path_len -= 1;
     }
+    // If no path consider it as match.
+    if path_len == 0 {
+        return true;
+    }
+
+    stopdirs.iter().any(|stop| unsafe {
+        path_fnamencmp(stop.as_ptr(), path.as_ptr(), path_len) == 0
+            && (stop.len() <= path_len || vim_ispathsep(stop.at(path_len) as c_int))
+    })
 }
