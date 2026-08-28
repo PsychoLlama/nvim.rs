@@ -80,119 +80,127 @@ unsafe fn match_add(
     conceal_char: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's window, strings and list.
-    unsafe {
-        let mut id = id;
-        let mut rtype = UPD_SOME_VALID;
+    let mut id = id;
+    let mut rtype = UPD_SOME_VALID;
 
-        if *grp == 0 || (!pat.is_null() && *pat == 0) {
-            return -1;
-        }
-        if id < -1 || id == 0 {
+    if unsafe { *grp } == 0 || (!pat.is_null() && unsafe { *pat } == 0) {
+        return -1;
+    }
+    if id < -1 || id == 0 {
+        unsafe {
             semsg_c!(
                 gettext(c"E799: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
                 id as int64_t,
-            );
-            return -1;
-        }
-        if id == -1 {
-            id = (*wp).w_next_match_id;
-            (*wp).w_next_match_id += 1;
-        } else {
-            let mut cur = (*wp).w_match_head;
-            while !cur.is_null() {
-                if (*cur).mit_id == id {
+            )
+        };
+        return -1;
+    }
+    if id == -1 {
+        id = unsafe { (*wp).w_next_match_id };
+        unsafe { (*wp).w_next_match_id += 1 };
+    } else {
+        let mut cur = unsafe { (*wp).w_match_head };
+        while !cur.is_null() {
+            if unsafe { (*cur).mit_id } == id {
+                unsafe {
                     semsg_c!(
                         gettext(c"E801: ID already taken: %ld".as_ptr()),
                         id as int64_t,
-                    );
-                    return -1;
-                }
-                cur = (*cur).mit_next;
-            }
-            // Keep the auto-allocated ids above every hand-picked one, with
-            // room for a few more to be picked soon.
-            if (*wp).w_next_match_id < id + 100 {
-                (*wp).w_next_match_id = id + 100;
-            }
-        }
-
-        let hlg_id = syn_check_group(grp, strlen(grp));
-        if hlg_id == 0 {
-            return -1;
-        }
-        let mut regprog: *mut regprog_T = ::core::ptr::null_mut();
-        if !pat.is_null() {
-            regprog = vim_regcomp(pat, RE_MAGIC);
-            if regprog.is_null() {
-                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), pat);
+                    )
+                };
                 return -1;
             }
+            cur = unsafe { (*cur).mit_next };
         }
+        // Keep the auto-allocated ids above every hand-picked one, with
+        // room for a few more to be picked soon.
+        if unsafe { (*wp).w_next_match_id } < id + 100 {
+            unsafe { (*wp).w_next_match_id = id + 100 };
+        }
+    }
 
-        let m: *mut matchitem_T =
-            xcalloc(1, ::core::mem::size_of::<matchitem_T>()).cast::<matchitem_T>();
-        if tv_list_len(pos_list) > 0 {
+    let hlg_id = unsafe { syn_check_group(grp, strlen(grp)) };
+    if hlg_id == 0 {
+        return -1;
+    }
+    let mut regprog: *mut regprog_T = ::core::ptr::null_mut();
+    if !pat.is_null() {
+        regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
+        if regprog.is_null() {
+            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), pat) };
+            return -1;
+        }
+    }
+
+    let m: *mut matchitem_T =
+        unsafe { xcalloc(1, ::core::mem::size_of::<matchitem_T>()) }.cast::<matchitem_T>();
+    if unsafe { tv_list_len(pos_list) } > 0 {
+        unsafe {
             (*m).mit_pos_array = xcalloc(
                 tv_list_len(pos_list) as size_t,
                 ::core::mem::size_of::<llpos_T>(),
             )
-            .cast::<llpos_T>();
-            (*m).mit_pos_count = tv_list_len(pos_list);
-        }
-        (*m).mit_id = id;
-        (*m).mit_priority = prio;
+            .cast::<llpos_T>()
+        };
+        unsafe { (*m).mit_pos_count = tv_list_len(pos_list) };
+    }
+    unsafe { (*m).mit_id = id };
+    unsafe { (*m).mit_priority = prio };
+    unsafe {
         (*m).mit_pattern = if pat.is_null() {
             ::core::ptr::null_mut()
         } else {
             xstrdup(pat)
-        };
-        (*m).mit_hlg_id = hlg_id;
-        (*m).mit_match.regprog = regprog;
-        (*m).mit_match.rmm_ic = 0;
-        (*m).mit_match.rmm_maxcol = 0;
+        }
+    };
+    unsafe { (*m).mit_hlg_id = hlg_id };
+    unsafe { (*m).mit_match.regprog = regprog };
+    unsafe { (*m).mit_match.rmm_ic = 0 };
+    unsafe { (*m).mit_match.rmm_maxcol = 0 };
+    unsafe {
         (*m).mit_conceal_char = if conceal_char.is_null() {
             0
         } else {
             utf_ptr2char(conceal_char)
-        };
+        }
+    };
 
-        if !pos_list.is_null() {
-            match fill_pos_array(m, pos_list) {
-                Some((toplnum, botlnum)) if toplnum != 0 => {
-                    redraw_win_range_later(wp, toplnum, botlnum);
-                    (*m).mit_toplnum = toplnum;
-                    (*m).mit_botlnum = botlnum;
-                    rtype = UPD_VALID;
-                }
-                Some(_) => {}
-                None => {
-                    vim_regfree(regprog);
-                    xfree((*m).mit_pattern.cast());
-                    xfree((*m).mit_pos_array.cast());
-                    xfree(m.cast());
-                    return -1;
-                }
+    if !pos_list.is_null() {
+        match unsafe { fill_pos_array(m, pos_list) } {
+            Some((toplnum, botlnum)) if toplnum != 0 => {
+                unsafe { redraw_win_range_later(wp, toplnum, botlnum) };
+                unsafe { (*m).mit_toplnum = toplnum };
+                unsafe { (*m).mit_botlnum = botlnum };
+                rtype = UPD_VALID;
+            }
+            Some(_) => {}
+            None => {
+                unsafe { vim_regfree(regprog) };
+                unsafe { xfree((*m).mit_pattern.cast()) };
+                unsafe { xfree((*m).mit_pos_array.cast()) };
+                unsafe { xfree(m.cast()) };
+                return -1;
             }
         }
-
-        // Insert into the list, which is in ascending priority order — so a
-        // new match goes *after* every existing one of equal priority.
-        let mut cur = (*wp).w_match_head;
-        let mut prev = cur;
-        while !cur.is_null() && prio >= (*cur).mit_priority {
-            prev = cur;
-            cur = (*cur).mit_next;
-        }
-        if cur == prev {
-            (*wp).w_match_head = m;
-        } else {
-            (*prev).mit_next = m;
-        }
-        (*m).mit_next = cur;
-
-        redraw_later(wp, rtype);
-        id
     }
+
+    // Insert into the list, which is in ascending priority order — so a
+    // new match goes *after* every existing one of equal priority.
+    let mut cur = unsafe { (*wp).w_match_head };
+    let mut prev = cur;
+    while !cur.is_null() && prio >= unsafe { (*cur).mit_priority } {
+        prev = cur;
+        cur = unsafe { (*cur).mit_next };
+    }
+    if cur == prev {
+        unsafe { (*wp).w_match_head = m };
+    } else {
+        unsafe { (*prev).mit_next = m };
+    }
+    unsafe { (*m).mit_next = cur };
+
+    unsafe { redraw_later(wp, rtype) };
+    id
 }
 
 /// Fills `m`'s position array from a `matchaddpos()` list.
@@ -210,97 +218,101 @@ unsafe fn fill_pos_array(
     pos_list: *mut list_T,
 ) -> Option<(linenr_T, linenr_T)> {
     // SAFETY: the caller's match and list.
-    unsafe {
-        let mut toplnum: linenr_T = 0;
-        let mut botlnum: linenr_T = 0;
-        let mut i = 0;
+    let mut toplnum: linenr_T = 0;
+    let mut botlnum: linenr_T = 0;
+    let mut i = 0;
 
-        let mut li = tv_list_first(pos_list);
-        while !li.is_null() {
-            let tv = &raw mut (*li).li_tv;
-            let mut lnum: linenr_T = 0;
-            let mut col: colnr_T = 0;
-            let mut len: c_int = 1;
-            let mut error = false;
-            let mut skip = false;
+    let mut li = unsafe { tv_list_first(pos_list) };
+    while !li.is_null() {
+        let tv = unsafe { &raw mut (*li).li_tv };
+        let mut lnum: linenr_T = 0;
+        let mut col: colnr_T = 0;
+        let mut len: c_int = 1;
+        let mut error = false;
+        let mut skip = false;
 
-            if (*tv).v_type == VAR_LIST {
-                let subl = (*tv).vval.v_list;
-                let mut subli = tv_list_first(subl);
-                if subli.is_null() {
+        if unsafe { (*tv).v_type } == VAR_LIST {
+            let subl = unsafe { (*tv).vval.v_list };
+            let mut subli = unsafe { tv_list_first(subl) };
+            if subli.is_null() {
+                unsafe {
                     semsg_c!(
                         gettext(c"E5030: Empty list at position %d".as_ptr()),
                         tv_list_idx_of_item(pos_list, li),
-                    );
-                    return None;
-                }
-                lnum = tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) as linenr_T;
-                if error {
-                    return None;
-                }
-                if lnum <= 0 {
-                    skip = true;
-                } else {
-                    (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum;
-                    subli = (*subli).li_next;
-                    if !subli.is_null() {
-                        col =
-                            tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) as colnr_T;
-                        if error {
-                            return None;
-                        }
-                        if col < 0 {
-                            skip = true;
-                        } else {
-                            subli = (*subli).li_next;
-                            if !subli.is_null() {
-                                len = tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error)
-                                    as colnr_T;
-                                // Note the order: a negative length is
-                                // skipped before `error` is even looked at.
-                                if len < 0 {
-                                    skip = true;
-                                } else if error {
-                                    return None;
-                                }
+                    )
+                };
+                return None;
+            }
+            lnum =
+                unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) } as linenr_T;
+            if error {
+                return None;
+            }
+            if lnum <= 0 {
+                skip = true;
+            } else {
+                unsafe { (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum };
+                subli = unsafe { (*subli).li_next };
+                if !subli.is_null() {
+                    col = unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) }
+                        as colnr_T;
+                    if error {
+                        return None;
+                    }
+                    if col < 0 {
+                        skip = true;
+                    } else {
+                        subli = unsafe { (*subli).li_next };
+                        if !subli.is_null() {
+                            len = unsafe {
+                                tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error)
+                            } as colnr_T;
+                            // Note the order: a negative length is
+                            // skipped before `error` is even looked at.
+                            if len < 0 {
+                                skip = true;
+                            } else if error {
+                                return None;
                             }
                         }
                     }
-                    if !skip {
-                        (*(*m).mit_pos_array.offset(i as isize)).col = col;
-                        (*(*m).mit_pos_array.offset(i as isize)).len = len;
-                    }
                 }
-            } else if (*tv).v_type == VAR_NUMBER {
-                if (*tv).vval.v_number <= 0 {
-                    skip = true;
-                } else {
-                    lnum = (*tv).vval.v_number as linenr_T;
-                    (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum;
-                    (*(*m).mit_pos_array.offset(i as isize)).col = 0;
-                    (*(*m).mit_pos_array.offset(i as isize)).len = 0;
+                if !skip {
+                    unsafe { (*(*m).mit_pos_array.offset(i as isize)).col = col };
+                    unsafe { (*(*m).mit_pos_array.offset(i as isize)).len = len };
                 }
+            }
+        } else if unsafe { (*tv).v_type } == VAR_NUMBER {
+            if unsafe { (*tv).vval.v_number } <= 0 {
+                skip = true;
             } else {
+                lnum = unsafe { (*tv).vval.v_number } as linenr_T;
+                unsafe { (*(*m).mit_pos_array.offset(i as isize)).lnum = lnum };
+                unsafe { (*(*m).mit_pos_array.offset(i as isize)).col = 0 };
+                unsafe { (*(*m).mit_pos_array.offset(i as isize)).len = 0 };
+            }
+        } else {
+            unsafe {
                 semsg_c!(
                     gettext(c"E5031: List or number required at position %d".as_ptr()),
                     tv_list_idx_of_item(pos_list, li),
-                );
-                return None;
-            }
-
-            if !skip {
-                if toplnum == 0 || lnum < toplnum {
-                    toplnum = lnum;
-                }
-                if botlnum == 0 || lnum >= botlnum {
-                    botlnum = lnum + 1;
-                }
-                i += 1;
-            }
-            li = (*li).li_next;
+                )
+            };
+            return None;
         }
-        Some((toplnum, botlnum))
+
+        if !skip {
+            if toplnum == 0 || lnum < toplnum {
+                toplnum = lnum;
+            }
+            if botlnum == 0 || lnum >= botlnum {
+                botlnum = lnum + 1;
+            }
+            i += 1;
+        }
+        li = unsafe { (*li).li_next };
     }
+    Some((toplnum, botlnum))
 }
 
 /// Removes the match `id` from `wp`'s list; `-1` when there is no such match.
@@ -309,48 +321,48 @@ unsafe fn fill_pos_array(
 /// `wp` must be live.
 unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
     // SAFETY: the caller's window.
-    unsafe {
-        let mut rtype = UPD_SOME_VALID;
+    let mut rtype = UPD_SOME_VALID;
 
-        if id < 1 {
-            if perr {
+    if id < 1 {
+        if perr {
+            unsafe {
                 semsg_c!(
                     gettext(c"E802: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
                     id as int64_t,
-                );
-            }
-            return -1;
+                )
+            };
         }
-
-        let mut cur = (*wp).w_match_head;
-        let mut prev = cur;
-        while !cur.is_null() && (*cur).mit_id != id {
-            prev = cur;
-            cur = (*cur).mit_next;
-        }
-        if cur.is_null() {
-            if perr {
-                semsg_c!(gettext(c"E803: ID not found: %ld".as_ptr()), id as int64_t);
-            }
-            return -1;
-        }
-
-        if cur == prev {
-            (*wp).w_match_head = (*cur).mit_next;
-        } else {
-            (*prev).mit_next = (*cur).mit_next;
-        }
-        vim_regfree((*cur).mit_match.regprog);
-        xfree((*cur).mit_pattern.cast());
-        if (*cur).mit_toplnum != 0 {
-            redraw_win_range_later(wp, (*cur).mit_toplnum, (*cur).mit_botlnum);
-            rtype = UPD_VALID;
-        }
-        xfree((*cur).mit_pos_array.cast());
-        xfree(cur.cast());
-        redraw_later(wp, rtype);
-        0
+        return -1;
     }
+
+    let mut cur = unsafe { (*wp).w_match_head };
+    let mut prev = cur;
+    while !cur.is_null() && unsafe { (*cur).mit_id } != id {
+        prev = cur;
+        cur = unsafe { (*cur).mit_next };
+    }
+    if cur.is_null() {
+        if perr {
+            unsafe { semsg_c!(gettext(c"E803: ID not found: %ld".as_ptr()), id as int64_t) };
+        }
+        return -1;
+    }
+
+    if cur == prev {
+        unsafe { (*wp).w_match_head = (*cur).mit_next };
+    } else {
+        unsafe { (*prev).mit_next = (*cur).mit_next };
+    }
+    unsafe { vim_regfree((*cur).mit_match.regprog) };
+    unsafe { xfree((*cur).mit_pattern.cast()) };
+    if unsafe { (*cur).mit_toplnum } != 0 {
+        unsafe { redraw_win_range_later(wp, (*cur).mit_toplnum, (*cur).mit_botlnum) };
+        rtype = UPD_VALID;
+    }
+    unsafe { xfree((*cur).mit_pos_array.cast()) };
+    unsafe { xfree(cur.cast()) };
+    unsafe { redraw_later(wp, rtype) };
+    0
 }
 
 /// Removes every match from `wp`'s list.
@@ -359,17 +371,15 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 /// `wp` must be live.
 pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
     // SAFETY: the caller's window.
-    unsafe {
-        while !(*wp).w_match_head.is_null() {
-            let m = (*wp).w_match_head;
-            (*wp).w_match_head = (*m).mit_next;
-            vim_regfree((*m).mit_match.regprog);
-            xfree((*m).mit_pattern.cast());
-            xfree((*m).mit_pos_array.cast());
-            xfree(m.cast());
-        }
-        redraw_later(wp, UPD_SOME_VALID);
+    while !unsafe { (*wp).w_match_head }.is_null() {
+        let m = unsafe { (*wp).w_match_head };
+        unsafe { (*wp).w_match_head = (*m).mit_next };
+        unsafe { vim_regfree((*m).mit_match.regprog) };
+        unsafe { xfree((*m).mit_pattern.cast()) };
+        unsafe { xfree((*m).mit_pos_array.cast()) };
+        unsafe { xfree(m.cast()) };
     }
+    unsafe { redraw_later(wp, UPD_SOME_VALID) };
 }
 
 /// The match `id` in `wp`'s list, or null.
@@ -378,13 +388,11 @@ pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
 /// `wp` must be live.
 unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
     // SAFETY: the caller's window.
-    unsafe {
-        let mut cur = (*wp).w_match_head;
-        while !cur.is_null() && (*cur).mit_id != id {
-            cur = (*cur).mit_next;
-        }
-        cur
+    let mut cur = unsafe { (*wp).w_match_head };
+    while !cur.is_null() && unsafe { (*cur).mit_id } != id {
+        cur = unsafe { (*cur).mit_next };
     }
+    cur
 }
 
 /// `:[N]match {group} {pattern}`, `:[N]match none` and `:[N]match`.
@@ -397,62 +405,65 @@ unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
 /// `eap` must be a live Ex-command argument block with a writable `arg`.
 pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
-    unsafe {
-        // The command's count is the match id: `:match`, `:2match`, `:3match`.
-        if (*eap).line2 > 3 {
-            emsg(&raw const e_invcmd as *const c_char);
+    // The command's count is the match id: `:match`, `:2match`, `:3match`.
+    if unsafe { (*eap).line2 } > 3 {
+        unsafe { emsg(&raw const e_invcmd as *const c_char) };
+        return;
+    }
+    let id = unsafe { (*eap).line2 } as c_int;
+    let skip = unsafe { (*eap).skip } != 0;
+
+    // Whatever happens next, the old pattern for this id goes.
+    if !skip {
+        unsafe { match_delete(curwin.get(), id, false) };
+    }
+
+    let arg = unsafe { (*eap).arg };
+    let end;
+    if ends_excmd(unsafe { *arg } as c_int) != 0 {
+        // `:match` on its own: just clear.
+        end = arg;
+    } else if unsafe { strncasecmp(arg, c"none".as_ptr(), 4) } == 0
+        && (ascii_iswhite(unsafe { *arg.offset(4) } as c_int)
+            || ends_excmd(unsafe { *arg.offset(4) } as c_int) != 0)
+    {
+        end = unsafe { arg.offset(4) };
+    } else {
+        let mut p = unsafe { skiptowhite(arg) };
+        // The group name, up to the first whitespace.
+        let g = if skip {
+            ::core::ptr::null_mut()
+        } else {
+            unsafe { xmemdupz(arg.cast(), p.offset_from(arg) as size_t) }.cast::<c_char>()
+        };
+        p = unsafe { skipwhite(p) };
+        if unsafe { *p } == 0 {
+            // There must be two arguments.
+            unsafe { xfree(g.cast()) };
+            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
             return;
         }
-        let id = (*eap).line2 as c_int;
-        let skip = (*eap).skip != 0;
-
-        // Whatever happens next, the old pattern for this id goes.
+        // `*p` is the pattern's delimiter, whatever character it is.
+        end = unsafe { skip_regexp(p.offset(1), *p as c_int, 1) };
         if !skip {
-            match_delete(curwin.get(), id, false);
-        }
-
-        let arg = (*eap).arg;
-        let end;
-        if ends_excmd(*arg as c_int) != 0 {
-            // `:match` on its own: just clear.
-            end = arg;
-        } else if strncasecmp(arg, c"none".as_ptr(), 4) == 0
-            && (ascii_iswhite(*arg.offset(4) as c_int) || ends_excmd(*arg.offset(4) as c_int) != 0)
-        {
-            end = arg.offset(4);
-        } else {
-            let mut p = skiptowhite(arg);
-            // The group name, up to the first whitespace.
-            let g = if skip {
-                ::core::ptr::null_mut()
-            } else {
-                xmemdupz(arg.cast(), p.offset_from(arg) as size_t).cast::<c_char>()
-            };
-            p = skipwhite(p);
-            if *p == 0 {
-                // There must be two arguments.
-                xfree(g.cast());
-                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
+            if unsafe { *end } != 0
+                && ends_excmd(unsafe { *skipwhite(end.offset(1)) } as c_int) == 0
+            {
+                unsafe { xfree(g.cast()) };
+                unsafe { (*eap).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
                 return;
             }
-            // `*p` is the pattern's delimiter, whatever character it is.
-            end = skip_regexp(p.offset(1), *p as c_int, 1);
-            if !skip {
-                if *end != 0 && ends_excmd(*skipwhite(end.offset(1)) as c_int) == 0 {
-                    xfree(g.cast());
-                    (*eap).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end));
-                    return;
-                }
-                if *end != *p {
-                    // The closing delimiter is missing.
-                    xfree(g.cast());
-                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
-                    return;
-                }
-                // Terminate the pattern in place for the compile, then put
-                // the delimiter back so `find_nextcmd` sees the whole line.
-                let c = *end as uint8_t;
-                *end = 0;
+            if unsafe { *end } != unsafe { *p } {
+                // The closing delimiter is missing.
+                unsafe { xfree(g.cast()) };
+                unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p) };
+                return;
+            }
+            // Terminate the pattern in place for the compile, then put
+            // the delimiter back so `find_nextcmd` sees the whole line.
+            let c = unsafe { *end } as uint8_t;
+            unsafe { *end = 0 };
+            unsafe {
                 match_add(
                     curwin.get(),
                     g,
@@ -461,11 +472,11 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
                     id,
                     ::core::ptr::null_mut(),
                     ::core::ptr::null(),
-                );
-                xfree(g.cast());
-                *end = c as c_char;
-            }
+                )
+            };
+            unsafe { xfree(g.cast()) };
+            unsafe { *end = c as c_char };
         }
-        (*eap).nextcmd = find_nextcmd(end);
     }
+    unsafe { (*eap).nextcmd = find_nextcmd(end) };
 }

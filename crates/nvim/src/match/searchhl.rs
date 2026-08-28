@@ -71,25 +71,23 @@ impl ShlWalk {
     #[inline(always)]
     unsafe fn next(&mut self) -> Option<(*mut match_T, *mut matchitem_T)> {
         // SAFETY: the caller's match list.
-        unsafe {
-            if self.advance {
-                self.cur = (*self.cur).mit_next;
-                self.advance = false;
-            }
-            if self.cur.is_null() && self.taken {
-                return None;
-            }
-            let take_search = !self.taken
-                && (self.cur.is_null()
-                    || self.order == Order::SearchFirst
-                    || (*self.cur).mit_priority > SEARCH_HL_PRIORITY);
-            if take_search {
-                self.taken = true;
-                Some((self.search_hl, ::core::ptr::null_mut()))
-            } else {
-                self.advance = true;
-                Some((&raw mut (*self.cur).mit_hl, self.cur))
-            }
+        if self.advance {
+            self.cur = unsafe { (*self.cur).mit_next };
+            self.advance = false;
+        }
+        if self.cur.is_null() && self.taken {
+            return None;
+        }
+        let take_search = !self.taken
+            && (self.cur.is_null()
+                || self.order == Order::SearchFirst
+                || unsafe { (*self.cur).mit_priority } > SEARCH_HL_PRIORITY);
+        if take_search {
+            self.taken = true;
+            Some((self.search_hl, ::core::ptr::null_mut()))
+        } else {
+            self.advance = true;
+            Some((unsafe { &raw mut (*self.cur).mit_hl }, self.cur))
         }
     }
 }
@@ -104,30 +102,30 @@ impl ShlWalk {
 /// `wp` and `search_hl` must be live.
 pub(crate) unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
     // SAFETY: the caller's window and search state.
-    unsafe {
-        let mut cur = (*wp).w_match_head;
-        while !cur.is_null() {
-            // The highlight state borrows the item's program; the
-            // item keeps owning it, which is why this is a shallow
-            // clone and not a compile of its own.
-            (*cur).mit_hl.rm = (*cur).mit_match.clone();
+    let mut cur = unsafe { (*wp).w_match_head };
+    while !cur.is_null() {
+        // The highlight state borrows the item's program; the
+        // item keeps owning it, which is why this is a shallow
+        // clone and not a compile of its own.
+        unsafe { (*cur).mit_hl.rm = (*cur).mit_match.clone() };
+        unsafe {
             (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
                 0
             } else {
                 syn_id2attr((*cur).mit_hlg_id)
-            };
-            (*cur).mit_hl.buf = (*wp).w_buffer;
-            (*cur).mit_hl.lnum = 0;
-            (*cur).mit_hl.first_lnum = 0;
-            (*cur).mit_hl.tm = profile_setlimit(p_rdt.get());
-            cur = (*cur).mit_next;
-        }
-        (*search_hl).buf = (*wp).w_buffer;
-        (*search_hl).lnum = 0;
-        (*search_hl).first_lnum = 0;
-        (*search_hl).attr = win_hl_attr(wp, HLF_L);
-        // The time limit is set at the top level, for every window at once.
+            }
+        };
+        unsafe { (*cur).mit_hl.buf = (*wp).w_buffer };
+        unsafe { (*cur).mit_hl.lnum = 0 };
+        unsafe { (*cur).mit_hl.first_lnum = 0 };
+        unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt.get()) };
+        cur = unsafe { (*cur).mit_next };
     }
+    unsafe { (*search_hl).buf = (*wp).w_buffer };
+    unsafe { (*search_hl).lnum = 0 };
+    unsafe { (*search_hl).first_lnum = 0 };
+    unsafe { (*search_hl).attr = win_hl_attr(wp, HLF_L) };
+    // The time limit is set at the top level, for every window at once.
 }
 
 /// Finds the next `matchaddpos()` position on `lnum` at or after `mincol`.
@@ -146,59 +144,60 @@ unsafe fn next_search_hl_pos(
     mincol: colnr_T,
 ) -> c_int {
     // SAFETY: the caller's match state.
-    unsafe {
-        let mut found = -1;
+    let mut found = -1;
 
-        (*shl).lnum = 0;
-        let mut i = (*match_0).mit_pos_cur;
-        while i < (*match_0).mit_pos_count {
-            let pos = (*match_0).mit_pos_array.offset(i as isize);
-            if (*pos).lnum == 0 {
-                break;
-            }
-            // A whole-line position (len 0) before the column asked for is
-            // already behind us; a sized one may still reach past `mincol`.
-            if (*pos).len == 0 && (*pos).col < mincol {
-                i += 1;
-                continue;
-            }
-            if (*pos).lnum == lnum {
-                if found >= 0 {
-                    let best = (*match_0).mit_pos_array.offset(found as isize);
-                    if (*pos).col < (*best).col {
-                        ::core::ptr::swap(pos, best);
-                    }
-                } else {
-                    found = i;
-                }
-            }
+    unsafe { (*shl).lnum = 0 };
+    let mut i = unsafe { (*match_0).mit_pos_cur };
+    while i < unsafe { (*match_0).mit_pos_count } {
+        let pos = unsafe { (*match_0).mit_pos_array.offset(i as isize) };
+        if unsafe { (*pos).lnum } == 0 {
+            break;
+        }
+        // A whole-line position (len 0) before the column asked for is
+        // already behind us; a sized one may still reach past `mincol`.
+        if unsafe { (*pos).len } == 0 && unsafe { (*pos).col } < mincol {
             i += 1;
+            continue;
         }
-
-        (*match_0).mit_pos_cur = 0;
-        if found < 0 {
-            return 0;
+        if unsafe { (*pos).lnum } == lnum {
+            if found >= 0 {
+                let best = unsafe { (*match_0).mit_pos_array.offset(found as isize) };
+                if unsafe { (*pos).col } < unsafe { (*best).col } {
+                    unsafe { ::core::ptr::swap(pos, best) };
+                }
+            } else {
+                found = i;
+            }
         }
-
-        let best = (*match_0).mit_pos_array.offset(found as isize);
-        // Column 0 means the whole line; otherwise the position is 1-based
-        // and `len` wide.
-        let (start, end) = if (*best).col == 0 {
-            (0, MAXCOL)
-        } else {
-            ((*best).col - 1, (*best).col - 1 + (*best).len)
-        };
-
-        (*shl).lnum = lnum;
-        (*shl).rm.startpos[0].lnum = 0;
-        (*shl).rm.startpos[0].col = start;
-        (*shl).rm.endpos[0].lnum = 0;
-        (*shl).rm.endpos[0].col = end;
-        (*shl).is_addpos = true;
-        (*shl).has_cursor = false;
-        (*match_0).mit_pos_cur = found + 1;
-        1
+        i += 1;
     }
+
+    unsafe { (*match_0).mit_pos_cur = 0 };
+    if found < 0 {
+        return 0;
+    }
+
+    let best = unsafe { (*match_0).mit_pos_array.offset(found as isize) };
+    // Column 0 means the whole line; otherwise the position is 1-based
+    // and `len` wide.
+    let (start, end) = if unsafe { (*best).col } == 0 {
+        (0, MAXCOL)
+    } else {
+        (
+            unsafe { (*best).col } - 1,
+            unsafe { (*best).col } - 1 + unsafe { (*best).len },
+        )
+    };
+
+    unsafe { (*shl).lnum = lnum };
+    unsafe { (*shl).rm.startpos[0].lnum = 0 };
+    unsafe { (*shl).rm.startpos[0].col = start };
+    unsafe { (*shl).rm.endpos[0].lnum = 0 };
+    unsafe { (*shl).rm.endpos[0].col = end };
+    unsafe { (*shl).is_addpos = true };
+    unsafe { (*shl).has_cursor = false };
+    unsafe { (*match_0).mit_pos_cur = found + 1 };
+    1
 }
 
 /// Advances `shl` to its next match on `lnum` at or past `mincol`.
@@ -221,67 +220,68 @@ unsafe fn next_search_hl(
     cur: *mut matchitem_T,
 ) {
     // SAFETY: the caller's window and match state.
-    unsafe {
-        let called_emsg_before = called_emsg.get();
+    let called_emsg_before = called_emsg.get();
 
-        // `:{range}s/pat` only highlights inside the range.
-        if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
-            (*shl).lnum = 0;
+    // `:{range}s/pat` only highlights inside the range.
+    if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
+        unsafe { (*shl).lnum = 0 };
+        return;
+    }
+
+    if unsafe { (*shl).lnum } != 0 {
+        // Three cases: `lnum` is below the previous match, so start
+        // again; the previous match already includes `mincol`, so keep
+        // it; otherwise continue after it.
+        let l = unsafe { (*shl).lnum } + unsafe { (*shl).rm.endpos[0].lnum }
+            - unsafe { (*shl).rm.startpos[0].lnum };
+        if lnum > l {
+            unsafe { (*shl).lnum = 0 };
+        } else if lnum < l || unsafe { (*shl).rm.endpos[0].col } > mincol {
             return;
         }
+    }
 
-        if (*shl).lnum != 0 {
-            // Three cases: `lnum` is below the previous match, so start
-            // again; the previous match already includes `mincol`, so keep
-            // it; otherwise continue after it.
-            let l = (*shl).lnum + (*shl).rm.endpos[0].lnum - (*shl).rm.startpos[0].lnum;
-            if lnum > l {
-                (*shl).lnum = 0;
-            } else if lnum < l || (*shl).rm.endpos[0].col > mincol {
-                return;
-            }
+    // Search until a match that includes `mincol` turns up, or none does.
+    loop {
+        if profile_passed_limit(unsafe { (*shl).tm }) {
+            unsafe { (*shl).lnum = 0 }; // no match found in time
+            break;
         }
 
-        // Search until a match that includes `mincol` turns up, or none does.
-        loop {
-            if profile_passed_limit((*shl).tm) {
-                (*shl).lnum = 0; // no match found in time
+        let matchcol: colnr_T = if unsafe { (*shl).lnum } == 0 {
+            // No useful previous match: search from the line's start.
+            0
+        } else if !cpo_has(CpoFlag::SEARCH)
+            || (unsafe { (*shl).rm.endpos[0].lnum } == 0
+                && unsafe { (*shl).rm.endpos[0].col } <= unsafe { (*shl).rm.startpos[0].col })
+        {
+            // Not Vi-compatible, or an empty match: continue at the next
+            // character, and stop if that is past the end of the line.
+            let at = unsafe { (*shl).rm.startpos[0].col };
+            let ml = unsafe { ml_get_buf((*shl).buf, lnum).offset(at as isize) };
+            if unsafe { *ml } == 0 {
+                unsafe { (*shl).lnum = 0 };
                 break;
             }
+            at + unsafe { utfc_ptr2len(ml) }
+        } else {
+            // Vi-compatible: continue at the end of the previous match.
+            unsafe { (*shl).rm.endpos[0].col }
+        };
 
-            let matchcol: colnr_T = if (*shl).lnum == 0 {
-                // No useful previous match: search from the line's start.
-                0
-            } else if !cpo_has(CpoFlag::SEARCH)
-                || ((*shl).rm.endpos[0].lnum == 0
-                    && (*shl).rm.endpos[0].col <= (*shl).rm.startpos[0].col)
-            {
-                // Not Vi-compatible, or an empty match: continue at the next
-                // character, and stop if that is past the end of the line.
-                let at = (*shl).rm.startpos[0].col;
-                let ml = ml_get_buf((*shl).buf, lnum).offset(at as isize);
-                if *ml == 0 {
-                    (*shl).lnum = 0;
-                    break;
-                }
-                at + utfc_ptr2len(ml)
-            } else {
-                // Vi-compatible: continue at the end of the previous match.
-                (*shl).rm.endpos[0].col
-            };
+        unsafe { (*shl).lnum = lnum };
+        let mut nmatched = 0;
+        if !unsafe { (*shl).rm.regprog }.is_null() {
+            // Whether `shl->rm` shares `cur`'s compiled regexp, which
+            // `vim_regexec_multi` may free and recompile under us.
+            let regprog_is_copy = shl != search_hl
+                && !cur.is_null()
+                && shl == unsafe { &raw mut (*cur).mit_hl }
+                && unsafe { (*cur).mit_match.regprog } == unsafe { (*cur).mit_hl.rm.regprog };
+            let mut timed_out: c_int = 0;
 
-            (*shl).lnum = lnum;
-            let mut nmatched = 0;
-            if !(*shl).rm.regprog.is_null() {
-                // Whether `shl->rm` shares `cur`'s compiled regexp, which
-                // `vim_regexec_multi` may free and recompile under us.
-                let regprog_is_copy = shl != search_hl
-                    && !cur.is_null()
-                    && shl == &raw mut (*cur).mit_hl
-                    && (*cur).mit_match.regprog == (*cur).mit_hl.rm.regprog;
-                let mut timed_out: c_int = 0;
-
-                nmatched = vim_regexec_multi(
+            nmatched = unsafe {
+                vim_regexec_multi(
                     &raw mut (*shl).rm,
                     win,
                     (*shl).buf,
@@ -289,38 +289,38 @@ unsafe fn next_search_hl(
                     matchcol,
                     &raw mut (*shl).tm,
                     &raw mut timed_out,
-                );
-                if regprog_is_copy {
-                    (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog;
-                }
-                if called_emsg.get() > called_emsg_before || got_int.get() || timed_out != 0 {
-                    // Something went wrong in the regexp: stop using it.
-                    if shl == search_hl {
-                        // A match's regprog is a copy and must not be freed.
-                        vim_regfree((*shl).rm.regprog);
-                        set_no_hlsearch(true);
-                    }
-                    (*shl).rm.regprog = ::core::ptr::null_mut();
-                    (*shl).lnum = 0;
-                    got_int.set(false); // avoid the "Type :quit to exit Vim" message
-                    break;
-                }
-            } else if !cur.is_null() {
-                nmatched = next_search_hl_pos(shl, lnum, cur, matchcol);
+                )
+            };
+            if regprog_is_copy {
+                unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
             }
-
-            if nmatched == 0 {
-                (*shl).lnum = 0;
+            if called_emsg.get() > called_emsg_before || got_int.get() || timed_out != 0 {
+                // Something went wrong in the regexp: stop using it.
+                if shl == search_hl {
+                    // A match's regprog is a copy and must not be freed.
+                    unsafe { vim_regfree((*shl).rm.regprog) };
+                    unsafe { set_no_hlsearch(true) };
+                }
+                unsafe { (*shl).rm.regprog = ::core::ptr::null_mut() };
+                unsafe { (*shl).lnum = 0 };
+                got_int.set(false); // avoid the "Type :quit to exit Vim" message
                 break;
             }
-            if (*shl).rm.startpos[0].lnum > 0
-                || (*shl).rm.startpos[0].col >= mincol
-                || nmatched > 1
-                || (*shl).rm.endpos[0].col > mincol
-            {
-                (*shl).lnum += (*shl).rm.startpos[0].lnum;
-                break; // useful match found
-            }
+        } else if !cur.is_null() {
+            nmatched = unsafe { next_search_hl_pos(shl, lnum, cur, matchcol) };
+        }
+
+        if nmatched == 0 {
+            unsafe { (*shl).lnum = 0 };
+            break;
+        }
+        if unsafe { (*shl).rm.startpos[0].lnum } > 0
+            || unsafe { (*shl).rm.startpos[0].col } >= mincol
+            || nmatched > 1
+            || unsafe { (*shl).rm.endpos[0].col } > mincol
+        {
+            unsafe { (*shl).lnum += (*shl).rm.startpos[0].lnum };
+            break; // useful match found
         }
     }
 }
@@ -335,46 +335,51 @@ unsafe fn next_search_hl(
 /// `wp` and `search_hl` must be live.
 pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: linenr_T) {
     // SAFETY: the caller's window and search state.
-    unsafe {
-        let mut walk = ShlWalk::new(wp, search_hl, Order::SearchFirst);
-        while let Some((shl, cur)) = walk.next() {
-            if (*shl).rm.regprog.is_null()
-                || (*shl).lnum != 0
-                || re_multiline((*shl).rm.regprog) == 0
-            {
-                continue;
-            }
+    let mut walk = unsafe { ShlWalk::new(wp, search_hl, Order::SearchFirst) };
+    while let Some((shl, cur)) = unsafe { walk.next() } {
+        if unsafe { (*shl).rm.regprog }.is_null()
+            || unsafe { (*shl).lnum } != 0
+            || unsafe { re_multiline((*shl).rm.regprog) } == 0
+        {
+            continue;
+        }
 
-            if (*shl).first_lnum == 0 {
-                (*shl).first_lnum = lnum;
-                while (*shl).first_lnum > (*wp).w_topline {
-                    if has_folding(Win::new(wp), (*shl).first_lnum - 1, None, None) {
-                        break;
-                    }
-                    (*shl).first_lnum -= 1;
+        if unsafe { (*shl).first_lnum } == 0 {
+            unsafe { (*shl).first_lnum = lnum };
+            while unsafe { (*shl).first_lnum } > unsafe { (*wp).w_topline } {
+                if has_folding(
+                    unsafe { Win::new(wp) },
+                    unsafe { (*shl).first_lnum } - 1,
+                    None,
+                    None,
+                ) {
+                    break;
                 }
+                unsafe { (*shl).first_lnum -= 1 };
             }
-            if !cur.is_null() {
-                (*cur).mit_pos_cur = 0;
-            }
+        }
+        if !cur.is_null() {
+            unsafe { (*cur).mit_pos_cur = 0 };
+        }
 
-            // A position match is "in progress" while it still has unvisited
-            // positions on the line it is on.
-            let mut pos_inprogress = true;
-            let mut n: colnr_T = 0;
-            while (*shl).first_lnum < lnum
-                && (!(*shl).rm.regprog.is_null() || (!cur.is_null() && pos_inprogress))
-            {
-                next_search_hl(wp, search_hl, shl, (*shl).first_lnum, n, cur);
-                pos_inprogress = !cur.is_null() && (*cur).mit_pos_cur != 0;
-                if (*shl).lnum != 0 {
+        // A position match is "in progress" while it still has unvisited
+        // positions on the line it is on.
+        let mut pos_inprogress = true;
+        let mut n: colnr_T = 0;
+        while unsafe { (*shl).first_lnum } < lnum
+            && (!unsafe { (*shl).rm.regprog }.is_null() || (!cur.is_null() && pos_inprogress))
+        {
+            unsafe { next_search_hl(wp, search_hl, shl, (*shl).first_lnum, n, cur) };
+            pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
+            if unsafe { (*shl).lnum } != 0 {
+                unsafe {
                     (*shl).first_lnum =
-                        (*shl).lnum + (*shl).rm.endpos[0].lnum - (*shl).rm.startpos[0].lnum;
-                    n = (*shl).rm.endpos[0].col;
-                } else {
-                    (*shl).first_lnum += 1;
-                    n = 0;
-                }
+                        (*shl).lnum + (*shl).rm.endpos[0].lnum - (*shl).rm.startpos[0].lnum
+                };
+                n = unsafe { (*shl).rm.endpos[0].col };
+            } else {
+                unsafe { (*shl).first_lnum += 1 };
+                n = 0;
             }
         }
     }
@@ -387,14 +392,14 @@ pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, 
 /// `wp` and `shl` must be live.
 unsafe fn check_cur_search_hl(wp: *mut win_T, shl: *mut match_T) {
     // SAFETY: the caller's window and match state.
+    let linecount = unsafe { (*shl).rm.endpos[0].lnum } - unsafe { (*shl).rm.startpos[0].lnum };
+    let cursor = unsafe { (*wp).w_cursor };
     unsafe {
-        let linecount = (*shl).rm.endpos[0].lnum - (*shl).rm.startpos[0].lnum;
-        let cursor = (*wp).w_cursor;
         (*shl).has_cursor = cursor.lnum >= (*shl).lnum
             && cursor.lnum <= (*shl).lnum + linecount
             && (cursor.lnum > (*shl).lnum || cursor.col >= (*shl).rm.startpos[0].col)
-            && (cursor.lnum < (*shl).lnum + linecount || cursor.col < (*shl).rm.endpos[0].col);
-    }
+            && (cursor.lnum < (*shl).lnum + linecount || cursor.col < (*shl).rm.endpos[0].col)
+    };
 }
 
 /// Prepares every pattern for one window line, and answers whether any of
@@ -417,64 +422,66 @@ pub(crate) unsafe fn prepare_search_hl_line(
     search_attr_from_match: *mut bool,
 ) -> bool {
     // SAFETY: the caller's window, line and out-parameters.
-    unsafe {
-        let mut area_highlighting = false;
-        let mut walk = ShlWalk::new(wp, search_hl, Order::SearchFirst);
-        while let Some((shl, cur)) = walk.next() {
-            (*shl).startcol = MAXCOL;
-            (*shl).endcol = MAXCOL;
-            (*shl).attr_cur = 0;
-            (*shl).is_addpos = false;
-            (*shl).has_cursor = false;
-            if !cur.is_null() {
-                (*cur).mit_pos_cur = 0;
-            }
-            next_search_hl(wp, search_hl, shl, lnum, mincol, cur);
+    let mut area_highlighting = false;
+    let mut walk = unsafe { ShlWalk::new(wp, search_hl, Order::SearchFirst) };
+    while let Some((shl, cur)) = unsafe { walk.next() } {
+        unsafe { (*shl).startcol = MAXCOL };
+        unsafe { (*shl).endcol = MAXCOL };
+        unsafe { (*shl).attr_cur = 0 };
+        unsafe { (*shl).is_addpos = false };
+        unsafe { (*shl).has_cursor = false };
+        if !cur.is_null() {
+            unsafe { (*cur).mit_pos_cur = 0 };
+        }
+        unsafe { next_search_hl(wp, search_hl, shl, lnum, mincol, cur) };
 
-            // Re-read the line: a multi-line regexp may have invalidated it.
-            *line = ml_get_buf((*wp).w_buffer, lnum);
+        // Re-read the line: a multi-line regexp may have invalidated it.
+        unsafe { *line = ml_get_buf((*wp).w_buffer, lnum) };
 
-            if (*shl).lnum == 0 || (*shl).lnum > lnum {
-                continue;
-            }
+        if unsafe { (*shl).lnum } == 0 || unsafe { (*shl).lnum } > lnum {
+            continue;
+        }
 
-            // A match that started on an earlier line covers this one from
-            // column 0; one that ends on a later line covers it to the end.
+        // A match that started on an earlier line covers this one from
+        // column 0; one that ends on a later line covers it to the end.
+        unsafe {
             (*shl).startcol = if (*shl).lnum == lnum {
                 (*shl).rm.startpos[0].col
             } else {
                 0
-            };
+            }
+        };
+        unsafe {
             (*shl).endcol =
                 if lnum == (*shl).lnum + (*shl).rm.endpos[0].lnum - (*shl).rm.startpos[0].lnum {
                     (*shl).rm.endpos[0].col
                 } else {
                     MAXCOL
-                };
-
-            // Before the columns are widened below.
-            if shl == search_hl {
-                check_cur_search_hl(wp, shl);
-            }
-
-            // An empty match still highlights one character.
-            if (*shl).startcol == (*shl).endcol {
-                if *(*line).offset((*shl).endcol as isize) != 0 {
-                    (*shl).endcol += utfc_ptr2len((*line).offset((*shl).endcol as isize));
-                } else {
-                    (*shl).endcol += 1;
                 }
-            }
-            if (*shl).startcol < mincol {
-                // Already highlighted at the left edge.
-                (*shl).attr_cur = (*shl).attr;
-                *search_attr = (*shl).attr;
-                *search_attr_from_match = shl != search_hl;
-            }
-            area_highlighting = true;
+        };
+
+        // Before the columns are widened below.
+        if shl == search_hl {
+            unsafe { check_cur_search_hl(wp, shl) };
         }
-        area_highlighting
+
+        // An empty match still highlights one character.
+        if unsafe { (*shl).startcol } == unsafe { (*shl).endcol } {
+            if unsafe { *(*line).offset((*shl).endcol as isize) } != 0 {
+                unsafe { (*shl).endcol += utfc_ptr2len((*line).offset((*shl).endcol as isize)) };
+            } else {
+                unsafe { (*shl).endcol += 1 };
+            }
+        }
+        if unsafe { (*shl).startcol } < mincol {
+            // Already highlighted at the left edge.
+            unsafe { (*shl).attr_cur = (*shl).attr };
+            unsafe { *search_attr = (*shl).attr };
+            unsafe { *search_attr_from_match = shl != search_hl };
+        }
+        area_highlighting = true;
     }
+    area_highlighting
 }
 
 /// Advances every pattern past `col` and answers the attribute that wins
@@ -501,96 +508,102 @@ pub(crate) unsafe fn update_search_hl(
     search_attr_from_match: *mut bool,
 ) -> c_int {
     // SAFETY: the caller's window, line and out-parameters.
-    unsafe {
-        let mut walk = ShlWalk::new(wp, search_hl, Order::ByPriority);
-        while let Some((shl, cur)) = walk.next() {
-            if !cur.is_null() {
-                (*cur).mit_pos_cur = 0;
+    let mut walk = unsafe { ShlWalk::new(wp, search_hl, Order::ByPriority) };
+    while let Some((shl, cur)) = unsafe { walk.next() } {
+        if !cur.is_null() {
+            unsafe { (*cur).mit_pos_cur = 0 };
+        }
+        let mut pos_inprogress = true;
+        while !unsafe { (*shl).rm.regprog }.is_null() || (!cur.is_null() && pos_inprogress) {
+            if unsafe { (*shl).startcol } != MAXCOL
+                && col >= unsafe { (*shl).startcol }
+                && col < unsafe { (*shl).endcol }
+            {
+                // Inside the match. Widen it to a whole character.
+                let next_col = col + unsafe { utfc_ptr2len((*line).offset(col as isize)) };
+                if unsafe { (*shl).endcol } < next_col {
+                    unsafe { (*shl).endcol = next_col };
+                }
+                // The match holding the cursor uses `CurSearch`.
+                if shl == search_hl && unsafe { (*shl).has_cursor } {
+                    unsafe { (*shl).attr_cur = win_hl_attr(wp, HLF_LC) };
+                    if unsafe { (*shl).attr_cur } != unsafe { (*shl).attr } {
+                        search_hl_has_cursor_lnum.set(lnum);
+                    }
+                } else {
+                    unsafe { (*shl).attr_cur = (*shl).attr };
+                }
+                // A match in the `Conceal` group hides its text; 2 marks
+                // the first cell, so the replacement character is drawn
+                // once rather than once per cell.
+                if !cur.is_null()
+                    && shl != search_hl
+                    && unsafe { syn_name2id(c"Conceal".as_ptr()) } == unsafe { (*cur).mit_hlg_id }
+                {
+                    unsafe { *has_match_conc = if col == (*shl).startcol { 2 } else { 1 } };
+                    unsafe { *match_conc = (*cur).mit_conceal_char };
+                } else {
+                    unsafe { *has_match_conc = 0 };
+                }
+                break;
             }
-            let mut pos_inprogress = true;
-            while !(*shl).rm.regprog.is_null() || (!cur.is_null() && pos_inprogress) {
-                if (*shl).startcol != MAXCOL && col >= (*shl).startcol && col < (*shl).endcol {
-                    // Inside the match. Widen it to a whole character.
-                    let next_col = col + utfc_ptr2len((*line).offset(col as isize));
-                    if (*shl).endcol < next_col {
-                        (*shl).endcol = next_col;
-                    }
-                    // The match holding the cursor uses `CurSearch`.
-                    if shl == search_hl && (*shl).has_cursor {
-                        (*shl).attr_cur = win_hl_attr(wp, HLF_LC);
-                        if (*shl).attr_cur != (*shl).attr {
-                            search_hl_has_cursor_lnum.set(lnum);
-                        }
-                    } else {
-                        (*shl).attr_cur = (*shl).attr;
-                    }
-                    // A match in the `Conceal` group hides its text; 2 marks
-                    // the first cell, so the replacement character is drawn
-                    // once rather than once per cell.
-                    if !cur.is_null()
-                        && shl != search_hl
-                        && syn_name2id(c"Conceal".as_ptr()) == (*cur).mit_hlg_id
-                    {
-                        *has_match_conc = if col == (*shl).startcol { 2 } else { 1 };
-                        *match_conc = (*cur).mit_conceal_char;
-                    } else {
-                        *has_match_conc = 0;
-                    }
-                    break;
-                }
-                if col != (*shl).endcol {
-                    break;
-                }
+            if col != unsafe { (*shl).endcol } {
+                break;
+            }
 
-                // Just past the end: look for the next match on this line.
-                (*shl).attr_cur = 0;
-                next_search_hl(wp, search_hl, shl, lnum, col, cur);
-                pos_inprogress = !cur.is_null() && (*cur).mit_pos_cur != 0;
+            // Just past the end: look for the next match on this line.
+            unsafe { (*shl).attr_cur = 0 };
+            unsafe { next_search_hl(wp, search_hl, shl, lnum, col, cur) };
+            pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
 
-                // Re-read the line: a multi-line regexp may have invalidated it.
-                *line = ml_get_buf((*wp).w_buffer, lnum);
+            // Re-read the line: a multi-line regexp may have invalidated it.
+            unsafe { *line = ml_get_buf((*wp).w_buffer, lnum) };
 
-                if (*shl).lnum != lnum {
-                    break;
-                }
-                (*shl).startcol = (*shl).rm.startpos[0].col;
+            if unsafe { (*shl).lnum } != lnum {
+                break;
+            }
+            unsafe { (*shl).startcol = (*shl).rm.startpos[0].col };
+            unsafe {
                 (*shl).endcol = if (*shl).rm.endpos[0].lnum == 0 {
                     (*shl).rm.endpos[0].col
                 } else {
                     MAXCOL
-                };
-                if shl == search_hl {
-                    check_cur_search_hl(wp, shl);
                 }
-                if (*shl).startcol == (*shl).endcol {
-                    // Highlight the empty match, then try again after it.
-                    let p = (*line).offset((*shl).endcol as isize);
-                    (*shl).endcol += if *p == 0 { 1 } else { utfc_ptr2len(p) };
-                }
-                // Round again, in case the new match starts here.
+            };
+            if shl == search_hl {
+                unsafe { check_cur_search_hl(wp, shl) };
             }
-        }
-
-        // The attribute of the highest-priority pattern covering `col`:
-        // walking in priority order, the last writer wins.
-        *search_attr_from_match = false;
-        let mut search_attr = (*search_hl).attr_cur;
-        let mut walk = ShlWalk::new(wp, search_hl, Order::ByPriority);
-        while let Some((shl, _)) = walk.next() {
-            if (*shl).attr_cur != 0 {
-                search_attr = (*shl).attr_cur;
-                *on_last_col = col + 1 >= (*shl).endcol;
-                *search_attr_from_match = shl != search_hl;
+            if unsafe { (*shl).startcol } == unsafe { (*shl).endcol } {
+                // Highlight the empty match, then try again after it.
+                let p = unsafe { (*line).offset((*shl).endcol as isize) };
+                unsafe { (*shl).endcol += if *p == 0 { 1 } else { utfc_ptr2len(p) } };
             }
+            // Round again, in case the new match starts here.
         }
-
-        // Under `'list'` the eol character is drawn from `'listchars'`, so
-        // the match must not colour past the last real character.
-        if *(*line).offset(col as isize) == 0 && (*wp).w_onebuf_opt.wo_list != 0 && !lcs_eol_todo {
-            search_attr = 0;
-        }
-        search_attr
     }
+
+    // The attribute of the highest-priority pattern covering `col`:
+    // walking in priority order, the last writer wins.
+    unsafe { *search_attr_from_match = false };
+    let mut search_attr = unsafe { (*search_hl).attr_cur };
+    let mut walk = unsafe { ShlWalk::new(wp, search_hl, Order::ByPriority) };
+    while let Some((shl, _)) = unsafe { walk.next() } {
+        if unsafe { (*shl).attr_cur } != 0 {
+            search_attr = unsafe { (*shl).attr_cur };
+            unsafe { *on_last_col = col + 1 >= (*shl).endcol };
+            unsafe { *search_attr_from_match = shl != search_hl };
+        }
+    }
+
+    // Under `'list'` the eol character is drawn from `'listchars'`, so
+    // the match must not colour past the last real character.
+    if unsafe { *(*line).offset(col as isize) } == 0
+        && unsafe { (*wp).w_onebuf_opt.wo_list } != 0
+        && !lcs_eol_todo
+    {
+        search_attr = 0;
+    }
+    search_attr
 }
 
 /// Whether the cell just past the end of the line should be highlighted.
@@ -607,32 +620,31 @@ pub(crate) unsafe fn get_prevcol_hl_flag(
     curcol: colnr_T,
 ) -> bool {
     // SAFETY: the caller's window and search state.
-    unsafe {
-        // Not really at that column when text to the left is being skipped.
-        let skip = if (*wp).w_onebuf_opt.wo_wrap != 0 {
-            (*wp).w_skipcol
-        } else {
-            (*wp).w_leftcol
-        };
-        let prevcol = if skip > curcol { curcol + 1 } else { curcol };
+    // Not really at that column when text to the left is being skipped.
+    let skip = if unsafe { (*wp).w_onebuf_opt.wo_wrap } != 0 {
+        unsafe { (*wp).w_skipcol }
+    } else {
+        unsafe { (*wp).w_leftcol }
+    };
+    let prevcol = if skip > curcol { curcol + 1 } else { curcol };
 
-        let covers = |m: *const match_T| {
-            !(*m).is_addpos
-                && (prevcol == (*m).startcol || (prevcol > (*m).startcol && (*m).endcol == MAXCOL))
-        };
+    let covers = |m: *const match_T| {
+        !unsafe { (*m).is_addpos }
+            && (prevcol == unsafe { (*m).startcol }
+                || (prevcol > unsafe { (*m).startcol } && unsafe { (*m).endcol } == MAXCOL))
+    };
 
-        if covers(search_hl) {
+    if covers(search_hl) {
+        return true;
+    }
+    let mut cur = unsafe { (*wp).w_match_head };
+    while !cur.is_null() {
+        if covers(unsafe { &raw const (*cur).mit_hl }) {
             return true;
         }
-        let mut cur = (*wp).w_match_head;
-        while !cur.is_null() {
-            if covers(&raw const (*cur).mit_hl) {
-                return true;
-            }
-            cur = (*cur).mit_next;
-        }
-        false
+        cur = unsafe { (*cur).mit_next };
     }
+    false
 }
 
 /// The attribute for the character after the text, when a match starts
@@ -647,12 +659,12 @@ pub(crate) unsafe fn get_search_match_hl(
     char_attr: *mut c_int,
 ) {
     // SAFETY: the caller's window and out-parameter.
-    unsafe {
-        let mut walk = ShlWalk::new(wp, search_hl, Order::ByPriority);
-        while let Some((shl, _)) = walk.next() {
-            if col - 1 == (*shl).startcol && (shl == search_hl || !(*shl).is_addpos) {
-                *char_attr = (*shl).attr;
-            }
+    let mut walk = unsafe { ShlWalk::new(wp, search_hl, Order::ByPriority) };
+    while let Some((shl, _)) = unsafe { walk.next() } {
+        if col - 1 == unsafe { (*shl).startcol }
+            && (shl == search_hl || !unsafe { (*shl).is_addpos })
+        {
+            unsafe { *char_attr = (*shl).attr };
         }
     }
 }

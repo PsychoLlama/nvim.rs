@@ -28,9 +28,7 @@ const MAX_SAVED_POS: c_int = 8;
 /// `d` must be live and `val` null or NUL-terminated.
 unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
     // SAFETY: the caller's dictionary and value.
-    unsafe {
-        tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val);
-    }
+    unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -39,9 +37,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
 /// `d` must be live.
 unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
     // SAFETY: the caller's dictionary.
-    unsafe {
-        tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr);
-    }
+    unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
 
 /// `tv_dict_find` with a Rust key; null when absent.
@@ -65,29 +61,27 @@ unsafe fn matchadd_dict_arg(
     numbuf: &mut NumBuf,
 ) -> c_int {
     // SAFETY: the caller's typval and out-parameters.
-    unsafe {
-        if (*tv).v_type != VAR_DICT {
-            emsg(gettext(&raw const e_dictreq as *const c_char));
-            return FAIL;
-        }
-        let dict = (*tv).vval.v_dict;
-
-        let di = find(dict, "conceal");
-        if !di.is_null() {
-            *conceal_char = numbuf.string(&raw mut (*di).di_tv);
-        }
-
-        let di = find(dict, "window");
-        if di.is_null() {
-            return OK;
-        }
-        let Some(found) = find_win_by_nr_or_id(&raw mut (*di).di_tv) else {
-            emsg(gettext(&raw const e_invalwindow as *const c_char));
-            return FAIL;
-        };
-        *win = found.raw();
-        OK
+    if unsafe { (*tv).v_type } != VAR_DICT {
+        unsafe { emsg(gettext(&raw const e_dictreq as *const c_char)) };
+        return FAIL;
     }
+    let dict = unsafe { (*tv).vval.v_dict };
+
+    let di = unsafe { find(dict, "conceal") };
+    if !di.is_null() {
+        unsafe { *conceal_char = numbuf.string(&raw mut (*di).di_tv) };
+    }
+
+    let di = unsafe { find(dict, "window") };
+    if di.is_null() {
+        return OK;
+    }
+    let Some(found) = (unsafe { find_win_by_nr_or_id(&raw mut (*di).di_tv) }) else {
+        unsafe { emsg(gettext(&raw const e_invalwindow as *const c_char)) };
+        return FAIL;
+    };
+    unsafe { *win = found.raw() };
+    OK
 }
 
 /// `clearmatches([win])`.
@@ -100,11 +94,9 @@ pub(crate) unsafe fn f_clearmatches(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let win = get_optional_window(argvars, 0);
-        if !win.is_null() {
-            clear_matches(win);
-        }
+    let win = unsafe { get_optional_window(argvars, 0) };
+    if !win.is_null() {
+        unsafe { clear_matches(win) };
     }
 }
 
@@ -118,51 +110,49 @@ pub(crate) unsafe fn f_getmatches(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let win = get_optional_window(argvars, 0);
-        let l = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-        if win.is_null() {
-            return;
-        }
+    let win = unsafe { get_optional_window(argvars, 0) };
+    let l = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+    if win.is_null() {
+        return;
+    }
 
-        let mut cur = (*win).w_match_head;
-        while !cur.is_null() {
-            let dict = tv_dict_alloc();
-            if (*cur).mit_match.regprog.is_null() {
-                // Added with matchaddpos(): one `posN` key per position.
-                for i in 0..(*cur).mit_pos_count {
-                    let llpos = (*cur).mit_pos_array.offset(i as isize);
-                    if (*llpos).lnum == 0 {
-                        break;
-                    }
-                    // A column of zero means the whole line, and is reported
-                    // as a one-element list.
-                    let sub = tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 });
-                    tv_list_append_number(sub, (*llpos).lnum as varnumber_T);
-                    if (*llpos).col > 0 {
-                        tv_list_append_number(sub, (*llpos).col as varnumber_T);
-                        tv_list_append_number(sub, (*llpos).len as varnumber_T);
-                    }
-                    let key = format!("pos{}", i + 1);
-                    tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub);
+    let mut cur = unsafe { (*win).w_match_head };
+    while !cur.is_null() {
+        let dict = unsafe { tv_dict_alloc() };
+        if unsafe { (*cur).mit_match.regprog }.is_null() {
+            // Added with matchaddpos(): one `posN` key per position.
+            for i in 0..unsafe { (*cur).mit_pos_count } {
+                let llpos = unsafe { (*cur).mit_pos_array.offset(i as isize) };
+                if unsafe { (*llpos).lnum } == 0 {
+                    break;
                 }
-            } else {
-                put_str(dict, "pattern", (*cur).mit_pattern);
+                // A column of zero means the whole line, and is reported
+                // as a one-element list.
+                let sub = unsafe { tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 }) };
+                unsafe { tv_list_append_number(sub, (*llpos).lnum as varnumber_T) };
+                if unsafe { (*llpos).col } > 0 {
+                    unsafe { tv_list_append_number(sub, (*llpos).col as varnumber_T) };
+                    unsafe { tv_list_append_number(sub, (*llpos).len as varnumber_T) };
+                }
+                let key = format!("pos{}", i + 1);
+                unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub) };
             }
-            put_str(dict, "group", syn_id2name((*cur).mit_hlg_id));
-            put_nr(dict, "priority", (*cur).mit_priority as varnumber_T);
-            put_nr(dict, "id", (*cur).mit_id as varnumber_T);
-
-            if (*cur).mit_conceal_char != 0 {
-                let mut buf = [0 as c_char; MB_MAXCHAR + 1];
-                let len = utf_char2bytes((*cur).mit_conceal_char, buf.as_mut_ptr());
-                buf[len as usize] = 0;
-                put_str(dict, "conceal", buf.as_ptr());
-            }
-
-            tv_list_append_dict(l, dict);
-            cur = (*cur).mit_next;
+        } else {
+            unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };
         }
+        unsafe { put_str(dict, "group", syn_id2name((*cur).mit_hlg_id)) };
+        unsafe { put_nr(dict, "priority", (*cur).mit_priority as varnumber_T) };
+        unsafe { put_nr(dict, "id", (*cur).mit_id as varnumber_T) };
+
+        if unsafe { (*cur).mit_conceal_char } != 0 {
+            let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+            let len = unsafe { utf_char2bytes((*cur).mit_conceal_char, buf.as_mut_ptr()) };
+            buf[len as usize] = 0;
+            unsafe { put_str(dict, "conceal", buf.as_ptr()) };
+        }
+
+        unsafe { tv_list_append_dict(l, dict) };
+        cur = unsafe { (*cur).mit_next };
     }
 }
 
@@ -183,92 +173,95 @@ pub(crate) unsafe fn f_setmatches(
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let win = get_optional_window(argvars, 1);
+    let win = unsafe { get_optional_window(argvars, 1) };
 
-        (*rettv).vval.v_number = -1;
-        if (*argvars).v_type != VAR_LIST {
-            emsg(gettext(&raw const e_listreq as *const c_char));
-            return;
-        }
-        if win.is_null() {
-            return;
-        }
-        let l = (*argvars).vval.v_list;
+    unsafe { (*rettv).vval.v_number = -1 };
+    if unsafe { (*argvars).v_type } != VAR_LIST {
+        unsafe { emsg(gettext(&raw const e_listreq as *const c_char)) };
+        return;
+    }
+    if win.is_null() {
+        return;
+    }
+    let l = unsafe { (*argvars).vval.v_list };
 
-        // To some extent make sure this really came from getmatches().
-        let mut li_idx = 0;
-        let mut li = tv_list_first(l);
-        while !li.is_null() {
-            let tv = &raw mut (*li).li_tv;
-            if (*tv).v_type != VAR_DICT || (*tv).vval.v_dict.is_null() {
+    // To some extent make sure this really came from getmatches().
+    let mut li_idx = 0;
+    let mut li = unsafe { tv_list_first(l) };
+    while !li.is_null() {
+        let tv = unsafe { &raw mut (*li).li_tv };
+        if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict }.is_null() {
+            unsafe {
                 semsg_c!(
-                    gettext(
-                        c"E474: List item %d is either not a dictionary or an empty one".as_ptr(),
-                    ),
+                    gettext( c"E474: List item %d is either not a dictionary or an empty one".as_ptr(), ),
                     li_idx,
-                );
-                return;
-            }
-            let d = (*tv).vval.v_dict;
-            let ok = !find(d, "group").is_null()
-                && (!find(d, "pattern").is_null() || !find(d, "pos1").is_null())
-                && !find(d, "priority").is_null()
-                && !find(d, "id").is_null();
-            if !ok {
+                )
+            };
+            return;
+        }
+        let d = unsafe { (*tv).vval.v_dict };
+        let ok = !unsafe { find(d, "group") }.is_null()
+            && (!unsafe { find(d, "pattern") }.is_null() || !unsafe { find(d, "pos1") }.is_null())
+            && !unsafe { find(d, "priority") }.is_null()
+            && !unsafe { find(d, "id") }.is_null();
+        if !ok {
+            unsafe {
                 semsg_c!(
                     gettext(c"E474: List item %d is missing one of the required keys".as_ptr()),
                     li_idx,
-                );
-                return;
+                )
+            };
+            return;
+        }
+        li_idx += 1;
+        li = unsafe { (*li).li_next };
+    }
+
+    unsafe { clear_matches(win) };
+    let mut match_add_failed = false;
+    let mut li = unsafe { tv_list_first(l) };
+    while !li.is_null() {
+        let d = unsafe { (*li).li_tv.vval.v_dict };
+
+        // A match with no `pattern` is a position match: collect
+        // pos1..pos8 into the list `match_add` wants.
+        let mut positions: *mut list_T = ::core::ptr::null_mut();
+        if unsafe { find(d, "pattern") }.is_null() {
+            positions = unsafe { tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1) };
+            for i in 1..MAX_SAVED_POS + 1 {
+                let key = format!("pos{i}");
+                let pos_di =
+                    unsafe { tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t) };
+                if pos_di.is_null() {
+                    break;
+                }
+                if unsafe { (*pos_di).di_tv.v_type } != VAR_LIST {
+                    // Leaks `positions` exactly as upstream does, and
+                    // leaves the earlier entries of the list already
+                    // restored — the validation above does not look
+                    // inside a `posN` key.
+                    return;
+                }
+                unsafe { tv_list_append_tv(positions, &raw mut (*pos_di).di_tv) };
+                unsafe { tv_list_ref(positions) };
             }
-            li_idx += 1;
-            li = (*li).li_next;
         }
 
-        clear_matches(win);
-        let mut match_add_failed = false;
-        let mut li = tv_list_first(l);
-        while !li.is_null() {
-            let d = (*li).li_tv.vval.v_dict;
+        // Three scratches are in play here — this one and the two the
+        // frame lends below — and none may be reused before its value is.
+        let group = unsafe { group_buf.dict_string(d, c"group".as_ptr()) };
+        let priority = unsafe { tv_dict_get_number(d, c"priority".as_ptr()) } as c_int;
+        let id = unsafe { tv_dict_get_number(d, c"id".as_ptr()) } as c_int;
+        let conceal_di = unsafe { find(d, "conceal") };
+        let conceal = if conceal_di.is_null() {
+            ::core::ptr::null()
+        } else {
+            unsafe { numbuf.string(&raw mut (*conceal_di).di_tv) }
+        };
 
-            // A match with no `pattern` is a position match: collect
-            // pos1..pos8 into the list `match_add` wants.
-            let mut positions: *mut list_T = ::core::ptr::null_mut();
-            if find(d, "pattern").is_null() {
-                positions = tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1);
-                for i in 1..MAX_SAVED_POS + 1 {
-                    let key = format!("pos{i}");
-                    let pos_di = tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t);
-                    if pos_di.is_null() {
-                        break;
-                    }
-                    if (*pos_di).di_tv.v_type != VAR_LIST {
-                        // Leaks `positions` exactly as upstream does, and
-                        // leaves the earlier entries of the list already
-                        // restored — the validation above does not look
-                        // inside a `posN` key.
-                        return;
-                    }
-                    tv_list_append_tv(positions, &raw mut (*pos_di).di_tv);
-                    tv_list_ref(positions);
-                }
-            }
-
-            // Three scratches are in play here — this one and the two the
-            // frame lends below — and none may be reused before its value is.
-            let group = group_buf.dict_string(d, c"group".as_ptr());
-            let priority = tv_dict_get_number(d, c"priority".as_ptr()) as c_int;
-            let id = tv_dict_get_number(d, c"id".as_ptr()) as c_int;
-            let conceal_di = find(d, "conceal");
-            let conceal = if conceal_di.is_null() {
-                ::core::ptr::null()
-            } else {
-                numbuf.string(&raw mut (*conceal_di).di_tv)
-            };
-
-            let added = if positions.is_null() {
-                let pattern = numbuf2.dict_string(d, c"pattern".as_ptr());
+        let added = if positions.is_null() {
+            let pattern = unsafe { numbuf2.dict_string(d, c"pattern".as_ptr()) };
+            unsafe {
                 match_add(
                     win,
                     group,
@@ -278,8 +271,10 @@ pub(crate) unsafe fn f_setmatches(
                     ::core::ptr::null_mut(),
                     conceal,
                 )
-            } else {
-                let rc = match_add(
+            }
+        } else {
+            let rc = unsafe {
+                match_add(
                     win,
                     group,
                     ::core::ptr::null(),
@@ -287,19 +282,19 @@ pub(crate) unsafe fn f_setmatches(
                     id,
                     positions,
                     conceal,
-                );
-                tv_list_unref(positions);
-                rc
+                )
             };
-            if added != id {
-                match_add_failed = true;
-            }
+            unsafe { tv_list_unref(positions) };
+            rc
+        };
+        if added != id {
+            match_add_failed = true;
+        }
 
-            li = (*li).li_next;
-        }
-        if !match_add_failed {
-            (*rettv).vval.v_number = 0;
-        }
+        li = unsafe { (*li).li_next };
+    }
+    if !match_add_failed {
+        unsafe { (*rettv).vval.v_number = 0 };
     }
 }
 
@@ -315,36 +310,36 @@ unsafe fn optional_args(
     numbuf: &mut NumBuf,
 ) -> Option<(c_int, c_int, *const c_char, *mut win_T)> {
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let mut prio = DEFAULT_PRIORITY;
-        let mut id = -1;
-        let mut conceal_char: *const c_char = ::core::ptr::null();
-        let mut win = curwin.get();
-        let mut error = false;
+    let mut prio = DEFAULT_PRIORITY;
+    let mut id = -1;
+    let mut conceal_char: *const c_char = ::core::ptr::null();
+    let mut win = curwin.get();
+    let mut error = false;
 
-        // Nested, not sequential: an `id` is only read when a `priority` was
-        // given, and the dictionary only when an `id` was.
-        if (*argvars.offset(2)).v_type != VAR_UNKNOWN {
-            prio = tv_get_number_chk(argvars.offset(2), &raw mut error) as c_int;
-            if (*argvars.offset(3)).v_type != VAR_UNKNOWN {
-                id = tv_get_number_chk(argvars.offset(3), &raw mut error) as c_int;
-                if (*argvars.offset(4)).v_type != VAR_UNKNOWN
-                    && matchadd_dict_arg(
+    // Nested, not sequential: an `id` is only read when a `priority` was
+    // given, and the dictionary only when an `id` was.
+    if unsafe { (*argvars.offset(2)).v_type } != VAR_UNKNOWN {
+        prio = unsafe { tv_get_number_chk(argvars.offset(2), &raw mut error) } as c_int;
+        if unsafe { (*argvars.offset(3)).v_type } != VAR_UNKNOWN {
+            id = unsafe { tv_get_number_chk(argvars.offset(3), &raw mut error) } as c_int;
+            if unsafe { (*argvars.offset(4)).v_type } != VAR_UNKNOWN
+                && unsafe {
+                    matchadd_dict_arg(
                         argvars.offset(4),
                         &raw mut conceal_char,
                         &raw mut win,
                         numbuf,
-                    ) == FAIL
-                {
-                    return None;
-                }
+                    )
+                } == FAIL
+            {
+                return None;
             }
         }
-        if error {
-            None
-        } else {
-            Some((prio, id, conceal_char, win))
-        }
+    }
+    if error {
+        None
+    } else {
+        Some((prio, id, conceal_char, win))
     }
 }
 
@@ -359,25 +354,28 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
     let mut patbuf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let grp = grpbuf.string_chk(argvars);
-        let pat = patbuf.string_chk(argvars.offset(1));
+    let grp = unsafe { grpbuf.string_chk(argvars) };
+    let pat = unsafe { patbuf.string_chk(argvars.offset(1)) };
 
-        (*rettv).vval.v_number = -1;
-        if grp.is_null() || pat.is_null() {
-            return;
-        }
-        let Some((prio, id, conceal_char, win)) = optional_args(argvars, &mut concealbuf) else {
-            return;
-        };
-        if (1..=3).contains(&id) {
+    unsafe { (*rettv).vval.v_number = -1 };
+    if grp.is_null() || pat.is_null() {
+        return;
+    }
+    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(argvars, &mut concealbuf) })
+    else {
+        return;
+    };
+    if (1..=3).contains(&id) {
+        unsafe {
             semsg_c!(
                 gettext(c"E798: ID is reserved for \":match\": %d".as_ptr()),
                 id,
-            );
-            return;
-        }
+            )
+        };
+        return;
+    }
 
+    unsafe {
         (*rettv).vval.v_number = match_add(
             win,
             grp,
@@ -386,8 +384,8 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
             id,
             ::core::ptr::null_mut(),
             conceal_char,
-        ) as varnumber_T;
-    }
+        ) as varnumber_T
+    };
 }
 
 /// `matchaddpos(group, positions [, priority [, id [, options]]])`.
@@ -402,40 +400,45 @@ pub(crate) unsafe fn f_matchaddpos(
     let mut buf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    unsafe {
-        (*rettv).vval.v_number = -1;
+    unsafe { (*rettv).vval.v_number = -1 };
 
-        let group = buf.string_chk(argvars);
-        if group.is_null() {
-            return;
-        }
-        if (*argvars.offset(1)).v_type != VAR_LIST {
+    let group = unsafe { buf.string_chk(argvars) };
+    if group.is_null() {
+        return;
+    }
+    if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
+        unsafe {
             semsg_c!(
                 gettext(&raw const e_listarg as *const c_char),
                 c"matchaddpos()".as_ptr(),
-            );
-            return;
-        }
-        let l = (*argvars.offset(1)).vval.v_list;
-        if tv_list_len(l) == 0 {
-            return;
-        }
-
-        let Some((prio, id, conceal_char, win)) = optional_args(argvars, &mut concealbuf) else {
-            return;
+            )
         };
-        // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
-        if id == 1 || id == 2 {
+        return;
+    }
+    let l = unsafe { (*argvars.offset(1)).vval.v_list };
+    if unsafe { tv_list_len(l) } == 0 {
+        return;
+    }
+
+    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(argvars, &mut concealbuf) })
+    else {
+        return;
+    };
+    // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
+    if id == 1 || id == 2 {
+        unsafe {
             semsg_c!(
                 gettext(c"E798: ID is reserved for \"match\": %d".as_ptr()),
                 id,
-            );
-            return;
-        }
-
-        (*rettv).vval.v_number =
-            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as varnumber_T;
+            )
+        };
+        return;
     }
+
+    unsafe {
+        (*rettv).vval.v_number =
+            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as varnumber_T
+    };
 }
 
 /// `matcharg(id)` — the `[group, pattern]` of `:match`, `:2match` or
@@ -445,22 +448,20 @@ pub(crate) unsafe fn f_matchaddpos(
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_matcharg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    unsafe {
-        let id = tv_get_number(argvars) as c_int;
-        let is_excmd = (1..=3).contains(&id);
-        // Any other id answers an empty list, not an error.
-        let l = tv_list_alloc_ret(rettv, if is_excmd { 2 } else { 0 });
-        if !is_excmd {
-            return;
-        }
-        let m = get_match(curwin.get(), id);
-        if m.is_null() {
-            tv_list_append_string(l, ::core::ptr::null(), 0);
-            tv_list_append_string(l, ::core::ptr::null(), 0);
-        } else {
-            tv_list_append_string(l, syn_id2name((*m).mit_hlg_id), -1);
-            tv_list_append_string(l, (*m).mit_pattern, -1);
-        }
+    let id = unsafe { tv_get_number(argvars) } as c_int;
+    let is_excmd = (1..=3).contains(&id);
+    // Any other id answers an empty list, not an error.
+    let l = unsafe { tv_list_alloc_ret(rettv, if is_excmd { 2 } else { 0 }) };
+    if !is_excmd {
+        return;
+    }
+    let m = unsafe { get_match(curwin.get(), id) };
+    if m.is_null() {
+        unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
+        unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
+    } else {
+        unsafe { tv_list_append_string(l, syn_id2name((*m).mit_hlg_id), -1) };
+        unsafe { tv_list_append_string(l, (*m).mit_pattern, -1) };
     }
 }
 
@@ -474,8 +475,8 @@ pub(crate) unsafe fn f_matchdelete(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's slots.
+    let win = unsafe { get_optional_window(argvars, 1) };
     unsafe {
-        let win = get_optional_window(argvars, 1);
         (*rettv).vval.v_number = if win.is_null() {
             -1
         } else {
