@@ -7,7 +7,7 @@ use crate::api::private::helpers::{
     api_metadata, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
     arena_take_arraybuilder, copy_array, copy_dict, copy_object, copy_string, cstr_as_string,
     dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle, get_default_stl_hl,
-    parse_hl_msg, set_mark, string_to_array, try_enter, try_leave,
+    parse_hl_msg, set_mark, string_to_array,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
 use crate::ascii::ascii_isdigit;
@@ -98,12 +98,12 @@ use crate::types::{
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
     MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, SignTextAttrs,
-    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, Vv, Window, bln_values, buf_T,
-    dictitem_T, dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, int64_t,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
+    String_0, StringBuilder, Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T,
+    dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T,
-    mpack_token_type_t, msglist_T, pos_T, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t,
-    uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    mpack_token_type_t, pos_T, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
+    uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
