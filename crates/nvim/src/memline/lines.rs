@@ -388,7 +388,7 @@ pub unsafe fn ml_setmarked(lnum: linenr_T) {
     if hp.is_null() {
         return;
     }
-    let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+    let dp = unsafe { Db::new((*hp).bh_data.cast()) };
     unsafe {
         *db_index(dp).wrapping_offset((lnum - cur_buf().b_ml.locked_low()) as isize) |= DB_MARKED
     };
@@ -412,7 +412,7 @@ pub unsafe fn ml_firstmarked() -> linenr_T {
         if hp.is_null() {
             return 0;
         }
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
         let mut i = lnum - cur_buf().b_ml.locked_low();
         while lnum <= cur_buf().b_ml.locked_high() {
             let slot = db_index(dp).wrapping_offset(i as isize);
@@ -443,7 +443,7 @@ pub unsafe fn ml_clearmarked() {
         if hp.is_null() {
             return;
         }
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
         let mut i = lnum - cur_buf().b_ml.locked_low();
         while lnum <= cur_buf().b_ml.locked_high() {
             let slot = db_index(dp).wrapping_offset(i as isize);

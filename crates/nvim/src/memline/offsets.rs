@@ -143,13 +143,13 @@ unsafe fn ml_chunk_addline(
                 b.b_ml.ml_chunks.switch_off();
                 return false;
             }
-            let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
-            let rest = if unsafe { (*dp).db_line_count } == 1 {
-                unsafe { (*dp).db_txt_end }.wrapping_sub(unsafe { (*dp).db_txt_start }) as c_int
+            let dp = unsafe { Db::new((*hp).bh_data.cast()) };
+            let rest = if dp.db_line_count == 1 {
+                dp.db_txt_end.wrapping_sub(dp.db_txt_start) as c_int
             } else {
                 unsafe {
-                    db_line_start(dp, ((*dp).db_line_count - 2) as c_int) as c_int
-                        - (*dp).db_txt_start as c_int
+                    db_line_start(dp, (dp.db_line_count - 2) as c_int) as c_int
+                        - dp.db_txt_start as c_int
                 }
             };
             b.b_ml.ml_chunks.set(curix + 1, 1, rest);
@@ -185,7 +185,7 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: linenr_T) -
             b.b_ml.ml_chunks.switch_off();
             return false;
         }
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
         let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
         let idx = curline - b.b_ml.locked_low();
         curline = b.b_ml.locked_high() + 1;
@@ -203,7 +203,7 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: linenr_T) -
 
         // First line in the block has its text at the end of it.
         let text_end = if idx == 0 {
-            unsafe { (*dp).db_txt_end as c_int }
+            dp.db_txt_end as c_int
         } else {
             unsafe { db_line_start(dp, idx - 1) as c_int }
         };
@@ -305,13 +305,13 @@ pub unsafe fn ml_find_line_or_offset(
         if hp.is_null() {
             return -1;
         }
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
         let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
         let start_idx = curline - b.b_ml.locked_low();
         let mut idx = start_idx;
         // First line in the block has its text at the end of it.
         let text_end = if idx == 0 {
-            unsafe { (*dp).db_txt_end as c_int }
+            dp.db_txt_end as c_int
         } else {
             unsafe { db_line_start(dp, idx - 1) as c_int }
         };

@@ -408,13 +408,15 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
         unsafe { iemsg(tr(c"E298: Didn't get block nr 1?")) };
         return false;
     }
-    let pp = unsafe { (**hp).bh_data } as *mut PointerBlock;
-    unsafe { (*pp).pb_count = 1 };
-    let entry = pb_entries(pp);
-    unsafe { (*entry).pe_bnum = 2 };
-    unsafe { (*entry).pe_page_count = 1 };
-    unsafe { (*entry).pe_old_lnum = 1 };
-    unsafe { (*entry).pe_line_count = 1 }; // line count after the insertion below
+    let mut pp = unsafe { Pb::new((**hp).bh_data.cast()) };
+    pp.pb_count = 1;
+    // SAFETY: the block was just created with room for `pb_count_max`
+    // entries, and this is the first.
+    let mut entry = unsafe { Pe::new(pb_entries(pp)) };
+    entry.pe_bnum = 2;
+    entry.pe_page_count = 1;
+    entry.pe_old_lnum = 1;
+    entry.pe_line_count = 1; // line count after the insertion below
     unsafe { mf_put(mfp, *hp, true, false) };
 
     // Block two: the first data block, holding one empty line.
@@ -423,12 +425,12 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
         unsafe { iemsg(tr(c"E298: Didn't get block nr 2?")) };
         return false;
     }
-    let dp = unsafe { (**hp).bh_data } as *mut DataBlock;
-    unsafe { (*dp).db_txt_start -= 1 }; // at the end of the block
-    unsafe { *db_index(dp) = (*dp).db_txt_start };
-    unsafe { (*dp).db_free -= 1 + INDEX_SIZE as ::core::ffi::c_uint };
-    unsafe { (*dp).db_line_count = 1 };
-    unsafe { *db_byte(dp, (*dp).db_txt_start as isize) = NUL as ::core::ffi::c_char };
+    let mut dp = unsafe { Db::new((**hp).bh_data.cast()) };
+    dp.db_txt_start -= 1; // at the end of the block
+    unsafe { *db_index(dp) = dp.db_txt_start };
+    dp.db_free -= 1 + INDEX_SIZE as ::core::ffi::c_uint;
+    dp.db_line_count = 1;
+    unsafe { *db_byte(dp, dp.db_txt_start as isize) = NUL as ::core::ffi::c_char };
     true
 }
 

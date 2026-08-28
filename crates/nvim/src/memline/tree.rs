@@ -14,11 +14,38 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 
 use super::*;
+use crate::winlayer::Live;
 
 /// `ML_SIMPLE(action)` upstream. The actions that may be answered straight
 /// from the currently locked block; `ML_FLUSH` deliberately is not one, and
 /// neither is anything that has to rebuild the stack.
 const ML_SIMPLE: c_int = 0x10;
+
+/// A data block of the tree, whose page the caller has promised stays
+/// mapped for as long as the handle is used.
+///
+/// # Why a `Live<T>` is sound over a block with a trailing array
+///
+/// `DataBlock` ends in `db_index: [c_uint; 0]`, and the real array runs to
+/// the end of the page — past `size_of::<DataBlock>()`. [`Deref`] hands out a
+/// borrow whose provenance covers the *header* only, which is exactly what a
+/// field access needs and never enough for the array. So the array is reached
+/// from [`Live::raw`] instead, through [`db_index`] and [`db_byte`], which
+/// derive from the block pointer the caller promised about rather than from
+/// the header borrow. Nothing in this module may reach the trailing array
+/// through a `&DataBlock`.
+///
+/// [`Deref`]: core::ops::Deref
+/// [`Live::raw`]: crate::winlayer::Live::raw
+pub(crate) type Db = Live<DataBlock>;
+
+/// A pointer block of the tree, with [`Db`]'s promise and [`Db`]'s trailing
+/// array (`pb_pointer`), reached through [`pb_entries`].
+pub(crate) type Pb = Live<PointerBlock>;
+
+/// One entry of a pointer block, with [`Db`]'s promise. `PointerEntry` has no
+/// trailing array, so its whole self is reachable through the borrow.
+pub(crate) type Pe = Live<PointerEntry>;
 
 /// The line-offset array that follows a data block's header.
 ///
@@ -37,9 +64,8 @@ const ML_SIMPLE: c_int = 0x10;
 /// Saying where the array is reads nothing -- it is the block's address plus
 /// the header's size -- so this needs no promise of its own; what a caller
 /// then reads or writes through it does.
-pub(crate) fn db_index(dp: *mut DataBlock) -> *mut c_uint {
-    dp.wrapping_byte_add(offset_of!(DataBlock, db_index))
-        .cast::<c_uint>()
+pub(crate) fn db_index(dp: Db) -> *mut c_uint {
+    dp.field_ptr(offset_of!(DataBlock, db_index))
 }
 
 /// The byte `at` bytes into the data block's page.
@@ -47,15 +73,15 @@ pub(crate) fn db_index(dp: *mut DataBlock) -> *mut c_uint {
 /// As [`db_index`], this is arithmetic on the block's own address and reads
 /// nothing; the lines' text lives in the same page, back to front from its
 /// end, and this is how a caller names a line's first byte.
-pub(crate) fn db_byte(dp: *mut DataBlock, at: isize) -> *mut c_char {
-    dp.cast::<c_char>().wrapping_offset(at)
+pub(crate) fn db_byte(dp: Db, at: isize) -> *mut c_char {
+    dp.raw().cast::<c_char>().wrapping_offset(at)
 }
 
 /// Where line `idx` of the block starts, with the mark bit stripped.
 ///
 /// # Safety
 /// `dp` must point at a data block holding more than `idx` lines.
-pub(crate) unsafe fn db_line_start(dp: *mut DataBlock, idx: c_int) -> c_uint {
+pub(crate) unsafe fn db_line_start(dp: Db, idx: c_int) -> c_uint {
     // SAFETY: the caller's block holds more than `idx` lines.
     unsafe { *db_index(dp).wrapping_offset(idx as isize) & DB_INDEX_MASK }
 }
@@ -64,9 +90,8 @@ pub(crate) unsafe fn db_line_start(dp: *mut DataBlock, idx: c_int) -> c_uint {
 /// zero-length-array provenance rule as [`db_index`].
 ///
 /// As [`db_index`], naming the array costs no read.
-pub(crate) fn pb_entries(pp: *mut PointerBlock) -> *mut PointerEntry {
-    pp.wrapping_byte_add(offset_of!(PointerBlock, pb_pointer))
-        .cast::<PointerEntry>()
+pub(crate) fn pb_entries(pp: Pb) -> *mut PointerEntry {
+    pp.field_ptr(offset_of!(PointerBlock, pb_pointer))
 }
 
 impl PointerBlock {
@@ -170,13 +195,13 @@ pub(crate) unsafe fn ml_get_buf_impl(
             return unsafe { ml_get_placeholder(buf, lnum) };
         }
 
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
         let idx = lnum - b.b_ml.locked_low();
         let start = unsafe { db_line_start(dp, idx) };
         // The text ends where the previous line starts; the first line
         // of the block ends at the end of the block.
         let end = if idx == 0 {
-            unsafe { (*dp).db_txt_end }
+            dp.db_txt_end
         } else {
             unsafe { db_line_start(dp, idx - 1) }
         };
@@ -254,13 +279,13 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
-    let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
+    let mut dp = unsafe { Db::new((*hp).bh_data.cast()) };
     let idx = lnum - b.b_ml.locked_low();
     let start = unsafe { db_line_start(dp, idx) } as c_int;
     let old_line = db_byte(dp, start as isize);
     let old_len = if idx == 0 {
         // Line is last in the block, so its text runs to the end.
-        unsafe { (*dp).db_txt_end as c_int - start }
+        dp.db_txt_end as c_int - start
     } else {
         // The text of the previous line follows it.
         unsafe { db_line_start(dp, idx - 1) as c_int - start }
@@ -269,7 +294,7 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
     // Negative if the line got smaller.
     let extra = new_len - old_len;
 
-    if (unsafe { (*dp).db_free } as c_int) < extra {
+    if (dp.db_free as c_int) < extra {
         // It does not fit: delete and append instead. Append first,
         // because ml_delete_int cannot delete the last line of a
         // buffer, which is trouble for a buffer that has only one. The
@@ -286,12 +311,12 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
         // Move the text of the lines that follow, and adjust their
         // offsets. (Lines are stored back to front, so "following"
         // lines sit at *lower* offsets.)
-        let txt_start = unsafe { (*dp).db_txt_start } as isize;
+        let txt_start = dp.db_txt_start as isize;
         unsafe {
             core::ptr::copy(
                 db_byte(dp, txt_start),
                 db_byte(dp, txt_start - extra as isize),
-                (start - (*dp).db_txt_start as c_int) as usize,
+                (start - dp.db_txt_start as c_int) as usize,
             )
         };
         for i in idx + 1..count {
@@ -302,8 +327,8 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
     let slot = db_index(dp).wrapping_offset(idx as isize);
     unsafe { *slot = (*slot).wrapping_sub(extra as c_uint) };
 
-    unsafe { (*dp).db_free = (*dp).db_free.wrapping_sub(extra as c_uint) };
-    unsafe { (*dp).db_txt_start = (*dp).db_txt_start.wrapping_sub(extra as c_uint) };
+    dp.db_free = dp.db_free.wrapping_sub(extra as c_uint);
+    dp.db_txt_start = dp.db_txt_start.wrapping_sub(extra as c_uint);
 
     unsafe {
         core::ptr::copy(
@@ -333,12 +358,14 @@ pub(crate) unsafe fn ml_new_data(
 ) -> *mut bhdr_T {
     debug_assert!(page_count >= 0);
     let hp = unsafe { mf_new(mfp, negative, page_count as c_uint) };
-    let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
-    unsafe { (*dp).db_id = DATA_ID as uint16_t };
-    unsafe { (*dp).db_txt_end = (page_count as c_uint).wrapping_mul((*mfp).mf_page_size) };
-    unsafe { (*dp).db_txt_start = (*dp).db_txt_end };
-    unsafe { (*dp).db_free = (*dp).db_txt_start.wrapping_sub(HEADER_SIZE as c_uint) };
-    unsafe { (*dp).db_line_count = 0 };
+    let mut dp = unsafe { Db::new((*hp).bh_data.cast()) };
+    // SAFETY: `mfp` is the caller's memfile.
+    let page_size = unsafe { (*mfp).mf_page_size };
+    dp.db_id = DATA_ID as uint16_t;
+    dp.db_txt_end = (page_count as c_uint).wrapping_mul(page_size);
+    dp.db_txt_start = dp.db_txt_end;
+    dp.db_free = dp.db_txt_start.wrapping_sub(HEADER_SIZE as c_uint);
+    dp.db_line_count = 0;
     hp
 }
 
@@ -348,10 +375,12 @@ pub(crate) unsafe fn ml_new_data(
 /// `mfp` must point at a memfile.
 pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
     let hp = unsafe { mf_new(mfp, false, 1) };
-    let pp = unsafe { (*hp).bh_data } as *mut PointerBlock;
-    unsafe { (*pp).pb_id = PTR_ID as uint16_t };
-    unsafe { (*pp).pb_count = 0 };
-    unsafe { (*pp).pb_count_max = PointerBlock::count_max((*mfp).mf_page_size) };
+    let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
+    // SAFETY: `mfp` is the caller's memfile.
+    let page_size = unsafe { (*mfp).mf_page_size };
+    pp.pb_id = PTR_ID as uint16_t;
+    pp.pb_count = 0;
+    pp.pb_count_max = PointerBlock::count_max(page_size);
     hp
 }
 
@@ -447,15 +476,17 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
             high -= 1;
         }
 
-        let dp = unsafe { (*hp).bh_data } as *mut DataBlock;
-        if unsafe { (*dp).db_id } as c_int == DATA_ID as c_int {
+        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
+        if dp.db_id as c_int == DATA_ID as c_int {
             b.b_ml.lock(hp, low, high);
             return hp;
         }
 
         // Anything that is not a data block must be a pointer block.
-        let pp = dp as *mut PointerBlock;
-        if unsafe { (*pp).pb_id } as c_int != PTR_ID as c_int {
+        // SAFETY: the same page, read as the pointer block it turned out
+        // to be; `mf_get` holds it for as long as `dp` is used.
+        let pp = unsafe { Pb::new(dp.raw().cast()) };
+        if pp.pb_id as c_int != PTR_ID as c_int {
             unsafe { iemsg(tr(c"E317: Pointer block id wrong")) };
             unsafe { mf_put(mfp, hp, false, false) };
             break;
@@ -471,16 +502,17 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         unsafe { (*buf).b_ml.stack_set(top, frame) };
 
         let mut dirty = false;
-        let count = unsafe { (*pp).pb_count } as c_int;
+        let count = pp.pb_count as c_int;
         let mut idx = 0;
         while idx < count {
-            let entry = pb_entries(pp).wrapping_offset(idx as isize);
-            let t = unsafe { (*entry).pe_line_count };
+            // SAFETY: `idx` is below the block's own `pb_count`.
+            let mut entry = unsafe { Pe::new(pb_entries(pp).wrapping_offset(idx as isize)) };
+            let t = entry.pe_line_count;
             low += t;
             if low > lnum {
                 b.b_ml.stack_set_index(top, idx);
-                bnum = unsafe { (*entry).pe_bnum };
-                page_count = unsafe { (*entry).pe_page_count };
+                bnum = entry.pe_bnum;
+                page_count = entry.pe_page_count;
                 high = low - 1;
                 low -= t;
 
@@ -490,7 +522,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
                     let bnum2 = unsafe { mf_trans_del(mfp, bnum) };
                     if bnum != bnum2 {
                         bnum = bnum2;
-                        unsafe { (*entry).pe_bnum = bnum };
+                        entry.pe_bnum = bnum;
                         dirty = true;
                     }
                 }
@@ -515,12 +547,13 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
             break;
         }
 
-        let entry = pb_entries(pp).wrapping_offset(idx as isize);
+        // SAFETY: `idx` is below the block's own `pb_count`.
+        let mut entry = unsafe { Pe::new(pb_entries(pp).wrapping_offset(idx as isize)) };
         if action == ML_DELETE as c_int {
-            unsafe { (*entry).pe_line_count -= 1 };
+            entry.pe_line_count -= 1;
             dirty = true;
         } else if action == ML_INSERT as c_int {
-            unsafe { (*entry).pe_line_count += 1 };
+            entry.pe_line_count += 1;
             dirty = true;
         }
         unsafe { mf_put(mfp, hp, dirty, false) };
@@ -588,14 +621,15 @@ pub(crate) unsafe fn ml_lineadd_depth(buf: *mut buf_T, count: c_int, depth: usiz
             break;
         }
         // Must be a pointer block: it is on the stack.
-        let pp = unsafe { (*hp).bh_data } as *mut PointerBlock;
-        if unsafe { (*pp).pb_id } as c_int != PTR_ID as c_int {
+        let pp = unsafe { Pb::new((*hp).bh_data.cast()) };
+        if pp.pb_id as c_int != PTR_ID as c_int {
             unsafe { mf_put(mfp, hp, false, false) };
             unsafe { iemsg(tr(c"E317: Pointer block id wrong 2")) };
             break;
         }
-        let entry = pb_entries(pp).wrapping_offset(ip.ip_index as isize);
-        unsafe { (*entry).pe_line_count += count };
+        // SAFETY: the stack entry's index is the one this walk took.
+        let mut entry = unsafe { Pe::new(pb_entries(pp).wrapping_offset(ip.ip_index as isize)) };
+        entry.pe_line_count += count;
         b.b_ml.stack_add_high(idx, count);
         unsafe { mf_put(mfp, hp, true, false) };
     }

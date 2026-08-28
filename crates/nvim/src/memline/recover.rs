@@ -462,18 +462,18 @@ unsafe fn recover_lines(
             } else if unsafe { (*((**hp).bh_data as *mut PointerBlock)).pb_id }
                 == PTR_ID as uint16_t
             {
-                let pp = unsafe { (**hp).bh_data } as *mut PointerBlock;
+                let mut pp = unsafe { Pb::new((**hp).bh_data.cast()) };
                 // The counts in the header have to fit the page size this
                 // build uses, or the entries cannot be walked at all.
                 let count_max = PointerBlock::count_max(unsafe { (*mfp).mf_page_size });
                 let mut ptr_block_error = false;
-                if unsafe { (*pp).pb_count_max } != count_max {
+                if pp.pb_count_max != count_max {
                     ptr_block_error = true;
-                    unsafe { (*pp).pb_count_max = count_max };
+                    pp.pb_count_max = count_max;
                 }
-                if unsafe { (*pp).pb_count } > unsafe { (*pp).pb_count_max } {
+                if pp.pb_count > pp.pb_count_max {
                     ptr_block_error = true;
-                    unsafe { (*pp).pb_count = (*pp).pb_count_max };
+                    pp.pb_count = pp.pb_count_max;
                 }
                 if ptr_block_error {
                     complain(c"E1364: Warning: Pointer block corrupted");
@@ -482,7 +482,7 @@ unsafe fn recover_lines(
                 // The first time down this block, its entries should
                 // account for exactly the line count promised above it.
                 if idx == 0 && line_count != 0 {
-                    for i in 0..unsafe { (*pp).pb_count } as usize {
+                    for i in 0..pp.pb_count as usize {
                         let entry = pb_entries(pp).wrapping_add(i);
                         line_count -= unsafe { (*entry).pe_line_count };
                     }
@@ -492,10 +492,10 @@ unsafe fn recover_lines(
                     }
                 }
 
-                if unsafe { (*pp).pb_count } == 0 {
+                if pp.pb_count == 0 {
                     append(&mut lnum, tr(c"???EMPTY BLOCK"));
                     error += 1;
-                } else if idx < unsafe { (*pp).pb_count } as c_int {
+                } else if idx < pp.pb_count as c_int {
                     let pe = unsafe { *pb_entries(pp).wrapping_add(idx as usize) };
                     if pe.pe_bnum < 0 {
                         // A data block whose number is still negative was
@@ -559,8 +559,8 @@ unsafe fn recover_lines(
                     break 'step;
                 }
             } else {
-                let dp = unsafe { (**hp).bh_data } as *mut DataBlock;
-                if unsafe { (*dp).db_id } != DATA_ID as uint16_t {
+                let mut dp = unsafe { Db::new((**hp).bh_data.cast()) };
+                if dp.db_id != DATA_ID as uint16_t {
                     if bnum == 1 {
                         unsafe {
                             semsg_c!(
@@ -579,9 +579,7 @@ unsafe fn recover_lines(
                     // The block's length has to match the page count the
                     // pointer block promised; if it does not, trust the
                     // pointer block.
-                    if page_count.wrapping_mul(unsafe { (*mfp).mf_page_size })
-                        != unsafe { (*dp).db_txt_end }
-                    {
+                    if page_count.wrapping_mul(unsafe { (*mfp).mf_page_size }) != dp.db_txt_end {
                         append(
                             &mut lnum,
                             tr(c"??? from here until ???END lines may be messed up"),
@@ -589,15 +587,15 @@ unsafe fn recover_lines(
                         error += 1;
                         has_error = true;
                         let end = page_count.wrapping_mul(unsafe { (*mfp).mf_page_size });
-                        unsafe { (*dp).db_txt_end = end };
+                        dp.db_txt_end = end;
                     }
 
                     // Make sure the block ends in a NUL, so that copying
                     // the last line out of it cannot run past the end.
-                    unsafe { *db_byte(dp, (*dp).db_txt_end as isize - 1) = NUL as c_char };
+                    unsafe { *db_byte(dp, dp.db_txt_end as isize - 1) = NUL as c_char };
 
                     // Likewise for the line count.
-                    if line_count as c_long != unsafe { (*dp).db_line_count } {
+                    if line_count as c_long != dp.db_line_count {
                         append(
                             &mut lnum,
                             tr(c"??? from here until ???END lines may have been inserted/deleted"),
@@ -607,15 +605,9 @@ unsafe fn recover_lines(
                     }
 
                     let mut did_questions = false;
-                    for i in 0..unsafe { (*dp).db_line_count } {
-                        let index = unsafe {
-                            (&raw mut (*dp).db_index)
-                                .cast::<c_uint>()
-                                .offset(i as isize)
-                        };
-                        if index as *mut c_char
-                            >= unsafe { db_byte(dp, (*dp).db_txt_start as isize) }
-                        {
+                    for i in 0..dp.db_line_count {
+                        let index = db_index(dp).wrapping_offset(i as isize);
+                        if index as *mut c_char >= db_byte(dp, dp.db_txt_start as isize) {
                             // The line count must be wrong: the index
                             // array has run into the text.
                             error += 1;
@@ -624,7 +616,7 @@ unsafe fn recover_lines(
                         }
                         let txt_start = (unsafe { index.read() } & DB_INDEX_MASK) as c_int;
                         let text = if txt_start <= HEADER_SIZE as c_int
-                            || txt_start >= unsafe { (*dp).db_txt_end } as c_int
+                            || txt_start >= dp.db_txt_end as c_int
                         {
                             error += 1;
                             // One "???" for a run of them is enough.
