@@ -12,7 +12,39 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
-use crate::winlayer::{Buf, Win, tab_windows};
+use crate::winlayer::{Buf, Pos, Win, tab_windows};
+use core::ffi::CStr;
+
+/// An exception whose whole message is `why`.
+///
+/// # Safety
+/// `err` must be the caller's error slot, and `why` must hold no `%`
+/// directive: upstream passes it as the format itself.
+unsafe fn err_exception(err: *mut Error, why: &CStr) {
+    // SAFETY: the caller's promise.
+    unsafe { api_set_error(err, kErrorTypeException, why.as_ptr()) };
+}
+
+/// "Invalid `name`: out of range", what every bounds check here answers.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_out_of_range(err: *mut Error, name: &CStr) {
+    let why = c"out of range".as_ptr();
+    // SAFETY: the caller's promise about `err`; `name` is a C string.
+    unsafe { api_err_invalid(err, name.as_ptr(), why, 0, false) };
+}
+
+/// A validation failure whose whole message is `why`.
+///
+/// # Safety
+/// `err` must be the caller's error slot.
+unsafe fn err_validation(err: *mut Error, why: &CStr) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: the caller's promise; `%s` takes the one C string it is given,
+    // so nothing in `why` is read as a directive.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, why.as_ptr()) };
+}
 
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
@@ -26,311 +58,280 @@ pub unsafe fn nvim_buf_set_text(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut scratch: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let mut scratch__items: [Object; 1] = [NIL; 1];
-        scratch.capacity = 1 as size_t;
-        scratch.items = &raw mut scratch__items as *mut Object;
-        if replacement.size == 0 as size_t {
-            array_add(
-                &mut scratch,
-                Object::string(String_0::from_raw_parts(
-                    c"".as_ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 1]>().wrapping_sub(1 as size_t),
-                )),
-            );
-            replacement = scratch;
-        }
-        let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
-        if b.is_null() {
-            return ().reported(error);
-        }
-        let mut oob: bool = false;
-        start_row = normalize_index(b, start_row as int64_t, false, &raw mut oob) as Integer;
-        if oob {
-            api_err_invalid(
-                err,
-                c"start_row".as_ptr(),
-                c"out of range".as_ptr(),
-                0 as int64_t,
-                false,
-            );
-            return ().reported(error);
-        }
-        end_row = normalize_index(b, end_row as int64_t, false, &raw mut oob) as Integer;
-        if oob {
-            api_err_invalid(
-                err,
-                c"end_row".as_ptr(),
-                c"out of range".as_ptr(),
-                0 as int64_t,
-                false,
-            );
-            return ().reported(error);
-        }
-        let mut str_at_start: *mut ::core::ffi::c_char = ml_get_buf(b, start_row as linenr_T);
-        let mut len_at_start: colnr_T = ml_get_buf_len(b, start_row as linenr_T);
-        str_at_start = arena_memdupz(arena, str_at_start, len_at_start as size_t);
-        start_col = if start_col < 0 as Integer {
-            len_at_start as Integer + start_col + 1 as Integer
-        } else {
-            start_col
-        };
-        if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
-            api_err_invalid(
-                err,
-                c"start_col".as_ptr(),
-                c"out of range".as_ptr(),
-                0 as int64_t,
-                false,
-            );
-            return ().reported(error);
-        }
-        let mut str_at_end: *mut ::core::ffi::c_char = ml_get_buf(b, end_row as linenr_T);
-        let mut len_at_end: colnr_T = ml_get_buf_len(b, end_row as linenr_T);
-        str_at_end = arena_memdupz(arena, str_at_end, len_at_end as size_t);
-        end_col = if end_col < 0 as Integer {
-            len_at_end as Integer + end_col + 1 as Integer
-        } else {
-            end_col
-        };
-        if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
-            api_err_invalid(
-                err,
-                c"end_col".as_ptr(),
-                c"out of range".as_ptr(),
-                0 as int64_t,
-                false,
-            );
-            return ().reported(error);
-        }
-        if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"'start' is higher than 'end'".as_ptr(),
-            );
-            return ().reported(error);
-        }
-        let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
-        if !check_string_array(
+    let mut scratch: Array = Array {
+        size: 0 as size_t,
+        capacity: 0 as size_t,
+        items: ::core::ptr::null_mut::<Object>(),
+    };
+    let mut scratch__items: [Object; 1] = [NIL; 1];
+    scratch.capacity = 1 as size_t;
+    scratch.items = &raw mut scratch__items as *mut Object;
+    if replacement.size == 0 as size_t {
+        let put_value = Object::string(String_0::from_raw_parts(
+            c"".as_ptr() as *mut ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 1]>().wrapping_sub(1 as size_t),
+        ));
+        // SAFETY: the collection is this call's own.
+        unsafe { array_add(&mut scratch, put_value) };
+        replacement = scratch;
+    }
+    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, err) };
+    if b.is_null() {
+        return ().reported(error);
+    }
+    let mut oob: bool = false;
+    start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
+    if oob {
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_out_of_range(err, c"start_row") };
+        return ().reported(error);
+    }
+    end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
+    if oob {
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_out_of_range(err, c"end_row") };
+        return ().reported(error);
+    }
+    let mut str_at_start: *mut ::core::ffi::c_char =
+        unsafe { ml_get_buf(b, start_row as linenr_T) };
+    let mut len_at_start: colnr_T = unsafe { ml_get_buf_len(b, start_row as linenr_T) };
+    str_at_start = unsafe { arena_memdupz(arena, str_at_start, len_at_start as size_t) };
+    start_col = if start_col < 0 as Integer {
+        len_at_start as Integer + start_col + 1 as Integer
+    } else {
+        start_col
+    };
+    if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_out_of_range(err, c"start_col") };
+        return ().reported(error);
+    }
+    let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as linenr_T) };
+    let mut len_at_end: colnr_T = unsafe { ml_get_buf_len(b, end_row as linenr_T) };
+    str_at_end = unsafe { arena_memdupz(arena, str_at_end, len_at_end as size_t) };
+    end_col = if end_col < 0 as Integer {
+        len_at_end as Integer + end_col + 1 as Integer
+    } else {
+        end_col
+    };
+    if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_out_of_range(err, c"end_col") };
+        return ().reported(error);
+    }
+    if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
+        let why = c"'start' is higher than 'end'";
+        // SAFETY: `err` is this call's own error slot.
+        unsafe { err_validation(err, why) };
+        return ().reported(error);
+    }
+    let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
+    if !unsafe {
+        check_string_array(
             replacement,
             c"replacement string".as_ptr() as *mut ::core::ffi::c_char,
             disallow_nl,
             err,
-        ) {
-            return ().reported(error);
-        }
-        let mut new_len: size_t = replacement.size;
-        let mut new_byte: bcount_t = 0 as bcount_t;
-        let mut old_byte: bcount_t = 0 as bcount_t;
-        if start_row == end_row {
-            old_byte = end_col as bcount_t - start_col as bcount_t;
-        } else {
-            old_byte = (old_byte as ::core::ffi::c_long
-                + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
+        )
+    } {
+        return ().reported(error);
+    }
+    let mut new_len: size_t = replacement.size;
+    let mut new_byte: bcount_t = 0 as bcount_t;
+    let mut old_byte: bcount_t = 0 as bcount_t;
+    if start_row == end_row {
+        old_byte = end_col as bcount_t - start_col as bcount_t;
+    } else {
+        old_byte = (old_byte as ::core::ffi::c_long
+            + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
+            as bcount_t;
+        let mut i: int64_t = 1 as int64_t;
+        while i < end_row - start_row {
+            let mut lnum: int64_t = start_row as int64_t + i;
+            old_byte += (unsafe { ml_get_buf_len(b, lnum as linenr_T) } + 1 as ::core::ffi::c_int)
                 as bcount_t;
-            let mut i: int64_t = 1 as int64_t;
-            while i < end_row - start_row {
-                let mut lnum: int64_t = start_row as int64_t + i;
-                old_byte +=
-                    (ml_get_buf_len(b, lnum as linenr_T) + 1 as ::core::ffi::c_int) as bcount_t;
-                i += 1;
-            }
-            old_byte += end_col as bcount_t + 1 as bcount_t;
+            i += 1;
         }
-        let mut first_item: String_0 =
-            (*replacement.items.offset(0 as ::core::ffi::c_int as isize))
-                .data
-                .string;
-        let mut last_item: String_0 = (*replacement
-            .items
-            .add(replacement.size.wrapping_sub(1 as size_t)))
-        .data
-        .string;
-        let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
-        let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
-        if replacement.size == 1 as size_t {
-            firstlen = firstlen.wrapping_add(last_part_len);
-        }
-        let mut first: *mut ::core::ffi::c_char = arena_allocz(arena, firstlen);
-        let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        memcpy(
-            first as *mut ::core::ffi::c_void,
-            str_at_start as *const ::core::ffi::c_void,
-            start_col as size_t,
-        );
-        memcpy(
-            first.offset(start_col as isize) as *mut ::core::ffi::c_void,
-            first_item.data() as *const ::core::ffi::c_void,
-            first_item.len(),
-        );
-        memchrsub(
-            first.offset(start_col as isize) as *mut ::core::ffi::c_void,
-            NUL as ::core::ffi::c_char,
-            NL as ::core::ffi::c_char,
-            first_item.len(),
-        );
-        if replacement.size == 1 as size_t {
-            memcpy(
-                first.offset(start_col as isize).add(first_item.len()) as *mut ::core::ffi::c_void,
-                str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
-                last_part_len,
-            );
-        } else {
-            last = arena_allocz(arena, last_item.len().wrapping_add(last_part_len));
-            memcpy(
-                last as *mut ::core::ffi::c_void,
-                last_item.data() as *const ::core::ffi::c_void,
-                last_item.len(),
-            );
-            memchrsub(
-                last as *mut ::core::ffi::c_void,
-                NUL as ::core::ffi::c_char,
-                NL as ::core::ffi::c_char,
-                last_item.len(),
-            );
-            memcpy(
-                last.add(last_item.len()) as *mut ::core::ffi::c_void,
-                str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
-                last_part_len,
-            );
-        }
-        let mut lines: *mut *mut ::core::ffi::c_char = arena_alloc(
+        old_byte += end_col as bcount_t + 1 as bcount_t;
+    }
+    let last_index = replacement.size.wrapping_sub(1 as size_t);
+    // SAFETY: `replacement` is a non-empty array, so both indices are in it.
+    let first_item: String_0 = unsafe { (*replacement.items).data.string };
+    // SAFETY: as above.
+    let last_item: String_0 = unsafe { (*replacement.items.add(last_index)).data.string };
+    let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
+    let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
+    if replacement.size == 1 as size_t {
+        firstlen = firstlen.wrapping_add(last_part_len);
+    }
+    let mut first: *mut ::core::ffi::c_char = unsafe { arena_allocz(arena, firstlen) };
+    let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    // `memchrsub` turns embedded NULs back into the newlines they stand for.
+    let nul = NUL as ::core::ffi::c_char;
+    let nl = NL as ::core::ffi::c_char;
+    // SAFETY: `first` has `firstlen` writable bytes, and `start_col` is
+    // within the line it was measured against.
+    let head = unsafe { first.offset(start_col as isize) } as *mut ::core::ffi::c_void;
+    // SAFETY: `first` holds `start_col` bytes of the old line's head.
+    unsafe { memcpy(first.cast(), str_at_start.cast(), start_col as size_t) };
+    let src = first_item.data() as *const ::core::ffi::c_void;
+    // SAFETY: `head` has `first_item.len()` writable bytes after `start_col`.
+    unsafe { memcpy(head, src, first_item.len()) };
+    // SAFETY: as above.
+    unsafe { memchrsub(head, nul, nl, first_item.len()) };
+    // SAFETY: `end_col` is within the line `str_at_end` copied.
+    let tail = unsafe { str_at_end.offset(end_col as isize) } as *const ::core::ffi::c_void;
+    if replacement.size == 1 as size_t {
+        // SAFETY: `firstlen` counted `last_part_len` in as well.
+        let after = unsafe { first.offset(start_col as isize).add(first_item.len()) };
+        let after = after as *mut ::core::ffi::c_void;
+        // SAFETY: `after` has `last_part_len` writable bytes.
+        unsafe { memcpy(after, tail, last_part_len) };
+    } else {
+        let lastlen = last_item.len().wrapping_add(last_part_len);
+        // SAFETY: the arena hands back `lastlen` writable bytes.
+        last = unsafe { arena_allocz(arena, lastlen) };
+        let src = last_item.data() as *const ::core::ffi::c_void;
+        // SAFETY: `last` has `lastlen` writable bytes.
+        unsafe { memcpy(last.cast(), src, last_item.len()) };
+        // SAFETY: as above.
+        unsafe { memchrsub(last.cast(), nul, nl, last_item.len()) };
+        // SAFETY: the tail sits after the item, still inside `lastlen`.
+        let after = unsafe { last.add(last_item.len()) } as *mut ::core::ffi::c_void;
+        // SAFETY: `after` has `last_part_len` writable bytes.
+        unsafe { memcpy(after, tail, last_part_len) };
+    }
+    let mut lines: *mut *mut ::core::ffi::c_char = unsafe {
+        arena_alloc(
             arena,
             new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
             true,
-        ) as *mut *mut ::core::ffi::c_char;
-        *lines.offset(0 as ::core::ffi::c_int as isize) = first;
-        new_byte += first_item.len() as bcount_t;
-        let mut i_0: size_t = 1 as size_t;
-        while i_0 < new_len.wrapping_sub(1 as size_t) {
-            let l: String_0 = (*replacement.items.add(i_0)).data.string;
-            *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len());
-            memchrsub(
-                *lines.add(i_0) as *mut ::core::ffi::c_void,
-                NUL as ::core::ffi::c_char,
-                NL as ::core::ffi::c_char,
-                l.len(),
-            );
-            new_byte += l.len() as bcount_t + 1 as bcount_t;
-            i_0 = i_0.wrapping_add(1);
-        }
-        if replacement.size > 1 as size_t {
-            *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last;
-            new_byte += last_item.len() as bcount_t + 1 as bcount_t;
-        }
-        let mut tstate: TryState = TryState {
-            current_exception: ::core::ptr::null_mut::<except_T>(),
-            private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-            msg_list: ::core::ptr::null::<*const msglist_T>(),
-            got_int: 0,
-            did_throw: false,
-            need_rethrow: 0,
-            did_emsg: 0,
-        };
-        try_enter(&raw mut tstate);
-        's_652: {
-            if (*b).b_p_ma == 0 {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Buffer is not 'modifiable'".as_ptr(),
-                );
-            } else if u_save_buf(
-                Buf::new(b),
-                start_row as linenr_T - 1 as linenr_T,
-                end_row as linenr_T + 1 as linenr_T,
-            ) == 0 as ::core::ffi::c_int
-            {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Failed to save undo information".as_ptr(),
-                );
+        )
+    } as *mut *mut ::core::ffi::c_char;
+    unsafe { *lines.offset(0 as ::core::ffi::c_int as isize) = first };
+    new_byte += first_item.len() as bcount_t;
+    let mut i_0: size_t = 1 as size_t;
+    while i_0 < new_len.wrapping_sub(1 as size_t) {
+        let l: String_0 = unsafe { (*replacement.items.add(i_0)).data.string };
+        unsafe { *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len()) };
+        // SAFETY: `i_0` is below `new_len`, so the slot was just written.
+        let line = unsafe { *lines.add(i_0) } as *mut ::core::ffi::c_void;
+        // SAFETY: `line` holds `l.len()` bytes.
+        unsafe { memchrsub(line, nul, nl, l.len()) };
+        new_byte += l.len() as bcount_t + 1 as bcount_t;
+        i_0 = i_0.wrapping_add(1);
+    }
+    if replacement.size > 1 as size_t {
+        unsafe { *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last };
+        new_byte += last_item.len() as bcount_t + 1 as bcount_t;
+    }
+    let mut tstate: TryState = TryState {
+        current_exception: ::core::ptr::null_mut::<except_T>(),
+        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+        msg_list: ::core::ptr::null::<*const msglist_T>(),
+        got_int: 0,
+        did_throw: false,
+        need_rethrow: 0,
+        did_emsg: 0,
+    };
+    unsafe { try_enter(&raw mut tstate) };
+    's_652: {
+        if unsafe { (*b).b_p_ma } == 0 {
+            let why = c"Buffer is not 'modifiable'";
+            // SAFETY: `err` is this call's own error slot; the
+            // message holds no `%` directive.
+            unsafe { err_exception(err, why) };
+        } else if u_save_buf(
+            unsafe { Buf::new(b) },
+            start_row as linenr_T - 1 as linenr_T,
+            end_row as linenr_T + 1 as linenr_T,
+        ) == 0 as ::core::ffi::c_int
+        {
+            let why = c"Failed to save undo information";
+            // SAFETY: `err` is this call's own error slot; the
+            // message holds no `%` directive.
+            unsafe { err_exception(err, why) };
+        } else {
+            let mut extra: ptrdiff_t = 0 as ptrdiff_t;
+            let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
+            let mut to_delete: size_t = if new_len < old_len {
+                old_len.wrapping_sub(new_len)
             } else {
-                let mut extra: ptrdiff_t = 0 as ptrdiff_t;
-                let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
-                let mut to_delete: size_t = if new_len < old_len {
-                    old_len.wrapping_sub(new_len)
+                0 as size_t
+            };
+            let mut i_1: size_t = 0 as size_t;
+            while i_1 < to_delete {
+                if unsafe { ml_delete_buf(b, start_row as linenr_T, false) }
+                    == 0 as ::core::ffi::c_int
+                {
+                    let why = c"Failed to delete line";
+                    // SAFETY: `err` is this call's own error slot; the
+                    // message holds no `%` directive.
+                    unsafe { err_exception(err, why) };
+                    break 's_652;
                 } else {
-                    0 as size_t
-                };
-                let mut i_1: size_t = 0 as size_t;
-                while i_1 < to_delete {
-                    if ml_delete_buf(b, start_row as linenr_T, false) == 0 as ::core::ffi::c_int {
-                        api_set_error(err, kErrorTypeException, c"Failed to delete line".as_ptr());
-                        break 's_652;
-                    } else {
-                        i_1 = i_1.wrapping_add(1);
-                    }
+                    i_1 = i_1.wrapping_add(1);
                 }
-                if to_delete > 0 as size_t {
-                    extra -= to_delete as ptrdiff_t;
-                }
-                let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
-                let mut i_2: size_t = 0 as size_t;
-                while i_2 < to_replace {
-                    let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
-                    if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
-                        api_set_error(
-                            err,
-                            kErrorTypeValidation,
-                            c"%s".as_ptr(),
-                            c"Index out of bounds".as_ptr(),
-                        );
-                        break 's_652;
-                    } else if ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
-                        == 0 as ::core::ffi::c_int
-                    {
-                        api_set_error(err, kErrorTypeException, c"Failed to replace line".as_ptr());
-                        break 's_652;
-                    } else {
-                        i_2 = i_2.wrapping_add(1);
-                    }
-                }
-                let mut i_3: size_t = to_replace;
-                while i_3 < new_len {
-                    let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
-                    if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
-                        api_set_error(
-                            err,
-                            kErrorTypeValidation,
-                            c"%s".as_ptr(),
-                            c"Index out of bounds".as_ptr(),
-                        );
-                        break 's_652;
-                    } else if ml_append_buf(
-                        b,
-                        lnum_1 as linenr_T,
-                        *lines.add(i_3),
-                        0 as colnr_T,
-                        false,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        api_set_error(err, kErrorTypeException, c"Failed to insert line".as_ptr());
-                        break 's_652;
-                    } else {
-                        extra += 1;
-                        i_3 = i_3.wrapping_add(1);
-                    }
-                }
-                let mut col_extent: colnr_T = (end_col
-                    - (if end_row == start_row {
-                        start_col
-                    } else {
-                        0 as Integer
-                    })) as colnr_T;
-                let mut adjust: linenr_T = if end_row >= start_row {
-                    MAXLNUM as ::core::ffi::c_int as linenr_T
+            }
+            if to_delete > 0 as size_t {
+                extra -= to_delete as ptrdiff_t;
+            }
+            let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
+            let mut i_2: size_t = 0 as size_t;
+            while i_2 < to_replace {
+                let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
+                if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                    let why = c"Index out of bounds";
+                    // SAFETY: `err` is this call's own error slot.
+                    unsafe { err_validation(err, why) };
+                    break 's_652;
+                } else if unsafe {
+                    ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
+                } == 0 as ::core::ffi::c_int
+                {
+                    let why = c"Failed to replace line";
+                    // SAFETY: `err` is this call's own error slot; the
+                    // message holds no `%` directive.
+                    unsafe { err_exception(err, why) };
+                    break 's_652;
                 } else {
-                    0 as linenr_T
-                };
+                    i_2 = i_2.wrapping_add(1);
+                }
+            }
+            let mut i_3: size_t = to_replace;
+            while i_3 < new_len {
+                let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
+                if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                    let why = c"Index out of bounds";
+                    // SAFETY: `err` is this call's own error slot.
+                    unsafe { err_validation(err, why) };
+                    break 's_652;
+                } else if unsafe {
+                    ml_append_buf(b, lnum_1 as linenr_T, *lines.add(i_3), 0 as colnr_T, false)
+                } == 0 as ::core::ffi::c_int
+                {
+                    let why = c"Failed to insert line";
+                    // SAFETY: `err` is this call's own error slot; the
+                    // message holds no `%` directive.
+                    unsafe { err_exception(err, why) };
+                    break 's_652;
+                } else {
+                    extra += 1;
+                    i_3 = i_3.wrapping_add(1);
+                }
+            }
+            let mut col_extent: colnr_T = (end_col
+                - (if end_row == start_row {
+                    start_col
+                } else {
+                    0 as Integer
+                })) as colnr_T;
+            let mut adjust: linenr_T = if end_row >= start_row {
+                MAXLNUM as ::core::ffi::c_int as linenr_T
+            } else {
+                0 as linenr_T
+            };
+            unsafe {
                 mark_adjust_buf(
                     b,
                     start_row as linenr_T,
@@ -340,9 +341,11 @@ pub unsafe fn nvim_buf_set_text(
                     true,
                     kMarkAdjustApi,
                     kExtmarkNOOP,
-                );
-                if visual_active() && b == curbuf.get() && !visual_mode().is_block() {
-                    let mut anchor = visual_anchor();
+                )
+            };
+            if visual_active() && b == curbuf.get() && !visual_mode().is_block() {
+                let mut anchor = visual_anchor();
+                unsafe {
                     fix_pos_col(
                         b,
                         &raw mut anchor,
@@ -353,10 +356,12 @@ pub unsafe fn nvim_buf_set_text(
                         new_len as linenr_T,
                         last_item.len() as colnr_T,
                         1 as colnr_T,
-                    );
-                    set_visual_anchor(anchor);
-                    check_visual_pos();
-                }
+                    )
+                };
+                set_visual_anchor(anchor);
+                unsafe { check_visual_pos() };
+            }
+            unsafe {
                 extmark_splice(
                     b,
                     start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
@@ -368,20 +373,22 @@ pub unsafe fn nvim_buf_set_text(
                     last_item.len() as colnr_T,
                     new_byte,
                     kExtmarkUndo,
-                );
-                changed_lines(
-                    Buf::new(b),
-                    start_row as linenr_T,
-                    start_col as colnr_T,
-                    end_row as linenr_T + 1 as linenr_T,
-                    extra as linenr_T,
-                    true,
-                );
-                for win in tab_windows().map(Win::raw) {
-                    if (*win).w_buffer == b {
-                        if (*win).w_cursor.lnum as Integer >= start_row
-                            && (*win).w_cursor.lnum as Integer <= end_row
-                        {
+                )
+            };
+            changed_lines(
+                unsafe { Buf::new(b) },
+                start_row as linenr_T,
+                start_col as colnr_T,
+                end_row as linenr_T + 1 as linenr_T,
+                extra as linenr_T,
+                true,
+            );
+            for win in tab_windows().map(Win::raw) {
+                if unsafe { (*win).w_buffer } == b {
+                    if unsafe { (*win).w_cursor.lnum } as Integer >= start_row
+                        && unsafe { (*win).w_cursor.lnum } as Integer <= end_row
+                    {
+                        unsafe {
                             fix_cursor_cols(
                                 win,
                                 start_row as linenr_T,
@@ -390,50 +397,47 @@ pub unsafe fn nvim_buf_set_text(
                                 end_col as colnr_T,
                                 new_len as linenr_T,
                                 last_item.len() as colnr_T,
-                            );
-                        } else {
-                            fix_cursor(
-                                win,
-                                start_row as linenr_T,
-                                end_row as linenr_T,
-                                extra as linenr_T,
-                            );
-                        }
+                            )
+                        };
+                    } else {
+                        let (lo, hi) = (start_row as linenr_T, end_row as linenr_T);
+                        // SAFETY: a live window showing this buffer.
+                        unsafe { fix_cursor(win, lo, hi, extra as linenr_T) };
                     }
                 }
             }
         }
-        try_leave(&raw mut tstate, err);
     }
+    unsafe { try_leave(&raw mut tstate, err) };
     ().reported(error)
 }
 
 pub(crate) unsafe fn fix_cursor(
-    mut win: *mut win_T,
+    win: *mut win_T,
     mut lo: linenr_T,
     mut hi: linenr_T,
     mut extra: linenr_T,
 ) {
-    unsafe {
-        if (*win).w_cursor.lnum >= lo {
-            if (*win).w_cursor.lnum >= hi {
-                (*win).w_cursor.lnum += extra;
-            } else if extra < 0 as linenr_T {
-                check_cursor_lnum(Win::new(win));
-            }
-            check_cursor_col(Win::new(win));
-            changed_cline_bef_curs(Win::new(win));
-            (*win).w_valid.clear(WinValid::BOTLINE_AP);
-            update_topline(Win::new(win));
-        } else {
-            invalidate_botline_win(Win::new(win));
-        };
-    }
+    // SAFETY: the caller's promise -- `win` is a live window.
+    let mut win = unsafe { Win::new(win) };
+    if win.w_cursor.lnum >= lo {
+        if win.w_cursor.lnum >= hi {
+            win.w_cursor.lnum += extra;
+        } else if extra < 0 as linenr_T {
+            check_cursor_lnum(win);
+        }
+        check_cursor_col(win);
+        changed_cline_bef_curs(win);
+        win.w_valid.clear(WinValid::BOTLINE_AP);
+        update_topline(win);
+    } else {
+        invalidate_botline_win(win);
+    };
 }
 
 unsafe fn fix_pos_col(
-    mut buf: *mut buf_T,
-    mut pos: *mut pos_T,
+    buf: *mut buf_T,
+    pos: *mut pos_T,
     mut start_row: linenr_T,
     mut start_col: colnr_T,
     mut end_row: linenr_T,
@@ -442,46 +446,48 @@ unsafe fn fix_pos_col(
     mut new_cols_at_end_row: colnr_T,
     mut mode_col_adj: colnr_T,
 ) {
-    unsafe {
-        if (*pos).lnum < start_row {
-            return;
+    // SAFETY: the caller's promise -- `pos` is a live position, and nothing
+    // below can move it.
+    let mut pos = unsafe { Pos::new(pos) };
+    if pos.lnum < start_row {
+        return;
+    }
+    let mut old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
+    let mut lnum_shift: linenr_T = new_rows - old_rows;
+    if pos.lnum > end_row {
+        pos.lnum += lnum_shift;
+        return;
+    }
+    let mut end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
+        start_col
+    } else {
+        0 as colnr_T
+    };
+    let mut end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
+    if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
+        pos.lnum += lnum_shift;
+        pos.col += end_row_change_end - end_col;
+        return;
+    }
+    let mut old_coladd: colnr_T = pos.coladd;
+    let coladd = pos.coladd;
+    pos.col += coladd;
+    pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    let mut new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
+    if pos.lnum > new_end_row {
+        pos.lnum = new_end_row;
+        let mut len: colnr_T = unsafe { ml_get_buf_len(buf, new_end_row) };
+        if pos.col < len {
+            pos.col = len;
         }
-        let mut old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
-        let mut lnum_shift: linenr_T = new_rows - old_rows;
-        if (*pos).lnum > end_row {
-            (*pos).lnum += lnum_shift;
-            return;
-        }
-        let mut end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
-            start_col
-        } else {
-            0 as colnr_T
-        };
-        let mut end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
-        if (*pos).lnum == end_row && (*pos).col + mode_col_adj > end_col {
-            (*pos).lnum += lnum_shift;
-            (*pos).col += end_row_change_end - end_col;
-            return;
-        }
-        let mut old_coladd: colnr_T = (*pos).coladd;
-        (*pos).col += (*pos).coladd;
-        (*pos).coladd = 0 as ::core::ffi::c_int as colnr_T;
-        let mut new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
-        if (*pos).lnum > new_end_row {
-            (*pos).lnum = new_end_row;
-            let mut len: colnr_T = ml_get_buf_len(buf, new_end_row);
-            if (*pos).col < len {
-                (*pos).col = len;
-            }
-        }
-        if (*pos).lnum == new_end_row
-            && (*pos).col > end_row_change_end
-            && old_coladd == 0 as ::core::ffi::c_int
-        {
-            (*pos).col = end_row_change_end;
-            if (*pos).col - mode_col_adj >= end_row_change_start {
-                (*pos).col -= mode_col_adj;
-            }
+    }
+    if pos.lnum == new_end_row
+        && pos.col > end_row_change_end
+        && old_coladd == 0 as ::core::ffi::c_int
+    {
+        pos.col = end_row_change_end;
+        if pos.col - mode_col_adj >= end_row_change_start {
+            pos.col -= mode_col_adj;
         }
     }
 }
@@ -495,12 +501,12 @@ unsafe fn fix_cursor_cols(
     mut new_rows: linenr_T,
     mut new_cols_at_end_row: colnr_T,
 ) {
+    let mut mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+        0 as colnr_T
+    } else {
+        1 as colnr_T
+    };
     unsafe {
-        let mut mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
-            0 as colnr_T
-        } else {
-            1 as colnr_T
-        };
         fix_pos_col(
             (*win).w_buffer,
             &raw mut (*win).w_cursor,
@@ -511,9 +517,9 @@ unsafe fn fix_cursor_cols(
             new_rows,
             new_cols_at_end_row,
             mode_col_adj,
-        );
-        check_cursor_col(Win::new(win));
-        changed_cline_bef_curs(Win::new(win));
-        invalidate_botline_win(Win::new(win));
-    }
+        )
+    };
+    check_cursor_col(unsafe { Win::new(win) });
+    changed_cline_bef_curs(unsafe { Win::new(win) });
+    invalidate_botline_win(unsafe { Win::new(win) });
 }
