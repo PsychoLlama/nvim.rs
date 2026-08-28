@@ -606,6 +606,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+")
     parser.add_argument("--rounds", type=int, default=12)
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="name every site a pass acts on, as file:line. The run does not "
+        "always reach a fixed point -- `wrap` and `unnest` can disagree about "
+        "the same spans forever, one adding a region the other calls "
+        "redundant -- and without this there is no way to learn which spans "
+        "those are.",
+    )
     args = parser.parse_args()
 
     for round_no in range(1, args.rounds + 1):
@@ -627,6 +636,10 @@ def main() -> int:
                 p.write_bytes(raw)
                 count += n
             print(f"round {round_no}: {name} {count} site(s)")
+            if args.verbose:
+                for path, spans in sorted(per_file.items()):
+                    for span in spans:
+                        print(f"  {name}: {path}:{span['line_start']}")
             moved += count
             if count:
                 # One pass per round: a later pass would read stale offsets.
