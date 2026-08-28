@@ -376,7 +376,7 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
         unsafe { (*cur).w_set_curswant = saved_set_curswant };
         unsafe { (*cur).w_curswant = saved_curswant };
         unsafe { (*cur).w_virtcol = saved_virtcol };
-        unsafe { (*cur).w_valid }.clear(WinValid::VIRTCOL);
+        unsafe { (*cur).w_valid.clear(WinValid::VIRTCOL) };
     }
 }
 

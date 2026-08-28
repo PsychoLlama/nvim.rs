@@ -656,8 +656,15 @@ NON_MUT_SELF_FN = re.compile(
 DEREF_METHOD = re.compile(
     r"unsafe\s*\{\s*\(?\s*\*[^{}]*?\}\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\("
 )
-# `Refcount`/`RefcountSize`, whose whole point is that the count moves.
-REFCOUNT_METHODS = frozenset({"retain", "release", "release_many"})
+# Names whose `&mut self` form is the only one that matters, listed because
+# the exclusivity rule above would lose them: `Refcount::release` shares its
+# name with two *consuming* `release(self)` methods, and `flags!`'s
+# `clear(&mut self, flags)` shares its name with two `clear(&self)` methods on
+# unrelated types. Losing either costs a mutation that silently does nothing
+# -- `unsafe { (*cur).w_valid }.clear(VIRTCOL)` left the cached virtual
+# column marked valid, so `getcurpos()` published a stale 'curswant' and
+# never put the real one back.
+MUTATING_BY_NAME = frozenset({"retain", "release", "release_many", "clear"})
 
 # `*pp = *pp.add(3)` where the author meant `*pp = (*pp).add(3)`.
 #
@@ -773,12 +780,12 @@ def place_writes(tree):
 
 
 def mutating_methods(tree):
-    """Method names that can only ever be `&mut self`, plus the refcount three."""
+    """Method names that can only ever be `&mut self`, plus `MUTATING_BY_NAME`."""
     mutating, other = set(), set()
     for masked in tree.values():
         mutating.update(MUT_SELF_FN.findall(masked))
         other.update(NON_MUT_SELF_FN.findall(masked))
-    return (mutating - other) | REFCOUNT_METHODS
+    return (mutating - other) | MUTATING_BY_NAME
 
 
 def deref_temporary_mutations(tree):
