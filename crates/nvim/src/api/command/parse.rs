@@ -18,25 +18,36 @@ use core::ptr;
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
 unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
+    let mut args: Array = arena_array(arena, 2);
+    let lhs_start: *mut c_char = arg_str.cast_mut();
+    // SAFETY: the caller's promise -- `arg_str` is NUL-terminated, so the
+    // two scans and the difference between them stay inside it.
+    let (lhs_end, lhs_len) = unsafe {
+        let end = skiptowhite(lhs_start);
+        (end, end.offset_from(lhs_start) as size_t)
+    };
+    // SAFETY: `args` was reserved for two, and the left-hand side holds
+    // `lhs_len` bytes.
     unsafe {
-        let mut args: Array = arena_array(arena, 2);
-        let lhs_start: *mut c_char = arg_str.cast_mut();
-        let lhs_end: *mut c_char = skiptowhite(lhs_start);
-        let lhs_len = lhs_end.offset_from(lhs_start) as size_t;
         array_add(
             &mut args,
             Object::string(cstrn_as_string(lhs_start, lhs_len)),
-        );
-        let rhs_start: *mut c_char = skipwhite(lhs_end);
-        if *rhs_start != NUL as c_char {
+        )
+    };
+    // SAFETY: as above.
+    let rhs_start: *mut c_char = unsafe { skipwhite(lhs_end) };
+    // SAFETY: `rhs_start` is inside the string, at worst at its terminator.
+    if unsafe { *rhs_start } != NUL as c_char {
+        // SAFETY: as above -- the rest of the line is one opaque argument.
+        unsafe {
             let rhs_len = strlen(rhs_start);
             array_add(
                 &mut args,
                 Object::string(cstrn_as_string(rhs_start, rhs_len)),
             );
         }
-        args
     }
+    args
 }
 
 /// The command's arguments, split the way the command itself would have them.
@@ -69,20 +80,29 @@ unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
     // per call, so the whole split fits in one `length + 1` block.
     // SAFETY: `args` is reserved for the upper bound the splitter itself
     // computes, and `buf` advances by exactly what each call wrote.
-    unsafe {
-        let mut buf: *mut c_char = arena_alloc(arena, length + 1, false).cast::<c_char>();
-        let mut args: Array = arena_array(arena, uc_nargs_upper_bound(ea.arg, length));
-        let (mut end, mut len): (size_t, size_t) = (0, 0);
-        let mut done = false;
-        while !done {
+    // SAFETY: `arena_alloc` answers a block of the size asked for, and the
+    // upper bound is what the splitter itself computes.
+    let (mut buf, mut args) = unsafe {
+        let buf: *mut c_char = arena_alloc(arena, length + 1, false).cast();
+        (
+            buf,
+            arena_array(arena, uc_nargs_upper_bound(ea.arg, length)),
+        )
+    };
+    let (mut end, mut len): (size_t, size_t) = (0, 0);
+    let mut done = false;
+    while !done {
+        // SAFETY: `end`/`len` are this frame's, and `buf` advances by
+        // exactly what each call wrote, so it stays inside the block.
+        unsafe {
             done = uc_split_args_iter(ea.arg, length, &raw mut end, buf, &raw mut len);
             if len > 0 {
                 array_add(&mut args, Object::string(cstrn_as_string(buf, len)));
                 buf = buf.add(len + 1);
             }
         }
-        args
     }
+    args
 }
 
 /// The name of the command `ea` names: a user command's own spelling, the
@@ -201,41 +221,35 @@ pub unsafe fn nvim_parse_cmd(
 ) -> Result<KeyDict_cmd, Error> {
     let mut error = ERROR_INIT;
     let err = &mut error;
-    // SAFETY: all three are plain C aggregates whose all-zero state is the
+    // SAFETY (all three): a plain C aggregate whose all-zero state is the
     // valid "nothing parsed yet" one, as the C original's CLEAR_FIELD relies
     // on.
-    let (mut result, mut ea, mut cmdinfo) = unsafe {
-        (
-            ::core::mem::zeroed::<KeyDict_cmd>(),
-            ::core::mem::zeroed::<exarg_T>(),
-            ::core::mem::zeroed::<CmdParseInfo>(),
-        )
-    };
+    let mut result: KeyDict_cmd = unsafe { ::core::mem::zeroed() };
+    // SAFETY: as above.
+    let mut ea: exarg_T = unsafe { ::core::mem::zeroed() };
+    // SAFETY: as above.
+    let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
     let mut errormsg = None;
     // SAFETY: `arena` is the dispatcher's and `str` is `size` readable bytes;
     // the arena copy outlives everything `parse_cmdline` leaves pointing into
     // it, including `ea.arg` and `ea.nextcmd`.
-    let parsed = unsafe {
-        let mut cmdline = arena_memdupz(arena, str.data(), str.len());
-        parse_cmdline(
-            &raw mut cmdline,
-            &raw mut ea,
-            &raw mut cmdinfo,
-            &mut errormsg,
-        )
-    };
+    let mut cmdline = unsafe { arena_memdupz(arena, str.data(), str.len()) };
+    let (line, e, info) = (&raw mut cmdline, &raw mut ea, &raw mut cmdinfo);
+    // SAFETY: as above; the three out-parameters are this frame's.
+    let parsed = unsafe { parse_cmdline(line, e, info, &mut errormsg) };
     if !parsed {
-        // SAFETY: `err` is live, and `errormsg` is the parser's own message.
-        unsafe {
-            match &errormsg {
-                None => api_set_error(err, kErrorTypeException, c"Parsing command-line".as_ptr()),
-                Some(msg) => api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"Parsing command-line: %s".as_ptr(),
-                    msg.as_ptr(),
-                ),
+        match &errormsg {
+            // SAFETY: `err` is live; the message takes no argument.
+            None => {
+                let msg = c"Parsing command-line".as_ptr();
+                unsafe { api_set_error(err, kErrorTypeException, msg) };
+            }
+            // SAFETY: `err` is live and `errormsg` is the parser's own
+            // NUL-terminated message, which the format's one `%s` takes.
+            Some(msg) => {
+                let fmt = c"Parsing command-line: %s".as_ptr();
+                unsafe { api_set_error(err, kErrorTypeException, fmt, msg.as_ptr()) };
             }
         }
         return Err(error);
@@ -250,14 +264,11 @@ pub unsafe fn nvim_parse_cmd(
             .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
     };
     // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `ea`.
-    let (args, cmd) = unsafe {
-        let args = parse_args(&ea, arena);
-        let cmd: *mut ucmd_T = match ea.cmdidx {
-            CMD_USER => nth(Table::Global),
-            CMD_USER_BUF => nth(Table::Buffer(curbuf.get())),
-            _ => ptr::null_mut(),
-        };
-        (args, cmd)
+    let args = unsafe { parse_args(&ea, arena) };
+    let cmd: *mut ucmd_T = match ea.cmdidx {
+        CMD_USER => nth(Table::Global),
+        CMD_USER_BUF => nth(Table::Buffer(curbuf.get())),
+        _ => ptr::null_mut(),
     };
     // A user command carries its own default count.
     // SAFETY: `cmd`, when non-null, points at a live `ucmd_T`.
